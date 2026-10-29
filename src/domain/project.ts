@@ -15,7 +15,8 @@ import type { AppState } from './model'
  * - overlay command-bar: placement pill -> anchor urlPillRect(sidebar.width), initialQuery = focused url; center ->
  *   anchor layout.content, initialQuery ''. tabs = all tabs with a url (focused first, then lastActiveAt desc);
  *   history = first CAPS.commandBarHistory entries.
- * - overlay archive: entries newest first with fromSpaceTitle; autoArchiveAfter from settings.
+ * - overlay archive: anchor = layout.content (the card the archive draws in); entries newest first with
+ *   fromSpaceTitle; autoArchiveAfter from settings.
  * - rev = session.rev, now = `now`.
  */
 export function projectWindow(state: AppState, windowId: WindowId, layout: LayoutView, now: Instant, platform: Platform): WindowView {

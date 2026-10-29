@@ -105,7 +105,7 @@ export interface DockSpaceView {
   readonly title: string
   readonly icon: SpaceIcon
   readonly active: boolean
-  /** Primary theme color, for the dot shown when the space has no emoji. */
+  /** Primary theme color, for the dot shown when `icon.kind` is `none`. */
   readonly color: string
 }
 
@@ -174,6 +174,14 @@ export interface HistoryCandidate {
 
 export interface ArchiveView {
   readonly kind: 'archive'
+  /**
+   * The content card (`ContentView.rect`, window coordinates). The archive draws inside the card, like Arc's
+   * archive page in the content area, not over the whole window: the window host gives the overlay view exactly
+   * this rect and the card's radius while the archive is open (src/main/layout.ts), so no native view covers the
+   * sidebar or the dock and both stay clickable. CSS cannot do this: `pointer-events: none` on a page does not hand
+   * a click to the native view underneath, and `setIgnoreMouseEvents` exists on windows only, not on views.
+   */
+  readonly anchor: Rect
   /** Newest first. Grouping into buckets happens in the overlay (src/renderer/overlay/archive-groups.ts). */
   readonly entries: readonly ArchiveEntryView[]
   readonly autoArchiveAfter: AutoArchiveAfter

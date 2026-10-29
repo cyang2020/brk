@@ -1,7 +1,14 @@
 /**
- * The overlay surface: full window, transparent, top of the native stack, attached only while view.overlay is set.
- * Renders <CommandBar/> or <Archive/>. A click on the transparent area outside the card, or Esc, dispatches
- * overlay/close. Because it covers the whole window while attached, nothing below can be clicked meanwhile.
+ * The overlay surface: one bundle, one webContents, attached only while view.overlay is set. Its native rect
+ * depends on which overlay is open (src/main/layout.ts `Layout.overlay`):
+ * - command bar: the full window, transparent, top of the stack. The root catches a click on the empty area and
+ *   dispatches overlay/close; nothing below can be clicked meanwhile, which is intended.
+ * - archive: exactly the content card (view.overlay.anchor === view.content.rect; the host rounds the view). The
+ *   archive fills this surface's viewport, so the sidebar and the dock are covered by no view and stay usable:
+ *   clicking a row dispatches tab/focus, which closes the overlay through the reducer's overlay rule. Not done with
+ *   CSS: `pointer-events: none` on a page does not hand a click to the native view underneath, and
+ *   `setIgnoreMouseEvents` exists on windows only, so the host sizes the view instead.
+ * Esc dispatches overlay/close in both.
  */
 import type { ReactElement } from 'react'
 

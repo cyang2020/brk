@@ -3,11 +3,14 @@
  * idempotent and is the only code that adds, removes, orders, sizes or focuses views.
  *
  * Stack, bottom to top (spike sections 1 and 2):
- *   sidebar surface (full window; gradient, sidebar, gutters)       always
- *   tab panes (rounded, inset)                                       0..4
- *   floating-sidebar surface (sidebar-sized, transparent)            while peeking
- *   overlay surface (full window, transparent)                       while an overlay is open
- * The floating and overlay surfaces are created on first need and kept; detached when not needed.
+ *   sidebar surface (full window; gradient, sidebar, gutters)             always
+ *   tab panes (rounded, inset)                                             0..4
+ *   overlay surface as the archive (content card rect, rounded)           while the archive is open
+ *   floating-sidebar surface (sidebar-sized, transparent)                  while peeking
+ *   overlay surface as the command bar (full window, transparent)         while the command bar is open
+ * One overlay surface (one webContents, the overlay bundle) serves both overlays; where it sits depends on which is
+ * open: the archive card is content, so a peeked sidebar floats over it; the command bar covers everything. The
+ * floating and overlay surfaces are created on first need and kept; detached when not needed.
  */
 import type { BaseWindow } from 'electron'
 import type { Instant, Platform, WindowId } from '../shared/base'
@@ -37,10 +40,13 @@ export interface WindowHost {
   /**
    * TODO:
    *   sel = selectWindow(state, id)
-   *   layout = computeLayout({ contentSize: sel.contentSize, sidebar: sel.sidebar, fractions: sel.panes.map(p => p.fraction), overlayOpen: sel.overlay !== null })
-   *   desired = [sidebar, ...sel.panes.map(p => tabs.viewFor(p.tabId, p.url, id)), floating if layout.floatingSidebar, overlay if layout.overlay]
+   *   layout = computeLayout({ contentSize: sel.contentSize, sidebar: sel.sidebar, fractions: sel.panes.map(p => p.fraction), overlay: sel.overlay })
+   *   desired = [sidebar, ...sel.panes.map(p => tabs.viewFor(p.tabId, p.url, id)),
+   *              ...(sel.overlay === 'archive' ? [overlay] : []), ...(layout.floatingSidebar ? [floating] : []),
+   *              ...(sel.overlay === 'command-bar' ? [overlay] : [])]
    *   if attached order !== desired: remove the extras, re-add in order (addChildView on an attached view moves it to the top)
-   *   setBounds + setBorderRadius(layout.radius) on panes; setBounds on surfaces; win.setBackgroundColor(sel.windowColor)
+   *   setBounds + setBorderRadius(layout.radius) on panes; setBounds on surfaces; overlay: setBounds(layout.overlay) and
+   *     setBorderRadius(sel.overlay === 'archive' ? layout.radius : 0); win.setBackgroundColor(sel.windowColor)
    *   macOS: setWindowButtonVisibility(sel.sidebar.visible || sel.sidebar.peek)
    *   view = projectWindow(state, id, layout, now, platform); push to each mounted surface, coalesced per tick
    *   focus: if key(sel.focus) !== lastFocusKey -> focus that webContents; lastFocusKey = key
