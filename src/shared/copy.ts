@@ -31,6 +31,36 @@ export const COPY = {
     editTheme: 'Edit Theme Color…',
     pickColor: 'Click to pick a color',
   },
+  /** Sidebar controls (W3). */
+  sidebar: {
+    /** Observed. */
+    collapsePinned: 'Collapse Pinned Tabs',
+    expandPinned: 'Expand Pinned Tabs',
+    resetTab: 'Back to Pinned URL',
+    closeKeepPinned: 'Close and Keep Pinned',
+    /** GUESS (accessible name of the dock's "+" button, whose menu holds these three). */
+    plusButton: 'New Tab, Folder or Space',
+  },
+  /** Space dialog (W3). */
+  spaceDialog: {
+    /** Observed menu title "New Space…" without the ellipsis. */
+    newTitle: 'New Space',
+    /** GUESS. */
+    editTitle: 'Edit Space',
+    /** GUESS (short labels). */
+    name: 'Name',
+    icon: 'Icon',
+    color: 'Color',
+    emojiPlaceholder: 'Emoji',
+    /** Observed: "Default Space Icon". */
+    noIcon: 'Default Space Icon',
+    /** Observed accessibility prefix "Set space color to ". */
+    setColor: (hex: string): string => `Set space color to ${hex}`,
+    /** GUESS (short labels). */
+    create: 'Create Space',
+    save: 'Save',
+    cancel: 'Cancel',
+  },
   commandBar: {
     switchToTab: 'Switch to Tab',
     switchToSplit: 'Switch to Split View',
