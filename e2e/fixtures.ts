@@ -1,29 +1,63 @@
-// Playwright fixtures: a static http server for e2e/site/ and the built app with page helpers.
+// Playwright fixtures: a static http server for e2e/site/ and the built app, driven through the main process's
+// test API (src/shared/test-api.ts: `globalThis.__arc`, installed when ARC_E2E=1). Rules the spike established
+// (/tmp/arc-spike/REPORT.md section 5): never pick Playwright pages by index (map Page -> webContents id with CDP
+// Target.getTargetInfo + webContents.fromDevToolsTargetId); app shortcuts go through `press` (page.keyboard fires
+// neither menu accelerators nor before-input-event); a closed tab is gone when its 'destroyed' event was recorded.
 import { _electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join } from 'node:path';
-import { PANEL_RADIUS } from '../src/shared/layout';
+import { extname, join } from 'node:path';
+import type { Instant, ItemId } from '../src/shared/base';
+import type { SurfaceKind } from '../src/shared/bridge';
+import type { UiCommand } from '../src/shared/commands';
+import { TEST_ENV, type LayerCapture, type NativeLayer, type NativeWindowFacts } from '../src/shared/test-api';
+import type { WindowView } from '../src/shared/view';
 
 export { expect } from '@playwright/test';
 
 const ROOT = join(__dirname, '..');
 const SITE = join(__dirname, 'site');
+const SHOTS = join(ROOT, 'verify', 'shots');
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
+export type Rgba = readonly [number, number, number, number];
+
 export interface Arc {
-  electronApp: ElectronApplication;
-  /** The chrome view's page (gradient background and sidebar). */
-  chromePage(): Promise<Page>;
+  /** The running app; `restart()` replaces it. */
+  readonly electronApp: ElectronApplication;
+  /** The profile directory (ARC_USER_DATA), kept across `restart()`. */
+  readonly userData: string;
+  /** The renderer page of one of the first window's surfaces, found by webContents id from `native()`. Waits for the layer to be attached. */
+  surface(kind: SurfaceKind): Promise<Page>;
+  /** The page of a loaded tab's view. */
+  tabPage(tabId: ItemId): Promise<Page>;
   /** The Playwright page whose main-process webContents has this id. */
   pageForWebContentsId(id: number): Promise<Page>;
-  /** The page of the topmost tab view attached to the window. */
-  activeTabPage(): Promise<Page>;
-  /** Full-window PNG: chrome view capture with each attached tab view drawn on top in a rounded clip. */
-  compositeScreenshot(path: string): Promise<void>;
+  /** The WindowView the first window's renderers receive. */
+  view(): Promise<WindowView>;
+  /** Attached native layers bottom to top, content size, focused webContents. */
+  native(): Promise<NativeWindowFacts>;
+  /** Same parse-and-dispatch path as a renderer message. */
+  dispatch(command: UiCommand): Promise<void>;
+  /** A real key press ("CmdOrCtrl+T") through sendInputEvent into the focused webContents. */
+  press(accelerator: string): Promise<void>;
+  /** Moves the test clock forward and runs the auto-archive sweep; returns the new time. */
+  advanceClock(ms: number): Promise<Instant>;
+  /** Resolves once the tab webContents' 'destroyed' event was recorded (webContents.close() is asynchronous). */
+  waitForDestroyed(webContentsId: number): Promise<void>;
+  /**
+   * Full-window PNG at verify/shots/<name>.png: every attached layer's capturePage() drawn bottom to top, each
+   * inside a rounded clip of its own radius (spike section 6: pixel-equal to the real screen on Linux; excludes what
+   * the OS draws, such as traffic lights). Returns the file path.
+   */
+  compositeScreenshot(name: string): Promise<string>;
+  /** [r, g, b, a] at window point (x, y) of one attached layer's capture, e.g. 'chrome' for gradient checks. */
+  layerPixel(role: NativeLayer['role'], x: number, y: number): Promise<Rgba>;
+  /** flush() state.json, close the app, relaunch on the same profile directory. */
+  restart(): Promise<void>;
 }
 
 export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
@@ -31,6 +65,7 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
     async ({}, use) => {
       const server = createServer((req, res) => {
         const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+        if (path === '/fail') return req.socket.destroy(); // did-fail-load, for the restore-tolerates-failure check
         const file = join(SITE, path === '/' ? 'index.html' : path); // URL() already resolved any ../
         readFile(file).then(
           (body) => res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' }).end(body),
@@ -46,21 +81,27 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
 
   arc: async ({ siteUrl }, use) => {
     if (!existsSync(join(ROOT, 'out/main/index.js'))) throw new Error('out/main/index.js is missing: run `npm run build` first');
-    const userData = await mkdtemp(join(tmpdir(), 'arc-e2e-')); // fresh profile per launch
-    const electronApp = await _electron.launch({
-      cwd: ROOT,
-      args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), `--user-data-dir=${userData}`, 'out/main/index.js'],
-      // env replaces the inherited environment, so keep it (DISPLAY under Xvfb, HOME, PATH).
-      env: { ...process.env, ARC_TEST: '1', ARC_TEST_URL: siteUrl },
-    });
-    await waitFor(() => electronApp.evaluate(() => globalThis.__arcTest !== undefined), 'globalThis.__arcTest');
+    const userData = await mkdtemp(join(tmpdir(), 'arc-e2e-')); // fresh profile per test; restart() reuses it
+
+    const launch = async (): Promise<ElectronApplication> => {
+      const app = await _electron.launch({
+        cwd: ROOT,
+        args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), 'out/main/index.js'],
+        // env replaces the inherited environment, so keep it (DISPLAY under Xvfb, HOME, PATH).
+        env: { ...process.env, [TEST_ENV.enable]: '1', [TEST_ENV.userData]: userData, [TEST_ENV.startUrl]: siteUrl },
+      });
+      await waitFor(() => app.evaluate(() => globalThis.__arc !== undefined), 'globalThis.__arc');
+      await waitFor(() => app.evaluate(() => globalThis.__arc!.native().layers.some((l) => l.role === 'chrome')), 'the chrome layer');
+      return app;
+    };
+    let app = await launch();
 
     const webContentsIdOf = async (page: Page): Promise<number | null> => {
       try {
-        const session = await electronApp.context().newCDPSession(page);
+        const session = await app.context().newCDPSession(page);
         const { targetInfo } = await session.send('Target.getTargetInfo');
         await session.detach();
-        return await electronApp.evaluate(({ webContents }, id) => webContents.fromDevToolsTargetId(id)?.id ?? null, targetInfo.targetId);
+        return await app.evaluate(({ webContents }, id) => webContents.fromDevToolsTargetId(id)?.id ?? null, targetInfo.targetId);
       } catch {
         return null; // the page closed while we asked
       }
@@ -68,41 +109,22 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
     // electronApp.windows() lists every view's page in no stable order, so match by webContents id.
     const pageForWebContentsId = (id: number): Promise<Page> =>
       waitFor(async () => {
-        for (const page of electronApp.windows()) if ((await webContentsIdOf(page)) === id) return page;
+        for (const page of app.windows()) if ((await webContentsIdOf(page)) === id) return page;
         return undefined;
       }, `a page for webContents ${id}`);
-    const chromePage = async (): Promise<Page> =>
-      pageForWebContentsId(await electronApp.evaluate(() => globalThis.__arcTest!.chromeView.webContents.id));
-    const activeTabPage = async (): Promise<Page> => {
-      const id = await electronApp.evaluate(() => {
-        const { win, tabViews } = globalThis.__arcTest!;
-        const stack = win.contentView.children;
-        return tabViews()
-          .filter((tab) => stack.includes(tab))
-          .sort((a, b) => stack.indexOf(a) - stack.indexOf(b))
-          .at(-1)?.webContents.id;
-      });
-      if (id === undefined) throw new Error('no tab view is attached to the window');
-      return pageForWebContentsId(id);
-    };
 
-    // capturePage() of one view never includes the others, and BaseWindow has no capturePage,
-    // so capture each view in main and draw them together on a canvas in the chrome page.
-    const compositeScreenshot = async (path: string): Promise<void> => {
-      const shot = await electronApp.evaluate(async () => {
-        const { win, chromeView, tabViews } = globalThis.__arcTest!;
-        const stack = win.contentView.children;
-        const tabs = tabViews()
-          .filter((tab) => stack.includes(tab))
-          .sort((a, b) => stack.indexOf(a) - stack.indexOf(b));
-        const capture = async (view: Electron.WebContentsView) => (await view.webContents.capturePage()).toDataURL();
-        return {
-          width: chromeView.getBounds().width,
-          background: await capture(chromeView),
-          layers: await Promise.all(tabs.map(async (tab) => ({ bounds: tab.getBounds(), png: await capture(tab) }))),
-        };
-      });
-      const dataUrl = await (await chromePage()).evaluate(async ({ width, background, layers, radius }) => {
+    const native = (): Promise<NativeWindowFacts> => app.evaluate(() => globalThis.__arc!.native());
+    const layerFor = (role: NativeLayer['role']): Promise<NativeLayer> =>
+      waitFor(async () => (await native()).layers.find((l) => l.role === role), `an attached '${role}' layer`);
+    const surface = async (kind: SurfaceKind): Promise<Page> =>
+      pageForWebContentsId((await layerFor(kind === 'sidebar' ? 'chrome' : kind)).webContentsId);
+    const captureLayers = (): Promise<readonly LayerCapture[]> => app.evaluate(() => globalThis.__arc!.captureLayers());
+
+    // capturePage() of one view never includes the others and BaseWindow has no capturePage, so each layer is
+    // captured in main and they are drawn together on a canvas in the chrome page, bottom to top, rounded clips.
+    const compositeScreenshot = async (name: string): Promise<string> => {
+      const [captures, { contentSize }] = await Promise.all([captureLayers(), native()]);
+      const dataUrl = await (await surface('sidebar')).evaluate(async ({ captures, contentSize }) => {
         const load = (src: string) =>
           new Promise<HTMLImageElement>((resolve, reject) => {
             const img = new Image();
@@ -110,30 +132,83 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
             img.onerror = reject;
             img.src = src;
           });
-        const bg = await load(background);
-        const k = bg.width / width; // device pixels per CSS pixel
+        const k = captures.find((c) => c.layer.role === 'chrome')?.scale ?? 1; // device pixels per window point
         const canvas = document.createElement('canvas');
-        canvas.width = bg.width;
-        canvas.height = bg.height;
+        canvas.width = Math.round(contentSize.width * k);
+        canvas.height = Math.round(contentSize.height * k);
         const g = canvas.getContext('2d')!;
-        g.drawImage(bg, 0, 0);
-        for (const { bounds: b, png } of layers) {
-          const img = await load(png);
+        for (const { layer, pngBase64 } of captures) {
+          const img = await load(`data:image/png;base64,${pngBase64}`);
+          const b = layer.bounds;
           g.save();
           g.beginPath();
-          g.roundRect(b.x * k, b.y * k, b.width * k, b.height * k, radius * k);
+          g.roundRect(b.x * k, b.y * k, b.width * k, b.height * k, layer.radius * k);
           g.clip();
           g.drawImage(img, b.x * k, b.y * k, b.width * k, b.height * k);
           g.restore();
         }
         return canvas.toDataURL('image/png');
-      }, { ...shot, radius: PANEL_RADIUS });
-      await mkdir(dirname(path), { recursive: true });
+      }, { captures, contentSize });
+      await mkdir(SHOTS, { recursive: true });
+      const path = join(SHOTS, `${name}.png`);
       await writeFile(path, Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'));
+      return path;
     };
 
-    await use({ electronApp, chromePage, pageForWebContentsId, activeTabPage, compositeScreenshot });
-    await electronApp.close();
+    const layerPixel = async (role: NativeLayer['role'], x: number, y: number): Promise<Rgba> => {
+      const capture = (await captureLayers()).find((c) => c.layer.role === role);
+      if (!capture) throw new Error(`no attached '${role}' layer to read a pixel from`);
+      const rgba = await (await surface('sidebar')).evaluate(async ({ capture, x, y }) => {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = `data:image/png;base64,${capture.pngBase64}`;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const g = canvas.getContext('2d')!;
+        g.drawImage(img, 0, 0);
+        const k = capture.scale;
+        return Array.from(g.getImageData(Math.round((x - capture.layer.bounds.x) * k), Math.round((y - capture.layer.bounds.y) * k), 1, 1).data);
+      }, { capture, x, y });
+      return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0, rgba[3] ?? 0];
+    };
+
+    const arc: Arc = {
+      get electronApp() {
+        return app;
+      },
+      userData,
+      surface,
+      tabPage: async (tabId) => {
+        const id = await app.evaluate((_, tabId) => globalThis.__arc!.tabWebContentsId(tabId), tabId);
+        if (id === null) throw new Error(`tab ${tabId} has no webContents (not loaded)`);
+        return pageForWebContentsId(id);
+      },
+      pageForWebContentsId,
+      view: () => app.evaluate(() => globalThis.__arc!.view()),
+      native,
+      dispatch: (command) => app.evaluate((_, command) => globalThis.__arc!.dispatch(command), command),
+      press: (accelerator) => app.evaluate((_, accelerator) => globalThis.__arc!.press(accelerator), accelerator),
+      advanceClock: (ms) => app.evaluate((_, ms) => globalThis.__arc!.advanceClock(ms), ms),
+      waitForDestroyed: (webContentsId) =>
+        waitFor(
+          () => app.evaluate((_, id) => globalThis.__arc!.destroyedWebContentsIds().includes(id) || undefined, webContentsId),
+          `'destroyed' of webContents ${webContentsId}`,
+        ).then(() => undefined),
+      compositeScreenshot,
+      layerPixel,
+      restart: async () => {
+        await app.evaluate(() => globalThis.__arc!.flush());
+        await app.close();
+        app = await launch();
+      },
+    };
+
+    await use(arc);
+    await app.close();
     await rm(userData, { recursive: true, force: true });
   },
 });
