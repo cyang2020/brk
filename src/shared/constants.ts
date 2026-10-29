@@ -52,7 +52,11 @@ export const TIMING = {
   peekHideDelayMs: 250,
   /** GUESS. Space switch crossfade of gradient and grain (Arc's shader has a `transitioning` state). */
   themeCrossfadeMs: 300,
-  /** Our choice. A menu accelerator arriving this soon after before-input-event dispatched the same action is dropped. */
+  /**
+   * Our choice. A menu click flagged triggeredByAccelerator is dropped when the before-input-event hook dispatched
+   * the same action for the same window within this many ms (and the reverse when the menu fired first); the full
+   * rule is in src/main/input.ts. Bounds one physical press, not two separate presses.
+   */
   keyDedupeMs: 100,
 } as const
 

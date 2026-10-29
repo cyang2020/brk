@@ -35,8 +35,8 @@ export function parseAccelerator(accelerator: string, platform: Platform): Chord
 }
 
 /**
- * Built once per process from ACTIONS. Returns the action for a keyDown, or null. keyUp and auto-repeat of
- * toggles are the caller's business (input.ts ignores auto-repeat except for tab/step and tab/cycle-recent).
+ * Built once per process from ACTIONS. Returns the action for a keyDown, or null. keyUp and `isAutoRepeat` are the
+ * caller's business: input.ts ignores auto-repeat keyDowns for every action (rule 1 there).
  */
 export function createKeymap(platform: Platform): (input: KeyInput) => ActionId | null {
   throw new Error('not implemented')
