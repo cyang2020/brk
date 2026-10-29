@@ -15,7 +15,7 @@ import { produce, type Draft } from 'immer'
 import type { Instant, WindowId } from '../shared/base'
 import type { Input, SystemCommand, UiCommand, UiCommandType } from '../shared/commands'
 import type { Effect } from './effects'
-import { open, seal, type AppState, type StateImpl } from './model'
+import { open, seal, type AppState, type Overlay, type StateImpl } from './model'
 import { normalize } from './normalize'
 import { archiveHandlers } from './ops/archive'
 import { sidebarHandlers } from './ops/sidebar'
@@ -62,8 +62,12 @@ const HANDLERS: Handlers = {
  * Derived from the type name, so a new overlay-local command needs no second list. Every other UI command closes
  * the overlay first (see src/shared/commands.ts).
  */
-export function keepsOverlay(type: UiCommandType): boolean {
-  return /^(commandBar|overlay|archive|settings)\//.test(type)
+export function keepsOverlay(type: UiCommandType, open: Overlay['kind'] | null): boolean {
+  if (/^(commandBar|overlay)\//.test(type)) return true
+  // archive/* and settings/* belong to the archive page. Picked from the command bar (Restore Last Closed Tab,
+  // Clear Archive) they must close the bar like any other action; archive/open replaces whatever is open.
+  if (/^(archive|settings)\//.test(type)) return open === 'archive' || type === 'archive/open'
+  return false
 }
 
 export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
@@ -73,7 +77,7 @@ export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
     const command = input.command
     const windowId: WindowId | null = input.origin === 'ui' ? input.windowId : 'windowId' in command ? command.windowId : null
     if (input.origin === 'ui' && !draft.doc.windows[input.windowId]) return // stale window: drop
-    if (input.origin === 'ui' && !keepsOverlay(input.command.type)) closeOverlay(draft, input.windowId)
+    if (input.origin === 'ui' && !keepsOverlay(input.command.type, draft.session.windows[input.windowId]?.overlay?.kind ?? null)) closeOverlay(draft, input.windowId)
     const handler = HANDLERS[command.type] as Handler<AnyCommand>
     handler(draft, command, { ...ctx, windowId, emit: (effect) => effects.push(effect) })
     normalize(draft, ctx)

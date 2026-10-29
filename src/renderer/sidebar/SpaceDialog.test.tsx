@@ -1,17 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { THEME_PRESETS, themeFromPrimary, type SpaceTheme, type Hex } from '../../shared/theme'
 import { TID } from '../../shared/testids'
 import { SidebarApp } from './SidebarApp'
 import { click, doubleClick, installFakeArc, keyDown, makeView, mount, spaceId, typeInto, type FakeArc, type Mounted } from './test-support'
-
-vi.mock('../../shared/constants', async (importOriginal) =>
-  (await import('./test-standins')).withConstantStandIns(await importOriginal<typeof import('../../shared/constants')>()),
-)
-
-vi.mock('../../shared/theme', async (importOriginal) =>
-  (await import('./test-standins')).withThemeStandIns(await importOriginal<typeof import('../../shared/theme')>()),
-)
 
 let arc: FakeArc
 let ui: Mounted

@@ -15,7 +15,8 @@
  * it in the `Input` envelope. Targets default to "what the user is looking at" through `'focused'` / `'current'`.
  *
  * Overlay rule (enforced once, in `reduce` by `keepsOverlay`, derived from the type prefix): every UiCommand except
- * `commandBar/*`, `overlay/*`, `archive/*` and `settings/*` first closes an open overlay. Picking an action or a tab
+ * `commandBar/*` and `overlay/*` first closes an open command bar; `archive/*` and `settings/*` additionally keep an
+ * open archive page (they are its own controls). Picking an action or a tab
  * in the command bar is therefore just dispatching that action's command. Name new overlay-local commands with
  * one of those prefixes.
  *

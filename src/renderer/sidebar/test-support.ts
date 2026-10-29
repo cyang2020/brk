@@ -5,7 +5,6 @@
  * `UiCommandSchema` (what main does at its boundary), and lets a test push a `WindowView`. Rendering uses
  * react-dom and `act` directly: the architecture test allows only react and react-dom (plus vitest in test files)
  * under src/renderer.
- * Stand-ins for shared bodies that are still `not implemented` on this branch live in test-standins.ts.
  */
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

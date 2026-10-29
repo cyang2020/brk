@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ArchiveId, Instant, ItemId, SpaceId, WindowId } from '../shared/base'
 import { UiCommandSchema, type SystemCommand, type UiCommand } from '../shared/commands'
-import { CAPS, LAYOUT, urlPillRect } from '../shared/constants'
+import { CAPS, LAYOUT, urlPillRect, AUTO_ARCHIVE_AFTER } from '../shared/constants'
 import { THEME_PRESETS, themeFromPrimary } from '../shared/theme'
 import type { ArchiveEntryView, LayoutView, RowView, TabRowView, WindowView } from '../shared/view'
 import {
@@ -220,6 +220,21 @@ describe('reduce: tabs', () => {
     expect(d.view().overlay!.openId).toBe(first + 1)
   })
 
+  it('an archive command picked from the command bar closes the bar, while archive commands keep the archive page open', () => {
+    const d = new Driver()
+    const t = d.open('https://a.test/')
+    d.ui({ type: 'tab/close', target: t })
+    d.ui({ type: 'commandBar/open', mode: 'new-tab' })
+    d.ui({ type: 'archive/restore-last' })
+    expect(d.view().overlay).toBeNull()
+    expect(d.todayIds()).toContain(t)
+    d.ui({ type: 'archive/open' })
+    d.ui({ type: 'settings/auto-archive', after: AUTO_ARCHIVE_AFTER[0] })
+    expect(d.view().overlay?.kind).toBe('archive')
+    d.ui({ type: 'archive/clear' })
+    expect(d.view().overlay?.kind).toBe('archive')
+  })
+
   it('commandBar/open edit-current is centered while the sidebar is hidden, and new-tab when nothing is shown', () => {
     const d = new Driver()
     d.ui({ type: 'sidebar/toggle' })
@@ -250,7 +265,7 @@ describe('reduce: tabs', () => {
     expect(bar.history).toEqual([{ url: 'http://127.0.0.1:9/b', title: 'Bee', visitedAt: T0 + MINUTE }])
   })
 
-  it('overlay/close closes the bar; any other UI command closes it too, but archive commands keep it', () => {
+  it('overlay/close closes the bar; any other UI command closes it too, including archive and settings commands', () => {
     const d = new Driver()
     d.ui({ type: 'commandBar/open', mode: 'new-tab' })
     d.ui({ type: 'overlay/close' })
@@ -258,7 +273,8 @@ describe('reduce: tabs', () => {
     unchanged(d.state, d.ui({ type: 'overlay/close' }))
     d.ui({ type: 'commandBar/open', mode: 'new-tab' })
     d.ui({ type: 'settings/auto-archive', after: '1h' })
-    expect(d.view().overlay?.kind).toBe('command-bar')
+    expect(d.view().overlay).toBeNull()
+    d.ui({ type: 'commandBar/open', mode: 'new-tab' })
     d.ui({ type: 'sidebar/resize', width: 300 })
     expect(d.view().overlay).toBeNull()
   })

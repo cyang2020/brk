@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { COPY } from '../../shared/copy'
 import { LAYOUT } from '../../shared/constants'
 import { TID } from '../../shared/testids'
@@ -20,10 +20,6 @@ import {
   type FakeArc,
   type Mounted,
 } from './test-support'
-
-vi.mock('../../shared/constants', async (importOriginal) =>
-  (await import('./test-standins')).withConstantStandIns(await importOriginal<typeof import('../../shared/constants')>()),
-)
 
 let arc: FakeArc
 let ui: Mounted

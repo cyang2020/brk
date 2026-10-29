@@ -1,10 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { ItemId } from '../../shared/base'
 import { dockIndexAt, dropAt, type RowGeometry } from './dnd'
-
-vi.mock('../../shared/placement', async (importOriginal) =>
-  (await import('./test-standins')).withPlacementStandIns(await importOriginal<typeof import('../../shared/placement')>()),
-)
 
 const id = (v: string): ItemId => v as ItemId
 const H = 34
