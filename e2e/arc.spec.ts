@@ -7,12 +7,35 @@
 import { readFile } from 'node:fs/promises';
 import { LAYOUT } from '../src/shared/constants';
 import { TID } from '../src/shared/testids';
-import { expect, test } from './fixtures';
+import type { RowView, TabRowView, WindowView } from '../src/shared/view';
+import { expect, test, type Arc, type Rgba } from './fixtures';
 
 /** Width and height from a PNG's IHDR chunk. */
 async function pngSize(path: string): Promise<{ width: number; height: number }> {
   const png = await readFile(path);
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+const todayIds = async (arc: Arc): Promise<string[]> => (await arc.view()).space.today.rows.map((r) => r.id);
+const tabRows = (rows: readonly RowView[]): TabRowView[] => rows.filter((r): r is TabRowView => r.kind === 'tab');
+const current = (view: WindowView): RowView | undefined =>
+  [...view.space.today.rows, ...view.space.pinned.rows, ...view.favorites.tiles].find((r) => r.kind !== 'folder' && r.status === 'current');
+const maxChannelDistance = (a: Rgba, b: Rgba): number => Math.max(...a.slice(0, 3).map((v, i) => Math.abs(v - (b[i] ?? 0))));
+
+/** Cmd+T, type a URL, Enter: the way a user opens a tab. Resolves with the new Today row once it is current. */
+async function openTab(arc: Arc, url: string): Promise<TabRowView> {
+  const before = await todayIds(arc);
+  await arc.press('CmdOrCtrl+T');
+  const overlay = await arc.surface('overlay');
+  const input = overlay.getByTestId(TID.commandBarInput);
+  await expect(input).toBeVisible();
+  await input.fill(url);
+  await overlay.keyboard.press('Enter');
+  await expect.poll(() => todayIds(arc)).toHaveLength(before.length + 1);
+  const row = tabRows((await arc.view()).space.today.rows).find((r) => !before.includes(r.id));
+  if (!row) throw new Error('no new Today row');
+  expect(row.status).toBe('current');
+  return row;
 }
 
 test('0. launch smoke: test API answers, one window, chrome layer attached, sidebar DOM rendered', async ({ arc }) => {
@@ -31,13 +54,27 @@ test('0. launch smoke: test API answers, one window, chrome layer attached, side
   expect(size.height).toBeGreaterThanOrEqual(facts.contentSize.height);
 });
 
-test.skip('1. launch: sidebar view and one tab view are attached; content card is inset and rounded', async ({ arc }) => {
-  // facts = await arc.native(): layers[0].role === 'chrome' (full window); exactly one layer with role 'pane'
-  // pane.bounds.x === LAYOUT.sidebar.defaultWidth + LAYOUT.contentInset; pane.bounds.y === LAYOUT.contentInset
-  // pane.bounds.width === contentSize.width - pane.bounds.x - LAYOUT.contentInset; pane.radius === LAYOUT.contentRadius
-  // await arc.compositeScreenshot('1-launch'): pixel at (pane.x + 1, pane.y + 1) equals the chrome layer's pixel there
-  //   (corner is cut), and the pixel at the pane's top-edge midpoint (pane.x + width/2, pane.y + 2) is the page's background
-  void [arc, LAYOUT];
+test('1. launch: sidebar view and one tab view are attached; content card is inset and rounded', async ({ arc }) => {
+  const facts = await arc.native();
+  expect(facts.layers[0]?.role).toBe('chrome');
+  expect(facts.layers[0]?.bounds).toEqual({ x: 0, y: 0, ...facts.contentSize });
+  const panes = facts.layers.filter((l) => l.role === 'pane');
+  expect(panes).toHaveLength(1);
+  const pane = panes[0]!;
+  expect(pane.bounds.x).toBe(LAYOUT.sidebar.defaultWidth + LAYOUT.contentInset);
+  expect(pane.bounds.y).toBe(LAYOUT.contentInset);
+  expect(pane.bounds.width).toBe(facts.contentSize.width - pane.bounds.x - LAYOUT.contentInset);
+  expect(pane.bounds.height).toBe(facts.contentSize.height - 2 * LAYOUT.contentInset);
+  expect(pane.radius).toBe(LAYOUT.contentRadius);
+  // let the page paint before the capture, so the midpoint pixel is the page's own background
+  await expect(await arc.tabPage(pane.tabId!)).toHaveTitle('Fixture Home');
+  const shot = await arc.compositeScreenshot('1-launch');
+  const corner = { x: pane.bounds.x + 1, y: pane.bounds.y + 1 };
+  expect(await arc.compositePixel(shot, corner.x, corner.y)).toEqual(await arc.layerPixel('chrome', corner.x, corner.y)); // the corner is cut
+  const mid = { x: pane.bounds.x + Math.floor(pane.bounds.width / 2), y: pane.bounds.y + 2 };
+  const page = await arc.compositePixel(shot, mid.x, mid.y);
+  expect(page).toEqual([255, 255, 255, 255]); // the fixture page has no background of its own: white
+  expect(maxChannelDistance(page, await arc.layerPixel('chrome', mid.x, mid.y))).toBeGreaterThan(24); // and it is not the gradient
 });
 
 test.skip('2. Cmd+T opens the command bar; Enter on a URL adds a Today tab that really loads it', async ({ arc, siteUrl }) => {
@@ -73,13 +110,22 @@ test.skip('4. clicking a dock space switches space: sidebar shows its tabs and t
   void [arc, siteUrl];
 });
 
-test.skip('5. Cmd+S hides the sidebar: content fills the window with inset and radius kept; again restores', async ({ arc }) => {
-  // { contentSize: { width: W, height: H } } = await arc.native(); inset = LAYOUT.contentInset
-  // await arc.press('CmdOrCtrl+S'); expect.poll(view().sidebar.visible).toBe(false)
-  // pane = native().layers.find(role === 'pane'): pane.bounds === { x: inset, y: inset, width: W - 2*inset, height: H - 2*inset }
-  // pane.radius === LAYOUT.contentRadius; await arc.compositeScreenshot('5-sidebar-hidden')
-  // await arc.press('CmdOrCtrl+S'); expect.poll(view().sidebar.visible).toBe(true); pane.bounds.x === LAYOUT.sidebar.defaultWidth + inset
-  void arc;
+test('5. Cmd+S hides the sidebar: content fills the window with inset and radius kept; again restores', async ({ arc }) => {
+  const { contentSize: { width: W, height: H } } = await arc.native();
+  const inset = LAYOUT.contentInset;
+  const pane = async () => (await arc.native()).layers.find((l) => l.role === 'pane')!;
+  await arc.press('CmdOrCtrl+S');
+  await expect.poll(async () => (await arc.view()).sidebar.visible).toBe(false);
+  const hidden = await pane();
+  expect(hidden.bounds).toEqual({ x: inset, y: inset, width: W - 2 * inset, height: H - 2 * inset });
+  expect(hidden.radius).toBe(LAYOUT.contentRadius);
+  await arc.compositeScreenshot('5-sidebar-hidden');
+  await arc.press('CmdOrCtrl+S');
+  await expect.poll(async () => (await arc.view()).sidebar.visible).toBe(true);
+  const shown = await pane();
+  expect(shown.bounds.x).toBe(LAYOUT.sidebar.defaultWidth + inset);
+  expect(shown.bounds.width).toBe(W - shown.bounds.x - inset);
+  expect(shown.radius).toBe(LAYOUT.contentRadius);
 });
 
 test.skip('6. Ctrl+Shift+= creates a split: two tab views attached side by side', async ({ arc, siteUrl }) => {
@@ -105,12 +151,16 @@ test.skip('7. after the clock passes the threshold an idle Today tab is archived
   void [arc, siteUrl];
 });
 
-test.skip('8. closing a tab destroys its webContents (destroyed event)', async ({ arc, siteUrl }) => {
-  // open a second Today tab T (Cmd+T, siteUrl + 'page2.html', Enter); T is focused
-  // wc = (await arc.native()).layers.find(l => l.tabId === T).webContentsId
-  // await arc.press('CmdOrCtrl+W'); await arc.waitForDestroyed(wc)
-  // (await arc.view()).space.today.rows has no row T (archived); (await arc.native()).layers has no layer with webContentsId wc
-  void [arc, siteUrl];
+test('8. closing a tab destroys its webContents (destroyed event)', async ({ arc, siteUrl }) => {
+  const t = await openTab(arc, `${siteUrl}page2.html`);
+  const layer = (await arc.native()).layers.find((l) => l.tabId === t.id);
+  expect(layer).toBeDefined();
+  const wc = layer!.webContentsId;
+  await arc.press('CmdOrCtrl+W');
+  await arc.waitForDestroyed(wc);
+  expect(await todayIds(arc)).not.toContain(t.id); // archived
+  expect((await arc.native()).layers.some((l) => l.webContentsId === wc)).toBe(false);
+  expect(await arc.electronApp.evaluate(() => globalThis.__arc!.destroyedWebContentsIds())).toContain(wc);
 });
 
 test.skip('9. restart restores spaces, Pinned, Today, current tab, and sidebar width', async ({ arc, siteUrl }) => {
