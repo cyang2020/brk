@@ -26,9 +26,24 @@ export const SpaceThemeSchema = z.object({
 })
 export type SpaceTheme = z.infer<typeof SpaceThemeSchema>
 
-/** Arc: `SidebarCustomIcon`. v1 supports an emoji or Arc's default space icon. */
+/**
+ * Arc: `SidebarIconType` has 61 built-in icon names (model-and-shortcuts.md 1.4). v1 ships glyphs for these 16
+ * (ported from candidate A). The sidebar renderer maps them with a `Record<NamedIcon, ...>` of inline SVGs, so a
+ * name without a glyph fails the build. The tuple is the single list: the schema and the type derive from it.
+ */
+export const NAMED_ICONS = [
+  'star', 'bookmark', 'heart', 'flag', 'folder', 'calendar', 'mail', 'terminal',
+  'briefcase', 'home', 'book', 'music', 'camera', 'globe', 'bolt', 'leaf',
+] as const
+export type NamedIcon = (typeof NAMED_ICONS)[number]
+
+/**
+ * Arc: `SidebarCustomIcon` = emoji | icon(SidebarIconType) | symbol. v1: an emoji, one of the named icons, or
+ * Arc's default (`none`: the dock draws a dot in the theme's primary color).
+ */
 export const SpaceIconSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('emoji'), emoji: z.string().min(1).max(16) }),
+  z.object({ kind: z.literal('named'), name: z.enum(NAMED_ICONS) }),
   z.object({ kind: z.literal('none') }),
 ])
 export type SpaceIcon = z.infer<typeof SpaceIconSchema>

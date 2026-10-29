@@ -1,7 +1,8 @@
 /**
- * New space / edit space, inside the sidebar panel. Fields: name (TID.spaceDialogName), emoji (TID.spaceDialogEmoji),
- * color from THEME_PRESETS as four pages of nine (TID.spaceDialogColor(set, i)), live preview via
- * themeFromPrimary + resolveTheme. Submit (TID.spaceDialogSubmit) -> space/new or space/update. Cancel ->
+ * New space / edit space, inside the sidebar panel. Fields: name (TID.spaceDialogName); icon picker: an emoji input
+ * (TID.spaceDialogEmoji), one of NAMED_ICONS as a glyph grid (TID.spaceDialogIcon(name)), or none; color from
+ * THEME_PRESETS as four pages of nine (TID.spaceDialogColor(set, i)), live preview via themeFromPrimary +
+ * resolveTheme. Submit (TID.spaceDialogSubmit) -> space/new or space/update with the SpaceIcon chosen. Cancel ->
  * sidebar/dialog { dialog: null }. Form values are local state until submit.
  */
 import type { ReactElement } from 'react'

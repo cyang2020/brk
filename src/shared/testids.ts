@@ -6,6 +6,7 @@
  */
 import type { ArchiveId, ItemId, SpaceId } from './base'
 import type { SectionKind } from './placement'
+import type { NamedIcon } from './theme'
 import type { ArchiveBucket } from './view'
 
 export const TID = {
@@ -33,6 +34,8 @@ export const TID = {
   spaceDialog: 'space-dialog',
   spaceDialogName: 'space-dialog-name',
   spaceDialogEmoji: 'space-dialog-emoji',
+  /** One per NAMED_ICONS entry in the icon picker. */
+  spaceDialogIcon: (name: NamedIcon): string => `space-dialog-icon-${name}`,
   spaceDialogColor: (set: string, index: number): string => `space-dialog-color-${set}-${index}`,
   spaceDialogSubmit: 'space-dialog-submit',
   // Overlay surface (W4)
