@@ -1,0 +1,199 @@
+/*
+ * The overlay bundle's one stylesheet. Colors are Arc's observed tokens (visual-and-copy.md): Command Bar text,
+ * row and accessory colors (ARC_CommandBar), PopoverBackground / PopoverShadow / FocusRing and the Foreground /
+ * BackgroundPrimary page tokens (ARCClients_BaseAssets). P3 values are written as sRGB hex. Sizes are GUESSES.
+ */
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font: 13px/1.35 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  color-scheme: light;
+  --popover-bg: #fafbff;
+  --popover-shadow: rgba(21, 28, 50, 0.3);
+  --bar-text: rgba(0, 0, 0, 0.8);
+  --bar-text-secondary: rgba(0, 0, 0, 0.33);
+  --bar-placeholder: rgba(0, 0, 0, 0.3);
+  --bar-hairline: rgba(0, 0, 0, 0.1);
+  --bar-row-hover: rgba(0, 0, 0, 0.05);
+  --bar-accessory-bg: rgba(0, 0, 0, 0.05);
+  --bar-accessory-fg: rgba(0, 0, 0, 0.5);
+  --bar-hint-pill: #458aff;
+  --focus-ring: #458aff;
+  --page-bg: #ffffff;
+  --fg-primary: rgba(14, 15, 16, 0.9);
+  --fg-secondary: rgba(0, 0, 0, 0.5);
+  --fg-tertiary: rgba(0, 0, 0, 0.3);
+  --primary-button: #3139fb;
+  --primary-button-hover: #2c33e2;
+  --primary-button-pressed: #2a30d5;
+  --danger: #d74807;
+}
+
+.overlay-root[data-scheme='dark'] {
+  color-scheme: dark;
+  --popover-bg: #151c30;
+  --popover-shadow: rgba(21, 28, 50, 0.8);
+  --bar-text: rgba(255, 255, 255, 0.8);
+  --bar-text-secondary: rgba(255, 255, 255, 0.33);
+  --bar-placeholder: rgba(255, 255, 255, 0.3);
+  --bar-hairline: rgba(255, 255, 255, 0.1);
+  --bar-row-hover: rgba(255, 255, 255, 0.05);
+  --bar-accessory-bg: rgba(255, 255, 255, 0.05);
+  --bar-accessory-fg: rgba(255, 255, 255, 0.66);
+  --bar-hint-pill: rgba(250, 251, 255, 0.33);
+  --page-bg: #000000;
+  --fg-primary: rgba(255, 255, 255, 0.8);
+  --fg-secondary: rgba(255, 255, 255, 0.5);
+  --fg-tertiary: rgba(255, 255, 255, 0.3);
+}
+
+.glyph {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.favicon {
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+/* ---- Command bar ---- */
+
+.command-bar {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--popover-bg);
+  color: var(--bar-text);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 0.5px var(--bar-hairline),
+    0 18px 48px -8px var(--popover-shadow);
+  animation: command-bar-in 120ms ease-out;
+}
+
+.command-bar[data-placement='pill'] {
+  border-radius: 10px;
+}
+
+@keyframes command-bar-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.command-bar-input {
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 54px;
+  padding: 0 20px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--bar-text);
+  font: inherit;
+  font-size: 18px;
+  user-select: text;
+}
+
+.command-bar[data-placement='pill'] .command-bar-input {
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.command-bar-input::placeholder {
+  color: var(--bar-placeholder);
+}
+
+.command-bar-input::selection {
+  background: color-mix(in srgb, var(--focus-ring) 30%, transparent);
+}
+
+.command-bar-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--bar-hairline);
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.result[data-selected='true'] {
+  background: var(--bar-row-hover);
+}
+
+.result-icon {
+  flex: none;
+  color: var(--bar-text-secondary);
+}
+
+.result-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-verb {
+  color: var(--bar-text-secondary);
+}
+
+.result-detail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--bar-text-secondary);
+}
+
+.result-title + .result-hint {
+  margin-left: auto;
+}
+
+.result-hint {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--bar-accessory-bg);
+  color: var(--bar-accessory-fg);
+  font: inherit;
+  font-size: 11px;
+}
+
+.result-hint-switch {
+  color: var(--bar-hint-pill);
+  font-weight: 500;
+}
