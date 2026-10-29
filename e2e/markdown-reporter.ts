@@ -18,7 +18,11 @@ export default class MarkdownReporter implements Reporter {
       const error = test.outcome() === 'unexpected' && last?.error?.message ? ` — ${last.error.message.split('\n')[0]}` : '';
       return `- ${LABEL[test.outcome()]} ${test.titlePath().filter(Boolean).join(' › ')}${error}`.replace(/\u001b\[[\d;]*m/g, '');
     });
-    const header = `# E2E report\n\n${result.startTime.toISOString()} · ${process.platform}/${process.arch} · ${result.status} in ${(result.duration / 1000).toFixed(1)}s\n\n`;
+    const counts = (['expected', 'unexpected', 'skipped'] as const)
+      .map((outcome) => `${(this.suite?.allTests() ?? []).filter((test) => test.outcome() === outcome).length} ${LABEL[outcome]}`)
+      .join(', ');
+    // result.status is Playwright's run status ('passed' when nothing failed, even if every test was skipped), so the counts follow it.
+    const header = `# E2E report\n\n${result.startTime.toISOString()} · ${process.platform}/${process.arch} · ${result.status} in ${(result.duration / 1000).toFixed(1)}s · ${counts}\n\n`;
     const dir = join(__dirname, '..', 'verify');
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'REPORT.md'), header + lines.join('\n') + '\n');
