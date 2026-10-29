@@ -1,7 +1,8 @@
 /** The archive: archiving, restoring, clearing, and the auto-archive sweep. */
 import type { Draft } from 'immer'
 import type { ArchiveId, ItemId } from '../../shared/base'
-import type { ArchiveReason, StateImpl } from '../model'
+import type { ArchiveReason } from '../../shared/constants'
+import type { StateImpl } from '../model'
 import type { Ctx, HandlerCtx, Handlers } from '../reduce'
 import { notImplemented } from '../todo'
 

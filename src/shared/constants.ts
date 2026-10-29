@@ -88,6 +88,14 @@ export const AUTO_ARCHIVE_MS: Readonly<Record<AutoArchiveAfter, number | null>> 
 /** Inferred from the education banner "Arc archives tabs that you haven't used in the past 12 hours." */
 export const DEFAULT_AUTO_ARCHIVE: AutoArchiveAfter = '12h'
 
+/**
+ * Why a tab is in the archive. Arc: `ArchiveReason` auto | manual | clearButton | clearTabGroup, plus container
+ * deletion (folder or space). Defined once, here: the domain model, the stored schema (src/domain/codec.ts) and the
+ * renderer view (src/shared/view.ts) all take `ArchiveReason` from this tuple.
+ */
+export const ARCHIVE_REASONS = ['manual', 'auto', 'clear', 'container-deleted'] as const
+export type ArchiveReason = (typeof ARCHIVE_REASONS)[number]
+
 /** Our choice. Window size on first launch. */
 export const DEFAULT_WINDOW_SIZE = { width: 1280, height: 820 } as const
 

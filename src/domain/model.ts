@@ -17,7 +17,7 @@
  * - restore: the whole Doc is the file.
  */
 import type { ArchiveId, Instant, ItemId, Rect, Size, SpaceId, WindowId } from '../shared/base'
-import type { AutoArchiveAfter } from '../shared/constants'
+import type { ArchiveReason, AutoArchiveAfter } from '../shared/constants'
 import type { SectionKind } from '../shared/placement'
 import type { SpaceIcon, SpaceTheme } from '../shared/theme'
 
@@ -79,24 +79,29 @@ export interface FolderItem extends ItemBase {
   readonly collapsed: boolean
 }
 
-/** Arc: `SidebarSplitViewData`. Children are 2..4 tabs, left to right. */
+/** Arc: `SidebarSplitViewData`. */
 export interface SplitItem extends ItemBase {
   readonly kind: 'split'
   readonly parentId: ItemId
-  readonly children: readonly ItemId[]
+  /**
+   * Pane tabs, left to right. At least two by type (a split left with one pane is dissolved by normalize, and the
+   * stored schema refuses fewer); at most LAYOUT.maxPanes, enforced by split/add and repairTree.
+   */
+  readonly children: readonly [ItemId, ItemId, ...ItemId[]]
   /** Relative widths keyed by pane (Arc: `itemWidthFactors`); a missing key counts as 1. Normalized on read. */
   readonly widths: Readonly<Record<ItemId, number>>
   readonly focusedId: ItemId
   readonly lastActiveAt: Instant
 }
 
-/** A section root: Favorites (spaceId null), or one space's Pinned or Today. Never moves, never archived. */
-export interface SectionItem extends ItemBase {
+/**
+ * A section root: the one Favorites root (no space), or one space's Pinned or Today. Never moves, never archived.
+ * A discriminated union, so a Favorites root with a space, or a Pinned root without one, cannot be built.
+ */
+export type SectionItem = ItemBase & {
   readonly kind: 'section'
-  readonly section: SectionKind
-  readonly spaceId: SpaceId | null
   readonly children: readonly ItemId[]
-}
+} & ({ readonly section: 'favorites'; readonly spaceId: null } | { readonly section: 'pinned' | 'today'; readonly spaceId: SpaceId })
 
 /** Arc: `SpaceModel` + `CustomInfo`. */
 export interface Space {
@@ -129,9 +134,6 @@ export interface WindowDoc {
 export interface Settings {
   readonly autoArchiveAfter: AutoArchiveAfter
 }
-
-/** Arc: `ArchiveReason` auto | manual | clearButton | clearTabGroup, plus container deletion. */
-export type ArchiveReason = 'manual' | 'auto' | 'clear' | 'container-deleted'
 
 /** Arc: `ArchivedItem`. v1 archives tabs only: archiving a folder or split archives each tab inside it. */
 export interface ArchivedTab {

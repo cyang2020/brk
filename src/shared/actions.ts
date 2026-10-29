@@ -37,7 +37,8 @@ export interface ActionSpec {
   readonly command: UiCommand
 }
 
-export const MENU_ORDER: readonly MenuName[] = ['File', 'Edit', 'View', 'Spaces', 'Tabs', 'Archive', 'Window']
+/** Menu bar position per menu. `Record` over `MenuName`: adding a menu name without a position fails the build. */
+export const MENU_ORDER: Readonly<Record<MenuName, number>> = { File: 0, Edit: 1, View: 2, Spaces: 3, Tabs: 4, Archive: 5, Window: 6 }
 
 export const ACTIONS = {
   // File

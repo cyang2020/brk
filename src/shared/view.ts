@@ -7,7 +7,7 @@
  * `rev` so a surface can ignore a duplicate. Plain data: structured-clone safe.
  */
 import type { ArchiveId, Instant, ItemId, Platform, Rect, SpaceId, WindowId } from './base'
-import type { AutoArchiveAfter } from './constants'
+import type { ArchiveReason, AutoArchiveAfter } from './constants'
 import type { SectionKind } from './placement'
 import type { ResolvedTheme, SpaceIcon, SpaceTheme } from './theme'
 
@@ -187,15 +187,13 @@ export interface ArchiveView {
   readonly autoArchiveAfter: AutoArchiveAfter
 }
 
-export type ArchiveReasonView = 'manual' | 'auto' | 'clear' | 'container-deleted'
-
 export interface ArchiveEntryView {
   readonly id: ArchiveId
   readonly title: string
   readonly url: string | null
   readonly faviconUrl: string | null
   readonly archivedAt: Instant
-  readonly reason: ArchiveReasonView
+  readonly reason: ArchiveReason
   readonly fromSpaceTitle: string | null
 }
 

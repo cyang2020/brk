@@ -3,8 +3,9 @@
  * src/domain/tree.ts refuses illegal moves); the sidebar renderer calls the same function for drag feedback.
  */
 
-/** Arc: `SidebarItemContextType` = topApp | pinned | unpinned. "Today" is the UI name of unpinned. */
-export type SectionKind = 'favorites' | 'pinned' | 'today'
+/** Arc: `SidebarItemContextType` = topApp | pinned | unpinned. "Today" is the UI name of unpinned. The tuple feeds the stored schema. */
+export const SECTION_KINDS = ['favorites', 'pinned', 'today'] as const
+export type SectionKind = (typeof SECTION_KINDS)[number]
 export type PlaceableKind = 'tab' | 'folder' | 'split'
 
 /**
