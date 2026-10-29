@@ -4,8 +4,10 @@
  * results drop below it, with initialQuery selected.
  *
  * Query text is local state (single writer: this input). Results = suggest(query, bar, platform); Up/Down move the
- * selection, Enter dispatches commandFor(selected), Esc dispatches overlay/close. The input autofocuses on mount
- * and when the view's rev shows the bar was reopened. data-testid TID.commandBar, TID.commandBarInput,
+ * selection, Enter dispatches commandFor(selected), Esc dispatches overlay/close. The input autofocuses and the
+ * query resets to `bar.initialQuery` on mount and whenever `bar.openId` changes (a new opening, including Cmd+L
+ * replacing an open Cmd+T bar); page events and clock ticks re-project the view with the same openId, so they never
+ * clobber what the user typed. `rev` is not consulted. data-testid TID.commandBar, TID.commandBarInput,
  * TID.commandBarResult(i).
  */
 import type { ReactElement } from 'react'

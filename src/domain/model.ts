@@ -174,13 +174,18 @@ export interface Session {
 export interface WindowSession {
   readonly contentSize: Size
   readonly overlay: Overlay | null
+  /** Incremented every time an overlay opens or is replaced; the new overlay's `openId`. Never reset. */
+  readonly overlayOpens: number
   readonly peek: boolean
   readonly renamingId: ItemId | null
   readonly dialog: SidebarDialog | null
   readonly recentCycle: RecentCycle | null
 }
 
-export type Overlay = { readonly kind: 'command-bar'; readonly target: CommandBarTarget } | { readonly kind: 'archive' }
+/** `openId` = overlayOpens when this overlay opened; becomes OverlayView.openId (src/shared/view.ts). */
+export type Overlay =
+  | { readonly kind: 'command-bar'; readonly openId: number; readonly target: CommandBarTarget }
+  | { readonly kind: 'archive'; readonly openId: number }
 
 /** Arc: `CommandBarDestinationType` createNewTab | overrideCurrentTab. */
 export type CommandBarTarget =

@@ -3,8 +3,8 @@
  * input; they never see the domain's tree, ids-to-items maps, or session bookkeeping. The same object is what
  * the e2e test API returns from `view()`, so tests assert on exactly what the UI renders from.
  *
- * Produced by `projectWindow` (src/domain/project.ts), pushed whole on every change (no patches), stamped with
- * `rev` so a surface can ignore a duplicate. Plain data: structured-clone safe.
+ * Produced by `projectWindow` (src/domain/project.ts), pushed whole on every change (no patches). Plain data:
+ * structured-clone safe. A surface renders every push; it never skips one by comparing `rev` (see `rev`).
  */
 import type { ArchiveId, Instant, ItemId, Platform, Rect, SpaceId, WindowId } from './base'
 import type { ArchiveReason, AutoArchiveAfter } from './constants'
@@ -12,7 +12,11 @@ import type { SectionKind } from './placement'
 import type { ResolvedTheme, SpaceIcon, SpaceTheme } from './theme'
 
 export interface WindowView {
-  /** Monotonic per app state; equal rev means identical content. */
+  /**
+   * Counts state changes (Session.rev). Two views with equal `rev` came from the same state but need not be
+   * identical: `now` moves on its own (main re-projects on clock ticks so the archive's time buckets stay right),
+   * so a surface must not use `rev` to skip a push or to detect "the overlay was reopened" (that is `openId`).
+   */
   readonly rev: number
   /** The injected clock's time when this view was projected. Renderers use it instead of Date.now(). */
   readonly now: Instant
@@ -144,7 +148,17 @@ export type SpaceDialogView =
 
 export type OverlayView = CommandBarView | ArchiveView
 
-export interface CommandBarView {
+interface OverlayBase {
+  /**
+   * Identity of this opening: WindowSession.overlayOpens at the moment the overlay opened or was replaced by a
+   * different one (Cmd+L while the Cmd+T bar is open). It stays the same across page events, clock pushes and every
+   * other re-projection while the overlay is open. The command bar resets its typed query and refocuses its input
+   * when `openId` changes, never on `rev`.
+   */
+  readonly openId: number
+}
+
+export interface CommandBarView extends OverlayBase {
   readonly kind: 'command-bar'
   /** `center`: Cmd+T and new split panes. `pill`: Cmd+L, drawn over the URL pill. */
   readonly placement: 'center' | 'pill'
@@ -172,7 +186,7 @@ export interface HistoryCandidate {
   readonly visitedAt: Instant
 }
 
-export interface ArchiveView {
+export interface ArchiveView extends OverlayBase {
   readonly kind: 'archive'
   /**
    * The content card (`ContentView.rect`, window coordinates). The archive draws inside the card, like Arc's

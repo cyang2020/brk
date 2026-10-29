@@ -12,12 +12,12 @@ import type { AppState } from './model'
  * - urlPill: displayUrl(focused tab url) or null.
  * - content: layout.content and layout.radius; panes zip selectWindow panes with layout.panes; splitId when the
  *   active item is a split.
- * - overlay command-bar: placement pill -> anchor urlPillRect(sidebar.width), initialQuery = focused url; center ->
- *   anchor layout.content, initialQuery ''. tabs = all tabs with a url (focused first, then lastActiveAt desc);
- *   history = first CAPS.commandBarHistory entries.
- * - overlay archive: anchor = layout.content (the card the archive draws in); entries newest first with
- *   fromSpaceTitle; autoArchiveAfter from settings.
- * - rev = session.rev, now = `now`.
+ * - overlay command-bar: openId = overlay.openId; placement pill -> anchor urlPillRect(sidebar.width), initialQuery =
+ *   focused url; center -> anchor layout.content, initialQuery ''. tabs = all tabs with a url (focused first, then
+ *   lastActiveAt desc); history = first CAPS.commandBarHistory entries.
+ * - overlay archive: openId = overlay.openId; anchor = layout.content (the card the archive draws in); entries
+ *   newest first with fromSpaceTitle; autoArchiveAfter from settings.
+ * - rev = session.rev; now = `now` (independent of rev: a clock-only re-projection changes now, not rev).
  */
 export function projectWindow(state: AppState, windowId: WindowId, layout: LayoutView, now: Instant, platform: Platform): WindowView {
   throw new Error('not implemented')
