@@ -197,3 +197,226 @@ body {
   color: var(--bar-hint-pill);
   font-weight: 500;
 }
+
+/* ---- Archive (fills the content-card-sized surface) ---- */
+
+.archive {
+  --archive-gutter: max(32px, calc((100% - 760px) / 2));
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--page-bg);
+  color: var(--fg-primary);
+}
+
+.archive-header,
+.archive-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 var(--archive-gutter);
+}
+
+.archive-header {
+  padding-top: 28px;
+  padding-bottom: 14px;
+}
+
+.archive-title {
+  flex: 1;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.archive-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg-secondary);
+}
+
+.archive-close:hover {
+  background: var(--bar-accessory-bg);
+  color: var(--fg-primary);
+}
+
+.archive-toolbar {
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bar-hairline);
+}
+
+.archive-filter {
+  flex: 1 1 180px;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--bar-hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-primary);
+  font: inherit;
+  user-select: text;
+}
+
+.archive-filter::placeholder {
+  color: var(--fg-tertiary);
+}
+
+.archive-filter:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent);
+}
+
+.archive-threshold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.archive-threshold select {
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--bar-hairline);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg-primary);
+  font: inherit;
+}
+
+.archive-button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--bar-accessory-bg);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.archive-button:hover:not(:disabled) {
+  background: var(--bar-hairline);
+}
+
+.archive-button:disabled {
+  opacity: 0.4;
+}
+
+.archive-button-danger,
+.archive-button-danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.archive-button:focus-visible,
+.archive-close:focus-visible,
+.archive-threshold select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.archive-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-confirm-text {
+  color: var(--fg-secondary);
+  font-size: 12px;
+}
+
+.archive-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px var(--archive-gutter) 32px;
+}
+
+.archive-empty {
+  margin: 72px auto 0;
+  max-width: 320px;
+  color: var(--fg-secondary);
+  font-size: 14px;
+  text-align: center;
+}
+
+.archive-group-title {
+  margin: 20px 12px 6px;
+  color: var(--fg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.archive-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archive-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 8px 4px 12px;
+  border-radius: 8px;
+}
+
+.archive-entry:hover {
+  background: var(--bar-row-hover);
+}
+
+.archive-entry-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.archive-entry-title,
+.archive-entry-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-entry-url,
+.archive-entry-meta {
+  color: var(--fg-secondary);
+  font-size: 12px;
+}
+
+.archive-entry-meta {
+  flex: none;
+  white-space: nowrap;
+}
+
+.archive-entry:hover .archive-button {
+  background: var(--primary-button);
+  color: #ffffff;
+}
+
+.archive-entry .archive-button:hover {
+  background: var(--primary-button-hover);
+}
+
+.archive-entry .archive-button:active {
+  background: var(--primary-button-pressed);
+}

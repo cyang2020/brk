@@ -8,11 +8,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionId } from '../../shared/actions'
-import type { Instant, ItemId, SpaceId, WindowId } from '../../shared/base'
+import type { ArchiveId, Instant, ItemId, SpaceId, WindowId } from '../../shared/base'
 import type { UiCommand } from '../../shared/commands'
 import { SIDEBAR_TOKENS } from '../../shared/theme'
 import { TID } from '../../shared/testids'
-import type { CommandBarView, OverlayView, WindowView } from '../../shared/view'
+import type { ArchiveView, CommandBarView, OverlayView, WindowView } from '../../shared/view'
 import { OverlayApp } from './OverlayApp'
 
 const bridge = vi.hoisted(() => {
@@ -130,11 +130,19 @@ function mount(view: WindowView): void {
 const byTestId = (id: string): HTMLElement | null => container.querySelector<HTMLElement>(`[data-testid="${id}"]`)
 const input = (): HTMLInputElement => byTestId(TID.commandBarInput) as HTMLInputElement
 
-function type(text: string): void {
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+/** Sets a control's value the way a user edit does, so React's onChange runs. */
+function edit(el: HTMLInputElement | HTMLSelectElement, value: string, event: 'input' | 'change'): void {
+  const setValue = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')!.set!
   act(() => {
-    setValue.call(input(), text)
-    input().dispatchEvent(new Event('input', { bubbles: true }))
+    setValue.call(el, value)
+    el.dispatchEvent(new Event(event, { bubbles: true }))
+  })
+}
+const type = (text: string, el: HTMLInputElement = input()): void => edit(el, text, 'input')
+
+function click(el: Element): void {
+  act(() => {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
 }
 
@@ -221,7 +229,7 @@ describe('command bar', () => {
 
   it('clicking a row runs it', () => {
     mount(windowView(commandBar()))
-    act(() => byTestId(TID.commandBarResult(2))!.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    click(byTestId(TID.commandBarResult(2))!)
     expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'commandBar/submit', input: 'https://news.ycombinator.com/' }]])
   })
 
@@ -266,5 +274,127 @@ describe('command bar', () => {
     expect(byTestId(TID.commandBar)!.style.top).toBe('116px')
     show(windowView(commandBar({ openId: 2, placement: 'pill', anchor: { x: 16, y: 44, width: 216, height: 36 } })))
     expect([byTestId(TID.commandBar)!.style.left, byTestId(TID.commandBar)!.style.top, input().style.height]).toEqual(['16px', '44px', '36px'])
+  })
+})
+
+const local = (mo: number, d: number, h: number, mi: number): Instant => new Date(2026, mo - 1, d, h, mi).getTime() as Instant
+
+function archive(extra: Partial<ArchiveView> = {}): ArchiveView {
+  return {
+    kind: 'archive',
+    openId: 5,
+    anchor: CONTENT,
+    autoArchiveAfter: '12h',
+    entries: [
+      { id: 'a1' as ArchiveId, title: 'Fixture Home', url: 'http://127.0.0.1:4000/', faviconUrl: null, archivedAt: local(10, 29, 14, 0), reason: 'auto', fromSpaceTitle: 'Home' },
+      { id: 'a2' as ArchiveId, title: 'Weather', url: 'https://weather.example.com/', faviconUrl: null, archivedAt: local(10, 28, 9, 30), reason: 'manual', fromSpaceTitle: 'Work' },
+      { id: 'a3' as ArchiveId, title: 'Old Docs', url: null, faviconUrl: null, archivedAt: local(9, 1, 12, 0), reason: 'clear', fromSpaceTitle: null },
+    ],
+    ...extra,
+  }
+}
+
+/** Each group as [testid, heading, entry testids]. */
+function groups(): [string | null, string | null, string[]][] {
+  return [...container.querySelectorAll('[data-testid^="archive-group-"]')].map((g) => [
+    g.getAttribute('data-testid'),
+    g.querySelector('h2')!.textContent,
+    [...g.querySelectorAll('[data-testid^="archive-entry-"]')].map((e) => e.getAttribute('data-testid')!),
+  ])
+}
+
+describe('archive', () => {
+  it('shows the title and groups entries by bucket, newest group first', () => {
+    mount(windowView(archive()))
+    expect(byTestId(TID.archive)!.querySelector('h1')!.textContent).toBe('Archive')
+    expect(groups()).toEqual([
+      [TID.archiveGroup('today'), 'Today', [TID.archiveEntry('a1' as ArchiveId)]],
+      [TID.archiveGroup('yesterday'), 'Yesterday', [TID.archiveEntry('a2' as ArchiveId)]],
+      [TID.archiveGroup('beyond'), 'Beyond', [TID.archiveEntry('a3' as ArchiveId)]],
+    ])
+  })
+
+  it('each entry shows its title, display URL, when, why and its source space', () => {
+    mount(windowView(archive()))
+    const text = (id: string): string => byTestId(TID.archiveEntry(id as ArchiveId))!.textContent!
+    expect(text('a1')).toBe('Fixture Home127.0.0.1:40002:00 PM · Auto-archived · HomeRestore')
+    expect(text('a2')).toBe('Weatherweather.example.com9:30 AM · Closed · WorkRestore')
+    expect(text('a3')).toBe('Old DocsSep 1 · Cleared from TodayRestore')
+  })
+
+  it('Restore dispatches archive/restore for that entry', () => {
+    mount(windowView(archive()))
+    click(byTestId(TID.archiveRestore('a2' as ArchiveId))!)
+    expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'archive/restore', entryId: 'a2' }]])
+  })
+
+  it('Clear Archive asks first, and dispatches archive/clear only on confirm', () => {
+    mount(windowView(archive()))
+    click(byTestId(TID.archiveClear)!)
+    expect(bridge.dispatch).not.toHaveBeenCalled()
+    expect(byTestId(TID.archive)!.textContent).toContain("Are you sure you'd like to Clear Archive?")
+    click(byTestId(TID.archiveClearConfirm)!)
+    expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'archive/clear' }]])
+    expect(byTestId(TID.archiveClearConfirm)).toBeNull()
+  })
+
+  it('Cancel and Escape back out of the confirm without clearing or closing', () => {
+    mount(windowView(archive()))
+    click(byTestId(TID.archiveClear)!)
+    const cancel = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!
+    expect(document.activeElement).toBe(cancel)
+    click(cancel)
+    expect(byTestId(TID.archiveClearConfirm)).toBeNull()
+
+    click(byTestId(TID.archiveClear)!)
+    press('Escape', document.activeElement!)
+    expect(byTestId(TID.archiveClearConfirm)).toBeNull()
+    expect(bridge.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('the threshold picker shows the current setting and dispatches settings/auto-archive', () => {
+    mount(windowView(archive()))
+    const select = byTestId(TID.archiveThreshold) as HTMLSelectElement
+    expect(select.closest('label')!.textContent).toContain('Archive tabs after')
+    expect([...select.options].map((o) => o.textContent)).toEqual(['1 hour', '6 hours', '12 hours', '24 hours', '7 days', '30 days', 'Never'])
+    expect(select.value).toBe('12h')
+    edit(select, '24h', 'change')
+    expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'settings/auto-archive', after: '24h' }]])
+  })
+
+  it('empty: shows the hint and disables Clear Archive', () => {
+    mount(windowView(archive({ entries: [] })))
+    expect(byTestId(TID.archive)!.textContent).toContain('Hover your mouse over a tab and press the × to archive it.')
+    expect(groups()).toEqual([])
+    expect((byTestId(TID.archiveClear) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('the close button and Escape dispatch overlay/close', () => {
+    mount(windowView(archive()))
+    click(byTestId(TID.archiveClose)!)
+    press('Escape', document.body)
+    expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'overlay/close' }], [{ type: 'overlay/close' }]])
+  })
+
+  it('the filter narrows entries by title, URL or space; Escape clears it before closing', () => {
+    mount(windowView(archive()))
+    const filter = byTestId(TID.archive)!.querySelector<HTMLInputElement>('input[placeholder="Filter Archived Tabs"]')!
+    type('work', filter)
+    expect(groups()).toEqual([[TID.archiveGroup('yesterday'), 'Yesterday', [TID.archiveEntry('a2' as ArchiveId)]]])
+    type('nothing like this', filter)
+    expect(byTestId(TID.archive)!.textContent).toContain('No archived tabs match your filter.')
+    press('Escape', filter)
+    expect(filter.value).toBe('')
+    expect(groups()).toHaveLength(3)
+    expect(bridge.dispatch).not.toHaveBeenCalled()
+    press('Escape', filter)
+    expect(bridge.dispatch.mock.calls).toEqual([[{ type: 'overlay/close' }]])
+  })
+
+  it('switching from the command bar to the archive replaces the bar', () => {
+    mount(windowView(commandBar()))
+    show(windowView(archive()))
+    expect(byTestId(TID.commandBar)).toBeNull()
+    expect(byTestId(TID.archive)).not.toBeNull()
   })
 })

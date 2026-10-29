@@ -49,4 +49,7 @@ export const TID = {
   archiveRestore: (id: ArchiveId): string => `archive-restore-${id}`,
   archiveClear: 'archive-clear',
   archiveThreshold: 'archive-threshold',
+  /** The confirm button of the inline "Clear Archive" confirmation. */
+  archiveClearConfirm: 'archive-clear-confirm',
+  archiveClose: 'archive-close',
 } as const
