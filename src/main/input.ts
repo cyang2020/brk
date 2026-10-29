@@ -27,11 +27,13 @@
  * W2 tests (src/main/input.test.ts): hook then accelerator -> one dispatch; accelerator then hook -> one dispatch;
  * mouse click -> always; auto-repeat -> none; two presses 150 ms apart -> two; sidebar/toggle twice -> toggled back.
  */
-import type { BaseWindow, WebContents } from 'electron'
+import { Menu, type BaseWindow, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import type { Platform, WindowId } from '../shared/base'
-import type { ActionId } from '../shared/actions'
+import { ACTIONS, MENU_ORDER, type ActionId, type MenuName } from '../shared/actions'
+import { createKeymap, parseAccelerator } from '../shared/accelerator'
 import type { SurfaceKind } from '../shared/bridge'
 import type { Input } from '../shared/commands'
+import { TIMING } from '../shared/constants'
 import type { Effect } from '../domain'
 
 export type Dispatch = (input: Input) => void
@@ -51,8 +53,65 @@ export interface KeyRouter {
   fromMenu(actionId: ActionId, windowId: WindowId, triggeredByAccelerator: boolean): void
 }
 
-export function createKeyRouter(dispatch: Dispatch, platform: Platform): KeyRouter {
-  throw new Error('not implemented')
+type Path = 'hook' | 'menu'
+
+/**
+ * `now` is a monotonic millisecond clock for the dedupe window only (not domain time, which is src/main/clock.ts);
+ * tests inject one.
+ */
+export function createKeyRouter(dispatch: Dispatch, platform: Platform, now: () => number = () => performance.now()): KeyRouter {
+  const keymap = createKeymap(platform)
+  const records = new Map<string, { readonly time: number; readonly path: Path }>()
+  const key = (windowId: WindowId, actionId: ActionId): string => `${windowId}\u0000${actionId}`
+
+  /** True when the other path already dispatched this press; that record is consumed. */
+  const consumeCounterpart = (windowId: WindowId, actionId: ActionId, counterpart: Path): boolean => {
+    const k = key(windowId, actionId)
+    const record = records.get(k)
+    if (!record || record.path !== counterpart || now() - record.time > TIMING.keyDedupeMs) return false
+    records.delete(k)
+    return true
+  }
+  const record = (windowId: WindowId, actionId: ActionId, path: Path): void => {
+    records.set(key(windowId, actionId), { time: now(), path })
+  }
+  const fire = (windowId: WindowId, actionId: ActionId): void => {
+    dispatch({ origin: 'ui', windowId, command: ACTIONS[actionId].command })
+  }
+
+  return {
+    attach(webContents, owner): void {
+      webContents.on('before-input-event', (event, input) => {
+        if (input.type === 'keyUp') {
+          if (input.key === 'Control') dispatch({ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: owner.windowId } })
+          return
+        }
+        if (input.isAutoRepeat) return
+        const actionId = keymap(input)
+        if (actionId === null) return
+        if (owner.surface === 'tab' && ACTIONS[actionId].priority !== 'app') return
+        event.preventDefault()
+        if (consumeCounterpart(owner.windowId, actionId, 'menu')) return
+        record(owner.windowId, actionId, 'hook')
+        fire(owner.windowId, actionId)
+      })
+    },
+    fromMenu(actionId, windowId, triggeredByAccelerator): void {
+      if (triggeredByAccelerator) {
+        if (consumeCounterpart(windowId, actionId, 'hook')) return
+        record(windowId, actionId, 'menu')
+      }
+      fire(windowId, actionId)
+    },
+  }
+}
+
+const SEPARATOR: MenuItemConstructorOptions = { type: 'separator' }
+
+/** Native items that precede a menu's actions. The Window menu's close role is re-keyed off Cmd+W, which is Archive Tab. */
+const NATIVE_ROLES: Partial<Record<MenuName, readonly MenuItemConstructorOptions[]>> = {
+  Edit: [{ role: 'undo' }, { role: 'redo' }, SEPARATOR, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }],
+  Window: [{ role: 'minimize' }, { role: 'close', accelerator: 'CmdOrCtrl+Shift+W' }],
 }
 
 /**
@@ -62,10 +121,52 @@ export function createKeyRouter(dispatch: Dispatch, platform: Platform): KeyRout
  * `event.triggeredByAccelerator`.
  */
 export function installAppMenu(router: KeyRouter, focusedWindowId: () => WindowId | null, platform: Platform): void {
-  throw new Error('not implemented')
+  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(router, focusedWindowId, platform)))
+}
+
+/** The template `installAppMenu` builds, exported for the unit test. */
+export function appMenuTemplate(router: KeyRouter, focusedWindowId: () => WindowId | null, platform: Platform): MenuItemConstructorOptions[] {
+  const byMenu = new Map<MenuName, ActionId[]>()
+  for (const actionId of Object.keys(ACTIONS) as ActionId[]) {
+    const list = byMenu.get(ACTIONS[actionId].menu) ?? []
+    list.push(actionId)
+    byMenu.set(ACTIONS[actionId].menu, list)
+  }
+  const names = (Object.keys(MENU_ORDER) as MenuName[]).sort((a, b) => MENU_ORDER[a] - MENU_ORDER[b])
+  const template: MenuItemConstructorOptions[] = platform === 'darwin' ? [{ role: 'appMenu' }] : []
+  for (const name of names) {
+    const items: MenuItemConstructorOptions[] = [...(NATIVE_ROLES[name] ?? [])]
+    let lastGroup: number | null = items.length > 0 ? -1 : null
+    for (const actionId of byMenu.get(name) ?? []) {
+      const spec = ACTIONS[actionId]
+      if (lastGroup !== null && spec.group !== lastGroup) items.push(SEPARATOR)
+      lastGroup = spec.group
+      const accelerator = spec.keys.find((k) => parseAccelerator(k, platform) !== null)
+      items.push({
+        label: spec.label,
+        ...(accelerator === undefined ? {} : { accelerator }),
+        click: (_item, _window, event) => {
+          const windowId = focusedWindowId()
+          if (windowId !== null) router.fromMenu(actionId, windowId, event.triggeredByAccelerator === true)
+        },
+      })
+    }
+    if (name === 'File' && platform !== 'darwin') items.push(SEPARATOR, { role: 'quit' })
+    template.push({ label: name, submenu: items })
+  }
+  return template
 }
 
 /** Executes a `menu/popup` effect: Menu.buildFromTemplate(entries) popped up at `at` in `window`. */
 export function popupMenu(effect: Extract<Effect, { type: 'menu/popup' }>, window: BaseWindow, dispatch: Dispatch): void {
-  throw new Error('not implemented')
+  Menu.buildFromTemplate(popupTemplate(effect, dispatch)).popup({ window, x: Math.round(effect.at.x), y: Math.round(effect.at.y) })
+}
+
+/** The template `popupMenu` builds, exported for the unit test. */
+export function popupTemplate(effect: Extract<Effect, { type: 'menu/popup' }>, dispatch: Dispatch): MenuItemConstructorOptions[] {
+  return effect.entries.map((entry) =>
+    entry.kind === 'separator'
+      ? SEPARATOR
+      : { label: entry.label, enabled: entry.enabled, click: () => dispatch({ origin: 'ui', windowId: effect.windowId, command: entry.command }) },
+  )
 }
