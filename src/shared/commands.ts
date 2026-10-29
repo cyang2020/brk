@@ -195,6 +195,12 @@ export type SystemCommand =
   | { readonly type: 'page/open'; readonly openerId: ItemId; readonly url: string; readonly background: boolean }
   /** Ctrl released after Ctrl+Tab cycling (before-input-event keyUp). No-op when no cycle is running. */
   | { readonly type: 'tab/cycle-recent-commit'; readonly windowId: WindowId }
+  /**
+   * A tab view's webContents gained keyboard focus (its 'focus' event: the user clicked into another split pane).
+   * The reducer sets that pane's split `focusedId`, so 'focused' targets (Cmd+L, Cmd+W, Cmd+D) resolve to the pane
+   * the user is in. Ignored when the tab is not a split pane.
+   */
+  | { readonly type: 'pane/focused'; readonly tabId: ItemId }
   /** BaseWindow resize/move. `bounds` is persisted for restore; `contentSize` drives layout. */
   | { readonly type: 'window/bounds'; readonly windowId: WindowId; readonly bounds: Rect; readonly contentSize: Size }
   /** Auto-archive sweep. Sent on an interval and by the e2e test clock after it moves. */

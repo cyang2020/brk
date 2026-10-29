@@ -12,4 +12,9 @@ export const splitHandlers = {
   'split/close-pane': notImplemented,
   // widths = fractions keyed by tabId, each clamped to >= LAYOUT.minPaneFraction after normalization.
   'split/resize': notImplemented,
+  // System (tab-runtime.ts, webContents 'focus'): the user clicked into a pane. If the tab is a pane of a split, set
+  // that split's focusedId = tabId (no lastActiveAt stamp: the pane was already visible). Not a pane: no-op. Main
+  // dispatches it as soon as the event fires, so a later 'focused'-targeted UI command (Cmd+L, Cmd+W, Cmd+D)
+  // resolves to the pane the user is in.
+  'pane/focused': notImplemented,
 } satisfies Partial<Handlers>

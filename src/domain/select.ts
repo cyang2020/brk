@@ -27,7 +27,10 @@ export interface WindowSelection {
   readonly bounds: Rect | null
   readonly contentSize: Size
   readonly sidebar: { readonly visible: boolean; readonly width: number; readonly peek: boolean }
-  /** 0..LAYOUT.maxPanes, left to right. Empty when the space shows nothing. */
+  /**
+   * 0..LAYOUT.maxPanes, left to right. Empty when the current space has no activeBySpace entry (a new space, or
+   * its last loaded tab was closed-and-kept): the window shows an empty content card, no tab view is attached.
+   */
   readonly panes: readonly PaneSelection[]
   readonly overlay: 'command-bar' | 'archive' | null
   /** overlay -> overlay; renaming or dialog -> sidebar; else the focused pane; no panes -> sidebar. */
@@ -52,7 +55,11 @@ export function loadedTabIds(state: AppState): ReadonlySet<ItemId> {
 
 // --- domain-internal ---------------------------------------------------------------------------------------------
 
-/** The tab whose page has keyboard focus in the window: the active tab, or the active split's focused pane. */
+/**
+ * The tab whose page has keyboard focus in the window: the active tab, or the active split's focused pane
+ * (`focusedId`, kept current by `pane/focused`). Null when the current space has no activeBySpace entry; a
+ * 'focused'-targeted command is then a no-op.
+ */
 export function focusedTabId(state: StateImpl, windowId: WindowId): ItemId | null {
   throw new Error('not implemented')
 }

@@ -23,7 +23,8 @@ export function openTab(draft: Draft<StateImpl>, windowId: WindowId, url: string
 /**
  * Makes `itemId` what the window shows. A split pane focuses its split with that pane focused; a tab in another
  * space switches the window to that space; a Favorites tab stays in the current space. Unless `stamp` is false
- * (Ctrl+Tab in progress), stamps `lastActiveAt = now` on the outgoing and incoming visible tabs.
+ * (Ctrl+Tab in progress), stamps `lastActiveAt = now` on the outgoing and incoming visible tabs. Sets
+ * activeBySpace[space] = the item (or its split), which is the only way an absent entry gets filled.
  */
 export function focusItem(draft: Draft<StateImpl>, windowId: WindowId, itemId: ItemId, ctx: Ctx, stamp = true): void {
   throw new Error('not implemented')
@@ -36,8 +37,13 @@ export const tabHandlers = {
   // index = 1. Later presses: index = (index + delta) mod length. Focus without stamping.
   'tab/cycle-recent': notImplemented,
   'tab/cycle-recent-commit': notImplemented, // if recentCycle: stamp the chosen tab, clear recentCycle; else no-op
-  // Resolve target. Today (or a Today split pane): archiveItems([id], 'manual'). Pinned/Favorites: remove from
-  // `loaded`; keep the item. Then focus moves to the most recent other tab of the space (lastActiveAt), or nothing.
+  // Resolve target. Today tab (or a Today split's pane): archiveItems([id], 'manual'). Pinned or Favorites tab
+  // (Arc's "Close and Keep Pinned"): delete it from session.loaded (main then closes its webContents) and keep the
+  // item where it is. Then, in both cases, for every window whose activeBySpace[s] is the tab or a split containing
+  // it: set activeBySpace[s] to the most recent other *loaded* tab or split of s (lastActiveAt desc; a loaded
+  // Favorites tab counts), or delete the entry when there is none, so s shows an empty content card. normalize never
+  // refills a deleted entry (normalize.ts rule 3), so closing the only pinned tab of a space leaves it unloaded
+  // instead of selecting and reloading it; the next tab/focus or commandBar/submit fills the entry again.
   'tab/close': notImplemented,
   // Resolve target to a tab (a split pane toggles the whole split). Today -> moveItem to end of space Pinned;
   // Pinned/Favorites (any depth) -> moveItem to top of Today. moveItem maintains pinnedUrl.
@@ -49,7 +55,8 @@ export const tabHandlers = {
   'view/zoom': notImplemented, // emit web/zoom
   'view/devtools': notImplemented, // emit web/devtools
   // url (committed): tab.url = url, push history (dedupe by url, cap). title/faviconUrl: tab fields.
-  // loading/canGoBack/canGoForward/failure/crashed: session.live[tabId]. Unknown or unloaded tab: ignore.
+  // loading/canGoBack/canGoForward/failure/crashed: session.live[tabId]. Unknown, archived or unloaded tab: ignore
+  // (a late event from a retired webContents; tab-runtime.ts drops most of them by generation, this is the backstop).
   'page/updated': notImplemented,
   // openTab in the opener's space's Today (opener in Favorites -> window's current space), focus unless background.
   'page/open': notImplemented,

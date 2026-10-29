@@ -2,7 +2,7 @@
 import type { Draft } from 'immer'
 import type { ArchiveId, ItemId } from '../../shared/base'
 import type { ArchiveReason, StateImpl } from '../model'
-import type { Ctx, Handlers } from '../reduce'
+import type { Ctx, HandlerCtx, Handlers } from '../reduce'
 import { notImplemented } from '../todo'
 
 /**
@@ -16,10 +16,13 @@ export function archiveItems(draft: Draft<StateImpl>, ids: readonly ItemId[], re
 
 /**
  * Puts an archived tab back: its source space's section (top of Today, end of Pinned; Favorites -> end of
- * Favorites), or the current space's Today when the space is gone. Reuses the tab id unless taken. Removes the
- * entry. Returns the restored tab id, or null for an unknown entry.
+ * Favorites), or, when that space no longer exists, the top of Today of the current space of `ctx.windowId`, the
+ * window the user restored from. `ctx` is the dispatching command's HandlerCtx: `archive/restore` and
+ * `archive/restore-last` are UI commands, so `ctx.windowId` is set for them; with a null windowId and a missing
+ * source space there is no destination and the entry is left untouched (the domain invents no window). Reuses the
+ * tab id unless taken. Removes the entry. Returns the restored tab id, or null for an unknown entry or no destination.
  */
-export function restoreEntry(draft: Draft<StateImpl>, entryId: ArchiveId, ctx: Ctx): ItemId | null {
+export function restoreEntry(draft: Draft<StateImpl>, entryId: ArchiveId, ctx: HandlerCtx): ItemId | null {
   throw new Error('not implemented')
 }
 
@@ -33,8 +36,8 @@ export function sweepAutoArchive(draft: Draft<StateImpl>, ctx: Ctx): number {
 }
 
 export const archiveHandlers = {
-  'archive/restore': notImplemented, // restoreEntry, then focus the restored tab; the archive overlay stays open
-  'archive/restore-last': notImplemented, // restoreEntry(archive[0]); focus it
+  'archive/restore': notImplemented, // restoreEntry(draft, entryId, ctx), then focus the restored tab; the archive overlay stays open
+  'archive/restore-last': notImplemented, // restoreEntry(draft, archive[0].id, ctx); focus it
   'archive/clear': notImplemented, // doc.archive = []
   'settings/auto-archive': notImplemented, // settings.autoArchiveAfter = after
   'clock/tick': notImplemented, // sweepAutoArchive

@@ -116,7 +116,11 @@ export interface WindowDoc {
   /** Outer window bounds for restore; null before the first resize/move event. */
   readonly bounds: Rect | null
   readonly spaceId: SpaceId
-  /** What each space shows in this window: a tab (any section, including Favorites) or a split. Arc: `lastActiveTabsPerSpace`. */
+  /**
+   * What each space shows in this window: a tab (any section, including Favorites) or a split. Arc:
+   * `lastActiveTabsPerSpace`. An absent entry means the space shows an empty content card (a new space, or its
+   * last loaded tab was closed-and-kept by tab/close); normalize repairs entries, it never adds one.
+   */
   readonly activeBySpace: Readonly<Record<SpaceId, ItemId>>
   /** Arc: `SidebarViewPreferences` (`sidebarMode` anchored/noChrome, `sidebarWidth`). */
   readonly sidebar: { readonly visible: boolean; readonly width: number }
@@ -155,8 +159,10 @@ export interface Session {
   readonly rev: number
   readonly windows: Readonly<Record<WindowId, WindowSession>>
   /**
-   * Tabs that should have a live webContents. Invariant (normalize): every visible tab is loaded. A tab leaves the
-   * set when archived, removed, or closed-and-kept (Cmd+W on Pinned/Favorites). Main closes views outside it.
+   * Tabs that should have a live webContents. Invariant (normalize rule 5): every visible tab, that is every tab or
+   * split pane named by an activeBySpace entry that exists, is loaded. A tab leaves the set when archived, removed,
+   * or closed-and-kept (Cmd+W on Pinned/Favorites), and nothing but focusing it again puts it back. Main closes
+   * views outside it.
    */
   readonly loaded: Readonly<Record<ItemId, true>>
   /** Page-reported state of loaded tabs. */

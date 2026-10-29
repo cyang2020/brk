@@ -37,7 +37,7 @@ Arc（The Browser Company 出品，2025 年被 Atlassian 收购）在 2026-10-22
 
 - 窗口：每个 Space 一套主题（多色混合渐变 + 颗粒纹理），hiddenInset 标题栏（红绿灯在侧边栏上方），内容面板圆角 + 内边距，侧边栏可拖宽。
 - 侧边栏：Space 名和图标；网址胶囊（显示当前网址，占位文案 "Search or Enter URL…"，点击等于 Cmd+L）；Favorites 网格（跨 Space 共享）；Pinned 区（可折叠）；分隔线；Today 区（含 "New Tab" 行，悬停区头出现 Clear）；底部一排 Space 图标 + 归档入口 + "+" 菜单（New Tab / New Folder / New Space）。
-- 标签：新建、归档（Cmd+W 或悬停 ×）、点击切换、Ctrl+Tab 最近标签轮换、Cmd+Opt+↑/↓ 上下一个、固定/取消固定（Cmd+D）、双击重命名、拖拽排序和跨区移动、文件夹（嵌套、展开折叠）、恢复最近归档（Cmd+Shift+T）、清空 Today（Cmd+Shift+K）、固定标签重置回原始网址、加载指示、favicon。
+- 标签：新建、归档（Cmd+W 或悬停 ×；Today 标签进归档，Pinned/Favorites 标签只卸载页面、保留条目，即 Arc 的 "Close and Keep Pinned"）、点击切换、Ctrl+Tab 最近标签轮换、Cmd+Opt+↑/↓ 上下一个、固定/取消固定（Cmd+D）、双击重命名、拖拽排序和跨区移动、文件夹（嵌套、展开折叠）、恢复最近归档（Cmd+Shift+T）、清空 Today（Cmd+Shift+K）、固定标签重置回原始网址、加载指示、favicon。
 - Space：新建（名字、emoji/图标、从 4 套 9 色预设里选主题色）、重命名、改图标、改主题、删除（标签进归档）、排序、切换（点底部图标，Cmd+Opt+←/→）。每个 Space 有自己的 Pinned 和 Today。
 - 命令栏：Cmd+T 居中新建模式，Cmd+L 在网址胶囊上编辑当前标签；建议项包括打开中的标签（切换）、"搜索/打开你输入的"、历史、少量命令（切换侧边栏、新建 Space、固定、分屏）。方向键选择，回车执行，Esc 关闭。
 - 分屏：Ctrl+Shift+= 加一格，Ctrl+Shift+- 关一格，拖中缝调宽，最多 4 格；分屏作为一个侧边栏条目保存，子项是各格。
