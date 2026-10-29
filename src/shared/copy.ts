@@ -2,6 +2,7 @@
  * UI copy. Strings marked observed are Arc's (visual-and-copy.md section 3). Short labels of 15 bytes or less were
  * not recoverable from the binary; those are marked GUESS.
  */
+import type { ArchiveReason, AutoArchiveAfter } from './constants'
 import type { ArchiveBucket } from './view'
 
 export const COPY = {
@@ -64,6 +65,9 @@ export const COPY = {
   commandBar: {
     switchToTab: 'Switch to Tab',
     switchToSplit: 'Switch to Split View',
+    /** GUESS (short labels): the verb before what you typed on the "search or navigate what you typed" row. */
+    searchVerb: 'Search',
+    openVerb: 'Open',
   },
   archive: {
     title: 'Archive',
@@ -80,5 +84,27 @@ export const COPY = {
       'past-month': 'Past Month',
       beyond: 'Beyond',
     } satisfies Record<ArchiveBucket, string>,
+    /** Inferred from the threshold comments "Auto archive threshold; 12 hours" etc.; the visible labels live in code. */
+    thresholds: {
+      '1h': '1 hour',
+      '6h': '6 hours',
+      '12h': '12 hours',
+      '24h': '24 hours',
+      '7d': '7 days',
+      '30d': '30 days',
+      never: 'Never',
+    } satisfies Record<AutoArchiveAfter, string>,
+    /** GUESS: Arc's reasons (auto, manual, clearButton, clearTabGroup) are enum names only; the filter asks "How was the tab closed?". */
+    reasons: {
+      manual: 'Closed',
+      auto: 'Auto-archived',
+      clear: 'Cleared from Today',
+      'container-deleted': 'Folder or Space deleted',
+    } satisfies Record<ArchiveReason, string>,
+    /** GUESS (short labels). */
+    restore: 'Restore',
+    close: 'Close',
+    cancel: 'Cancel',
+    noMatch: 'No archived tabs match your filter.',
   },
 } as const
