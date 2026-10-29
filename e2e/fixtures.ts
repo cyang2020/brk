@@ -56,6 +56,8 @@ export interface Arc {
   compositeScreenshot(name: string): Promise<string>;
   /** [r, g, b, a] at window point (x, y) of one attached layer's capture, e.g. 'chrome' for gradient checks. */
   layerPixel(role: NativeLayer['role'], x: number, y: number): Promise<Rgba>;
+  /** [r, g, b, a] at window point (x, y) of a composite written by `compositeScreenshot` (its width is contentSize.width × scale). */
+  compositePixel(path: string, x: number, y: number): Promise<Rgba>;
   /** flush() state.json, close the app, relaunch on the same profile directory. */
   restart(): Promise<void>;
 }
@@ -155,25 +157,36 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
       return path;
     };
 
-    const layerPixel = async (role: NativeLayer['role'], x: number, y: number): Promise<Rgba> => {
-      const capture = (await captureLayers()).find((c) => c.layer.role === role);
-      if (!capture) throw new Error(`no attached '${role}' layer to read a pixel from`);
-      const rgba = await (await surface('sidebar')).evaluate(async ({ capture, x, y }) => {
+    // Decodes a PNG on a canvas in the chrome page (no PNG decoder in the harness) and reads one device pixel.
+    const pngPixel = async (pngBase64: string, deviceX: number, deviceY: number): Promise<Rgba> => {
+      const rgba = await (await surface('sidebar')).evaluate(async ({ pngBase64, deviceX, deviceY }) => {
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const el = new Image();
           el.onload = () => resolve(el);
           el.onerror = reject;
-          el.src = `data:image/png;base64,${capture.pngBase64}`;
+          el.src = `data:image/png;base64,${pngBase64}`;
         });
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
         const g = canvas.getContext('2d')!;
         g.drawImage(img, 0, 0);
-        const k = capture.scale;
-        return Array.from(g.getImageData(Math.round((x - capture.layer.bounds.x) * k), Math.round((y - capture.layer.bounds.y) * k), 1, 1).data);
-      }, { capture, x, y });
+        return Array.from(g.getImageData(deviceX, deviceY, 1, 1).data);
+      }, { pngBase64, deviceX, deviceY });
       return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0, rgba[3] ?? 0];
+    };
+
+    const layerPixel = async (role: NativeLayer['role'], x: number, y: number): Promise<Rgba> => {
+      const capture = (await captureLayers()).find((c) => c.layer.role === role);
+      if (!capture) throw new Error(`no attached '${role}' layer to read a pixel from`);
+      const k = capture.scale;
+      return pngPixel(capture.pngBase64, Math.round((x - capture.layer.bounds.x) * k), Math.round((y - capture.layer.bounds.y) * k));
+    };
+
+    const compositePixel = async (path: string, x: number, y: number): Promise<Rgba> => {
+      const png = await readFile(path);
+      const k = png.readUInt32BE(16) / (await native()).contentSize.width; // IHDR width / window width = device pixels per point
+      return pngPixel(png.toString('base64'), Math.round(x * k), Math.round(y * k));
     };
 
     const arc: Arc = {
@@ -200,6 +213,7 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
         ).then(() => undefined),
       compositeScreenshot,
       layerPixel,
+      compositePixel,
       restart: async () => {
         await app.evaluate(() => globalThis.__arc!.flush());
         await app.close();

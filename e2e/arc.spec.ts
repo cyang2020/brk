@@ -1,18 +1,34 @@
 /**
- * The done predicate's nine scenarios (docs/plan.md, 完成标准 2) plus a launch smoke. Every test is `test.skip`
- * until W2 fills the main-process bodies: the app cannot launch yet, so verify/REPORT.md must list them as
- * SKIPPED, never PASS. Each body's comment is the exact driving steps and assertions, in terms of the harness in
- * ./fixtures.ts (the e2e hook contract in docs/design/module-map.md), the TID selectors (src/shared/testids.ts)
- * and LAYOUT (src/shared/constants.ts). `siteUrl` is the local static server (e2e/site/, plus /fail).
+ * The done predicate's nine scenarios (docs/plan.md, 完成标准 2) plus a launch smoke. Each body follows the driving
+ * steps and assertions of the e2e hook contract in docs/design/module-map.md, in terms of the harness in
+ * ./fixtures.ts, the TID selectors (src/shared/testids.ts) and LAYOUT (src/shared/constants.ts). `siteUrl` is the
+ * local static server (e2e/site/, plus /fail).
  */
-import { test } from './fixtures';
+import { readFile } from 'node:fs/promises';
+import { LAYOUT } from '../src/shared/constants';
+import { TID } from '../src/shared/testids';
+import { expect, test } from './fixtures';
 
-test.skip('0. launch smoke: test API answers, one window, chrome layer attached, sidebar DOM rendered', async ({ arc }) => {
-  // facts = await arc.native(): facts.layers[0].role === 'chrome', its bounds === { x: 0, y: 0, ...facts.contentSize }
-  // sidebar = await arc.surface('sidebar'); await expect(sidebar.getByTestId(TID.sidebar)).toBeVisible()
-  // view = await arc.view(): view.dock.length === 1, view.space.today.rows.length === 1 (the ARC_START_URL tab, status 'current')
-  // await arc.compositeScreenshot('0-launch-smoke')  (a PNG at least contentSize wide and high)
-  void arc;
+/** Width and height from a PNG's IHDR chunk. */
+async function pngSize(path: string): Promise<{ width: number; height: number }> {
+  const png = await readFile(path);
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+test('0. launch smoke: test API answers, one window, chrome layer attached, sidebar DOM rendered', async ({ arc }) => {
+  const facts = await arc.native();
+  expect(facts.layers[0]?.role).toBe('chrome');
+  expect(facts.layers[0]?.bounds).toEqual({ x: 0, y: 0, ...facts.contentSize });
+  const sidebar = await arc.surface('sidebar');
+  await expect(sidebar.getByTestId(TID.sidebar)).toBeVisible();
+  const view = await arc.view();
+  expect(view.dock).toHaveLength(1);
+  expect(view.space.today.rows).toHaveLength(1);
+  expect(view.space.today.rows[0]).toMatchObject({ kind: 'tab', status: 'current' });
+  const shot = await arc.compositeScreenshot('0-launch-smoke');
+  const size = await pngSize(shot);
+  expect(size.width).toBeGreaterThanOrEqual(facts.contentSize.width);
+  expect(size.height).toBeGreaterThanOrEqual(facts.contentSize.height);
 });
 
 test.skip('1. launch: sidebar view and one tab view are attached; content card is inset and rounded', async ({ arc }) => {
@@ -21,7 +37,7 @@ test.skip('1. launch: sidebar view and one tab view are attached; content card i
   // pane.bounds.width === contentSize.width - pane.bounds.x - LAYOUT.contentInset; pane.radius === LAYOUT.contentRadius
   // await arc.compositeScreenshot('1-launch'): pixel at (pane.x + 1, pane.y + 1) equals the chrome layer's pixel there
   //   (corner is cut), and the pixel at the pane's top-edge midpoint (pane.x + width/2, pane.y + 2) is the page's background
-  void arc;
+  void [arc, LAYOUT];
 });
 
 test.skip('2. Cmd+T opens the command bar; Enter on a URL adds a Today tab that really loads it', async ({ arc, siteUrl }) => {
