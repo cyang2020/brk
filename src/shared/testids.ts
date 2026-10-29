@@ -38,6 +38,14 @@ export const TID = {
   spaceDialogIcon: (name: NamedIcon): string => `space-dialog-icon-${name}`,
   spaceDialogColor: (set: string, index: number): string => `space-dialog-color-${set}-${index}`,
   spaceDialogSubmit: 'space-dialog-submit',
+  spaceDialogIconNone: 'space-dialog-icon-none',
+  spaceDialogCancel: 'space-dialog-cancel',
+  /** Space icon and title above Pinned; right-click opens the space menu. */
+  spaceHeader: 'space-header',
+  /** "Back to Pinned URL" on a pinned or favorite tab whose `canReset` is true. */
+  rowReset: (id: ItemId): string => `row-${id}-reset`,
+  /** Content card placeholder drawn when the space shows no tab. */
+  emptyContent: 'empty-content',
   // Overlay surface (W4)
   commandBar: 'command-bar',
   commandBarInput: 'command-bar-input',
