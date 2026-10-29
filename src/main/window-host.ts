@@ -82,6 +82,24 @@ const SURFACE_KINDS: readonly SurfaceKind[] = ['sidebar', 'floating-sidebar', 'o
 const sameRect = (a: Rect, b: Rect): boolean => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 
 /**
+ * capturePage() fails (UnknownVizError) when the view has no compositor frame yet, which is the normal state right
+ * after a view was attached or resized. A capture asked for at that moment is legitimate, so wait for the frame:
+ * retry at a short interval, bounded.
+ */
+async function captureWhenPainted(wc: Electron.WebContents): Promise<Electron.NativeImage> {
+  const attempts = 60
+  const intervalMs = 50
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await wc.capturePage()
+    } catch (error) {
+      if (attempt >= attempts) throw error
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+}
+
+/**
  * Creates the BaseWindow (bounds from the selection or DEFAULT_WINDOW_SIZE; macOS: titleBarStyle 'hiddenInset',
  * trafficLightPosition LAYOUT.trafficLights; Linux/Windows: frameless) and the surfaces. Wires 'resize', 'move' and
  * the root view's 'bounds-changed' to window/bounds system commands (one is sent at creation), and 'focus' to
@@ -292,7 +310,7 @@ export function createWindowHost(windowId: WindowId, initial: WindowSelection, d
       for (const layer of attachedLayers()) {
         const view = win.contentView.children.find((v) => v instanceof WebContentsView && v.webContents.id === layer.webContentsId) as WebContentsView | undefined
         if (!view) continue
-        const image = await view.webContents.capturePage()
+        const image = await captureWhenPainted(view.webContents)
         const size = image.getSize()
         out.push({ layer, pngBase64: image.toPNG().toString('base64'), scale: layer.bounds.width > 0 ? size.width / layer.bounds.width : 1 })
       }
