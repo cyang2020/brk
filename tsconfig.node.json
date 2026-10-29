@@ -1,5 +1,16 @@
 {
+  // Main process, preload, domain, and the pure shared modules. Composite: a file outside `include` cannot be
+  // imported (TS6307), which is how the renderer and e2e projects below are kept out of node-side code.
   "extends": "./tsconfig.json",
-  "compilerOptions": { "lib": ["ES2023"], "types": ["node"] },
-  "include": ["src/main", "src/preload", "src/shared", "electron.vite.config.ts", "vitest.config.ts"]
+  "compilerOptions": { "composite": true, "lib": ["ES2023"], "types": ["node"] },
+  "include": [
+    "src/main",
+    "src/preload",
+    "src/domain",
+    "src/ipc",
+    "src/shared",
+    "src/*.test.ts",
+    "electron.vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

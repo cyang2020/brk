@@ -1,9 +1,9 @@
-// Writes verify/REPORT.md: one PASS/FAIL line per test, from Playwright's own results.
+// Writes verify/REPORT.md: one PASS / FAIL / SKIPPED line per test, from Playwright's own results.
 import type { FullResult, Reporter, Suite } from '@playwright/test/reporter';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const LABEL = { expected: 'PASS', unexpected: 'FAIL', flaky: 'FLAKY', skipped: 'SKIP' } as const;
+const LABEL = { expected: 'PASS', unexpected: 'FAIL', flaky: 'FLAKY', skipped: 'SKIPPED' } as const;
 
 export default class MarkdownReporter implements Reporter {
   private suite: Suite | undefined;

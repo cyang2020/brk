@@ -1,17 +1,29 @@
-export interface UrlOrSearch {
-  kind: 'url' | 'search';
-  value: string;
+/**
+ * Typed-input resolution and URL policy. The overlay calls `resolveTypedInput` to label the "open what you typed"
+ * row; main calls it again when `commandBar/submit` arrives, so a renderer's guess is never trusted.
+ */
+
+export type TypedInput =
+  | { readonly kind: 'url'; readonly url: string }
+  | { readonly kind: 'search'; readonly query: string; readonly url: string }
+
+/** Our choice. Arc's search engine is a per-profile setting whose default is not in static data. */
+export const SEARCH_TEMPLATE = 'https://www.google.com/search?q=%s'
+
+/**
+ * `localhost:5173/a`, `127.0.0.1:8080`, `example.com`, `https://x.y/z` are URLs (scheme added when missing);
+ * anything with spaces or without a dot/port/known scheme is a search. Empty or whitespace input returns null.
+ */
+export function resolveTypedInput(text: string): TypedInput | null {
+  throw new Error('not implemented')
 }
 
-const HAS_SCHEME = /^[a-z][a-z\d+.-]*:\/\//i;
-const LOCALHOST = /^localhost(:\d+)?(\/\S*)?$/i;
-const BARE_HOST = /^[a-z\d-]+(\.[a-z\d-]+)+(:\d+)?(\/\S*)?$/i;
+/** Schemes a tab may load: http, https, about:blank. javascript:, file:, chrome:, devtools: are refused. */
+export function isAllowedUrl(url: string): boolean {
+  throw new Error('not implemented')
+}
 
-/** Decide whether command bar input is a URL to open or text to search for. */
-export function parseUrlOrSearch(input: string): UrlOrSearch {
-  const text = input.trim();
-  if (HAS_SCHEME.test(text) || text.startsWith('about:')) return { kind: 'url', value: text };
-  if (LOCALHOST.test(text)) return { kind: 'url', value: `http://${text}` };
-  if (BARE_HOST.test(text)) return { kind: 'url', value: `https://${text}` };
-  return { kind: 'search', value: text };
+/** URL pill text: host plus path, no scheme, no trailing slash, `www.` dropped. */
+export function displayUrl(url: string): string {
+  throw new Error('not implemented')
 }
