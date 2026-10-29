@@ -11,11 +11,17 @@ export interface TestClock extends Clock {
 }
 
 export const systemClock: Clock = {
-  now: () => {
-    throw new Error('not implemented')
-  },
+  now: () => Date.now() as Instant,
 }
 
 export function createTestClock(base: Clock = systemClock): TestClock {
-  throw new Error('not implemented')
+  let offset = 0
+  const now = (): Instant => (base.now() + offset) as Instant
+  return {
+    now,
+    advance(ms: number): Instant {
+      if (Number.isFinite(ms) && ms > 0) offset += ms
+      return now()
+    },
+  }
 }

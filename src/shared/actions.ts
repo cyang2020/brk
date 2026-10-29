@@ -86,5 +86,5 @@ export type ActionId = keyof typeof ACTIONS
 
 /** Ids with `palette: true`, in table order. */
 export function paletteActions(): readonly ActionId[] {
-  throw new Error('not implemented')
+  return (Object.keys(ACTIONS) as ActionId[]).filter((id) => ACTIONS[id].palette)
 }

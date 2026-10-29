@@ -11,6 +11,7 @@
  *   +--------+-------------+   +--------------------------+   +--------+-----------------+
  */
 import type { Rect, Size } from '../shared/base'
+import { LAYOUT } from '../shared/constants'
 import type { LayoutView } from '../shared/view'
 
 export interface LayoutInput {
@@ -42,5 +43,28 @@ export interface Layout extends LayoutView {
  * absorbs rounding. radius = LAYOUT.contentRadius for every pane. overlay per `Layout.overlay`.
  */
 export function computeLayout(input: LayoutInput): Layout {
-  throw new Error('not implemented')
+  const inset = LAYOUT.contentInset
+  const { width: windowWidth, height: windowHeight } = input.contentSize
+  const chrome: Rect = { x: 0, y: 0, width: windowWidth, height: windowHeight }
+  const x = (input.sidebar.visible ? input.sidebar.width : 0) + inset
+  const content: Rect = { x, y: inset, width: Math.max(0, windowWidth - x - inset), height: Math.max(0, windowHeight - 2 * inset) }
+
+  const panes: Rect[] = []
+  const count = input.fractions.length
+  if (count > 0) {
+    const available = Math.max(0, content.width - (count - 1) * inset)
+    let cursor = content.x
+    let used = 0
+    input.fractions.forEach((fraction, i) => {
+      const width = i === count - 1 ? Math.max(0, available - used) : Math.max(0, Math.round(available * fraction))
+      panes.push({ x: cursor, y: content.y, width, height: content.height })
+      cursor += width + inset
+      used += width
+    })
+  }
+
+  const floatingSidebar: Rect | null =
+    !input.sidebar.visible && input.sidebar.peek ? { x: inset, y: inset, width: input.sidebar.width, height: Math.max(0, windowHeight - 2 * inset) } : null
+  const overlay: Rect | null = input.overlay === 'command-bar' ? chrome : input.overlay === 'archive' ? content : null
+  return { chrome, content, panes, radius: LAYOUT.contentRadius, floatingSidebar, overlay }
 }
