@@ -137,22 +137,71 @@ export const DEFAULT_THEME: SpaceTheme = { colors: ['#7EB8D6' as Hex], grain: 0.
 
 /** WCAG relative luminance, 0..1. */
 export function relativeLuminance(color: Hex): number {
-  throw new Error('not implemented')
+  const [r, g, b] = channels(color).map((c) => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }) as [number, number, number]
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 /**
- * Pure. Scheme: forced by `appearance`, else `light` when the primary color's luminance is above a threshold
- * (GUESS 0.45). Gradient: the stored colors as CSS. Tokens: SIDEBAR_TOKENS[scheme].
+ * Our choice, replacing the skeleton's GUESS of 0.45: the luminance at which black and white text have equal WCAG
+ * contrast, sqrt(1.05 * 0.05) - 0.05. Above it dark text (the light scheme) reads better. With 0.45, mid-tone
+ * themes such as DEFAULT_THEME's #7EB8D6 would get white text at contrast 2.2 instead of black at 9.7.
+ */
+export const LIGHT_SCHEME_MIN_LUMINANCE = Math.sqrt(1.05 * 0.05) - 0.05
+
+/**
+ * Pure. Scheme: forced by `appearance`, else `light` when the primary color's luminance is at least
+ * LIGHT_SCHEME_MIN_LUMINANCE. Gradient: the stored colors as CSS. Tokens: SIDEBAR_TOKENS[scheme]. Window color: the
+ * primary color.
  */
 export function resolveTheme(theme: SpaceTheme): ResolvedTheme {
-  throw new Error('not implemented')
+  const primary = theme.colors[0] ?? DEFAULT_THEME.colors[0]!
+  const scheme =
+    theme.appearance === 'auto' ? (relativeLuminance(primary) >= LIGHT_SCHEME_MIN_LUMINANCE ? 'light' : 'dark') : theme.appearance
+  return {
+    scheme,
+    gradient: theme.colors.map((c) => c.toUpperCase()),
+    grain: Math.min(1, Math.max(0, theme.grain)),
+    tokens: SIDEBAR_TOKENS[scheme],
+    windowColor: primary.toUpperCase(),
+  }
 }
 
 /**
  * The theme a new space gets when the user picks one preset color: the primary plus two analogous companions
- * (Arc's `wheel: analogous`), grain 0.25, appearance auto. Pure; the space dialog uses it for its live preview.
+ * (Arc's `wheel: analogous`: hue +20 degrees and 6% lighter, hue -20 degrees and 6% darker), grain 0.25, appearance
+ * auto. Pure; the space dialog uses it for its live preview.
  */
 export function themeFromPrimary(primary: Hex): SpaceTheme {
-  // TODO: rotate hue ±20°, nudge lightness, return { colors: [primary, a, b], grain: 0.25, appearance: 'auto' }
-  throw new Error('not implemented')
+  const { h, s, l } = toHsl(primary)
+  const companion = (dh: number, dl: number): Hex => fromHsl((h + dh + 360) % 360, s, Math.min(1, Math.max(0, l + dl)))
+  return { colors: [primary.toUpperCase() as Hex, companion(20, 0.06), companion(-20, -0.06)], grain: 0.25, appearance: 'auto' }
+}
+
+function channels(color: Hex): [number, number, number] {
+  const n = Number.parseInt(color.slice(1), 16)
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+}
+
+function toHsl(color: Hex): { readonly h: number; readonly s: number; readonly l: number } {
+  const [r, g, b] = channels(color).map((c) => c / 255) as [number, number, number]
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (d === 0) return { h: 0, s: 0, l }
+  const s = d / (1 - Math.abs(2 * l - 1))
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return { h: h * 60, s, l }
+}
+
+function fromHsl(h: number, s: number, l: number): Hex {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  const hex = (v: number): string => Math.round(Math.min(1, Math.max(0, v + m)) * 255).toString(16).padStart(2, '0')
+  return `#${hex(r)}${hex(g)}${hex(b)}`.toUpperCase() as Hex
 }

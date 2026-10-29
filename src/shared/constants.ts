@@ -104,6 +104,11 @@ export const DEFAULT_WINDOW_SIZE = { width: 1280, height: 820 } as const
  * these numbers and the projection uses this rect as the Cmd+L command bar anchor, so the two cannot drift.
  */
 export function urlPillRect(sidebarWidth: number): Rect {
-  // TODO: { x: inset + urlPill.sideInset, y: titlebarHeight, width: sidebarWidth - 2*urlPill.sideInset, height: urlPill.height }
-  throw new Error('not implemented')
+  const { contentInset, titlebarHeight, urlPill } = LAYOUT
+  return {
+    x: contentInset + urlPill.sideInset,
+    y: titlebarHeight,
+    width: Math.max(0, sidebarWidth - 2 * urlPill.sideInset),
+    height: urlPill.height,
+  }
 }

@@ -16,5 +16,12 @@ export type PlaceableKind = 'tab' | 'folder' | 'split'
  * - Split panes are not drop targets; a split moves as one row.
  */
 export function canPlace(item: PlaceableKind, section: SectionKind, insideFolder: boolean): boolean {
-  throw new Error('not implemented')
+  switch (section) {
+    case 'favorites':
+      return item === 'tab' && !insideFolder
+    case 'pinned':
+      return true
+    case 'today':
+      return item !== 'folder' && !insideFolder
+  }
 }

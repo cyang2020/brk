@@ -215,5 +215,8 @@ export type ParsedCommand = { readonly ok: true; readonly command: UiCommand } |
 
 /** Boundary parse for renderer and test-API messages. `UiCommandSchema.safeParse`, flattened to a message on failure. */
 export function parseUiCommand(raw: unknown): ParsedCommand {
-  throw new Error('not implemented')
+  const parsed = UiCommandSchema.safeParse(raw)
+  if (parsed.success) return { ok: true, command: parsed.data }
+  const error = parsed.error.issues.map((issue) => `${issue.path.length > 0 ? issue.path.map(String).join('.') : '(root)'}: ${issue.message}`).join('; ')
+  return { ok: false, error }
 }
