@@ -11,17 +11,18 @@
  * vocabulary allows (`item/move` to a slot, `sidebar/resize` to a width, `space/focus` to a space). Toggles
  * (`sidebar/toggle`, `tab/toggle-pin`) are toggles by definition; input.ts guarantees one dispatch per key press.
  */
-import type { Draft } from 'immer'
+import { produce, type Draft } from 'immer'
 import type { Instant, WindowId } from '../shared/base'
 import type { Input, SystemCommand, UiCommand, UiCommandType } from '../shared/commands'
 import type { Effect } from './effects'
-import type { AppState, StateImpl } from './model'
+import { open, seal, type AppState, type StateImpl } from './model'
+import { normalize } from './normalize'
 import { archiveHandlers } from './ops/archive'
 import { sidebarHandlers } from './ops/sidebar'
 import { spaceHandlers } from './ops/spaces'
 import { splitHandlers } from './ops/split'
 import { tabHandlers } from './ops/tabs'
-import { windowHandlers } from './ops/window'
+import { closeOverlay, windowHandlers } from './ops/window'
 
 export interface Ctx {
   readonly now: Instant
@@ -62,24 +63,23 @@ const HANDLERS: Handlers = {
  * the overlay first (see src/shared/commands.ts).
  */
 export function keepsOverlay(type: UiCommandType): boolean {
-  throw new Error('not implemented')
+  return /^(commandBar|overlay|archive|settings)\//.test(type)
 }
 
 export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
-  // TODO:
-  // const effects: Effect[] = []
-  // const prev = open(state)
-  // const next = produce(prev, (draft) => {
-  //   const command = input.command
-  //   const windowId = input.origin === 'ui' ? input.windowId : ('windowId' in command ? command.windowId : null)
-  //   if (input.origin === 'ui' && !draft.doc.windows[windowId]) return            // stale window: drop
-  //   if (input.origin === 'ui' && !keepsOverlay(command.type)) closeOverlay(draft, windowId)
-  //   ;(HANDLERS[command.type] as Handler<AnyCommand>)(draft, command, { ...ctx, windowId, emit: (e) => effects.push(e) })
-  //   normalize(draft, ctx)
-  // })
-  // const changed = next !== prev
-  // const sealed = changed ? produce(next, (d) => { d.session.rev += 1 }) : next
-  // return { state: seal(sealed), effects, docChanged: sealed.doc !== prev.doc }
-  void HANDLERS
-  throw new Error('not implemented')
+  const effects: Effect[] = []
+  const prev = open(state)
+  const next = produce(prev, (draft) => {
+    const command = input.command
+    const windowId: WindowId | null = input.origin === 'ui' ? input.windowId : 'windowId' in command ? command.windowId : null
+    if (input.origin === 'ui' && !draft.doc.windows[input.windowId]) return // stale window: drop
+    if (input.origin === 'ui' && !keepsOverlay(input.command.type)) closeOverlay(draft, input.windowId)
+    const handler = HANDLERS[command.type] as Handler<AnyCommand>
+    handler(draft, command, { ...ctx, windowId, emit: (effect) => effects.push(effect) })
+    normalize(draft, ctx)
+  })
+  const sealed = next === prev ? next : produce(next, (draft) => {
+    draft.session.rev += 1
+  })
+  return { state: seal(sealed), effects, docChanged: sealed.doc !== prev.doc }
 }
