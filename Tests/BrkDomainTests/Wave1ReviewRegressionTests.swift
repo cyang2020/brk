@@ -95,4 +95,31 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(fractions.count, 3)
         for f in fractions { XCTAssertEqual(f, 1.0 / 3, accuracy: 1e-12) }
     }
+
+    // MARK: Suspicion: a saved URL that may not open
+
+    /// A state file that holds javascript: or data: URLs (hand-edited or corrupt) never makes the next launch load
+    /// one: a tab, archive entry or history entry holding such a URL is dropped, and such a saved pinnedURL is
+    /// replaced by the tab's own URL. The command bar would have searched these, never opened them.
+    func testARestoredURLTheBarWouldNotOpenIsNeverLoaded() throws {
+        let d = Driver()
+        let pinned = try XCTUnwrap(d.current?.id)
+        d.user(.tab(.togglePin(.focused)))
+        let gone = d.open("https://example.com/archived")
+        d.user(.tab(.close(.item(gone))))
+        let shown = d.open("https://example.com/shown")
+        var stored = try JSONDecoder().decode(StoredDocV1.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        let script = url("javascript:alert(1)"), inline = url("data:text/html,%3Cscript%3Ealert(1)%3C/script%3E")
+        stored.items[shown]?.tab?.url = script
+        stored.items[pinned]?.tab?.pinnedURL = inline
+        stored.archive[0].tab.url = inline
+        stored.history.append(.init(url: script, title: "script", visitedAt: T0))
+        let restored = Driver(file: jsonData(["version": 1, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
+        let mayNotOpen: (URL?) -> Bool = { ["javascript", "data"].contains($0?.scheme) }
+        XCTAssertFalse(restored.snapshot.pages.contains { mayNotOpen($0.initialURL) }, "\(restored.snapshot.pages)")
+        XCTAssertNil(restored.row(shown), "the tab whose URL may not open is dropped")
+        XCTAssertEqual(restored.state.tab(pinned)?.pinnedURL, start, "a pinnedURL that may not open becomes the tab's URL")
+        XCTAssertFalse(restored.archive().contains { mayNotOpen($0.url) })
+        XCTAssertFalse(restored.state.doc.history.contains { mayNotOpen($0.url) })
+    }
 }
