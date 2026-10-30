@@ -283,9 +283,13 @@ extension Work {
             let was = session.heldModifiers
             session.heldModifiers = held
             state.session.windows[window] = session
-            // Control up commits a pending Ctrl+Tab cycle; Control down with a cycle still pending (its release was
-            // lost) commits it too, so each new hold starts a fresh walk (regression finding 6).
-            if was.contains(.control) != held.contains(.control) { commitCycle(in: window) }
+            // Control up commits a pending Ctrl+Tab cycle; Control down with a cycle still pending commits it too, so
+            // each new hold starts a fresh walk (regression finding 6). flagsChanged only fires on a change, so a
+            // report equal to the last one with Control held means a release went missing in between (it was
+            // delivered elsewhere): that is a new press. Shift going down or up during a hold changes nothing.
+            let controlChanged = was.contains(.control) != held.contains(.control)
+            let missedRelease = held == was && held.contains(.control)
+            if controlChanged || missedRelease { commitCycle(in: window) }
         case .closed:
             // Keep the WindowDoc so the next launch restores it (v1 has one window). Quitting after the last window
             // closes is AppKit's applicationShouldTerminateAfterLastWindowClosed, which reaches the same ordered quit
