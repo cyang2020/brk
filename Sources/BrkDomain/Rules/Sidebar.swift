@@ -274,6 +274,7 @@ extension Work {
             if session.overlay != nil { session.overlay = nil }
             else if session.renaming != nil { session.renaming = nil }
             else if session.dialog != nil { session.dialog = nil }
+            else if session.profileDialog != nil { session.profileDialog = nil }
             else { effects.append(.window(window, .leaveFullScreen)) }
             state.session.windows[window] = session
         }

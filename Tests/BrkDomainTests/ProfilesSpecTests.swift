@@ -6,6 +6,17 @@ import XCTest
 /// Owner: F2. Profiles and incognito: records, per-profile Favorites and settings, a space's profile, the browsing
 /// context of pages, the URL pill's badge, the dialogs.
 final class ProfilesSpecTests: XCTestCase {
+    func test_escapeClosesTheProfileDialogWithoutLeavingFullScreen() {
+        let d = Driver()
+        d.user(.profile(.openDialog(.create)))
+        XCTAssertNotNil(d.view.profileDialog)
+
+        let result = d.key(KeyChord([], .escape), stage: .menu, pressID: 1)
+
+        XCTAssertNil(d.view.profileDialog)
+        XCTAssertFalse(result.effects.contains(.window(d.window, .leaveFullScreen)))
+    }
+
     /// a fresh profile has the default profile, with its settings record and Favorites root
     func test_aFreshProfileHasTheDefaultProfile() {
         let d = Driver()
