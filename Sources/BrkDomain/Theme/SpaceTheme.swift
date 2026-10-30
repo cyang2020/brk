@@ -99,6 +99,12 @@ public struct SidebarTokens: Hashable, Sendable, Codable {
     public var tabShadowBackground: RGBA
     public var dragHint: RGBA
     public var dragHintStrong: RGBA
+    /// TabListOverlapBorder: the hairline where the list's top-level rows overlap the header.
+    public var tabListOverlapBorder: RGBA
+    /// TabCellBackgroundMutiselected (sic): rows in a Cmd+click multiselection.
+    public var tabMultiselected: RGBA
+    /// TabCellSlash: the stroke between the panes of a split row.
+    public var tabSlash: RGBA
 
     public static let light = SidebarTokens(
         foreground: RGBA(0, 0, 0, 0.3), foregroundStrong: RGBA(0, 0, 0, 0.45),
@@ -108,7 +114,8 @@ public struct SidebarTokens: Hashable, Sendable, Codable {
         tabPrevious: RGBA(1, 1, 1, 0.32), tabPreviousHover: RGBA(1, 1, 1, 0.5),
         tabPressed: RGBA(hex: "#0E0F10", alpha: 0.065), tabChild: RGBA(0, 0, 0, 0.07),
         tabShadow: RGBA(0, 0, 0, 0.2), tabShadowBackground: RGBA(1, 1, 1, 0.9),
-        dragHint: RGBA(0, 0, 0, 0.2), dragHintStrong: RGBA(0, 0, 0, 0.5)
+        dragHint: RGBA(0, 0, 0, 0.2), dragHintStrong: RGBA(0, 0, 0, 0.5),
+        tabListOverlapBorder: RGBA(0, 0, 0, 0.05), tabMultiselected: RGBA(0, 0, 0, 0.1), tabSlash: RGBA(0, 0, 0, 0.3)
     )
 
     public static let dark = SidebarTokens(
@@ -119,7 +126,8 @@ public struct SidebarTokens: Hashable, Sendable, Codable {
         tabPrevious: RGBA(hex: "#FAFBFF", alpha: 0.08), tabPreviousHover: RGBA(hex: "#FAFBFF", alpha: 0.12),
         tabPressed: RGBA(hex: "#FAFBFF", alpha: 0.065), tabChild: RGBA(1, 1, 1, 0.07),
         tabShadow: RGBA(0, 0, 0, 0), tabShadowBackground: RGBA(0, 0, 0, 0),
-        dragHint: RGBA(1, 1, 1, 0.2), dragHintStrong: RGBA(1, 1, 1, 0.5)
+        dragHint: RGBA(1, 1, 1, 0.2), dragHintStrong: RGBA(1, 1, 1, 0.5),
+        tabListOverlapBorder: RGBA(1, 1, 1, 0.05), tabMultiselected: RGBA(hex: "#FAFBFF", alpha: 0.1), tabSlash: RGBA(1, 1, 1, 0.3)
     )
 }
 
@@ -147,7 +155,7 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 /// - Gradient: always three stops, primary first. The stored base colors come first (at most 3); the rest are the
 ///   primary's companions by the wheel rule: analogous = hue + offset and lighter, hue - offset and darker;
 ///   complementary = the opposite hue and lighter, then the primary's hue darker. Saturation is kept; lightness
-///   moves by `companionLightnessStep`. Three base colors leave the wheel nothing to add (Arc's editor places them).
+///   moves by Metrics.theme.companionLightnessStep. Three base colors leave the wheel nothing to add (Arc's editor places them).
 /// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
 /// - Wash: white (light) or black at 35% (dark) with opacity min(0.2 + 0.55 x intensity, 0.5).
 /// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
@@ -178,14 +186,10 @@ public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
 /// (electron-v1 theme.ts `LIGHT_SCHEME_MIN_LUMINANCE`). The default Brand 8 blue (0.43) is light; #757575 is dark.
 let lightSchemeMinLuminance = (1.05 * 0.05).squareRoot() - 0.05
 
-/// Lightness step of the wheel companions (electron-v1 theme.ts `themeFromPrimary`: 6% lighter and 6% darker).
-/// Arc's `lightnessRange` value was not recovered. Belongs in Metrics.theme (W1); kept here until it moves.
-private let companionLightnessStep = 0.06
-
 /// The two companions of `primary` under `wheel`, opaque sRGB.
 private func companions(of primary: RGBA, _ wheel: ColorWheel) -> [RGBA] {
     let (h, s, l) = hsl(primary)
-    let step = companionLightnessStep
+    let step = Metrics.theme.companionLightnessStep.value
     let offsets: [(hue: Double, lightness: Double)] = switch wheel {
     case .analogous:
         [(Metrics.theme.analogousHueOffset.value, step), (-Metrics.theme.analogousHueOffset.value, -step)]
