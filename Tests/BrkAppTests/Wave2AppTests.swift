@@ -145,6 +145,24 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertEqual(h.store.snapshot.windows[h.window]?.space.today.rows.count, 2, "the tab is in the standard window's Today")
     }
 
+    /// a key CEF delivers from the peeked page routes to the window whose Peek shows it (the page is in the overlay,
+    /// not a pane): Esc closes the Peek and the key is consumed
+    func test_keysFromThePeekedPageRouteToItsWindow() throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .peek(.open(URL(string: "https://example.com/peeked")!))))
+        guard case .peek(let peek)? = h.store.snapshot.windows[h.window]?.overlay, let page = peek.page else { return XCTFail("no peek with a page") }
+        XCTAssertEqual(h.store.window(showing: page), h.window)
+        XCTAssertEqual(h.engine.focused.last, page, "the peeked page got keyboard focus")
+        // Esc is a page-first key (`pageThenApp`): CEF asks before the page (declined) and again after it (consumed).
+        let press = h.key("escape", stage: .beforePage, id: 11).press
+        XCTAssertFalse(h.router.engine(h.engine, page: page, key: press, stage: .beforePage, pressID: PressID(raw: 11)), "Esc is the page's first")
+        XCTAssertTrue(h.router.engine(h.engine, page: page, key: press, stage: .afterPage, pressID: PressID(raw: 11)), "Esc from the peeked page was passed to the page")
+        XCTAssertNil(h.store.snapshot.windows[h.window]?.overlay, "the Peek did not close")
+        XCTAssertNil(h.store.snapshot.pages.first { $0.id == page }, "the peeked page is still demanded")
+    }
+
     func test_downloadDecisionReadsTheProfilesSettings() throws {
         throw XCTSkip("F5: KeyRouter.decideDownload answers .save or .ask from the page's profile settings; the engine's download events reach the ledger")
     }

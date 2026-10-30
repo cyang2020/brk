@@ -163,7 +163,11 @@ extension HostWindow {
     /// gets the event and CEF's key handler routes it (before and after the page). Returns true when consumed.
     func hostEvent(_ event: NSEvent) -> Bool {
         switch event.type {
-        case .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown: onFlagsChanged?(event.modifierFlags)
+        case .flagsChanged: onFlagsChanged?(event.modifierFlags)
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown where !event.modifierFlags.contains(.control):
+            // Control stays the keyboard's report alone: a click while Control is held mid Ctrl+Tab walk would otherwise
+            // read as a repeated report, which the reducer takes for a missed release and commits the walk.
+            onFlagsChanged?(event.modifierFlags)
         default: break
         }
         if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {

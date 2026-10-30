@@ -114,8 +114,8 @@ enum Wave2Scenarios {
         }
         try expect(try app.view(second!).kind == .standard, "the new window is not standard")
         try expect(try app.view(second!).space.id == app.view().space.id, "the new window is on another space")
-        try app.perform(.dispatch(window: second, command: .commandBar(.dismiss)))
-        try app.perform(.dispatch(window: second, command: .commandBar(.submit(app.site.url("page2.html").absoluteString))))
+        try dispatch(app, window: second, .commandBar(.dismiss))
+        try dispatch(app, window: second, .commandBar(.submit(app.site.url("page2.html").absoluteString)))
         try app.waitUntil("the tab in both sidebars") {
             let a = try app.view().space.today.rows.map(\.id), b = try app.view(second!).space.today.rows.map(\.id)
             return a.count == 2 && a == b
@@ -146,11 +146,11 @@ enum Wave2Scenarios {
         let size = Metrics.littleArc.defaultSize.value
         try expect(near(CGRect(origin: .zero, size: facts.contentSize), CGRect(origin: .zero, size: size), tolerance: 1),
                    "Little Arc content size \(facts.contentSize), expected \(size)")
-        try app.perform(.dispatch(window: little, command: .commandBar(.submit(app.site.url("page2.html").absoluteString))))
+        try dispatch(app, window: little, .commandBar(.submit(app.site.url("page2.html").absoluteString)))
         try app.waitUntil("the Little Arc's one tab") { try app.view(little!).scratch?.rows.count == 1 }
         try app.screenshot("little-arc", window: little)
         let before = todayIDs(try app.view())
-        try app.perform(.dispatch(window: little, command: .window(.openIn(.current))))
+        try dispatch(app, window: little, .window(.openIn(.current)))
         try app.waitUntil("the tab at the top of Today and the Little Arc gone") {
             guard case .hello(let h) = try app.send(.hello) else { return false }
             let today = todayIDs(try app.view())
@@ -165,7 +165,8 @@ enum Wave2Scenarios {
     @Sendable static func peek(_ app: AppUnderTest) throws {
         let before = todayIDs(try app.view())
         try app.settle()
-        try app.click(at: CGPoint(x: try app.native().computed.cards[0].rect.minX + 40, y: try app.native().computed.cards[0].rect.minY + 40), modifiers: "shift")
+        let card = try app.native().computed.cards[0].rect
+        try app.click(at: CGPoint(x: card.minX + 52, y: card.minY + 48), modifiers: "shift")   // the link's middle, as R3 clicks it
         var page: PageID?
         try app.waitUntil("a Peek on page2") {
             guard case .peek(let p)? = try app.view().overlay else { return false }
@@ -191,22 +192,22 @@ enum Wave2Scenarios {
     /// W2-7 (F3): `externalURL` with default settings opens a Little Arc on the link; with "Links from other apps
     /// open in Little Arc" off and a route `127.0.0.1 -> Work`, the link lands at the top of Work's Today.
     @Sendable static func externalLinks(_ app: AppUnderTest) throws {
-        try app.perform(.externalURL(url: app.site.url("page2.html")))
+        try externalURL(app, app.site.url("page2.html"))
         var little: WindowID?
         try app.waitUntil("a Little Arc on the link") {
             guard case .hello(let h) = try app.send(.hello) else { return false }
             little = h.windows.first { (try? app.view($0))?.kind == .little }
             guard let little else { return false }
-            let v = try app.view(little)
-            return v.scratch?.rows.first.flatMap { tab($0.id, in: v) }?.url == app.site.url("page2.html")
+            guard case .tab(let row)? = try app.view(little).scratch?.rows.first else { return false }   // its one tab is a scratch row
+            return row.url == app.site.url("page2.html")
         }
-        try app.perform(.dispatch(window: little, command: .window(.close)))
+        try dispatch(app, window: little, .window(.close))
         let work = try createSpace(app, title: "Work")
         try app.click(.dockSpace(try app.view().dock[0].id))
         try app.waitUntil("the first space") { try app.view().space.id != work }
         try app.dispatch(.settings(.links(.externalLinksInLittleArc(false))))
         try app.dispatch(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("fixture"), pattern: "127.0.0.1", destination: .space(work))))))
-        try app.perform(.externalURL(url: app.site.url("red.html")))
+        try externalURL(app, app.site.url("red.html"))
         try app.waitUntil("the routed link at the top of Work's Today") {
             let v = try app.view()
             return v.space.id == work && tabRows(v.space.today.rows).first?.url == app.site.url("red.html")
@@ -325,4 +326,19 @@ func isLibrary(_ overlay: OverlaySnapshot?, page: LibraryPage) -> Bool { if case
 
 extension ControlResult {
     func isSettingsPane(_ pane: SettingsPane) -> Bool { if case .settings(let s) = self { s.pane == pane } else { false } }
+}
+
+/// `dispatch` to a window other than the first (a Little Arc, a second window): the reply is `dispatched(rev)`,
+/// which `perform` (an `ok` op) would refuse.
+@discardableResult
+func dispatch(_ app: AppUnderTest, window: WindowID?, _ command: Command) throws -> Int {
+    let result = try app.send(.dispatch(window: window, command: command))
+    guard case .dispatched(let rev) = result else { throw Check(description: "dispatch to \(window?.rawValue ?? "(key)") answered \(AppUnderTest.describe(result))") }
+    return rev
+}
+
+/// A link from another app, as the GetURL Apple Event delivers it; replies `dispatched(rev)` like a dispatch.
+func externalURL(_ app: AppUnderTest, _ url: URL) throws {
+    let result = try app.send(.externalURL(url: url))
+    guard case .dispatched = result else { throw Check(description: "externalURL answered \(AppUnderTest.describe(result))") }
 }

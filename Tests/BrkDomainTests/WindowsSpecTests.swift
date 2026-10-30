@@ -21,6 +21,13 @@ final class WindowsSpecTests: XCTestCase {
         let b = d.open("http://127.0.0.1:9/b")
         XCTAssertEqual(d.view(of: second).space.today.rows.map(\.id), [b, a], "a tab opened in one window shows in the other's sidebar")
         XCTAssertEqual(Driver(file: d.savedFile).snapshot.windows.count, 2, "standard windows are saved")
+        XCTAssertNil(v.bounds, "the first window had reported no frame, so the new one has none to cascade from")
+        let frame = CGRect(x: 300, y: 300, width: 1280, height: 776)
+        d.system(.window(second, .geometry(bounds: frame, contentSize: frame.size)))
+        d.user(.window(.new), in: second)
+        let third = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window && $0 != second })
+        let step = Metrics.littleArc.cascade.value
+        XCTAssertEqual(d.view(of: third).bounds, frame.offsetBy(dx: step, dy: -step), "a new window cascades from the window it was asked from")
     }
 
     /// .window(.newLittle(url)) opens a Little Arc window: one tab in its own container, no sidebar, not saved

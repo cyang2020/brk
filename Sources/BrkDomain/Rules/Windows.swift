@@ -23,13 +23,13 @@ extension Work {
             // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It opens with
             // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
             guard let doc = state.doc.windows[window] else { return }
-            let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible, doc.sidebarWidth))
+            let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible, doc.sidebarWidth), cascadingFrom: doc.bounds)
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newIncognito:
             // Shift+Cmd+N: a session-only window; its tabs live in its scratch tree and its pages browse in
             // `BrowsingContext.incognito` (F2 owns the incognito theme and the badge).
             guard let doc = state.doc.windows[window] else { return }
-            let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth))
+            let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newLittle(let url):
             // Opt+Cmd+N, an external link or an Opt+Cmd+click: one tab in the window's own container, no sidebar.
@@ -112,15 +112,18 @@ extension Work {
 
     // MARK: Helpers
 
-    /// A new `WindowDoc` (and its session and scratch tree) on `space`. A Little Arc cascades from the last Little
-    /// Arc that has reported a frame (Arc: "new windows cascade by 30"); the first one has no bounds and the host
-    /// centers it at Arc's default size. Returns its id.
+    /// A new `WindowDoc` (and its session and scratch tree) on `space`. A new window appears down and right of the
+    /// one it was asked from (`cascadingFrom`, the dispatching window's frame), so Cmd+N visibly adds a window
+    /// instead of covering the old one exactly; a Little Arc cascades from the last Little Arc that has reported a
+    /// frame (Arc: "new windows cascade by 30"). The step is Little Arc's measured 30 for every kind until Arc's
+    /// standard-window cascade is measured. Without a frame to cascade from the host centers the window at the
+    /// kind's default size. Returns its id.
     @discardableResult
-    mutating func newWindow(kind: WindowKind, space: SpaceID, sidebar: (visible: Bool, width: Double)) -> WindowID {
+    mutating func newWindow(kind: WindowKind, space: SpaceID, sidebar: (visible: Bool, width: Double), cascadingFrom origin: CGRect? = nil) -> WindowID {
         let id = WindowID(ctx.newID())
-        var bounds: CGRect?
+        let step = Metrics.littleArc.cascade.value
+        var bounds = origin.map { $0.offsetBy(dx: step, dy: -step) }
         if kind == .little, let last = state.doc.windows.values.filter({ $0.kind == .little }).compactMap(\.bounds).max(by: { $0.minX < $1.minX }) {
-            let step = Metrics.littleArc.cascade.value
             bounds = last.offsetBy(dx: step, dy: -step)
         }
         state.doc.windows[id] = WindowDoc(id: id, kind: kind, bounds: bounds, space: space, activeBySpace: [:],
