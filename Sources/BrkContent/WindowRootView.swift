@@ -2,7 +2,10 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkOverlays
+import BrkSidebar
 import BrkTheme
+import BrkUIKit
 
 /// A window's content view. Bottom to top: themed background, anchored sidebar, content cards (page surfaces inside),
 /// archive page (inside the content area), floating sidebar (only while peeking a hidden sidebar), command bar, space
@@ -40,6 +43,19 @@ public final class WindowRootView: NSView {
     /// Order: background (crossfade when the theme changed and this is not the first render), sidebar (anchored or
     /// floating: same view, re-parented above `content` while floating), content cards (each card hosts the
     /// surface for its pane; a surface that moved to another card is simply re-added there), archive, command bar.
+    /// Gives keyboard focus to the native view a `FocusTarget` names. Returns false for `.page` and `.none` (the
+    /// engine's business, handled by the window controller) and when the view is not on screen yet. This is the
+    /// only way BrkApp reaches a view's focus: the fields themselves are internal to their targets.
+    public func focus(_ target: FocusTarget) -> Bool {
+        switch target {
+        case .commandBarInput: commandBar.focusInput()
+        case .renameField(let item): sidebar.focusRenameField(item)
+        case .spaceDialog: spaceDialog.focusForm()
+        case .sidebar: sidebar.focusList()
+        case .page, .none: false
+        }
+    }
+
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, surface: (PageID) -> NSView?) {
         // TODO(W2): background.frame = bounds; background.show(snapshot.theme, animated: lastTheme != nil);
         // let palette = Palette(snapshot.theme)

@@ -15,9 +15,12 @@ final class ImportRulesTests: XCTestCase {
         "BrkEngine": ["BrkBase", "AppKit", "Foundation", "os"],
         "BrkCEF": ["BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
         "BrkTheme": ["BrkBase", "BrkDomain", "AppKit", "Metal", "QuartzCore", "Foundation", "CoreGraphics"],
-        "BrkUI": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "AppKit", "SwiftUI", "Foundation", "CoreGraphics"],
+        "BrkUIKit": ["BrkBase", "BrkDomain", "BrkLayout", "AppKit", "Foundation", "CoreGraphics"],
+        "BrkSidebar": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "Foundation", "CoreGraphics"],
+        "BrkOverlays": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "SwiftUI", "Foundation", "CoreGraphics"],
+        "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "AppKit", "Foundation", "CoreGraphics"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
-        "BrkApp": ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUI", "BrkControl", "AppKit", "Foundation", "CoreGraphics", "os"],
+        "BrkApp": ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "AppKit", "Foundation", "CoreGraphics", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkEngine", "AppKit", "Foundation"],
         "BrkE2E": ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
     ]
@@ -58,9 +61,19 @@ final class ImportRulesTests: XCTestCase {
 
     func testRejectsAnUpwardImport() {
         XCTAssertEqual(Self.importViolations(target: "BrkDomain", path: "BrkDomain/X.swift", text: "import AppKit\n").count, 1)
-        XCTAssertEqual(Self.importViolations(target: "BrkUI", path: "BrkUI/X.swift", text: "@testable import BrkCEF\n").count, 1)
-        XCTAssertEqual(Self.importViolations(target: "BrkUI", path: "BrkUI/X.swift", text: "@preconcurrency import BrkApp\n").count, 1)
-        XCTAssertEqual(Self.importViolations(target: "BrkUI", path: "BrkUI/X.swift", text: "// import BrkApp\nimport AppKit\n"), [])
+        XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "@testable import BrkCEF\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "@preconcurrency import BrkApp\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "// import BrkApp\nimport AppKit\n"), [])
+    }
+
+    /// Worker boundaries: sibling view targets never import each other, and the app composes views only through
+    /// BrkContent (so W2's root is the one place that knows every worker's public surface).
+    func testWorkerViewTargetsAreDisjoint() {
+        XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "import BrkOverlays\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkOverlays", path: "BrkOverlays/X.swift", text: "import BrkSidebar\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkApp", path: "BrkApp/X.swift", text: "import BrkSidebar\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkApp", path: "BrkApp/X.swift", text: "import BrkOverlays\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkUIKit", path: "BrkUIKit/X.swift", text: "import BrkTheme\n").count, 1)
     }
 
     func testRejectsAClockReadOutsideClock() {
@@ -74,7 +87,7 @@ final class ImportRulesTests: XCTestCase {
     }
 
     func testRejectsALayoutLiteralInAView() {
-        XCTAssertEqual(Self.patternViolations(path: "BrkUI/Sidebar/X.swift", text: "layer?.cornerRadius = 12\n").count, 1)
+        XCTAssertEqual(Self.patternViolations(path: "BrkSidebar/X.swift", text: "layer?.cornerRadius = 12\n").count, 1)
     }
 
     // MARK: Scanner

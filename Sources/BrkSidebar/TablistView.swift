@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 
 /// Owner: W3. The space's tab list: Pinned rows, the divider with Today's Clear, the New Tab row, Today rows.
 ///
@@ -23,6 +24,12 @@ final class TablistView: NSScrollView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// The rename field of `item` becomes first responder; false when it is not showing.
+    func focusRenameField(_ item: ItemID) -> Bool {
+        guard let row = rowViews[item], let window else { return false }
+        return row.focusRenameField(in: window)
+    }
 
     func render(_ space: SpaceSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette) {
         // TODO(W3): document view height = last row maxY; for each RowFrame: .item(id) -> reuse or make a RowView,
@@ -52,6 +59,12 @@ final class RowView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override var isFlipped: Bool { true }
+
+    /// False until the rename field exists (W3 creates it on `render(renaming: true)`).
+    func focusRenameField(in window: NSWindow) -> Bool {
+        // TODO(W3): guard let field = renameField else { return false }; return window.makeFirstResponder(field)
+        false
+    }
 
     func render(_ row: Row, renaming: Bool, palette: Palette) {
         guard row != self.row else { return }

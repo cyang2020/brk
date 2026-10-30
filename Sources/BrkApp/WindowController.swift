@@ -2,8 +2,9 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import BrkContent
 import BrkLayout
-import BrkUI
+import BrkUIKit
 
 /// One browser window: an NSWindow with a full-size, transparent title bar (traffic lights over the sidebar), its
 /// root view, and the glue that turns a `WindowSnapshot` into frames, views, page placement and focus.
@@ -16,6 +17,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
     private let send: @MainActor (Input) -> Void
     private(set) var lastSnapshot: WindowSnapshot?
     private(set) var lastFrames: WindowFrames?
+    private var pendingFocus: FocusTarget?
 
     init(id: WindowID, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void) {
         self.id = id
@@ -44,6 +46,23 @@ public final class WindowController: NSObject, NSWindowDelegate {
     func render(_ snapshot: WindowSnapshot) {
         // TODO(W2): the steps above. Never call send() from here (render must not produce input).
         fatalError("not implemented")
+    }
+
+    /// Keyboard focus follows the snapshot: a page gets it through the engine, a native view through the root's
+    /// narrow focus API; nothing else in BrkApp touches a view's responder status.
+    func applyFocus(_ target: FocusTarget) {
+        switch target {
+        case .page(let page):
+            engine.focus(page)
+        case .none:
+            engine.focus(nil)
+        case .commandBarInput, .renameField, .spaceDialog, .sidebar:
+            engine.focus(nil)
+            if !root.focus(target) {
+                // The view is not on screen yet (same render that opened it): W2 re-applies after layout.
+                pendingFocus = target
+            }
+        }
     }
 
     // MARK: NSWindowDelegate -> WindowEvent

@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 import SwiftUI
 
 /// Owner: W4 (dialogs). The new-space and edit-space dialog: name, icon (emoji, named icon or SF Symbol), Arc's
@@ -16,7 +17,7 @@ public final class SpaceDialogHost: NSView {
     let dispatch: Dispatch
     private var hosting: NSHostingView<SpaceDialogForm>?
 
-    init(dispatch: @escaping Dispatch) {
+    public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
         isHidden = true
@@ -26,7 +27,13 @@ public final class SpaceDialogHost: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func render(_ dialog: SpaceDialogSnapshot?, frames: WindowFrames, palette: Palette) {
+    /// Keyboard focus into the form (its first field). False while hidden or not in a window.
+    public func focusForm() -> Bool {
+        guard !isHidden, let hosting, let window else { return false }
+        return window.makeFirstResponder(hosting)
+    }
+
+    public func render(_ dialog: SpaceDialogSnapshot?, frames: WindowFrames, palette: Palette) {
         // TODO(W4): nil -> hide and drop the hosting view. Else create (or keep, if the same dialog) an NSHostingView
         // of SpaceDialogForm(dialog, dispatch) centered over the content area; a new dialog resets the form.
         fatalError("not implemented")

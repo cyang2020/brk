@@ -1,5 +1,6 @@
 import BrkBase
 import BrkDomain
+import BrkUIKit
 import Foundation
 
 /// Owner: W4. One command bar result and the command it dispatches when chosen. Choosing a result is just

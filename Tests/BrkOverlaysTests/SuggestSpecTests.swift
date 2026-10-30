@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import BrkUI
+@testable import BrkOverlays
 import BrkBase
 import BrkDomain
 

@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 
 /// Owner: W2. The content cards and split dividers. Each card is a rounded, clipping layer (Metrics.content
 /// .cornerRadius, continuous) with a separate shadow view behind it (a clipping layer cannot cast its own shadow),

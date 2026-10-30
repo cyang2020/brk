@@ -3,6 +3,9 @@ import BrkDomain
 import CoreGraphics
 import Foundation
 
+// Owner: W2. The window, its content area, cards, dividers, the command bar box and window placement. The sidebar
+// column's internals are W3's, in SidebarLayout.swift; `WindowFrames.swift` is the frozen contract both fill.
+
 /// The window's geometry as one pure function of (snapshot, content size). Every number comes from `Metrics`.
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
@@ -15,49 +18,6 @@ public enum WindowLayout {
         // cards = ContentLayout.cards(contentArea, fractions: snapshot.content.panes.map(\.fraction)).
         // sidebar internals = SidebarLayout.compute(...). commandBar = CommandBarLayout.frame(...). archive =
         //   contentArea when the overlay is .archive.
-        fatalError("not implemented")
-    }
-}
-
-/// The sidebar column, top to bottom: title row, URL pill, favorites tray, tab list, dock.
-public enum SidebarLayout {
-    public static func compute(frame: CGRect, favorites: Int, space: SpaceSnapshot, dockCount: Int) -> SidebarFrames {
-        // TODO(W3): titleRow y = Metrics.sidebar.headerTopInset, height titleRowHeight; traffic lights at
-        //   (Metrics.window.trafficLightLeft, trafficLightCenterY - size/2).
-        // urlPill below, inset Metrics.urlPill.sideInset, height Metrics.urlPill.height.
-        // favoritesTray = FavoritesGrid.tiles(...). dock at the bottom, height Metrics.dock.height.
-        // tablistViewport between the tray and the dock; rows = TablistLayout.rows(space, width:).
-        fatalError("not implemented")
-    }
-}
-
-/// Arc's favorites grid: 4 columns, falling to 2 then 1 when a tile would be narrower than 47 pt; square tiles.
-public enum FavoritesGrid {
-    public static func tiles(count: Int, width: Double) -> (tray: CGSize, tiles: [CGRect]) {
-        // TODO(W3): columns = 4 if (width - 2*inset - 3*gap)/4 >= minTile, else 2 if ..., else 1;
-        // tile = (width - 2*inset - (columns-1)*gap) / columns; rows = ceil(count/columns).
-        fatalError("not implemented")
-    }
-}
-
-/// The tab list: spacer (2), Pinned rows, divider (16), Today's New Tab row and rows. Rows 40 high on a 41 pitch.
-public enum TablistLayout {
-    public static func rows(_ space: SpaceSnapshot, width: Double) -> [RowFrame] {
-        // TODO(W3): flatten folders (collapsed folders hide children; indent depth x folderIndent); collapsed Pinned
-        // shows no rows; a split is one row.
-        fatalError("not implemented")
-    }
-
-    /// Where a drag at `point` (document coordinates) would drop `kind`, or nil. Uses `Placement.canPlace` so the
-    /// feedback agrees with what the reducer will accept.
-    public static func dropTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind) -> Destination? {
-        fatalError("not implemented")
-    }
-}
-
-/// The dock: Library button at the left, space cells (at most 34 x 32, shrinking to 8; compact below 22), "+".
-public enum DockLayout {
-    public static func cells(count: Int, in dock: CGRect) -> (spaces: [CGRect], library: CGRect, plus: CGRect) {
         fatalError("not implemented")
     }
 }
@@ -83,6 +43,16 @@ public enum CommandBarLayout {
     /// 24 from top and bottom, centered both ways in the content area. Over the pill: the pill's rect widened to
     /// 100...720, at least 80 from the right edge (layout-constants.md, low confidence).
     public static func frame(placement: CommandBarPlacement, contentArea: CGRect, urlPill: CGRect?) -> CGRect {
+        fatalError("not implemented")
+    }
+}
+
+/// Window frames saved on another display must reopen on screen (regression finding 8).
+public enum WindowPlacement {
+    /// `saved` and `screens` in AppKit screen coordinates (bottom-left origin). Returns `saved` if it overlaps a
+    /// screen's visible frame by at least 100 x 100, else a frame of the same size (clamped to the main screen)
+    /// centered on the main screen; nil `saved` -> Metrics.window.defaultSize centered.
+    public static func fit(_ saved: CGRect?, screens: [CGRect], main: CGRect) -> CGRect {
         fatalError("not implemented")
     }
 }

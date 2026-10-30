@@ -2,10 +2,14 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 
 /// Owner: W3. The sidebar column: title row (traffic lights are AppKit's own buttons, positioned by the window
 /// controller at `SidebarFrames.trafficLightsOrigin`; back/forward/reload here), URL pill, favorites grid, the
 /// space's tab list, the dock, and the edge resize handle. Translucent tokens over the themed background.
+///
+/// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`, `focusRenameField`, `focusList`.
+/// Everything else in BrkSidebar is internal to W3.
 @MainActor
 public final class SidebarView: NSView {
     let dispatch: Dispatch
@@ -16,7 +20,7 @@ public final class SidebarView: NSView {
     let dock: DockView
     let resizeHandle: ResizeHandleView
 
-    init(dispatch: @escaping Dispatch) {
+    public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         header = SidebarHeaderView(dispatch: dispatch)
         urlPill = URLPillView(dispatch: dispatch)
@@ -34,10 +38,21 @@ public final class SidebarView: NSView {
 
     public override var isFlipped: Bool { true }
 
-    func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
+    public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
         // TODO(W3): guard let f = frames.sidebar; frame = f.frame; identify(.floatingSidebar) when floating (with
         // Arc's floating background, inset 5); children render their slices at their frames.
         fatalError("not implemented")
+    }
+
+    /// Makes the rename field of `item` first responder. False when that row is not on screen or not renaming.
+    public func focusRenameField(_ item: ItemID) -> Bool {
+        tablist.focusRenameField(item)
+    }
+
+    /// Keyboard focus into the tab list itself (FocusTarget.sidebar). False when the list is not in a window.
+    public func focusList() -> Bool {
+        guard let window else { return false }
+        return window.makeFirstResponder(tablist)
     }
 }
 
