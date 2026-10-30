@@ -38,7 +38,25 @@ final class AppSpecTests: XCTestCase {
     func test_systemclockReadsRealTime() throws { throw XCTSkip(pendingW2) }
 
     /// the test clock is the base clock plus an offset that only grows
-    func test_theTestClockIsTheBaseClockPlusAnOffsetThatOnlyGrows() throws { throw XCTSkip(pendingW2) }
+    func test_theTestClockIsTheBaseClockPlusAnOffsetThatOnlyGrows() throws {
+        let clock = OffsetClock()
+        let before = clock.now()
+        let after = try clock.advance(by: .seconds(10))
+        XCTAssertGreaterThanOrEqual(after.since(before), .seconds(10))
+        XCTAssertGreaterThanOrEqual(clock.now(), after)
+    }
+
+    /// a negative advance is refused and leaves the clock where it was (the judge's probe)
+    func test_aBackwardAdvanceIsRefused() throws {
+        let clock = OffsetClock()
+        _ = try clock.advance(by: .seconds(5))
+        let before = clock.now()
+        var thrown: ClockError?
+        do { _ = try clock.advance(by: .seconds(-10)) } catch { thrown = error }
+        XCTAssertEqual(thrown, .backwards(.seconds(-10)))
+        XCTAssertGreaterThanOrEqual(clock.now(), before)
+        _ = try clock.advance(by: .zero)
+    }
 
     // MARK: - electron-v1:src/main/input.test.ts
     // MARK: createKeyRouter

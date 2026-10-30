@@ -14,12 +14,16 @@ public struct Suggestion: Equatable, Sendable {
 }
 
 public enum Suggest {
-    /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows:
-    /// 1. "open what you typed" (`.commandBar(.submit(query))`) when the query is non-empty;
-    /// 2. open tabs whose title or URL contains the query (`.tab(.focus(id))`), current space first;
-    /// 3. actions whose title or triggers match (`action.spec.command`);
-    /// 4. history entries (`.commandBar(.submit(url))`), deduplicated against open tabs by URL.
-    /// Case- and diacritic-insensitive prefix match on words beats substring match.
+    /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows (Arc shows 5; the Electron version
+    /// showed 8). Order, as the Electron `suggest.test.ts` spec has it (SuggestSpecTests):
+    /// 1. open tabs whose title or URL matches (`.tab(.focus(id))`), never the focused one; word-start matches
+    ///    before mid-word; with an empty query in view order without the focused tab;
+    /// 2. "open what you typed" (`.commandBar(.submit(trimmed))`) when the query is non-blank; a typed URL that is
+    ///    also in history shows once, as this row;
+    /// 3. history entries (`.commandBar(.submit(url))`), newest first, one row per URL, none that an open tab has;
+    /// 4. actions with a command bar listing whose title or triggers match (`action.spec.command`), carrying the
+    ///    formatted first key.
+    /// Matching is case- and diacritic-insensitive on titles and URLs.
     public static func rank(query: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
         fatalError("not implemented")
     }

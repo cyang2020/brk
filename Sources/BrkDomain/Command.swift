@@ -11,9 +11,11 @@ import Foundation
 // so the control socket's boundary parse is structural only (JSON -> Command). Adding a case is one line here plus
 // one `case` in the area's rule file; Swift's exhaustive switch fails the build until both exist.
 //
-// Overlay rule, enforced once in `reduce` (`Command.keepsCommandBar` / `keepsArchive`): every command except
-// `.commandBar` first closes an open command bar; `.archive` and `.settings` keep an open archive page. Picking an
-// action or a tab in the command bar is therefore just dispatching that action's command.
+// Overlay rule, enforced once in `reduce` (`Command.keepsCommandBar` / `keepsArchive`): every command first closes
+// an open command bar except `.commandBar` itself and the sidebar's peek and resize (pointer motion at the edge
+// must not dismiss what the user is typing); every command closes an open archive page except `.archive`,
+// `.settings`, `.sidebar(.peek)` and `.sidebar(.resize)`. Picking an action or a tab in the command bar is therefore
+// just dispatching that action's command. OverlayPolicyTests pins the table against the behavioral inventory.
 
 public enum Input: Sendable, Equatable {
     case user(WindowID, Command)
@@ -217,14 +219,16 @@ public enum WindowEvent: Sendable, Equatable {
 extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
-        if case .commandBar = self { return true }
-        return false
+        switch self {
+        case .commandBar, .sidebar(.peek), .sidebar(.resize): true
+        default: false
+        }
     }
 
     /// Whether this command leaves an open archive page open.
     var keepsArchive: Bool {
         switch self {
-        case .archive, .settings, .sidebar(.peek): true
+        case .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
         default: false
         }
     }

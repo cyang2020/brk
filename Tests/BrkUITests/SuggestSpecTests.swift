@@ -34,8 +34,9 @@ final class SuggestSpecTests: XCTestCase {
     /// only lists actions with a command bar listing
     func test_onlyListsActionsWithACommandBarListing() throws { throw XCTSkip(pendingW4) }
 
-    /// shows at most 8 rows: 3 tabs, the typed row, 3 history entries, then actions
-    func test_showsAtMost8Rows3TabsTheTypedRow3HistoryEntriesThenActions() throws { throw XCTSkip(pendingW4) }
+    /// shows at most Metrics.commandBar.maxVisibleRows (5) rows: tabs, the typed row, history entries, then actions
+    /// (the Electron case said 8; Arc's cap is 5 and the order is the same)
+    func test_showsAtMostMaxVisibleRowsTabsTheTypedRowHistoryEntriesThenActions() throws { throw XCTSkip(pendingW4) }
 
     // MARK: commandFor
     /// maps each kind to the command the bar dispatches
