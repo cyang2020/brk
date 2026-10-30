@@ -140,34 +140,92 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var windowColor: RGBA
 }
 
-/// Pure: stored theme -> paint values. Light or dark comes from the primary color's luminance unless forced.
-/// First pass by the integrator; W5 owns the gradient derivation (companions by `wheel`, lightness nudges) and
-/// the ported theme cases pin the scheme choice.
+/// Pure: stored theme -> paint values.
+///
+/// - Scheme: forced by `appearance`, else light when the primary's relative luminance is at least
+///   `lightSchemeMinLuminance` (the luminance at which black and white text have equal WCAG contrast).
+/// - Gradient: always three stops, primary first. The stored base colors come first (at most 3); the rest are the
+///   primary's companions by the wheel rule: analogous = hue + offset and lighter, hue - offset and darker;
+///   complementary = the opposite hue and lighter, then the primary's hue darker. Saturation is kept; lightness
+///   moves by `companionLightnessStep`. Three base colors leave the wheel nothing to add (Arc's editor places them).
+/// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
+/// - Wash: white (light) or black at 35% (dark) with opacity min(0.2 + 0.55 x intensity, 0.5).
+/// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
 public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
-    let colors = theme.colors.isEmpty ? [ThemePresets.brand[7]] : Array(theme.colors.prefix(3))
-    let primary = colors[0]
-    let scheme: Scheme
-    switch theme.appearance {
-    case .light: scheme = .light
-    case .dark: scheme = .dark
-    case .auto: scheme = relativeLuminance(primary) > 0.5 ? .light : .dark   // TODO(W5): the ported mid-tone case
+    let base = (theme.colors.isEmpty ? SpaceTheme.default.colors : Array(theme.colors.prefix(3))).map(opaque)
+    let primary = base[0]
+    let scheme: Scheme = switch theme.appearance {
+    case .light: .light
+    case .dark: .dark
+    case .auto: relativeLuminance(primary) >= lightSchemeMinLuminance ? .light : .dark
     }
-    // TODO(W5): companions by wheel (Metrics.theme.analogousHueOffset / complementaryHueOffset) with the lightness
-    // range; v1 pass: the base colors plus a lightened/darkened variant of the primary.
-    var gradient = colors
-    gradient.append(scheme == .light ? mix(primary, RGBA(1, 1, 1), 0.25) : mix(primary, RGBA(0, 0, 0), 0.25))
+    let gradient = Array((base + companions(of: primary, theme.wheel)).prefix(3))
     let multiplier: Double = switch theme.texture {
     case .grain: Metrics.theme.grainOpacity.value
     case .sand: Metrics.theme.sandOpacity.value
     case .denim: Metrics.theme.denimOpacity.value
     case .tweed: Metrics.theme.tweedOpacity.value
     }
-    let intensity = min(max(theme.intensity, 0), 1)
+    let intensity = clamp01(theme.intensity)
     let washAlpha = min(Metrics.theme.washBase.value + Metrics.theme.washSlope.value * intensity, Metrics.theme.washCap.value)
     let wash = scheme == .light ? RGBA(1, 1, 1, washAlpha) : RGBA(0, 0, 0, Metrics.theme.darkWashAlpha.value * washAlpha)
     return ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: intensity * multiplier,
-                         textureContrast: min(max(theme.noise, 0), 1), wash: wash,
+                         textureContrast: clamp01(theme.noise), wash: wash,
                          tokens: scheme == .light ? .light : .dark, windowColor: mix(primary, wash, wash.alpha))
+}
+
+/// sqrt(1.05 x 0.05) - 0.05 = 0.1791: above it black text has the higher WCAG contrast, so the scheme is light
+/// (electron-v1 theme.ts `LIGHT_SCHEME_MIN_LUMINANCE`). The default Brand 8 blue (0.43) is light; #757575 is dark.
+let lightSchemeMinLuminance = (1.05 * 0.05).squareRoot() - 0.05
+
+/// Lightness step of the wheel companions (electron-v1 theme.ts `themeFromPrimary`: 6% lighter and 6% darker).
+/// Arc's `lightnessRange` value was not recovered. Belongs in Metrics.theme (W1); kept here until it moves.
+private let companionLightnessStep = 0.06
+
+/// The two companions of `primary` under `wheel`, opaque sRGB.
+private func companions(of primary: RGBA, _ wheel: ColorWheel) -> [RGBA] {
+    let (h, s, l) = hsl(primary)
+    let step = companionLightnessStep
+    let offsets: [(hue: Double, lightness: Double)] = switch wheel {
+    case .analogous:
+        [(Metrics.theme.analogousHueOffset.value, step), (-Metrics.theme.analogousHueOffset.value, -step)]
+    case .complementary:
+        [(Metrics.theme.complementaryHueOffset.value, step), (0, -step)]
+    }
+    return offsets.map { rgb(hue: h + $0.hue, saturation: s, lightness: clamp01(l + $0.lightness)) }
+}
+
+private func clamp01(_ v: Double) -> Double { min(max(v, 0), 1) }
+
+/// The color clamped into sRGB 0...1 (Arc stores extended sRGB) with alpha 1: the background is opaque.
+private func opaque(_ c: RGBA) -> RGBA { RGBA(clamp01(c.red), clamp01(c.green), clamp01(c.blue), 1) }
+
+/// Hue in degrees 0..<360, saturation and lightness 0...1.
+private func hsl(_ c: RGBA) -> (Double, Double, Double) {
+    let maxC = max(c.red, c.green, c.blue), minC = min(c.red, c.green, c.blue)
+    let l = (maxC + minC) / 2, d = maxC - minC
+    guard d > 0 else { return (0, 0, l) }
+    let s = d / (1 - abs(2 * l - 1))
+    let h: Double = if maxC == c.red { ((c.green - c.blue) / d).truncatingRemainder(dividingBy: 6) }
+        else if maxC == c.green { (c.blue - c.red) / d + 2 }
+        else { (c.red - c.green) / d + 4 }
+    return ((h * 60 + 360).truncatingRemainder(dividingBy: 360), s, l)
+}
+
+private func rgb(hue: Double, saturation s: Double, lightness l: Double) -> RGBA {
+    let h = (hue.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+    let c = (1 - abs(2 * l - 1)) * s
+    let x = c * (1 - abs((h / 60).truncatingRemainder(dividingBy: 2) - 1))
+    let m = l - c / 2
+    let (r, g, b): (Double, Double, Double) = switch h {
+    case ..<60: (c, x, 0)
+    case ..<120: (x, c, 0)
+    case ..<180: (0, c, x)
+    case ..<240: (0, x, c)
+    case ..<300: (x, 0, c)
+    default: (c, 0, x)
+    }
+    return RGBA(clamp01(r + m), clamp01(g + m), clamp01(b + m), 1)
 }
 
 /// WCAG relative luminance of an sRGB color.
