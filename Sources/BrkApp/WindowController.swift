@@ -5,6 +5,7 @@ import BrkDomain
 import BrkEngine
 import BrkLayout
 import BrkUIKit
+import os
 
 /// One browser window: an NSWindow with a full-size, transparent title bar (traffic lights over the sidebar), its
 /// root view, and the glue that turns a `WindowSnapshot` into frames, views, page placement and focus.
@@ -44,17 +45,22 @@ public final class WindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Applies a snapshot: restore the saved frame once (`WindowPlacement.fit`); frames = `WindowLayout.compute
-    /// (snapshot, contentSize)`; `root.render(...)` with `engine.surface(for:)`; traffic lights to
-    /// `frames.sidebar?.trafficLightsOrigin` (hidden while the sidebar is hidden; Arc shows them on hover); keyboard
-    /// focus only when `snapshot.focus` differs from the last one. Never calls `send` (render must not produce input).
+    /// Restores the saved frame once (`WindowPlacement.fit`), before the window is shown. The resulting
+    /// `windowDidResize` reports the fitted frame to the store, which queues it behind the current dispatch.
+    func place(_ snapshot: WindowSnapshot) {
+        guard !placed else { return }
+        placed = true
+        let screens = NSScreen.screens.map(\.visibleFrame)
+        let main = NSScreen.main?.visibleFrame ?? CGRect(origin: .zero, size: Metrics.window.defaultSize.value)
+        window.setFrame(WindowPlacement.fit(snapshot.bounds, screens: screens, main: main), display: false)
+    }
+
+    /// Applies a snapshot: frames = `WindowLayout.compute(snapshot, contentSize)`; `root.render(...)` with
+    /// `engine.surface(for:)`; traffic lights to `frames.sidebar?.trafficLightsOrigin` (hidden while the sidebar is
+    /// hidden; Arc shows them on hover); keyboard focus only when `snapshot.focus` differs from the last one.
+    /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
-        if !placed {
-            placed = true
-            let screens = NSScreen.screens.map(\.visibleFrame)
-            let main = NSScreen.main?.visibleFrame ?? CGRect(origin: .zero, size: Metrics.window.defaultSize.value)
-            window.setFrame(WindowPlacement.fit(snapshot.bounds, screens: screens, main: main), display: false)
-        }
+        place(snapshot)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
         root.render(snapshot, frames: frames, surface: { [engine] page in engine.surface(for: page) })
         window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
@@ -91,6 +97,12 @@ public final class WindowController: NSObject, NSWindowDelegate {
     public func windowDidMove(_ notification: Notification) { reportGeometry() }
     public func windowWillClose(_ notification: Notification) { send(.system(.window(id, .closed))) }
 
+    /// Becoming key again (app switch, a closed overlay panel) re-applies the snapshot's focus, so a page gets its
+    /// Chromium view back as first responder and a native field keeps its own.
+    public func windowDidBecomeKey(_ notification: Notification) {
+        if let last = lastSnapshot { applyFocus(last.focus) }
+    }
+
     private func reportGeometry() {
         let content = window.contentView?.bounds.size ?? .zero
         send(.system(.window(id, .geometry(bounds: window.frame, contentSize: content))))
@@ -102,10 +114,25 @@ public final class WindowController: NSObject, NSWindowDelegate {
 public final class BrowserWindow: NSWindow {
     /// Called for every `flagsChanged`, so Control going up or down reaches the reducer whoever has focus.
     var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+    private let keyLog = Logger(subsystem: "brk", category: "keys")
 
     public override func sendEvent(_ event: NSEvent) {
         if event.type == .flagsChanged { onFlagsChanged?(event.modifierFlags) }
+        if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {
+            keyLog.notice("window.sendEvent keyDown code=\(event.keyCode, privacy: .public) eventWindow=\(event.windowNumber, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
+        }
         super.sendEvent(event)
+    }
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let handled = super.performKeyEquivalent(with: event)
+        keyLog.notice("window.performKeyEquivalent code=\(event.keyCode, privacy: .public) handledByViews=\(handled, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
+        return handled
+    }
+
+    static func describe(_ responder: NSResponder?) -> String {
+        guard let responder else { return "nil" }
+        return NSStringFromClass(type(of: responder))
     }
 
     /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top. `origin` is in

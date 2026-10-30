@@ -2,14 +2,26 @@ import BrkBase
 import CCef
 import CefKit
 
-/// CefKeyEvent -> KeyPress. CEF reports the macOS virtual key code as `nativeKeyCode`, which is `Key.code`.
+/// CefKeyEvent -> KeyPress. CEF reports the macOS virtual key code as `nativeKeyCode`, which is `Key.code`, so a
+/// chord is matched by physical key (Ctrl+Shift+= although the page sees "+").
 enum KeyTranslation {
-    /// Nil for character events (`.character` phase), modifier-only keys, and keys `Key.known` does not list.
+    /// Nil for character events (`.character` phase), modifier-only keys, and keys `Key` does not list.
     static func press(from event: CefKeyEvent) -> KeyPress? {
-        // TODO(W2): phase .rawKeyDown/.keyDown -> .down, .keyUp -> .up, .character -> nil;
-        // Key.byCode(UInt16(event.nativeKeyCode)); modifiers from hasCommand/hasShift/hasOption/hasControl;
-        // isRepeat = event.modifiers & EVENTFLAG_IS_REPEAT; editableFieldFocused = event.isEditableFieldFocused.
-        _ = EVENTFLAG_IS_REPEAT
-        fatalError("not implemented")
+        let phase: KeyPress.Phase
+        switch event.phase {
+        case .rawKeyDown, .keyDown: phase = .down
+        case .keyUp: phase = .up
+        case .character: return nil
+        }
+        guard event.nativeKeyCode >= 0, event.nativeKeyCode <= Int(UInt16.max),
+              let key = Key.byCode(UInt16(event.nativeKeyCode)) else { return nil }
+        var modifiers = Modifiers()
+        if event.hasCommand { modifiers.insert(.command) }
+        if event.hasShift { modifiers.insert(.shift) }
+        if event.hasOption { modifiers.insert(.option) }
+        if event.hasControl { modifiers.insert(.control) }
+        let isRepeat = event.modifiers & UInt32(EVENTFLAG_IS_REPEAT.rawValue) != 0
+        return KeyPress(chord: KeyChord(modifiers, key), phase: phase, isRepeat: isRepeat,
+                        editableFieldFocused: event.isEditableFieldFocused)
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkEngine
 import CefKit
+import os
 
 /// The page surface for the Chrome runtime. Chromium binds a Chrome-runtime browser's compositor to its own window,
 /// so we cannot parent the browser into our view; instead, once the browser's host window has its view tree, the
@@ -13,45 +14,135 @@ import CefKit
 @MainActor
 final class EmbeddedSurface: PageSurfaceView {
     private weak var chrome: CefChromeBrowser?
-    /// Chromium views currently inside this surface, compositor first (bottom), input view above it.
-    private var borrowed: [NSView] = []
-    /// Where each borrowed view came from, to give it back at close and shutdown.
-    private weak var homeView: NSView?
+    private weak var host: NSWindow?
+    /// Chromium views currently inside this surface, compositor first (bottom), each with the superview it came
+    /// from, to give it back at close and shutdown.
+    private var borrowed: [(view: NSView, home: NSView?)] = []
+    private var attempts = 0
+    private var retired = false
+    private var observedWindow: NSWindow?
+    private let log = Logger(subsystem: "brk", category: "embed")
+    /// Called once Chromium's input view (`RenderWidgetHostViewCocoa`) exists inside the surface, so the page can
+    /// take keyboard focus. The renderer creates it a little after the two views are embedded; a focus applied
+    /// before that lands on the surface itself and key equivalents fall through to the menu.
+    var onReadyForFocus: (() -> Void)?
 
-    /// Starts embedding `chrome`'s views. They appear asynchronously (the host window builds its tree after
-    /// `on_window_created`), so this polls on the main run loop.
+    /// The host window builds its tree after `on_window_created`; the spike saw the views within a few polls.
+    private static let pollInterval: TimeInterval = 0.05
+    private static let maxAttempts = 200   // 10 s
+
+    var isEmbedded: Bool { !borrowed.isEmpty }
+    var isReadyForFocus: Bool { isEmbedded && Self.find("RenderWidgetHostViewCocoa", in: self) != nil }
+
+    /// Starts embedding `chrome`'s views, polling on the main run loop until they appear.
     func adopt(_ chrome: CefChromeBrowser) {
-        // TODO(W2):
-        // 1. Wait (poll every 50 ms, give up after 10 s and log the host's view tree) until chrome.nsWindow?.contentView
-        //    contains a view whose class name is "WebContentsViewCocoa" and one named "ViewsCompositorSuperview".
-        // 2. HostWindows.adopt(hostWindow, parent: window): strip .titled/.resizable, clear background, no shadow,
-        //    ignoresMouseEvents = true, never key/main (HostWindows key guard), add as child window of our window so it
-        //    follows us between spaces and to full screen.
-        // 3. homeView = the compositor's current superview; addSubview(compositor); addSubview(webContentsView);
-        //    both frame = bounds, autoresizingMask = [.width, .height]; borrowed = [compositor, webContentsView].
-        // 4. Keep the host window's frame equal to our screen frame on every layout (`layout()` below), so popups,
-        //    IME candidate windows and tooltips that Chromium positions in host-window coordinates land on the card.
-        fatalError("not implemented")
+        self.chrome = chrome
+        attempts = 0
+        retired = false
+        tryEmbed()
     }
 
-    /// Gives the borrowed views back to their host window and detaches the host window from ours. Idempotent. Must
-    /// run before the browser closes (shutdown phase 1, and every page close).
-    func returnViews() {
-        // TODO(W2): for each borrowed view (reverse order): homeView?.addSubview(view); borrowed = [];
-        // window?.removeChildWindow(host); HostWindows.release(host).
-        fatalError("not implemented")
+    private func tryEmbed() {
+        guard !retired, !isEmbedded, let chrome, chrome.isWindowAlive else { return }
+        if let hostWindow = chrome.nsWindow, let content = hostWindow.contentView,
+           let compositor = Self.find("ViewsCompositorSuperview", in: content),
+           let webContents = Self.find("WebContentsViewCocoa", in: content) {
+            host = hostWindow
+            HostWindows.adopt(hostWindow, parent: window)
+            borrowed = [(compositor, compositor.superview), (webContents, webContents.superview)]
+            for (view, _) in borrowed {
+                addSubview(view)
+                view.frame = bounds
+                view.autoresizingMask = [.width, .height]
+            }
+            syncHostFrame()
+            log.notice("page \(self.page.description, privacy: .public): embedded after \(self.attempts, privacy: .public) polls into window \(self.window?.windowNumber ?? -1, privacy: .public); host window \(hostWindow.windowNumber, privacy: .public)")
+            waitForInputView(attempt: 0)
+            return
+        }
+        attempts += 1
+        guard attempts < Self.maxAttempts else {
+            let tree = chrome.nsWindow?.contentView.map { Self.describe($0) } ?? ["(no host window)"]
+            log.fault("page \(self.page.description, privacy: .public): Chromium's views never appeared; host view tree: \(tree.joined(separator: " | "))")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pollInterval) { [weak self] in self?.tryEmbed() }
     }
+
+    private func waitForInputView(attempt: Int) {
+        guard !retired else { return }
+        if isReadyForFocus {
+            log.notice("page \(self.page.description, privacy: .public): input view ready after \(attempt, privacy: .public) polls")
+            onReadyForFocus?()
+            return
+        }
+        guard attempt < Self.maxAttempts else {
+            log.error("page \(self.page.description, privacy: .public): no RenderWidgetHostViewCocoa appeared; keyboard focus cannot reach the page")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pollInterval) { [weak self] in self?.waitForInputView(attempt: attempt + 1) }
+    }
+
+    /// Gives the borrowed views back to where they came from and detaches the host window from ours. Idempotent;
+    /// also stops a pending embed. Must run before the browser closes (shutdown phase 1, and every page close).
+    func returnViews() {
+        retired = true
+        for (view, home) in borrowed {
+            if let home {
+                home.addSubview(view)
+                view.frame = home.bounds
+                view.autoresizingMask = [.width, .height]
+            } else {
+                view.removeFromSuperview()
+            }
+        }
+        borrowed = []
+        if let host { HostWindows.release(host) }
+        host = nil
+        stopObservingMoves()
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    /// The view that takes keyboard focus: Chromium's input view inside the moved views, else the surface itself.
+    var keyboardTarget: NSView { Self.find("RenderWidgetHostViewCocoa", in: self) ?? self }
 
     override func layout() {
         super.layout()
-        // TODO(W2): borrowed views frame = bounds; host window frame = our frame in screen coordinates (one layout
-        // behind is harmless: the window is empty, spike "viewport-lag").
+        for (view, _) in borrowed where view.frame != bounds { view.frame = bounds }
+        syncHostFrame()
     }
 
+    /// Leaving a window hides the page (Chromium is told); entering one re-parents the host window under it. The
+    /// host window follows our window's moves as well as our layout.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        // TODO(W2): window == nil -> chrome?.browser.wasHidden(true) and remove the host window from the old parent;
-        // else re-parent the host window as a child of the new window, wasHidden(false).
+        stopObservingMoves()
+        if let window {
+            if let host { HostWindows.adopt(host, parent: window) }
+            syncHostFrame()
+            chrome?.browser.wasHidden(false)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowDidMove(_:)), name: NSWindow.didMoveNotification, object: window)
+            observedWindow = window
+        } else {
+            chrome?.browser.wasHidden(true)
+            if let host { host.parent?.removeChildWindow(host) }
+        }
+    }
+
+    @objc private func windowDidMove(_ note: Notification) { syncHostFrame() }
+
+    private func stopObservingMoves() {
+        if let observedWindow { NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: observedWindow) }
+        observedWindow = nil
+    }
+
+    /// Keeps the host window's frame equal to our screen frame, so popups, IME candidate windows and tooltips that
+    /// Chromium positions in host-window coordinates land on the card (one layout behind is harmless: it is empty).
+    private func syncHostFrame() {
+        guard let host, let window else { return }
+        let target = window.convertToScreen(convert(bounds, to: nil))
+        if host.frame != target { host.setFrame(target, display: false) }
     }
 
     var frameInWindow: CGRect? {
@@ -60,7 +151,7 @@ final class EmbeddedSurface: PageSurfaceView {
         return content.isFlipped ? r : CGRect(x: r.minX, y: content.bounds.height - r.maxY, width: r.width, height: r.height)
     }
 
-    var embeddedViewClasses: [String] { borrowed.map { NSStringFromClass(type(of: $0)) } }
+    var embeddedViewClasses: [String] { borrowed.map { NSStringFromClass(type(of: $0.view)) } }
 
     var containsFirstResponder: Bool {
         guard let responder = window?.firstResponder as? NSView else { return false }
@@ -72,5 +163,11 @@ final class EmbeddedSurface: PageSurfaceView {
         if NSStringFromClass(type(of: root)) == className { return root }
         for sub in root.subviews { if let found = find(className, in: sub) { return found } }
         return nil
+    }
+
+    private static func describe(_ view: NSView, depth: Int = 0) -> [String] {
+        var out = ["\(String(repeating: "  ", count: depth))\(NSStringFromClass(type(of: view))) \(NSStringFromRect(view.frame))"]
+        if depth < 3 { for sub in view.subviews { out += describe(sub, depth: depth + 1) } }
+        return out
     }
 }
