@@ -1,7 +1,6 @@
 /** The state a fresh profile starts with. */
 import type { ItemId, Size, SpaceId, WindowId } from '../shared/base'
 import { DEFAULT_AUTO_ARCHIVE, LAYOUT } from '../shared/constants'
-import { COPY } from '../shared/copy'
 import { DEFAULT_THEME } from '../shared/theme'
 import type { Doc, Item, Session, TabItem } from './model'
 import { freshWindowSession } from './normalize'
@@ -44,7 +43,7 @@ export function createInitialDoc(ctx: Ctx, startUrl: string | null): Doc {
     version: 1,
     items,
     spaces: {
-      [spaceId]: { id: spaceId, title: COPY.space.fallbackTitle(1), icon: { kind: 'none' }, theme: DEFAULT_THEME, pinnedId, todayId, pinnedCollapsed: false },
+      [spaceId]: { id: spaceId, title: '', icon: { kind: 'none' }, theme: DEFAULT_THEME, pinnedId, todayId, pinnedCollapsed: false },
     } as Doc['spaces'],
     spaceOrder: [spaceId],
     favoritesId,

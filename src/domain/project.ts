@@ -1,5 +1,5 @@
 /** The renderer projection: domain state -> WindowView (src/shared/view.ts). Pure. */
-import type { Instant, ItemId, Platform, WindowId } from '../shared/base'
+import type { Instant, ItemId, Platform, SpaceId, WindowId } from '../shared/base'
 import { CAPS, urlPillRect } from '../shared/constants'
 import { COPY } from '../shared/copy'
 import { resolveTheme } from '../shared/theme'
@@ -17,13 +17,26 @@ import type {
   LayoutView,
 } from '../shared/view'
 import type { SectionKind } from '../shared/placement'
-import { open, own, type AppState, type TabItem } from './model'
+import { open, own, type AppState, type Doc, type TabItem } from './model'
 import { activeItemId, focusedTabId, selectWindow, visibleTabIds } from './select'
 import { getItem, locate, tabsUnder } from './tree'
 
 /** Custom title, else page title, else display URL, else "New Tab". */
 export function tabTitle(tab: TabItem): string {
   return tab.customTitle ?? (tab.title !== '' ? tab.title : null) ?? (tab.url !== null ? displayUrl(tab.url) : null) ?? COPY.newTabRow
+}
+
+/**
+ * A space's display title: its stored title, or the derived "Space N" where N is its 1-based dock position when the
+ * stored title is blank. The fallback is never stored (src/domain/ops/spaces.ts), so deleting a space and creating
+ * another cannot leave two spaces with the same "Space N". Every place a space title is shown uses this.
+ */
+export function spaceTitle(doc: Doc, spaceId: SpaceId): string {
+  const space = own(doc.spaces, spaceId)
+  if (!space) return ''
+  if (space.title !== '') return space.title
+  const index = doc.spaceOrder.indexOf(spaceId)
+  return COPY.space.fallbackTitle((index < 0 ? doc.spaceOrder.length : index) + 1)
 }
 
 /**
@@ -104,7 +117,7 @@ export function projectWindow(state: AppState, windowId: WindowId, layout: Layou
       : ws.dialog.kind === 'new-space'
         ? { kind: 'new-space' }
         : (() => {
-            const edited = doc.spaces[ws.dialog.spaceId]
+            const edited = own(doc.spaces, ws.dialog.spaceId)
             return edited ? { kind: 'edit-space', spaceId: edited.id, title: edited.title, icon: edited.icon, theme: edited.theme } : null
           })()
 
@@ -118,13 +131,13 @@ export function projectWindow(state: AppState, windowId: WindowId, layout: Layou
       .sort((a, b) => (a.id === focused ? -1 : b.id === focused ? 1 : b.lastActiveAt - a.lastActiveAt))
       .map((tab): SwitchCandidate => {
         const where = locate(doc, tab.id)
-        const tabSpace = where?.spaceId ? doc.spaces[where.spaceId] : undefined
+        const tabSpace = where?.spaceId ? own(doc.spaces, where.spaceId) : undefined
         return {
           tabId: tab.id,
           title: tabTitle(tab),
           url: tab.url!,
           faviconUrl: tab.faviconUrl,
-          spaceTitle: tabSpace?.title ?? null,
+          spaceTitle: tabSpace ? spaceTitle(doc, tabSpace.id) : null,
           inCurrentSpace: where?.section === 'favorites' || where?.spaceId === win.spaceId,
           isFocused: tab.id === focused,
         }
@@ -152,7 +165,7 @@ export function projectWindow(state: AppState, windowId: WindowId, layout: Layou
           faviconUrl: entry.tab.faviconUrl,
           archivedAt: entry.archivedAt,
           reason: entry.reason,
-          fromSpaceTitle: entry.from.spaceId ? (doc.spaces[entry.from.spaceId]?.title ?? null) : null,
+          fromSpaceTitle: entry.from.spaceId && own(doc.spaces, entry.from.spaceId) ? spaceTitle(doc, entry.from.spaceId) : null,
         }),
       ),
       autoArchiveAfter: doc.settings.autoArchiveAfter,
@@ -177,14 +190,14 @@ export function projectWindow(state: AppState, windowId: WindowId, layout: Layou
     },
     space: {
       id: space.id,
-      title: space.title,
+      title: spaceTitle(doc, space.id),
       icon: space.icon,
       pinned: { rootId: space.pinnedId, collapsed: space.pinnedCollapsed, rows: rows(space.pinnedId, 'pinned') },
       today: { rootId: space.todayId, rows: rows(space.todayId, 'today') },
     },
     dock: doc.spaceOrder.flatMap((id) => {
-      const docked = doc.spaces[id]
-      return docked ? [{ id, title: docked.title, icon: docked.icon, active: id === win.spaceId, color: docked.theme.colors[0] ?? resolveTheme(docked.theme).windowColor }] : []
+      const docked = own(doc.spaces, id)
+      return docked ? [{ id, title: spaceTitle(doc, id), icon: docked.icon, active: id === win.spaceId, color: docked.theme.colors[0] ?? resolveTheme(docked.theme).windowColor }] : []
     }),
     content: {
       rect: layout.content,

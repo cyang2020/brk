@@ -906,7 +906,8 @@ describe('reduce: spaces and archive', () => {
     const d = new Driver()
     const space = d.view().space.id
     d.ui({ type: 'sidebar/dialog', dialog: { kind: 'edit-space', spaceId: 'current' } })
-    expect(d.view().dialog).toMatchObject({ kind: 'edit-space', spaceId: space, title: 'Space 1', icon: { kind: 'none' } })
+    // The dialog carries the raw stored title (empty for a fallback-named space); the UI shows "Space 1" as placeholder.
+    expect(d.view().dialog).toMatchObject({ kind: 'edit-space', spaceId: space, title: '', icon: { kind: 'none' } })
     const theme = themeFromPrimary(THEME_PRESETS.greyscale[7]!)
     d.ui({ type: 'space/update', spaceId: space, title: 'Home', icon: { kind: 'emoji', emoji: '🏠' }, theme })
     expect(d.view().dialog).toBeNull()

@@ -1,7 +1,6 @@
 /** Spaces: create, edit, delete, reorder, switch, collapse Pinned. */
 import { castDraft } from 'immer'
 import type { ItemId, SpaceId } from '../../shared/base'
-import { COPY } from '../../shared/copy'
 import type { SpaceIcon, SpaceTheme } from '../../shared/theme'
 import { own, type SectionItem } from '../model'
 import type { Handlers } from '../reduce'
@@ -16,9 +15,9 @@ const copyIcon = (icon: SpaceIcon): SpaceIcon =>
 const copyTheme = (theme: SpaceTheme): SpaceTheme => ({ colors: [...theme.colors], grain: theme.grain, appearance: theme.appearance })
 
 export const spaceHandlers = {
-  // New space with fresh Pinned and Today section roots; a blank title -> COPY.space.fallbackTitle(n) where n is its
-  // dock position. Appended to spaceOrder; the dispatching window switches to it (empty Today, nothing shown).
-  // Closes the dialog.
+  // New space with fresh Pinned and Today section roots; a blank title is stored empty and shown as "Space N" (N is
+  // the dock position) by the projection. Appended to spaceOrder; the dispatching window switches to it (empty Today,
+  // nothing shown). Closes the dialog.
   'space/new': (draft, command, ctx) => {
     const w = ctx.windowId
     const ws = w ? draft.session.windows[w] : undefined
@@ -30,10 +29,11 @@ export const spaceHandlers = {
     const root = (id: ItemId, section: 'pinned' | 'today'): SectionItem => ({ kind: 'section', id, createdAt: ctx.now, section, spaceId, children: [] })
     doc.items[pinnedId] = castDraft(root(pinnedId, 'pinned'))
     doc.items[todayId] = castDraft(root(todayId, 'today'))
-    const title = command.title.trim()
+    // Store the title empty when blank; the display name "Space N" is derived from the dock index in the projection,
+    // so deleting a space and creating another never produces two spaces frozen with the same "Space N".
     doc.spaces[spaceId] = castDraft({
       id: spaceId,
-      title: title === '' ? COPY.space.fallbackTitle(doc.spaceOrder.length + 1) : title,
+      title: command.title.trim(),
       icon: copyIcon(command.icon),
       theme: copyTheme(command.theme),
       pinnedId,

@@ -11,8 +11,9 @@
 import { useEffect, useRef } from 'react'
 import type { ReactElement } from 'react'
 import { LAYOUT, TIMING, urlPillRect } from '../../shared/constants'
+import { COPY } from '../../shared/copy'
 import { TID } from '../../shared/testids'
-import type { SpaceDialogView, WindowView } from '../../shared/view'
+import type { DockSpaceView, SpaceDialogView, WindowView } from '../../shared/view'
 import { currentSurface, dispatch, useWindowView } from '../common/bridge'
 import { themeVars } from '../common/theme-vars'
 import { Background } from './Background'
@@ -71,6 +72,16 @@ export interface SidebarPanelProps {
 const dialogKey = (dialog: SpaceDialogView): string => (dialog.kind === 'edit-space' ? `edit-${dialog.spaceId}` : 'new')
 
 /**
+ * The name field's placeholder: the derived "Space N" display title. For a new space that is the next dock position;
+ * for an edit, the dock already carries the space's derived display title (dock titles come from the same projection
+ * helper), so an empty-titled space edits against its own "Space N".
+ */
+const dialogPlaceholder = (dialog: SpaceDialogView, dock: readonly DockSpaceView[]): string =>
+  dialog.kind === 'edit-space'
+    ? (dock.find((d) => d.id === dialog.spaceId)?.title ?? COPY.space.fallbackTitle(dock.length))
+    : COPY.space.fallbackTitle(dock.length + 1)
+
+/**
  * Top to bottom: titlebar row (drag region, traffic lights on macOS), <UrlPill/>, <Favorites/>, Pinned, the Today
  * separator, Today, <Dock/>. A <SpaceDialog/> replaces Favorites and the sections while view.dialog is set.
  * data-testid TID.sidebar or TID.floatingSidebar.
@@ -91,7 +102,7 @@ export function SidebarPanel(props: SidebarPanelProps): ReactElement {
         <div className="titlebar" style={{ height: box.y }} />
         <UrlPill pill={view.urlPill} box={box} />
         {view.dialog ? (
-          <SpaceDialog key={dialogKey(view.dialog)} dialog={view.dialog} spaceCount={view.dock.length} />
+          <SpaceDialog key={dialogKey(view.dialog)} dialog={view.dialog} placeholder={dialogPlaceholder(view.dialog, view.dock)} />
         ) : (
           <>
             <Favorites favorites={view.favorites} renamingId={view.renamingId} />

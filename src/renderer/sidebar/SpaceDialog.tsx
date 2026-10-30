@@ -20,8 +20,8 @@ import { Glyph, NAMED_GLYPHS, SpaceGlyph } from './icons'
 
 export interface SpaceDialogProps {
   readonly dialog: SpaceDialogView
-  /** Spaces that exist now, for the "Space N" placeholder of a new space. */
-  readonly spaceCount: number
+  /** The name field's placeholder: the derived "Space N" display title for this space (or the next one when new). */
+  readonly placeholder: string
 }
 
 const PRESET_SETS = Object.keys(THEME_PRESETS) as PresetSet[]
@@ -40,7 +40,7 @@ export function SpaceDialog(props: SpaceDialogProps): ReactElement {
   const [icon, setIcon] = useState<SpaceIcon>(editing?.icon ?? { kind: 'none' })
   const [theme, setTheme] = useState<SpaceTheme>(editing?.theme ?? DEFAULT_THEME)
   const preview = resolveTheme(theme)
-  const placeholder = editing?.title ?? COPY.space.fallbackTitle(props.spaceCount + 1)
+  const placeholder = props.placeholder
 
   const submit = (): void => {
     const name = title.trim()
