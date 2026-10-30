@@ -196,6 +196,7 @@ final class AppUnderTest {
         }
         guard case .hello(let h) = try send(.hello, timeout: 10) else { throw Check(description: "hello did not answer with hello") }
         hello = h
+        print("[e2e] launch \(scenarioID) #\(launches), pid \(h.pid)")
         try expect(h.engine == engine.rawValue, "hello says engine \(h.engine), the runner launched \(engine.rawValue)")
         try waitUntil("the first window render", timeout: 10) { (try? self.view()) != nil }
     }
@@ -304,8 +305,10 @@ final class AppUnderTest {
         return snapshot
     }
 
-    func native() throws -> NativeFacts {
-        let result = try send(.native(window: window))
+    func native() throws -> NativeFacts { try native(window) }
+
+    func native(_ id: WindowID?) throws -> NativeFacts {
+        let result = try send(.native(window: id))
         guard case .native(let facts) = result else { throw Check(description: "native answered \(Self.describe(result))") }
         let hostNumbers = Set(facts.pages.values.compactMap(\.hostWindowNumber))
         for w in facts.appWindows where w.isKey && (hostNumbers.contains(w.number) || w.className.contains("NativeWidget")) {
@@ -313,6 +316,55 @@ final class AppUnderTest {
             if !hostKeyViolations.contains(entry) { hostKeyViolations.append(entry) }
         }
         return facts
+    }
+
+    /// Keep every window's model and native responder together, including windows created after launch.
+    func recordWindows(_ label: String) throws {
+        struct WindowEvidence: Encodable {
+            let view: WindowSnapshot
+            let native: NativeFacts
+        }
+        guard case .hello(let current) = try send(.hello) else { throw Check(description: "hello did not answer") }
+        let evidence = try current.windows.map { try WindowEvidence(view: view($0), native: native($0)) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let path = shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(scenarioID)-\(label)-windows.json")
+        try encoder.encode(evidence).write(to: path)
+    }
+
+    /// Observe across deferred layout turns. Every sample must retain the requested native page responder;
+    /// waiting for a later good sample cannot hide an intermittent loss.
+    func verifyStablePageFocus(_ label: String) throws {
+        struct Sample: Encodable {
+            let elapsed: Double
+            let window: WindowID
+            let isKey: Bool
+            let expected: PageID
+            let focused: PageID?
+            let firstResponder: String
+            let hasKeyboardFocus: Bool
+        }
+        var samples: [Sample] = []
+        let start = uptime()
+        defer {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let path = shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(scenarioID)-\(label)-focus.json")
+            if let data = try? encoder.encode(samples) { try? data.write(to: path) }
+        }
+        try waitUntil("native page focus to remain stable across layout updates") {
+            guard case .hello(let current) = try send(.hello) else { return false }
+            for id in current.windows {
+                guard case .page(let page) = try view(id).focus else { continue }
+                let facts = try native(id)
+                let holds = facts.pages[page]?.hasKeyboardFocus == true
+                samples.append(Sample(elapsed: uptime() - start, window: id, isKey: facts.isKey, expected: page,
+                                      focused: facts.focusedPage, firstResponder: facts.firstResponder, hasKeyboardFocus: holds))
+                try expect(facts.focusedPage == page && holds,
+                           "window \(id) lost page \(page) during layout; first responder \(facts.firstResponder)")
+            }
+            return uptime() - start >= 0.5
+        }
     }
 
     @discardableResult

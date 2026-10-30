@@ -225,6 +225,8 @@ enum Wave2Scenarios {
             return try isShown(native, .row(row.id)) && isShown(app.native(), .row(row.id))
                 && native.focusedPage == PageID(row.id) && native.pages[PageID(row.id)] != nil
         }
+        try app.recordWindows("both-loaded")
+        try app.verifyStablePageFocus("both-loaded")
         try app.screenshot("two-windows")
         try app.flush()
         try app.restart()

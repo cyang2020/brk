@@ -40,7 +40,7 @@ final class FakeEngine: WebEngine {
         performed.append((page, action))
     }
 
-    func focus(_ page: PageID?) {
+    func focus(_ page: PageID?, in window: NSWindow) {
         calls.append("focus")
         focused.append(page)
     }

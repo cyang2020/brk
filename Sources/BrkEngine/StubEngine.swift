@@ -50,12 +50,15 @@ public final class StubEngine: WebEngine {
         }
     }
 
-    public func focus(_ page: PageID?) {
+    public func focus(_ page: PageID?, in window: NSWindow) {
         guard let page, let surface = pages[page] else {
-            for surface in pages.values where surface.window?.firstResponder === surface { surface.window?.makeFirstResponder(nil) }
+            for surface in pages.values where surface.window === window && window.firstResponder === surface {
+                window.makeFirstResponder(nil)
+            }
             return
         }
-        surface.window?.makeFirstResponder(surface)
+        guard surface.window === window else { return }
+        window.makeFirstResponder(surface)
     }
 
     public func evaluate(_ script: String, in page: PageID) {

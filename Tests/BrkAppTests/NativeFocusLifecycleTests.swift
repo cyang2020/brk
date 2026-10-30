@@ -1,0 +1,121 @@
+import AppKit
+import BrkBase
+import BrkDomain
+import BrkEngine
+import XCTest
+@testable import BrkApp
+
+@MainActor
+final class NativeFocusLifecycleTests: XCTestCase {
+    func testWindowUpdateRepairsLostPageResponderWithoutAKeyWindow() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        let controller = try h.controller()
+        let page = try XCTUnwrap(h.engine.surface(for: h.page))
+        NSApp.keyWindow?.resignKey()
+        XCTAssertNil(NSApp.keyWindow)
+        XCTAssertTrue(controller.window.makeFirstResponder(page))
+        // AppKit clears the Chromium responder during a later sidebar layout or renderer replacement.
+        XCTAssertTrue(controller.window.makeFirstResponder(nil))
+        h.update(controller)
+        XCTAssertTrue(controller.window.firstResponder === page)
+        XCTAssertNil(NSApp.keyWindow, "repair must not activate a window")
+    }
+
+    func testUpdateKeepsANativeEditorEvenWhenModelStillNamesThePage() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        let controller = try h.controller()
+        let editor = NSTextView(frame: .zero)
+        controller.root.addSubview(editor)
+        XCTAssertTrue(controller.window.makeFirstResponder(editor))
+        h.update(controller)
+        XCTAssertTrue(controller.window.firstResponder === editor)
+    }
+
+    func testUpdateUsesTheLatestFocusTargetAndLeavesHiddenWindowsAlone() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        let controller = try h.controller()
+        h.store.dispatch(.user(h.window, .commandBar(.open(.newTab))))
+        controller.window.makeFirstResponder(nil)
+        h.update(controller)
+        XCTAssertFalse(controller.window.firstResponder === h.engine.surface(for: h.page))
+        h.store.dispatch(.user(h.window, .commandBar(.dismiss)))
+        controller.window.orderOut(nil)
+        controller.window.makeFirstResponder(nil)
+        h.update(controller)
+        XCTAssertFalse(controller.window.firstResponder === h.engine.surface(for: h.page))
+    }
+
+    func testNativeFocusInSecondWindowDoesNotBlurTheFirstPage() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        let first = try h.controller()
+        let page = try XCTUnwrap(h.engine.surface(for: h.page))
+        XCTAssertTrue(first.window.makeFirstResponder(page))
+        h.store.dispatch(.user(h.window, .window(.new)))
+        let secondID = try XCTUnwrap(h.store.snapshot.windows.keys.first { $0 != h.window })
+        let second = try XCTUnwrap(h.store.windowController(secondID))
+        XCTAssertTrue(first.window.firstResponder === page, "the second window's bar must not clear the first window's page")
+        let editor = second.window.firstResponder
+        first.window.makeFirstResponder(nil)
+        h.update(first)
+        XCTAssertTrue(first.window.firstResponder === page)
+        XCTAssertTrue(second.window.firstResponder === editor, "background repair must not take the second window's editor")
+    }
+
+    func testOldWindowCannotReclaimOrBlurASurfaceMovedToAnotherWindow() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        let first = try h.controller()
+        let page = try XCTUnwrap(h.engine.surface(for: h.page))
+        h.store.dispatch(.user(h.window, .window(.new)))
+        let secondID = try XCTUnwrap(h.store.snapshot.windows.keys.first { $0 != h.window })
+        let second = try XCTUnwrap(h.store.windowController(secondID))
+        second.root.addSubview(page)
+        XCTAssertTrue(second.window.makeFirstResponder(page))
+        first.window.makeFirstResponder(nil)
+        h.update(first)
+        XCTAssertTrue(second.window.firstResponder === page)
+        first.applyFocus(.none)
+        XCTAssertTrue(second.window.firstResponder === page, "the old owner must not blur the moved surface")
+    }
+}
+
+@MainActor
+private struct FocusHarness {
+    let engine: StubEngine
+    let store: AppStore
+    let window: WindowID
+    let page: PageID
+    let directory: URL
+    private let router: KeyRouter
+
+    init() {
+        _ = NSApplication.shared
+        engine = StubEngine()
+        let clock = OffsetClock()
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-focus-unit-\(UUID().uuidString)")
+        let restored = StateCodec.restore(nil, seed: RestoreSeed(startURL: URL(string: "https://example.test/"),
+                                                                contentSize: Metrics.window.defaultSize.value),
+                                          ctx: Context(now: clock.now(), newID: { UUID().uuidString }))
+        store = AppStore(restored: restored, clock: clock, engine: engine, stateFile: StateFile(directory: directory))
+        router = KeyRouter(store: store)
+        engine.delegate = router
+        window = store.snapshot.windows.keys.first!
+        page = store.snapshot.pages[0].id
+        store.start()
+    }
+
+    func controller() throws -> WindowController { try XCTUnwrap(store.windowController(window)) }
+
+    func update(_ controller: WindowController) {
+        controller.window.delegate?.windowDidUpdate?(Notification(name: NSWindow.didUpdateNotification, object: controller.window))
+    }
+
+    func close() {
+        for id in store.snapshot.windows.keys { store.windowController(id)?.window.orderOut(nil) }
+        try? FileManager.default.removeItem(at: directory)
+    }
+}

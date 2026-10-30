@@ -106,11 +106,11 @@ public class WindowController: NSObject, NSWindowDelegate {
     func applyFocus(_ target: FocusTarget) {
         switch target {
         case .page(let page):
-            engine.focus(page)
+            engine.focus(page, in: window)
         case .none:
-            engine.focus(nil)
+            engine.focus(nil, in: window)
         case .commandBarInput, .renameField, .spaceDialog, .profileDialog, .sidebar:
-            engine.focus(nil)
+            engine.focus(nil, in: window)
             if !root.focus(target) {
                 // The view is not on screen yet (same render that opened it): re-applied by the next render.
                 pendingFocus = target
@@ -128,6 +128,16 @@ public class WindowController: NSObject, NSWindowDelegate {
     /// Chromium view back as first responder and a native field keeps its own.
     public func windowDidBecomeKey(_ notification: Notification) {
         if let last = lastSnapshot { applyFocus(last.focus) }
+    }
+
+    /// Deferred native layout can clear Chromium's responder after the last page callback. Repair only the
+    /// window fallback, using this window's current intent. A native editor, hidden window, or moved page wins.
+    public func windowDidUpdate(_ notification: Notification) {
+        guard window.isVisible, window.firstResponder == nil || window.firstResponder === window,
+              case .page(let page) = lastSnapshot?.focus,
+              let surface = engine.surface(for: page), surface.window === window,
+              !surface.isHiddenOrHasHiddenAncestor else { return }
+        engine.focus(page, in: window)
     }
 
     private func reportGeometry() {

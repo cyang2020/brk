@@ -40,6 +40,7 @@ enum NativeScenarios {
         try app.press("cmd+s")
         try waitForTitle(app, swallow.id, keyTitle("cmd+s", swallowed: true))
         try expect(try app.view().sidebar.visible, "the first Cmd+S (swallowed by the page) hid the sidebar")
+        try app.recordWindows("swallow-delivered")
         try app.press("cmd+s")
         try app.waitUntil("the second Cmd+S within 1 s to hide the sidebar", timeout: 3) { try !app.view().sidebar.visible }
 
@@ -49,6 +50,8 @@ enum NativeScenarios {
         try app.press("cmd+r")
         try app.press("cmd+r")
         try waitForTitle(app, keys.id, "keys:loads=3")
+        try app.verifyStablePageFocus("after-reloads")
+        try app.recordWindows("after-reloads")
     }
 
     /// N2: Cmd+L focuses the command bar input and "x" goes there, not to the page; Esc returns focus to the page and

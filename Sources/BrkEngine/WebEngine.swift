@@ -34,9 +34,10 @@ public protocol WebEngine: AnyObject {
 
     func perform(_ action: PageAction, on page: PageID)
 
-    /// Gives keyboard focus to `page`'s content, or takes it away from every page (nil) so the caller can focus a
-    /// native view. The caller decides when (only when the snapshot's `focus` changes).
-    func focus(_ page: PageID?)
+    /// Gives keyboard focus to `page` in its owning window, or releases that window's page focus (nil) for a
+    /// native view. A pending request survives input-view creation. Never activates a window or affects another
+    /// window's request. The caller also repairs focus after AppKit clears a responder during native layout.
+    func focus(_ page: PageID?, in window: NSWindow)
 
     /// Runs JavaScript in a page, no result. For the e2e harness's fixture pages (they report through
     /// `document.title`) and, later, Boosts' user scripts. A no-op for a page that is not live.
