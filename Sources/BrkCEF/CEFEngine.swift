@@ -31,11 +31,17 @@ public final class CEFEngine: WebEngine {
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
     private var live: [PageID: ChromePage] = [:]
     private var closing: [PageLedger.Incarnation: ChromePage] = [:]
+    /// Pages whose browser was asked to close and whose host window CEF has not destroyed yet.
+    private var destroying: [PageLedger.Incarnation: ChromePage] = [:]
     private var ledger = PageLedger()
     private var phase: ShutdownPhase = .running
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Resumed with true when the last closing browser reports OnBeforeClose, with false by the timeout.
     private var closeWaiter: CheckedContinuation<Bool, Never>?
+    /// Resumed when the last host window is destroyed (or by a short timeout: not a failure).
+    private var windowWaiter: CheckedContinuation<Void, Never>?
+    /// A `focus(page)` for a page whose input view has not arrived yet; applied by `pageReadyForFocus`.
+    private var pendingFocus: PageID?
     private let log = Logger(subsystem: "brk", category: "cef")
 
     enum ShutdownPhase: Equatable {
@@ -54,8 +60,13 @@ public final class CEFEngine: WebEngine {
     /// example `swift run` outside the .app); main.swift then exits with a message pointing at scripts/build.sh.
     public static func bootstrap(_ configuration: Configuration) throws -> CEFEngine {
         var config = CefConfiguration()
-        config.rootCachePath = configuration.cacheDirectory
-        config.cachePath = configuration.cacheDirectory.appendingPathComponent("Default", isDirectory: true)
+        // CEF compares cache_path against the real path of root_cache_path, so /tmp must become /private/tmp here too
+        // or it rejects the pair and falls back to in-memory storage. Foundation's symlink resolution strips
+        // /private on purpose, so this is realpath(3) on the created directory.
+        let root = Self.realPath(of: configuration.cacheDirectory)
+        config.rootCachePath = root
+        config.cachePath = root.appendingPathComponent("Default", isDirectory: true)
+        config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         config.defaultRuntimeStyle = .chrome
         try CefRuntime.shared.initialize(configuration: config)
@@ -70,17 +81,24 @@ public final class CEFEngine: WebEngine {
 
     private init() {}
 
+    private static func realPath(of directory: URL) -> URL {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard let resolved = realpath(directory.path, nil) else { return directory }
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
+    }
+
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for (id, page) in live where wanted[id] == nil {
             live[id] = nil
+            if pendingFocus == id { pendingFocus = nil }
             retire(page)
         }
         for spec in pages where live[spec.id] == nil {
             guard let url = spec.initialURL else { continue }
             let incarnation = ledger.create(spec.id)
-            // TODO(W2): profiles: spec.profile != .default -> a CefProfile (request context) per profile, created lazily.
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
             live[spec.id] = page
             record(.created, page)
@@ -110,13 +128,21 @@ public final class CEFEngine: WebEngine {
         }
     }
 
+    /// Nil takes keyboard focus away from every page (the caller then focuses a native view). A page whose input
+    /// view has not arrived yet (created in this same render) gets the focus when it does; a later call replaces it.
     public func focus(_ page: PageID?) {
-        // TODO(W2): nil -> every live page setFocus(false). Otherwise: surface.window?.makeKey() (our window, never
-        // the host window), makeFirstResponder(the RenderWidgetHostViewCocoa inside the surface, else the surface),
-        // browser.setFocus(true). The spike's focus sequence (u2-bar): bar field <-> RenderWidgetHostViewCocoa.
-        // If the page's Chromium views are not embedded yet (a page created in this same render), remember the
-        // request and apply it when EmbeddedSurface.adopt finishes; a later focus() call replaces it.
-        fatalError("not implemented")
+        guard phase == .running else { return }
+        guard let page, let target = live[page] else {
+            pendingFocus = nil
+            for live in live.values where live.surface.containsFirstResponder { live.dropFocus() }
+            return
+        }
+        if target.surface.isReadyForFocus {
+            pendingFocus = nil
+            target.takeFocus()
+        } else {
+            pendingFocus = page
+        }
     }
 
     public func evaluate(_ script: String, in page: PageID) {
@@ -137,12 +163,15 @@ public final class CEFEngine: WebEngine {
     /// 1. restoringViews: every surface gives Chromium's views back to their host window's content view, and every
     ///    host window is removed from our window's children (`EmbeddedSurface.returnViews()`).
     /// 2. closingBrowsers: `close(force: true)` for every live page (closing ones are already on their way); await
-    ///    each `browserDidClose` (OnBeforeClose), bounded by Metrics.persistence.shutdownTimeout.
+    ///    each `browserDidClose` (OnBeforeClose), bounded by Metrics.persistence.shutdownTimeout. Then give CEF a
+    ///    moment to destroy the emptied host windows (every `onWindowDestroyed`, or 1 s).
     /// 3. On time: shuttingDownRuntime, `CefRuntime.shared.shutdown()`, `.clean`. Timed out: log each unclosed page,
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
+        log.notice("shutdown: \(self.live.count, privacy: .public) live, \(self.closing.count, privacy: .public) closing")
         phase = .restoringViews
+        pendingFocus = nil
         for page in live.values { page.surface.returnViews() }
         for page in closing.values { page.surface.returnViews() }
         phase = .closingBrowsers
@@ -154,14 +183,17 @@ public final class CEFEngine: WebEngine {
         guard closedAll else {
             let unclosed = closing.values.map(\.id).sorted()
             for page in closing.values {
-                log.fault("shutdown: page \(page.id.description) generation \(page.incarnation.generation) (browser \(page.browser.id)) never reported OnBeforeClose")
+                log.fault("shutdown: page \(page.id.description, privacy: .public) generation \(page.incarnation.generation, privacy: .public) (browser \(page.browser.id, privacy: .public)) never reported OnBeforeClose")
             }
             phase = .done
             return .timedOut(unclosed: unclosed)
         }
+        await waitForHostWindows(timeout: 1.0)
         phase = .shuttingDownRuntime
+        log.notice("shutdown: every browser closed (\(self.destroying.count, privacy: .public) host windows still alive); cef_shutdown")
         CefRuntime.shared.shutdown()
         phase = .done
+        log.notice("shutdown: clean")
         return .clean
     }
 
@@ -179,6 +211,20 @@ public final class CEFEngine: WebEngine {
         }
     }
 
+    private func waitForHostWindows(timeout: Double) async {
+        if destroying.isEmpty { return }
+        await withCheckedContinuation { continuation in
+            windowWaiter = continuation
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(timeout))
+                if let waiter = self.windowWaiter {
+                    self.windowWaiter = nil
+                    waiter.resume()
+                }
+            }
+        }
+    }
+
     // MARK: Called by ChromePage
 
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
@@ -189,6 +235,13 @@ public final class CEFEngine: WebEngine {
     func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
         guard phase == .running, live[page.id] === page else { return false }
         return delegate?.engine(self, page: page.id, key: press, stage: stage, pressID: pressID) ?? false
+    }
+
+    /// The page's input view arrived in its surface: apply the focus that was waiting for it.
+    func pageReadyForFocus(_ page: ChromePage) {
+        guard phase == .running, live[page.id] === page, pendingFocus == page.id else { return }
+        pendingFocus = nil
+        page.takeFocus()
     }
 
     /// OnBeforeClose for any incarnation. The ledger says what it may do: a retired incarnation's close never removes
@@ -202,16 +255,28 @@ public final class CEFEngine: WebEngine {
             if !idLiveAgain, phase == .running { delegate?.engine(self, page: page.id, didEmit: .closed) }
         case .liveClosedByPage:
             if live[page.id] === page { live[page.id] = nil }
+            if pendingFocus == page.id { pendingFocus = nil }
+            page.surface.returnViews()
+            destroying[page.incarnation] = page
             if phase == .running {
                 delegate?.engine(self, page: page.id, didEmit: .closedByPage)
                 delegate?.engine(self, page: page.id, didEmit: .closed)
             }
         case .stale:
-            log.error("OnBeforeClose for unknown incarnation \(page.id.description)#\(page.incarnation.generation)")
+            log.error("OnBeforeClose for unknown incarnation \(page.id.description, privacy: .public)#\(page.incarnation.generation, privacy: .public)")
         }
         if closing.isEmpty, let waiter = closeWaiter {
             closeWaiter = nil
             waiter.resume(returning: true)
+        }
+    }
+
+    /// CEF destroyed the page's host window: the last trace of the browser is gone.
+    func pageWindowDidClose(_ page: ChromePage) {
+        destroying[page.incarnation] = nil
+        if destroying.isEmpty, let waiter = windowWaiter {
+            windowWaiter = nil
+            waiter.resume()
         }
     }
 
@@ -220,12 +285,15 @@ public final class CEFEngine: WebEngine {
     private func retire(_ page: ChromePage) {
         guard let incarnation = ledger.retire(page.id), incarnation == page.incarnation else { return }
         closing[incarnation] = page
+        destroying[incarnation] = page
         record(.closeRequested, page)
         page.close()
     }
 
     private func record(_ kind: PageLogEntry.Kind, _ page: ChromePage) {
-        pageLog.append(PageLogEntry(page: page.id, generation: page.incarnation.generation, kind: kind,
-                                    browserID: Int(page.browser.id), uptime: ProcessInfo.processInfo.systemUptime))
+        let entry = PageLogEntry(page: page.id, generation: page.incarnation.generation, kind: kind,
+                                 browserID: Int(page.browser.id), uptime: ProcessInfo.processInfo.systemUptime)
+        pageLog.append(entry)
+        log.notice("pagelog \(kind.rawValue, privacy: .public) page=\(page.id.description, privacy: .public) generation=\(page.incarnation.generation, privacy: .public) browser=\(page.browser.id, privacy: .public)")
     }
 }

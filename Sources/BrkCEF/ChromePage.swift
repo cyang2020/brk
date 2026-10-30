@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkEngine
 import CefKit
+import os
 
 /// One page: a frameless Chrome-runtime browser (`CefChromeBrowser`), the CEF delegate that turns its callbacks into
 /// `PageEvent`s and key presses, and the surface its views are embedded in. One instance per incarnation of a page
@@ -15,12 +16,37 @@ final class ChromePage: CefBrowserDelegate {
     private unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    /// CEF destroyed the host window (after OnBeforeClose); nothing of this page is left on screen.
+    private(set) var windowDestroyed = false
+    private let log = Logger(subsystem: "brk", category: "page")
+
+    /// Where a new browser's host window first appears: off every screen, so nothing flashes before its views are
+    /// moved into a card. The card then sets the real size.
+    static let offscreenBounds = CGRect(x: -20_000, y: -20_000, width: 1024, height: 768)
 
     init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation) {
-        // TODO(W2): options: isFrameless = true, showsChromeToolbar = false, backgroundColor = .white,
-        // initialBounds = the surface's screen frame if it is already in a window (else an off-screen rect).
-        // chrome = CefChromeBrowser.create(url:options:delegate: self); surface.adopt(chrome) starts embedding.
-        fatalError("not implemented")
+        id = spec.id
+        self.incarnation = incarnation
+        self.engine = engine
+        surface = EmbeddedSurface(page: spec.id)
+        var options = CefChromeBrowserOptions()
+        options.isFrameless = true
+        options.showsChromeToolbar = false
+        options.backgroundColor = .white
+        options.initialBounds = Self.offscreenBounds
+        // TODO(W2): profiles: spec.profile != .default -> a CefProfile (request context) per profile, created lazily.
+        chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
+        chrome.browser.delegate = self
+        chrome.onWindowDestroyed = { [weak self] in
+            guard let self else { return }
+            self.windowDestroyed = true
+            self.engine.pageWindowDidClose(self)
+        }
+        surface.onReadyForFocus = { [weak self] in
+            guard let self else { return }
+            self.engine.pageReadyForFocus(self)
+        }
+        surface.adopt(chrome)
     }
 
     var browser: CefBrowser { chrome.browser }
@@ -38,13 +64,27 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
+    /// Keyboard focus into the page: our window (never the host) becomes key and Chromium's input view inside the
+    /// surface becomes first responder; Chromium is told it has focus (the spike's focus sequence, u2-bar).
+    func takeFocus() {
+        guard let window = surface.window else { return }
+        if !window.isKeyWindow { window.makeKey() }
+        window.makeFirstResponder(surface.keyboardTarget)
+        chrome.browser.setFocus(true)
+    }
+
+    func dropFocus() { chrome.browser.setFocus(false) }
+
     // MARK: CefBrowserDelegate -> PageEvent
 
     func browser(_ b: CefBrowser, didChangeURL url: URL?) {
         if let url { engine.pageDidEmit(self, .committed(url)) }
     }
 
-    func browser(_ b: CefBrowser, didChangeTitle title: String) { engine.pageDidEmit(self, .titleChanged(title)) }
+    func browser(_ b: CefBrowser, didChangeTitle title: String) {
+        log.notice("page \(self.id.description, privacy: .public) title: \(title, privacy: .public)")
+        engine.pageDidEmit(self, .titleChanged(title))
+    }
 
     func browser(_ b: CefBrowser, didChangeFavicon urls: [URL]) { engine.pageDidEmit(self, .faviconChanged(urls.first)) }
 
@@ -64,29 +104,42 @@ final class ChromePage: CefBrowserDelegate {
 
     func browserDidGainFocus(_ b: CefBrowser) { engine.pageDidEmit(self, .gainedFocus) }
 
+    /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
-        // Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
-        // TODO(W2): map request.disposition: .newBackgroundTab -> .backgroundTab; .newPopup -> .popup; else
-        // .foregroundTab. Emit .openRequested(url, disposition) when targetURL != nil.
+        if let url = request.targetURL {
+            let disposition: OpenDisposition
+            switch request.disposition {
+            case .newBackgroundTab: disposition = .backgroundTab
+            case .newPopup: disposition = .popup
+            default: disposition = .foregroundTab
+            }
+            engine.pageDidEmit(self, .openRequested(url, disposition))
+        }
         return .handled
     }
 
     func browserDidClose(_ b: CefBrowser) { engine.pageDidClose(self) }
 
+    /// CEF's two key callbacks. Before the page (`OnPreKeyEvent`) the id is minted from the event being dispatched;
+    /// after the page (`OnKeyEvent`, only when the page did not consume it) the id is the partner's, paired by
+    /// `PressCorrelator`. Modifier-only keys and character events are not routed (Control reaches BrkApp as
+    /// `WindowEvent.modifiersChanged` from the window's `flagsChanged` events).
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool {
-        // TODO(W2): guard let press = KeyTranslation.press(from: event) else { return false }  (chars, unknown keys)
-        // Modifier-only keys (Control up/down) -> return false; they reach BrkApp as WindowEvent.modifiersChanged
-        // from the window's flagsChanged events (one source for both focus cases).
-        // let now = Instant(milliseconds: Int64(ProcessInfo.processInfo.systemUptime * 1000))  // monotonic; only the
-        //     correlation timeout reads it, never app time (the app clock stays in BrkApp/Clock.swift)
-        // if isBeforePage {
-        //     let id = PressID(eventTimestamp: NSApp.currentEvent?.timestamp ?? ProcessInfo.processInfo.systemUptime)
-        //     if press.phase == .down { presses.beforePage(press.chord, id: id, at: now) }
-        //     return engine.pageKey(self, press, stage: .beforePage, pressID: id)
-        // } else {
-        //     let id = presses.afterPage(press.chord, at: now) ?? PressID(eventTimestamp: ProcessInfo.processInfo.systemUptime)
-        //     return engine.pageKey(self, press, stage: .afterPage, pressID: id)
-        // }
-        fatalError("not implemented")
+        guard let press = KeyTranslation.press(from: event) else { return false }
+        // Monotonic; only the correlation timeout reads it, never app time (the app clock stays in BrkApp/Clock.swift).
+        let uptime = ProcessInfo.processInfo.systemUptime
+        let now = Instant(milliseconds: Int64(uptime * 1000))
+        let pressID: PressID
+        if isBeforePage {
+            pressID = PressID(eventTimestamp: NSApp.currentEvent?.timestamp ?? uptime)
+            if press.phase == .down { presses.beforePage(press.chord, id: pressID, at: now) }
+        } else {
+            pressID = presses.afterPage(press.chord, at: now) ?? PressID(eventTimestamp: uptime)
+        }
+        let handled = engine.pageKey(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
+        if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
+            log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
+        }
+        return handled
     }
 }
