@@ -1,0 +1,17 @@
+# Core design synthesis
+
+Use candidate A as the base for window-owned pages and operation ownership. Both independent candidates reached that shape. The [independent review](../../../verify/completion/core-design/judge.md) scored A 24/30 and B 20/30. The parent's separately recorded scores were 23/30 and 18/30. Both favored A; the scoring differences concern completeness of interfaces and migration detail, not the chosen ownership.
+
+A is commit `819ecffb9bf5f12e6010d9e9da31f8c20de48e53`. Its original [design](../core-candidate/README.md) and [native evidence](../../../verify/completion/core-candidate/REPORT.md) are preserved unchanged. B is commit `0e4060024af89ee54310a1ec11139a4d4ef5e02c`, available on `t3/design-brk-core-interface` and in `/Users/administrator/.t3/worktrees/brk/t3-f5d4c4d3`. Both started at `ae96ea1`. Neither experimental adapter is product code.
+
+A provides window-specific saved URLs, stronger operation result types, private-session generations, and more native output and lifecycle evidence. Keep these choices. Adopt three constraints from B: preserve optional URLs for empty panes, never replay a download-triggering URL during automatic browser recreation, and refuse ambiguous find results while accounting for DOM and subframe changes. Reject B's shared last-observer URL as the only restoration state and its generic terminal result with an optional destination.
+
+Only the [page identity and restoration contract](identity.md) is frozen for the next implementation unit. It corrects review C1 and the parent's additional archive/seed concerns. [Identity.swift](Identity.swift) gives a compilable caller/interface sketch using the existing BrkBase action vocabulary. The implementation should extend the existing `PageID` and `WebEngine`, not introduce a competing engine facade. Implement the identity, domain, codec, engine attachment, and app routing changes together under one owner.
+
+The original A interface remains a candidate for later operations. C2 through C6 are open in the independent review: all browser leases and final disposal results, delayed answers and terminal races, generated find-ID correlation, output cancellation/file cleanup, and complete clear-data preflight/ordering. They must be resolved before those interfaces freeze. This does not delay the independent page-identity migration. Selection/replace, print submission and broader storage remain required features, not exclusions.
+
+The parent independently typechecked both candidate sketches, verified A's 1,924 inherited file hashes and B's change boundaries, and parsed A's three PDFs with PDFKit. The judge independently reconstructed A's instrumentation and checked output receipts. The parent's CEF bundle has not acquired any candidate behavior by merging these documents and experiments. A's 46 passing regression scenarios ran the old model with instrumentation disabled; they do not prove the new shared-tab mapping.
+
+The [pinned Chromium find helper](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/components/find_in_page/find_tab_helper.cc) allocates request IDs globally and filters prior search sessions. [CEF's adapter](https://raw.githubusercontent.com/chromiumembedded/cef/14c5a08/libcef/browser/browser_host_base.cc) forwards find parameters to that helper. The parent checked these sources independently; the future Brk token adapter still needs its own race tests.
+
+Final Arc behavior and pixel parity remain unverified. The complete feature inventory and prior exclusions remain unchanged.
