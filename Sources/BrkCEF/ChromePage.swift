@@ -4,17 +4,19 @@ import BrkEngine
 import CefKit
 
 /// One page: a frameless Chrome-runtime browser (`CefChromeBrowser`), the CEF delegate that turns its callbacks into
-/// `PageEvent`s and key presses, and the surface its views are embedded in.
+/// `PageEvent`s and key presses, and the surface its views are embedded in. One instance per incarnation of a page
+/// id (`PageLedger`): a reused id gets a new ChromePage while the old one is still closing.
 @MainActor
 final class ChromePage: CefBrowserDelegate {
     let id: PageID
+    let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
     private let chrome: CefChromeBrowser
     private unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
 
-    init(spec: PageSpec, url: URL, engine: CEFEngine) {
+    init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation) {
         // TODO(W2): options: isFrameless = true, showsChromeToolbar = false, backgroundColor = .white,
         // initialBounds = the surface's screen frame if it is already in a window (else an off-screen rect).
         // chrome = CefChromeBrowser.create(url:options:delegate: self); surface.adopt(chrome) starts embedding.
@@ -29,6 +31,8 @@ final class ChromePage: CefBrowserDelegate {
                   hasKeyboardFocus: surface.containsFirstResponder)
     }
 
+    /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
+    /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
         surface.returnViews()
         chrome.browser.close(force: true)

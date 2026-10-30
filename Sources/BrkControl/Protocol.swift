@@ -51,13 +51,14 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case pixel(window: WindowID?, point: CGPoint)
     /// Moves the test clock forward (BRK_TEST_CLOCK=1 only) and dispatches `.system(.clockTick)`.
     case advanceClock(seconds: Double)
-    /// Runs JavaScript in a page; fire and forget (fixture pages report through `document.title`).
+    /// Runs JavaScript in a page through `WebEngine.evaluate`; fire and forget (fixture pages report through
+    /// `document.title`).
     case evaluate(page: PageID, script: String)
     /// Navigates a page to chrome://crash (renderer crash) or chrome://gpucrash, for recovery scenarios.
     case crash(page: PageID, process: CrashTarget)
     /// Moves the NSWindow to a screen frame (finding 8).
     case setWindowFrame(window: WindowID?, frame: CGRect)
-    /// Page lifecycle log since launch: created and closed (OnBeforeClose) pages, in order.
+    /// `WebEngine.pageLog`: created, close requested and closed (OnBeforeClose) pages with generations, in order.
     case pageLog
     /// Writes state.json now (skips the debounce).
     case flush
@@ -164,20 +165,6 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
         self.className = className
         self.isKey = isKey
         self.isVisible = isVisible
-    }
-}
-
-public struct PageLogEntry: Codable, Sendable, Equatable {
-    public enum Kind: String, Codable, Sendable { case created, closed }
-    public var page: PageID
-    public var kind: Kind
-    public var browserID: Int?
-    public var at: Instant
-    public init(page: PageID, kind: Kind, browserID: Int?, at: Instant) {
-        self.page = page
-        self.kind = kind
-        self.browserID = browserID
-        self.at = at
     }
 }
 

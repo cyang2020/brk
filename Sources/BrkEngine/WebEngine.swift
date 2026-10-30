@@ -13,6 +13,10 @@ import BrkBase
 /// Implementations: `CEFEngine` (BrkCEF; Chrome runtime, views embedded) and `StubEngine` (no Chromium; placeholder
 /// views; used by `BRK_ENGINE=stub` and by UI work without a CEF download). An Alloy-runtime engine can be added as a
 /// third implementation for testing or fallback without touching any caller.
+///
+/// Identity rule for reused ids (`PageLedger`): a page id leaves the live set the moment `reconcile` stops listing
+/// it, so the same id can be live again while the old browser is still closing. The old incarnation's events are
+/// dropped and its OnBeforeClose never removes or reports closure for the new one.
 @MainActor
 public protocol WebEngine: AnyObject {
     var delegate: (any WebEngineDelegate)? { get set }
@@ -34,12 +38,21 @@ public protocol WebEngine: AnyObject {
     /// native view. The caller decides when (only when the snapshot's `focus` changes).
     func focus(_ page: PageID?)
 
+    /// Runs JavaScript in a page, no result. For the e2e harness's fixture pages (they report through
+    /// `document.title`) and, later, Boosts' user scripts. A no-op for a page that is not live.
+    func evaluate(_ script: String, in page: PageID)
+
     /// Diagnostics for the control socket. Never used for app behavior.
     func facts(for page: PageID) -> PageFacts?
 
-    /// Ordered teardown, idempotent: after it returns no browser is alive, every borrowed view is back where it came
-    /// from, and the engine's runtime is shut down, so the process may exit. Calling it again awaits the same work.
-    func shutdown() async
+    /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
+    var pageLog: [PageLogEntry] { get }
+
+    /// Ordered teardown, idempotent: after it returns no browser is alive and every borrowed view is back where it
+    /// came from. `.clean` means the runtime is shut down too and the process may exit; `.timedOut` means some
+    /// browsers never answered and the runtime was left running (never `cef_shutdown` with browsers alive): the
+    /// caller exits anyway, non-zero. Calling it again awaits the same work and returns the same outcome.
+    func shutdown() async -> ShutdownOutcome
 }
 
 @MainActor

@@ -84,6 +84,42 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case closed
 }
 
+/// One line of the engine's page-lifecycle log (`WebEngine.pageLog`), read by the control socket's `pageLog` op.
+/// `generation` tells incarnations of a reused id apart; `uptime` is `ProcessInfo.systemUptime` at the event,
+/// for ordering only (the engine has no app clock). Diagnostic: the app never branches on it.
+public struct PageLogEntry: Hashable, Sendable, Codable {
+    public enum Kind: String, Hashable, Sendable, Codable {
+        /// A browser was created for the page.
+        case created
+        /// The engine stopped listing the page and asked its browser to close.
+        case closeRequested
+        /// The browser reported OnBeforeClose. For a close the engine did not start this is a page-initiated close.
+        case closed
+    }
+    public var page: PageID
+    public var generation: UInt64
+    public var kind: Kind
+    public var browserID: Int?
+    public var uptime: Double
+    public init(page: PageID, generation: UInt64, kind: Kind, browserID: Int?, uptime: Double) {
+        self.page = page
+        self.generation = generation
+        self.kind = kind
+        self.browserID = browserID
+        self.uptime = uptime
+    }
+}
+
+/// How `WebEngine.shutdown()` ended. `Lifecycle` decides what the process does with it (BrkApp/Lifecycle.swift).
+public enum ShutdownOutcome: Hashable, Sendable {
+    /// Every browser reported OnBeforeClose and the runtime was shut down; the process may exit normally.
+    case clean
+    /// Some browsers never reported OnBeforeClose within Metrics.persistence.shutdownTimeout. The runtime was NOT
+    /// shut down (cef_shutdown with live browsers is the crash the spike saw); the engine logged each unclosed page.
+    /// The caller must still exit, with a non-zero status, so the e2e runner fails the scenario.
+    case timedOut(unclosed: [PageID])
+}
+
 /// What the engine can tell the e2e harness about one page. Diagnostic only: the app never branches on it.
 public struct PageFacts: Hashable, Sendable, Codable {
     /// The page surface's frame in its window, top-left origin, points. Nil when the surface is in no window.

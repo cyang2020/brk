@@ -65,7 +65,10 @@ extension Work {
             // TODO(W1): live.crashed = true; Effect.page(page, .recover). The pane shows .crashed until committed.
             break
         case .closedByPage:
-            // TODO(W1): as tab close(.item) without effects: the page is already closing (regression finding 7).
+            // TODO(W1): the page closed itself (window.close()); the engine has already dropped it from its live
+            // set. Remove the page demand so reconcile does not recreate it: as .tab(.close(.item(tab))) without
+            // effects (Today: archive .manual and focus the most recent other tab; Pinned/Favorites: unload, keep
+            // the row). Regression finding 7: no blank card behind a current row.
             break
         case .gainedFocus:
             // TODO(W1): if the tab is a pane of a shown split, split.focused = tab, so .focused targets resolve to the
@@ -76,7 +79,8 @@ extension Work {
             // .foregroundTab/.popup focus it, .backgroundTab keeps focus (but loads it). Unknown opener -> no-op.
             _ = (url, disposition)
         case .closed:
-            // TODO(W1): bookkeeping only: drop session.live[tab]. The engine already forgot the browser.
+            // TODO(W1): bookkeeping only: drop session.live[tab]. The engine already forgot the browser, and it
+            // never sends .closed for an id that is live again with a newer incarnation (PageLedger).
             break
         }
         fatalError("not implemented")
