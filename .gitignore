@@ -1,5 +1,9 @@
-node_modules/
-out/
-test-results/
-playwright-report/
-*.tsbuildinfo
+.DS_Store
+.build/
+.swiftpm/
+.cef/
+dist/
+*.app
+verify/swift/
+xcuserdata/
+DerivedData/

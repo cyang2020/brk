@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>keys</title></head>
+<body><textarea id="t" autofocus></textarea>
+<script>
+// ?swallow=1 calls preventDefault on every keydown. The title records the last key the page saw, so the runner
+// can tell whether an app shortcut reached the page (N1).
+var swallow = location.search.indexOf('swallow=1') >= 0;
+window.addEventListener('keydown', function (e) {
+  var c = (e.ctrlKey ? 'ctrl+' : '') + (e.altKey ? 'alt+' : '') + (e.shiftKey ? 'shift+' : '') + (e.metaKey ? 'cmd+' : '') + e.key.toLowerCase();
+  document.title = 'key:' + c + (swallow ? ':swallowed' : ':seen');
+  if (swallow) e.preventDefault();
+}, true);
+</script></body></html>

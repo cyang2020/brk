@@ -1,0 +1,197 @@
+import BrkBase
+import BrkDomain
+import BrkLayout
+import CoreGraphics
+import Foundation
+
+// The control socket contract, shared by the app's server (BrkApp/Control) and the e2e runner (BrkE2E), so the two
+// sides cannot drift: a request the runner can build is one the server can decode.
+//
+// Transport: a Unix stream socket at $BRK_CONTROL_SOCKET (only when set). One JSON object per line each way;
+// requests carry an `id`, replies echo it. Requests on one connection run in order on the main actor; a connection
+// may stay open for a whole scenario. scripts/ctl.sh sends one line by hand for debugging.
+
+public struct ControlRequest: Codable, Sendable, Equatable {
+    public var id: Int
+    public var op: ControlOp
+    public init(id: Int, op: ControlOp) {
+        self.id = id
+        self.op = op
+    }
+}
+
+public enum ControlOp: Codable, Sendable, Equatable {
+    /// Process facts: pid, windows, engine kind, data directory. The runner's readiness probe.
+    case hello
+    /// The window's `WindowSnapshot`, exactly what its views rendered last.
+    case view(window: WindowID?)
+    /// Computed frames, actual AppKit frames by view identifier, page facts, focus. See `NativeFacts`.
+    case native(window: WindowID?)
+    /// Runs a command through the normal dispatch path, as if a view sent it.
+    case dispatch(window: WindowID?, command: Command)
+    /// Scenario setup shortcut: opens `url` as a new Today tab through the same commands as Cmd+T, typing, Enter
+    /// (`.commandBar(.open(.newTab))` then `.commandBar(.submit(url))`), and returns the new tab's id.
+    case load(window: WindowID?, url: URL)
+    /// Injects key-down and key-up NSEvents for "cmd+t", "ctrl+shift+=", "escape" into the key window, in process
+    /// (no Accessibility permission), so they take the same path a real press takes: into Chromium and CEF's key
+    /// handler when a page has focus, into the menu when a native view has focus.
+    case press(chord: String)
+    /// Holds `modifiers` down, presses `chord` `times` times, then releases (Ctrl+Tab cycling, finding 6).
+    case hold(modifiers: String, chord: String, times: Int)
+    /// Types text into the first responder (command bar, rename field, or a focused page field).
+    case type(text: String)
+    /// Injects a left click at the centre of a view (by `ViewID`, located in the live view tree) or at a window point
+    /// (top-left origin). `modifiers` like "cmd" for Cmd+click on a page link.
+    case click(view: ViewID?, point: CGPoint?, modifiers: String?, count: Int)
+    /// Moves the pointer (hover: peek the hidden sidebar).
+    case hover(point: CGPoint)
+    /// CGWindowListCreateImage of the window (works without screen recording permission, spike unknown 8), PNG.
+    case screenshot(window: WindowID?, path: String)
+    /// One pixel of a fresh window capture, at a window point (top-left origin, points), as sRGB 0...255.
+    case pixel(window: WindowID?, point: CGPoint)
+    /// Moves the test clock forward (BRK_TEST_CLOCK=1 only) and dispatches `.system(.clockTick)`.
+    case advanceClock(seconds: Double)
+    /// Runs JavaScript in a page; fire and forget (fixture pages report through `document.title`).
+    case evaluate(page: PageID, script: String)
+    /// Navigates a page to chrome://crash (renderer crash) or chrome://gpucrash, for recovery scenarios.
+    case crash(page: PageID, process: CrashTarget)
+    /// Moves the NSWindow to a screen frame (finding 8).
+    case setWindowFrame(window: WindowID?, frame: CGRect)
+    /// Page lifecycle log since launch: created and closed (OnBeforeClose) pages, in order.
+    case pageLog
+    /// Writes state.json now (skips the debounce).
+    case flush
+    /// Waits until no page is loading and the main queue is idle, or `timeout` seconds pass.
+    case settle(timeout: Double)
+    /// Starts the ordered quit. The reply comes before the process exits; the runner then waits for exit and checks
+    /// the exit status and that no new crash report appeared.
+    case quit
+}
+
+public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
+
+public struct ControlReply: Codable, Sendable, Equatable {
+    public var id: Int
+    public var result: ControlResult
+    public init(id: Int, result: ControlResult) {
+        self.id = id
+        self.result = result
+    }
+}
+
+public enum ControlResult: Codable, Sendable, Equatable {
+    case ok
+    case hello(Hello)
+    case view(WindowSnapshot)
+    case native(NativeFacts)
+    case dispatched(rev: Int)
+    case loaded(tab: ItemID)
+    case pixel(red: Int, green: Int, blue: Int, alpha: Int)
+    case screenshot(path: String, pixelWidth: Int, pixelHeight: Int)
+    case clock(now: Instant)
+    case pageLog([PageLogEntry])
+    case failed(String)
+}
+
+public struct Hello: Codable, Sendable, Equatable {
+    public var pid: Int32
+    public var engine: String
+    public var windows: [WindowID]
+    public var dataDirectory: String
+    public init(pid: Int32, engine: String, windows: [WindowID], dataDirectory: String) {
+        self.pid = pid
+        self.engine = engine
+        self.windows = windows
+        self.dataDirectory = dataDirectory
+    }
+}
+
+/// What the window really looks like, next to what layout computed.
+public struct NativeFacts: Codable, Sendable, Equatable {
+    public var window: WindowID
+    /// NSWindow frame (screen, bottom-left origin) and content size.
+    public var windowFrame: CGRect
+    public var contentSize: CGSize
+    public var backingScale: Double
+    public var isKey: Bool
+    /// `WindowLayout.compute` for the last rendered snapshot.
+    public var computed: WindowFrames
+    /// Every view in the window with an accessibility identifier: its frame in window coordinates (top-left),
+    /// whether it is hidden, and its layer corner radius. Keys are `ViewID.identifier` strings.
+    public var actual: [String: ActualView]
+    /// Page surfaces attached to this window, keyed by page.
+    public var pages: [PageID: PageFacts]
+    /// Class name of the first responder, and the page that has keyboard focus, if any.
+    public var firstResponder: String
+    public var focusedPage: PageID?
+    /// Window numbers of every window the app owns, including CEF host windows; none of the host windows may be key.
+    public var appWindows: [AppWindowFact]
+    public init(window: WindowID, windowFrame: CGRect, contentSize: CGSize, backingScale: Double, isKey: Bool,
+                computed: WindowFrames, actual: [String: ActualView], pages: [PageID: PageFacts],
+                firstResponder: String, focusedPage: PageID?, appWindows: [AppWindowFact]) {
+        self.window = window
+        self.windowFrame = windowFrame
+        self.contentSize = contentSize
+        self.backingScale = backingScale
+        self.isKey = isKey
+        self.computed = computed
+        self.actual = actual
+        self.pages = pages
+        self.firstResponder = firstResponder
+        self.focusedPage = focusedPage
+        self.appWindows = appWindows
+    }
+}
+
+public struct ActualView: Codable, Sendable, Equatable {
+    public var frame: CGRect
+    public var hidden: Bool
+    public var cornerRadius: Double
+    public init(frame: CGRect, hidden: Bool, cornerRadius: Double) {
+        self.frame = frame
+        self.hidden = hidden
+        self.cornerRadius = cornerRadius
+    }
+}
+
+public struct AppWindowFact: Codable, Sendable, Equatable {
+    public var number: Int
+    public var className: String
+    public var isKey: Bool
+    public var isVisible: Bool
+    public init(number: Int, className: String, isKey: Bool, isVisible: Bool) {
+        self.number = number
+        self.className = className
+        self.isKey = isKey
+        self.isVisible = isVisible
+    }
+}
+
+public struct PageLogEntry: Codable, Sendable, Equatable {
+    public enum Kind: String, Codable, Sendable { case created, closed }
+    public var page: PageID
+    public var kind: Kind
+    public var browserID: Int?
+    public var at: Instant
+    public init(page: PageID, kind: Kind, browserID: Int?, at: Instant) {
+        self.page = page
+        self.kind = kind
+        self.browserID = browserID
+        self.at = at
+    }
+}
+
+/// Newline-delimited JSON framing for both sides.
+public enum ControlWire {
+    public static func encode<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var data = try encoder.encode(value)
+        data.append(0x0A)
+        return data
+    }
+
+    public static func decode<T: Decodable>(_ type: T.Type, line: Data) throws -> T {
+        try JSONDecoder().decode(type, from: line)
+    }
+}

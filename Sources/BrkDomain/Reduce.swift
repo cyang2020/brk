@@ -1,0 +1,119 @@
+import BrkBase
+import Foundation
+
+/// What the reducer may read from outside: the injected clock's time and a source of fresh ids. Nothing else.
+public struct Context: Sendable {
+    public let now: Instant
+    public let newID: @Sendable () -> String
+
+    public init(now: Instant, newID: @escaping @Sendable () -> String) {
+        self.now = now
+        self.newID = newID
+    }
+}
+
+public struct Transition: Sendable {
+    public let state: AppState
+    public let effects: [Effect]
+    /// The saved part changed: schedule a write.
+    public let docChanged: Bool
+    /// Anything changed (rev was bumped): re-project and render. False means `state` is the input value.
+    public let changed: Bool
+    /// For `Input.key`: the key was an app shortcut and was consumed. CEF's key handler returns this.
+    public let keyHandled: Bool
+}
+
+/// The only writer of application state. Pure: same inputs, same output; no clock reads, no I/O, no traps for any
+/// `Input` value (unknown ids are no-ops, numbers are clamped).
+///
+/// Order inside one transition:
+/// 1. `.user` and `.key`: if a Ctrl+Tab cycle is pending and the command is not `cycleRecent`, commit it first
+///    (robust against a lost Control key-up); apply the overlay rule (`Command.keepsCommandBar`/`keepsArchive`).
+/// 2. Run the area's rules (Rules/*.swift), which change state and append effects.
+/// 3. `normalize` (every cross-entity invariant; repairs only, never fills an absent active item).
+/// 4. If the result differs from the input, bump `session.rev`.
+public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transition {
+    var work = Work(state: state, ctx: ctx)
+    switch input {
+    case .user(let window, let command):
+        work.run(command, in: window)
+    case .key(let window, let key):
+        work.routeKey(key, in: window)
+    case .system(let event):
+        work.observe(event)
+    }
+    return work.finish(from: state)
+}
+
+/// One transition in progress. Rules are `extension Work` methods grouped by the knowledge they own, one file per
+/// area under Rules/. They mutate `state`, append to `effects`, and never read the clock except through `ctx`.
+struct Work {
+    var state: AppState
+    let ctx: Context
+    var effects: [Effect] = []
+    var keyHandled = false
+
+    init(state: AppState, ctx: Context) {
+        self.state = state
+        self.ctx = ctx
+    }
+
+    /// Dispatches a command to its area. The exhaustive switch is the handler table: a new `Command` area
+    /// without rules does not compile.
+    mutating func run(_ command: Command, in window: WindowID) {
+        guard state.doc.windows[window] != nil else { return }
+        commitPendingCycle(unless: command, in: window)
+        applyOverlayRule(for: command, in: window)
+        switch command {
+        case .commandBar(let c): commandBar(c, in: window)
+        case .archive(let c): archive(c, in: window)
+        case .tab(let c): tabs(c, in: window)
+        case .page(let c): pages(c, in: window)
+        case .item(let c): items(c, in: window)
+        case .space(let c): spaces(c, in: window)
+        case .split(let c): splits(c, in: window)
+        case .sidebar(let c): sidebar(c, in: window)
+        case .app(let c): app(c, in: window)
+        case .settings(let c): settings(c, in: window)
+        }
+    }
+
+    /// `Input.key`: decide with `KeyRouting.decide` over `state.session.keyRouting`; on `.dispatch(action)` run
+    /// `action.spec.command` for the window and set `keyHandled`.
+    mutating func routeKey(_ key: KeyInput, in window: WindowID) {
+        // TODO(W2): var memory = state.session.keyRouting
+        //           let decision = KeyRouting.decide(key, memory: &memory, now: ctx.now)
+        //           state.session.keyRouting = memory
+        //           if case .dispatch(let action) = decision { run(action.spec.command, in: window); keyHandled = true }
+        fatalError("not implemented")
+    }
+
+    mutating func observe(_ event: SystemEvent) {
+        switch event {
+        case .page(let page, let e): pageEvent(e, for: page)
+        case .clockTick: sweepAutoArchive()
+        case .window(let window, let e): windowEvent(e, in: window)
+        }
+    }
+
+    mutating func commitPendingCycle(unless command: Command, in window: WindowID) {
+        // TODO(W1): if session.windows[window].recentCycle != nil and command is not .tab(.cycleRecent), commit it:
+        // stamp lastActiveAt for tabs that entered or left the screen relative to the cycle's baseline, clear it.
+        fatalError("not implemented")
+    }
+
+    mutating func applyOverlayRule(for command: Command, in window: WindowID) {
+        // TODO(W1): an open .commandBar closes unless command.keepsCommandBar; an open .archive closes unless
+        // command.keepsArchive or keepsCommandBar.
+        fatalError("not implemented")
+    }
+
+    mutating func finish(from input: AppState) -> Transition {
+        // TODO(W1): normalize(&state); changed = state != input; if changed { state.session.rev += 1 };
+        // docChanged = state.doc != input.doc.
+        // Fast path: every key a page receives while the user types arrives as `.key` and usually decides
+        // `.passToPage` with no memory change; when no rule touched state (track a `touched` flag set by every
+        // mutating helper), return the input as is without normalize or the O(items) comparison.
+        fatalError("not implemented")
+    }
+}
