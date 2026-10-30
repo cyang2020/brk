@@ -1,0 +1,40 @@
+# Architect brief: native Arc rebuild (Swift + AppKit + CEF)
+
+You are one runner in a parallel design exploration (pstack `architect`, Phase B, run through `arena`). Produce one candidate design package. Another runner on a different model gets this same brief. Do not hedge toward a safe middle; a sharp, well-argued shape is what the picker needs.
+
+Read in this order before writing anything:
+
+1. `/Users/administrator/.claude/skills/architect/references/runner-prompt.md`, `rationale-template.md`, `design-red-flags.md`.
+2. `docs/arc-anatomy/model-and-shortcuts.md` (sections 1.3 to 1.15, 2.3, 3, 4), `docs/arc-anatomy/visual-and-copy.md` (sections 1, 2, "Sidebar sections", "Spaces", "Tabs", "Command bar and URL inputter", "Split view", "Little Arc", "Peek"), `docs/arc-anatomy/layout-constants.md` (77 decompiled numbers; use them, do not guess where a number exists).
+3. `docs/design/rationale.md` and `docs/design/module-map.md`: the design of the retired Electron version. Its domain model (one state owner, pure reducer over a command vocabulary, flat item map, spaces with pinned and today roots, shared favorites, archive snapshots, injectable clock, whole-snapshot projections) carries over. Its tests are the behavioral spec: `git show electron-v1:src/domain/reduce.test.ts`, `git show electron-v1:src/domain/model.ts`, `git show electron-v1:src/shared/commands.ts`, `git show electron-v1:src/shared/view.ts`, `git show electron-v1:e2e/arc.spec.ts`, `git show electron-v1:e2e/regression.spec.ts` (run these in your worktree; the tag is in the repo).
+4. `docs/swift/cef-hosting-results.md`: what Electron-free hosting of Chromium verifiably does on this Mac. The Chrome-runtime embed (Chromium's `ViewsCompositorSuperview` and `WebContentsViewCocoa` moved into our card view, host window never key) is the only mode that gave a clipped rounded card, a native view over the page with focus going and coming back, Arc-style key priority through `OnPreKeyEvent`, splits with live resize, and `chrome://extensions`. Its risks: segfault at quit unless browsers close before `CefShutdown` and moved views go back; dependence on private Chromium view classes; one empty host window per page; the AppKit menu key equivalents never fire while a page is focused, so every app shortcut goes through the CEF key handler. The prototype source is at `/Users/administrator/.cache/arc-spike-swift/Sources/` (ours, reuse freely) and `docs/swift/reference-bases.md` reviews CefSwift (`/Users/administrator/.cache/arc-ref/CefSwift`, SwiftPM plugin that downloads a pinned CEF and assembles the .app with helper bundles; LICENSE says MIT, README says BSD-3, both permissive; no human commits since June). The user ruled out building on the `cra` project; its code must not be copied. Using CefSwift as a vendored, pinned dependency is allowed if you justify it; so is a thin bridge of your own over CEF's C API. Say which and why.
+
+## The task
+
+Design the module structure, core types, function signatures, build layout, and test harness for a native macOS rebuild of Arc, so that parallel implementation workers can fill in bodies without stepping on each other. Target: every feature in anatomy section 3 eventually, pixel-faithful to the constants, with the first implementation wave covering the core (sidebar, spaces, pinned and today tabs, favorites, folders, command bar, split view, archive and auto-archive, theme, persistence, shortcuts). The design must show where Little Arc, Peek, profiles, incognito, extensions, Boosts, Easels, Notes, Live Folders, Air Traffic Control, picture in picture, captures, site control center, settings, onboarding, and import plug in later without reshaping the core.
+
+Fixed constraints:
+
+- Swift 6 with strict concurrency, SwiftPM at the repo root, macOS 14 or later, Apple silicon first. AppKit for the shell; SwiftUI only inside `NSHostingView` for editors and dialogs where it pays off (Arc does the same). No Electron, no WKWebView.
+- Chromium through CEF with the Chrome runtime and the embed technique from the prototype, behind one hosting interface so an Alloy host can be swapped in for testing or fallback. Shutdown order is part of the design (close every browser, wait for `OnBeforeClose`, restore moved views, then `CefShutdown`).
+- One owner for application state in the app process; a pure reducer is the only writer; every input (menu, key through CEF, sidebar click, command bar, control socket, page events, clock) is a command; views render a projection; the clock is injected.
+- Persistence: one versioned JSON file under Application Support, written atomically, parsed at the boundary, with quarantine of an unreadable file.
+- Shortcuts: one table drives the menu, the CEF `OnPreKeyEvent` handler (priority `app` intercepts before the page, `page` lets the page handle first), and the command bar's command list. Keys per the Arc menu table in anatomy section 2.3.
+- Layout numbers live in one constants file, each with its source (constant name from `layout-constants.md`) or labeled a guess.
+- Theme: gradient plus texture background rendered by us (Metal or Core Image), with our own procedurally generated textures (Arc's asset files are not copied), light and dark derivation, crossfade on space switch.
+- Test strategy: XCTest for the domain and pure layout math; an app-level control socket (as the prototype's `ctl.sh`: load, press, dispatch, view, native frames, screenshot through `CGWindowListCreateImage`, advance clock, quit) driven by a script runner for end-to-end scenarios on this Mac's display; pixel checks against the constants; `scripts/e2e.sh` runs the suite and writes `verify/swift/REPORT.md` and screenshots.
+- Product name in code and bundle: `Brk` (the repository name; "Arc" is The Browser Company's trademark). The user can rename later; keep the name in one place.
+- Signing ad hoc in `scripts/build.sh`; notarization is out of scope.
+
+## What to produce, in your worktree
+
+1. `docs/design/swift/rationale.md` per the rationale template. Caller's usage first (what each implementation worker imports and calls, with two or three realistic call sites per worker), then the types. Fill every section except "Synthesis decision". Name the workers you expect (for example W1 domain, W2 CEF host and window, W3 sidebar views, W4 command bar and archive, W5 theme renderer) and what each owns.
+2. `docs/design/swift/module-map.md`: modules with path, owner, what it hides, what it exposes, who imports it; the dependency direction rules and how they are enforced (SwiftPM target boundaries, `package` access level, a test that scans imports); the control-socket contract; the e2e scenario list (the nine done-predicate scenarios of the Electron plan plus the regression scenarios from `electron-v1:e2e/regression.spec.ts`, translated to the socket); the accessibility identifiers the scenarios use.
+3. `Package.swift`, `Sources/**`, `Tests/**`: the skeleton. Real targets, real types and signatures, `fatalError("not implemented")` bodies, `// TODO` pseudocode for the tricky parts (view moving, shutdown order, key routing, split layout, theme rendering), doc comments stating intent and invariants. It must build: run `swift build` and `swift test` (tests may be `XCTSkip`ped stubs) in your worktree and fix until both exit 0. Do not download CEF or build the .app in this phase; `scripts/build.sh` and `scripts/e2e.sh` are part of the skeleton as scripts with the steps written out.
+4. Keep the whole package readable in one sitting: a reviewer should trace "user presses Cmd+T while a page is focused" and "user clicks a space in the dock" from input to pixels by reading types and signatures alone.
+
+## Rules
+
+- Work only inside your worktree. Commit your package to your branch with one commit (`git add -A && git commit`), message `arena candidate: <one-line summary of the shape>`.
+- Do not read the other runner's worktree.
+- Finish with a reply under 300 words: the load-bearing decisions, what you rejected, and the single biggest risk in your shape.
