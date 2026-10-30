@@ -133,6 +133,9 @@ struct DialogOverlayMetrics: MetricGroup {
     let previewHeight = Metric(64.0, .guess("live theme preview tile height"))
     let swatchSize = Metric(24.0, .guess("preset swatch diameter; nine fit one row of the dialog"))
     let iconButtonSize = Metric(28.0, .guess("icon choice button size"))
+    let ringWidth = Metric(2.0, .guess("ring around the chosen swatch or icon, in the FocusRing color"))
+    let ringGap = Metric(3.0, .guess("gap between a chosen swatch and its ring"))
+    let dotSize = Metric(8.0, .guess("the theme-color dot drawn for a space without an icon"))
 }
 
 /// Copy the overlay views use that BrkUIKit's `Copy` does not have yet. Observed strings are Arc's
