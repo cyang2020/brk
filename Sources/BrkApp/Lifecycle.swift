@@ -48,6 +48,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // CEF replaces signal handlers during bootstrap. Restore the app's crash trace after CEF initializes.
+        CrashBacktrace.install()
         let directory = Product.dataDirectory()
         let stateFile = StateFile(directory: directory)
         let clock: any Clock = options.testClock ? OffsetClock() : SystemClock()

@@ -127,7 +127,9 @@ extension Work {
             state.session.live[tab] = live
         case .titleChanged(let title):
             if current.title != title { state.withTree(scope) { $0.updateTab(tab) { $0.title = title } } }  // never customTitle
-            if let first = state.doc.history.first, first.url == current.url, first.title != title { state.doc.history[0].title = title }
+            if case .profile(let profile) = state.browsingContext(of: tab),
+               let index = state.doc.history.firstIndex(where: { $0.url == current.url && $0.profile == profile }),
+               state.doc.history[index].title != title { state.doc.history[index].title = title }
         case .faviconChanged(let url):
             if current.favicon != url { state.withTree(scope) { $0.updateTab(tab) { $0.favicon = url } } }
         case .loadingChanged(let isLoading, let back, let forward):

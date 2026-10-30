@@ -175,6 +175,8 @@ final class Wave2AppTests: XCTestCase {
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("/tmp/brk-downloads")))))
         XCTAssertEqual(decide(), .save(directory: "/tmp/brk-downloads"))
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("~/Desktop")))))
+        XCTAssertEqual(decide(), .save(directory: "/tmp/brk-downloads"), "the settings boundary refuses relative and tilde paths")
+        h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory(NSHomeDirectory() + "/Desktop")))))
         XCTAssertEqual(decide(), .save(directory: NSHomeDirectory() + "/Desktop"))
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .promptForDownloadLocation(true)))))
         XCTAssertEqual(decide(), .ask(directory: NSHomeDirectory() + "/Desktop"))

@@ -82,6 +82,21 @@ final class FixtureServer: @unchecked Sendable {
             }.first ?? ""
             let body = Data("[\"\(query)\", [\"\(query)ft\", \"\(query)m\"]]".utf8)
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/download-active" {
+            // Keep a response open until the browser cancels it. The shutdown scenario waits for received bytes,
+            // then quits without releasing this response; no fixed delay can turn it into a completed download.
+            let body = Data(repeating: 65, count: 65_536)
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"active.bin\"\r\nContent-Length: 1048576\r\nConnection: close\r\n\r\n".utf8)
+            let bytes = header + body
+            var offset = 0
+            while offset < bytes.count {
+                let count = bytes.withUnsafeBytes { write(fd, $0.baseAddress! + offset, $0.count - offset) }
+                guard count > 0 else { return }
+                offset += count
+            }
+            var byte: UInt8 = 0
+            _ = read(fd, &byte, 1)
+            return
         } else if path == "/download" {
             let body = Data("fixture download\n".utf8)
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

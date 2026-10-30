@@ -44,6 +44,18 @@ enum HostWindows {
 
     static func isHost(_ window: NSWindow) -> Bool { hosts.contains(window) }
 
+    /// Chromium's download animation and bubble use native widgets outside CefChromeBrowser's page hosts.
+    /// They can outlive OnBeforeClose and onWindowDestroyed. AppKit would close them during terminate, after
+    /// cef_shutdown has destroyed their Chromium observers. Close them synchronously while CEF is still alive.
+    /// CefNSWindow page hosts keep their CEF close path; this private class name is pinned by the download e2e tests.
+    static func closeAuxiliaryWindows() {
+        autoreleasepool {
+            for window in NSApp.windows where NSStringFromClass(type(of: window)) == "NativeWidgetMacNSWindow" {
+                window.close()
+            }
+        }
+    }
+
     /// Replaces `canBecomeKeyWindow` and `canBecomeMainWindow` on the host's class, once per class. The method is
     /// added to the class itself when it only inherited one, so NSWindow's own implementation is never touched.
     private static func guardClass(of window: NSWindow) {
