@@ -150,10 +150,16 @@ final class ControlExecutor {
 
         case .advanceClock(let seconds):
             guard let clock else { throw Failure(message: "BRK_TEST_CLOCK not set") }
-            guard seconds.isFinite else { throw Failure(message: "advanceClock(\(seconds)): not a finite number") }
+            // Nil for NaN, an infinity, and a finite value whose milliseconds do not fit Int64 (1e308 s).
+            guard let milliseconds = Int64(exactly: (seconds * 1000).rounded()) else {
+                throw Failure(message: "advanceClock(\(seconds)): not a number of milliseconds the clock can hold")
+            }
             let now: Instant
-            do { now = try clock.advance(by: .milliseconds(Int64((seconds * 1000).rounded()))) } catch {
-                throw Failure(message: "the test clock refuses to move backwards (\(seconds) s)")
+            do { now = try clock.advance(by: .milliseconds(milliseconds)) } catch {
+                switch error {
+                case .backwards: throw Failure(message: "the test clock refuses to move backwards (\(seconds) s)")
+                case .outOfRange: throw Failure(message: "advanceClock(\(seconds)): past the last instant the clock supports")
+                }
             }
             store.dispatch(.system(.clockTick))
             return .clock(now: now)

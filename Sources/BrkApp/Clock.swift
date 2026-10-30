@@ -14,6 +14,8 @@ public struct SystemClock: Clock {
 public enum ClockError: Error, Equatable {
     /// `advance(by:)` was asked to move time backwards. The offset is unchanged.
     case backwards(Duration)
+    /// `advance(by:)` would carry the reading past the end of `Instant.supported`. The offset is unchanged.
+    case outOfRange(Duration)
 }
 
 /// BRK_TEST_CLOCK=1: real time plus an offset that only moves forward (`advance`), so timers and page loads still
@@ -29,11 +31,17 @@ public final class OffsetClock: Clock, @unchecked Sendable {
         lock.withLock { SystemClock().now().advanced(by: offset) }
     }
 
-    /// Moves the offset forward and returns the new reading. Throws for a negative duration; zero is allowed.
+    /// Moves the offset forward and returns the new reading. Throws for a negative duration and for one that would
+    /// read past `Instant.supported`; zero is allowed. The room is measured in `Duration`, which cannot overflow here.
     @discardableResult
     public func advance(by duration: Duration) throws(ClockError) -> Instant {
         guard duration >= .zero else { throw .backwards(duration) }
-        lock.withLock { offset += duration }
+        let accepted = lock.withLock {
+            guard duration <= Instant.supported.upperBound.since(SystemClock().now()) - offset else { return false }
+            offset += duration
+            return true
+        }
+        guard accepted else { throw .outOfRange(duration) }
         return now()
     }
 }
