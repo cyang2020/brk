@@ -42,6 +42,7 @@ struct SidebarDrawMetrics: MetricGroup {
     // Favorites.
     let tileFavicon = Metric(20.0, .guess("favicon size inside a 47 pt favorites tile"))
     let tileRingWidth = Metric(2.0, .anatomy("cra L475: the active favorite has a 2 pt rim inside the edge"))
+    let tileRenameInset = Metric(4.0, .guess("side padding of the rename field across a favorites tile; Arc's favorite rename was not recovered"))
     let emptyDash = Metric([4.0, 3.0], .guess("dash pattern of the empty favorites drop box"))
 
     // Dock.

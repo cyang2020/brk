@@ -108,7 +108,7 @@ public final class SidebarView: NSView {
         urlPill.frame = local(f.urlPill)
         urlPill.render(snapshot.urlPill, palette: palette)
         favorites.frame = local(f.favoritesTray)
-        favorites.render(snapshot.favorites, frames: f, palette: palette)
+        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(snapshot.space, palette: palette)
         tablist.frame = local(f.tablistViewport)
@@ -122,9 +122,10 @@ public final class SidebarView: NSView {
     /// The palette of the last render (the drag preview's card color).
     var currentPalette: Palette? { last?.palette }
 
-    /// Makes the rename field of `item` first responder. False when that row is not on screen or not renaming.
+    /// Makes the rename field of `item` (a row or a favorite tile) first responder. False when it is not on screen or
+    /// not renaming.
     public func focusRenameField(_ item: ItemID) -> Bool {
-        tablist.focusRenameField(item)
+        tablist.focusRenameField(item) || favorites.focusRenameField(item)
     }
 
     /// Keyboard focus into the tab list itself (FocusTarget.sidebar). False when the list is not in a window.
@@ -158,7 +159,7 @@ public final class SidebarView: NSView {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Draw.floatingDismissPoll.value))
                 guard let self, let window = self.window, let slice = self.last, slice.floats, let f = slice.frames else { return }
-                if self.drag.isActive || self.tablist.isRenaming { continue }
+                if self.drag.isActive || self.tablist.isRenaming || self.favorites.isRenaming { continue }
                 let pointer = self.rootPoint(fromWindow: window.mouseLocationOutsideOfEventStream)
                 let m = Metrics.sidebar
                 if pointer.x > f.frame.width + m.floatingStayOpenSlack.value || pointer.x < -m.outsideHoverZoneWidth.value {

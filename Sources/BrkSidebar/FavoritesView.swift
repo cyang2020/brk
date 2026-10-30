@@ -18,7 +18,7 @@ final class FavoritesView: NSView {
     private let emptyTitle = NSTextField(labelWithString: Copy.favoritesEmptyTitle)
     private let emptySubtitle = NSTextField(wrappingLabelWithString: Copy.favoritesEmptySubtitle)
     private let dropBar = NSView()
-    private var last: (FavoritesSnapshot, SidebarFrames, Palette)?
+    private var last: (FavoritesSnapshot, ItemID?, SidebarFrames, Palette)?
     private var palette: Palette?
     private var dropHighlight = false
 
@@ -49,13 +49,17 @@ final class FavoritesView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func render(_ favorites: FavoritesSnapshot, frames: SidebarFrames, palette: Palette) {
-        if let last, last.0 == favorites, last.1 == frames, last.2 == palette { return }
-        last = (favorites, frames, palette)
+    func render(_ favorites: FavoritesSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette) {
+        if let last, last.0 == favorites, last.1 == renaming, last.2 == frames, last.3 == palette { return }
+        last = (favorites, renaming, frames, palette)
         self.palette = palette
         section.frame = bounds
         let shown = Set(favorites.tiles.map(\.id))
-        for (id, tile) in tiles where !shown.contains(id) { tile.removeFromSuperview(); tiles[id] = nil }
+        for (id, tile) in tiles where !shown.contains(id) {
+            tile.retireRenameField()
+            tile.removeFromSuperview()
+            tiles[id] = nil
+        }
         for row in favorites.tiles {
             let tile = tiles[row.id] ?? {
                 let t = FavoriteTileView(dispatch: dispatch, drag: drag, id: row.id)
@@ -64,7 +68,7 @@ final class FavoritesView: NSView {
                 return t
             }()
             if let rect = frames.favoriteTiles[row.id] { tile.frame = rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY) }
-            tile.render(row, palette: palette)
+            tile.render(row, renaming: row.id == renaming, palette: palette)
         }
         let empty = favorites.tiles.isEmpty
         emptyBox.isHidden = !empty
@@ -129,10 +133,20 @@ final class FavoritesView: NSView {
     }
 
     func tileView(_ id: ItemID) -> FavoriteTileView? { tiles[id] }
+
+    /// A favorite's rename field is being edited.
+    var isRenaming: Bool { tiles.values.contains { $0.isEditingName } }
+
+    /// The rename field of `item` becomes first responder; false when that tile is not showing one.
+    func focusRenameField(_ item: ItemID) -> Bool {
+        guard let tile = tiles[item], let window else { return false }
+        return tile.focusRenameField(in: window)
+    }
 }
 
 /// One favorite: the favicon (or the tab's custom icon) centred in a 47 pt continuous-corner tile. Current tile:
 /// lighter fill and a 2 pt rim (Arc: `AppTrayItemHighlightRingView`, inset 1, radius 11). Unloaded tabs draw dimmer.
+/// While renaming, the title editor spans the tile in place of the icon.
 @MainActor
 final class FavoriteTileView: HoverView {
     let id: ItemID
@@ -142,6 +156,7 @@ final class FavoriteTileView: HoverView {
     private let ring = CAShapeLayer()
     private var row: TabRow?
     private var palette: Palette?
+    private var renameField: RenameField?
 
     init(dispatch: @escaping Dispatch, drag: DragController, id: ItemID) {
         self.dispatch = dispatch
@@ -156,20 +171,52 @@ final class FavoriteTileView: HoverView {
         identify(.favorite(id))
     }
 
-    func render(_ row: TabRow, palette: Palette) {
+    func render(_ row: TabRow, renaming: Bool, palette: Palette) {
         self.row = row
         self.palette = palette
         toolTip = row.title
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, loading: row.loading)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
+        if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
         stateChanged()
         needsLayout = true
+    }
+
+    var isEditingName: Bool { renameField.map { !$0.finished } ?? false }
+
+    func focusRenameField(in window: NSWindow) -> Bool {
+        layoutSubtreeIfNeeded()
+        return renameField?.focus(in: window) ?? false
+    }
+
+    private func showRenameField(_ row: TabRow, palette: Palette) {
+        guard renameField == nil else { return }
+        let field = RenameField(text: row.title, font: .systemFont(ofSize: Draw.smallFont.value), color: palette.ink.text) { [weak self] title in
+            guard let self else { return }
+            self.dispatch(.item(.rename(self.id, title: title)))
+        }
+        field.alignment = .center
+        addSubview(field)
+        renameField = field
+        icon.isHidden = true
+    }
+
+    /// Drops the field without committing (the rename ended elsewhere, or the tile left).
+    func retireRenameField() {
+        guard let field = renameField else { return }
+        field.retire()
+        renameField = nil
+        icon.isHidden = false
     }
 
     override func layout() {
         super.layout()
         let side = Draw.tileFavicon.value
         icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        if let field = renameField {
+            let inset = Draw.tileRenameInset.value, height = field.intrinsicContentSize.height
+            field.frame = CGRect(x: inset, y: (bounds.height - height) / 2, width: bounds.width - 2 * inset, height: height)
+        }
         let m = Metrics.favorites
         let ringRect = bounds.insetBy(dx: m.ringInset.value + Draw.tileRingWidth.value / 2, dy: m.ringInset.value + Draw.tileRingWidth.value / 2)
         CATransaction.begin()
