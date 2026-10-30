@@ -101,17 +101,17 @@ struct ProfilePathTests {
         #expect(CefProfile.cachePath(for: .incognito, rootCachePath: root) == nil)
     }
 
-    @Test func persistentProfileDerivesUnderProfiles() {
+    @Test func persistentProfileIsADirectChildOfTheRoot() {
         let path = CefProfile.cachePath(for: .persistent(name: "Work"), rootCachePath: root)
-        #expect(path?.path == "/tmp/cefroot/Profiles/Work")
+        #expect(path?.path == "/tmp/cefroot/Profile-Work")
     }
 
     @Test func persistentProfileSanitizesName() {
-        // Path separators and leading dots can't escape the Profiles dir.
+        // Path separators and leading dots can't escape the root cache dir.
         let path = CefProfile.cachePath(for: .persistent(name: "../../etc"), rootCachePath: root)
         #expect(path != nil)
         #expect(!(path!.path.contains("/etc")))
-        #expect(path!.path.hasPrefix("/tmp/cefroot/Profiles/"))
+        #expect(path!.deletingLastPathComponent().path == "/tmp/cefroot")
 
         #expect(CefProfile.sanitize("a/b") == "a_b")
         #expect(CefProfile.sanitize("...") == "Profile")
