@@ -12,7 +12,7 @@ The subprocess implementation in `Sources/BrkApp/AIProvider.swift` needs a focus
 
 `StateCodec` owns the version-2 saved document and migration/repair. `StateFile` owns atomic/debounced persistence. Ephemeral windows and scratch tabs must stay out of the saved document. New Notes, Easels, Boosts, imports and sync data must retain those boundaries rather than treating all documents as persistent by default.
 
-Sharing already builds an `ExportDocument` through a domain effect. `ExportCodec` writes JSON or Netscape bookmark HTML; `ShareExport` invokes the native save panel and writes the selected file. The original sharing-by-link requirement was replaced by file export at the user's direction. The native save-panel test remains skipped, and there are no creative-document types to export yet.
+Sharing already builds an `ExportDocument` through a domain effect. `ExportCodec` writes JSON or Netscape bookmark HTML; `ShareExport` invokes the native save panel and writes the selected file. The original sharing-by-link requirement was replaced by file export at the user's direction. The native save-panel test remains skipped, and there are no creative-document types to export yet. The current writer ignores errors; export acceptance must include visible failure handling as well as success and cancellation.
 
 Boosts, Notes, Easels, onboarding, import, and local-folder sync do not have complete workflows in current source. Their menu rows are `.later` actions or their Library pages are placeholders. A disabled action or stored setting does not change that status.
 

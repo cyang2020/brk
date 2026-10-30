@@ -41,3 +41,12 @@ python3 scripts/check-completion.py --require-complete
 ```
 
 The second command is expected to fail until the agreed feature scope is complete.
+
+## Current parallel pass
+
+- Platform grounding owns A036 to A055, A083 to A088, A093 to A098, and A102 to A112. It traces CEF and host capabilities and proposes current feature states.
+- Native-shell grounding owns A001 to A035, A056 to A082, A089 to A092, A113 to A118, and A127 to A133. It traces UI, domain, layout and persistence behavior.
+- The parent has reviewed the remaining 26 productivity/integration rows in `grounding/integrations.md`.
+- A separate reference experiment investigates the verified Arc fake-auth candidate only in a demonstrably isolated target. It also prepares a standalone local reference-capture helper if the cloud experiment is unavailable. This does not delay platform/source grounding.
+
+The two grounding reports are inputs to the `how` explainer, then to the next `architect`/`arena` design pair. Implementation begins after those interfaces and acceptance checks are coherent.
