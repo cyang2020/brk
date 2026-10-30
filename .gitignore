@@ -6,5 +6,5 @@
 .swiftpm/
 DerivedData/
 dist/
-verify/swift/
+verify/swift/logs/
 xcuserdata/
