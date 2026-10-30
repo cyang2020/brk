@@ -62,6 +62,10 @@ public struct Instant: Hashable, Comparable, Sendable, Codable, CustomStringConv
 
     public init(milliseconds: Int64) { self.milliseconds = milliseconds }
 
+    /// What the clock can read and the state file may hold: the Unix epoch through the last millisecond of 9999 UTC.
+    /// Restore replaces a saved instant outside it (`StateCodec`); the test clock refuses to leave it.
+    public static let supported = Instant(milliseconds: 0)...Instant(milliseconds: 253_402_300_799_999)
+
     public static func < (a: Instant, b: Instant) -> Bool { a.milliseconds < b.milliseconds }
 
     public func advanced(by duration: Duration) -> Instant {
@@ -69,8 +73,9 @@ public struct Instant: Hashable, Comparable, Sendable, Codable, CustomStringConv
         return Instant(milliseconds: milliseconds + seconds * 1000 + attoseconds / 1_000_000_000_000_000)
     }
 
-    /// `self - earlier`, as a `Duration`.
-    public func since(_ earlier: Instant) -> Duration { .milliseconds(milliseconds - earlier.milliseconds) }
+    /// `self - earlier`, as a `Duration`. Exact for any two instants: the difference is taken in `Duration`'s
+    /// 128-bit range, where the Int64 subtraction could overflow.
+    public func since(_ earlier: Instant) -> Duration { .milliseconds(milliseconds) - .milliseconds(earlier.milliseconds) }
 
     public var description: String { "\(milliseconds)ms" }
 
