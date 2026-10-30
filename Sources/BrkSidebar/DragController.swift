@@ -1,0 +1,212 @@
+import AppKit
+import BrkBase
+import BrkDomain
+import BrkLayout
+import BrkUIKit
+
+/// Owner: W3. Dragging rows and favorites with plain pointer events (no NSDraggingSession: nothing leaves the
+/// window). A press becomes a drag after `Draw.dragThreshold`; the item's image follows the pointer on a card like
+/// the selected row; the target under the pointer shows where it lands; release dispatches one `.item(.move)`.
+///
+/// Targets, in the order they are tested:
+/// - the favorites tray: an index among the other tiles, if `Placement.canPlace(kind, .favorites, .section)`;
+/// - a dock space cell: `.space(id)`;
+/// - the tab list: `TablistLayout.dropTarget` (the same `Placement.canPlace` the reducer applies). It sees row
+///   frames, not which item is dragged, so its index counts the attached list; the dragged item's own slot is
+///   removed here (`Destination` counts children after the item is detached), and drops into the item itself or
+///   its own subtree are refused.
+@MainActor
+final class DragController {
+    struct Item: Equatable {
+        let id: ItemID
+        let kind: ItemKind
+        let section: SectionKind
+    }
+
+    /// What hit testing reads, refreshed on every render.
+    struct Context {
+        var space: SpaceSnapshot
+        var favorites: FavoritesSnapshot
+        var frames: SidebarFrames
+    }
+
+    private enum Target: Equatable {
+        case favorites(index: Int)
+        case list(Destination, point: CGPoint)
+        case dock(SpaceID)
+
+        var destination: Destination? {
+            switch self {
+            case .favorites: nil
+            case .list(let destination, _): destination
+            case .dock(let space): .space(space)
+            }
+        }
+    }
+
+    private struct Session {
+        let item: Item
+        let source: NSView
+        let preview: NSView
+        let grab: CGPoint
+        var target: Target?
+    }
+
+    private let dispatch: Dispatch
+    weak var sidebar: SidebarView?
+    var context: Context?
+    private var pressed: (item: Item, source: NSView, start: CGPoint)?
+    private var session: Session?
+
+    init(dispatch: @escaping Dispatch) {
+        self.dispatch = dispatch
+    }
+
+    var isActive: Bool { session != nil }
+
+    /// Mouse down on a row or tile: remember it; it becomes a drag once the pointer travels far enough.
+    func press(_ item: Item, source: NSView, event: NSEvent) {
+        pressed = (item, source, event.locationInWindow)
+        session = nil
+    }
+
+    /// Mouse dragged. True once the press has become a drag (the caller drops its pressed look and its click).
+    @discardableResult
+    func drag(_ event: NSEvent) -> Bool {
+        if session == nil {
+            guard let pressed, hypot(event.locationInWindow.x - pressed.start.x, event.locationInWindow.y - pressed.start.y) >= Draw.dragThreshold.value
+            else { return false }
+            begin(pressed.item, source: pressed.source, event: event)
+        }
+        guard var session, let sidebar, let context else { return session != nil }
+        let local = sidebar.convert(event.locationInWindow, from: nil)
+        session.preview.setFrameOrigin(CGPoint(x: local.x - session.grab.x, y: local.y - session.grab.y))
+        let root = sidebar.rootPoint(fromWindow: event.locationInWindow)
+        if context.frames.tablistViewport.contains(root) { sidebar.tablist.autoScroll(at: root, frames: context.frames) }
+        session.target = target(at: root, item: session.item, context: context)
+        show(session.target, item: session.item, context: context)
+        self.session = session
+        return true
+    }
+
+    /// Mouse up. True when a drag ended here (the caller must not treat the release as a click).
+    func release(_ event: NSEvent) -> Bool {
+        pressed = nil
+        guard let session else { return false }
+        finish(session)
+        switch session.target {
+        case .favorites(let index)?:
+            if let root = context?.favorites.root { dispatch(.item(.move(session.item.id, to: .into(parent: root, index: index)))) }
+        case let target?:
+            if let destination = target.destination { dispatch(.item(.move(session.item.id, to: destination))) }
+        case nil:
+            break
+        }
+        return true
+    }
+
+    /// Ends a drag without moving anything (the sidebar went away under it).
+    func cancel() {
+        pressed = nil
+        if let session { finish(session) }
+    }
+
+    // MARK: Session
+
+    private func begin(_ item: Item, source: NSView, event: NSEvent) {
+        guard let sidebar, let palette = sidebar.currentPalette else { return }
+        // Lifted on the selected-row card (TabCellBackgroundCurrent), whatever it was dragged from.
+        let card = (source as? RowView).map { RowGeometry(bounds: $0.bounds, depth: 0).selection } ?? source.bounds
+        let fill = palette.color(palette.tokens.tabCurrent)
+        // The image is the item at rest: no hover button, no pressed fill.
+        (source as? HoverView)?.setHovered(false)
+        (source as? HoverView)?.isPressed = false
+        let preview = NSView(frame: sidebar.convert(card, from: source))
+        preview.wantsLayer = true
+        preview.alphaValue = Draw.dragPreviewAlpha.value
+        if let layer = preview.layer {
+            layer.backgroundColor = fill.cgColor
+            layer.cornerCurve = .continuous
+            layer.cornerRadius = source is RowView ? Metrics.tablist.selectionRadius.value : Metrics.favorites.tileRadius.value
+            layer.shadowColor = palette.ink.shadow.cgColor
+            layer.shadowOpacity = 1
+            layer.shadowRadius = Draw.dragPreviewShadow.value
+            layer.shadowOffset = .zero
+        }
+        if let rep = source.bitmapImageRepForCachingDisplay(in: source.bounds) {
+            source.cacheDisplay(in: source.bounds, to: rep)
+            let image = NSImage(size: source.bounds.size)
+            image.addRepresentation(rep)
+            let content = NSImageView(frame: source.bounds.offsetBy(dx: -card.minX, dy: -card.minY))
+            content.image = image
+            content.imageScaling = .scaleNone
+            preview.addSubview(content)
+        }
+        sidebar.addSubview(preview)
+        let local = sidebar.convert(event.locationInWindow, from: nil)
+        session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY))
+        (source as? RowView)?.dragSource = true
+        if !(source is RowView) { source.alphaValue = Draw.dragSourceAlpha.value }
+    }
+
+    private func finish(_ session: Session) {
+        session.preview.removeFromSuperview()
+        (session.source as? RowView)?.dragSource = false
+        session.source.alphaValue = 1
+        if let context { show(nil, item: session.item, context: context) }
+        self.session = nil
+    }
+
+    // MARK: Targets
+
+    private func target(at root: CGPoint, item: Item, context: Context) -> Target? {
+        guard let sidebar else { return nil }
+        let f = context.frames
+        if f.favoritesTray.contains(root) {
+            guard Placement.canPlace(item.kind, inSection: .favorites, parentKind: .section) else { return nil }
+            let local = CGPoint(x: root.x - f.favoritesTray.minX, y: root.y - f.favoritesTray.minY)
+            return .favorites(index: sidebar.favorites.dropIndex(at: local, dragging: item.id, frames: f, favorites: context.favorites))
+        }
+        if let space = f.dockSpaces.first(where: { $0.value.contains(root) })?.key { return .dock(space) }
+        guard f.tablistViewport.contains(root) else { return nil }
+        let point = sidebar.tablist.documentPoint(fromRoot: root, frames: f)
+        guard let raw = TablistLayout.dropTarget(at: point, rows: f.rows, space: context.space, dragging: item.kind),
+              let destination = Self.detached(raw, dragging: item.id, in: context.space) else { return nil }
+        return .list(destination, point: point)
+    }
+
+    /// `TablistLayout.dropTarget`'s index counts the list as drawn, with the dragged item still in it; `Destination`
+    /// counts after the item is detached. Nil for a drop into the dragged item or anything inside it.
+    static func detached(_ destination: Destination, dragging id: ItemID, in space: SpaceSnapshot) -> Destination? {
+        guard case .into(let parent, var index) = destination else { return destination }
+        if parent == id || contains(parent, under: id, in: space.pinned.rows + space.today.rows) { return nil }
+        let siblings: [Row]? = if parent == space.pinned.root { space.pinned.rows }
+            else if parent == space.today.root { space.today.rows }
+            else if case .folder(let folder)? = TablistView.find(parent, in: space.pinned.rows) { folder.children }
+            else { nil }
+        if let at = siblings?.firstIndex(where: { $0.id == id }), at < index { index -= 1 }
+        return .into(parent: parent, index: index)
+    }
+
+    /// Whether `target` is somewhere inside the subtree of `root`.
+    private static func contains(_ target: ItemID, under root: ItemID, in rows: [Row]) -> Bool {
+        guard case .folder(let folder)? = TablistView.find(root, in: rows) else { return false }
+        return TablistView.find(target, in: folder.children) != nil
+    }
+
+    private func show(_ target: Target?, item: Item, context: Context) {
+        guard let sidebar else { return }
+        let f = context.frames
+        if case .favorites(let index)? = target {
+            sidebar.favorites.showDrop(index: index, dragging: item.id, frames: f, favorites: context.favorites)
+        } else {
+            sidebar.favorites.showDrop(index: nil, dragging: nil, frames: f, favorites: context.favorites)
+        }
+        if case .list(let destination, let point)? = target {
+            sidebar.tablist.showDrop(destination, dragging: item.id, at: point, frames: f, space: context.space)
+        } else {
+            sidebar.tablist.showDrop(nil, dragging: nil, at: nil, frames: f, space: context.space)
+        }
+        if case .dock(let space)? = target { sidebar.dock.showDrop(space: space) } else { sidebar.dock.showDrop(space: nil) }
+    }
+}
