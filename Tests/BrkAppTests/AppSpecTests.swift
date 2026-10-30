@@ -12,7 +12,34 @@ final class AppSpecTests: XCTestCase {
     // MARK: - electron-v1:src/main/store.test.ts
     // MARK: openDocStore
     /// reads null when there is no file, and the text once one was written
-    func test_readsNullWhenThereIsNoFileAndTheTextOnceOneWasWritten() throws { throw XCTSkip(pendingW2) }
+    func test_readsNullWhenThereIsNoFileAndTheTextOnceOneWasWritten() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = StateFile(directory: dir)
+        XCTAssertEqual(file.read(), .absent)
+        try file.writeNow(Data("one".utf8))
+        XCTAssertEqual(file.read(), .data(Data("one".utf8)))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted(), ["state.json"], "no temp file left behind")
+    }
+
+    /// a write scheduled before writeNow never lands after it (the drain rule)
+    func test_aStaleDebouncedWriteNeverOverwritesAFlush() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = StateFile(directory: dir)
+        file.schedule(Data("stale".utf8))
+        try file.writeNow(Data("flushed".utf8))
+        Thread.sleep(forTimeInterval: Metrics.persistence.saveDebounce.value + 0.3)
+        XCTAssertEqual(file.read(), .data(Data("flushed".utf8)))
+    }
+
+    /// an unreadable file is reported as unreadable, not as absent
+    func test_anUnreadableFileIsNotAbsent() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("state.json"), withIntermediateDirectories: true)
+        guard case .unreadable = StateFile(directory: dir).read() else { return XCTFail("a directory named state.json must read as unreadable") }
+    }
 
     /// debounces and writes only the latest text
     func test_debouncesAndWritesOnlyTheLatestText() throws { throw XCTSkip(pendingW2) }
@@ -27,10 +54,23 @@ final class AppSpecTests: XCTestCase {
     func test_createsTheDirectoryWhenItIsMissing() throws { throw XCTSkip(pendingW2) }
 
     /// quarantine moves the file aside and a fresh save does not touch the moved copy
-    func test_quarantineMovesTheFileAsideAndAFreshSaveDoesNotTouchTheMovedCopy() throws { throw XCTSkip(pendingW2) }
+    func test_quarantineMovesTheFileAsideAndAFreshSaveDoesNotTouchTheMovedCopy() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = StateFile(directory: dir)
+        try file.writeNow(Data("bad".utf8))
+        let moved = try XCTUnwrap(try file.quarantine(now: Instant(milliseconds: 42)))
+        XCTAssertEqual(moved.lastPathComponent, "state.rejected-42.json")
+        XCTAssertEqual(file.read(), .absent)
+        try file.writeNow(Data("fresh".utf8))
+        XCTAssertEqual(try Data(contentsOf: moved), Data("bad".utf8))
+    }
 
     /// quarantine of a missing file only logs
-    func test_quarantineOfAMissingFileOnlyLogs() throws { throw XCTSkip(pendingW2) }
+    func test_quarantineOfAMissingFileOnlyLogs() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)")
+        XCTAssertNil(try StateFile(directory: dir).quarantine(now: Instant(milliseconds: 1)))
+    }
 
     // MARK: - electron-v1:src/main/clock.test.ts
     // MARK: clocks

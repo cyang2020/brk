@@ -1,3 +1,5 @@
+import BrkBase
+import Foundation
 import XCTest
 
 @testable import BrkDomain
@@ -239,6 +241,27 @@ final class ReduceSpecTests: XCTestCase {
 
     /// StateCodec.restore rejects a file with an unknown version, and a file whose doc has no spaces
     func test_statecodecRestoreRejectsAFileWithAnUnknownVersionAndAFileWhoseDocHasNoSpaces() throws { throw XCTSkip(pendingW1) }
+
+    /// StateCodec.restore of a fresh profile encodes to a versioned envelope; garbage and an unknown version are rejected
+    /// with the reason, and the state alongside is the fresh one (runs now: envelope and fresh profile are real)
+    func test_statecodecEnvelopeVersionAndRejection() throws {
+        let ids = Counter()
+        let ctx = Context(now: Instant(milliseconds: 1_790_000_000_000), newID: ids.next)
+        let seed = RestoreSeed(startURL: Driver.startURL, contentSize: Driver.contentSize)
+        let fresh = StateCodec.restore(nil, seed: seed, ctx: ctx)
+        XCTAssertEqual(fresh.outcome, .fresh)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: StateCodec.encode(fresh.state)) as? [String: Any])
+        XCTAssertEqual(json["version"] as? Int, StateCodec.currentVersion)
+        let doc = try XCTUnwrap(json["doc"] as? [String: Any])
+        XCTAssertEqual((doc["items"] as? [String: Any])?.count, 4, "favorites, pinned and today roots plus the start tab")
+        XCTAssertEqual(StateCodec.encode(fresh.state), StateCodec.encode(fresh.state), "deterministic bytes")
+        let garbage = StateCodec.restore(Data("not json".utf8), seed: seed, ctx: ctx)
+        guard case .rejected(.unreadable) = garbage.outcome else { return XCTFail("\(garbage.outcome)") }
+        let future = StateCodec.restore(Data(#"{"version": 99, "doc": {}}"#.utf8), seed: seed, ctx: ctx)
+        XCTAssertEqual(future.outcome, .rejected(.unknownVersion(99)))
+        let fallback = try XCTUnwrap(try JSONSerialization.jsonObject(with: StateCodec.encode(future.state)) as? [String: Any])
+        XCTAssertEqual(((fallback["doc"] as? [String: Any])?["spaces"] as? [String: Any])?.count, 1, "a rejected file starts fresh")
+    }
 
     /// a restored Today tab whose page later fails to load keeps its url and title (failure is live state only)
     func test_aRestoredTodayTabWhosePageLaterFailsToLoadKeepsItsUrlAndTitleFailureIsLive() throws { throw XCTSkip(pendingW1) }

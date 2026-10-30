@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import os
 
 /// The one owner of application state. `dispatch` is the only path into `reduce`, and `reduce` is the only writer;
 /// everything else (windows, engine, menu, control server) renders or reconciles from the snapshot it publishes.
@@ -57,9 +58,14 @@ public final class AppStore {
         fatalError("not implemented")
     }
 
-    /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down.
-    public func flush() {
-        stateFile.writeNow(StateCodec.encode(state))
+    /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down. A failure is
+    /// logged and reported; the quit goes on (the debounced copy on disk is the fallback).
+    @discardableResult
+    public func flush() -> Bool {
+        do { try stateFile.writeNow(StateCodec.encode(state)); return true } catch {
+            Logger(subsystem: "brk", category: "store").error("flush failed: \(error)")
+            return false
+        }
     }
 
     /// The window whose current snapshot shows `page` in one of its panes.
