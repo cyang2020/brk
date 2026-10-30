@@ -1,0 +1,8 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Profile storage</title></head>
+<body><p>History clearing must preserve this profile's site storage.</p>
+<script>
+const key = 'brk-history-storage-control';
+if (location.hash === '#seed') localStorage.setItem(key, 'keep');
+document.title = 'profile-storage:' + (localStorage.getItem(key) || 'missing') + ':' + crypto.randomUUID();
+</script></body></html>

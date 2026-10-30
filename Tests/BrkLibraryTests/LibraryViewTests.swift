@@ -162,7 +162,7 @@ final class LibraryViewTests: XCTestCase {
     // MARK: History
 
     /// visits grouped by day (Today, Yesterday, then the date) with title, host and time; a click opens the page in
-    /// a new tab; the search keeps each visit's `history-<i>`; Clear Browsing Data asks first
+    /// a new tab; the search keeps each visit's `history-<i>`; Clear History asks first
     func testTheHistoryPageListsVisitsAndSearches() throws {
         let view = makeView()
         let day: Int64 = 86_400_000
@@ -186,9 +186,9 @@ final class LibraryViewTests: XCTestCase {
         sent = []
         page.actionButton.performClick(nil)
         XCTAssertEqual(sent, [])
-        XCTAssertTrue(texts(page).contains("Clear this profile's history and site data?"))
+        XCTAssertTrue(texts(page).contains("Clear this profile's browsing history?"))
         page.cancelButton.performClick(nil)
-        XCTAssertFalse(texts(page).contains("Clear this profile's history and site data?"))
+        XCTAssertFalse(texts(page).contains("Clear this profile's browsing history?"))
         page.actionButton.performClick(nil)
         page.actionButton.performClick(nil)
         XCTAssertEqual(sent, [.library(.clearHistory)])

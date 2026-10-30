@@ -92,15 +92,14 @@ final class DownloadsPageView: LibraryListPage {
 
 /// The History page: the profile's visits by day, newest first, each with its title, host and time. A click opens
 /// the page in a new tab of the window's space (the Library closes, as for any page that opens); the button and the
-/// context menu remove a visit. Clear Browsing Data asks inline first, then clears the profile's history and asks
-/// the engine to forget its site data.
+/// context menu remove a visit. Clear History asks inline first and removes only this profile's visits.
 @MainActor
 final class HistoryPageView: LibraryListPage {
     private var rows: [HistoryRow] = []
 
     init(dispatch: @escaping Dispatch) {
-        super.init(dispatch: dispatch, page: .history, search: LibraryCopy.searchHistory, action: LibraryCopy.clearBrowsingData,
-                   confirmation: LibraryCopy.clearBrowsingDataConfirm)
+        super.init(dispatch: dispatch, page: .history, search: LibraryCopy.searchHistory, action: LibraryCopy.clearHistory,
+                   confirmation: LibraryCopy.clearHistoryConfirm)
     }
 
     func show(_ rows: [HistoryRow], openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {

@@ -41,10 +41,9 @@ extension Work {
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile && $0.url == url }
         case .clearHistory:
-            // "Clear Browsing Data": this profile's visits go, and the engine drops the profile's site data.
+            // History removal does not dispose a live request context or schedule profile-directory deletion.
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile }
-            effects.append(.forgetBrowsingData(.profile(profile)))
         }
     }
 

@@ -154,10 +154,10 @@ public enum LibraryCopy {
     static func noResults(_ query: String) -> String { "No results found for “\(query)”" }
     /// GUESS.
     static let historyEmpty = "Pages you visit in this profile show up here."
-    /// Observed: "File deleted or moved" (Downloads); "Clear Browsing Data" (Profiles pane). The rest GUESS.
+    /// Observed: "File deleted or moved" (Downloads). History copy describes the implemented history-only action.
     static let fileMissing = "File deleted or moved"
-    static let clearBrowsingData = "Clear Browsing Data…"
-    static let clearBrowsingDataConfirm = "Clear this profile's history and site data?"
+    static let clearHistory = "Clear History…"
+    static let clearHistoryConfirm = "Clear this profile's browsing history?"
     static let clear = "Clear"
     static let clearDownloads = "Clear Downloads"
     static let cancel = "Cancel"

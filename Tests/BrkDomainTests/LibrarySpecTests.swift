@@ -5,6 +5,27 @@ import XCTest
 
 /// Owner: F5. The Library host, its pages, the download ledger and the history page.
 final class LibrarySpecTests: XCTestCase {
+    func test_clearingHistoryDoesNotDisposeItsBrowsingProfile() throws {
+        for custom in [false, true] {
+            let d = Driver()
+            if custom {
+                d.user(.profile(.create(name: "Work", icon: nil)))
+                let profile = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
+                d.user(.profile(.assign(.current, to: profile)))
+            }
+            let tab = d.todayIDs[0]
+            d.page(tab, .committed(url("https://example.com/history-only")))
+            let profiles = d.snapshot.settings.profiles.map(\.profile.id)
+            let result = d.user(.library(.clearHistory))
+            XCTAssertFalse(result.effects.contains { if case .forgetBrowsingData = $0 { return true }; return false },
+                           "clearing history must not schedule profile disposal")
+            XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), profiles)
+            d.user(.library(.open(.history)))
+            guard case .library(let page)? = d.view.overlay else { return XCTFail("history did not open") }
+            XCTAssertTrue(page.history.isEmpty)
+        }
+    }
+
     func test_incognitoDownloadAndHistoryEventsNeverChangeSavedRecords() throws {
         let d = Driver()
         let home = d.todayIDs[0]
@@ -204,7 +225,7 @@ final class LibrarySpecTests: XCTestCase {
         d.user(.library(.open(.history)))
         guard case .library(let inWork)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(inWork.history.map(\.url), [url("http://127.0.0.1:9/shared")])
-        XCTAssertEqual(d.user(.library(.clearHistory)).effects, [.forgetBrowsingData(.profile(work))])
+        XCTAssertEqual(d.user(.library(.clearHistory)).effects, [], "history removal does not dispose the profile")
         guard case .library(let clearedWork)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(clearedWork.history, [])
         d.user(.space(.step(.previous)))
