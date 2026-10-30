@@ -35,8 +35,13 @@ public final class CEFEngine: WebEngine {
     private var destroying: [PageLedger.Incarnation: ChromePage] = [:]
     private var ledger = PageLedger()
     /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
-    /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profiles/<id>`; incognito is in memory.
+    /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profile-<id>`; incognito is in memory.
     private var profiles: [BrowsingContext: CefProfile] = [:]
+    /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
+    private var loaders: [ProfileID: ProfileLoader] = [:]
+    private var readyProfiles: Set<ProfileID> = []
+    /// The last `reconcile` input, replayed when a profile finishes loading.
+    private var wanted: [PageSpec] = []
     private var phase: ShutdownPhase = .running
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Resumed with true when the last closing browser reports OnBeforeClose, with false by the timeout.
@@ -98,6 +103,7 @@ public final class CEFEngine: WebEngine {
 
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
+        self.wanted = pages
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits a pending focus; a held focus is
@@ -108,7 +114,7 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages where live[spec.id] == nil {
-            guard let url = spec.initialURL else { continue }
+            guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
             live[spec.id] = page
@@ -143,6 +149,12 @@ public final class CEFEngine: WebEngine {
     /// view has not arrived yet (created in this same render) gets the focus when it does; a later call replaces it.
     public func focus(_ page: PageID?) {
         guard phase == .running else { return }
+        if let page, live[page] == nil, wanted.contains(where: { $0.id == page }) {
+            // Its profile is still loading: the page takes the focus when its input view arrives.
+            pendingFocus = page
+            focusedPage = page
+            return
+        }
         guard let page, let target = live[page] else {
             pendingFocus = nil
             focusedPage = nil
@@ -172,12 +184,34 @@ public final class CEFEngine: WebEngine {
     public func forget(_ context: BrowsingContext) {
         guard phase == .running, context != .profile(.default) else { return }
         profiles[context] = nil
-        if case .profile(let id) = context { profileDirectories?.mark(id) }
+        if case .profile(let id) = context {
+            loaders.removeValue(forKey: id)?.release()
+            readyProfiles.remove(id)
+            profileDirectories?.mark(id)
+        }
+    }
+
+    /// Whether pages can be created in `context` now. The default profile and incognito (an off-the-record profile
+    /// of the loaded default one) always can; a persistent profile once Chromium has loaded it (`ProfileLoader`),
+    /// after which every waiting page is created by replaying the last `reconcile`.
+    private func isReady(_ context: BrowsingContext) -> Bool {
+        guard case .profile(let id) = context, id != .default else { return true }
+        if readyProfiles.contains(id) { return true }
+        if loaders[id] == nil, let root = CefRuntime.shared.configuration?.rootCachePath {
+            let path = root.appendingPathComponent(ProfileDirectories.directoryName(id), isDirectory: true)
+            loaders[id] = ProfileLoader(cachePath: path) { [weak self] in
+                guard let self, self.phase == .running, self.loaders[id] != nil else { return }
+                self.log.notice("profile \(id.rawValue, privacy: .public) loaded")
+                self.readyProfiles.insert(id)
+                self.reconcile(self.wanted)
+            }
+        }
+        return false
     }
 
     /// The request context for a page's browsing context (BrkEngine/WebEngine.swift `BrowsingContext`): nil for the
     /// default profile (the runtime's own cache, `<rootCachePath>/Default`), one persistent context per other
-    /// profile under `<rootCachePath>/Profiles/<id>`, one shared off-the-record context for every incognito page.
+    /// profile in `<rootCachePath>/Profile-<id>`, one shared off-the-record context for every incognito page.
     /// Created on first use and reused until `forget`.
     func profile(for context: BrowsingContext) -> CefProfile? {
         if let existing = profiles[context] { return existing }
