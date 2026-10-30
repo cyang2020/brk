@@ -35,7 +35,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
 /// Arc's `KeyBinding.Priority` (anatomy 1.14, 2.2), named for what happens:
 /// - `app` (overrideWebView): taken in `OnPreKeyEvent`; the page never sees it.
 /// - `pageThenApp` (promptAfterConsumedByWebView): the page gets it first; if the page consumed it, pressing it
-///   again within Metrics.Motion.pressTwiceWindow takes it for the app ("press twice to use Arc's shortcut").
+///   again within Metrics.keys.pressTwiceWindow takes it for the app ("press twice to use Arc's shortcut").
 /// - `page` (low, or unset in the nib): the page gets it first; the app acts only if the page did not consume it.
 public enum KeyPriority: String, Hashable, Sendable, Codable { case app, pageThenApp, page }
 

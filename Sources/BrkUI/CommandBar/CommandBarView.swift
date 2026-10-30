@@ -34,7 +34,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette) {
         // TODO(W4): nil -> hide. Else frame = frames.commandBar; if bar.openID != openID { query = initialQuery,
         // select all, bounce }; results = Suggest.rank(query:, bar:, appName: Product.name); result rows identify
-        // (.commandBarResult(i)); row height Metrics.CommandBar.suggestionRowHeight.
+        // (.commandBarResult(i)); row height Metrics.commandBar.suggestionRowHeight.
         fatalError("not implemented")
     }
 

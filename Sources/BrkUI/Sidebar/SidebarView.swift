@@ -71,7 +71,7 @@ final class URLPillView: NSView {
     override var isFlipped: Bool { true }
 
     func render(_ pill: URLPillSnapshot, frame: CGRect, palette: Palette) {
-        // TODO(W3): radius Metrics.URLPill.cornerRadius (continuous), itemBackground token, leading icon 22.
+        // TODO(W3): radius Metrics.urlPill.cornerRadius (continuous), itemBackground token, leading icon 22.
         fatalError("not implemented")
     }
 
@@ -93,13 +93,13 @@ final class FavoritesView: NSView {
 
     func render(_ favorites: FavoritesSnapshot, frames: SidebarFrames, palette: Palette) {
         // TODO(W3): one tile view per tile keyed by ItemID (reused across renders), identify(.favorite(id)),
-        // radius Metrics.Favorites.tileRadius; the current tile gets the ring (inset 1, radius 11); empty state copy.
+        // radius Metrics.favorites.tileRadius; the current tile gets the ring (inset 1, radius 11); empty state copy.
         fatalError("not implemented")
     }
 }
 
 /// The dock: Library (archive in v1), one cell per space, "+". Cell click -> `.space(.focus(id))`; "+" ->
-/// `.sidebar(.popupMenu(.plusButton, at:))`; Library -> `.archive(.open)`. Press scale Metrics.Dock.pressScale.
+/// `.sidebar(.popupMenu(.plusButton, at:))`; Library -> `.archive(.open)`. Press scale Metrics.dock.pressScale.
 @MainActor
 final class DockView: NSView {
     let dispatch: Dispatch
@@ -114,7 +114,7 @@ final class DockView: NSView {
 
     func render(_ items: [DockItem], frames: SidebarFrames, palette: Palette) {
         // TODO(W3): cells keyed by SpaceID at frames.dockSpaces[id]; identify(.dockSpace(id)); icon: emoji, SF Symbol,
-        // or a dot in DockItem.color; active cell background itemBackground; radius Metrics.Dock.cellRadius.
+        // or a dot in DockItem.color; active cell background itemBackground; radius Metrics.dock.cellRadius.
         fatalError("not implemented")
     }
 }

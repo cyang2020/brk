@@ -7,7 +7,7 @@ import Foundation
 ///   the file to `state.rejected-<timestamp>.json` next to it and the app starts fresh.
 /// - Writes are atomic: write to a temporary file in the same directory, fsync (F_FULLFSYNC), rename over
 ///   state.json. A crash at any point leaves either the old or the new file, never a torn one.
-/// - `schedule` debounces by Metrics.Persistence.saveDebounce and writes off the main actor; `writeNow` is
+/// - `schedule` debounces by Metrics.persistence.saveDebounce and writes off the main actor; `writeNow` is
 ///   synchronous (quit, control `flush`). Writing identical bytes twice is harmless.
 public final class StateFile: Sendable {
     public let url: URL
@@ -44,7 +44,7 @@ public final class StateFile: Sendable {
         init(url: URL) { self.url = url }
 
         func schedule(_ data: Data) {
-            // TODO(W2): pending = data; restart a Task.sleep(Metrics.Persistence.saveDebounce) timer that writes.
+            // TODO(W2): pending = data; restart a Task.sleep(Metrics.persistence.saveDebounce) timer that writes.
             pending = data
         }
     }

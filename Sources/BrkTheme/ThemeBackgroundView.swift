@@ -29,7 +29,7 @@ public final class ThemeBackgroundView: NSView {
 
     public override var isFlipped: Bool { true }
 
-    /// Shows `theme`. `animated` crossfades gradient and texture over Metrics.Motion.themeCrossfade (Arc's background
+    /// Shows `theme`. `animated` crossfades gradient and texture over Metrics.motion.themeCrossfade (Arc's background
     /// configuration is `single` or `transitioning`); otherwise it switches at once (launch, restore).
     public func show(_ theme: ResolvedTheme, animated: Bool) {
         guard theme != current else { return }

@@ -31,7 +31,7 @@ extension Work {
     mutating func sidebar(_ command: SidebarCommand, in window: WindowID) {
         // TODO(W1):
         // .toggle: sidebarVisible.toggle(); ends a peek.
-        // .resize(width): 0 -> hide; else clamp to Metrics.Sidebar.minWidth...maxWidth.
+        // .resize(width): 0 -> hide; else clamp to Metrics.sidebar.minWidth...maxWidth.
         // .peek(open): only while hidden.
         // .openDialog(req): dialog = req (peek a hidden sidebar); nil closes.
         // .popupMenu(req, at): Effect.popupMenu(window, menuModel(for: req), at) built from state, entries carry the

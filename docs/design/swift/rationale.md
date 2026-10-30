@@ -119,7 +119,7 @@ theme: resolveTheme(space.theme)
 
 ```swift
 // BrkThemeTests: textures are generated, deterministic, tileable
-let denim = TexturePixels.generate(.denim, size: Metrics.Theme.denimTile.value, seed: 7)
+let denim = TexturePixels.generate(.denim, size: Metrics.theme.denimTile.value, seed: 7)
 ```
 
 ### W6, harness
@@ -130,7 +130,7 @@ try app.launch()
 try app.press("cmd+t"); try app.type(site.url("page2.html").absoluteString); try app.press("return")
 try app.waitUntil("a second Today row") { try app.view().space.today.rows.count == 2 }
 let card = try app.native().actual[ViewID.card(0).identifier]!
-try expect(card.cornerRadius == Metrics.Content.cornerRadius.value, "card radius \(card.cornerRadius)")
+try expect(card.cornerRadius == Metrics.content.cornerRadius.value, "card radius \(card.cornerRadius)")
 ```
 
 ## Shape
@@ -264,7 +264,7 @@ No second state store in views, no Combine or Observation bindings to state (vie
 1. `BrkUI/Sidebar/SidebarView.swift`, `DockView`: mouse up on a cell dispatches `.space(.focus(id))` through `Dispatch`, which the window controller bound to `store.dispatch(.user(window, command))`.
 2. `Rules/Sidebar.swift`, `spaces`: stamps `lastActiveAt` on tabs leaving the screen, sets `windows[w].space`.
 3. `project`: the new space's rows, the dock's active flag, `theme = resolveTheme(space.theme)`, the space's active item as the pane; `pages` includes it (loaded now if it never was).
-4. `engine.reconcile` creates the page if needed. `WindowController.render`: frames for the new rows and the card; `ThemeBackgroundView.show(theme, animated: true)` starts the Metal crossfade (Metrics.Motion.themeCrossfade); the tab list slides the old rows out and the new ones in; card 0 swaps surfaces (the old surface leaves the window and its page is told it is hidden); focus moves to the shown page.
+4. `engine.reconcile` creates the page if needed. `WindowController.render`: frames for the new rows and the card; `ThemeBackgroundView.show(theme, animated: true)` starts the Metal crossfade (Metrics.motion.themeCrossfade); the tab list slides the old rows out and the new ones in; card 0 swaps surfaces (the old surface leaves the window and its page is told it is hidden); focus moves to the shown page.
 5. e2e scenario 4 samples the background pixel before and after; R9 checks that only the current space's surface is in the window.
 
 ## Synthesis decision

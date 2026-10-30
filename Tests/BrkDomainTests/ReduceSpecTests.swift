@@ -85,7 +85,7 @@ final class ReduceSpecTests: XCTestCase {
     /// .page events is ignored for an unloaded pinned tab, and the same patch twice changes nothing the second time
     func test_pageEventsIsIgnoredForAnUnloadedPinnedTabAndTheSamePatchTwiceChangesNothing() throws { throw XCTSkip(pendingW1) }
 
-    /// .page events url pushes a history entry, deduplicated by url and capped at Metrics.Persistence.historyCap
+    /// .page events url pushes a history entry, deduplicated by url and capped at Metrics.persistence.historyCap
     func test_pageEventsUrlPushesAHistoryEntryDeduplicatedByUrlAndCappedAtMetricsPersistence() throws { throw XCTSkip(pendingW1) }
 
     /// .openRequested from a Favorites tab opens in the window current space Today; background keeps focus
@@ -135,7 +135,7 @@ final class ReduceSpecTests: XCTestCase {
     /// .split(.addPane) with nothing shown, or on a Favorites tab, is a no-op
     func test_splitAddPaneWithNothingShownOrOnAFavoritesTabIsANoOp() throws { throw XCTSkip(pendingW1) }
 
-    /// .split(.addPane) on a split with Metrics.Content.maxPanes panes is a no-op
+    /// .split(.addPane) on a split with Metrics.content.maxPanes panes is a no-op
     func test_splitAddPaneOnASplitWithMetricsContentMaxPanesPanesIsANoOp() throws { throw XCTSkip(pendingW1) }
 
     /// .split(.addPane) inserts the new pane after the focused pane with an equal share
@@ -147,7 +147,7 @@ final class ReduceSpecTests: XCTestCase {
     /// .split(.closePane) in Pinned moves the pane out after the split and unloads it instead of archiving
     func test_splitClosePaneInPinnedMovesThePaneOutAfterTheSplitAndUnloadsItInsteadOf() throws { throw XCTSkip(pendingW1) }
 
-    /// .split(.resize) normalizes fractions to sum 1 and clamps each to at least Metrics.Content.minPaneFraction
+    /// .split(.resize) normalizes fractions to sum 1 and clamps each to at least Metrics.content.minPaneFraction
     func test_splitResizeNormalizesFractionsToSum1AndClampsEachToAtLeastMetricsContent() throws { throw XCTSkip(pendingW1) }
 
     /// moving a pane out of its split with .item(.move) leaves a one-pane split that normalize dissolves
@@ -208,7 +208,7 @@ final class ReduceSpecTests: XCTestCase {
     /// a restored tab is not swept again at once even if it was idle for long
     func test_aRestoredTabIsNotSweptAgainAtOnceEvenIfItWasIdleForLong() throws { throw XCTSkip(pendingW1) }
 
-    /// archive entries are capped at Metrics.Persistence.archiveCap, oldest dropped
+    /// archive entries are capped at Metrics.persistence.archiveCap, oldest dropped
     func test_archiveEntriesAreCappedAtMetricsPersistenceArchiveCapOldestDropped() throws { throw XCTSkip(pendingW1) }
 
     // MARK: window chrome
@@ -244,7 +244,7 @@ final class ReduceSpecTests: XCTestCase {
     func test_aRestoredTodayTabWhosePageLaterFailsToLoadKeepsItsUrlAndTitleFailureIsLive() throws { throw XCTSkip(pendingW1) }
 
     // MARK: layout clamps (domain side)
-    /// .sidebar(.resize) clamps the width to Metrics.Sidebar.minWidth...maxWidth
+    /// .sidebar(.resize) clamps the width to Metrics.sidebar.minWidth...maxWidth
     func test_sidebarResizeClampsTheWidthToMetricsSidebarMinWidthMaxWidth() throws { throw XCTSkip(pendingW1) }
 
     /// .geometry updates contentSize so project reflects the new size, and persists bounds

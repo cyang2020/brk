@@ -8,7 +8,7 @@ extension Work {
         switch command {
         case .addPane:
             // TODO(W1): shown item is a tab (not Favorites) -> replace it in place by a split [tab, new empty tab];
-            // shown item is a split with fewer than Metrics.Content.maxPanes panes -> insert an empty tab after the
+            // shown item is a split with fewer than Metrics.content.maxPanes panes -> insert an empty tab after the
             // focused pane with an equal share. Open the command bar with target .fillPane(new tab). Nothing shown,
             // a Favorites tab, or a full split -> no-op.
             break
@@ -17,7 +17,7 @@ extension Work {
             // a split left with one pane dissolves into that tab in place (normalize).
             break
         case .resize(let split, let fractions):
-            // TODO(W1): normalize to sum 1, clamp each to Metrics.Content.minPaneFraction, store as widths.
+            // TODO(W1): normalize to sum 1, clamp each to Metrics.content.minPaneFraction, store as widths.
             _ = (split, fractions)
         }
         fatalError("not implemented")

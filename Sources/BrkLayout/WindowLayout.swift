@@ -8,9 +8,9 @@ public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         // TODO(W2): sidebarFrame:
         //   visible -> x 0, width = snapshot.sidebar.width, full height;
-        //   hidden + peek -> floating: inset Metrics.Sidebar.floatingInset left/top/bottom, sidebarFloats = true;
-        //   hidden -> nil, revealStrip from Metrics.Sidebar.reveal* factors x Metrics.Content.inset.
-        // contentArea = (window minus anchored sidebar).insetBy(Metrics.Content.inset) - the inset is kept when the
+        //   hidden + peek -> floating: inset Metrics.sidebar.floatingInset left/top/bottom, sidebarFloats = true;
+        //   hidden -> nil, revealStrip from Metrics.sidebar.reveal* factors x Metrics.content.inset.
+        // contentArea = (window minus anchored sidebar).insetBy(Metrics.content.inset) - the inset is kept when the
         //   sidebar is hidden (Arc keeps 10 pt, cra L851-853).
         // cards = ContentLayout.cards(contentArea, fractions: snapshot.content.panes.map(\.fraction)).
         // sidebar internals = SidebarLayout.compute(...). commandBar = CommandBarLayout.frame(...). archive =
@@ -22,10 +22,10 @@ public enum WindowLayout {
 /// The sidebar column, top to bottom: title row, URL pill, favorites tray, tab list, dock.
 public enum SidebarLayout {
     public static func compute(frame: CGRect, favorites: Int, space: SpaceSnapshot, dockCount: Int) -> SidebarFrames {
-        // TODO(W3): titleRow y = Metrics.Sidebar.headerTopInset, height titleRowHeight; traffic lights at
-        //   (Metrics.Window.trafficLightLeft, trafficLightCenterY - size/2).
-        // urlPill below, inset Metrics.URLPill.sideInset, height Metrics.URLPill.height.
-        // favoritesTray = FavoritesGrid.tiles(...). dock at the bottom, height Metrics.Dock.height.
+        // TODO(W3): titleRow y = Metrics.sidebar.headerTopInset, height titleRowHeight; traffic lights at
+        //   (Metrics.window.trafficLightLeft, trafficLightCenterY - size/2).
+        // urlPill below, inset Metrics.urlPill.sideInset, height Metrics.urlPill.height.
+        // favoritesTray = FavoritesGrid.tiles(...). dock at the bottom, height Metrics.dock.height.
         // tablistViewport between the tray and the dock; rows = TablistLayout.rows(space, width:).
         fatalError("not implemented")
     }
@@ -71,7 +71,7 @@ public enum ContentLayout {
         fatalError("not implemented")
     }
 
-    /// Divider drag -> new fractions for `.split(.resize)`, clamped to Metrics.Content.minPaneFraction.
+    /// Divider drag -> new fractions for `.split(.resize)`, clamped to Metrics.content.minPaneFraction.
     public static func fractions(afterDragging divider: Int, to x: Double, in area: CGRect, current: [Double]) -> [Double] {
         fatalError("not implemented")
     }

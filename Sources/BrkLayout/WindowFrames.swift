@@ -20,9 +20,9 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     public var resizeHandle: CGRect?
     /// The left-edge strip that reveals a hidden sidebar on hover.
     public var revealStrip: CGRect?
-    /// The area the cards share (window minus sidebar, inset by Metrics.Content.inset).
+    /// The area the cards share (window minus sidebar, inset by Metrics.content.inset).
     public var contentArea: CGRect
-    /// One per pane, left to right; panes separated by Metrics.Content.splitGap.
+    /// One per pane, left to right; panes separated by Metrics.content.splitGap.
     public var cards: [CardFrame]
     /// Drag handles in the gaps between cards.
     public var dividers: [CGRect]
@@ -55,7 +55,7 @@ public struct CardFrame: Sendable, Equatable, Codable {
 
 public struct SidebarFrames: Sendable, Equatable, Codable {
     public var frame: CGRect
-    /// Traffic lights and back/forward/reload (Metrics.Sidebar.titleRowHeight).
+    /// Traffic lights and back/forward/reload (Metrics.sidebar.titleRowHeight).
     public var titleRow: CGRect
     /// Origin of the close button; the other two follow at size + spacing.
     public var trafficLightsOrigin: CGPoint
@@ -84,7 +84,7 @@ public struct RowFrame: Sendable, Equatable, Codable {
     public var kind: Kind
     /// Document coordinates of the tab list.
     public var rect: CGRect
-    /// Folder nesting level (indent = depth x Metrics.Tablist.folderIndent).
+    /// Folder nesting level (indent = depth x Metrics.tablist.folderIndent).
     public var depth: Int
 }
 

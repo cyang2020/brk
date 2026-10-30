@@ -114,7 +114,7 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     /// Gradient stops for the Metal background, primary first (derived from the base colors; 1 to 3 + blends).
     public var gradient: [RGBA]
     public var texture: Texture
-    /// intensity x the texture's multiplier (Metrics.Theme.*Opacity).
+    /// intensity x the texture's multiplier (Metrics.theme.*Opacity).
     public var textureOpacity: Double
     /// White (light) or black at 35% (dark), with opacity min(0.2 + 0.55 x intensity, 0.5).
     public var wash: RGBA
@@ -127,7 +127,7 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
     // TODO(W5): scheme = appearance forced, else luminance(colors[0]) > 0.5 ? .light : .dark (WCAG relative
     // luminance); gradient stops: Arc blends base colors with analogous neighbours (wheel) - v1: base colors plus a
-    // lightened/darkened variant of the primary; textureOpacity = intensity * Metrics.Theme.<texture>Opacity;
-    // wash per Metrics.Theme.wash*; tokens = scheme == .light ? .light : .dark.
+    // lightened/darkened variant of the primary; textureOpacity = intensity * Metrics.theme.<texture>Opacity;
+    // wash per Metrics.theme.wash*; tokens = scheme == .light ? .light : .dark.
     fatalError("not implemented")
 }

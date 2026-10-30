@@ -108,7 +108,7 @@ public final class CEFEngine: WebEngine {
     /// 1. restoringViews: every surface gives Chromium's views back to their host window's content view, and every
     ///    host window is removed from our window's children (`EmbeddedSurface.returnViews()`).
     /// 2. closingBrowsers: `browser.close(force: true)` for every live and closing page; await each
-    ///    `browserDidClose` (OnBeforeClose), bounded by Metrics.Persistence.shutdownTimeout (log what did not close).
+    ///    `browserDidClose` (OnBeforeClose), bounded by Metrics.persistence.shutdownTimeout (log what did not close).
     /// 3. shuttingDownRuntime: `CefRuntime.shared.shutdown()`; nothing touches CEF after this.
     /// 4. done. Lifecycle then replies to applicationShouldTerminate.
     private func runShutdown() async {

@@ -5,7 +5,7 @@ import BrkBase
 import BrkDomain
 
 // Ported from electron-v1:src/renderer/overlay/suggest.test.ts. Arc shows at most 5 rows
-// (Metrics.CommandBar.maxVisibleRows), not the Electron version's 8; the row-count case uses Arc's number.
+// (Metrics.commandBar.maxVisibleRows), not the Electron version's 8; the row-count case uses Arc's number.
 
 final class SuggestSpecTests: XCTestCase {
     // MARK: - electron-v1:src/renderer/overlay/suggest.test.ts

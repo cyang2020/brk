@@ -8,7 +8,7 @@ import BrkLayout
 /// Not an NSOutlineView (Arc uses `TablistOutlineView`): rows are plain views in a flipped document view inside an
 /// NSScrollView, placed at `SidebarFrames.rows` and reused by item id. Layout is data (BrkLayout/TablistLayout), so
 /// row geometry, drag hit-testing and pixel tests read one pure function instead of NSOutlineView's internal layout.
-/// Space switches slide the old rows out and the new ones in over Metrics.Motion.spaceSwitch.
+/// Space switches slide the old rows out and the new ones in over Metrics.motion.spaceSwitch.
 @MainActor
 final class TablistView: NSScrollView {
     let dispatch: Dispatch

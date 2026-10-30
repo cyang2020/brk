@@ -14,7 +14,7 @@ public struct Suggestion: Equatable, Sendable {
 }
 
 public enum Suggest {
-    /// Ranks results for `query`, at most Metrics.CommandBar.maxVisibleRows:
+    /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows:
     /// 1. "open what you typed" (`.commandBar(.submit(query))`) when the query is non-empty;
     /// 2. open tabs whose title or URL contains the query (`.tab(.focus(id))`), current space first;
     /// 3. actions whose title or triggers match (`action.spec.command`);

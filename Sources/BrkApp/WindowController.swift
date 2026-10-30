@@ -22,7 +22,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
         self.engine = engine
         self.send = send
         window = BrowserWindow(
-            contentRect: CGRect(origin: .zero, size: Metrics.Window.defaultSize.value),
+            contentRect: CGRect(origin: .zero, size: Metrics.window.defaultSize.value),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
@@ -72,7 +72,7 @@ public final class BrowserWindow: NSWindow {
     /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top.
     func placeTrafficLights(origin: CGPoint?) {
         // TODO(W2): for close/miniaturize/zoom: setFrameOrigin in the titlebar view's coordinates from `origin`
-        // (window top-left space), spacing Metrics.Window.trafficLightSize + trafficLightSpacing; nil hides them.
+        // (window top-left space), spacing Metrics.window.trafficLightSize + trafficLightSpacing; nil hides them.
         fatalError("not implemented")
     }
 }

@@ -11,15 +11,15 @@ let pendingW3 = "W3: not implemented yet"
 final class ArcGeometryTests: XCTestCase {
     /// 8 + 8 + 4 x 47 + 3 x 8 = 228: the reset width is the narrowest that keeps four square favorites.
     func testResetWidthIsFourFavoritesWide() {
-        let f = Metrics.Favorites.self
+        let f = Metrics.favorites.self
         let width = 2 * f.inset.value + Double(f.maxColumns.value) * f.minTile.value + Double(f.maxColumns.value - 1) * f.gap.value
-        XCTAssertEqual(width, Metrics.Sidebar.resetWidth.value)
+        XCTAssertEqual(width, Metrics.sidebar.resetWidth.value)
     }
 
     /// Title row centre = header top inset + title row height / 2 (cra L141 measures 24).
     func testTrafficLightCentreLine() {
-        XCTAssertEqual(Metrics.Sidebar.headerTopInset.value + Metrics.Sidebar.titleRowHeight.value / 2,
-                       Metrics.Window.trafficLightCenterY.value)
+        XCTAssertEqual(Metrics.sidebar.headerTopInset.value + Metrics.sidebar.titleRowHeight.value / 2,
+                       Metrics.window.trafficLightCenterY.value)
     }
 
     /// cra L1590-1594: 4 columns at sidebar width 230, 2 columns at 227.

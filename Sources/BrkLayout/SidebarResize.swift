@@ -24,14 +24,14 @@ public struct SidebarResizeDrag: Sendable, Equatable {
     }
 
     /// Double-click on the edge.
-    public static var resetWidth: Double { Metrics.Sidebar.resetWidth.value }
+    public static var resetWidth: Double { Metrics.sidebar.resetWidth.value }
 }
 
 /// Window frames saved on another display must reopen on screen (regression finding 8).
 public enum WindowPlacement {
     /// `saved` and `screens` in AppKit screen coordinates (bottom-left origin). Returns `saved` if it overlaps a
     /// screen's visible frame by at least 100 x 100, else a frame of the same size (clamped to the main screen)
-    /// centered on the main screen; nil `saved` -> Metrics.Window.defaultSize centered.
+    /// centered on the main screen; nil `saved` -> Metrics.window.defaultSize centered.
     public static func fit(_ saved: CGRect?, screens: [CGRect], main: CGRect) -> CGRect {
         fatalError("not implemented")
     }

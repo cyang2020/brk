@@ -11,7 +11,7 @@ import BrkEngine
 /// 2. `AppStore`, `KeyRouter` as the engine's delegate, `MainMenu`.
 /// 3. first dispatch-free render: windows from the restored snapshot, `engine.reconcile(snapshot.pages)` (only
 ///    visible tabs are loaded: lazy restore).
-/// 4. sweep timer (Metrics.Persistence.sweepInterval) dispatching `.system(.clockTick)`.
+/// 4. sweep timer (Metrics.persistence.sweepInterval) dispatching `.system(.clockTick)`.
 /// 5. control server, when LaunchOptions.controlSocket is set.
 ///
 /// Quit (Cmd+Q through the reducer as `AppEffect.quit`, the Dock menu, logout - every path reaches

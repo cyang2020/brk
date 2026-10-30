@@ -3,7 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkLayout
 
-/// Owner: W2. The content cards and split dividers. Each card is a rounded, clipping layer (Metrics.Content
+/// Owner: W2. The content cards and split dividers. Each card is a rounded, clipping layer (Metrics.content
 /// .cornerRadius, continuous) with a separate shadow view behind it (a clipping layer cannot cast its own shadow),
 /// hosting the engine's page surface for its pane. Divider drags dispatch `.split(.resize)` with
 /// `ContentLayout.fractions(afterDragging:...)`.
@@ -39,7 +39,7 @@ final class CardView: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
         layer?.cornerCurve = .continuous
-        layer?.cornerRadius = Metrics.Content.cornerRadius.value
+        layer?.cornerRadius = Metrics.content.cornerRadius.value
         layer?.backgroundColor = NSColor.white.cgColor
     }
 

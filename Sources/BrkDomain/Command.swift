@@ -139,12 +139,12 @@ public enum SpaceCommand: Hashable, Sendable, Codable {
 }
 
 public enum SplitCommand: Hashable, Sendable, Codable {
-    /// Ctrl+Shift+=. A tab becomes a split of [tab, empty pane]; a split gains a pane (max Metrics.Content.maxPanes).
+    /// Ctrl+Shift+=. A tab becomes a split of [tab, empty pane]; a split gains a pane (max Metrics.content.maxPanes).
     /// The command bar opens to fill the new pane.
     case addPane
     /// Ctrl+Shift+-. Closes the focused pane; a split left with one pane dissolves into that tab.
     case closePane
-    /// Divider drag. Relative fractions; the reducer normalizes and enforces Metrics.Content.minPaneFraction.
+    /// Divider drag. Relative fractions; the reducer normalizes and enforces Metrics.content.minPaneFraction.
     case resize(ItemID, fractions: [ItemID: Double])
 }
 

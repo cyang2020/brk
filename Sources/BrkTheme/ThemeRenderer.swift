@@ -5,7 +5,7 @@ import Metal
 import QuartzCore
 
 /// Metal pipeline for the themed background, in three passes like Arc's shader library:
-/// 1. gradient: render the gradient stops into a small texture (Metrics.Theme.gradientTexturePerFactor x factor px)
+/// 1. gradient: render the gradient stops into a small texture (Metrics.theme.gradientTexturePerFactor x factor px)
 ///    with a soft multi-point blend; during a transition, blend the from/to gradients by `progress`.
 /// 2. overlay: pick the texture tile(s) (from/to during a transition) with their opacities.
 /// 3. render: draw the gradient texture scaled to the drawable, multiply the tiled overlay texture over it
@@ -47,7 +47,7 @@ final class ThemeRenderer {
 }
 
 /// Procedural, tileable textures, generated once per kind at the tile sizes of Arc's own assets
-/// (Metrics.Theme.*Tile) and uploaded as MTLTextures. Arc's asset files are not copied.
+/// (Metrics.theme.*Tile) and uploaded as MTLTextures. Arc's asset files are not copied.
 @MainActor
 final class TextureCache {
     let device: any MTLDevice

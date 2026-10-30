@@ -23,7 +23,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var now: Instant
     /// Saved outer frame (screen coordinates) to restore; nil for a new window.
     public var bounds: CGRect?
-    /// The current space's theme. A change crossfades (Metrics.Motion.themeCrossfade).
+    /// The current space's theme. A change crossfades (Metrics.motion.themeCrossfade).
     public var theme: ResolvedTheme
     public var sidebar: SidebarSnapshot
     public var urlPill: URLPillSnapshot

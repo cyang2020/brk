@@ -26,9 +26,9 @@ struct Doc: Sendable, Equatable {
     var spaceOrder: [SpaceID]
     /// Favorites root per profile (Arc: `topAppsContainerIDs`). v1 has `ProfileID.default` only.
     var favorites: [ProfileID: ItemID]
-    /// Newest first, capped at Metrics.Persistence.archiveCap.
+    /// Newest first, capped at Metrics.persistence.archiveCap.
     var archive: [ArchivedTab]
-    /// Newest first, deduplicated by URL, capped at Metrics.Persistence.historyCap.
+    /// Newest first, deduplicated by URL, capped at Metrics.persistence.historyCap.
     var history: [HistoryEntry]
     var windows: [WindowID: WindowDoc]
     var settings: Settings

@@ -62,7 +62,7 @@ enum KeyRouting {
     /// 4. `pressID == memory.lastDispatchedPress` -> `.ignore`.
     /// 5. `menu` -> `.dispatch` (a native view has focus).
     /// 6. `beforePage`: `.app` -> `.dispatch`; `.pageThenApp` with `pendingPageFirst` for this chord younger than
-    ///    Metrics.Motion.pressTwiceWindow -> `.dispatch` and clear; otherwise record pending and `.passToPage`;
+    ///    Metrics.keys.pressTwiceWindow -> `.dispatch` and clear; otherwise record pending and `.passToPage`;
     ///    `.page` -> `.passToPage`.
     /// 7. `afterPage` (the page did not consume it) -> `.dispatch`, clear pending.
     /// Every `.dispatch` sets `lastDispatchedPress = pressID`.
