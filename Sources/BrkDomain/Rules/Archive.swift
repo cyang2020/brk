@@ -34,8 +34,18 @@ extension Work {
             }
         }
         archiveTabs(victims, reason: .auto)
-        // TODO(F3): Little Arc windows idle past `LinkSettings.littleArcAutoArchive` close with their tab archived
-        // (Arc: `AutoArchiveType.littleArc`).
+        // Little Arc windows (Arc: `AutoArchiveType.littleArc`, one global threshold in the Links pane; F3): a Little Arc
+        // whose tabs have all been idle for the threshold closes with its tabs archived. Idle counts from a tab's
+        // `lastActiveAt` (set when it opened or was last shown); being the key window does not refresh it, because the
+        // contract has no key-window event. A Little Arc without a tab (its bar still open) is left alone.
+        if let threshold = state.doc.settings.links.littleArcAutoArchive.interval {
+            for id in state.doc.windows.keys.sorted() where state.doc.windows[id]?.kind == .little {
+                let tabs = state.session.scratch[id]?.allTabs() ?? []
+                guard !tabs.isEmpty, tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
+                archiveTabs(tabs, reason: .auto)
+                removeWindow(id)
+            }
+        }
     }
 
     /// The single archiving primitive. Tabs, splits and folders in `ids` are flattened to their tabs, which are

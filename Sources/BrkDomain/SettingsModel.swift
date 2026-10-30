@@ -86,10 +86,11 @@ public struct LinkRoute: Hashable, Sendable, Codable {
         self.destination = destination
     }
 
-    /// Case-insensitive host match; "*." matches any subdomain depth and the bare host. TODO(F3): the rule body.
+    /// Case-insensitive host match (F3): "spotify.com" matches that host only; "*.spotify.com" matches the bare host
+    /// and any subdomain depth. The stored pattern is already normalized (`normalizedPattern`, Rules/Windows.swift);
+    /// a pattern typed with a scheme or path still matches because it is normalized here too. No host: no match.
     public func matches(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased() else { return false }
-        let pattern = pattern.lowercased()
+        guard let host = url.host?.lowercased(), let pattern = LinkRoute.normalizedPattern(pattern) else { return false }
         if pattern.hasPrefix("*.") {
             let base = String(pattern.dropFirst(2))
             return host == base || host.hasSuffix("." + base)

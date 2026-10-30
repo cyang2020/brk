@@ -14,7 +14,9 @@
 #    use (132 MB, SHA-1 from Vendor/CefSwift/CEF_VERSION.json), builds the product and `cef-helper`, assembles
 #    dist/<Product>.app with "<Product> Helper", "(Alerts)", "(GPU)", "(Plugin)", "(Renderer)", sets
 #    LSEnvironment MallocNanoZone=0, signs ad hoc (--sign -).
-# 5. codesign --verify --deep --strict.
+# 5. scripts/declare-url-types.sh adds CFBundleURLTypes for http and https to the bundle's Info.plist (the plugin
+#    writes the plist without them; the default-browser registration needs them), then the bundle is signed again.
+# 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG="${CONFIG:-release}"
@@ -30,5 +32,9 @@ swift package --allow-writing-to-package-directory --allow-network-connections a
   cef bundle --product "$PRODUCT" --configuration "$CONFIG" --bundle-id "$BUNDLE_ID" --sign -
 
 APP="dist/$PRODUCT.app"
+# 6. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
+#    because the plugin signed before the edit.
+scripts/declare-url-types.sh "$APP/Contents/Info.plist"
+codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "[build] $APP signed ad hoc and verified"

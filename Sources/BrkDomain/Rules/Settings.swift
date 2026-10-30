@@ -40,12 +40,13 @@ extension Work {
                 if case .space(let id)? = destination, state.doc.spaces[id] == nil { return }
                 state.doc.settings.links.defaultRoute = destination
             case .addRoute(let route):
-                // TODO(F3): validate the pattern (a host glob) and refuse a destination naming a missing space.
-                guard !state.doc.linkRoutes.contains(where: { $0.id == route.id }) else { return }
-                state.doc.linkRoutes.append(route)
+                // F3: the pattern is normalized to the host glob `LinkRoute.matches` compares (`normalizedPattern`); an
+                // unusable pattern or a destination naming a missing space is refused (`AppState.validRoute`).
+                guard !state.doc.linkRoutes.contains(where: { $0.id == route.id }), let valid = state.validRoute(route) else { return }
+                state.doc.linkRoutes.append(valid)
             case .updateRoute(let route):
-                guard let index = state.doc.linkRoutes.firstIndex(where: { $0.id == route.id }) else { return }
-                state.doc.linkRoutes[index] = route
+                guard let index = state.doc.linkRoutes.firstIndex(where: { $0.id == route.id }), let valid = state.validRoute(route) else { return }
+                if state.doc.linkRoutes[index] != valid { state.doc.linkRoutes[index] = valid }
             case .removeRoute(let id):
                 state.doc.linkRoutes.removeAll { $0.id == id }
             case .moveRoute(let id, let index):

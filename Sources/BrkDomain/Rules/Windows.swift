@@ -4,29 +4,37 @@ import Foundation
 
 // Owner: F3. Window kinds and external links: a second standard window, incognito and Little Arc windows through
 // the scratch-container seam (`ContainerScope.window`, `Session.scratch`, `SectionRole.scratch`), "Open in <space>",
-// and links from other apps routed by Air Traffic Control. First-pass bodies; F3 fills in Arc's behavior
-// (anatomy-m 1.8, 1.10; visual-and-copy.md "Little Arc", "Air Traffic Control").
+// and links from other apps routed by Air Traffic Control (anatomy-m 1.8, 1.10, 4.2; visual-and-copy.md "Little
+// Arc", "Air Traffic Control").
+//
+// Little Arc (Arc: `LittleBrowser`, hosted by BrkApp/LittleWindowController.swift in an NSPanel): one tab in the
+// window's own container, no sidebar, Arc's default size until a frame is saved (Metrics.littleArc), the next one
+// cascading by Metrics.littleArc.cascade from the last. Its entry points (`LittleBrowserEntryPoint`): the File menu
+// (Opt+Cmd+N, `newLittle(nil)`: the command bar opens on an empty window), an external link (`externalURL` with
+// "Links from other apps open in Little Arc" or a `.littleArc` route), an Opt+Cmd+click on a page link
+// (`Rules/Peek.swift` `specialOpen` -> `newLittle(url)`). A Little Arc goes when its tab is moved out ("Open in"),
+// closed (Shift+Cmd+W archives it; Cmd+W archives the tab and normalize closes the emptied window), or idle past
+// the Links threshold (`Rules/Archive.swift`).
 
 extension Work {
     mutating func windows(_ command: WindowCommand, in window: WindowID) {
         switch command {
         case .new:
-            // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It shows the
-            // space's most recent loaded item (normalize fills nothing; `focus` would, so start empty like Arc's
-            // new window with the command bar).
+            // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It opens with
+            // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible, doc.sidebarWidth))
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newIncognito:
             // Shift+Cmd+N: a session-only window; its tabs live in its scratch tree and its pages browse in
-            // `BrowsingContext.incognito`. TODO(F3): Arc's incognito theme (dark, no space theme).
+            // `BrowsingContext.incognito` (F2 owns the incognito theme and the badge).
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth))
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newLittle(let url):
-            // Opt+Cmd+N (or an external link): one tab in the window's own container, no sidebar. With a url the tab
-            // is shown at once; without one the command bar opens. TODO(F3): `LittleBrowserEntryPoint`, the
-            // auto-archive threshold (`LinkSettings.littleArcAutoArchive`), the "Open in" hint.
+            // Opt+Cmd+N, an external link or an Opt+Cmd+click: one tab in the window's own container, no sidebar.
+            // With a url the tab is shown at once; without one the command bar opens, and a Little Arc that is left
+            // without a tab and without its bar closes (normalize).
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .little, space: doc.space, sidebar: (false, doc.sidebarWidth))
             if let url {
@@ -54,8 +62,9 @@ extension Work {
                 if others.isEmpty { effects.append(.window(window, .close)) } else { removeWindow(window) }
             }
         case .openIn(let ref):
-            // Cmd+O: the held tab (a Little Arc's, or the window's peeked tab) moves to the top of the target
-            // space's Today and a standard window on that space shows it; the Little Arc window or the Peek closes.
+            // Cmd+O ("Open Little Arc or Peek in…", Arc's `openInCurrentSpace:`) and the "Open in" menu: the held
+            // tab (a Little Arc's, or the window's peeked tab) moves to the top of the target space's Today and a
+            // standard window on that space shows it; the Little Arc window or the Peek closes.
             guard let doc = state.doc.windows[window], let held = heldTab(in: window) else { return }
             let target: SpaceID? = switch ref {
             case .current: mostRecentStandardWindow().map { state.doc.windows[$0]!.space } ?? doc.space
@@ -74,9 +83,9 @@ extension Work {
         }
     }
 
-    /// Links from other apps (Apple Event GetURL). The first matching route wins; else the Links settings decide:
-    /// `defaultRoute`, then "Links from other apps open in Little Arc", else the most recent standard window's
-    /// current space. A url the bar may not open is ignored. TODO(F3): Arc's `LinkDestination` copy and the toast.
+    /// Links from other apps (Apple Event GetURL). The first matching route wins (Air Traffic Control, in the
+    /// user's order); else the Links settings decide: `defaultRoute`, then "Links from other apps open in Little
+    /// Arc", else the most recent standard window's current space. A url the bar may not open is ignored.
     mutating func externalURL(_ url: URL) {
         guard isAllowedURL(url) else { return }
         let destination = state.doc.linkRoutes.first { $0.matches(url) }?.destination
@@ -85,7 +94,7 @@ extension Work {
         open(url, at: destination)
     }
 
-    /// Opens `url` where a route says.
+    /// Opens `url` where a route says. A route naming a space that is gone falls back to the most recent space.
     mutating func open(_ url: URL, at destination: LinkDestination) {
         let recent = mostRecentStandardWindow()
         switch destination {
@@ -103,11 +112,18 @@ extension Work {
 
     // MARK: Helpers
 
-    /// A new `WindowDoc` (and, through normalize, its session and scratch tree) on `space`. Returns its id.
+    /// A new `WindowDoc` (and its session and scratch tree) on `space`. A Little Arc cascades from the last Little
+    /// Arc that has reported a frame (Arc: "new windows cascade by 30"); the first one has no bounds and the host
+    /// centers it at Arc's default size. Returns its id.
     @discardableResult
     mutating func newWindow(kind: WindowKind, space: SpaceID, sidebar: (visible: Bool, width: Double)) -> WindowID {
         let id = WindowID(ctx.newID())
-        state.doc.windows[id] = WindowDoc(id: id, kind: kind, bounds: nil, space: space, activeBySpace: [:],
+        var bounds: CGRect?
+        if kind == .little, let last = state.doc.windows.values.filter({ $0.kind == .little }).compactMap(\.bounds).max(by: { $0.minX < $1.minX }) {
+            let step = Metrics.littleArc.cascade.value
+            bounds = last.offsetBy(dx: step, dy: -step)
+        }
+        state.doc.windows[id] = WindowDoc(id: id, kind: kind, bounds: bounds, space: space, activeBySpace: [:],
                                           sidebarVisible: sidebar.visible, sidebarWidth: sidebar.width)
         ensureSession(id)
         return id
@@ -121,9 +137,13 @@ extension Work {
         state.session.scratch[id] = nil
     }
 
-    /// The session and scratch tree a window needs before the rules can use it (normalize repairs the same).
+    /// The session and scratch tree a window needs before the rules can use it (normalize repairs the same). The
+    /// session starts at the kind's default content size, so layout is right before AppKit reports a frame.
     mutating func ensureSession(_ id: WindowID) {
-        if state.session.windows[id] == nil { state.session.windows[id] = .fresh(contentSize: Metrics.window.defaultSize.value) }
+        if state.session.windows[id] == nil {
+            let size = state.doc.windows[id]?.kind == .little ? Metrics.littleArc.defaultSize.value : Metrics.window.defaultSize.value
+            state.session.windows[id] = .fresh(contentSize: size)
+        }
         if state.session.scratch[id] == nil {
             var tree = SidebarTree(scope: .window(id))
             tree.makeRoot(ItemID(ctx.newID()), .scratch(id), createdAt: ctx.now)
@@ -153,8 +173,9 @@ extension Work {
     /// The tab "Open in" moves: the window's peeked tab, else a Little Arc's shown tab.
     func heldTab(in window: WindowID) -> ItemID? { state.heldTab(in: window) }
 
-    /// The standard window the user used last: the one whose shown tab is most recent, ties by id.
-    /// TODO(F3): track key-window order in the session (`WindowEvent.becameKey`) instead of guessing by recency.
+    /// The standard window the user used last: the one whose shown tab is most recent, ties by id. The contract has
+    /// no key-window event (`WindowEvent` is geometry, modifiers, closed), so recency of what each window shows is
+    /// the signal; a window the user only looked at without choosing a tab does not count.
     func mostRecentStandardWindow() -> WindowID? {
         state.doc.windows.values.filter { $0.kind == .standard }
             .sorted { a, b in
@@ -169,10 +190,52 @@ extension Work {
 extension AppState {
     /// The tab "Open in" moves: the window's peeked tab, else a Little Arc's shown tab.
     func heldTab(in window: WindowID) -> ItemID? {
-        if case .peek(_, let tab)? = session.windows[window]?.overlay { return tab }
+        if let peeked = peekedTab(in: window) { return peeked }
         guard doc.windows[window]?.kind == .little else { return nil }
         return focusedPane(in: window)
     }
+
+    /// An Air Traffic Control route as the editor accepts it: the pattern normalized (`LinkRoute.normalizedPattern`)
+    /// and a destination that names an existing space. Nil refuses the route.
+    func validRoute(_ route: LinkRoute) -> LinkRoute? {
+        guard let pattern = LinkRoute.normalizedPattern(route.pattern) else { return nil }
+        if case .space(let id) = route.destination, doc.spaces[id] == nil { return nil }
+        return LinkRoute(id: route.id, pattern: pattern, destination: route.destination)
+    }
+}
+
+extension LinkRoute {
+    /// A pattern as typed ("Open.Spotify.com/", "https://*.spotify.com", " spotify.com. ") reduced to the host glob
+    /// `matches` compares: trimmed, lowercased, without a scheme, path, query, port, or trailing dot. Nil when
+    /// nothing usable is left (empty text, a bare "*" or "*.", a pattern with spaces inside).
+    public static func normalizedPattern(_ text: String) -> String? {
+        var pattern = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let range = pattern.range(of: "://") { pattern = String(pattern[range.upperBound...]) }
+        if let cut = pattern.firstIndex(where: { $0 == "/" || $0 == "?" || $0 == "#" || $0 == ":" }) { pattern = String(pattern[..<cut]) }
+        while pattern.hasSuffix(".") { pattern.removeLast() }
+        while pattern.hasPrefix(".") { pattern.removeFirst() }
+        let host = pattern.hasPrefix("*.") ? String(pattern.dropFirst(2)) : pattern
+        guard !host.isEmpty, !host.contains(" "), !host.contains("*") else { return nil }
+        return pattern
+    }
+}
+
+/// Arc's "Open in" menu for a Little Arc or a Peek (`LittleBrowserMoveMenu`): every space in dock order, each
+/// moving the held tab to that space (`.window(.openIn(.space(id)))`), then "Open in current Space"
+/// (`.window(.openIn(.current))`, the most recently used standard window's space, what Cmd+O does). Pure, so the
+/// Peek card and the Little Arc panel build the same menu from the snapshot's dock.
+public enum OpenInMenu {
+    public static let currentSpaceTitle = "Open in current Space"
+
+    public static func model(spaces: [DockItem]) -> MenuModel {
+        var entries: [MenuEntry] = spaces.map { .action(title: $0.title, command: .window(.openIn(.space($0.id))), enabled: true) }
+        if !entries.isEmpty { entries.append(.separator) }
+        entries.append(.action(title: currentSpaceTitle, command: .window(.openIn(.current)), enabled: true))
+        return MenuModel(entries: entries)
+    }
+
+    /// The button's label: "Open in <space>" for the space Cmd+O would use.
+    public static func buttonTitle(space: String) -> String { "Open in \(space)" }
 }
 
 extension WindowSession {
@@ -188,8 +251,8 @@ extension SidebarTree {
         items.values.first { $0.parent == nil && { if case .section(let s) = $0.body { s.role == role } else { false } }($0) }?.id
     }
 
-    /// Every tab in the tree, any depth.
+    /// Every tab in the tree, any depth, by id (so callers archive in a stable order).
     func allTabs() -> [ItemID] {
-        items.values.compactMap { if case .tab = $0.body { $0.id } else { nil } }
+        items.values.compactMap { if case .tab = $0.body { $0.id } else { nil } }.sorted()
     }
 }

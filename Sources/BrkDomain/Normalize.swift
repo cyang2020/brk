@@ -25,6 +25,7 @@ func normalize(_ state: inout AppState) -> [String] {
     repairSpaces(&state, &repairs)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
+    closeEmptyLittleWindows(&state)
     repairLoaded(&state)
     applyCaps(&state, &repairs)
     return repairs
@@ -140,6 +141,20 @@ private func repairSessionTargets(_ state: inout AppState) {
             }
         }
         if session != before { state.session.windows[id] = session }
+    }
+}
+
+/// A Little Arc holds one tab (Arc: `LittleBrowser`; F3): when its last tab is gone (Cmd+W, the page closed itself,
+/// the sweep) and no command bar is waiting for a URL, the window closes with it, session and scratch tree included.
+/// Runs after the session targets are repaired, so a bar whose tab vanished does not keep the window alive.
+private func closeEmptyLittleWindows(_ state: inout AppState) {
+    for id in state.doc.windows.keys.sorted() where state.doc.windows[id]?.kind == .little {
+        if case .commandBar? = state.session.windows[id]?.overlay { continue }
+        let hasTab = state.session.scratch[id]?.items.values.contains { if case .tab = $0.body { true } else { false } } ?? false
+        guard !hasTab else { continue }
+        state.doc.windows[id] = nil
+        state.session.windows[id] = nil
+        state.session.scratch[id] = nil
     }
 }
 

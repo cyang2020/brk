@@ -47,11 +47,12 @@ extension AppState {
         }
     }
 
-    /// `.focused` -> the focused pane in the window; `.item(id)` -> that id. Nil unless the result is a tab.
+    /// `.focused` -> the peeked tab while a Peek is open (browsing acts on the peeked page, F3), else the focused
+    /// pane in the window; `.item(id)` -> that id. Nil unless the result is a tab.
     func resolveTab(_ ref: ItemRef, in window: WindowID) -> ItemID? {
         let id: ItemID?
         switch ref {
-        case .focused: id = focusedPane(in: window)
+        case .focused: id = peekedTab(in: window) ?? focusedPane(in: window)
         case .item(let item): id = item
         }
         guard let id, let scope = locate(id), case .tab? = tree(scope)?[id]?.body else { return nil }

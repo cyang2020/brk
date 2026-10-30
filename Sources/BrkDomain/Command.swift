@@ -419,11 +419,12 @@ extension Command {
         }
     }
 
-    /// Whether this command leaves an open Peek open: browsing acts on the peeked page; everything that changes
-    /// what the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
+    /// Whether this command leaves an open Peek open: browsing acts on the peeked page (`.focused` resolves to it,
+    /// Rules/Queries.swift), so Cmd+W closes the peeked tab and not the one underneath; everything that changes what
+    /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize): true
+        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
         default: false
         }
     }
