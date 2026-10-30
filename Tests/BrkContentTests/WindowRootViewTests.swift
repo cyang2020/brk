@@ -55,6 +55,25 @@ final class WindowRootViewTests: XCTestCase {
         let gap = hit(container, CGPoint(x: card.minX - Metrics.content.inset.value / 2, y: card.midY))
         XCTAssertFalse(gap === root.content, "the content area took a click in the inset between sidebar and card")
     }
+
+    /// e2e R2: with the sidebar hidden the sidebar view still renders, so its reveal strip is on screen at the
+    /// computed frame for the hover that peeks it back
+    func testHiddenSidebarStillRendersItsRevealStrip() throws {
+        let v = snapshot(sidebarVisible: false)
+        XCTAssertFalse(v.sidebar.visible)
+        let (_, root, frames) = render(v)
+        let strip = try XCTUnwrap(frames.revealStrip, "layout gives a hidden sidebar a reveal strip")
+        XCTAssertTrue(root.sidebar.isHidden)
+        var found: NSView?
+        func walk(_ view: NSView) {
+            if view.accessibilityIdentifier() == ViewID.revealStrip.identifier { found = view }
+            view.subviews.forEach(walk)
+        }
+        walk(root)
+        let view = try XCTUnwrap(found, "no reveal-strip view in the root")
+        XCTAssertFalse(view.isHiddenOrHasHiddenAncestor, "the reveal strip is hidden")
+        XCTAssertEqual(view.frame, strip)
+    }
 }
 
 final class IDs: @unchecked Sendable {
