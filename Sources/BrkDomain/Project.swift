@@ -175,7 +175,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }
     }
     if doc.kind == .incognito {
-        pill.profile = ProfileBadge(name: "Incognito", icon: nil, incognito: true)
+        pill.profile = ProfileBadge(name: ProfileCopy.incognito, icon: nil, incognito: true)
     } else if space.profile != .default, let profile = state.doc.profiles[space.profile] {
         pill.profile = ProfileBadge(name: profile.name, icon: profile.icon, incognito: false)
     }
@@ -272,11 +272,7 @@ private func profileRows(_ state: AppState) -> [ProfileRow] {
     state.doc.profiles.values.sorted { a, b in
         if (a.id == .default) != (b.id == .default) { return a.id == .default }
         return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending || (a.name == b.name && a.id < b.id)
-    }.map { profile in
-        ProfileRow(id: profile.id, name: profile.name, icon: profile.icon,
-                   spaceTitles: state.doc.spaceOrder.filter { state.doc.spaces[$0]?.profile == profile.id }.map(state.displayTitle(of:)),
-                   isDefault: profile.id == .default)
-    }
+    }.map(state.profileRow)
 }
 
 /// The table actions that do something now. Everything is enabled except: actions on the focused tab when nothing

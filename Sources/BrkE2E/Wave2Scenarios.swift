@@ -12,8 +12,8 @@ enum Wave2Scenarios {
     static let all: [Scenario] = [
         Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", settingsWindow),
         Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", cefOnly: "cookies in a page",
-                 pending: "F2", profileContexts),
-        Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", pending: "F2", incognito),
+                 profileContexts),
+        Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", incognito),
         Scenario("W2-4", "Cmd+N opens a second standard window that shares the sidebar", pending: "F3", newWindow),
         Scenario("W2-5", "Cmd+Opt+N opens Little Arc at Arc's default size; Open in moves its tab into the space", pending: "F3", littleArc),
         Scenario("W2-6", "Shift+click opens a Peek over the content; Esc closes it and its page", cefOnly: "a click on a link in a page",
@@ -56,7 +56,10 @@ enum Wave2Scenarios {
 
     /// W2-2 (F2): a Work profile is created and assigned to a new space; `cookie.html#set` loaded there sets a
     /// cookie (title "cookie:brk=1"); the same page loaded in the default profile's space sees none ("cookie:");
-    /// the URL pill shows the Work badge.
+    /// the URL pill shows the Work badge. Then the rest of a profile's life on the real engine: the change dialog
+    /// on screen; the default space moved to Work reloads its shown page in Work's context (the reader now sees the
+    /// cookie); the delete dialog refuses while a space uses Work; with both spaces back on the default profile Work
+    /// is deleted, its Chromium directory is marked in `profiles-to-delete` and is gone after a restart.
     @Sendable static func profileContexts(_ app: AppUnderTest) throws {
         let work = try createSpace(app, title: "Work")
         try app.dispatch(.profile(.create(name: "Work", icon: nil)))
@@ -70,11 +73,56 @@ enum Wave2Scenarios {
         try app.waitUntil("the Work badge in the URL pill") { try app.view().urlPill.profile?.name == "Work" }
         let setter = try openTab(app, app.site.url("cookie.html#set"))
         try waitForTitle(app, setter.id, "cookie:brk=1")
+        try app.waitUntil("the badge on screen in the URL pill") {
+            let n = try app.native()
+            return contains(try visible(n, .urlPill), try visible(n, .profileBadge))
+        }
+        try app.screenshot("profile-badge")
         try app.click(.dockSpace(try app.view().dock[0].id))
         try app.waitUntil("the default space") { try app.view().urlPill.profile == nil }
-        let reader = try openTab(app, app.site.url("cookie.html"))
-        try waitForTitle(app, reader.id, "cookie:")
+        try app.waitUntil("no badge for the default profile") { !isShown(try app.native(), .profileBadge) }
+        // `load`, not Cmd+T and typing: the bar's top result for the typed URL is "Switch to Tab" on the setter
+        // (cookie.html#set), which would focus the setter in Work instead of opening a reader here.
+        let readerID = try app.load(app.site.url("cookie.html"))
+        try app.waitUntil("the reader in the default space") { tabRows(try app.view().space.today.rows).contains { $0.id == readerID } }
+        try waitForTitle(app, readerID, "cookie:")
         try app.screenshot("profiles")
+
+        let first = try app.view().space.id
+        try app.dispatch(.profile(.openDialog(.change(.current))))
+        try app.waitUntil("the change dialog on screen") { isShown(try app.native(), .profileDialog) }
+        try app.screenshot("profile-dialog-change")
+        try app.dispatch(.profile(.assign(.space(first), to: profile!)))
+        try app.waitUntil("the change dialog closed") { try app.view().profileDialog == nil && !isShown(try app.native(), .profileDialog) }
+        try waitForTitle(app, readerID, "cookie:brk=1")
+        try expect(try app.pageLog().filter { $0.page == PageID(readerID) && $0.kind == .created }.count == 2,
+                   "the reader's page was not replaced in the new context")
+
+        try app.dispatch(.profile(.openDialog(.delete(profile!))))
+        try app.waitUntil("the delete dialog on screen") { isShown(try app.native(), .profileDialog) }
+        try app.screenshot("profile-dialog-delete-refused")
+        try app.dispatch(.profile(.delete(profile!)))
+        try expect(try app.view().profileDialog != nil, "deleting a profile with spaces was not refused")
+        try app.dispatch(.profile(.openDialog(nil)))
+        try app.dispatch(.profile(.assign(.space(first), to: .default)))
+        try app.dispatch(.profile(.assign(.space(work), to: .default)))
+        let directory = app.dataDirectory.appendingPathComponent("Chromium/Profile-\(profile!.rawValue)", isDirectory: true)
+        let marker = app.dataDirectory.appendingPathComponent("profiles-to-delete")
+        try expect(FileManager.default.fileExists(atPath: directory.path), "Work's pages left no Chromium directory at \(directory.path)")
+        try app.dispatch(.profile(.openDialog(.create)))
+        try app.waitUntil("the create dialog on screen") { isShown(try app.native(), .profileDialog) }
+        try app.screenshot("profile-dialog-create")
+        try app.dispatch(.profile(.openDialog(nil)))
+        try app.dispatch(.profile(.delete(profile!)))
+        try app.waitUntil("Work deleted and marked") {
+            guard case .settings(let s) = try app.send(.settings) else { return false }
+            let marked = (try? String(contentsOf: marker, encoding: .utf8))?.split(separator: "\n").contains { $0 == "Profile-\(profile!.rawValue)" } ?? false
+            return s.profiles.map(\.profile.id) == [.default] && marked
+        }
+        try app.flush()
+        try app.restart()
+        try expect(!FileManager.default.fileExists(atPath: directory.path), "the deleted profile's directory survived the restart")
+        try expect(!FileManager.default.fileExists(atPath: marker.path), "the marker survived the sweep")
     }
 
     /// W2-3 (F2): Shift+Cmd+N (or the dispatch while the nib conflict stands) opens an incognito window; a page
@@ -88,9 +136,18 @@ enum Wave2Scenarios {
             incognito = h.windows.first { (try? app.view($0))?.kind == .incognito }
             return incognito != nil
         }
-        try app.perform(.dispatch(window: incognito, command: .commandBar(.submit(app.site.url("page2.html").absoluteString))))
+        let submit = try app.send(.dispatch(window: incognito, command: .commandBar(.submit(app.site.url("page2.html").absoluteString))))
+        guard case .dispatched = submit else { throw Check(description: "the submit in the incognito window answered \(AppUnderTest.describe(submit))") }
         try app.waitUntil("the incognito tab in its own section") { try app.view(incognito!).scratch?.rows.count == 1 }
+        try app.waitUntil("the incognito page loaded off the record", timeout: 10) {
+            guard case .tab(let row)? = try app.view(incognito!).scratch?.rows.first else { return false }
+            return row.title == "Fixture Page 2"
+        }
         try expect(try app.view(incognito!).urlPill.profile?.incognito == true, "no incognito badge")
+        try app.waitUntil("the incognito badge on screen") {
+            guard case .native(let n) = try app.send(.native(window: incognito)) else { return false }
+            return isShown(n, .profileBadge)
+        }
         try app.screenshot("incognito", window: incognito)
         try app.flush()
         try app.restart()

@@ -15,7 +15,7 @@ import Foundation
 ///   `cachePath`).
 /// - ``incognito()`` is in-memory: nothing is persisted to disk.
 /// - ``persistent(name:)`` stores its data under
-///   `<rootCachePath>/Profiles/<name>`, isolated from other profiles.
+///   `<rootCachePath>/Profile-<name>`, isolated from other profiles.
 ///
 /// Create profiles after ``CefRuntime/initialize(configuration:)`` succeeds.
 @MainActor
@@ -58,7 +58,7 @@ public final class CefProfile {
     }
 
     /// A named on-disk profile stored under
-    /// `<rootCachePath>/Profiles/<name>`. Reusing the same `name` reuses the
+    /// `<rootCachePath>/Profile-<name>`. Reusing the same `name` reuses the
     /// same storage.
     public static func persistent(name: String) -> CefProfile {
         CefProfile(kind: .persistent(name: name))
@@ -67,20 +67,22 @@ public final class CefProfile {
     /// The on-disk cache path for a profile kind given a root, or `nil` for
     /// the global and incognito kinds (global = runtime cache; incognito =
     /// in-memory). Pure function, exposed for testing.
+    ///
+    /// A direct child of the root: the Chrome runtime only loads a profile
+    /// whose directory's parent is root_cache_path (its user data dir);
+    /// anything deeper logs "Cannot create profile at path" and the browser
+    /// does not get an isolated profile (chrome_browser_context.cc).
     static func cachePath(for kind: Kind, rootCachePath: URL?) -> URL? {
         switch kind {
         case .global, .incognito:
             return nil
         case .persistent(let name):
-            let safe = sanitize(name)
-            return rootCachePath?
-                .appendingPathComponent("Profiles", isDirectory: true)
-                .appendingPathComponent(safe, isDirectory: true)
+            return rootCachePath?.appendingPathComponent("Profile-" + sanitize(name), isDirectory: true)
         }
     }
 
     /// Strips path separators and leading dots so a profile name can't escape
-    /// the Profiles directory.
+    /// the root cache directory.
     static func sanitize(_ name: String) -> String {
         let cleaned = name
             .replacingOccurrences(of: "/", with: "_")
