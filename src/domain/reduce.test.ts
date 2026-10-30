@@ -275,7 +275,7 @@ describe('reduce: tabs', () => {
     d.ui({ type: 'settings/auto-archive', after: '1h' })
     expect(d.view().overlay).toBeNull()
     d.ui({ type: 'commandBar/open', mode: 'new-tab' })
-    d.ui({ type: 'sidebar/resize', width: 300 })
+    d.ui({ type: 'sidebar/toggle' })
     expect(d.view().overlay).toBeNull()
   })
 

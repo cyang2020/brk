@@ -64,6 +64,10 @@ const HANDLERS: Handlers = {
  */
 export function keepsOverlay(type: UiCommandType, open: Overlay['kind'] | null): boolean {
   if (/^(commandBar|overlay)\//.test(type)) return true
+  // Peeking the hidden sidebar and dragging its resize handle are window-chrome adjustments around an open overlay,
+  // not actions that replace it: with the sidebar hidden, peeking is the only way to reach the dock while reading the
+  // archive, and the window host's stack already floats a peeked sidebar over the archive card (window-host.ts).
+  if (type === 'sidebar/peek' || type === 'sidebar/resize') return true
   // archive/* and settings/* belong to the archive page. Picked from the command bar (Restore Last Closed Tab,
   // Clear Archive) they must close the bar like any other action; archive/open replaces whatever is open.
   if (/^(archive|settings)\//.test(type)) return open === 'archive' || type === 'archive/open'
