@@ -112,19 +112,40 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         quitting = true
         sweep?.invalidate()
         control?.stopAccepting()
-        store?.flush()
+        let store = store, engine = engine, log = log
         Task { @MainActor in
-            switch await engine.shutdown() {
+            switch await Self.orderedQuit(store: store, engine: engine, dataDirectory: Product.dataDirectory(), log: log) {
             case .clean:
                 NSApp.reply(toApplicationShouldTerminate: true)
-            case .timedOut(let unclosed):
-                log.fault("shutdown timed out: \(unclosed.count) browsers never reported OnBeforeClose: \(unclosed.map(\.description).joined(separator: ", "))")
-                let marker = Product.dataDirectory().appendingPathComponent("shutdown-incomplete.log")
-                try? "\(unclosed.map(\.description).joined(separator: "\n"))\n".write(to: marker, atomically: true, encoding: .utf8)
+            case .timedOut:
                 exit(Self.shutdownTimedOutStatus)
             }
         }
         return .terminateLater
+    }
+
+    /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// Steps 2 and 3 of the quit, free of AppKit so a test can run them with a fake engine: `store.flush()` (state is
+    /// on disk before anything risky), `await engine.shutdown()`, then the records in the data directory:
+    /// `page-log.txt` (every created, closeRequested and closed entry, for the e2e report) and, on a timeout,
+    /// `shutdown-incomplete.log` naming each unclosed page. The caller turns the outcome into the exit status.
+    static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
+        store?.flush()
+        let outcome = await engine.shutdown()
+        try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        let pageLog = engine.pageLog.map {
+            String(format: "%.3f %@ page=%@ generation=%llu browser=%@", $0.uptime, $0.kind.rawValue, $0.page.description, $0.generation,
+                   $0.browserID.map(String.init) ?? "-")
+        }
+        try? (pageLog.joined(separator: "\n") + "\n").write(to: dataDirectory.appendingPathComponent("page-log.txt"), atomically: true, encoding: .utf8)
+        if case .timedOut(let unclosed) = outcome {
+            log.fault("shutdown timed out: \(unclosed.count) browsers never reported OnBeforeClose: \(unclosed.map(\.description).joined(separator: ", "))")
+            let marker = dataDirectory.appendingPathComponent("shutdown-incomplete.log")
+            try? (unclosed.map(\.description).joined(separator: "\n") + "\n").write(to: marker, atomically: true, encoding: .utf8)
+        }
+        return outcome
     }
 
     /// Exit status of a quit whose browsers did not close in time. Distinct from a crash (signal) and from 0.
@@ -138,10 +159,9 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 /// deadlock, first stub run. A run-loop block runs outside the dispatch drain, so the nested loop can service the queue.
 @MainActor
 public enum Quit {
-    public static func request() {
-        RunLoop.main.perform { NSApp.terminate(nil) }
-    }
+    public static func request() { perform() }
 
-    /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
-    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
+    /// without terminating the test process.
+    public static var perform: @MainActor () -> Void = { RunLoop.main.perform { NSApp.terminate(nil) } }
 }

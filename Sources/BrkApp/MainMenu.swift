@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import os
 
 /// Builds the main menu from the shortcut table: one NSMenu per `MenuName` in order, items in `ActionID` order with
 /// separators between groups, key equivalent and mask from each action's first binding, `{app}` -> Product.name.
@@ -74,8 +75,12 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
 
     @objc func performAction(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let action = ActionID(rawValue: raw) else { return }
-        perform?(action, NSApp.currentEvent)
+        let event = NSApp.currentEvent
+        log.notice("menu \(action.rawValue, privacy: .public) from event type=\(event?.type.rawValue ?? 0, privacy: .public) window=\(event?.windowNumber ?? -1, privacy: .public) keyWindow=\(NSApp.keyWindow?.windowNumber ?? -1, privacy: .public)")
+        perform?(action, event)
     }
+
+    private let log = Logger(subsystem: "brk", category: "keys")
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { return true }

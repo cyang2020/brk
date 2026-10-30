@@ -35,6 +35,8 @@ public final class AppStore {
     private let calendar = Calendar.autoupdatingCurrent
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
+    /// TEMPORARY (W2): stands in for the reducer rules W1 has not written yet; nil unless BRK_W1_SHIM=1.
+    private let shim = DomainShim.fromEnvironment()
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -42,11 +44,17 @@ public final class AppStore {
         self.engine = engine
         self.stateFile = stateFile
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
+        if let shim { snapshot = shim.patch(snapshot) }
     }
 
-    /// The first render after launch: windows and pages from the restored snapshot, no transition.
+    /// The first render after launch: windows and pages from the restored snapshot, no transition. Runs as a
+    /// dispatch cycle: placing a window reports its geometry (`windowDidResize`), and that input must queue behind
+    /// this publish like any other re-entrant one, not run in the middle of it.
     public func start() {
+        dispatching = true
         publish(docChanged: false)
+        dispatching = false
+        drain()
     }
 
     /// Every user command, system event and page event enters here.
@@ -71,7 +79,7 @@ public final class AppStore {
 
     /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right).
     public func refresh() {
-        snapshot = project(state, ProjectionContext(now: clock.now(), calendar: calendar))
+        snapshot = projected()
         renderWindows()
     }
 
@@ -105,6 +113,10 @@ public final class AppStore {
     }
 
     private func apply(_ input: Input) -> Bool {
+        if let shim, let handled = shim.intercept(input, snapshot: snapshot) {
+            publish(docChanged: false)
+            return handled
+        }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         if t.changed {
             state = t.state
@@ -114,20 +126,29 @@ public final class AppStore {
         return t.keyHandled
     }
 
+    /// Project, patch (shim only), save, reconcile pages, then windows: closed ones go, new ones are placed and
+    /// shown, every one renders. A new window is key and on screen before its first render, because keyboard focus
+    /// into a Chromium view only sticks in a key window.
     private func publish(docChanged: Bool) {
-        snapshot = project(state, ProjectionContext(now: clock.now(), calendar: calendar))
+        snapshot = projected()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
-        for id in snapshot.windows.keys where windows[id] == nil {
+        for id in snapshot.windows.keys.sorted() where windows[id] == nil {
             let controller = WindowController(id: id, engine: engine, send: { [weak self] in self?.dispatch($0) })
             windows[id] = controller
+            controller.place(snapshot.windows[id]!)
             controller.window.makeKeyAndOrderFront(nil)
         }
         renderWindows()
+    }
+
+    private func projected() -> AppSnapshot {
+        let snapshot = project(state, ProjectionContext(now: clock.now(), calendar: calendar))
+        return shim?.patch(snapshot) ?? snapshot
     }
 
     private func renderWindows() {

@@ -12,6 +12,7 @@ import BrkUIKit
 public final class ContentAreaView: NSView {
     let dispatch: Dispatch
     private var cards: [CardView] = []
+    private var shadows: [ShadowView] = []
     private var dividers: [DividerView] = []
 
     init(dispatch: @escaping Dispatch) {
@@ -30,12 +31,20 @@ public final class ContentAreaView: NSView {
     func render(_ content: ContentSnapshot, frames: WindowFrames, palette: Palette, surface: (PageID) -> NSView?) {
         frame = CGRect(origin: .zero, size: frames.contentSize)
         while cards.count < frames.cards.count {
+            let shadow = ShadowView(frame: .zero)
+            shadows.append(shadow)
+            addSubview(shadow, positioned: .below, relativeTo: cards.first)
             let card = CardView(frame: .zero)
             cards.append(card)
             addSubview(card)
         }
-        while cards.count > frames.cards.count { cards.removeLast().removeFromSuperview() }
-        for (card, frame) in zip(cards, frames.cards) {
+        while cards.count > frames.cards.count {
+            cards.removeLast().removeFromSuperview()
+            shadows.removeLast().removeFromSuperview()
+        }
+        for ((card, shadow), frame) in zip(zip(cards, shadows), frames.cards) {
+            shadow.frame = frame.rect
+            shadow.layer?.cornerRadius = frame.cornerRadius
             card.frame = frame.rect
             card.layer?.cornerRadius = frame.cornerRadius
             card.identify(.card(frame.pane))
@@ -58,11 +67,32 @@ public final class ContentAreaView: NSView {
             divider.frame = rect
             divider.identify(.divider(divider.index))
             divider.split = content.split
+            divider.panes = content.panes.map(\.tab)
             divider.fractions = content.panes.map(\.fraction)
             divider.area = frames.contentArea
             divider.orientation = content.orientation
         }
     }
+}
+
+/// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the
+/// card with the same frame and radius (Metrics.content.shadowRadius, shadowOpacity; hidden when showsShadow is off).
+@MainActor
+final class ShadowView: NSView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.white.cgColor
+        layer?.cornerCurve = .continuous
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = Float(Metrics.content.shadowOpacity.value)
+        layer?.shadowRadius = Metrics.content.shadowRadius.value
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        isHidden = !Metrics.content.showsShadow.value
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
 }
 
 @MainActor
@@ -121,6 +151,8 @@ final class DividerView: NSView {
     let index: Int
     let dispatch: Dispatch
     var split: ItemID?
+    /// The pane tabs in order; the fractions dictionary of `.split(.resize)` is keyed by them.
+    var panes: [ItemID] = []
     var fractions: [Double] = []
     var area: CGRect = .zero
     var orientation: SplitOrientation = .horizontal
@@ -145,8 +177,7 @@ final class DividerView: NSView {
         let point = superview.convert(event.locationInWindow, from: nil)
         let position = orientation == .horizontal ? point.x : point.y
         let next = ContentLayout.fractions(afterDragging: index, to: position, in: area, current: fractions, orientation: orientation)
-        // TODO(W2): the pane ids for the fractions dictionary come from the snapshot's panes; W2 wires them here.
-        _ = next
-        dispatch(.split(.resize(split, fractions: [:])))
+        guard next.count == panes.count else { return }
+        dispatch(.split(.resize(split, fractions: Dictionary(uniqueKeysWithValues: zip(panes, next)))))
     }
 }
