@@ -66,6 +66,17 @@ final class ImportRulesTests: XCTestCase {
         XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "// import BrkApp\nimport AppKit\n"), [])
     }
 
+    /// Swift allows any whitespace around an import's tokens, several statements on a line, comments before it and
+    /// attributes with arguments; the scanner sees all of them (the review's probe was a tab-indented AppKit import).
+    func testRejectsAnImportWhateverItsLayout() {
+        for text in ["\timport AppKit\n", "import\tAppKit\n", "import Foundation; import AppKit\n", "/* why */ import AppKit\n",
+                     "import\n    AppKit\n", "@_spi(Private) import AppKit\n", "@testable\nimport AppKit\n", "import typealias AppKit.NSView\n",
+                     "import let AppKit.NSAppKitVersionNumber\n", "\u{000C}import AppKit\r\n"] {
+            XCTAssertEqual(Self.importViolations(target: "BrkDomain", path: "BrkDomain/X.swift", text: text).count, 1, text.debugDescription)
+        }
+        XCTAssertEqual(Self.importViolations(target: "BrkDomain", path: "BrkDomain/X.swift", text: "\timport Foundation\n\t// import AppKit\n"), [])
+    }
+
     /// Worker boundaries: sibling view targets never import each other, and the app composes views only through
     /// BrkContent (so W2's root is the one place that knows every worker's public surface).
     func testWorkerViewTargetsAreDisjoint() {
