@@ -254,7 +254,9 @@ struct StoredDocV1: Codable {
     }
 
     /// Stored -> Doc, with repairs, one line each. Every saved instant (created, last active, archived, visited) outside
-    /// `Instant.supported` becomes `ctx.now`. In order:
+    /// `Instant.supported` becomes `ctx.now`. A saved URL the command bar would not open (`isOpenableURL`: javascript:,
+    /// data:, ...) is never restored: the tab, archive entry or history entry holding it is dropped, and such a
+    /// pinnedURL is cleared (`SidebarTree.restored` stamps it again from the tab's URL). In order:
     /// 1. items become `SidebarTree.RestoredItem`s; an item whose kind has no matching payload, or a section that
     ///    names no space (Pinned, Today) or is a scratch root, is dropped;
     /// 2. no spaces -> `noSpaces` (nothing can be shown);
@@ -274,9 +276,18 @@ struct StoredDocV1: Codable {
             repairs.append("\(what) \(instant) is outside the supported range: now \(ctx.now)")
             return ctx.now
         }
+        func opens(_ url: URL?, _ owner: String) -> Bool {
+            guard let url, !isOpenableURL(url) else { return true }
+            repairs.append("\(owner): dropped, its \(url.scheme ?? "schemeless") URL may not open")
+            return false
+        }
         func tab(_ stored: StoredTab, _ owner: String) -> Tab {
             var tab = Tab(stored)
             tab.lastActiveAt = usable(stored.lastActiveAt, "\(owner): lastActiveAt")
+            if let saved = stored.pinnedURL, !isOpenableURL(saved) {
+                repairs.append("\(owner): cleared a \(saved.scheme ?? "schemeless") pinnedURL that may not open")
+                tab.pinnedURL = nil
+            }
             return tab
         }
         typealias Record = SidebarTree.RestoredItem
@@ -284,7 +295,9 @@ struct StoredDocV1: Codable {
         for (id, stored) in items {
             let payload: Record.Payload?
             switch stored.kind {
-            case .tab: payload = stored.tab.map { .tab(tab($0, "\(id)")) }
+            case .tab:
+                guard opens(stored.tab?.url, "\(id)") else { continue }
+                payload = stored.tab.map { .tab(tab($0, "\(id)")) }
             case .folder: payload = stored.folder.map { .folder(title: $0.title, collapsed: $0.collapsed, icon: $0.icon) }
             case .split:
                 payload = stored.split.map {
@@ -379,12 +392,14 @@ struct StoredDocV1: Codable {
             spaces: docSpaces,
             spaceOrder: order,
             favorites: favoriteRoots,
-            archive: archive.map {
+            archive: archive.filter { opens($0.tab.url, "archive \($0.id)") }.map {
                 ArchivedTab(id: $0.id, tabID: $0.tabID, tab: tab($0.tab, "archive \($0.id)"),
                             archivedAt: usable($0.archivedAt, "archive \($0.id): archivedAt"), reason: $0.reason,
                             fromSpace: $0.fromSpace, fromSection: $0.fromSection)
             },
-            history: history.map { HistoryEntry(url: $0.url, title: $0.title, visitedAt: usable($0.visitedAt, "history \($0.url): visitedAt")) },
+            history: history.filter { opens($0.url, "a history entry") }.map {
+                HistoryEntry(url: $0.url, title: $0.title, visitedAt: usable($0.visitedAt, "history \($0.url): visitedAt"))
+            },
             windows: docWindows,
             settings: Settings(autoArchive: autoArchive)
         )

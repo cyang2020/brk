@@ -64,15 +64,22 @@ public func resolveTypedInput(_ text: String) -> URL? {
     guard !input.isEmpty else { return nil }
     if input.contains(where: \.isWhitespace) { return searchURL(input) }
     let host = hostLike(input)
-    if host == nil, let scheme = schemeOf(input) {
-        if ["http", "https", "file", "about", "chrome"].contains(scheme), let url = URL(string: input).flatMap(canonical),
-           scheme == "about" || scheme == "file" || url.host?.isEmpty == false {
-            return url
-        }
+    if host == nil, schemeOf(input) != nil {
+        if let url = URL(string: input).flatMap(canonical), isOpenableURL(url) { return url }
         return searchURL(input)
     }
     if let local = host, let url = URL(string: (local ? "http://" : "https://") + input).flatMap(canonical) { return url }
     return searchURL(input)
+}
+
+/// Whether the user may open `url` by typing it: http and https with a host, file, about:, and chrome: with a host.
+/// Also what a restored tab may hold (`StateCodec`): a saved javascript: or data: URL is never loaded.
+func isOpenableURL(_ url: URL) -> Bool {
+    switch url.scheme?.lowercased() {
+    case "http", "https", "chrome": url.host?.isEmpty == false
+    case "file", "about": true
+    default: false
+    }
 }
 
 /// Whether a page may open `url` in a new tab (`PageEvent.openRequested`): http and https with a host, file, and
