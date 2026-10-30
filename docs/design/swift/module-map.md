@@ -1,6 +1,6 @@
 # Module map: Brk on Swift, AppKit and CEF
 
-Owners: **W1** domain and layout math, **W2** engine, window host and app store, **W3** sidebar UI, **W4** command bar, archive and dialogs, **W5** theme renderer, **W6** e2e harness and control protocol. **Contract** files are frozen at this skeleton: their types and public names do not change during parallel work. A worker that needs a contract change writes it down as a deviation in its report, and the integrator applies it. The function bodies inside a contract file are still written by the owner named in the table.
+Owners: **W1** domain and layout math, **W2** engine, window host and app store, **W3** sidebar UI, **W4** command bar, archive and dialogs, **W5** theme renderer, **W6** e2e harness and control protocol. Wave 2 adds **F1** settings, **F2** profiles and incognito, **F3** window kinds and external links, **F4** command bar, menu and remapping, **F5** Library; their paths, contracts, tests and scenarios are in `wave2.md`. **Contract** files are frozen at this skeleton: their types and public names do not change during parallel work. A worker that needs a contract change writes it down as a deviation in its report, and the integrator applies it. The function bodies inside a contract file are still written by the owner named in the table.
 
 Every path below is relative to the repository root. Every file has exactly one owner; the owner of a directory owns every file under it unless a row names the file.
 
@@ -10,23 +10,25 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 
 | Module | Path | Owner | Hides | Exposes | Imported by |
 |---|---|---|---|---|---|
-| Base vocabulary | `BrkBase/` | contract (W1 maintains) | nothing | `ID<Tag>` with `ItemID`, `SpaceID`, `WindowID`, `ArchiveID`, `ProfileID`; `Instant`; `Modifiers`, `Key` (a `CaseIterable` enum by key code), `KeyChord`, `KeyPress`, `KeyStage`, `PressID`; the page vocabulary `PageID`, `PageSpec`, `PageAction`, `PageEvent`, `OpenDisposition`, `PageFacts`, `PageLogEntry`, `ShutdownOutcome`; `Metric`, `MetricSource`, `MetricGroup`, `Metrics` (the constants table); `Product`, `LaunchOptions` | every module |
-| Domain: model | `BrkDomain/Model.swift`, `SidebarTree.swift` | W1 | every stored field; the hierarchy changes only inside `SidebarTree.swift` (`fileprivate(set)` on parent, body, children, panes, focus) | `AppState` (opaque), `ContainerScope`, `CustomIcon`, `NamedIcon`, `SpaceIcon`, `SplitOrientation`, `AutoArchiveThreshold`, `ArchiveReason`, `LoadFailure`, `SectionKind`, `ItemKind`, `Placement.canPlace` | (domain only, plus the public types) |
-| Domain: commands | `BrkDomain/Command.swift`, `Effect.swift` | contract (W1) | nothing | `Input`, `Command` and its ten area enums, `ItemRef`, `SpaceRef`, `Step`, `Destination`, `SystemEvent`, `WindowEvent`, `Effect`, `WindowEffect`, `AppEffect`, `MenuModel` | BrkLayout, BrkUIKit, BrkSidebar, BrkOverlays, BrkContent, BrkControl, BrkApp, BrkE2E |
-| Domain: reducer | `BrkDomain/Reduce.swift`, `Rules/*.swift` (`Keys.swift` holds `routeKey`), `KeyRouting.swift`, `Normalize.swift`, `Codec.swift` | W1 | handler dispatch, the overlay rule, per-area rules, invariants, key priorities and press-twice memory, the file format | `reduce`, `Context`, `Transition`, `KeyInput`, `resolveTypedInput`, `isAllowedURL`, `displayURL`, `StateCodec`, `RestoreSeed`, `Restored`, `RestoreOutcome`, `CodecError` | BrkApp (only `AppStore.swift` calls `reduce`) |
-| Domain: projection | `BrkDomain/Snapshot.swift` (contract), `Project.swift` | W1 | how rows, titles, statuses, focus, pages, candidates and archive buckets are derived | `project`, `ProjectionContext`, `AppSnapshot`, `WindowSnapshot` and its parts, `FocusTarget`, `ArchiveBucket`, `archiveBucket` | BrkLayout, BrkTheme, every UI target, BrkControl, BrkApp, BrkE2E |
-| Shortcut table | `BrkDomain/Actions.swift` | contract (W1; W2 may add rows) | nothing | `ActionID`, `ActionSpec`, `KeyBinding`, `KeyPriority`, `MenuName`, `CommandBarListing`, `KeyMap` | BrkApp (menu), BrkDomain (routing, command bar), BrkOverlays (titles) |
+| Base vocabulary | `BrkBase/` | contract (W1 maintains) | nothing | `ID<Tag>` with `ItemID`, `SpaceID`, `WindowID`, `ArchiveID`, `ProfileID`, `DownloadID`, `LinkRouteID`, `SearchEngineID`, `AIRequestID`; `Instant`; `Modifiers`, `Key` (a `CaseIterable` enum by key code), `KeyChord`, `KeyPress`, `KeyStage`, `PressID`; the page vocabulary `PageID`, `PageSpec` (with `BrowsingContext`), `PageAction`, `PageEvent`, `DownloadEvent`, `DownloadDecision`, `OpenDisposition`, `PageFacts`, `PageLogEntry`, `ShutdownOutcome`; `Metric`, `MetricSource`, `MetricGroup`, `Metrics` (the constants table); `Product`, `LaunchOptions` | every module |
+| Domain: model | `BrkDomain/Model.swift`, `SettingsModel.swift`, `SidebarTree.swift` | W1 (`SettingsModel.swift`: F1, with F2/F3/F4 for their types) | every stored field; the hierarchy changes only inside `SidebarTree.swift` (`fileprivate(set)` on parent, body, children, panes, focus) | `AppState` (opaque), `ContainerScope`, `WindowKind`, `CustomIcon`, `NamedIcon`, `SpaceIcon`, `SplitOrientation`, `AutoArchiveThreshold`, `ArchiveReason`, `LoadFailure`, `SectionKind`, `ItemKind`, `Placement.canPlace`; the settings vocabulary `SettingsPane`, `GeneralSettings`, `ProfileSettings`, `LinkSettings`, `LinkRoute`, `LinkDestination`, `MaxSettings`, `AIProviderChoice`, `AIProviderKind`, `AdvancedSettings`, `KeyOverride`, `SearchEngine`, `LibraryPage`, `DownloadState`, `AITask`, `AIOutcome` | (domain only, plus the public types) |
+| Domain: commands | `BrkDomain/Command.swift`, `Effect.swift` | contract (W1) | nothing | `Input`, `Command` and its fifteen area enums (`later(LaterFeature)` for greyed-out rows), `ItemRef`, `SpaceRef`, `Step`, `Destination`, `SystemEvent`, `WindowEvent`, `Effect`, `WindowEffect`, `AppEffect`, `MenuModel`, `ExportDocument`, `ExportEntry`, `ExportFormat` | BrkLayout, BrkUIKit, BrkSidebar, BrkOverlays, BrkLibrary, BrkSettings, BrkContent, BrkControl, BrkApp, BrkE2E |
+| Domain: reducer | `BrkDomain/Reduce.swift`, `Rules/*.swift` (`Keys.swift` holds `routeKey`; wave 2: `Settings.swift` F1, `Profiles.swift` F2, `Windows.swift` and `Peek.swift` F3, `Library.swift` F5, `Assist.swift` later wave), `KeyRouting.swift`, `Normalize.swift`, `Codec.swift` | W1 | handler dispatch, the overlay rule, per-area rules, invariants, key priorities and press-twice memory, the file format and the export format | `reduce`, `Context`, `Transition`, `KeyInput`, `resolveTypedInput`, `isAllowedURL`, `displayURL`, `StateCodec`, `RestoreSeed`, `Restored`, `RestoreOutcome`, `CodecError`, `ExportCodec` | BrkApp (only `AppStore.swift` calls `reduce`) |
+| Domain: projection | `BrkDomain/Snapshot.swift` (contract), `Project.swift` | W1 (`projectSettings` F1; the `library` and `peek` overlay arms F5 and F3) | how rows, titles, statuses, focus, pages, candidates and archive buckets are derived | `project`, `ProjectionContext`, `AppSnapshot` (with `settings`), `WindowSnapshot` and its parts (`kind`, `scratch`, `profileDialog`, `LibrarySnapshot`, `PeekSnapshot`, `ProfileBadge`), `SettingsSnapshot` and its rows, `FocusTarget`, `ArchiveBucket`, `archiveBucket` | BrkLayout, BrkTheme, every UI target, BrkControl, BrkApp, BrkE2E |
+| Shortcut table | `BrkDomain/Actions.swift` | contract (W1; F4 edits listings and triggers) | nothing | `ActionID` (every Arc menu row), `ActionSpec` (`row`, `submenu`, `hidden`, `alternate`), `KeyBinding`, `KeyPriority`, `MenuName`, `Submenu`, `CommandBarListing`, `KeyBindingState`, `KeyBindingSource`, `ResolvedBinding`, `KeyBindings.resolve`, `KeyMap(overrides:)` | BrkApp (menu), BrkDomain (routing, command bar, settings), BrkOverlays (titles), BrkSettings |
 | Theme model | `BrkDomain/Theme/SpaceTheme.swift` | types contract (W1); `resolveTheme` body W5 | luminance math, gradient derivation | `RGBA`, `Texture`, `ColorWheel`, `AppearanceChoice`, `Scheme`, `SpaceTheme`, `ThemePresets`, `SidebarTokens`, `ResolvedTheme`, `resolveTheme`, `relativeLuminance` | domain, BrkTheme, BrkUIKit |
-| Layout | `BrkLayout/WindowFrames.swift` (contract), `WindowLayout.swift`, `SidebarLayout.swift`, `SidebarResizeDrag.swift` | W1 | all geometry | `WindowFrames`, `CardFrame`, `SidebarFrames`, `RowFrame`, `ViewID`, `WindowLayout.compute`, `ContentLayout`, `CommandBarLayout`, `WindowPlacement.fit`, `SidebarLayout`, `FavoritesGrid`, `TablistLayout`, `DockLayout`, `SidebarResizeDrag` | every UI target, BrkControl, BrkApp, BrkE2E |
-| Engine interface | `BrkEngine/WebEngine.swift` (contract), `PageLedger.swift` (contract), `PressCorrelator.swift`, `StubEngine.swift` | W2 | for the stub: placeholder views and synchronous load events | `WebEngine`, `WebEngineDelegate`, `PageSurfaceView`, `PageLedger`, `PressCorrelator`, `StubEngine` | BrkCEF, BrkApp, `Brk` (main) |
+| Layout | `BrkLayout/WindowFrames.swift` (contract), `WindowLayout.swift` (`LibraryLayout`: F5), `SidebarLayout.swift`, `SidebarResizeDrag.swift` | W1 | all geometry | `WindowFrames` (with `library`, `peek`), `LibraryFrames`, `CardFrame`, `SidebarFrames`, `RowFrame`, `ViewID`, `WindowLayout.compute`, `ContentLayout`, `CommandBarLayout`, `LibraryLayout`, `WindowPlacement.fit`, `SidebarLayout`, `FavoritesGrid`, `TablistLayout`, `DockLayout`, `SidebarResizeDrag` | every UI target, BrkControl, BrkApp, BrkE2E |
+| Engine interface | `BrkEngine/WebEngine.swift` (contract), `PageLedger.swift` (contract), `PressCorrelator.swift`, `StubEngine.swift` | W2 | for the stub: placeholder views and synchronous load events | `WebEngine` (plus `forget(_ context:)`), `WebEngineDelegate` (plus `decideDownload`, `shouldNavigateTo`), `PageSurfaceView`, `PageLedger`, `PressCorrelator`, `StubEngine` | BrkCEF, BrkApp, `Brk` (main) |
 | CEF engine | `BrkCEF/` | W2 | CEF init, the Chrome-runtime browser and host window per page, moving Chromium's views into the card, the key guard on host windows, CEF key translation, page close bookkeeping, shutdown order | `CEFEngine` (`bootstrap`, `Configuration`, the `WebEngine` methods) | `Brk` (main) only |
 | Theme renderer | `BrkTheme/` | W5 | Metal pipeline, shader source, procedural textures, display-link crossfade (today: a gradient layer with a Core Animation crossfade) | `ThemeBackgroundView` (`show(_:animated:)`), `TexturePixels` | BrkContent |
 | View contract | `BrkUIKit/Rendering.swift` | contract (W1 maintains) | nothing | `Dispatch`, `identify(_:)`, `Palette`, `Copy` | BrkSidebar, BrkOverlays, BrkContent, BrkApp |
 | Sidebar views | `BrkSidebar/` | W3 | all AppKit drawing of the column, hover, drag preview, scroll, the rename field | `SidebarView` (`init(dispatch:)`, `render`, `focusRenameField`, `focusList`) | BrkContent |
-| Overlay views | `BrkOverlays/` | W4 | the command bar's query, highlight and rows; the archive page; the space dialog form (SwiftUI in `NSHostingView`) | `CommandBarView` (`render`, `focusInput`), `ArchivePageView` (`render`), `SpaceDialogHost` (`render`, `focusForm`), `Suggest`, `Suggestion` | BrkContent, BrkOverlaysTests |
-| Content and root | `BrkContent/` | W2 | the card views, dividers, how the root composes the targets above | `WindowRootView` (`render(_:frames:surface:)`, `focus(_:)`), `ContentAreaView` | BrkApp |
-| Control protocol | `BrkControl/` | W6 | JSON line framing, the client socket | `ControlRequest`, `ControlOp`, `ControlReply`, `ControlResult`, `NativeFacts`, `ActualView`, `AppWindowFact`, `Hello`, `ControlWire`, `ControlClient` | BrkApp, BrkE2E |
-| App | `BrkApp/` | W2 (`Control/`: W6) | the state value, dispatch queue, effect execution, window controllers, traffic-light placement, menu building, key adapters, debounced atomic writes, quarantine, the clocks, launch and quit order, the control server | `Lifecycle`, `Quit`, `AppStore`, `WindowController`, `BrowserWindow`, `StateFile`, `Clock`, `SystemClock`, `OffsetClock`, `ClockError` | `Brk` (main) |
+| Overlay views | `BrkOverlays/` | W4 / F4 (`ArchivePageView.swift`: F5, moving to BrkLibrary) | the command bar's query, highlight and rows; the archive page; the space dialog form (SwiftUI in `NSHostingView`) | `CommandBarView` (`render`, `focusInput`), `ArchivePageView` (`render`), `SpaceDialogHost` (`render`, `focusForm`), `Suggest`, `Suggestion` | BrkContent, BrkOverlaysTests |
+| Library | `BrkLibrary/` | F5 | the page strip and the pages (downloads, history, media, easels and notes, boosts, spaces; the archive page joins from BrkOverlays) | `LibraryView` (`init(dispatch:)`, `render`), `LibraryCopy` | BrkContent, BrkLibraryTests |
+| Settings window | `BrkSettings/` | F1 (F2, F3, F4 write their panes' contents) | the panes as SwiftUI in an `NSHostingView`; every control dispatches a `.settings(...)` command and keeps no state | `SettingsHost` (`init(dispatch:)`, `render(_:)`), `SettingsCopy` | BrkApp, BrkSettingsTests |
+| Content and root | `BrkContent/` | W2 (`PeekCardView`: F3) | the card views, dividers, the Peek card, how the root composes the targets above | `WindowRootView` (`render(_:frames:surface:)`, `focus(_:)`), `ContentAreaView`, `PeekCardView` | BrkApp |
+| Control protocol | `BrkControl/` | W6 | JSON line framing, the client socket | `ControlRequest`, `ControlOp` (plus `settings`, `openSettings`, `externalURL`), `ControlReply`, `ControlResult`, `NativeFacts`, `ActualView`, `AppWindowFact`, `Hello`, `ControlWire`, `ControlClient` | BrkApp, BrkE2E |
+| App | `BrkApp/` | W2 (`Control/`: W6; `SettingsWindowController.swift`: F1; `ExternalLinks.swift` and the Little Arc host: F3; `MainMenu.swift`, `SuggestionFetcher.swift`: F4; `AIProvider.swift`, `ShareExport.swift`: wave 2 seams) | the state value, dispatch queue, effect execution, window controllers, the settings window, traffic-light placement, menu building, key adapters, download and navigation decisions, debounced atomic writes, quarantine, the clocks, launch and quit order, the control server, the AI tool runner, the export writer, the suggestion fetch, the GetURL handler | `Lifecycle`, `Quit`, `AppStore`, `WindowController`, `BrowserWindow`, `StateFile`, `Clock`, `SystemClock`, `OffsetClock`, `ClockError`, `AIProvider`, `AIProviderSeam`, `CLIProvider`, `AIPrompt`, `ShareExport`, `SuggestionFetcher`, `GetURLHandler`, `DefaultBrowser` | `Brk` (main) |
 | Composition root | `Brk/main.swift` | W2 | which engine runs; CEF before `NSApp` | the executable | (none) |
 | E2E runner | `BrkE2E/` | W6 | process launch, fixture server, polling, report writing | `brk-e2e` executable | (none) |
 | Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product, the `cef` command plugin, `cef-helper` | BrkCEF only |
@@ -44,6 +46,8 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 
 Totals at this skeleton: 258 XCTest cases, 63 run and pass, 195 `XCTSkip` stubs naming their owner; 51 first-party `fatalError("not implemented")` bodies (BrkDomain 16, BrkE2E 18, BrkCEF 7, BrkTheme 4, BrkApp 2, BrkControl 2, BrkLayout 1, BrkOverlays 1); 24 e2e scenarios registered as `todo`. Everything on the launch-and-idle path (restore, normalize, project, layout, first-pass renders, the stub engine, the store, lifecycle, menu, quit) runs: `BRK_ENGINE=stub swift run Brk` opens the shell.
 
+Wave 2 workers (F1 to F5), their paths, the contracts they write against, their tests and scenarios, and the dependency order are in `wave2.md`. At the wave-2 contract commit: 378 tests run, 30 `XCTSkip` stubs naming their owner, no `fatalError("not implemented")` left (every reducer arm has a total first-pass body), 24 scenarios PASS and W2-1 to W2-12 registered `pending` their owner.
+
 What "first pass" means: the integrator wrote the simplest body that makes the shell open and left `TODO(Wn)` notes where the owner's spec goes further (projection candidates, the space-title counter, favorites drag and drop, rename field, suggestion rows, archive groups, the Metal renderer). Owners replace those bodies; they do not treat them as frozen.
 
 ## Dependency rules
@@ -57,19 +61,21 @@ BrkTheme    -> BrkDomain, BrkBase
 BrkUIKit    -> BrkLayout, BrkDomain, BrkBase
 BrkSidebar  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkOverlays -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
-BrkContent  -> BrkSidebar, BrkOverlays, BrkTheme, BrkUIKit, BrkLayout, BrkDomain, BrkBase
+BrkLibrary  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
+BrkSettings -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
+BrkContent  -> BrkSidebar, BrkOverlays, BrkLibrary, BrkTheme, BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkControl  -> BrkLayout, BrkDomain, BrkBase
-BrkApp      -> BrkContent, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
+BrkApp      -> BrkContent, BrkSettings, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
 Brk (main)  -> BrkApp, BrkCEF, BrkEngine, BrkBase
 BrkE2E      -> BrkControl, BrkLayout, BrkDomain, BrkBase
 ```
 
-Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, the UI targets, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkOverlays; `os` only in BrkEngine, BrkCEF and BrkApp); the exact lists are in `ImportRulesTests.allowedImports`.
+Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, the UI targets, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkOverlays and BrkSettings; UniformTypeIdentifiers only in BrkApp; `os` only in BrkEngine, BrkCEF and BrkApp); the exact lists are in `ImportRulesTests.allowedImports`.
 
 1. `BrkBase`, `BrkDomain`, `BrkLayout` and `BrkControl` import only Foundation and CoreGraphics besides each other: no AppKit, so the reducer, the projection, the layout and the wire format are testable headless and cannot touch views.
 2. `BrkEngine` imports only BrkBase and AppKit: it knows pages, not tabs.
 3. Only `BrkCEF` imports `CefKit`, `CCef` or `CCefAppKit`, and only `Brk/main.swift` imports `BrkCEF`. BrkApp holds `any WebEngine`.
-4. `BrkSidebar` and `BrkOverlays` never import each other, and never import `BrkApp`, `BrkEngine` or `BrkCEF`; `BrkApp` composes views only through `BrkContent` and reaches a view's keyboard focus only through `WindowRootView.focus(_:)`. Views get page surfaces as plain `NSView`s through a closure and send intent through `Dispatch`.
+4. `BrkSidebar`, `BrkOverlays` and `BrkLibrary` never import each other, and never import `BrkApp`, `BrkEngine` or `BrkCEF`; `BrkApp` composes the browser window's views only through `BrkContent` and reaches a view's keyboard focus only through `WindowRootView.focus(_:)`. The settings window is its own NSWindow, so `BrkApp` hosts `BrkSettings` directly (`SettingsWindowController`). Views get page surfaces as plain `NSView`s through a closure and send intent through `Dispatch`.
 5. `BrkE2E` never imports `BrkApp` or any UI target: the runner sees the app only through the control socket.
 6. Single writers: only `BrkApp/AppStore.swift` calls `reduce`; only `BrkApp/Clock.swift` reads the real time (`Date()`); only `BrkDomain/SidebarTree.swift` changes hierarchy, kinds, panes or split focus (enforced by `fileprivate(set)` and a fileprivate `Item.init`, not by a scan); only `BrkCEF` adds child windows or replaces methods; only `BrkDomain/Codec.swift`, `BrkControl` and the runner create JSON coders; no `cornerRadius = <number>` outside `BrkBase/Metrics.swift`; only `BrkApp/Lifecycle.swift` and `AppStore.swift` ask for a quit, through `Quit.request()`.
 
@@ -94,7 +100,12 @@ How each rule is enforced:
 | Keys and press identity | `Sources/BrkBase/Keys.swift` | `Key`, `KeyChord`, `KeyPress`, `KeyStage`, `PressID` and its correlation rule |
 | View contract | `Sources/BrkUIKit/Rendering.swift` plus the public surfaces of `WindowRootView`, `SidebarView`, `CommandBarView`, `ArchivePageView`, `SpaceDialogHost` | `Dispatch`, `identify`, `Palette`, `Copy`; render and focus entry points |
 | Container seam | `ContainerScope`, `Session.scratch`, `AppState.tree/withTree/locate`, `WindowDoc.container` in `Sources/BrkDomain/Model.swift`; `SectionRole.scratch` in `SidebarTree.swift` | how ephemeral windows' items enter the reducer and the projection |
-| Codec envelope | `StoredFile`, `StoredFileV1`, `CodecError`, `StateCodec.migrate`, `StoredDocV1.init(_:)`/`validated(ctx:)` in `Sources/BrkDomain/Codec.swift` | the versioned file and its conversions |
+| Codec envelope | `StoredFile`, `StoredFileV1` (decode only), `StoredFileV2`, `CodecError`, `StateCodec.migrate`, `StoredDocV2.init(_:)`/`init(v1:)`/`validated(ctx:)` in `Sources/BrkDomain/Codec.swift` | the versioned file and its conversions; v2 is current |
+| Settings | `SettingsCommand` and its per-pane enums in `Command.swift`; `SettingsSnapshot` in `Snapshot.swift`; the setting structs in `SettingsModel.swift` | every settings field, how it is changed and how it is read (window and socket) |
+| Library and Peek | `LibraryCommand`, `PeekCommand`, `LibrarySnapshot`, `PeekSnapshot`, `LibraryFrames`, `WindowFrames.peek` | the Library host, its pages, the Peek card |
+| Windows | `WindowKind`, `WindowCommand`, `WindowSnapshot.kind/scratch`, `SystemEvent.externalURL`, `LinkRoute`/`LinkDestination` | standard, incognito and Little Arc windows; links from other apps |
+| Profiles | `ProfileCommand`, `ProfileDialogSnapshot`, `ProfileBadge`, `BrowsingContext`, `WebEngine.forget` | profiles, their contexts, the dialogs |
+| Export and AI seams | `ExportDocument`, `ExportCodec`, `Effect.export`; `AITask`, `AIOutcome`, `Effect.ai`, `SystemEvent.aiResult`, `AIProvider` (BrkApp) | share-by-file; the local command-line AI tools |
 
 ## Control socket contract
 
@@ -134,6 +145,11 @@ Every op maps to a capability the executor can reach through BrkApp's allowed im
 | `flush` | writes state.json now (drains pending debounced writes) | `ok` |
 | `settle(timeout)` | waits until no page is loading and the main queue is idle | `ok` or `failed` |
 | `quit` | `Quit.request()`: the ordered quit; replies before the process exits. Exit status 0 after a clean shutdown, 3 (`Lifecycle.shutdownTimedOutStatus`) when browsers did not close in time, with `shutdown-incomplete.log` in the data directory | `ok` |
+| `settings` | `AppSnapshot.settings`: every saved value, the resolved shortcut table, the open pane | `settings(SettingsSnapshot)` |
+| `openSettings(pane)` | dispatches `.settings(.openPane(pane))` on the key window, as Preferences… does | `dispatched(rev)` |
+| `externalURL(url)` | dispatches `.system(.externalURL(url))`, as the GetURL Apple Event does | `dispatched(rev)` |
+
+`BRK_SUGGEST_URL=<url>` (wave 2) replaces every search engine's suggest endpoint so the fixture server answers W2-10; `click(view:)` finds the view in any app window (the settings window included).
 
 Restart is the runner's job: `quit`, wait for exit, launch again with the same `BRK_DATA_DIR`.
 
@@ -173,6 +189,9 @@ Scenarios 0 to 9 are the Electron plan's done predicate. R2 to R10 are `electron
 | N2 | Focus round trip, host windows never key | `press("cmd+l")`, `type("x")`, `press("escape")`, `type("y")` | the bar input had focus and the page did not get "x"; after Esc the page title shows `key:y:seen`; no host window in `appWindows` was ever key |
 | N3 | Pixel layout equals the constants | launch, `native()` | traffic lights at x 13 with 14 pt size centred 24 from the top; `url-pill` height 36, 8 from each sidebar side, radius 12; favorites tiles at least 47 with gap 8; rows 40 tall on a 41 pitch; `dock` height 50; every computed frame equals its `actual` frame |
 | N4 | Clean quit with many pages | three tabs, a split, `quit` | exit status 0 within 10 s (3 would mean the engine timed out), no new crash report, `pageLog` has `closed` for every created page |
+| W2-1 to W2-12 | Wave 2 (settings, profiles, incognito, new window, Little Arc, Peek, external links, type travel, remapping, suggestions, downloads, history) | see `wave2.md` | registered `pending` their owner (SKIPPED without a launch) until the owner makes them pass |
+
+Scenario 7 asserts the archive page at `computed.library.page` since wave 2 (the Library host fills the content area with a page strip on top); R2 opens `.library(.open(.archive))`.
 
 ## Accessibility identifiers
 
@@ -189,6 +208,10 @@ Set by the UI targets from `BrkLayout.ViewID`, never typed by hand. The runner a
 | `.commandBar`, `.commandBarInput`, `.commandBarResult(i)` | `command-bar`, `command-bar-input`, `command-bar-result-<i>` |
 | `.archive`, `.archiveGroup(bucket)`, `.archiveEntry(id)`, `.archiveRestore(id)`, `.archiveClear`, `.archiveThreshold` | `archive`, `archive-group-<bucket>`, `archive-entry-<id>`, `archive-restore-<id>`, `archive-clear`, `archive-threshold` |
 | `.spaceDialog`, `.themeBackground` | `space-dialog`, `theme-background` |
+| `.library`, `.libraryPage(page)`, `.libraryClose`, `.downloadEntry(id)`, `.historyEntry(i)` | `library`, `library-page-<page>`, `library-close`, `download-<id>`, `history-<i>` |
+| `.peek`, `.peekClose`, `.peekOpenIn`, `.littleHint` | `peek`, `peek-close`, `peek-open-in`, `little-hint` |
+| `.profileBadge`, `.profileDialog` | `profile-badge`, `profile-dialog` |
+| `.settingsWindow`, `.settingsPane(pane)`, `.settingsField(name)` | `settings`, `settings-pane-<pane>`, `settings-field-<name>` |
 
 ## Build layout
 
