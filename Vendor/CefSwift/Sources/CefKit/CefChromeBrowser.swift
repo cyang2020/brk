@@ -23,6 +23,10 @@ public struct CefChromeBrowserOptions {
     /// Background color applied before the first paint.
     public var backgroundColor: NSColor?
 
+    /// The request context (cookies, cache, storage) the browser runs in; `nil` is the runtime's global context.
+    /// Brk wave-2 addition: per-profile and incognito contexts for Chrome-runtime browsers.
+    public var profile: CefProfile?
+
     public init() {}
 }
 
@@ -141,8 +145,9 @@ public final class CefChromeBrowser {
         chrome.viewDelegate = viewDelegate
         // cef_browser_view_create consumes our +1 client and +1 delegate refs
         // and returns a +1 browser view that `chrome` owns.
+        let requestContext = options.profile?.makeRequestContext()
         chrome.rawBrowserView = CefStringUtil.withCefString(url.absoluteString) { cefURL in
-            cef_browser_view_create(clientPointer, cefURL, &settings, nil, nil, viewDelegate.makeStruct())
+            cef_browser_view_create(clientPointer, cefURL, &settings, nil, requestContext, viewDelegate.makeStruct())
         }
 
         let windowDelegate = ChromeWindowDelegate(chrome: chrome, options: options)
