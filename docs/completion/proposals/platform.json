@@ -1,0 +1,1639 @@
+{
+  "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+  "method": "Read-only current-source and pinned CEF/CefKit audit, code-matched parent evidence reuse (520 SHA-256 matches), and bounded reducer/header probes. No CEF runtime rerun, no feature implementation, no architecture selection. See docs/completion/grounding/platform.md and verify/completion/platform-grounding/probe-results.json. All partial/missing behavior remains in the full completion scope.",
+  "features": [
+    {
+      "id": "A036",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Back, forward, reload, stop",
+      "arc_evidence": "rows 96 to 98, 157 to 160",
+      "description": "Page navigation with Arc's key priorities",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Back, forward, normal/forced reload and stop target the focused loaded page, including split and Peek, honor shortcut priorities, and preserve focus after navigation.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only N1",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Repeated Cmd+R reaches the real page and preserves focus; not all navigation actions.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/N1.log",
+          "scenario": "N1"
+        }
+      ],
+      "remaining": [
+        "Verify real back/forward/stop and forced cache-bypass behavior, split/Peek targets and private contexts; existing native evidence covers only part of the row."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkApp/KeyRouter.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift"
+      ],
+      "current_behavior": "PageCommand becomes Effect.page and CefBrowser navigation methods. N1 checks repeated reload."
+    },
+    {
+      "id": "A037",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Key priorities and press twice",
+      "arc_evidence": "anatomy-m 1.14, 2.2",
+      "description": "App wins, page wins, or page first then app on a second press",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "App priority, page priority and page-first/second-press behavior work for every implemented chord and user override, with preventDefault, repeat, native editors, distinct windows and exactly-once dispatch.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "scope": "KeyRoutingSpecTests and PressCorrelatorTests cover routing state, identity and Downloads priority.",
+          "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only N1",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Specific app/page/press-twice chords and repeat reload.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/N1.log",
+          "scenario": "N1"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-9",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Remapped shortcut routes and the old chord reaches the page.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-9.log",
+          "scenario": "W2-9"
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/platform-grounding/run-probes.py",
+          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "scope": "Default Cmd+Shift+J is consumed beforePage and opens Brk Downloads.",
+          "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
+        }
+      ],
+      "remaining": [
+        "Model the raw pre-key out-parameter intent and measure Chrome accelerator ordering before changing contracts.",
+        "Preserve default Downloads Cmd+Shift+J app priority and explicit page-priority override.",
+        "Extend real tests to affected Chrome commands, swallowed/unswallowed events, native fields, remaps and duplicate paths."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/KeyRouting.swift",
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Keys.swift",
+        "Sources/BrkEngine/PressCorrelator.swift",
+        "Sources/BrkCEF/ChromePage.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_keyboard_handler_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/views/cef_browser_view_capi.h"
+      ],
+      "current_behavior": "Pure KeyRouting, per-window memory and PressCorrelator are connected. CefKit ignores is_keyboard_shortcut and has no Chrome-command handler."
+    },
+    {
+      "id": "A038",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Zoom",
+      "arc_evidence": "rows 105 to 110",
+      "description": "Zoom in, out, reset with Chrome's zoom steps",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Zoom in/out/reset follows Chrome preset percentages and limits, displays the effective value, and affects the focused page with correct key priority.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [],
+      "remaining": [
+        "Implement exact preset/limit behavior and effective-value readback.",
+        "Verify actual rendered scale and focus across normal, split and Peek pages."
+      ],
+      "implementation": [
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift"
+      ],
+      "current_behavior": "CEFEngine changes zoomLevel by 0.5 and resets to zero; source TODO acknowledges missing presets."
+    },
+    {
+      "id": "A039",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Find in page",
+      "arc_evidence": "rows 53 to 58",
+      "description": "Find bar, next, previous, replace, jump to selection",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "A native find bar supports new search, next/previous, match count and active result, close/clear, Find and Replace in supported editable contexts, Use Selection to Find and Jump to Selection, with correct focus and stale-result handling.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Wrap findNext, stop_finding and on_find_result with operation/document identity and count/ordinal/final state.",
+        "Build find UI and keyboard/focus behavior.",
+        "Specify and implement replace, selection retrieval and jump; do not silently omit these smaller actions.",
+        "Test navigation, close, profile replacement, split/Peek, multiple frames and out-of-order results."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkEngine/WebEngine.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_find_handler_capi.h"
+      ],
+      "current_behavior": "All six actions are .later(.findInPage). CefBrowser.find exists but always uses findNext=0; no find handler or Brk UI."
+    },
+    {
+      "id": "A040",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Copy URL",
+      "arc_evidence": "rows 45 to 47",
+      "description": "Copy the URL, as Markdown, or as a quote",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Copy URL, URL as Markdown and URL as Quote write the expected clipboard text for the focused tab or Peek without navigation or profile leakage.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Verify native pasteboard contents from menu and keyboard for all three formats, including Peek and titles requiring Markdown escaping.",
+        "Confirm quote semantics against authenticated reference; current quote is title plus URL, not selected page text."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkApp/AppStore.swift"
+      ],
+      "current_behavior": "Rules/Tabs formats three strings and AppStore writes NSPasteboard."
+    },
+    {
+      "id": "A041",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Developer tools",
+      "arc_evidence": "rows 113 to 120",
+      "description": "View source, DevTools, inspect, console, network, developer mode",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "View Source, DevTools toggle, element inspection, console, network, JavaScript from Apple Events setting and developer mode execute their named behavior on the correct page and close safely.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Wrap source/inspect and explicit panel selection or supported commands; resolve Apple Events and developer-mode behavior.",
+        "Verify real auxiliary windows, input, page association and shutdown after reparenting."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkCEF/HostWindows.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_frame_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_browser_capi.h"
+      ],
+      "current_behavior": "Only DevTools toggle is connected; the other listed developer actions are disabled."
+    },
+    {
+      "id": "A042",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Clear cookies or cache and refresh",
+      "arc_evidence": "rows 99, 100",
+      "description": "Reload after clearing site data",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Clear Cookies and Refresh and Clear Cache and Refresh delete the explicitly scoped data in the originating profile, wait for completion, and reload only the still-valid target page.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [],
+      "remaining": [
+        "Define host/domain/origin scope, including domain cookies; URL-only cookie deletion is narrower than all site cookies.",
+        "Wrap asynchronous completion, context identity and errors; cache clear is context-wide in the raw API.",
+        "Prove another profile and unrelated site data survive, including navigation/close races."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefProfile.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_cookie_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_context_capi.h"
+      ],
+      "current_behavior": "Both actions are disabled; forced reload only bypasses cache. Raw cookie-manager deletion and request-context HTTP-cache clearing are available."
+    },
+    {
+      "id": "A043",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Website appearance",
+      "arc_evidence": "rows 86 to 90",
+      "description": "Websites, Easels and Notes use automatic, light or dark",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Automatic/light/dark appearance affects actual websites, Easels and Notes, follows the system in automatic mode, and persists with defined profile scope.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Connect an engine appearance policy and verify CSS prefers-color-scheme changes on real pages.",
+        "Determine whether request-context set_chrome_color_scheme supplies the required website behavior; test rather than assume.",
+        "Apply equivalent behavior to Easels/Notes when implemented."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_context_capi.h"
+      ],
+      "current_behavior": "webAppearance is stored and exposed in menus/settings; no page consumer applies it."
+    },
+    {
+      "id": "A044",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Save, print, share, cast",
+      "arc_evidence": "rows 33, 38, 39, 111",
+      "description": "Standard page actions",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Save Page As creates a usable offline page in supported formats; Print and PDF export report completion/cancellation; Share writes a local file; Cast selects and controls a real receiver, with correct page/window/profile ownership.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Implement save-page content rather than confuse link export with saved HTML.",
+        "Wrap PDF callbacks, validate output, and test native print/save dialogs after embedding.",
+        "Connect version-safe Chrome command lookup if used; cef_id_for_command_id_name is not in the current loader symbols.",
+        "Verify local export save panel; its existing test is skipped and write errors are currently swallowed.",
+        "Implement and test Cast routing with a receiver; no evidence exists yet."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkApp/ShareExport.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_browser_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_media_router_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/ccef_symbols.h"
+      ],
+      "current_behavior": "Local Share exports link/title JSON or bookmark HTML. Save/Print/Cast remain disabled. Raw print/PDF/Chrome command and media-router APIs are available."
+    },
+    {
+      "id": "A045",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Full screen and Exit",
+      "arc_evidence": "rows 121, 122",
+      "description": "Ctrl+Cmd+F; Esc leaves the current context",
+      "historical_status": "done",
+      "status": "partial",
+      "acceptance": "Ctrl+Cmd+F enters/leaves native fullscreen; Escape closes the current overlay first and exits page/video or window fullscreen when appropriate, without activating a hidden CEF host.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Connect or explicitly reconcile DOM/video fullscreen with the native window.",
+        "Verify physical key/traffic-light input, fullscreen media, overlay precedence, and focus return."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkCEF/ChromePage.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift"
+      ],
+      "current_behavior": "Native fullscreen and overlay-first exit effects exist. CefKit forwards didChangeFullscreen, but ChromePage does not consume it."
+    },
+    {
+      "id": "A046",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Edit menu",
+      "arc_evidence": "rows 41 to 51, 59 to 84",
+      "description": "Standard editing, spelling, substitutions, transformations, speech, font",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "All standard editing, spelling/grammar, substitutions, transformations, speech and font actions are enabled only when their responder supports them and work in native editors and applicable webpage editing contexts.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Exercise menu clicks and shortcuts in native fields, HTML input, textarea, contenteditable and frames.",
+        "Resolve selector differences such as pasteAsPlainText: vs CefBrowser.pasteAndMatchStyle and unsupported rich editing.",
+        "Implement the missing spelling/substitution/transformation/speech/font behavior; do not count menu topology tests as execution."
+      ],
+      "implementation": [
+        "Sources/BrkApp/MainMenu.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_frame_capi.h"
+      ],
+      "current_behavior": "MainMenu installs AppKit responder selectors. CefBrowser has editing wrappers, but no Brk adapter proves the extended page Edit menu."
+    },
+    {
+      "id": "A047",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "History",
+      "arc_evidence": "row 161",
+      "description": "Cmd+Y shows the full history",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Cmd+Y presents the profile history with search/open/remove behavior and an explicit complete retention/visit model; private visits never appear or persist.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-12",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Cmd+Y displays two real visits inside the Library.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-12.log",
+          "scenario": "W2-12"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Private title/history and download metadata do not persist.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "scenario": "W2-11P"
+        }
+      ],
+      "remaining": [
+        "Resolve full-history semantics vs latest-per-URL cap and implement any missing visit/pagination behavior.",
+        "Keep browsing-data clearing tracked under A095; current History clear must not imply successful site-data deletion.",
+        "Verify search/open/remove and repeated-visit persistence, including private contexts."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Library.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Sources/BrkDomain/Codec.swift",
+        "Sources/BrkBase/Metrics.swift"
+      ],
+      "current_behavior": "Native History lists visits by profile and opens with Cmd+Y. The model stores latest visit per URL and caps at 500."
+    },
+    {
+      "id": "A048",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Downloads",
+      "arc_evidence": "row 171; Library downloads page; Profiles \"Download location\"; `StorableDownloadMetadata`",
+      "description": "Downloads list, location setting, download menu",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Downloads use profile location/ask settings and collision-safe names, show truthful progress and terminal states, open/reveal/remove records, and really cancel transport; ownership survives or explicitly terminates after source close/context change, while private metadata stays ephemeral and quit stays clean.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "scope": "LibrarySpecTests covers saved ledger transitions and profile/private filtering; it explicitly permits cancelled -> finished and does not prove cancellation.",
+          "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Real destination and duplicate-name files plus Downloads shortcut.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11.log",
+          "scenario": "W2-11"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11Q",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Immediate quit after completed download in restored persistent profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11Q.log",
+          "scenario": "W2-11Q"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11A",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Immediate quit during active transfer in restored persistent profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11A.log",
+          "scenario": "W2-11A"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Private file retained without saved history/download records.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "scenario": "W2-11P"
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/platform-grounding/run-probes.py",
+          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "scope": "Reproduces zero cancellation effects, ignored completion after source close, and ignored completion after profile reassignment.",
+          "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
+        }
+      ],
+      "remaining": [
+        "Retain and release cef_download_item_callback_t through a defined owner; implement cancel and preserve interrupted vs cancelled state.",
+        "Freeze originating context/incarnation and avoid live-page event filtering for valid operation updates.",
+        "Probe transfer and callback behavior after browser close and context disposal before selecting lifetime policy.",
+        "Make pending save decisions stale-safe; clean destination reservations and partial files on every terminal/aborted path.",
+        "Keep default Cmd+Shift+J app priority, private-navigation/download tests and active/immediate quit checks."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkEngine/WebEngine.swift",
+        "Sources/BrkCEF/ChromePage.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkApp/KeyRouter.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Library.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefDownloads.swift"
+      ],
+      "current_behavior": "Real download files/Library/location/collision suffixes are verified in part. Cancel only changes the ledger. Events require a live tab and rederive current profile."
+    },
+    {
+      "id": "A049",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Links that open new tabs and popups",
+      "arc_evidence": "anatomy-m 1.10 `browserPopup`; RS spec",
+      "description": "Cmd+click opens a background tab; popups open",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Cmd+click opens a background tab; foreground-modifier opens and popups retain correct disposition, opener/context and requested window behavior, including private and hidden source pages.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only R3",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Cmd+click opens and loads a background tab.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/R3.log",
+          "scenario": "R3"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Option+Cmd private link stays private.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "scenario": "W2-P1"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1C",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Same private modifier path over custom profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P1C.log",
+          "scenario": "W2-P1C"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Hidden private popup remains in owning private window.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P2.log",
+          "scenario": "W2-P2"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2C",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Hidden private popup remains private over custom profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P2C.log",
+          "scenario": "W2-P2C"
+        }
+      ],
+      "remaining": [
+        "Preserve raw disposition/user-gesture/frame/popup identity before adding real popup windows.",
+        "Test empty-URL window.open/document.write and opener-dependent auth flows; current .handled cancels CEF popup creation.",
+        "Preserve hidden-private ownership and Option+Cmd privacy fixes."
+      ],
+      "implementation": [
+        "Sources/BrkCEF/ChromePage.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Peek.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift"
+      ],
+      "current_behavior": "Popups become foreground domain tabs; on_open_urlfrom_tab loses disposition and all such opens become background. Privacy routing is fixed."
+    },
+    {
+      "id": "A050",
+      "section": "Page and browsing (View, Edit and Archive menus)",
+      "feature": "Session restore",
+      "arc_evidence": "Advanced \"When opening Arc, restore windows from previous session\"",
+      "description": "Reopens windows, spaces, tabs; loads lazily",
+      "historical_status": "done",
+      "status": "partial",
+      "acceptance": "Restart restores standard windows/spaces/tabs/geometry lazily when enabled, honors the restore-windows setting when disabled, and never restores private or Little Brk session data.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only 9",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Restart preserves spaces, pinned/today/current tab/sidebar width and loads only current tab.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/9.log",
+          "scenario": "9"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-3",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Incognito tabs and window omitted after restart.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-3.log",
+          "scenario": "W2-3"
+        }
+      ],
+      "remaining": [
+        "Wire the restore setting to the restore path and define startup behavior when off.",
+        "Verify multiple restored standard windows and profile replacement with exact current per-window focus contract."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Codec.swift",
+        "Sources/BrkDomain/Normalize.swift",
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkApp/WindowController.swift"
+      ],
+      "current_behavior": "Codec persists standard windows and global tree; loaded pages are reconstructed lazily. restoreWindowsOnLaunch is stored but never consumed."
+    },
+    {
+      "id": "A051",
+      "section": "Windows",
+      "feature": "Several standard windows",
+      "arc_evidence": "rows 17, 31; anatomy-m 1.8",
+      "description": "New Window, Close Window, all sharing one sidebar",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Several standard windows share one sidebar and support independent active pages, close behavior and native focus; selecting the same logical tab in two windows has a defined and tested result.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-4",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "New standard window, shared rows and independent loaded page focus.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-4.log",
+          "scenario": "W2-4"
+        }
+      ],
+      "remaining": [
+        "Resolve and verify simultaneous selection of one PageID across windows; do not infer duplicate-page presentation from per-window focus requests.",
+        "Verify native close/last-window restart and cross-window page movement with native editors."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkDomain/Rules/Shared.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkApp/WindowController.swift",
+        "Sources/BrkCEF/CEFEngine.swift"
+      ],
+      "current_behavior": "New/close commands and shared sidebar work; engine keeps one NSView per PageID and selection is per-window."
+    },
+    {
+      "id": "A052",
+      "section": "Windows",
+      "feature": "Blank window",
+      "arc_evidence": "row 18",
+      "description": "A window with no sidebar items",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Blank Window opens a native browser window whose sidebar has no inherited items and whose lifetime/persistence/profile behavior is explicit.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Specify and implement its container, UI and restore/close behavior; a normal new window with an empty card still shares sidebar items."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkApp/WindowController.swift"
+      ],
+      "current_behavior": "newBlankWindow is .later(.blankWindow); no blank WindowKind."
+    },
+    {
+      "id": "A053",
+      "section": "Windows",
+      "feature": "Hide, minimize, zoom, bring all to front",
+      "arc_evidence": "rows 10 to 12, 14, 168, 169, 175",
+      "description": "Standard window and app commands",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Hide, Hide Others, Show All, Minimize, Zoom and Bring All to Front affect the intended native app/window and preserve page/native responder focus.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Verify actual native window ordering, minimize/restore and responder recovery from menus and keys on multiple windows; selector existence alone is insufficient."
+      ],
+      "implementation": [
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkApp/MainMenu.swift",
+        "Sources/BrkApp/WindowController.swift"
+      ],
+      "current_behavior": "AppStore invokes app hide/minimize effects; MainMenu uses unhideAllApplications:, performZoom: and arrangeInFront:."
+    },
+    {
+      "id": "A054",
+      "section": "Windows",
+      "feature": "Window placement on restore",
+      "arc_evidence": "anatomy-m 1.8",
+      "description": "A window saved off screen comes back on screen",
+      "historical_status": "done",
+      "status": "verified",
+      "acceptance": "A standard window saved off all displays reopens with at least 100 by 100 points on an active display; fitting preserves valid placement and clamps fallback size to the main visible screen.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "scope": "ArcGeometryTests.testWindowPlacementOffScreen passed: offscreen, second display, 50-point overlap, oversize and default frame cases.",
+          "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only R8",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Saved (5000,4000) window restored after restart; assertion checks >=100x100 active-display overlap. Source hashes match.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/R8.log",
+          "scenario": "R8"
+        }
+      ],
+      "remaining": [],
+      "implementation": [
+        "Sources/BrkLayout/WindowLayout.swift",
+        "Sources/BrkApp/WindowController.swift",
+        "Tests/BrkLayoutTests/ArcGeometryTests.swift",
+        "Sources/BrkE2E/RegressionScenarios.swift"
+      ],
+      "current_behavior": "WindowController.place calls WindowPlacement.fit; exact fit cases and real restart are covered."
+    },
+    {
+      "id": "A055",
+      "section": "Windows",
+      "feature": "Stay on top",
+      "arc_evidence": "anatomy-m 1.8 `WindowState.stayOnTop`",
+      "description": "Keeps a window above others",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "A per-window stay-on-top control changes native stacking level, can be reversed, and has tested restore/fullscreen/multiwindow behavior.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Add state/control and host behavior; ordinary Little Brk NSPanel is explicitly non-floating and is not this feature."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkApp/WindowController.swift",
+        "Sources/BrkApp/LittleWindowController.swift"
+      ],
+      "current_behavior": "No stay-on-top state, command or native level assignment exists."
+    },
+    {
+      "id": "A083",
+      "section": "Little Arc and Peek",
+      "feature": "Little Arc window",
+      "arc_evidence": "row 20; `ARC_LittleBrowser`; anatomy-m 1.10",
+      "description": "A small one-tab floating window",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Little Brk opens a compact one-page panel with working native chrome, focus and the intended floating behavior, without a sidebar or persistent session restore.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-5",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Compact Little Brk size/no-sidebar and Open In to space.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-5.log",
+          "scenario": "W2-5"
+        }
+      ],
+      "remaining": [
+        "Resolve and implement floating behavior against actual reference.",
+        "Verify multiple panel/window activation, links that create more scratch tabs, close/restart and page input."
+      ],
+      "implementation": [
+        "Sources/BrkApp/LittleWindowController.swift",
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "BrowserPanel, hint strip, default size and scratch tab exist; isFloatingPanel is false."
+    },
+    {
+      "id": "A084",
+      "section": "Little Arc and Peek",
+      "feature": "Little Arc \"Open In\" and move to a space",
+      "arc_evidence": "row 137; anatomy-m 2.5 `showLittleArcOpenInMenu`",
+      "description": "Move the page into a space or folder",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Little Brk/Peek Open In moves the page to a selected space or folder, closes the temporary host, and follows an explicit live-state and browsing-context continuity contract.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-5",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Open In promotes URL into a space; does not cover folder or live-state continuity.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-5.log",
+          "scenario": "W2-5"
+        }
+      ],
+      "remaining": [
+        "Add folder destinations and validate allowed container placement.",
+        "Decide and test history/form/download continuity and context changes; current implementation reloads a new browser."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkApp/LittleWindowController.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "OpenInMenu lists spaces/current space only. Domain creates a new tab ID from stored Tab data."
+    },
+    {
+      "id": "A085",
+      "section": "Little Arc and Peek",
+      "feature": "Little Arc entry points",
+      "arc_evidence": "Links pane; anatomy-m 1.10 `LittleBrowserEntryPoint`",
+      "description": "Links from other apps, global hotkey, Opt+Cmd+click, menu bar item",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "External links, global hotkey, Option+Cmd link click and menu-bar entry can open Little Brk, with correct destination profile and private-link protections.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-7",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Injected external URL chooses Little Brk or routed space.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-7.log",
+          "scenario": "W2-7"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Private Option+Cmd link is kept private.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "scenario": "W2-P1"
+        }
+      ],
+      "remaining": [
+        "Implement global shortcut registration and menu-bar entry.",
+        "Verify real external-app delivery and physical modifier clicks; retain private links in private context."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkDomain/Rules/Peek.swift",
+        "Sources/BrkApp/ExternalLinks.swift"
+      ],
+      "current_behavior": "File-menu shortcut, domain externalURL path and Option+Cmd routing exist. No global hotkey or menu-bar item."
+    },
+    {
+      "id": "A086",
+      "section": "Little Arc and Peek",
+      "feature": "Little Arc auto-archive",
+      "arc_evidence": "Links \"Archive Little Arcs after:\"",
+      "description": "Closes idle Little Arc windows",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Little Brk auto-archive respects configured thresholds and never closes a panel that is actively used; expired panels archive/close once and can be restored appropriately.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "scope": "WindowsSpecTests.test_idleLittleArcsAreArchivedAfterTheLinksThreshold checks clock threshold, never, idempotence and archive restore; no active-user test.",
+          "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        }
+      ],
+      "remaining": [
+        "Define idle using actual relevant interaction/activity; protect actively used panels and media/download work.",
+        "Add native active-vs-idle and restart/never threshold checks."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkDomain/Reduce.swift",
+        "Sources/BrkApp/WindowController.swift",
+        "Sources/BrkDomain/SettingsModel.swift"
+      ],
+      "current_behavior": "Tick sweep compares tab lastActiveAt; no native activity/key-window input refreshes it while a panel remains shown."
+    },
+    {
+      "id": "A087",
+      "section": "Little Arc and Peek",
+      "feature": "Peek",
+      "arc_evidence": "anatomy-v 3 \"Peek\"; anatomy-m 1.7 `modalV2`",
+      "description": "Opens a link in a panel over the page; Shift+click; links from Pinned and Favorites",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Shift-click and qualifying external-site links from Pinned/Favorites open a Peek; all browsing actions target it, dismissal cleans it up, and private/Little Brk contexts stay correctly scoped.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-6",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Shift+click creates Peek and Esc closes its page.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-6.log",
+          "scenario": "W2-6"
+        }
+      ],
+      "remaining": [
+        "Preserve main-frame metadata and prove iframe navigations do not spuriously open Peek.",
+        "Test Pinned/Favorites same-site/cross-site behavior beyond the suffix heuristic, browsing/selection/copy and Open In.",
+        "Retain private navigation invariants."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Peek.swift",
+        "Sources/BrkDomain/Rules/Queries.swift",
+        "Sources/BrkApp/KeyRouter.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift"
+      ],
+      "current_behavior": "Peek overlay/scratch page and Shift-click path work. Cross-site navigation heuristic exists, but wrapper discards frame identity."
+    },
+    {
+      "id": "A088",
+      "section": "Little Arc and Peek",
+      "feature": "Peek Email",
+      "arc_evidence": "row 135",
+      "description": "Shift+Cmd+E peeks Gmail",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Shift+Cmd+E opens the intended Gmail Peek in the correct profile with normal Peek controls and no account-system integration.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Define target selection when multiple mail accounts/profiles exist, implement the action, and verify loaded destination and dismissal."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Peek.swift"
+      ],
+      "current_behavior": "peekEmail is a hidden .later(.peekEmail) action."
+    },
+    {
+      "id": "A093",
+      "section": "Profiles and incognito",
+      "feature": "Profiles",
+      "arc_evidence": "rows 27, 127; `ARC_ProfilesUI`; anatomy-m 1.12",
+      "description": "Separate browser data per space; own Favorites, search engine, archive time, extensions",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Spaces can use independent profiles with isolated cookies/storage, Favorites, search, archive/download preferences and extensions; reassignment/deletion cannot leak old context callbacks.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-2",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Custom profile cookies isolated from default with profile UI.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-2.log",
+          "scenario": "W2-2"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-1-edit",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Native profile settings editing persists, not proof every setting is consumed.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-1-edit.log",
+          "scenario": "W2-1-edit"
+        }
+      ],
+      "remaining": [
+        "Complete profile-scoped extension management, and test storage classes beyond cookies.",
+        "Fix active download ownership on reassignment/deletion and separate clear-data from deletion.",
+        "Keep initialization readiness and incarnation/focus protections."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Profiles.swift",
+        "Sources/BrkDomain/Rules/Library.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkCEF/CEFProfiles.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefProfile.swift"
+      ],
+      "current_behavior": "Profile dialogs/Favorites/settings and persistent CEF contexts work; custom-profile cookie separation is tested. Extension behavior is absent."
+    },
+    {
+      "id": "A094",
+      "section": "Profiles and incognito",
+      "feature": "Incognito window",
+      "arc_evidence": "row 19",
+      "description": "A window with no saved data",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Incognito uses off-the-record contexts; no private tabs/history/archive/download metadata persist, private links/popups retain context, last-window disposal resets the private session, and explicitly downloaded files may remain.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "static"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-3",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Incognito window/tab data omitted after restart.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-3.log",
+          "scenario": "W2-3"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Private download file remains with no saved metadata.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "scenario": "W2-11P"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Private Option+Cmd cookie/metadata isolation.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "scenario": "W2-P1"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1C",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Same path over custom profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P1C.log",
+          "scenario": "W2-P1C"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Hidden private popup owner retained.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P2.log",
+          "scenario": "W2-P2"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2C",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Same popup path over custom profile.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-P2C.log",
+          "scenario": "W2-P2C"
+        }
+      ],
+      "remaining": [
+        "Verify close-last-private/reopen without quitting resets cookies and other storage.",
+        "Define active download behavior when the private context expires.",
+        "Audit diagnostic logs and all relevant disk storage before claiming broadly no saved data; ChromePage currently logs titles/download paths as public."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Library.swift",
+        "Sources/BrkDomain/Codec.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkCEF/ChromePage.swift"
+      ],
+      "current_behavior": "Private scratch trees/context and metadata omission work with preserved native privacy fixes."
+    },
+    {
+      "id": "A095",
+      "section": "Profiles and incognito",
+      "feature": "Privacy and clear browsing data",
+      "arc_evidence": "Profiles pane \"Privacy and Security\", \"Clear Browsing Data\"",
+      "description": "Per-profile privacy settings",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Per-profile privacy controls and confirmed Clear Browsing Data remove only the requested data classes/scope, report completion/errors, work for default/custom profiles, and do not delete a live profile as a side effect.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/platform-grounding/run-probes.py",
+          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "scope": "Confirms clearHistory emits .forgetBrowsingData(.profile(.default)); no native data-clearing claim.",
+          "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
+        }
+      ],
+      "remaining": [
+        "Separate clear-data from unused-profile deletion/private-context expiry.",
+        "Implement cookie/cache/storage/history selection with scoped completion and restart proof.",
+        "Test two profiles and unrelated origins; protect active operations and retain profile records/settings.",
+        "Provide actual privacy controls rather than a History button with misleading scope."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Library.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkCEF/CEFEngine.swift",
+        "Sources/BrkCEF/CEFProfiles.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_context_capi.h"
+      ],
+      "current_behavior": "History clear removes Brk visits and calls forgetBrowsingData. Default forget is a no-op; custom forget marks the full profile directory for next-start deletion."
+    },
+    {
+      "id": "A096",
+      "section": "Extensions",
+      "feature": "Install and manage",
+      "arc_evidence": "rows 165, 166",
+      "description": "Chrome Web Store and `chrome://extensions`",
+      "historical_status": "partial",
+      "status": "missing",
+      "acceptance": "Users can install/manage/remove extensions through a supported store/local flow and management UI in Brk, with per-profile persistence, permissions, error reporting and correct private policy.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Probe a harmless unpacked extension and chrome://extensions on pinned Chrome runtime after embedding.",
+        "Verify installation confirmation, reload/restart, enable/disable/remove and profile/private isolation.",
+        "No old load_extension/get_extensions API exists in these pinned headers; choose supported contracts after experiments."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/CommandBar.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefChromeBrowser.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_context_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/cef_command_ids.h"
+      ],
+      "current_behavior": "Add/Manage menu actions disabled. chrome:// URL navigation is allowed; no extension install/manage behavior is verified."
+    },
+    {
+      "id": "A097",
+      "section": "Extensions",
+      "feature": "Extension buttons and picker",
+      "arc_evidence": "`ARC_ContentPanel` `ExtensionButton`; anatomy-m 2.5 `openExtensionsPicker`",
+      "description": "Toolbar buttons and a pinned extensions picker",
+      "historical_status": "planned",
+      "status": "missing",
+      "acceptance": "Installed extension actions appear in a native picker/toolbar with per-profile pinning and usable popup/permission UI whose windows close safely.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Prove a supported extension-action enumeration/invocation path and popup ownership.",
+        "Implement native picker/pinning UI, profile/private scope and keyboard/teardown tests.",
+        "get_chrome_toolbar only supplies a CEF view when toolbar is enabled; it does not prove a native Brk extension API."
+      ],
+      "implementation": [
+        "Sources/BrkCEF/ChromePage.swift",
+        "Sources/BrkCEF/HostWindows.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefChromeBrowser.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/views/cef_browser_view_capi.h"
+      ],
+      "current_behavior": "No extension registry/buttons/pins/actions. Chrome toolbar is disabled and its host is click-through/never-key."
+    },
+    {
+      "id": "A098",
+      "section": "Extensions",
+      "feature": "Extension shortcuts",
+      "arc_evidence": "Shortcuts pane \"Extension Shortcuts\"",
+      "description": "Keys for extension commands",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Extension command shortcuts can be inspected and configured per profile and coexist with Brk/page priorities, with duplicate and reserved-key handling.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Probe chrome://extensions/shortcuts and actual installed command dispatch in hidden-toolbar host.",
+        "Define extension vs page vs Brk priority and editable/native-window behavior without changing Downloads default."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/KeyRouting.swift",
+        "Sources/BrkSettings/Panes/ShortcutsPane.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift"
+      ],
+      "current_behavior": "Brk KeyMap covers ActionID only; no extension-command inventory or shortcut editor integration."
+    },
+    {
+      "id": "A102",
+      "section": "Captures and media",
+      "feature": "Capture",
+      "arc_evidence": "rows 35 to 37; `ARC_Capture`; Shortcuts \"Hold Command and Shift to start a Capture.\"",
+      "description": "Area, full page and portrait screenshots",
+      "historical_status": "planned",
+      "status": "missing",
+      "acceptance": "Area, full-page and portrait screenshots capture correct webpage pixels/scale, allow intended selection/export, and handle long/sticky/GPU content and private data with explicit ownership.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Probe a supported capture source on the actual embedded Chrome path; do not reuse OSR assumptions.",
+        "Implement area selection, full-page stitching or tested protocol capture, portrait framing and export/storage.",
+        "Verify output dimensions/pixels, cancellation, navigation races and private retention."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkApp/Control/ControlExecutor.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefRenderHandler.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_browser_capi.h"
+      ],
+      "current_behavior": "Three capture actions disabled. Control socket window screenshot and vendor OSR paint APIs are not product capture."
+    },
+    {
+      "id": "A103",
+      "section": "Captures and media",
+      "feature": "Media page",
+      "arc_evidence": "row 173",
+      "description": "Library page of captures",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Media Library lists real captures with preview/open/export/remove behavior and defined disk/profile/private retention.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Add capture storage/model/projection and a real Media page with lifecycle/error handling.",
+        "Verify actual capture artifacts are indexed, survive intended restart, and are removed/exported correctly."
+      ],
+      "implementation": [
+        "Sources/BrkLibrary/LibraryView.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Actions.swift"
+      ],
+      "current_behavior": "View Media opens LaterPageView with an empty placeholder; there is no capture ledger."
+    },
+    {
+      "id": "A104",
+      "section": "Captures and media",
+      "feature": "Picture in picture",
+      "arc_evidence": "`ARC_PictureInPicture`; Advanced \"Enable Picture in Picture when you leave a video tab\"",
+      "description": "Video and Meet PiP, auto PiP on leaving the tab",
+      "historical_status": "planned",
+      "status": "missing",
+      "acceptance": "Video and Meet PiP work with explicit/automatic entry when leaving a video tab, respect user activation/settings/site rules, and close or reattach correctly on navigation/tab/window/profile changes.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Probe video-element and document/Meet PiP separately on pinned embedded host.",
+        "Add playback ownership/state and host lifecycle; test private contexts, focus and active downloads/quit.",
+        "Define activation failure and multiple-player behavior; do not treat a command name as support."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkCEF/ChromePage.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/cef_command_ids.h"
+      ],
+      "current_behavior": "autoPictureInPicture setting has no consumer. Raw context command ID exists; no Brk PiP flow."
+    },
+    {
+      "id": "A105",
+      "section": "Captures and media",
+      "feature": "Media controls",
+      "arc_evidence": "`ARC_MediaControlsFeature` (`MiniPlayerFeature`)",
+      "description": "Play and pause controls for a playing tab",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Playing tabs expose truthful play/pause controls and media state, with correct frame/player targeting, background behavior and lifecycle.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Determine a supported playback/status path and multi-frame/player ownership.",
+        "Implement controls and verify real media response, autoplay/activation failure, tab closure and private behavior."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkCEF/ChromePage.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_audio_handler_capi.h"
+      ],
+      "current_behavior": "No Brk player state/control UI. CefBrowser.isAudioMuted exists but is unused and does not pause media."
+    },
+    {
+      "id": "A106",
+      "section": "Captures and media",
+      "feature": "Sound effects",
+      "arc_evidence": "`ARC_SoundEffects`; Advanced \"Play Arc sound effects\"",
+      "description": "Capture and event sounds",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Capture and other intended events play the defined Brk sounds when enabled and are silent when disabled, without blocking UI.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Define event-to-sound mapping and assets, connect event execution and setting consumer, verify audible and disabled behavior."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkApp/AppStore.swift"
+      ],
+      "current_behavior": "soundEffects is persisted but unused; NSSound.beep is only a generic application effect."
+    },
+    {
+      "id": "A107",
+      "section": "Site control center and permissions",
+      "feature": "Site control center",
+      "arc_evidence": "`ARC_SiteControlCenter`",
+      "description": "Popover with site settings, Boosts, capture, copy URL, share",
+      "historical_status": "planned",
+      "status": "missing",
+      "acceptance": "A site control popover shows the active origin/profile, effective permissions/settings and actions for Boosts, capture, copy URL and local file export with current readback.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Design effective per-origin settings state and asynchronous update/error reporting.",
+        "Connect popover to existing copy/export and future permission/Boost/capture work; verify navigation and private scope."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_context_capi.h"
+      ],
+      "current_behavior": "No site-control model/popover. Copy/export exist as separate actions."
+    },
+    {
+      "id": "A108",
+      "section": "Site control center and permissions",
+      "feature": "Site permissions",
+      "arc_evidence": "Info.plist permission prompts (anatomy-v 3)",
+      "description": "Camera, microphone, location, notifications prompts",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Native site prompts for camera, microphone, location and notifications show the correct origin/capability, support allow/deny/dismiss and settings readback, respect OS permissions, and cannot resolve stale prompts for a new page/profile.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Wrap retained asynchronous callbacks with prompt/frame/origin/mask/context/incarnation identity and one-time resolution/release.",
+        "Implement native prompt UI, persistence policy and cancellation on navigation/close/profile change.",
+        "Validate built app/helper permission metadata, signing and actual OS allow/deny behavior.",
+        "Treat desktop capture separately from device access; default Chrome permission bubbles are not a verified fallback."
+      ],
+      "implementation": [
+        "Vendor/CefSwift/Sources/CefKit/CefPermission.swift",
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
+        "Vendor/CefSwift/Sources/CefKit/CefBrowserDelegate.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_permission_handler_capi.h",
+        "Sources/BrkCEF/ChromePage.swift"
+      ],
+      "current_behavior": "CefKit sync permission wrapper defaults to deny; ChromePage does not override it. Frame, prompt ID and dismissal are not forwarded; desktop media is collapsed to camera/mic."
+    },
+    {
+      "id": "A109",
+      "section": "Site control center and permissions",
+      "feature": "Ad blocker",
+      "arc_evidence": "`ARC_AdBlocking`, `ARCClients_BlockListClient` (EasyList, EasyPrivacy); General pane",
+      "description": "Built-in ad, tracker and cookie-banner blocking",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Built-in ad/tracker blocking and cookie-banner handling use defined rules, profile/site exceptions and updates, block relevant requests/cosmetic content and preserve normal navigation.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Implement request filtering at correct callback/thread boundary, rule loading/update/error behavior and site exceptions.",
+        "Implement cosmetic/cookie-banner behavior separately from network blocking.",
+        "Verify main/subframe/subresource/redirect cases and profile/private isolation with deterministic fixtures."
+      ],
+      "implementation": [
+        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_request_handler_capi.h",
+        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_resource_request_handler_capi.h"
+      ],
+      "current_behavior": "No blocker or rules lifecycle; BrowserClient leaves get_resource_request_handler unset."
+    },
+    {
+      "id": "A110",
+      "section": "Site control center and permissions",
+      "feature": "Per-site behavior rules",
+      "arc_evidence": "`ARC_WebContentBehaviorConfigurationClient`",
+      "description": "Keep-alive list, PiP rules, tab suspension block list",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Per-site keep-alive, PiP and suspension-exclusion rules have explicit matching/profile/private scope and affect real scheduling/media behavior without interrupting protected operations.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [],
+      "remaining": [
+        "Define and implement policy rules plus actual consumers; existing loaded-tab set is not suspension.",
+        "Verify active media/download exemptions, navigation/profile change, persistence and private rules."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkCEF/CEFEngine.swift"
+      ],
+      "current_behavior": "No rule model, editor, tab-suspension scheduler or PiP policy consumer."
+    },
+    {
+      "id": "A111",
+      "section": "Air Traffic Control and link routing",
+      "feature": "Air Traffic Control",
+      "arc_evidence": "Links pane; anatomy-v 3 \"Air Traffic Control\"; `StorableLinkRouting.json`",
+      "description": "Routes send matching links to a chosen space or Little Arc",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Ordered Air Traffic Control rules route matching external hosts to selected space or Little Brk, support edit/reorder/delete/default behavior and follow true most-recent standard-window context.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-7",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Injected externalURL follows explicit host route then Little Brk default.",
+          "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
+          "log": "verify/swift/focus-parent/native/logs/W2-7.log",
+          "scenario": "W2-7"
+        }
+      ],
+      "remaining": [
+        "Connect actual window recency if required by Most Recent Space behavior.",
+        "Verify editor/reorder/invalid destination persistence and actual external-app events, not only injected externalURL.",
+        "Keep scope to host pattern semantics until richer path rules are specified."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkSettings/Panes/LinksRoutesEditor.swift",
+        "Sources/BrkApp/ExternalLinks.swift"
+      ],
+      "current_behavior": "Host glob rules/editor and first-match destination routing exist. Most recent uses shown-tab lastActiveAt, not actual native window activation."
+    },
+    {
+      "id": "A112",
+      "section": "Air Traffic Control and link routing",
+      "feature": "Default browser and links from other apps",
+      "arc_evidence": "row 5; General \"is not your default web browser\"",
+      "description": "Becomes the default browser and handles incoming links",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Brk can become the default http/https browser after OS confirmation, reflects actual registration status, and receives/routes real URLs from other applications on cold and warm launch.",
+      "owner": "platform-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "scope": "WindowsSpecTests checks emitted registration effect and idempotent http/https plist declarations, not OS registration.",
+          "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        }
+      ],
+      "remaining": [
+        "Verify Launch Services/user confirmation and real external application delivery on this app bundle.",
+        "Wire accurate current default status and error reporting; test cold-launch URL ordering.",
+        "W2-7 injects the control protocol input and does not prove the OS boundary."
+      ],
+      "implementation": [
+        "Sources/BrkApp/ExternalLinks.swift",
+        "Sources/BrkDomain/Rules/Windows.swift",
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "scripts/declare-url-types.sh",
+        "scripts/build.sh"
+      ],
+      "current_behavior": "Bundle scheme declaration, NSWorkspace registration and GetURL handler exist. isDefault is not reflected in SettingsSnapshot."
+    }
+  ]
+}
