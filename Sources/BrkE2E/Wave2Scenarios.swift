@@ -32,6 +32,10 @@ enum Wave2Scenarios {
         Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
         Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
         Scenario("W2-11P", "incognito downloads keep their files and leave no saved download or history records", cefOnly: "private downloads", LibraryScenarios.privacy),
+        Scenario("W2-P1", "Option+Cmd links retain private cookies and leave no persistent metadata", cefOnly: "native private link", PrivateNavigationScenarios.optionLink),
+        Scenario("W2-P1C", "Option+Cmd links remain private over a custom profile", cefOnly: "native private link", PrivateNavigationScenarios.optionLinkInProfile),
+        Scenario("W2-P2", "a hidden private page's popup stays in its own private window", cefOnly: "native private popup", PrivateNavigationScenarios.hiddenPopup),
+        Scenario("W2-P2C", "a hidden private popup retains isolation over a custom profile", cefOnly: "native private popup", PrivateNavigationScenarios.hiddenPopupInProfile),
     ]
 
     /// W2-1 (F1): `openSettings(.links)` shows the settings window; `settings` reports the pane; a click on the

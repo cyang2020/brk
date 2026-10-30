@@ -170,14 +170,22 @@ extension Work {
     private mutating func openRequested(_ url: URL, _ disposition: OpenDisposition, from opener: ItemID, _ tab: Tab) {
         guard isAllowedURL(url) else { return }
         if url.isFileURL, tab.url?.isFileURL != true { return }
+        guard let scope = state.locate(opener) else { return }
         let space = state.role(of: opener)?.space
-        let windows = state.doc.windows.keys.sorted()
-        guard let window = windows.first(where: { state.shownItem(in: $0).map(state.panes(of:))?.contains(opener) == true })
-            ?? windows.first(where: { state.doc.windows[$0]?.space == space })
-            ?? windows.first,
+        let window: WindowID?
+        if case .window(let owner) = scope {
+            // Scratch pages belong to this window even while another tab is shown. Visibility must never
+            // choose a different browsing context for a private popup or background-tab request.
+            window = owner
+        } else {
+            let windows = state.doc.windows.keys.sorted().filter { state.doc.windows[$0]?.kind == .standard }
+            window = windows.first(where: { state.shownItem(in: $0).map(state.panes(of:))?.contains(opener) == true })
+                ?? windows.first(where: { state.doc.windows[$0]?.space == space }) ?? windows.first
+        }
+        guard let window,
             let target = space ?? state.doc.windows[window]?.space else { return }
         // Shift+click, Opt+Cmd+click and Pinned/Favorites links to other sites open as a Peek or a Little Arc per the
-        // Links settings (Rules/Peek.swift). TODO(F3): Arc's `LittleBrowserEntryPoint.internalLink`.
+        // Links settings (Rules/Peek.swift). Private requests stay in their window's own container.
         switch specialOpen(for: url, from: opener, in: window) {
         case .peek?:
             peek(.open(url), in: window)

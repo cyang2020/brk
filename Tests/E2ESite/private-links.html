@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Private opener</title>
+<style>html,body{margin:0;width:100%;height:100%;font:16px -apple-system}a,button{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border:0;background:white}</style>
+</head><body>
+<a id="next" target="_blank">Open private destination</a>
+<button id="arm" hidden>Arm private popup</button>
+<script>
+const popup = new URLSearchParams(location.search).has('popup');
+const link = document.querySelector('#next');
+link.href = 'cookie.html?' + (popup ? 'secret-background-link' : 'secret-option-link') + '#set';
+const arm = document.querySelector('#arm');
+arm.style.display = popup ? 'flex' : 'none';
+link.style.display = popup ? 'none' : 'flex';
+arm.onclick = () => { document.title = 'Popup armed'; };
+window.firePrivatePopup = () => { window.open(link.href, '_blank'); document.title = 'Popup requested'; };
+</script></body></html>

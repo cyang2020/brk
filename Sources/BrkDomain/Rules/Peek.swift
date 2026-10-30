@@ -42,7 +42,9 @@ extension Work {
     func specialOpen(for url: URL, from opener: ItemID, in window: WindowID) -> LinkDestinationKind? {
         let links = state.doc.settings.links
         let held = state.session.windows[window]?.heldModifiers ?? []
-        if links.optionCommandClickLittleArc, held.contains(.option), held.contains(.command) { return .littleArc }
+        // Little Arc uses a persistent profile. The modifier must not move private navigation into it.
+        if state.doc.windows[window]?.kind != .incognito,
+           links.optionCommandClickLittleArc, held.contains(.option), held.contains(.command) { return .littleArc }
         if links.shiftClickPeek, held.contains(.shift), state.doc.windows[window]?.kind == .standard { return .peek }
         return nil
     }

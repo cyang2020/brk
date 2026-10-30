@@ -7,6 +7,24 @@ import XCTest
 
 @MainActor
 final class ControlInputRegressionTests: XCTestCase {
+    func testWindowlessControlOperationsFollowTheLastExplicitBrowserTarget() async throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .window(.newIncognito)))
+        let executor = ControlExecutor(store: h.store, engine: h.engine, clock: nil)
+        let windows = h.store.snapshot.windows.keys.sorted()
+        defer { for id in windows { h.store.windowController(id)?.window.orderOut(nil) } }
+        XCTAssertEqual(windows.count, 2)
+        for id in windows {
+            guard case .dispatched = await executor.run(.dispatch(window: id, command: .commandBar(.open(.newTab)))) else {
+                return XCTFail("targeted dispatch failed")
+            }
+            NSApp.keyWindow?.resignKey()
+            XCTAssertEqual(h.store.windowController(nil)?.id, id)
+        }
+    }
+
     func testClickAndTypingReachTheEditorInAnInactiveWindow() throws {
         _ = NSApplication.shared
         let previousMenu = NSApp.mainMenu

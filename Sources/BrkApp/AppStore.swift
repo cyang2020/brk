@@ -106,7 +106,8 @@ public final class AppStore {
 
     public func windowController(_ id: WindowID?) -> WindowController? {
         if let id { return windows[id] }
-        return windows.values.first { $0.window.isKeyWindow } ?? windows.values.first
+        return windows.values.first { $0.window.isKeyWindow }
+            ?? windows.values.first { $0.window === inputWindow } ?? windows.values.first
     }
 
     // MARK: Private
