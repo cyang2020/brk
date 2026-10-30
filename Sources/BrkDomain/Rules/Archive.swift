@@ -5,13 +5,20 @@ import Foundation
 
 extension Work {
     mutating func archive(_ command: ArchiveCommand, in window: WindowID) {
-        // TODO(W1):
-        // .open: overlay = .archive (in the content card); idempotent (same openID when already open).
-        // .restore(id): back to its source section if the space still exists, else top of the dispatching window's
-        //   current Today; reuse the tab id unless taken; lastActiveAt = now (not swept again at once); focus it.
-        // .restoreLast: newest .manual/.clearToday entry first, else newest; empty archive -> no-op.
-        // .clear: empty the archive.
-        fatalError("not implemented")
+        switch command {
+        case .open:
+            // In the content card; idempotent (the same openID while it is already open).
+            if case .archive? = state.session.windows[window]?.overlay { return }
+            openOverlay({ .archive(openID: $0) }, in: window)
+        case .restore(let id):
+            if let tab = restoreEntry(id, in: window) { focus(tab, in: window) }
+        case .restoreLast:
+            // Cmd+Shift+T brings back what the user closed or cleared, not what the sweep archived after it.
+            let entry = state.doc.archive.first { $0.reason == .manual || $0.reason == .clearToday } ?? state.doc.archive.first
+            if let entry, let tab = restoreEntry(entry.id, in: window) { focus(tab, in: window) }
+        case .clear:
+            if !state.doc.archive.isEmpty { state.doc.archive = [] }
+        }
     }
 
     mutating func settings(_ command: SettingsCommand, in window: WindowID) {
@@ -20,41 +27,67 @@ extension Work {
         }
     }
 
-    /// `SystemEvent.clockTick`. Archives (reason .auto) Today tabs idle longer than the threshold, never a tab on
-    /// screen in any window, never Pinned or Favorites, never an empty pane (no URL). Pending Ctrl+Tab cycles are
-    /// committed first so a tab just left is stamped (regression finding 5). Idempotent: a second tick at the same
-    /// `now` is a no-op.
+    /// `SystemEvent.clockTick`. Archives (reason .auto) every Today item, a tab or a split as one unit, that is not
+    /// on screen in any window and whose `lastActiveAt` (a split: its most recent pane) is at least the threshold
+    /// old. Never Pinned or Favorites. Empty panes inside a swept split are removed without an archive entry
+    /// (`archiveTabs`). Pending Ctrl+Tab cycles were committed first by `observe`, so a tab just left is stamped
+    /// (regression finding 5). Idempotent: a second tick at the same `now` is a no-op.
     mutating func sweepAutoArchive() {
-        for window in state.doc.windows.keys { commitCycle(in: window) }
         guard let threshold = state.doc.settings.autoArchive.interval else { return }
         let onScreen = state.onScreenTabs()
         var victims: [ItemID] = []
         for space in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
-            for tab in state.doc.tree.tabs(under: space.todayRoot) where !onScreen.contains(tab) {
-                guard case .tab(let t)? = state.doc.tree[tab]?.body, t.url != nil else { continue }
-                if ctx.now.since(t.lastActiveAt) >= threshold { victims.append(tab) }
+            for unit in state.doc.tree[space.todayRoot]?.children ?? [] {
+                guard !state.panes(of: unit).contains(where: onScreen.contains) else { continue }
+                if ctx.now.since(state.lastActiveOf(unit)) >= threshold { victims.append(unit) }
             }
         }
         archiveTabs(victims, reason: .auto)
     }
 
-    /// Moves tabs into the archive (newest first, capped by normalize), removing them from the tree and from
-    /// `loaded`/`live`. A folder or split id archives every tab inside it. Empty panes (no URL) are removed without
-    /// an archive entry.
-    mutating func archiveTabs(_ tabs: [ItemID], reason: ArchiveReason) {
-        for id in tabs {
-            guard let role = state.doc.tree.role(of: id), state.doc.tree[id]?.kind != .section else { continue }
-            let removed = state.doc.tree.removeSubtree(id)
-            for (tabID, tab) in removed.reversed() {
-                state.session.loaded.remove(tabID)
-                state.session.live[tabID] = nil
+    /// The single archiving primitive. Tabs, splits and folders in `ids` are flattened to their tabs, which are
+    /// snapshotted into the archive with their source space and section (one call's tabs in sidebar order, ahead of
+    /// older entries) and removed from the tree, `loaded` and `live`. Section roots and unknown ids are skipped.
+    /// Empty panes (no URL) are removed without an entry: there is nothing to restore. Normalize applies the cap.
+    mutating func archiveTabs(_ ids: [ItemID], reason: ArchiveReason) {
+        var batch: [ArchivedTab] = []
+        for id in ids {
+            guard let role = state.role(of: id), state.locate(id).flatMap({ state.tree($0)?[id]?.kind }) != .section else { continue }
+            for (tabID, tab) in removeItem(id) {
+                unload(tabID)
                 guard tab.url != nil else { continue }
-                state.doc.archive.insert(
-                    ArchivedTab(id: ArchiveID(ctx.newID()), tabID: tabID, tab: tab, archivedAt: ctx.now, reason: reason,
-                                fromSpace: role.space, fromSection: role.kind),
-                    at: 0
-                )
+                batch.append(ArchivedTab(id: ArchiveID(ctx.newID()), tabID: tabID, tab: tab, archivedAt: ctx.now, reason: reason,
+                                         fromSpace: role.space, fromSection: role.kind))
             }
         }
+        if !batch.isEmpty { state.doc.archive.insert(contentsOf: batch, at: 0) }
+    }
+
+    /// Puts an archived tab back: its space's section when that space still exists (end of Pinned, top of Today),
+    /// the end of Favorites for a Favorites tab, else the top of Today of the dispatching window's current space.
+    /// Reuses the tab id unless it is taken. `lastActiveAt = now`, so a restored tab is not swept again at once.
+    /// Removes the entry. Nil (nothing changes) for an unknown entry or when the tree refuses the insert.
+    mutating func restoreEntry(_ id: ArchiveID, in window: WindowID) -> ItemID? {
+        guard let index = state.doc.archive.firstIndex(where: { $0.id == id }) else { return nil }
+        let entry = state.doc.archive[index]
+        let current = state.doc.windows[window].flatMap { state.doc.spaces[$0.space] }
+        let source = entry.fromSpace.flatMap { state.doc.spaces[$0] }
+        let position: TreePosition
+        switch (entry.fromSection, source) {
+        case (.favorites, _):
+            guard let root = current.flatMap(state.favoritesRoot(for:)) ?? state.doc.favorites[.default] else { return nil }
+            position = .into(parent: root, index: Int.max)
+        case (.pinned, let space?): position = .into(parent: space.pinnedRoot, index: Int.max)
+        case (.today, let space?): position = .into(parent: space.todayRoot, index: 0)
+        case (.pinned, nil), (.today, nil), (.scratch, _):
+            guard let space = current else { return nil }
+            position = .into(parent: space.todayRoot, index: 0)
+        }
+        let tabID = state.locate(entry.tabID) == nil ? entry.tabID : ItemID(ctx.newID())
+        var tab = entry.tab
+        tab.lastActiveAt = ctx.now
+        do { try state.doc.tree.insert(tabID, .tab(tab), at: position, createdAt: ctx.now) } catch { return nil }
+        state.doc.archive.remove(at: index)
+        return tabID
     }
 }

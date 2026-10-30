@@ -6,45 +6,100 @@ import Foundation
 extension Work {
     mutating func tabs(_ command: TabCommand, in window: WindowID) {
         switch command {
-        case .focus(let tab):
-            // TODO(W1): unknown id -> no-op; already the focused pane -> no-op (same state, rev unchanged).
-            // Switch the window to the tab's space if needed; activeBySpace[space] = the tab, or its split if it is a
-            // pane (and focusPane); stamp lastActiveAt on tabs entering and leaving the screen; load it.
-            _ = tab
+        case .focus(let item):
+            // A tab or a split; a pane shows its split with that pane focused. Unknown id or already focused: no-op.
+            focus(item, in: window)
         case .step(let step):
-            // TODO(W1): next/previous stop in sidebarOrder(favorites, pinned, today) of the current space, no wrap;
-            // a split is one stop.
-            _ = step
+            // Next or previous stop in the space's sidebar order, no wrap; a split is one stop. Nothing shown: Down
+            // goes to the first stop, Up to the last.
+            guard let space = state.doc.windows[window]?.space else { return }
+            let stops = state.sidebarStops(space)
+            guard !stops.isEmpty else { return }
+            let at = state.shownItem(in: window).flatMap { stops.firstIndex(of: $0) }
+            let index: Int
+            switch (at, step) {
+            case (nil, .next): index = 0
+            case (nil, .previous): index = stops.count - 1
+            case (let i?, .next): index = min(i + 1, stops.count - 1)
+            case (let i?, .previous): index = max(i - 1, 0)
+            }
+            focus(stops[index], in: window)
         case .cycleRecent(let step):
-            // TODO(W1): first press freezes the order (tabs of the space by lastActiveAt, focused first) and the
-            // on-screen baseline; each press moves the cursor and shows that tab without stamping; one tab -> no-op.
-            _ = step
+            // First press freezes the order (the shown item, then the space's tabs and splits by recency, ties in
+            // sidebar order) and the on-screen baseline; each press moves the cursor and shows that item. Nothing is
+            // stamped until the walk commits (Control released, or any other input). Fewer than two items: no-op.
+            guard let doc = state.doc.windows[window], state.session.windows[window] != nil else { return }
+            var cycle: RecentCycle
+            if let pending = state.session.windows[window]!.recentCycle {
+                cycle = pending
+            } else {
+                let shown = state.shownItem(in: window)
+                let rest = state.unitsOfSpace(doc.space).filter { $0 != shown }.enumerated()
+                    .sorted { a, b in
+                        let (x, y) = (state.lastActiveOf(a.element), state.lastActiveOf(b.element))
+                        return x != y ? x > y : a.offset < b.offset
+                    }
+                    .map(\.element)
+                let order = (shown.map { [$0] } ?? []) + rest
+                guard order.count >= 2 else { return }
+                cycle = RecentCycle(order: order, index: 0, baseline: state.onScreenTabs())
+            }
+            let n = cycle.order.count
+            cycle.index = ((cycle.index + (step == .next ? 1 : -1)) % n + n) % n
+            state.session.windows[window]!.recentCycle = cycle
+            focus(cycle.order[cycle.index], in: window)
         case .close(let ref):
-            // TODO(W1): Today tab -> archiveTabs([tab], .manual), focus the most recent other tab of the space.
-            // Pinned/Favorites -> unload (leave session.loaded), keep the row, move activeBySpace to the most recent
-            // other loaded item or delete the entry (empty card); never refilled by normalize.
-            _ = ref
+            guard let tab = state.resolveTab(ref, in: window) else { return }
+            closeTab(tab)
         case .archive(let ref):
-            // TODO(W1): archiveTabs([tab], .manual) whatever the section (the Pinned row's explicit "Archive Tab").
-            _ = ref
+            // The Pinned row's explicit "Archive Tab": archive whatever the section.
+            guard let tab = state.resolveTab(ref, in: window) else { return }
+            archiveTabs([tab], reason: .manual)
+            replaceShown(tab)
         case .togglePin(let ref):
-            // TODO(W1): Today -> end of Pinned; Pinned or Favorites -> top of Today (tree.move maintains pinnedURL).
-            _ = ref
+            // Today -> end of the space's Pinned; Pinned or Favorites -> top of Today (a Favorites tab goes to the
+            // window's current space). A split pane toggles its whole split. `SidebarTree.move` keeps pinnedURL.
+            guard let tab = state.resolveTab(ref, in: window), let tree = state.tree(of: window) else { return }
+            let unit = tree.splitContaining(tab) ?? tab
+            guard let role = tree.role(of: unit), let space = state.doc.spaces[role.space ?? state.doc.windows[window]!.space] else { return }
+            switch role.kind {
+            case .today: moveItem(unit, to: .into(parent: space.pinnedRoot, index: Int.max))
+            case .pinned, .favorites: moveItem(unit, to: .into(parent: space.todayRoot, index: 0))
+            case .scratch: break
+            }
         case .reset(let ref):
-            // TODO(W1): pinned tab whose url != pinnedURL -> url = pinnedURL, Effect.page(.navigate(pinnedURL)).
-            _ = ref
+            // A Pinned or Favorites tab whose url drifted goes back to the url it was pinned with.
+            guard let tab = state.resolveTab(ref, in: window), let t = state.tab(tab), let pinned = t.pinnedURL, pinned != t.url else { return }
+            if let scope = state.locate(tab) { state.withTree(scope) { $0.updateTab(tab) { $0.url = pinned } } }
+            if state.session.loaded.contains(tab) { effects.append(.page(PageID(tab), .navigate(pinned))) }
         case .clearToday:
-            // TODO(W1): archiveTabs(every Today item of the current space not on screen in any window, .clearToday).
-            break
+            // Every Today item of the current space with no pane on screen in any window.
+            guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
+            let onScreen = state.onScreenTabs()
+            let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.panes(of: $0).contains(where: onScreen.contains) }
+            archiveTabs(idle, reason: .clearToday)
         }
-        fatalError("not implemented")
     }
 
+    /// Browsing actions resolve their target to a loaded tab and become `Effect.page`; an unloaded or unknown
+    /// target emits nothing. Copying needs only a url. None of them change state.
     mutating func pages(_ command: PageCommand, in window: WindowID) {
-        // TODO(W1): resolve ItemRef (.focused = state.focusedPane(in: window)); unloaded or unknown -> no effect.
-        // back/forward/reload/stop/zoom/devtools -> Effect.page(PageID(tab), action); copyURL -> .copyToPasteboard.
-        // These change no state: the transition has effects with `changed == false`.
-        fatalError("not implemented")
+        func emit(_ ref: ItemRef, _ action: PageAction) {
+            guard let tab = state.resolveTab(ref, in: window), state.session.loaded.contains(tab) else { return }
+            effects.append(.page(PageID(tab), action))
+        }
+        switch command {
+        case .back(let ref): emit(ref, .goBack)
+        case .forward(let ref): emit(ref, .goForward)
+        case .reload(let ref, let ignoringCache): emit(ref, .reload(ignoringCache: ignoringCache))
+        case .stop(let ref): emit(ref, .stop)
+        case .zoom(let step): emit(.focused, .zoom(step))
+        case .toggleDevTools: emit(.focused, .toggleDevTools)
+        case .copyURL:
+            if let tab = state.resolveTab(.focused, in: window), let url = state.tab(tab)?.url {
+                effects.append(.copyToPasteboard(url.absoluteString))
+            }
+        }
     }
 
     /// Page reports. Ignored for archived, unknown or unloaded tabs (a late event after close must not resurrect it);
@@ -56,18 +111,16 @@ extension Work {
         var live = state.session.live[tab] ?? LivePage(loading: false, canGoBack: false, canGoForward: false, failure: nil, crashed: false)
         switch event {
         case .committed(let url):
-            state.withTree(scope) { $0.updateTab(tab) { $0.url = url } }
-            pushHistory(url, title: current.title)
+            if current.url != url { state.withTree(scope) { $0.updateTab(tab) { $0.url = url } } }
+            recordVisit(url, title: current.title)
             live.failure = nil
             live.crashed = false
             state.session.live[tab] = live
         case .titleChanged(let title):
-            state.withTree(scope) { $0.updateTab(tab) { $0.title = title } }  // never customTitle
-            if let url = current.url, let i = state.doc.history.firstIndex(where: { $0.url == url }) {
-                state.doc.history[i].title = title
-            }
+            if current.title != title { state.withTree(scope) { $0.updateTab(tab) { $0.title = title } } }  // never customTitle
+            if let first = state.doc.history.first, first.url == current.url, first.title != title { state.doc.history[0].title = title }
         case .faviconChanged(let url):
-            state.withTree(scope) { $0.updateTab(tab) { $0.favicon = url } }
+            if current.favicon != url { state.withTree(scope) { $0.updateTab(tab) { $0.favicon = url } } }
         case .loadingChanged(let isLoading, let back, let forward):
             live.loading = isLoading
             live.canGoBack = back
@@ -86,24 +139,49 @@ extension Work {
             // A pane the user clicked into becomes its split's focused pane; a tab that is not a pane is a no-op.
             state.withTree(scope) { $0.focusPane(tab) }
         case .closedByPage:
-            // TODO(W1): the page closed itself (window.close()); the engine has already dropped it from its live
-            // set. Remove the page demand so reconcile does not recreate it: as .tab(.close(.item(tab))) without
-            // effects (Today: archive .manual and focus the most recent other tab; Pinned/Favorites: unload, keep
-            // the row). Regression finding 7: no blank card behind a current row.
-            fatalError("not implemented")
+            // The page closed itself (window.close()); the engine has already dropped it from its live set. Remove
+            // the page demand so reconcile does not recreate it, exactly as Cmd+W would (Today: archive; Pinned or
+            // Favorites: unload, keep the row), with no effects. Regression finding 7: no blank card behind a row.
+            closeTab(tab)
         case .openRequested(let url, let disposition):
-            // TODO(W1): isAllowedURL(url) else no-op; new tab at the top of the opener window's current space Today;
-            // .foregroundTab/.popup focus it, .backgroundTab keeps focus (but loads it). Unknown opener -> no-op.
-            _ = (url, disposition)
-            fatalError("not implemented")
+            openRequested(url, disposition, from: tab, current)
         case .closed:
             // Bookkeeping only: the engine never sends this for an id that is live again with a newer incarnation.
             state.session.live[tab] = nil
         }
     }
 
-    /// Newest first, one entry per URL, capped by normalize.
-    private mutating func pushHistory(_ url: URL, title: String) {
+    /// target=_blank, window.open, Cmd+click. A new tab at the top of the opener's space's Today (an opener in
+    /// Favorites: the window's current space), in the window that shows the opener, else one on the opener's space,
+    /// else the first window. Foreground and popup focus it; background keeps focus but loads it. Refused: a url
+    /// `isAllowedURL` refuses, and a file url opened from a page that is not a file itself.
+    private mutating func openRequested(_ url: URL, _ disposition: OpenDisposition, from opener: ItemID, _ tab: Tab) {
+        guard isAllowedURL(url) else { return }
+        if url.isFileURL, tab.url?.isFileURL != true { return }
+        let space = state.role(of: opener)?.space
+        let windows = state.doc.windows.keys.sorted()
+        guard let window = windows.first(where: { state.shownItem(in: $0).map(state.panes(of:))?.contains(opener) == true })
+            ?? windows.first(where: { state.doc.windows[$0]?.space == space })
+            ?? windows.first,
+            let target = space ?? state.doc.windows[window]?.space else { return }
+        switch disposition {
+        case .foregroundTab, .popup:
+            commitCycle(in: window)
+            openTab(url, inSpace: target, window: window, focus: true)
+        case .backgroundTab:
+            openTab(url, inSpace: target, window: window, focus: false)
+        }
+    }
+
+    /// Newest first, one entry per URL (capped by normalize). about:blank and URLs a page may not open are not
+    /// history. Committing the newest entry's URL again refreshes it in place.
+    private mutating func recordVisit(_ url: URL, title: String) {
+        guard url.absoluteString != "about:blank", isAllowedURL(url) else { return }
+        if let first = state.doc.history.first, first.url == url {
+            if first.visitedAt != ctx.now { state.doc.history[0].visitedAt = ctx.now }
+            if first.title != title { state.doc.history[0].title = title }
+            return
+        }
         state.doc.history.removeAll { $0.url == url }
         state.doc.history.insert(HistoryEntry(url: url, title: title, visitedAt: ctx.now), at: 0)
     }

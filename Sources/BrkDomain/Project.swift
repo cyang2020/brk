@@ -16,15 +16,16 @@ public struct ProjectionContext: Sendable {
 /// buckets and "now" stay right). Cost is O(items) per call; sidebars hold hundreds of rows, not millions.
 ///
 /// Derivations that live only here (single source of truth):
-/// - row status (current/visible/idle) from the window's shown item and split focus;
+/// - row status (current/visible/idle) from the window's shown item and split focus; a split row is current while
+///   it is what the window shows;
 /// - row titles (custom title, page title, display URL, "New Tab");
-/// - `pages`: every loaded tab of every container -> PageSpec(initialURL: tab.url, profile: space.profile);
-/// - `focus`: overlay input > rename field > dialog > focused pane's page > none;
-/// - `enabledActions`: which table actions apply (e.g. removeSplitView only with a split shown);
-/// - command bar candidates (open tabs focused-first then by recency, history, `ActionID`s with a listing);
-/// - archive groups by bucket (`archiveBucket`).
-///
-/// First pass by the integrator; W1 owns it and completes the TODOs.
+/// - `pages`: every loaded tab of every container -> PageSpec(initialURL: tab.url, profile of its section);
+/// - pane fractions: split widths through `clampFractions` (the same numbers `.split(.resize)` stores);
+/// - `focus`: command bar input > rename field > space dialog > (archive open: none) > focused pane's page > none;
+/// - `enabledActions`: which table actions do something right now (menu validation greys out the others);
+/// - command bar candidates: every tab with a url, the focused one first, then by recency (ties in sidebar order);
+///   the whole history, newest first; the `ActionID`s with a listing, in table order;
+/// - archive groups by bucket (`archiveBucket`), newest first in each; a deleted source space has no title.
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
@@ -54,12 +55,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     // What the window shows.
     let shown = doc.activeBySpace[space.id].flatMap { tree[$0] }
     var panes: [ItemID] = [], focusedPane: ItemID?, splitID: ItemID?, orientation = SplitOrientation.horizontal
-    var widths: [ItemID: Double] = [:]
+    var fractions: [Double] = []
     switch shown?.body {
     case .split(let s)?:
-        panes = s.panes.ids; focusedPane = s.focused; splitID = shown!.id; orientation = s.orientation; widths = s.widths
+        panes = s.panes.ids; focusedPane = s.focused; splitID = shown!.id; orientation = s.orientation
+        fractions = clampFractions(s.panes.ids.map { s.widths[$0] ?? 1 })
     case .tab?:
-        panes = [shown!.id]; focusedPane = shown!.id
+        panes = [shown!.id]; focusedPane = shown!.id; fractions = [1]
     case .folder?, .section?, nil:
         break
     }
@@ -93,9 +95,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }
     }
 
-    let favoritesRoot = state.doc.favorites[space.profile] ?? state.doc.favorites[.default] ?? space.pinnedRoot
-    let favorites = FavoritesSnapshot(root: favoritesRoot, tiles: rows(under: favoritesRoot, .favorites).compactMap {
-        if case .tab(let row) = $0 { return row } else { return nil }
+    let favoritesRoot = state.favoritesRoot(for: space) ?? space.pinnedRoot
+    let favorites = FavoritesSnapshot(root: favoritesRoot, tiles: tree.tabs(under: favoritesRoot).compactMap { tab in
+        guard case .tab(let t)? = tree[tab]?.body else { return nil }
+        return tabRow(tab, t, .favorites)
     })
     let spaceSnapshot = SpaceSnapshot(
         id: space.id, title: state.displayTitle(of: space.id), icon: space.icon,
@@ -105,25 +108,26 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let dock = state.doc.spaceOrder.compactMap { sid -> DockItem? in
         guard let s = state.doc.spaces[sid] else { return nil }
         return DockItem(id: sid, title: state.displayTitle(of: sid), icon: s.icon, active: sid == space.id,
-                        color: s.theme.colors.first ?? RGBA(0.5, 0.5, 0.5))
+                        color: s.theme.colors.first ?? SpaceTheme.default.colors[0])
     }
 
     // Content.
-    let total = panes.reduce(0.0) { $0 + (widths[$1] ?? 1) }
-    let contentPanes = panes.map { p -> Pane in
+    let contentPanes = zip(panes, fractions).map { p, fraction -> Pane in
         let content: PaneContent
         if case .tab(let t)? = tree[p]?.body, t.url != nil, state.session.loaded.contains(p) {
             content = (state.session.live[p]?.crashed ?? false) ? .crashed(PageID(p)) : .page(PageID(p))
         } else {
             content = .blank
         }
-        return Pane(tab: p, content: content, fraction: (widths[p] ?? 1) / max(total, 1), focused: p == focusedPane)
+        return Pane(tab: p, content: content, fraction: fraction, focused: p == focusedPane)
     }
     let content = ContentSnapshot(panes: contentPanes, split: splitID, orientation: orientation)
 
     // URL pill.
     var pill = URLPillSnapshot(text: nil, loading: false, canGoBack: false, canGoForward: false)
+    var focusedTab: Tab?
     if let focusedPane, case .tab(let t)? = tree[focusedPane]?.body {
+        focusedTab = t
         pill.text = t.url.map(displayURL)
         if let live = state.session.live[focusedPane] {
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward
@@ -149,18 +153,14 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         break
     }
 
-    // Focus and actions.
+    // Focus.
     let focus: FocusTarget
     if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
     else if session.dialog != nil { focus = .spaceDialog }
+    else if case .archive? = session.overlay { focus = .none }
     else if let focusedPane, case .page(let page)? = contentPanes.first(where: { $0.tab == focusedPane })?.content { focus = .page(page) }
     else { focus = .none }
-
-    var enabled = Set(ActionID.allCases)
-    if splitID == nil { enabled.remove(.removeSplitView) }
-    if let focusedPane, case .tab(let t)? = tree[focusedPane]?.body, !(t.pinnedURL != nil && t.pinnedURL != t.url) { enabled.remove(.resetTab) }
-    else if focusedPane == nil { enabled.remove(.resetTab) }
 
     let dialog: SpaceDialogSnapshot? = switch session.dialog {
     case .newSpace?: .newSpace
@@ -172,11 +172,42 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         id: id, rev: state.session.rev, now: ctx.now, bounds: doc.bounds, theme: resolveTheme(space.theme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, dock: dock, content: content,
-        renaming: session.renaming, dialog: dialog, overlay: overlay, focus: focus, enabledActions: enabled
+        renaming: session.renaming, dialog: dialog, overlay: overlay, focus: focus,
+        enabledActions: enabledActions(state, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
     )
 }
 
-/// Open tabs for the command bar: the focused one first, then by recency; every space of the container.
+/// The table actions that do something now. Everything is enabled except: actions on the focused tab when nothing
+/// is focused; page actions when the focused tab has no live page; Copy URL without a url; Go Back and Go Forward
+/// when the page cannot; Reset Tab when the url did not drift; Add Split View when nothing (or a Favorites tab, or
+/// a full split) is shown; Close this Split Pane without a split; Next and Previous Space at the ends of the dock;
+/// Restore Last Closed Tab and Clear Archive with an empty archive.
+private func enabledActions(_ state: AppState, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
+    var enabled = Set(ActionID.allCases)
+    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
+    if let (id, tab) = focused {
+        if !state.session.loaded.contains(id) || tab.url == nil { enabled.subtract(pageActions) }
+        if state.session.live[id]?.canGoBack != true { enabled.remove(.goBack) }
+        if state.session.live[id]?.canGoForward != true { enabled.remove(.goForward) }
+        if tab.url == nil { enabled.remove(.copyCurrentURL) }
+        if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
+    } else {
+        enabled.subtract(pageActions + [.archiveTab, .copyCurrentURL, .pinTab, .rename, .resetTab])
+    }
+    switch shown?.body {
+    case .tab?: if tree.role(of: shown!.id)?.kind == .favorites { enabled.remove(.addSplitView) }
+    case .split(let s)?: if s.panes.count >= Metrics.content.maxPanes.value { enabled.remove(.addSplitView) }
+    case .folder?, .section?, nil: enabled.remove(.addSplitView)
+    }
+    if case .split? = shown?.body {} else { enabled.remove(.removeSplitView) }
+    if state.doc.spaceOrder.last == space.id { enabled.remove(.focusNextSpace) }
+    if state.doc.spaceOrder.first == space.id { enabled.remove(.focusPreviousSpace) }
+    if state.doc.archive.isEmpty { enabled.subtract([.reopenLastClosedTab, .clearArchive]) }
+    return enabled
+}
+
+/// Open tabs for the command bar: every tab with a url in the container (every space's Pinned and Today, then
+/// Favorites), the focused one first, then by recency, ties in that order.
 private func switchCandidates(_ state: AppState, tree: SidebarTree, space: Space, focused: ItemID?) -> [SwitchCandidate] {
     var out: [(SwitchCandidate, Instant)] = []
     for s in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
@@ -188,39 +219,50 @@ private func switchCandidates(_ state: AppState, tree: SidebarTree, space: Space
             }
         }
     }
-    if let favorites = state.doc.favorites[space.profile] {
+    if let favorites = state.favoritesRoot(for: space) {
         for tab in tree.tabs(under: favorites) {
             guard case .tab(let t)? = tree[tab]?.body, let url = t.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: nil,
                                         inCurrentSpace: true, isFocused: tab == focused), t.lastActiveAt))
         }
     }
-    return out.sorted { a, b in
-        if a.0.isFocused != b.0.isFocused { return a.0.isFocused }
-        return a.1 > b.1
-    }.map(\.0)
+    return out.enumerated().sorted { a, b in
+        if a.element.0.isFocused != b.element.0.isFocused { return a.element.0.isFocused }
+        if a.element.1 != b.element.1 { return a.element.1 > b.element.1 }
+        return a.offset < b.offset
+    }.map(\.element.0)
 }
 
-/// Archive entries grouped by Arc's buckets, newest first in each, empty buckets left out.
+/// Archive entries grouped by Arc's buckets in bucket order, newest first in each, empty buckets left out.
 private func archiveGroups(_ state: AppState, _ ctx: ProjectionContext) -> [ArchiveGroup] {
-    var byBucket: [ArchiveBucket: [ArchiveEntry]] = [:]
-    for entry in state.doc.archive {
+    var byBucket: [ArchiveBucket: [(ArchiveEntry, Int)]] = [:]
+    for (index, entry) in state.doc.archive.enumerated() {
         let bucket = archiveBucket(of: entry.archivedAt, now: ctx.now, calendar: ctx.calendar)
-        byBucket[bucket, default: []].append(ArchiveEntry(id: entry.id, title: entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
-                                                          archivedAt: entry.archivedAt, reason: entry.reason,
-                                                          fromSpaceTitle: entry.fromSpace.map { state.displayTitle(of: $0) }))
+        let from = entry.fromSpace.flatMap { state.doc.spaces[$0] != nil ? state.displayTitle(of: $0) : nil }
+        byBucket[bucket, default: []].append((ArchiveEntry(id: entry.id, title: entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
+                                                           archivedAt: entry.archivedAt, reason: entry.reason, fromSpaceTitle: from), index))
     }
-    return ArchiveBucket.allCases.compactMap { bucket in byBucket[bucket].map { ArchiveGroup(bucket: bucket, entries: $0) } }
+    return ArchiveBucket.allCases.compactMap { bucket in
+        byBucket[bucket].map { list in
+            ArchiveGroup(bucket: bucket, entries: list.sorted { a, b in
+                a.0.archivedAt != b.0.archivedAt ? a.0.archivedAt > b.0.archivedAt : a.1 < b.1
+            }.map(\.0))
+        }
+    }
 }
 
-/// The bucket of an archive entry relative to `now` in `calendar`: today, yesterday, earlier this week (the
-/// calendar week, so on a Monday last Saturday is already past-month), within 30 days, beyond. Owner: W4 (archive).
+/// The bucket of an archive entry relative to `now`, by local calendar days in `calendar`'s time zone: today (a
+/// future time counts as today); yesterday; earlier this week, where weeks start on Monday whatever the
+/// calendar's own first weekday (so on a Monday there is no earlier day, and on a Tuesday last Sunday is already
+/// past-month); since local midnight 30 days ago; beyond.
 public func archiveBucket(of archivedAt: Instant, now: Instant, calendar: Calendar) -> ArchiveBucket {
     let when = Date(timeIntervalSince1970: Double(archivedAt.milliseconds) / 1000)
-    let today = Date(timeIntervalSince1970: Double(now.milliseconds) / 1000)
-    if calendar.isDate(when, inSameDayAs: today) { return .today }
-    if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), calendar.isDate(when, inSameDayAs: yesterday) { return .yesterday }
-    if when < today, calendar.isDate(when, equalTo: today, toGranularity: .weekOfYear) { return .pastWeek }
-    if let monthAgo = calendar.date(byAdding: .day, value: -30, to: today), when >= monthAgo { return .pastMonth }
+    let today = calendar.startOfDay(for: Date(timeIntervalSince1970: Double(now.milliseconds) / 1000))
+    func daysBack(_ n: Int) -> Date { calendar.date(byAdding: .day, value: -n, to: today) ?? today }
+    if when >= today { return .today }
+    if when >= daysBack(1) { return .yesterday }
+    let sinceMonday = (calendar.component(.weekday, from: today) + 5) % 7   // weekday: Sunday 1 ... Saturday 7
+    if when >= daysBack(sinceMonday) { return .pastWeek }
+    if when >= daysBack(30) { return .pastMonth }
     return .beyond
 }

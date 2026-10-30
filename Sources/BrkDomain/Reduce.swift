@@ -31,20 +31,36 @@ public struct Transition: Sendable {
 /// Order inside one transition:
 /// 1. `.user` and `.key`: if a Ctrl+Tab cycle is pending and the command is not `cycleRecent`, commit it first
 ///    (robust against a lost Control key-up); apply the overlay rule (`Command.keepsCommandBar`/`keepsArchive`).
+///    `.system(.clockTick)` commits every window's pending cycle first.
 /// 2. Run the area's rules (Rules/*.swift), which change state and append effects.
 /// 3. `normalize` (every cross-entity invariant; repairs only, never fills an absent active item).
-/// 4. If the result differs from the input, bump `session.rev`.
+/// 4. Stamp `lastActiveAt = now` on every tab that entered or left the screen (any window) during this input. This
+///    is the one place it is stamped, so a focus, a space switch, a dock drop, a close or a Ctrl+Tab commit cannot
+///    disagree. While the dispatching window is mid Ctrl+Tab walk nothing is stamped; the commit stamps the net
+///    change against the screen as it was when the walk began (`RecentCycle.baseline`).
+/// 5. If the result differs from the input, bump `session.rev`.
+///
+/// Fast path: a key that routing passes to the page (or ignores) without changing its memory returns the input
+/// state untouched, with no normalize and no comparison (typing in a page costs one lookup per key-down).
 public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transition {
     var work = Work(state: state, ctx: ctx)
     switch input {
     case .user(let window, let command):
+        guard state.doc.windows[window] != nil else { return .unchanged(state) }
         work.run(command, in: window)
     case .key(let window, let key):
-        work.routeKey(key, in: window)
+        guard work.routeKey(key, in: window) else { return .unchanged(state) }
     case .system(let event):
         work.observe(event)
     }
     return work.finish(from: state)
+}
+
+extension Transition {
+    /// The input state returned as is: nothing to render, write or run.
+    static func unchanged(_ state: AppState) -> Transition {
+        Transition(state: state, effects: [], docChanged: false, changed: false, keyHandled: false)
+    }
 }
 
 /// One transition in progress. Rules are `extension Work` methods grouped by the knowledge they own, one file per
@@ -55,6 +71,13 @@ struct Work {
     let ctx: Context
     var effects: [Effect] = []
     var keyHandled = false
+    /// Tabs on screen right before the first rule of this input ran (after the cycle commit and the overlay rule).
+    /// Nil until a command or event starts; `finish` stamps the difference.
+    private var screenBefore: Set<ItemID>?
+    /// The dispatching window, whose pending Ctrl+Tab walk suppresses stamping.
+    private var dispatchingWindow: WindowID?
+    /// The overlay the overlay rule closed for this command (Esc's "Exit" needs to know it already acted).
+    private(set) var closedOverlay = false
 
     init(state: AppState, ctx: Context) {
         self.state = state
@@ -67,6 +90,7 @@ struct Work {
         guard state.doc.windows[window] != nil else { return }
         commitPendingCycle(unless: command, in: window)
         applyOverlayRule(for: command, in: window)
+        begin(window: window)
         switch command {
         case .commandBar(let c): commandBar(c, in: window)
         case .archive(let c): archive(c, in: window)
@@ -82,11 +106,25 @@ struct Work {
     }
 
     mutating func observe(_ event: SystemEvent) {
+        if case .clockTick = event {
+            for window in state.doc.windows.keys.sorted() { commitCycle(in: window) }
+        }
+        switch event {
+        case .window(let window, _): begin(window: window)
+        case .page, .clockTick: begin(window: nil)
+        }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
         case .clockTick: sweepAutoArchive()
         case .window(let window, let e): windowEvent(e, in: window)
         }
+    }
+
+    /// Remembers the screen before the rules run. Only the first call of a transition counts.
+    private mutating func begin(window: WindowID?) {
+        guard screenBefore == nil else { return }
+        screenBefore = state.onScreenTabs()
+        dispatchingWindow = window
     }
 
     /// Any command other than `.tab(.cycleRecent)` commits a pending Ctrl+Tab cycle first.
@@ -98,29 +136,41 @@ struct Work {
     /// Ends a Ctrl+Tab cycle: tabs that entered or left the screen relative to the cycle's baseline are stamped once.
     mutating func commitCycle(in window: WindowID) {
         guard let cycle = state.session.windows[window]?.recentCycle else { return }
-        let now = state.onScreenTabs()
-        for tab in now.symmetricDifference(cycle.baseline) {
-            state.doc.tree.updateTab(tab) { $0.lastActiveAt = ctx.now }
-        }
         state.session.windows[window]!.recentCycle = nil
+        stamp(state.onScreenTabs().symmetricDifference(cycle.baseline))
     }
 
     /// An open command bar closes unless the command keeps it; an open archive closes unless the command keeps it or
-    /// keeps the command bar (opening the bar over the archive leaves the archive underneath).
+    /// is a command bar command (`.commandBar(.open)` then replaces it, `.dismiss` closes it).
     mutating func applyOverlayRule(for command: Command, in window: WindowID) {
         guard let overlay = state.session.windows[window]?.overlay else { return }
-        switch overlay {
-        case .commandBar: if !command.keepsCommandBar { state.session.windows[window]!.overlay = nil }
-        case .archive: if !(command.keepsArchive || command.keepsCommandBar) { state.session.windows[window]!.overlay = nil }
+        let keeps = switch overlay {
+        case .commandBar: command.keepsCommandBar
+        case .archive: command.keepsArchive || command.keepsCommandBar
+        }
+        if !keeps {
+            state.session.windows[window]!.overlay = nil
+            closedOverlay = true
+        }
+    }
+
+    /// `lastActiveAt = now` for these tabs (any container); other ids are ignored.
+    mutating func stamp(_ tabs: Set<ItemID>) {
+        let now = ctx.now
+        for tab in tabs.sorted() {
+            guard let scope = state.locate(tab) else { continue }
+            state.withTree(scope) { $0.updateTab(tab) { if $0.lastActiveAt != now { $0.lastActiveAt = now } } }
         }
     }
 
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
+        if let before = screenBefore {
+            let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
+            if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }
+        }
         let changed = state != input
         if changed { state.session.rev += 1 }
-        // TODO(W1): fast path for keys that pass to the page with no memory change: skip normalize and the O(items)
-        // comparison when no rule touched state (a `touched` flag set by every mutating helper).
         return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyHandled: keyHandled)
     }
 }

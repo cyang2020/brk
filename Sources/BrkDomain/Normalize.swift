@@ -2,32 +2,44 @@ import BrkBase
 import Foundation
 
 /// Every rule that spans entities, run after each transition and after decoding a file. It repairs; it never
-/// decides: an absent active item stays absent (the space shows an empty card) until a user action fills it.
+/// decides: an absent active item stays absent (the space shows an empty card) until a user action fills it, and a
+/// tab the user has not asked to see is never loaded. Idempotent: a normalized state comes back equal. Returns one
+/// line per repair (restore reports them; `reduce` ignores them). In order:
 ///
-/// 1. (Split membership, pane count and focus are kept by `SidebarTree` itself and need no repair.)
-/// 2. `activeBySpace` entries name existing tabs or splits of that window's spaces (or Favorites tabs); dangling
-///    entries are removed.
-/// 3. Every window's space exists; `spaceOrder` lists exactly the spaces; every saved window has a session.
+/// 1. (Split membership, pane count, split focus and `pinnedURL` are kept by `SidebarTree` itself and need no
+///    repair at run time; `SidebarTree.restored` repairs them in a file.)
+/// 2. Every window's space exists (else the first space); `spaceOrder` lists exactly the spaces; every saved window
+///    has a session and no session outlives its window.
+/// 3. `activeBySpace` entries: an entry for a missing space is deleted; one naming a split pane names its split;
+///    one naming something the space cannot show (gone, not a tab or split, under another space) is repaired to the
+///    space's most recent loaded item, or deleted when there is none.
 /// 4. Overlay, rename, dialog and cycle targets exist; otherwise they close.
-/// 5. Every visible tab (a pane of a window's shown item) is in `session.loaded`; `loaded` and `live` name only
-///    existing tabs, and `live` only loaded ones.
-/// 6. Archive and history caps; sidebar width within Metrics.sidebar bounds.
-func normalize(_ state: inout AppState) {
-    repairSpaces(&state)
-    repairShownItems(&state)
+/// 5. Every visible tab (a pane of any window's shown item) is in `session.loaded`; `loaded` names only existing
+///    tabs and `live` only loaded ones.
+/// 6. Archive and history caps; sidebar width within Metrics.sidebar bounds (a non-finite width becomes the default).
+@discardableResult
+func normalize(_ state: inout AppState) -> [String] {
+    var repairs: [String] = []
+    repairSpaces(&state, &repairs)
+    repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
     repairLoaded(&state)
-    applyCaps(&state)
+    applyCaps(&state, &repairs)
+    return repairs
 }
 
-private func repairSpaces(_ state: inout AppState) {
-    var order = state.doc.spaceOrder.filter { state.doc.spaces[$0] != nil }
+private func repairSpaces(_ state: inout AppState, _ repairs: inout [String]) {
+    var order: [SpaceID] = []
+    for space in state.doc.spaceOrder where state.doc.spaces[space] != nil && !order.contains(space) { order.append(space) }
     for space in state.doc.spaces.keys.sorted() where !order.contains(space) { order.append(space) }
-    if order != state.doc.spaceOrder { state.doc.spaceOrder = order }
-    for (id, var window) in state.doc.windows {
-        if state.doc.spaces[window.space] == nil, let first = order.first {
-            window.space = first
-            state.doc.windows[id] = window
+    if order != state.doc.spaceOrder {
+        repairs.append("spaceOrder rebuilt from the spaces")
+        state.doc.spaceOrder = order
+    }
+    for id in state.doc.windows.keys.sorted() {
+        if state.doc.spaces[state.doc.windows[id]!.space] == nil, let first = order.first {
+            repairs.append("window \(id) was on a missing space")
+            state.doc.windows[id]!.space = first
         }
         if state.session.windows[id] == nil {
             state.session.windows[id] = WindowSession(contentSize: Metrics.window.defaultSize.value, overlay: nil, overlayOpens: 0,
@@ -41,65 +53,76 @@ private func repairSpaces(_ state: inout AppState) {
     }
 }
 
-private func repairShownItems(_ state: inout AppState) {
-    for (id, var window) in state.doc.windows {
-        var changed = false
-        for (space, item) in window.activeBySpace {
-            let tree = state.tree(window.container)
-            guard state.doc.spaces[space] != nil, let node = tree?[item], let role = tree?.role(of: item),
-                  node.kind == .tab || node.kind == .split, role.space == space || role.kind == .favorites
-            else {
-                window.activeBySpace[space] = nil
-                changed = true
+private func repairShownItems(_ state: inout AppState, _ repairs: inout [String]) {
+    for id in state.doc.windows.keys.sorted() {
+        let window = state.doc.windows[id]!
+        for (space, item) in window.activeBySpace.sorted(by: { $0.key < $1.key }) {
+            guard state.doc.spaces[space] != nil else {
+                state.doc.windows[id]!.activeBySpace[space] = nil
                 continue
             }
+            guard let tree = state.tree(window.container) else { continue }
+            if showable(item, in: space, tree) { continue }
+            if let split = tree.splitContaining(item), showable(split, in: space, tree) {
+                state.doc.windows[id]!.activeBySpace[space] = split
+                continue
+            }
+            let next = state.mostRecentLoaded(in: space, excluding: item)
+            repairs.append("window \(id) showed \(item) in space \(space), now \(next.map(\.rawValue) ?? "nothing")")
+            state.doc.windows[id]!.activeBySpace[space] = next
         }
-        if changed { state.doc.windows[id] = window }
     }
 }
 
+/// A tab (not a pane) or a split, under the space's own sections or Favorites.
+private func showable(_ item: ItemID, in space: SpaceID, _ tree: SidebarTree) -> Bool {
+    guard let node = tree[item], node.kind == .tab || node.kind == .split, tree.splitContaining(item) == nil,
+          let role = tree.role(of: item) else { return false }
+    return role.space == space || role.kind == .favorites
+}
+
 private func repairSessionTargets(_ state: inout AppState) {
-    for (id, var session) in state.session.windows {
-        guard let window = state.doc.windows[id] else { continue }
+    for id in state.session.windows.keys.sorted() {
+        guard let window = state.doc.windows[id], var session = state.session.windows[id] else { continue }
         let tree = state.tree(window.container)
-        var changed = false
-        if let renaming = session.renaming, tree?[renaming] == nil { session.renaming = nil; changed = true }
+        let before = session
+        if let renaming = session.renaming, tree?[renaming] == nil { session.renaming = nil }
         switch session.overlay {
         case .commandBar(_, .navigate(let tab, _)), .commandBar(_, .fillPane(let tab)):
-            if tree?[tab] == nil { session.overlay = nil; changed = true }
+            if tree?[tab]?.kind != .tab { session.overlay = nil }
         case .commandBar(_, .newTab), .archive, nil:
             break
         }
-        if case .editSpace(let space)? = session.dialog, state.doc.spaces[space] == nil { session.dialog = nil; changed = true }
+        if case .editSpace(let space)? = session.dialog, state.doc.spaces[space] == nil { session.dialog = nil }
         if let cycle = session.recentCycle {
             let order = cycle.order.filter { tree?[$0] != nil }
-            if order.count < 2 { session.recentCycle = nil; changed = true }
-            else if order != cycle.order { session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline); changed = true }
+            if order.count < 2 { session.recentCycle = nil }
+            else if order != cycle.order {
+                session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline)
+            }
         }
-        if changed { state.session.windows[id] = session }
+        if session != before { state.session.windows[id] = session }
     }
 }
 
 private func repairLoaded(_ state: inout AppState) {
-    var loaded = state.session.loaded.filter { tab in
-        guard let scope = state.locate(tab), case .tab? = state.tree(scope)?[tab]?.body else { return false }
-        return true
-    }
-    loaded.formUnion(state.onScreenTabs())
+    var loaded = state.session.loaded.filter { state.tab($0) != nil }
+    loaded.formUnion(state.onScreenTabs().filter { state.tab($0) != nil })
     if loaded != state.session.loaded { state.session.loaded = loaded }
     let live = state.session.live.filter { loaded.contains($0.key) }
     if live.count != state.session.live.count { state.session.live = live }
 }
 
-private func applyCaps(_ state: inout AppState) {
+private func applyCaps(_ state: inout AppState, _ repairs: inout [String]) {
     let archiveCap = Metrics.persistence.archiveCap.value, historyCap = Metrics.persistence.historyCap.value
     if state.doc.archive.count > archiveCap { state.doc.archive.removeLast(state.doc.archive.count - archiveCap) }
     if state.doc.history.count > historyCap { state.doc.history.removeLast(state.doc.history.count - historyCap) }
-    for (id, var window) in state.doc.windows {
-        let clamped = min(max(window.sidebarWidth, Metrics.sidebar.minWidth.value), Metrics.sidebar.maxWidth.value)
-        if clamped != window.sidebarWidth {
-            window.sidebarWidth = clamped
-            state.doc.windows[id] = window
+    for id in state.doc.windows.keys.sorted() {
+        let width = state.doc.windows[id]!.sidebarWidth
+        let clamped = width.isFinite ? min(max(width, Metrics.sidebar.minWidth.value), Metrics.sidebar.maxWidth.value) : Metrics.sidebar.defaultWidth.value
+        if clamped != width {
+            repairs.append("window \(id) sidebar width \(width) clamped to \(clamped)")
+            state.doc.windows[id]!.sidebarWidth = clamped
         }
     }
 }

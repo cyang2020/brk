@@ -85,9 +85,8 @@ public enum StateCodec {
         let v1 = try migrate(data, from: envelope.version)
         let (doc, repairs) = try v1.validated(ctx: ctx)
         var state = AppState(doc: doc, session: Session.fresh(for: doc, contentSize: seed.contentSize))
-        let before = state
-        normalize(&state)
-        return (state, repairs + (state == before ? [] : ["normalize changed the restored state"]))
+        let normalized = normalize(&state)
+        return (state, repairs + normalized)
     }
 
     private static func readEnvelope(_ data: Data) throws(CodecError) -> StoredFile {
@@ -140,7 +139,9 @@ public enum StateCodec {
             session.windows[window]!.overlay = .commandBar(openID: 1, target: .newTab)
             session.windows[window]!.overlayOpens = 1
         }
-        return AppState(doc: doc, session: session)
+        var state = AppState(doc: doc, session: session)
+        normalize(&state)
+        return state
     }
 }
 
@@ -252,13 +253,125 @@ struct StoredDocV1: Codable {
         autoArchive = doc.settings.autoArchive
     }
 
-    /// Stored -> Doc, with repairs. Items become `SidebarTree.RestoredItem`s (an item whose kind has no matching
-    /// payload is dropped), the tree is rebuilt through `SidebarTree.restored`, spaces whose roots are missing get
-    /// new roots, `spaceOrder` is made to list exactly the spaces, every window's space must exist (else the first
-    /// space), `favorites` gets a root per profile in use. Throws `noSpaces` when nothing can be shown.
+    /// Stored -> Doc, with repairs, one line each. In order:
+    /// 1. items become `SidebarTree.RestoredItem`s; an item whose kind has no matching payload, or a section that
+    ///    names no space (Pinned, Today) or is a scratch root, is dropped;
+    /// 2. no spaces -> `noSpaces` (nothing can be shown);
+    /// 3. `spaceOrder` lists every space once, in stored order, the others appended;
+    /// 4. roots: each profile in use (the default one always) gets a Favorites root that is a Favorites section for
+    ///    that profile and no one else's; each space's Pinned and Today roots must be sections of that kind that no
+    ///    other root slot claimed (a root naming another space is pointed at this one); anything else gets a new empty
+    ///    root; sections nothing points at are dropped (their contents re-attach elsewhere);
+    /// 5. the tree is rebuilt and repaired by `SidebarTree.restored`;
+    /// 6. windows: at least one (a new standard window on the first space); a window on a missing space moves to the
+    ///    first. `activeBySpace` entries and widths are left to `normalize`.
     func validated(ctx: Context) throws(CodecError) -> (doc: Doc, repairs: [String]) {
-        // TODO(W1): as described; each repair appends one line. Use `Tab(stored)` below for tabs.
-        fatalError("not implemented")
+        var repairs: [String] = []
+        typealias Record = SidebarTree.RestoredItem
+        var records: [ItemID: Record] = [:]
+        for (id, stored) in items {
+            let payload: Record.Payload?
+            switch stored.kind {
+            case .tab: payload = stored.tab.map { .tab(Tab($0)) }
+            case .folder: payload = stored.folder.map { .folder(title: $0.title, collapsed: $0.collapsed, icon: $0.icon) }
+            case .split:
+                payload = stored.split.map {
+                    .split(widths: $0.widths, focused: $0.focused, orientation: $0.orientation, lastActiveAt: $0.lastActiveAt, icon: $0.icon)
+                }
+            case .section:
+                switch (stored.section?.kind, stored.section?.space) {
+                case (.favorites?, _): payload = .section(.favorites(stored.section?.profile ?? .default))
+                case (.pinned?, let space?): payload = .section(.pinned(space))
+                case (.today?, let space?): payload = .section(.today(space))
+                case (.pinned?, nil), (.today?, nil), (.scratch?, _), (nil, _): payload = nil
+                }
+            }
+            guard let payload else {
+                repairs.append("\(id): dropped a \(stored.kind.rawValue) record without its \(stored.kind.rawValue) fields")
+                continue
+            }
+            records[id] = Record(id: id, createdAt: stored.createdAt, parent: stored.parent, children: stored.children, payload: payload)
+        }
+
+        guard !spaces.isEmpty else { throw .noSpaces }
+        var order: [SpaceID] = []
+        for id in spaceOrder where spaces[id] != nil && !order.contains(id) { order.append(id) }
+        for id in spaces.keys.sorted() where !order.contains(id) { order.append(id) }
+        if order != spaceOrder { repairs.append("spaceOrder rebuilt from the stored spaces") }
+
+        // Roots, in dock order: what a space or a profile points at.
+        var claimed: Set<ItemID> = []
+        var roots: [ItemID] = []
+        func claim(_ id: ItemID?, as role: SectionRole, slot: String) -> ItemID {
+            if let id, !claimed.contains(id), case .section(let stored)? = records[id]?.payload, stored.kind == role.kind {
+                if stored != role {
+                    repairs.append("\(slot) root \(id) now belongs to it")
+                    records[id]!.payload = .section(role)
+                }
+                records[id]!.parent = nil
+                claimed.insert(id)
+                roots.append(id)
+                return id
+            }
+            let fresh = ItemID(ctx.newID())
+            repairs.append("\(slot) root \(id.map(\.rawValue) ?? "(none)") replaced by a new empty one")
+            records[fresh] = Record(id: fresh, createdAt: ctx.now, parent: nil, children: [], payload: .section(role))
+            claimed.insert(fresh)
+            roots.append(fresh)
+            return fresh
+        }
+        var profiles: [ProfileID] = [.default]
+        for id in order where !profiles.contains(spaces[id]!.profile) { profiles.append(spaces[id]!.profile) }
+        var favoriteRoots: [ProfileID: ItemID] = [:]
+        for profile in profiles { favoriteRoots[profile] = claim(favorites[profile], as: .favorites(profile), slot: "favorites \(profile)") }
+        var docSpaces: [SpaceID: Space] = [:]
+        for id in order {
+            let s = spaces[id]!
+            let pinned = claim(s.pinnedRoot, as: .pinned(id), slot: "space \(id) pinned")
+            let today = claim(s.todayRoot, as: .today(id), slot: "space \(id) today")
+            docSpaces[id] = Space(id: id, title: s.title, icon: s.icon, theme: s.theme, profile: s.profile, pinnedRoot: pinned,
+                                  todayRoot: today, pinnedCollapsed: s.pinnedCollapsed)
+        }
+        for (id, record) in records where record.payload.kind == .section && !claimed.contains(id) {
+            repairs.append("\(id): dropped a section root that no space or profile uses")
+            records[id] = nil
+        }
+        // Today roots of the first space first, so `restored`'s fallbacks land in the first space.
+        let others = records.keys.filter { !claimed.contains($0) }.sorted()
+        let (tree, treeRepairs) = SidebarTree.restored((roots + others).compactMap { records[$0] }, scope: .global)
+        repairs += treeRepairs
+
+        var docWindows: [WindowID: WindowDoc] = [:]
+        for (id, w) in windows {
+            var space = w.space
+            if docSpaces[space] == nil {
+                repairs.append("window \(id) was on a missing space")
+                space = order[0]
+            }
+            docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: w.activeBySpace,
+                                       sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
+        }
+        if docWindows.isEmpty {
+            let id = WindowID(ctx.newID())
+            repairs.append("no window: added \(id)")
+            docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: nil, space: order[0], activeBySpace: [:], sidebarVisible: true,
+                                       sidebarWidth: Metrics.sidebar.defaultWidth.value)
+        }
+
+        let doc = Doc(
+            tree: tree,
+            spaces: docSpaces,
+            spaceOrder: order,
+            favorites: favoriteRoots,
+            archive: archive.map {
+                ArchivedTab(id: $0.id, tabID: $0.tabID, tab: Tab($0.tab), archivedAt: $0.archivedAt, reason: $0.reason,
+                            fromSpace: $0.fromSpace, fromSection: $0.fromSection)
+            },
+            history: history.map { HistoryEntry(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            windows: docWindows,
+            settings: Settings(autoArchive: autoArchive)
+        )
+        return (doc, repairs)
     }
 }
 

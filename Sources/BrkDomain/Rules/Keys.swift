@@ -7,15 +7,16 @@ import Foundation
 extension Work {
     /// Decide with `KeyRouting.decide` over the window's routing memory; on `.dispatch(action)` run
     /// `action.spec.command` for the window and set `keyHandled`. An unknown window ignores the key.
-    mutating func routeKey(_ key: KeyInput, in window: WindowID) {
-        guard var memory = state.session.windows[window]?.keyRouting else { return }
+    /// Returns false when nothing was touched (the decision passed or ignored the key and the memory did not
+    /// change), so `reduce` can hand back the input state without normalizing or comparing.
+    mutating func routeKey(_ key: KeyInput, in window: WindowID) -> Bool {
+        guard var memory = state.session.windows[window]?.keyRouting else { return false }
         let decision = KeyRouting.decide(key, memory: &memory, now: ctx.now)
-        if memory != state.session.windows[window]!.keyRouting {
-            state.session.windows[window]!.keyRouting = memory
-        }
-        if case .dispatch(let action) = decision {
-            run(action.spec.command, in: window)
-            keyHandled = true
-        }
+        let remembered = memory != state.session.windows[window]!.keyRouting
+        if remembered { state.session.windows[window]!.keyRouting = memory }
+        guard case .dispatch(let action) = decision else { return remembered }
+        run(action.spec.command, in: window)
+        keyHandled = true
+        return true
     }
 }

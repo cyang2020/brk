@@ -231,6 +231,18 @@ enum TreeError: Error, Equatable {
     case itemNotFound, invalidHierarchy, forbiddenPlacement, wouldCreateCycle, splitFull, wrongScope
 }
 
+/// A split that a move or removal left with one pane, and the pane that took its place in its parent.
+struct Dissolved: Sendable, Equatable {
+    let split: ItemID
+    let pane: ItemID
+}
+
+/// What `removeSubtree` took out: the tabs in sidebar order, and the parent split it dissolved, if any.
+struct Removal: Sendable {
+    let tabs: [(ItemID, Tab)]
+    let dissolved: Dissolved?
+}
+
 struct SidebarTree: Sendable, Equatable {
     /// Which container this tree is. `makeRoot` refuses a role of another scope.
     let scope: ContainerScope
@@ -270,8 +282,10 @@ struct SidebarTree: Sendable, Equatable {
 
     /// The only way an item changes place. Refuses roots, cycles and forbidden placements. Keeps `parent` and
     /// children in agreement, maintains `pinnedURL` for every tab of the moved subtree whose section changed, and
-    /// dissolves the old parent split if the move left it with one pane, all in this one mutation.
-    mutating func move(_ id: ItemID, to position: TreePosition) throws(TreeError) {
+    /// dissolves the old parent split if the move left it with one pane, all in this one mutation. Returns that
+    /// dissolution, so callers can point references to the split at the pane that took its place.
+    @discardableResult
+    mutating func move(_ id: ItemID, to position: TreePosition) throws(TreeError) -> Dissolved? {
         guard let item = items[id] else { throw .itemNotFound }
         guard let oldParent = item.parent else { throw .invalidHierarchy }
         let (parent, index) = try resolve(position, detaching: id)
@@ -281,23 +295,23 @@ struct SidebarTree: Sendable, Equatable {
         items[id]!.parent = parent
         attach(id, to: parent, at: index)
         stampPinnedURLs(under: id)
-        dissolveIfSinglePane(oldParent)
+        return dissolveIfSinglePane(oldParent)
     }
 
-    /// Removes the item and its subtree, returning the removed tabs in sidebar order (callers archive them).
-    /// Dissolves the parent split if the removal left it with one pane. Roots cannot be removed.
-    mutating func removeSubtree(_ id: ItemID) -> [(ItemID, Tab)] {
-        guard let item = items[id], let parent = item.parent else { return [] }
+    /// Removes the item and its subtree: the removed tabs in sidebar order (callers archive them) and the parent
+    /// split's dissolution if the removal left it with one pane. Roots cannot be removed (`removeRoot` does).
+    mutating func removeSubtree(_ id: ItemID) -> Removal {
+        guard let item = items[id], let parent = item.parent else { return Removal(tabs: [], dissolved: nil) }
         detach(id, from: parent)
-        var removed: [(ItemID, Tab)] = []
-        var stack = [id]
-        while let next = stack.popLast() {
-            guard let node = items.removeValue(forKey: next) else { continue }
-            if case .tab(let tab) = node.body { removed.append((next, tab)) }
-            stack.append(contentsOf: node.children.reversed())
-        }
-        dissolveIfSinglePane(parent)
-        return removed
+        let tabs = deleteNodes(from: id)
+        return Removal(tabs: tabs, dissolved: dissolveIfSinglePane(parent))
+    }
+
+    /// Deletes a section root and everything under it (a deleted space's Pinned and Today). Nil for anything that
+    /// is not a root of this tree.
+    mutating func removeRoot(_ id: ItemID) -> [(ItemID, Tab)]? {
+        guard let item = items[id], item.parent == nil, case .section = item.body else { return nil }
+        return deleteNodes(from: id)
     }
 
     /// Ctrl+Shift+= on a tab: a new split item takes the tab's place and holds [tab, newPane]. The tab must sit
@@ -360,23 +374,201 @@ struct SidebarTree: Sendable, Equatable {
 
     // MARK: Restore
 
-    /// One item as the state file stores it, before validation. Only the codec builds these.
+    /// One item as the state file stores it, before validation. Only the codec builds these. Containers carry
+    /// their stored children as ids; the payload holds everything else, so the codec never builds a body.
     struct RestoredItem: Sendable {
+        enum Payload: Sendable {
+            case tab(Tab)
+            case folder(title: String, collapsed: Bool, icon: CustomIcon?)
+            case split(widths: [ItemID: Double], focused: ItemID, orientation: SplitOrientation, lastActiveAt: Instant, icon: CustomIcon?)
+            case section(SectionRole)
+
+            var kind: ItemKind {
+                switch self {
+                case .tab: .tab
+                case .folder: .folder
+                case .split: .split
+                case .section: .section
+                }
+            }
+        }
+
         var id: ItemID
         var createdAt: Instant
         var parent: ItemID?
+        /// Folder and section children, or a split's panes in order. Ignored for tabs.
         var children: [ItemID]
-        var body: ItemBody
-        var orderedPanes: [ItemID] { children }
+        var payload: Payload
     }
 
-    /// Builds a tree from decoded records and repairs what a file can get wrong: unknown parents (dropped), roots
-    /// that are not sections (dropped), children lists that disagree with parents (parents win), items placed
-    /// where `Placement` forbids (moved to the end of their space's Pinned, or dropped), splits with fewer than two
-    /// panes (dissolved), roots of another scope (dropped). Returns the repairs made, for `RestoreOutcome`.
+    /// Builds a tree from decoded records and repairs what a file can get wrong, in this order (each step sees the
+    /// result of the previous one):
+    /// 1. a second record for an id, and roots of another scope, are dropped;
+    /// 2. walking down from the roots (in record order), a child reference to a missing item, a section, an item
+    ///    already placed, or an item `Placement` forbids there (a split holds only tabs, up to the pane cap) is
+    ///    dropped from the list, and a child whose `parent` disagrees is corrected (the list wins);
+    /// 3. every item not reached is re-attached at the end of the first container that may hold it, trying the
+    ///    parent it names, that parent's section root, the Pinned root of that root's space, then the first Today,
+    ///    Pinned and Favorites roots; an item nothing may hold is dropped;
+    /// 4. splits with fewer than two panes are dissolved (the pane takes the split's place); a split's focus that
+    ///    is not a pane becomes its first pane, and widths keep only panes with positive finite values;
+    /// 5. `pinnedURL` is set exactly under Pinned and Favorites (kept, else the tab's url) and cleared elsewhere.
+    /// Returns one line per repair, for `RestoreOutcome.restored(repairs:)`.
     static func restored(_ records: [RestoredItem], scope: ContainerScope) -> (tree: SidebarTree, repairs: [String]) {
-        // TODO(W1): the rules above, each a small private function; keep the order so later rules see a valid tree.
-        fatalError("not implemented")
+        var repairs: [String] = []
+        var byID: [ItemID: RestoredItem] = [:]
+        var order: [ItemID] = []
+        for record in records {
+            if byID[record.id] != nil { repairs.append("\(record.id): dropped a second record with the same id"); continue }
+            if case .section(let role) = record.payload, role.scope != scope {
+                repairs.append("\(record.id): dropped a root of another container"); continue
+            }
+            byID[record.id] = record
+            order.append(record.id)
+        }
+        let roots = order.filter { byID[$0]!.payload.kind == .section }
+        func role(_ root: ItemID) -> SectionRole? {
+            if case .section(let r)? = byID[root]?.payload { return r }
+            return nil
+        }
+
+        var visited = Set(roots)
+        var parentOf: [ItemID: ItemID] = [:]
+        var childrenOf: [ItemID: [ItemID]] = [:]
+        var sectionOf: [ItemID: SectionKind] = [:]
+        for root in roots { sectionOf[root] = role(root)!.kind }
+
+        func fits(_ child: ItemKind, in container: ItemID, count: Int) -> Bool {
+            guard let section = sectionOf[container], let kind = byID[container]?.payload.kind else { return false }
+            if kind == .split { return child == .tab && count < Metrics.content.maxPanes.value }
+            return Placement.canPlace(child, inSection: section, parentKind: kind)
+        }
+
+        func walk(_ container: ItemID) {
+            guard let record = byID[container], record.payload.kind != .tab else { return }
+            var keep: [ItemID] = []
+            for child in record.children {
+                guard let node = byID[child] else {
+                    repairs.append("\(container): dropped a reference to missing item \(child)"); continue
+                }
+                if node.payload.kind == .section || visited.contains(child) {
+                    repairs.append("\(container): dropped a second reference to \(child)"); continue
+                }
+                if !fits(node.payload.kind, in: container, count: keep.count) {
+                    repairs.append("\(container): detached \(node.payload.kind.rawValue) \(child), which may not live there"); continue
+                }
+                visited.insert(child)
+                keep.append(child)
+                if node.parent != container { repairs.append("\(child): parent corrected to \(container)") }
+                parentOf[child] = container
+                if node.payload.kind != .tab {
+                    sectionOf[child] = sectionOf[container]
+                    walk(child)
+                }
+            }
+            childrenOf[container] = keep
+        }
+        for root in roots { walk(root) }
+
+        // Orphans: everything not reached from a root.
+        let firstToday = roots.first { role($0)?.kind == .today }
+        let firstPinned = roots.first { role($0)?.kind == .pinned }
+        let firstFavorites = roots.first { role($0)?.kind == .favorites }
+        func candidates(_ record: RestoredItem) -> [ItemID] {
+            var list: [ItemID] = []
+            if let named = record.parent { list.append(named) }
+            var seen: Set<ItemID> = []
+            var current = record.parent
+            while let c = current, !seen.contains(c), let node = byID[c] {
+                seen.insert(c)
+                if case .section(let r) = node.payload {
+                    list.append(c)
+                    if let space = r.space, let pinned = roots.first(where: { role($0) == .pinned(space) }) { list.append(pinned) }
+                    break
+                }
+                current = node.parent
+            }
+            list += [firstToday, firstPinned, firstFavorites].compactMap { $0 }
+            return list
+        }
+        while true {
+            let orphans = order.filter { !visited.contains($0) }
+            guard !orphans.isEmpty else { break }
+            // Top-most first, so a container is placed before the children it lists.
+            let id = orphans.first { byID[$0]!.parent.map { visited.contains($0) || byID[$0] == nil } ?? true } ?? orphans[0]
+            let record = byID[id]!
+            let target = candidates(record).first { c in
+                visited.contains(c) && byID[c]?.payload.kind != .tab && fits(record.payload.kind, in: c, count: childrenOf[c]?.count ?? 0)
+            }
+            visited.insert(id)
+            guard let target else {
+                repairs.append("\(id): dropped unreachable \(record.payload.kind.rawValue), no section may hold it")
+                byID[id] = nil
+                continue
+            }
+            childrenOf[target, default: []].append(id)
+            parentOf[id] = target
+            repairs.append("\(id): unreachable \(record.payload.kind.rawValue) re-attached to \(target)")
+            if record.payload.kind != .tab {
+                sectionOf[id] = sectionOf[target]
+                walk(id)
+            }
+        }
+
+        // Splits below two panes dissolve into their pane, in place.
+        for id in order where byID[id]?.payload.kind == .split && visited.contains(id) {
+            let panes = childrenOf[id] ?? []
+            guard panes.count < 2, let parent = parentOf[id] else { continue }
+            var siblings = childrenOf[parent] ?? []
+            let at = siblings.firstIndex(of: id) ?? siblings.count
+            siblings.removeAll { $0 == id }
+            if let pane = panes.first {
+                siblings.insert(pane, at: min(at, siblings.count))
+                parentOf[pane] = parent
+                repairs.append("\(id): split with one pane became tab \(pane)")
+            } else {
+                repairs.append("\(id): split with no panes was removed")
+            }
+            childrenOf[parent] = siblings
+            visited.remove(id)
+            byID[id] = nil
+        }
+
+        // Build the items.
+        var tree = SidebarTree(scope: scope)
+        for id in order {
+            guard let record = byID[id], visited.contains(id) else { continue }
+            let children = childrenOf[id] ?? []
+            let body: ItemBody
+            switch record.payload {
+            case .tab(var tab):
+                let section = sectionOf[parentOf[id] ?? id] ?? .today
+                let want: URL? = switch section {
+                case .pinned, .favorites: tab.pinnedURL ?? tab.url
+                case .today, .scratch: nil
+                }
+                if tab.pinnedURL != want {
+                    repairs.append("\(id): pinnedURL set for its section")
+                    tab.pinnedURL = want
+                }
+                body = .tab(tab)
+            case .folder(let title, let collapsed, let icon):
+                var folder = Folder(title: title, collapsed: collapsed, icon: icon)
+                folder.children = children
+                body = .folder(folder)
+            case .split(let widths, let focused, let orientation, let lastActiveAt, let icon):
+                guard let panes = SplitPanes(children) else { continue }
+                let kept = widths.filter { panes.contains($0.key) && $0.value.isFinite && $0.value > 0 }
+                if kept.count != widths.count { repairs.append("\(id): split widths kept only its panes") }
+                if !panes.contains(focused) { repairs.append("\(id): split focused a missing pane") }
+                body = .split(Split(panes: panes, focused: panes.contains(focused) ? focused : panes.ids[0], widths: kept,
+                                    orientation: orientation, lastActiveAt: lastActiveAt, icon: icon))
+            case .section(let role):
+                body = .section(Section(role: role, children: children))
+            }
+            tree.items[id] = Item(id: id, createdAt: record.createdAt, parent: parentOf[id], body: body)
+        }
+        return (tree, repairs)
     }
 
     // MARK: Reads
@@ -420,6 +612,26 @@ struct SidebarTree: Sendable, Equatable {
         }
     }
 
+    /// What a window can show under `root`, in sidebar order: tabs and splits (a split is one unit; its panes are
+    /// not listed), descending into folders, skipping collapsed folders' contents when `skipCollapsed`.
+    func units(under root: ItemID, skipCollapsed: Bool) -> [ItemID] {
+        guard let item = items[root] else { return [] }
+        return item.children.flatMap { child -> [ItemID] in
+            guard let node = items[child] else { return [] }
+            switch node.body {
+            case .tab, .split: return [child]
+            case .folder(let f): return skipCollapsed && f.collapsed ? [] : units(under: child, skipCollapsed: skipCollapsed)
+            case .section: return []
+            }
+        }
+    }
+
+    /// The parent split of a pane, or nil when `id` is not a split pane.
+    func splitContaining(_ id: ItemID) -> ItemID? {
+        guard let parent = items[id]?.parent, case .split? = items[parent]?.body else { return nil }
+        return parent
+    }
+
     // MARK: Private
 
     private func resolve(_ position: TreePosition, detaching moved: ItemID?) throws(TreeError) -> (parent: ItemID, index: Int) {
@@ -456,9 +668,10 @@ struct SidebarTree: Sendable, Equatable {
         case .section(var s): s.children.removeAll { $0 == id }; items[parent]!.body = .section(s)
         case .split(var sp):
             if let panes = sp.panes.removing(id) {
+                // The pane that loses focus hands it to its left neighbour, else its right one (Electron rule).
+                if sp.focused == id, let at = sp.panes.ids.firstIndex(of: id) { sp.focused = sp.panes.ids[at > 0 ? at - 1 : at + 1] }
                 sp.panes = panes
                 sp.widths[id] = nil
-                if sp.focused == id { sp.focused = panes.ids[0] }
                 items[parent]!.body = .split(sp)
             }
             // Fewer than two panes left: `dissolveIfSinglePane` runs right after, in the same mutation.
@@ -467,17 +680,29 @@ struct SidebarTree: Sendable, Equatable {
     }
 
     /// A split whose panes list still names one pane that has left (or one pane only) becomes that pane, in place.
-    private mutating func dissolveIfSinglePane(_ splitID: ItemID) {
-        guard let item = items[splitID], case .split(let split) = item.body, let parent = item.parent else { return }
+    private mutating func dissolveIfSinglePane(_ splitID: ItemID) -> Dissolved? {
+        guard let item = items[splitID], case .split(let split) = item.body, let parent = item.parent else { return nil }
         let remaining = split.panes.ids.filter { items[$0]?.parent == splitID }
-        guard remaining.count <= 1 else { return }
+        guard remaining.count <= 1 else { return nil }
         let index = items[parent]!.children.firstIndex(of: splitID) ?? 0
         detach(splitID, from: parent)
         items[splitID] = nil
-        if let pane = remaining.first {
-            items[pane]!.parent = parent
-            attach(pane, to: parent, at: index)
+        guard let pane = remaining.first else { return nil }
+        items[pane]!.parent = parent
+        attach(pane, to: parent, at: index)
+        return Dissolved(split: splitID, pane: pane)
+    }
+
+    /// Deletes `id` and its descendants from `items` (already detached from any parent). Tabs in sidebar order.
+    private mutating func deleteNodes(from id: ItemID) -> [(ItemID, Tab)] {
+        var removed: [(ItemID, Tab)] = []
+        var stack = [id]
+        while let next = stack.popLast() {
+            guard let node = items.removeValue(forKey: next) else { continue }
+            if case .tab(let tab) = node.body { removed.append((next, tab)) }
+            stack.append(contentsOf: node.children.reversed())
         }
+        return removed
     }
 
     /// Entering Pinned or Favorites sets `pinnedURL` (if unset); entering Today or scratch clears it.

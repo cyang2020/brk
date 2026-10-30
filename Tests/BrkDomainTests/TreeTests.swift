@@ -64,7 +64,7 @@ final class TreeTests: XCTestCase {
         XCTAssertEqual(tree[today]?.children, [ItemID("x"), ItemID("sp")])
 
         let removed = tree.removeSubtree(ItemID("b"))
-        XCTAssertEqual(removed.map(\.0), [ItemID("b")])
+        XCTAssertEqual(removed.tabs.map(\.0), [ItemID("b")])
         XCTAssertNil(tree[ItemID("sp")], "the split is gone")
         XCTAssertEqual(tree[today]?.children, [ItemID("x"), ItemID("a")], "the remaining pane took the split's place")
         XCTAssertEqual(tree[ItemID("a")]?.parent, today)
@@ -108,7 +108,7 @@ final class TreeTests: XCTestCase {
         var thrown: TreeError?
         do { try tree.move(pinned, to: .into(parent: today, index: 0)) } catch { thrown = error }
         XCTAssertEqual(thrown, .invalidHierarchy)
-        XCTAssertTrue(tree.removeSubtree(today).isEmpty)
+        XCTAssertTrue(tree.removeSubtree(today).tabs.isEmpty)
         XCTAssertNotNil(tree[today])
         XCTAssertFalse(tree.makeRoot(ItemID("scratch"), .scratch(WindowID("w")), createdAt: t0), "a saved tree holds no scratch root")
         var scratch = SidebarTree(scope: .window(WindowID("w")))
