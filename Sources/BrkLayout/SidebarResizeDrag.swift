@@ -2,7 +2,7 @@ import BrkBase
 import CoreGraphics
 import Foundation
 
-// Owner: W3.
+// Owner: W1 (layout math).
 
 /// Arc's sidebar edge drag, as a pure state machine (layout-constants.md, from the pan handler at 0x100220684):
 /// width follows the pointer within 164...500; within 14 pt of 228 it snaps to 228 and holds for 0.5 s unless the

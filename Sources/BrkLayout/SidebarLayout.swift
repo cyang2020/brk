@@ -3,8 +3,9 @@ import BrkDomain
 import CoreGraphics
 import Foundation
 
-// Owner: W3. The sidebar column: title row, URL pill, favorites grid, tab list rows and drop targets, dock cells.
-// First pass by the integrator so the shell lays out; W3 owns every number's placement and the ported geometry cases.
+// Owner: W1 (layout math). The sidebar column: title row, URL pill, favorites grid, tab list rows and drop targets,
+// dock cells. First pass by the integrator so the shell lays out; the Arc-constant geometry cases (ArcGeometryTests)
+// are the spec. W3's views read these frames and never compute their own.
 
 /// The sidebar column, top to bottom: title row, URL pill, favorites tray, tab list, dock.
 public enum SidebarLayout {
@@ -78,7 +79,7 @@ public enum TablistLayout {
     /// Where a drag at `point` (document coordinates) would drop `kind`, or nil. Uses `Placement.canPlace` so the
     /// feedback agrees with what the reducer will accept.
     public static func dropTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind) -> Destination? {
-        // TODO(W3): the row under `point` and whether the pointer is in its upper or lower half -> .into(parent, index);
+        // TODO(W1): the row under `point` and whether the pointer is in its upper or lower half -> .into(parent, index);
         // folders accept drops into them at their middle band; Placement.canPlace gates every candidate.
         fatalError("not implemented")
     }

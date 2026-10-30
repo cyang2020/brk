@@ -3,8 +3,9 @@ import BrkDomain
 import CoreGraphics
 import Foundation
 
-// Owner: W2. The window, its content area, cards, dividers, the command bar box and window placement. The sidebar
-// column's internals are W3's, in SidebarLayout.swift; `WindowFrames.swift` is the frozen contract both fill.
+// Owner: W1 (layout math). The window, its content area, cards, dividers, the command bar box and window placement.
+// The sidebar column's internals are in SidebarLayout.swift (read by W3's views); `WindowFrames.swift` is the frozen
+// contract both fill. First pass by the integrator; the ported layout cases (BrkLayoutTests) are the spec.
 
 /// The window's geometry as one pure function of (snapshot, content size). Every number comes from `Metrics`.
 public enum WindowLayout {

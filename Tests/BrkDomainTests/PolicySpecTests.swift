@@ -4,7 +4,7 @@ import XCTest
 
 // URL policy, placement rules, theme resolution and archive buckets, ported from the Electron tests of
 // src/shared/url.ts, placement.ts, theme.ts and src/renderer/overlay/archive-groups.ts (bucketing moved into the
-// projection, so it is tested here). Owners: W1 (url, placement), W5 (theme), W4 (archive buckets).
+// projection, so it is tested here). Owners: W1 (url, placement, archive buckets), W5 (theme).
 
 final class PolicySpecTests: XCTestCase {
     // MARK: - electron-v1:src/shared/url.test.ts
@@ -49,20 +49,20 @@ final class PolicySpecTests: XCTestCase {
     // MARK: - electron-v1:src/shared/theme.test.ts
     // MARK: relativeLuminance
     /// matches the WCAG endpoints and a mid grey
-    func test_matchesTheWCAGEndpointsAndAMidGrey() throws { throw XCTSkip(pendingW1) }
+    func test_matchesTheWCAGEndpointsAndAMidGrey() throws { throw XCTSkip(pendingW5) }
 
     // MARK: resolveTheme
     /// picks the light scheme and light tokens for a light primary
-    func test_picksTheLightSchemeAndLightTokensForALightPrimary() throws { throw XCTSkip(pendingW1) }
+    func test_picksTheLightSchemeAndLightTokensForALightPrimary() throws { throw XCTSkip(pendingW5) }
 
     /// picks the dark scheme and dark tokens for a dark primary
-    func test_picksTheDarkSchemeAndDarkTokensForADarkPrimary() throws { throw XCTSkip(pendingW1) }
+    func test_picksTheDarkSchemeAndDarkTokensForADarkPrimary() throws { throw XCTSkip(pendingW5) }
 
     /// gives the default mid-tone blue the light scheme (black text has the higher contrast)
-    func test_givesTheDefaultMidToneBlueTheLightSchemeBlackTextHasTheHigherContrast() throws { throw XCTSkip(pendingW1) }
+    func test_givesTheDefaultMidToneBlueTheLightSchemeBlackTextHasTheHigherContrast() throws { throw XCTSkip(pendingW5) }
 
     /// lets a forced appearance override the luminance
-    func test_letsAForcedAppearanceOverrideTheLuminance() throws { throw XCTSkip(pendingW1) }
+    func test_letsAForcedAppearanceOverrideTheLuminance() throws { throw XCTSkip(pendingW5) }
 
     /// the complementary wheel puts the companion at the opposite hue; analogous at +-30 degrees (W5)
     func test_wheelRuleDerivesCompanionHues() throws { throw XCTSkip(pendingW5) }
@@ -72,13 +72,13 @@ final class PolicySpecTests: XCTestCase {
 
     // MARK: themeFromPrimary
     /// keeps the primary first and adds two analogous companions with grain 0.25 and auto appearance
-    func test_keepsThePrimaryFirstAndAddsTwoAnalogousCompanionsWithGrain025AndAutoAppearance() throws { throw XCTSkip(pendingW1) }
+    func test_keepsThePrimaryFirstAndAddsTwoAnalogousCompanionsWithGrain025AndAutoAppearance() throws { throw XCTSkip(pendingW5) }
 
     /// keeps a grey grey and only nudges its lightness
-    func test_keepsAGreyGreyAndOnlyNudgesItsLightness() throws { throw XCTSkip(pendingW1) }
+    func test_keepsAGreyGreyAndOnlyNudgesItsLightness() throws { throw XCTSkip(pendingW5) }
 
     /// produces colors the stored schema accepts for every preset
-    func test_producesColorsTheStoredSchemaAcceptsForEveryPreset() throws { throw XCTSkip(pendingW1) }
+    func test_producesColorsTheStoredSchemaAcceptsForEveryPreset() throws { throw XCTSkip(pendingW5) }
 
     // MARK: - electron-v1:src/renderer/overlay/archive-groups.test.ts
     // MARK: bucketOf

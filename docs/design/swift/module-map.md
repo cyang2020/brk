@@ -1,33 +1,50 @@
 # Module map: Brk on Swift, AppKit and CEF
 
-Owners: **W1** domain, **W2** engine and window host, **W3** sidebar views and sidebar layout, **W4** command bar and archive, **W5** theme, **W6** e2e harness and control server. **Contract** files are frozen at this skeleton: their types and public names do not change during parallel work. A worker that needs a contract change writes it down as a deviation in its report, and the integrator applies it. The function bodies inside a contract file are still written by the owner named in the table.
+Owners: **W1** domain and layout math, **W2** engine, window host and app store, **W3** sidebar UI, **W4** command bar, archive and dialogs, **W5** theme renderer, **W6** e2e harness and control protocol. **Contract** files are frozen at this skeleton: their types and public names do not change during parallel work. A worker that needs a contract change writes it down as a deviation in its report, and the integrator applies it. The function bodies inside a contract file are still written by the owner named in the table.
 
-## Modules
+Every path below is relative to the repository root. Every file has exactly one owner; the owner of a directory owns every file under it unless a row names the file.
+
+## Targets
 
 Every module is a SwiftPM target. Paths are under `Sources/`.
 
 | Module | Path | Owner | Hides | Exposes | Imported by |
 |---|---|---|---|---|---|
-| Base vocabulary | `BrkBase/` | contract (W1) | nothing | `ID<Tag>` with `ItemID`, `SpaceID`, `WindowID`, `ArchiveID`, `ProfileID`; `Instant`; `Modifiers`, `Key`, `KeyChord`, `KeyPress`, `KeyStage`; the page vocabulary `PageID`, `PageSpec`, `PageAction`, `PageEvent`, `OpenDisposition`, `PageFacts`; `Metric`, `MetricSource`, `Metrics` (the constants file); `Product`, `LaunchOptions` | every module |
-| Domain: model | `BrkDomain/Model.swift`, `SidebarTree.swift` | W1 | every stored field; the hierarchy can only change inside `SidebarTree.swift` (`fileprivate(set)`) | `AppState` (opaque: no readable fields), `SpaceIcon`, `AutoArchiveThreshold`, `ArchiveReason`, `LoadFailure`, `SectionKind`, `ItemKind`, `Placement.canPlace` | (domain only, plus the public types) |
-| Domain: commands | `BrkDomain/Command.swift`, `Effect.swift` | contract (W1) | nothing | `Input`, `Command` and its ten area enums, `ItemRef`, `SpaceRef`, `Step`, `Destination`, `SystemEvent`, `WindowEvent`, `Effect`, `MenuModel` | BrkLayout, BrkUI, BrkControl, BrkApp, BrkE2E |
-| Domain: reducer | `BrkDomain/Reduce.swift`, `Rules/*.swift`, `Normalize.swift`, `KeyRouting.swift` | W1 (KeyRouting: W2) | handler dispatch, the overlay rule, per-area rules, invariants, key priorities and press-twice memory | `reduce`, `Context`, `Transition`, `KeyInput`, `resolveTypedInput`, `isAllowedURL` | BrkApp (only `AppStore.swift` calls `reduce`) |
-| Domain: projection | `BrkDomain/Snapshot.swift`, `Project.swift` | contract types (W1); `archiveBucket` body W4 | how rows, titles, statuses, focus, pages and candidates are derived | `project`, `ProjectionContext`, `AppSnapshot`, `WindowSnapshot` and its parts, `FocusTarget`, `ArchiveBucket`, `archiveBucket` | BrkLayout, BrkTheme, BrkUI, BrkControl, BrkApp, BrkE2E |
-| Domain: codec | `BrkDomain/Codec.swift` | W1 | the state file format (`StoredDocV1`, private), versions, migration, repair | `StateCodec.encode`, `StateCodec.restore`, `RestoreSeed`, `Restored`, `RestoreOutcome` | BrkApp |
-| Shortcut table | `BrkDomain/Actions.swift` | contract (W2 may add rows) | nothing | `ActionID`, `ActionSpec`, `KeyBinding`, `KeyPriority`, `MenuName`, `CommandBarListing`, `KeyMap` | BrkApp (menu), BrkDomain (routing, command bar), BrkUI (titles) |
-| Theme model | `BrkDomain/Theme/SpaceTheme.swift` | W5 | luminance math, gradient derivation | `RGBA`, `Texture`, `AppearanceChoice`, `Scheme`, `SpaceTheme`, `ThemePresets`, `SidebarTokens`, `ResolvedTheme`, `resolveTheme` | domain, BrkTheme, BrkUI |
-| Layout | `BrkLayout/WindowFrames.swift` (contract), `WindowLayout.swift`, `SidebarResize.swift` | W2 (window, content, command bar, placement); W3 (`SidebarLayout`, `FavoritesGrid`, `TablistLayout`, `DockLayout`, `SidebarResizeDrag`) | all geometry | `WindowFrames`, `CardFrame`, `SidebarFrames`, `RowFrame`, `ViewID` (accessibility identifiers), `WindowLayout.compute`, the sub-layouts, `SidebarResizeDrag`, `WindowPlacement.fit` | BrkUI, BrkControl, BrkApp, BrkE2E |
-| Engine interface | `BrkEngine/WebEngine.swift` (contract), `StubEngine.swift` | W2 | for the stub: placeholder views and fake page events | `WebEngine`, `WebEngineDelegate`, `PageSurfaceView`, `StubEngine` | BrkCEF, BrkApp, `Brk` (main) |
+| Base vocabulary | `BrkBase/` | contract (W1 maintains) | nothing | `ID<Tag>` with `ItemID`, `SpaceID`, `WindowID`, `ArchiveID`, `ProfileID`; `Instant`; `Modifiers`, `Key` (a `CaseIterable` enum by key code), `KeyChord`, `KeyPress`, `KeyStage`, `PressID`; the page vocabulary `PageID`, `PageSpec`, `PageAction`, `PageEvent`, `OpenDisposition`, `PageFacts`, `PageLogEntry`, `ShutdownOutcome`; `Metric`, `MetricSource`, `MetricGroup`, `Metrics` (the constants table); `Product`, `LaunchOptions` | every module |
+| Domain: model | `BrkDomain/Model.swift`, `SidebarTree.swift` | W1 | every stored field; the hierarchy changes only inside `SidebarTree.swift` (`fileprivate(set)` on parent, body, children, panes, focus) | `AppState` (opaque), `ContainerScope`, `CustomIcon`, `NamedIcon`, `SpaceIcon`, `SplitOrientation`, `AutoArchiveThreshold`, `ArchiveReason`, `LoadFailure`, `SectionKind`, `ItemKind`, `Placement.canPlace` | (domain only, plus the public types) |
+| Domain: commands | `BrkDomain/Command.swift`, `Effect.swift` | contract (W1) | nothing | `Input`, `Command` and its ten area enums, `ItemRef`, `SpaceRef`, `Step`, `Destination`, `SystemEvent`, `WindowEvent`, `Effect`, `WindowEffect`, `AppEffect`, `MenuModel` | BrkLayout, BrkUIKit, BrkSidebar, BrkOverlays, BrkContent, BrkControl, BrkApp, BrkE2E |
+| Domain: reducer | `BrkDomain/Reduce.swift`, `Rules/*.swift` (`Keys.swift` holds `routeKey`), `KeyRouting.swift`, `Normalize.swift`, `Codec.swift` | W1 | handler dispatch, the overlay rule, per-area rules, invariants, key priorities and press-twice memory, the file format | `reduce`, `Context`, `Transition`, `KeyInput`, `resolveTypedInput`, `isAllowedURL`, `displayURL`, `StateCodec`, `RestoreSeed`, `Restored`, `RestoreOutcome`, `CodecError` | BrkApp (only `AppStore.swift` calls `reduce`) |
+| Domain: projection | `BrkDomain/Snapshot.swift` (contract), `Project.swift` | W1 | how rows, titles, statuses, focus, pages, candidates and archive buckets are derived | `project`, `ProjectionContext`, `AppSnapshot`, `WindowSnapshot` and its parts, `FocusTarget`, `ArchiveBucket`, `archiveBucket` | BrkLayout, BrkTheme, every UI target, BrkControl, BrkApp, BrkE2E |
+| Shortcut table | `BrkDomain/Actions.swift` | contract (W1; W2 may add rows) | nothing | `ActionID`, `ActionSpec`, `KeyBinding`, `KeyPriority`, `MenuName`, `CommandBarListing`, `KeyMap` | BrkApp (menu), BrkDomain (routing, command bar), BrkOverlays (titles) |
+| Theme model | `BrkDomain/Theme/SpaceTheme.swift` | types contract (W1); `resolveTheme` body W5 | luminance math, gradient derivation | `RGBA`, `Texture`, `ColorWheel`, `AppearanceChoice`, `Scheme`, `SpaceTheme`, `ThemePresets`, `SidebarTokens`, `ResolvedTheme`, `resolveTheme`, `relativeLuminance` | domain, BrkTheme, BrkUIKit |
+| Layout | `BrkLayout/WindowFrames.swift` (contract), `WindowLayout.swift`, `SidebarLayout.swift`, `SidebarResizeDrag.swift` | W1 | all geometry | `WindowFrames`, `CardFrame`, `SidebarFrames`, `RowFrame`, `ViewID`, `WindowLayout.compute`, `ContentLayout`, `CommandBarLayout`, `WindowPlacement.fit`, `SidebarLayout`, `FavoritesGrid`, `TablistLayout`, `DockLayout`, `SidebarResizeDrag` | every UI target, BrkControl, BrkApp, BrkE2E |
+| Engine interface | `BrkEngine/WebEngine.swift` (contract), `PageLedger.swift` (contract), `PressCorrelator.swift`, `StubEngine.swift` | W2 | for the stub: placeholder views and synchronous load events | `WebEngine`, `WebEngineDelegate`, `PageSurfaceView`, `PageLedger`, `PressCorrelator`, `StubEngine` | BrkCEF, BrkApp, `Brk` (main) |
 | CEF engine | `BrkCEF/` | W2 | CEF init, the Chrome-runtime browser and host window per page, moving Chromium's views into the card, the key guard on host windows, CEF key translation, page close bookkeeping, shutdown order | `CEFEngine` (`bootstrap`, `Configuration`, the `WebEngine` methods) | `Brk` (main) only |
-| Theme renderer | `BrkTheme/` | W5 | Metal pipeline, shader source, procedural textures, display-link crossfade | `ThemeBackgroundView` (`show(_:animated:)`), `TexturePixels` | BrkUI |
-| Views | `BrkUI/` | W2 (`WindowRootView`, `Content/`), W3 (`Sidebar/`), W4 (`CommandBar/`, `Archive/`), W5 (`Dialogs/`) | all AppKit drawing, hover, drag preview, typed query, scroll; SwiftUI only inside `NSHostingView` (the space dialog) | `Dispatch`, `WindowRootView` (`render(_:frames:surface:)`), `Palette`, `Copy`, `Suggest`, `Suggestion`, `identify(_:)` | BrkApp |
-| Control protocol | `BrkControl/` | W6 | JSON line framing, the client socket | `ControlRequest`, `ControlOp`, `ControlReply`, `ControlResult`, `NativeFacts`, `ActualView`, `AppWindowFact`, `PageLogEntry`, `Hello`, `ControlWire`, `ControlClient` | BrkApp, BrkE2E |
-| App | `BrkApp/` | W2 (W6: `Control/`) | the state value, dispatch queue, effect execution, window controllers, traffic-light placement, menu building, key adapters, debounced atomic writes, quarantine, the clocks, launch and quit order, the control server | `Lifecycle`, `AppStore`, `WindowController`, `BrowserWindow`, `StateFile`, `Clock`, `SystemClock`, `OffsetClock` | `Brk` (main) |
+| Theme renderer | `BrkTheme/` | W5 | Metal pipeline, shader source, procedural textures, display-link crossfade (today: a gradient layer with a Core Animation crossfade) | `ThemeBackgroundView` (`show(_:animated:)`), `TexturePixels` | BrkContent |
+| View contract | `BrkUIKit/Rendering.swift` | contract (W1 maintains) | nothing | `Dispatch`, `identify(_:)`, `Palette`, `Copy` | BrkSidebar, BrkOverlays, BrkContent, BrkApp |
+| Sidebar views | `BrkSidebar/` | W3 | all AppKit drawing of the column, hover, drag preview, scroll, the rename field | `SidebarView` (`init(dispatch:)`, `render`, `focusRenameField`, `focusList`) | BrkContent |
+| Overlay views | `BrkOverlays/` | W4 | the command bar's query, highlight and rows; the archive page; the space dialog form (SwiftUI in `NSHostingView`) | `CommandBarView` (`render`, `focusInput`), `ArchivePageView` (`render`), `SpaceDialogHost` (`render`, `focusForm`), `Suggest`, `Suggestion` | BrkContent, BrkOverlaysTests |
+| Content and root | `BrkContent/` | W2 | the card views, dividers, how the root composes the targets above | `WindowRootView` (`render(_:frames:surface:)`, `focus(_:)`), `ContentAreaView` | BrkApp |
+| Control protocol | `BrkControl/` | W6 | JSON line framing, the client socket | `ControlRequest`, `ControlOp`, `ControlReply`, `ControlResult`, `NativeFacts`, `ActualView`, `AppWindowFact`, `Hello`, `ControlWire`, `ControlClient` | BrkApp, BrkE2E |
+| App | `BrkApp/` | W2 (`Control/`: W6) | the state value, dispatch queue, effect execution, window controllers, traffic-light placement, menu building, key adapters, debounced atomic writes, quarantine, the clocks, launch and quit order, the control server | `Lifecycle`, `Quit`, `AppStore`, `WindowController`, `BrowserWindow`, `StateFile`, `Clock`, `SystemClock`, `OffsetClock`, `ClockError` | `Brk` (main) |
 | Composition root | `Brk/main.swift` | W2 | which engine runs; CEF before `NSApp` | the executable | (none) |
 | E2E runner | `BrkE2E/` | W6 | process launch, fixture server, polling, report writing | `brk-e2e` executable | (none) |
-| Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product (`CefRuntime`, `CefChromeBrowser`, `CefBrowser`, `CefBrowserDelegate`, `CefKeyEvent`), the `cef` command plugin, `cef-helper` | BrkCEF only |
+| Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product, the `cef` command plugin, `cef-helper` | BrkCEF only |
 
-Tests (`Tests/`): `BrkDomainTests` (reducer spec ported from `electron-v1:src/domain/*.test.ts`, URL, placement, theme and archive-bucket policy, key routing, the shortcut table, vocabulary round trips; `Driver.swift` is the test harness), `BrkLayoutTests` (Electron layout cases and Arc-constant geometry), `BrkUITests` (suggestion ranking), `BrkThemeTests` (texture determinism and tiling), `BrkControlTests` (protocol round trips, boundary decoding), `BrkAppTests` (state file, clocks, key adapters, menu built from the table), `ArchitectureTests` (import and single-writer rules). Today: 213 tests, 22 run and pass, 191 are `XCTSkip` stubs naming their owner.
+## Workers
+
+| Worker | Owns (paths) | Frozen contracts it writes against | Tests it fills | Stubs left (`fatalError("not implemented")`) |
+|---|---|---|---|---|
+| W1 domain and layout math | `Sources/BrkBase/`, `Sources/BrkDomain/` (except `resolveTheme`'s body), `Sources/BrkLayout/`, `Sources/BrkUIKit/`, `Tests/BrkDomainTests/`, `Tests/BrkLayoutTests/`, `Tests/ArchitectureTests/` | `Command.swift`, `Effect.swift`, `Snapshot.swift`, `Actions.swift`, `WindowFrames.swift`, `Metrics.swift`, `Keys.swift`, `Page.swift` (types may not change; bodies and rules may) | 137 domain, 15 layout | BrkDomain 16, BrkLayout 1 |
+| W2 engine, window host, app store | `Sources/BrkEngine/`, `Sources/BrkCEF/`, `Sources/BrkApp/*.swift`, `Sources/BrkContent/`, `Sources/Brk/`, `Vendor/CefSwift/` (bumps), `scripts/build.sh`, `Tests/BrkAppTests/`, `Tests/BrkEngineTests/` | `WebEngine.swift`, `PageLedger.swift`, `Page.swift`, `Snapshot.swift`, `WindowFrames.swift`, the public surfaces of BrkSidebar and BrkOverlays | 25 app | BrkCEF 7, BrkApp 2 (`WindowFrames.frame(of:)` reports layout-owned frames; view-owned ones come from `actual`) |
+| W3 sidebar UI | `Sources/BrkSidebar/` | `Rendering.swift`, `Snapshot.swift`, `WindowFrames.swift`, `Command.swift`; its own public surface (`SidebarView`) | (W3's work shows in the e2e scenarios; unit cases for its layout are W1's) | 0 (first-pass bodies with `TODO(W3)` notes) |
+| W4 command bar, archive, dialogs | `Sources/BrkOverlays/`, `Tests/BrkOverlaysTests/` | `Rendering.swift`, `Snapshot.swift`, `WindowFrames.swift`, `Command.swift`, `Actions.swift`; its own public surfaces | 12 suggestion | BrkOverlays 1 (`Suggest.rank`) |
+| W5 theme renderer | `Sources/BrkTheme/`, `resolveTheme` in `Sources/BrkDomain/Theme/SpaceTheme.swift`, `Tests/BrkThemeTests/`, the theme cases in `Tests/BrkDomainTests/PolicySpecTests.swift` | `SpaceTheme.swift` types, `ThemeBackgroundView.show` signature | 3 texture, 9 theme | BrkTheme 4 |
+| W6 e2e harness and control protocol | `Sources/BrkControl/`, `Sources/BrkApp/Control/`, `Sources/BrkE2E/`, `Tests/BrkControlTests/`, `Tests/E2ESite/`, `scripts/e2e.sh`, `scripts/ctl.sh` | `Protocol.swift` (W6 owns it but it is frozen for everyone else), `Snapshot.swift`, `WindowFrames.swift`, `WebEngine.swift` (`evaluate`, `facts`, `pageLog`) | 3 decode, 24 scenarios | BrkControl 2, BrkE2E 18 |
+
+Totals at this skeleton: 258 XCTest cases, 63 run and pass, 195 `XCTSkip` stubs naming their owner; 51 first-party `fatalError("not implemented")` bodies (BrkDomain 16, BrkE2E 18, BrkCEF 7, BrkTheme 4, BrkApp 2, BrkControl 2, BrkLayout 1, BrkOverlays 1); 24 e2e scenarios registered as `todo`. Everything on the launch-and-idle path (restore, normalize, project, layout, first-pass renders, the stub engine, the store, lifecycle, menu, quit) runs: `BRK_ENGINE=stub swift run Brk` opens the shell.
+
+What "first pass" means: the integrator wrote the simplest body that makes the shell open and left `TODO(Wn)` notes where the owner's spec goes further (projection candidates, the space-title counter, favorites drag and drop, rename field, suggestion rows, archive groups, the Metal renderer). Owners replace those bodies; they do not treat them as frozen.
 
 ## Dependency rules
 
@@ -37,35 +54,54 @@ BrkLayout   -> BrkDomain, BrkBase
 BrkEngine   -> BrkBase
 BrkCEF      -> BrkEngine, BrkBase, CefKit (vendored)
 BrkTheme    -> BrkDomain, BrkBase
-BrkUI       -> BrkTheme, BrkLayout, BrkDomain, BrkBase
+BrkUIKit    -> BrkLayout, BrkDomain, BrkBase
+BrkSidebar  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
+BrkOverlays -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
+BrkContent  -> BrkSidebar, BrkOverlays, BrkTheme, BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkControl  -> BrkLayout, BrkDomain, BrkBase
-BrkApp      -> BrkUI, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
+BrkApp      -> BrkContent, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
 Brk (main)  -> BrkApp, BrkCEF, BrkEngine, BrkBase
 BrkE2E      -> BrkControl, BrkLayout, BrkDomain, BrkBase
 ```
 
-Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, BrkUI, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkUI); the exact lists are in `ImportRulesTests.allowedImports`.
+Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, the UI targets, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkOverlays; `os` only in BrkEngine, BrkCEF and BrkApp); the exact lists are in `ImportRulesTests.allowedImports`.
 
 1. `BrkBase`, `BrkDomain`, `BrkLayout` and `BrkControl` import only Foundation and CoreGraphics besides each other: no AppKit, so the reducer, the projection, the layout and the wire format are testable headless and cannot touch views.
 2. `BrkEngine` imports only BrkBase and AppKit: it knows pages, not tabs.
 3. Only `BrkCEF` imports `CefKit`, `CCef` or `CCefAppKit`, and only `Brk/main.swift` imports `BrkCEF`. BrkApp holds `any WebEngine`.
-4. `BrkUI` never imports `BrkApp`, `BrkEngine` or `BrkCEF`: views get page surfaces as plain `NSView`s through a closure, and send intent through `Dispatch`.
-5. `BrkE2E` never imports `BrkApp` or `BrkUI`: the runner sees the app only through the control socket.
-6. Single writers: only `BrkApp/AppStore.swift` calls `reduce`; only `BrkApp/Clock.swift` reads the real time (`Date()`); only `BrkDomain/SidebarTree.swift` changes `parent` or `children` (enforced by `fileprivate(set)`, not by a scan); only `BrkCEF` adds child windows or replaces methods; only `BrkDomain/Codec.swift`, `BrkControl` and the runner create JSON coders; no `cornerRadius = <number>` outside `BrkBase/Metrics.swift`.
+4. `BrkSidebar` and `BrkOverlays` never import each other, and never import `BrkApp`, `BrkEngine` or `BrkCEF`; `BrkApp` composes views only through `BrkContent` and reaches a view's keyboard focus only through `WindowRootView.focus(_:)`. Views get page surfaces as plain `NSView`s through a closure and send intent through `Dispatch`.
+5. `BrkE2E` never imports `BrkApp` or any UI target: the runner sees the app only through the control socket.
+6. Single writers: only `BrkApp/AppStore.swift` calls `reduce`; only `BrkApp/Clock.swift` reads the real time (`Date()`); only `BrkDomain/SidebarTree.swift` changes hierarchy, kinds, panes or split focus (enforced by `fileprivate(set)` and a fileprivate `Item.init`, not by a scan); only `BrkCEF` adds child windows or replaces methods; only `BrkDomain/Codec.swift`, `BrkControl` and the runner create JSON coders; no `cornerRadius = <number>` outside `BrkBase/Metrics.swift`; only `BrkApp/Lifecycle.swift` and `AppStore.swift` ask for a quit, through `Quit.request()`.
 
 How each rule is enforced:
 
 - **Target graph.** `Package.swift` declares exactly the edges above. An import of an undeclared module fails to compile; `scripts/build.sh` builds with `--explicit-target-dependency-import-check error` so a module reachable only transitively fails too.
-- **Types.** `AppState` has only internal stored properties, so code outside BrkDomain cannot read the tree. `Item.parent` and `Item.children` are `fileprivate(set)` in `SidebarTree.swift`. A `Metric` cannot be built without a `MetricSource`. `ActionID.spec` is an exhaustive switch, so an action without a table row does not compile, and `Work.run` is an exhaustive switch over `Command`, so an area without rules does not compile.
-- **`ArchitectureTests/ImportRulesTests.swift`.** Scans every `import` (including `@testable` and `@preconcurrency`) under `Sources/` against a per-target allow list, checks the single-writer patterns of rule 6 by file, checks that every target directory is in the rule table, and proves each rule with a negative case (an AppKit import in BrkDomain, `Date()` in a rule file, `reduce(` in the key router, a literal radius in a view). It runs in `swift test`.
+- **Types.** `AppState` has only internal stored properties, so code outside BrkDomain cannot read the tree. Hierarchy, kind, panes and focus are settable only in `SidebarTree.swift`; `SplitPanes` cannot hold fewer than two or more than `Metrics.content.maxPanes` panes; a `SidebarTree` refuses roots of another `ContainerScope`. A `Metric` cannot be built without a `MetricSource`. `ActionID.spec` is an exhaustive switch, so an action without a table row does not compile, and `Work.run` is an exhaustive switch over `Command`, so an area without rules does not compile. `WindowDoc.container` is an exhaustive switch over `WindowKind`, so a new window kind has to say where its items live. `Key` is `CaseIterable`, so there is no second key list.
+- **`ArchitectureTests`.** `ImportRulesTests` scans every `import` (including `@testable` and `@preconcurrency`) under `Sources/` against a per-target allow list, checks the single-writer patterns of rule 6 by file, checks that every target directory is in the rule table, and proves each rule with a negative case (an AppKit import in BrkDomain, `Date()` in a rule file, `reduce(` in the key router, a literal radius in a view, a sibling view-target import, a worker view import from BrkApp). `MetricInventoryTests` walks `Metrics` by reflection and reads `Metrics.swift` for free globals: a bare number anywhere in the table, an `.arc` row the constants document does not have, a confidence the row does not state, or a guess without a reason fails. Both run in `swift test`.
 - **`package` access level** is not used. All our targets are in one package, so `package` would mean the same as `public` to every sibling; the boundary is the target graph above. Everything a sibling may call is `public` and listed in the table, and everything else is `internal` by default.
+
+## Frozen contracts, by path
+
+| Contract | Path | What it fixes |
+|---|---|---|
+| Commands and effects | `Sources/BrkDomain/Command.swift`, `Sources/BrkDomain/Effect.swift` | every input a view, key, socket or page can produce; every one-shot the reducer can ask for |
+| Snapshot | `Sources/BrkDomain/Snapshot.swift` | what views render, what layout reads, what the socket returns |
+| Frames and view ids | `Sources/BrkLayout/WindowFrames.swift` | `WindowFrames`, `SidebarFrames`, `RowFrame`, `CardFrame`, `ViewID` and its identifier strings |
+| Engine protocol | `Sources/BrkEngine/WebEngine.swift`, `Sources/BrkEngine/PageLedger.swift`, `Sources/BrkBase/Page.swift` | the seven calls, the delegate, the page vocabulary, the identity rule for reused ids, `ShutdownOutcome` |
+| Control protocol | `Sources/BrkControl/Protocol.swift` | every op, every reply, the wire framing |
+| Actions table | `Sources/BrkDomain/Actions.swift` | titles, menus, bindings with priorities, command-bar listings |
+| Metrics | `Sources/BrkBase/Metrics.swift` | every layout, motion and theme number with its source |
+| Keys and press identity | `Sources/BrkBase/Keys.swift` | `Key`, `KeyChord`, `KeyPress`, `KeyStage`, `PressID` and its correlation rule |
+| View contract | `Sources/BrkUIKit/Rendering.swift` plus the public surfaces of `WindowRootView`, `SidebarView`, `CommandBarView`, `ArchivePageView`, `SpaceDialogHost` | `Dispatch`, `identify`, `Palette`, `Copy`; render and focus entry points |
+| Container seam | `ContainerScope`, `Session.scratch`, `AppState.tree/withTree/locate`, `WindowDoc.container` in `Sources/BrkDomain/Model.swift`; `SectionRole.scratch` in `SidebarTree.swift` | how ephemeral windows' items enter the reducer and the projection |
+| Codec envelope | `StoredFile`, `StoredFileV1`, `CodecError`, `StateCodec.migrate`, `StoredDocV1.init(_:)`/`validated(ctx:)` in `Sources/BrkDomain/Codec.swift` | the versioned file and its conversions |
 
 ## Control socket contract
 
 ### Launch
 
-- Environment: `BRK_CONTROL_SOCKET=<path>` starts the server (never set in a normal launch); `BRK_DATA_DIR=<dir>` replaces `~/Library/Application Support/Brk` (state.json, quarantined files, the Chromium cache); `BRK_TEST_CLOCK=1` makes the clock real time plus an offset that only `advanceClock` moves; `BRK_START_URL=<url>` is the one tab of a fresh profile; `BRK_ENGINE=stub` runs without Chromium; `BRK_REMOTE_DEBUGGING_PORT` opens CEF DevTools.
-- The runner launches `dist/Brk.app/Contents/MacOS/Brk` directly (not through `open`), so it owns the process and its exit status. Screen capture of the app's own window works without the screen-recording permission (spike unknown 8).
+- Environment: `BRK_CONTROL_SOCKET=<path>` starts the server (never set in a normal launch); `BRK_DATA_DIR=<dir>` replaces `~/Library/Application Support/Brk` (state.json, quarantined files, the Chromium cache, `shutdown-incomplete.log`); `BRK_TEST_CLOCK=1` makes the clock real time plus an offset that only `advanceClock` moves; `BRK_START_URL=<url>` is the one tab of a fresh profile; `BRK_ENGINE=stub` runs without Chromium; `BRK_REMOTE_DEBUGGING_PORT` opens CEF DevTools.
+- The runner launches `dist/Brk.app/Contents/MacOS/Brk` directly (not through `open`), so it owns the process and its exit status. Screen capture of the app's own window works without the screen-recording permission (spike unknown 8) and while the display is locked (`CGWindowListCreateImage` by window id, as the integrator used to verify the stub shell).
 - The runner waits for `hello` (up to 10 s: the first launch creates the Chromium profile in 4.3 s, later launches answer in 1.2 s, spike unknown 7).
 
 ### Transport
@@ -74,32 +110,34 @@ A Unix stream socket. One JSON object per line in each direction: `{"id": n, "op
 
 ### Operations
 
+Every op maps to a capability the executor can reach through BrkApp's allowed imports: `AppStore` (dispatch, snapshot, flush), `WindowController` (frames, window), `WebEngine` (`surface`, `facts`, `evaluate`, `pageLog`, `perform`), `OffsetClock`, `NSApp.sendEvent`, `CGWindowListCreateImage`, `Quit.request`.
+
 | Op | Does | Reply |
 |---|---|---|
 | `hello` | readiness probe | pid, engine kind, window ids, data directory |
 | `view(window)` | the window's last rendered `WindowSnapshot` | `view` |
-| `native(window)` | `WindowLayout.compute` of the last snapshot, every view with an accessibility identifier and its real frame (window coordinates, top-left), hidden flag and layer radius; `PageFacts` of every page in the window (surface frame, embedded Chromium view classes, browser id, host window number); first responder; every app window with its key flag | `native(NativeFacts)` |
+| `native(window)` | `WindowLayout.compute` of the last snapshot, every view with an accessibility identifier and its real frame (window coordinates, top-left), hidden flag and layer radius; `PageFacts` of every page in the window; first responder; every app window with its key flag | `native(NativeFacts)` |
 | `dispatch(window, command)` | decodes a `Command` and dispatches it as if a view sent it | `dispatched(rev)` |
 | `load(window, url)` | scenario setup: opens `url` as a new Today tab with the same two commands Cmd+T, typing and Enter produce | `loaded(tab)` |
-| `press(chord)` | in-process key-down and key-up `NSEvent`s into `NSApp.sendEvent` for the key window. With a page focused they reach Chromium and CEF's key handler exactly like real presses (spike unknown 3); with a native view focused they reach the menu | `ok` |
+| `press(chord)` | in-process key-down and key-up `NSEvent`s into `NSApp.sendEvent` for the key window; with a page focused they reach Chromium and CEF's key handler exactly like real presses (spike unknown 3); with a native view focused they reach the menu | `ok` |
 | `hold(modifiers, chord, times)` | modifier down, `times` presses, modifier up (Ctrl+Tab cycling) | `ok` |
 | `type(text)` | key events for each character into the first responder | `ok` |
 | `click(view or point, modifiers, count)` | in-process mouse down and up at the centre of the live view with that identifier, or at a window point; `modifiers: "cmd"` for Cmd+click on a page link | `ok` |
 | `hover(point)` | mouse-moved event (peek the hidden sidebar) | `ok` |
 | `screenshot(window, path)` | `CGWindowListCreateImage` of the window, written as PNG | path and pixel size |
 | `pixel(window, point)` | one sRGB pixel of a fresh capture at a window point in points | RGBA 0 to 255 |
-| `advanceClock(seconds)` | moves the test clock and dispatches `.system(.clockTick)` | `clock(now)` |
-| `evaluate(page, script)` | runs JavaScript in a page, no result (fixtures report through `document.title`) | `ok` |
+| `advanceClock(seconds)` | moves the test clock forward and dispatches `.system(.clockTick)`; a negative value is `failed` (the clock refuses it) | `clock(now)` |
+| `evaluate(page, script)` | `WebEngine.evaluate`: runs JavaScript in a page, no result (fixtures report through `document.title`) | `ok` |
 | `crash(page, renderer or gpu)` | loads `chrome://crash` or `chrome://gpucrash` in the page | `ok` |
 | `setWindowFrame(window, frame)` | moves the NSWindow (screen coordinates) | `ok` |
-| `pageLog` | pages created and closed (OnBeforeClose) since launch, in order | `pageLog` |
-| `flush` | writes state.json now | `ok` |
+| `pageLog` | `WebEngine.pageLog`: `created`, `closeRequested` and `closed` (OnBeforeClose) entries with page id, generation and browser id, in order | `pageLog` |
+| `flush` | writes state.json now (drains pending debounced writes) | `ok` |
 | `settle(timeout)` | waits until no page is loading and the main queue is idle | `ok` or `failed` |
-| `quit` | starts the ordered quit; replies before the process exits | `ok` |
+| `quit` | `Quit.request()`: the ordered quit; replies before the process exits. Exit status 0 after a clean shutdown, 3 (`Lifecycle.shutdownTimedOutStatus`) when browsers did not close in time, with `shutdown-incomplete.log` in the data directory | `ok` |
 
 Restart is the runner's job: `quit`, wait for exit, launch again with the same `BRK_DATA_DIR`.
 
-After every scenario the runner checks two things for free: no CEF host window is ever key (`native().appWindows`), and at quit the process exits with status 0 and no new crash report appears in `~/Library/Logs/DiagnosticReports`. The spike's Mode B crashed at quit in 5 of 5 runs, so that check is part of every pass.
+After every scenario the runner checks three things for free: no CEF host window is ever key (`native().appWindows`), the process exits with status 0, and no new crash report appears in `~/Library/Logs/DiagnosticReports`. The spike's Mode B crashed at quit in 5 of 5 runs, so that check is part of every pass; a status of 3 is the engine saying so in words.
 
 ### Fixture site
 
@@ -119,31 +157,31 @@ Scenarios 0 to 9 are the Electron plan's done predicate. R2 to R10 are `electron
 | 5 | Cmd+S hides the sidebar; again restores | `press("cmd+s")` twice | hidden: `card-0` = window inset 10 on every side, radius 6, `sidebar` hidden; shown again: x = sidebar width + 10 |
 | 6 | Ctrl+Shift+= makes a split | `press("ctrl+shift+=")`, type URL, return | two cards, same y and height, `card-0.maxX + 10 == card-1.minX`; `view().content.split` set; one split row with two panes; the command bar was open for the empty pane; after Enter the second page's title is "Fixture Page 2" |
 | 7 | Auto-archive, archive page, restore | open B (A goes idle), `advanceClock(13 h)`, `click(.dockLibrary)`, `click(.archiveRestore(id))` | A leaves Today, B stays (visible tabs never archive); `archive` frame equals `computed.contentArea`; the entry for A has reason auto and is in `archive-group-today`; after restore A is back in Today |
-| 8 | Cmd+W closes the page | open a tab, `press("cmd+w")` | `pageLog` has `closed` for its page (OnBeforeClose); `native().pages` no longer has it; the row is gone from Today (archived) |
+| 8 | Cmd+W closes the page | open a tab, `press("cmd+w")` | `pageLog` has `closeRequested` then `closed` for its page (OnBeforeClose); `native().pages` no longer has it; the row is gone from Today (archived) |
 | 9 | Restart restores everything | new space, two tabs, pin one, open `/fail`, focus page2, `dispatch(.sidebar(.resize(width: 300)))`, `flush`, restart | the same dock, space, pinned and Today ids, URLs and titles, current tab and width 300 before and after; after restart `native().pages` holds only the current tab (lazy restore); the `/fail` tab kept its URL and title |
 | R2 | Peek keeps the archive open | `press("cmd+s")`, `dispatch(.archive(.open))`, `hover` the reveal strip | `view().sidebar.peek` true and the overlay is still the archive; `floating-sidebar` is above the archive |
 | R3 | Cmd+click opens a background tab that loads | `click(point: link, modifiers: "cmd")` in fixture home | Today has two rows, focus stays on home, the new row becomes loaded and its title is "Fixture Page 2" |
 | R5a | Ctrl+Tab after 11 h is not archived an hour later | open B, `advanceClock(11 h)`, `hold("ctrl", "tab", 1)`, `advanceClock(1 h 1 min)` | B is still in Today |
 | R5b | Dropped on another space after 13 h is not swept | new space, back to the first, `advanceClock(13 h)`, `dispatch(.item(.move(x, to: .space(work))))`, `advanceClock(1 min)` | x is in Work's Today |
 | R6 | Ctrl+Tab twice returns | open B, Cmd+D twice, open C, `hold("ctrl", "tab", 1)` twice | current is B after the first hold, C after the second |
-| R7a | `window.close()` leaves no blank card | open `close.html` | within 8 s: `pageLog` closed for it, the row is gone, every card in `native()` has a surface or is the empty-card placeholder that `view()` predicts |
+| R7a | `window.close()` leaves no blank card | open `close.html` | within 8 s: `pageLog` closed for it without a `closeRequested` (page-initiated), the row is gone, every card in `native()` has a surface or is the empty-card placeholder that `view()` predicts |
 | R7b | A crashed renderer is recovered with no other input | `crash(page, .renderer)` | within 8 s, with no further op: the page's surface has its Chromium views again and the card midpoint is the page's white |
 | R8 | A window saved off every display reopens on screen | `setWindowFrame(x: 5000, y: 4000)`, `flush`, restart | the restored window frame intersects a screen's visible frame |
 | R9 | Only the current space's surface is attached | new space with `red.html`, `click(.dockSpace(first))` | `native().pages` lists exactly the panes `view()` shows; the card midpoint pixel is white, not red |
 | R10 | A GPU crash leaves the native sidebar working | `crash(page, .gpu)` | within 8 s the card midpoint is the page's white again; a click on a dock space still switches space |
-| N1 | Key priorities | open page2, then `keys.html` focused: `press("cmd+t")`, `press("escape")`, `press("cmd+shift+k")`; then `keys.html?swallow=1`: `press("cmd+s")` twice | Cmd+T opens the bar and the page title never shows `cmd+t`; Cmd+Shift+K (page priority) reaches the page first (title `key:cmd+shift+k:seen`) and then clears page2 from Today; with swallow, the first Cmd+S goes to the page and the sidebar stays, the second within 1 s hides the sidebar |
+| N1 | Key priorities and press identity | open page2, then `keys.html` focused: `press("cmd+t")`, `press("escape")`, `press("cmd+shift+k")`; then `keys.html?swallow=1`: `press("cmd+s")` twice; then two rapid `press("cmd+r")` | Cmd+T opens the bar and the page title never shows `cmd+t`; Cmd+Shift+K (page priority) reaches the page first (title `key:cmd+shift+k:seen`) and then clears page2 from Today; with swallow, the first Cmd+S goes to the page and the sidebar stays, the second within 1 s hides the sidebar; two unconsumed Cmd+R presses reload twice (two after-page ids, no false duplicate) |
 | N2 | Focus round trip, host windows never key | `press("cmd+l")`, `type("x")`, `press("escape")`, `type("y")` | the bar input had focus and the page did not get "x"; after Esc the page title shows `key:y:seen`; no host window in `appWindows` was ever key |
 | N3 | Pixel layout equals the constants | launch, `native()` | traffic lights at x 13 with 14 pt size centred 24 from the top; `url-pill` height 36, 8 from each sidebar side, radius 12; favorites tiles at least 47 with gap 8; rows 40 tall on a 41 pitch; `dock` height 50; every computed frame equals its `actual` frame |
-| N4 | Clean quit with many pages | three tabs, a split, `quit` | exit status 0 within 10 s, no new crash report, `pageLog` has `closed` for every created page |
+| N4 | Clean quit with many pages | three tabs, a split, `quit` | exit status 0 within 10 s (3 would mean the engine timed out), no new crash report, `pageLog` has `closed` for every created page |
 
 ## Accessibility identifiers
 
-Set by BrkUI from `BrkLayout.ViewID`, never typed by hand. The runner addresses views by the same enum.
+Set by the UI targets from `BrkLayout.ViewID`, never typed by hand. The runner addresses views by the same enum.
 
 | ViewID | Identifier |
 |---|---|
 | `.sidebar`, `.floatingSidebar`, `.titleRow`, `.urlPill`, `.favoritesTray` | `sidebar`, `floating-sidebar`, `title-row`, `url-pill`, `favorites` |
-| `.favorite(id)`, `.section(kind)`, `.row(id)`, `.rowClose(id)` | `favorite-<id>`, `section-favorites` / `section-pinned` / `section-today`, `row-<id>`, `row-<id>-close` |
+| `.favorite(id)`, `.section(kind)`, `.row(id)`, `.rowClose(id)` | `favorite-<id>`, `section-favorites` / `section-pinned` / `section-today` / `section-scratch`, `row-<id>`, `row-<id>-close` |
 | `.todayNewTab`, `.todayClear`, `.renameField` | `today-new-tab`, `today-clear`, `rename-field` |
 | `.dock`, `.dockSpace(id)`, `.dockLibrary`, `.dockPlus` | `dock`, `dock-space-<id>`, `dock-library`, `dock-plus` |
 | `.resizeHandle`, `.revealStrip` | `sidebar-resize`, `reveal-strip` |
@@ -154,7 +192,7 @@ Set by BrkUI from `BrkLayout.ViewID`, never typed by hand. The runner addresses 
 
 ## Build layout
 
-- `swift build` and `swift test` work with no CEF on disk: CefKit loads the framework with `dlopen` at run time. `BRK_ENGINE=stub swift run Brk` opens the full shell with placeholder pages.
+- `swift build` and `swift test` work with no CEF on disk: CefKit loads the framework with `dlopen` at run time. `BRK_ENGINE=stub swift run Brk` opens the full shell with placeholder pages; `BRK_DATA_DIR` points it at a scratch profile (restoring an existing state.json needs W1's `validated(ctx:)` first).
 - `scripts/build.sh`: reads the product name from `Package.swift`, builds with the explicit import check, runs the tests, runs the vendored plugin's `cef bundle` (downloads CEF 154.0.34 minimal arm64 once into `.cef/`, SHA-1 checked; builds the product and `cef-helper`; assembles `dist/Brk.app` with `Brk Helper.app`, `Brk Helper (Alerts).app`, `(GPU)`, `(Plugin)`, `(Renderer)`; sets `LSEnvironment MallocNanoZone=0`; signs ad hoc), then verifies the signature. Notarization is out of scope.
 - `scripts/e2e.sh`: build (unless `SKIP_BUILD=1`), then `swift run brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/swift`, which writes `verify/swift/REPORT.md` (PASS, FAIL or SKIPPED per scenario, with the machine, the CEF version and timings) and `verify/swift/shots/`.
 - `scripts/ctl.sh`: one control request by hand.
