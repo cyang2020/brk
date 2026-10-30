@@ -80,7 +80,8 @@ struct Tab: Sendable, Equatable {
     var customTitle: String?
     var favicon: URL?
     /// URL when the tab entered Pinned or Favorites (Arc: `savedURL`); the target of "Reset Tab". Nil exactly
-    /// while the tab is in Today. Maintained only by `SidebarTree.insert` and `move`.
+    /// while the tab is in Today. Maintained by `SidebarTree.insert` and `move`, and set by the command bar when it
+    /// gives an empty pane in Pinned its first URL.
     var pinnedURL: URL?
     /// Last time the tab started or stopped being on screen. Drives auto-archive and recent-tab order.
     var lastActiveAt: Instant
