@@ -201,17 +201,17 @@ extension Work {
         }
     }
 
-    /// Newest first, one entry per URL (capped by normalize). about:blank and URLs a page may not open are not
-    /// history. Committing the newest entry's URL again refreshes it in place.
+    /// Newest first, one entry per URL and profile (capped by normalize): a visit in one profile never removes
+    /// another profile's. about:blank and URLs a page may not open are not history. Committing the newest entry's
+    /// URL again in the same profile refreshes it in place.
     private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID) {
         guard url.absoluteString != "about:blank", isAllowedURL(url) else { return }
-        if let first = state.doc.history.first, first.url == url {
+        if let first = state.doc.history.first, first.url == url, first.profile == profile {
             if first.visitedAt != ctx.now { state.doc.history[0].visitedAt = ctx.now }
             if first.title != title { state.doc.history[0].title = title }
-            if first.profile != profile { state.doc.history[0].profile = profile }
             return
         }
-        state.doc.history.removeAll { $0.url == url }
+        state.doc.history.removeAll { $0.url == url && $0.profile == profile }
         state.doc.history.insert(HistoryEntry(url: url, title: title, visitedAt: ctx.now, profile: profile), at: 0)
     }
 }

@@ -13,7 +13,7 @@ final class LibraryViewTests: XCTestCase {
 
     private func frames(page: LibraryPage) -> (WindowFrames, LibrarySnapshot) {
         let area = CGRect(x: 238, y: 10, width: 1032, height: 756)
-        let library = LibraryLayout.frames(in: area)
+        let library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: 417, height: 776), page: area, contentSize: CGSize(width: 1280, height: 776))
         let frames = WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false, resizeHandle: nil,
                                   revealStrip: nil, contentArea: area, cards: [], dividers: [], commandBar: nil, library: library, peek: nil)
         let snapshot = LibrarySnapshot(openID: 1, page: page, archive: nil, downloads: [], history: [])
