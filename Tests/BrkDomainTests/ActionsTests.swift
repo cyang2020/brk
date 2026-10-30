@@ -126,7 +126,12 @@ final class ActionsTests: XCTestCase {
             XCTAssertEqual(spec.menu, row.menu, "row \(n)")
             XCTAssertEqual(spec.submenu, row.submenu, "row \(n)")
             XCTAssertEqual(spec.bindings.first?.chord, row.chord, "row \(n) \(row.item)")
-            if row.chord != nil { XCTAssertEqual(spec.bindings.first?.priority, row.priority, "row \(n) \(row.item)") }
+            if row.chord != nil {
+                // CEF's Chrome runtime consumes row 171 before its post-page callback. Brk must claim its own
+                // Downloads UI first. Keep the extracted Arc row unchanged as evidence of this host adaptation.
+                let expectedPriority: KeyPriority = n == 171 ? .app : row.priority
+                XCTAssertEqual(spec.bindings.first?.priority, expectedPriority, "row \(n) \(row.item)")
+            }
             XCTAssertEqual(spec.hidden, row.flags.contains("hidden"), "row \(n) \(row.item) hidden")
             XCTAssertEqual(spec.alternate, row.flags.contains("alternate"), "row \(n) \(row.item) alternate")
         }
