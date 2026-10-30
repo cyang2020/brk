@@ -35,6 +35,24 @@ async function openTab(arc: Arc, url: string): Promise<TabRowView> {
   return tabRows((await arc.view()).space.today.rows).find((r) => !before.includes(r.id))!;
 }
 
+/**
+ * Ctrl+Tab as a real keyboard delivers it: Control+Tab down to the focused page, then the ups to whatever has focus
+ * after the switch. Each hold sends its own Control keyDown, which commits any cycle the previous hold left pending
+ * (its keyUp can land on a view that is no longer focused and be lost).
+ */
+async function ctrlTab(arc: Arc): Promise<void> {
+  const send = (events: { type: 'keyDown' | 'keyUp'; keyCode: string; modifiers: 'control'[] }[]): Promise<number> =>
+    arc.electronApp.evaluate(({ webContents }, events) => {
+      const id = globalThis.__arc!.native().focusedWebContentsId!;
+      for (const e of events) webContents.fromId(id)!.sendInputEvent(e);
+      return id;
+    }, events);
+  await send([{ type: 'keyDown', keyCode: 'Control', modifiers: ['control'] }, { type: 'keyDown', keyCode: 'Tab', modifiers: ['control'] }]);
+  await sleep(300);
+  await send([{ type: 'keyUp', keyCode: 'Tab', modifiers: ['control'] }, { type: 'keyUp', keyCode: 'Control', modifiers: [] }]);
+  await sleep(200);
+}
+
 // Finding 1 is covered by unit tests (the e2e repro spawns a second Electron instance and runs well over 10s).
 
 test('finding 2: with the sidebar hidden, peeking the left edge keeps the archive open', async ({ arc }) => {
@@ -63,9 +81,9 @@ test('finding 5: a tab left with Ctrl+Tab after 11h is not archived an hour late
   const b = await openTab(arc, `${siteUrl}page2.html`); // the start tab goes idle; B is shown from T0
   await expect(await arc.tabPage(b.id)).toHaveTitle('Fixture Page 2');
   await arc.advanceClock(11 * HOUR);
-  await arc.press('Ctrl+Tab'); // back to the start tab: B leaves the screen and is stamped now
+  await arc.press('Ctrl+Tab'); // back to the start tab: B leaves the screen
   await expect.poll(() => currentId(arc)).not.toBe(b.id);
-  await arc.advanceClock(HOUR + 60_000); // B was last on screen 1h01m ago, under the 12h threshold
+  await arc.advanceClock(HOUR + 60_000); // the sweep commits the pending walk first, stamping B, so B is only 0 idle
   await sleep(200);
   expect(await todayIds(arc)).toContain(b.id);
 });
@@ -91,9 +109,9 @@ test('finding 6: Ctrl+Tab, then Ctrl+Tab again, returns to the tab you started i
   await arc.press('CmdOrCtrl+D'); // and unpin again (an app shortcut in the tab before leaving it)
   await expect.poll(async () => (await arc.view()).space.pinned.rows.length).toBe(0);
   const c = await openTab(arc, `${siteUrl}index.html`);
-  await arc.press('Ctrl+Tab');
+  await ctrlTab(arc);
   await expect.poll(() => currentId(arc)).toBe(b.id);
-  await arc.press('Ctrl+Tab'); // a second, independent walk: the first committed, so this returns to c
+  await ctrlTab(arc); // a fresh hold: its Control keyDown commits the first walk, so this returns to c
   await expect.poll(() => currentId(arc)).toBe(c.id);
 });
 

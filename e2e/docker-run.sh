@@ -16,10 +16,10 @@ VOLUME="arc-e2e-node-modules-$(cksum < "$ROOT/package-lock.json" | cut -d' ' -f1
 # The source is copied in rather than bind-mounted: Colima shares only $HOME by default, so a
 # bind mount of a worktree under /tmp shows up in the container as an empty directory.
 # verify/ is left out so a result can only come back if this run produced it.
-cid=$(docker create --init --ipc=host -w /work -v "$VOLUME:/work/node_modules" "$IMAGE" bash -euo pipefail -c '
+cid=$(docker create --init --ipc=host -e FILTER="${1:-}" -w /work -v "$VOLUME:/work/node_modules" "$IMAGE" bash -euo pipefail -c '
   flock node_modules -c "[ -e node_modules/.installed ] || { npm ci && node node_modules/electron/install.js && touch node_modules/.installed; }"
   npm run build
-  xvfb-run -a -s "-screen 0 1400x900x24" npm run e2e
+  xvfb-run -a -s "-screen 0 1400x900x24" npm run e2e -- $FILTER
 ')
 trap 'docker rm -f "$cid" >/dev/null' EXIT
 

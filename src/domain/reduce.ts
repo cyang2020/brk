@@ -83,8 +83,11 @@ export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
     const windowId: WindowId | null = input.origin === 'ui' ? input.windowId : 'windowId' in command ? command.windowId : null
     if (input.origin === 'ui' && !draft.doc.windows[input.windowId]) return // stale window: drop
     // Any UI command other than another Ctrl+Tab step commits a pending cycle first: the chosen tab becomes final even
-    // if the Control keyUp was lost. The cycle's net on-screen change is stamped here, against its baseline.
+    // if the Control keyUp was lost. The clock tick does too, so the auto-archive sweep never runs against a half-
+    // finished walk (the tab that left is stamped first). The cycle's net on-screen change is stamped against its baseline.
     if (input.origin === 'ui' && command.type !== 'tab/cycle-recent') commitPendingCycle(draft, windowId, ctx.now)
+    else if (input.origin === 'system' && command.type === 'clock/tick')
+      for (const id of Object.keys(draft.session.windows) as WindowId[]) commitPendingCycle(draft, id, ctx.now)
     if (input.origin === 'ui' && !keepsOverlay(input.command.type, draft.session.windows[input.windowId]?.overlay?.kind ?? null)) closeOverlay(draft, input.windowId)
     const before = onScreenTabIds(draft)
     const cycleWas = windowId !== null && draft.session.windows[windowId]?.recentCycle != null
