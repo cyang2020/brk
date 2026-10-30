@@ -59,11 +59,24 @@ final class MetricInventoryTests: XCTestCase {
     struct WrongConfidence: MetricGroup { let x = Metric(164.0, .arc("Sidebar minimum width while dragging", .low)) }
     struct EmptyGuess: MetricGroup { let x = Metric(1.0, .guess("")) }
     struct NestedBare: MetricGroup { let inner = BareNumber() }
+    /// The review's mutation: Arc's 0.08 s sidebar animation written as 8.0 under the same row.
+    struct WrongValue: MetricGroup { let sidebarToggle = Metric(8.0, .arc("Sidebar show/hide animation duration")) }
+    struct WrongSize: MetricGroup { let x = Metric(CGSize(width: 1280, height: 777), .arc("Main window default size")) }
+    struct WrongCurve: MetricGroup { let x = Metric([0.25, 0.46, 0.45, 0.95], .arc("Sidebar show/hide timing curve")) }
+    struct OneOfSeveral: MetricGroup { let x = Metric(11.0, .arc("Resize hit area", .medium, note: "starts 11 below the top")) }
 
     func testRejectsABareNumber() throws {
         let rows = try Self.constantRows()
         XCTAssertEqual(Self.problems(in: BareNumber(), path: "T", rows: rows).count, 1)
         XCTAssertEqual(Self.problems(in: NestedBare(), path: "T", rows: rows).count, 1)
+    }
+
+    func testRejectsAValueTheRowDoesNotHave() throws {
+        let rows = try Self.constantRows()
+        XCTAssertEqual(Self.problems(in: WrongValue(), path: "T", rows: rows).count, 1)
+        XCTAssertEqual(Self.problems(in: WrongSize(), path: "T", rows: rows).count, 1)
+        XCTAssertEqual(Self.problems(in: WrongCurve(), path: "T", rows: rows).count, 1)
+        XCTAssertEqual(Self.problems(in: OneOfSeveral(), path: "T", rows: rows), [], "a row with several values: the metric takes one")
     }
 
     func testRejectsASourceTheGroundingDoesNotHave() throws {
