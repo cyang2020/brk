@@ -1,9 +1,10 @@
+*.app
 .DS_Store
 .build/
-.swiftpm/
+.cef
 .cef/
+.swiftpm/
+DerivedData/
 dist/
-*.app
 verify/swift/
 xcuserdata/
-DerivedData/
