@@ -2,19 +2,19 @@
 
 The four interrupted workers continued with Codex. Their Settings, Windows, Command bar, and Library changes are merged with the completed Profiles implementation. The signed application is `dist/Brk.app`.
 
-Updated on 2026-10-31 after parent integration of the privacy and native-focus fixes. All 45 current native scenarios now pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
+Updated on 2026-10-31 after parent integration of the privacy, native-focus, and History storage fixes. All 46 current native scenarios pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
 
 ## Verification
 
-- `scripts/build.sh` passes: 459 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/swift/focus-parent/evidence/build.log).
-- The parent independently ran the merged CEF application through all 45 scenarios: 45 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/swift/focus-parent/native/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
+- `scripts/build.sh` passes: 460 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/completion/history-safety/build.log).
+- The parent independently ran the merged CEF application through all 46 scenarios: 46 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/completion/history-safety/native-after/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
 - The three skipped tests cover two later Max features and the native file-export save panel. They are not counted as verified behavior.
-- The [source hashes](../../verify/swift/focus-parent/source-sha256.json) and [application hash](../../verify/swift/focus-parent/app-sha256.txt) identify the current tested files.
+- The [source hashes](../../verify/completion/history-safety/source-sha256.json) and [application hash](../../verify/completion/history-safety/app-sha256.txt) identify the current tested files.
 
 The native run used this command after the successful build:
 
 ```sh
-BRK_E2E_DATA_ROOT=/tmp/brk-complete/data SKIP_BUILD=1 scripts/e2e.sh --out /tmp/brk-complete/focus-native
+SKIP_BUILD=1 scripts/e2e.sh --out /tmp/brk-history-safety/native-after
 ```
 
 ## Implemented behavior
@@ -36,6 +36,8 @@ Page focus now belongs to its native window. Late AppKit layout can repair a mis
 Cmd+Shift+J defaults to app priority because Chromium can consume its download accelerator before Brk receives the post-page callback. Explicit user priority overrides still apply. This is a documented CEF adaptation to the extracted Arc default.
 
 Chromium auxiliary download windows close before CEF shutdown. This fixes the reproduced exit crash without a shutdown delay. Download updates and history title changes also stay within their browsing profile.
+
+Clear History now removes Brk visits without scheduling the custom profile's Chromium directory for deletion. The new C-HISTORY case proves that the fixture's localStorage survives the action and a restart. Cookie, cache, and broader site-storage clearing remain unfinished.
 
 The parent preserved failing-before tests, native focus snapshots, and routing logs under [integration evidence](../../verify/swift/wave2-integration/). A temporary screenshot retry was removed after a test identified the unintended fullscreen transition. Final captures use the original strict WindowServer check.
 

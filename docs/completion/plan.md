@@ -42,13 +42,16 @@ python3 scripts/check-completion.py --require-complete
 
 The second command is expected to fail until the agreed feature scope is complete.
 
-## Current parallel pass
+## Completed grounding and current batch
 
-- Platform grounding owns A036 to A055, A083 to A088, A093 to A098, and A102 to A112. It traces CEF and host capabilities and proposes current feature states.
-- Native-shell grounding owns A001 to A035, A056 to A082, A089 to A092, A113 to A118, and A127 to A133. It traces UI, domain, layout and persistence behavior.
-- The parent has reviewed the remaining 26 productivity/integration rows in `grounding/integrations.md`.
-- A separate reference experiment investigates the verified Arc fake-auth candidate only in a demonstrably isolated target. It also prepares a standalone local reference-capture helper if the cloud experiment is unavailable. This does not delay platform/source grounding.
+- [Platform grounding](grounding/platform.md) assessed 43 rows covering CEF and browser operations.
+- [Native-shell grounding](grounding/native-shell.md) assessed 79 rows covering UI, domain, layout, persistence, menus, and settings.
+- The parent reviewed the remaining 26 productivity/integration rows in [integration grounding](grounding/integrations.md).
+
+All 148 rows now have a current assessment. The counts are 6 verified, 26 implemented, 52 partial, 58 missing, 3 excluded, 2 deferred, and 1 blocked. These categories describe acceptance and evidence, not effort or a completion percentage. The parent merged the 122 delegated proposals with `scripts/merge-completion-proposals.py`, then recorded subsequent corrections without rewriting the historical reports.
+
+The History review found a destructive coupling between history removal and profile disposal. Commit `ddc2854` removes that coupling and labels the action **Clear History…**. Its [before/after evidence](../../verify/completion/history-safety/REPORT.md) includes a failing native reproduction, 460 build tests with three known skips and zero failures, and 46 passing native scenarios. Full scoped browsing-data clearing remains unfinished.
 
 The reference experiment returned without an Arc-copy launch because its containment probe aborted. The capture helper is delivered at `artifacts/arc-reference-capture.zip`; the parent validated its checks and a genuine cloud welcome-screen capture. Authenticated local browser references and fake-auth runtime behavior remain unresolved. The reference row remains blocked and is not counted as visual parity.
 
-The two grounding reports are inputs to the `how` explainer, then to the next `architect`/`arena` design pair. Implementation begins after those interfaces and acceptance checks are coherent.
+The [architecture overview](grounding/overview.md) combines the grounding reports. The [next batch brief](core-batch-brief.md) asks two independent Codex candidates to resolve same-tab window ownership, real download control, and essential page operations. A separate judge will compare their contracts and runtime evidence before implementation. No human approval checkpoint is required for these reversible changes.
