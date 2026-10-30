@@ -344,6 +344,31 @@ describe('reduce: tabs', () => {
     expect(d.archive()[0]).toMatchObject({ title: '127.0.0.1:9/c', url: 'http://127.0.0.1:9/c', reason: 'manual', fromSpaceTitle: 'Space 1', archivedAt: T0 + 4 * HOUR })
   })
 
+  it('the Pinned-tab menu offers Close and Keep Pinned and a separate Archive Tab that archives it', () => {
+    const d = new Driver()
+    const a = d.todayIds()[0]!
+    d.ui({ type: 'tab/toggle-pin', target: a }) // a is now Pinned
+    const popup = d.ui({ type: 'ui/popup', menu: { kind: 'item', itemId: a }, at: { x: 0, y: 0 } }).effects[0]
+    const entries = popup?.type === 'menu/popup' ? popup.entries : []
+    const labels = entries.flatMap((e) => (e.kind === 'item' ? [e.label] : []))
+    expect(labels).toContain('Close and Keep Pinned')
+    expect(labels).toContain('Archive Tab')
+    const archiveItem = entries.find((e) => e.kind === 'item' && e.label === 'Archive Tab')
+    if (archiveItem?.kind !== 'item') throw new Error('no Archive Tab entry')
+    expect(archiveItem.command).toEqual({ type: 'tab/archive', target: a })
+    d.ui(archiveItem.command)
+    expect(d.pinnedIds()).not.toContain(a)
+    expect(d.archive().map((e) => e.url)).toEqual([START])
+  })
+
+  it('tab/archive keeps a Today tab menu to a single Archive Tab entry (tab/close)', () => {
+    const d = new Driver()
+    const a = d.todayIds()[0]!
+    const popup = d.ui({ type: 'ui/popup', menu: { kind: 'item', itemId: a }, at: { x: 0, y: 0 } }).effects[0]
+    const labels = popup?.type === 'menu/popup' ? popup.entries.flatMap((e) => (e.kind === 'item' ? [e.label] : [])) : []
+    expect(labels.filter((l) => l === 'Archive Tab' || l === 'Close and Keep Pinned')).toEqual(['Archive Tab'])
+  })
+
   it('tab/close on a Pinned tab keeps the row, drops it from loaded, and moves activeBySpace to the most recent other loaded tab', () => {
     const d = new Driver()
     const [a] = d.todayIds()
@@ -1413,9 +1438,9 @@ describe('handler groups', () => {
   it('cover every UiCommand type, and every command type has a behavior test above', () => {
     const handled = new Set(Object.values(groups).flatMap((h) => Object.keys(h)))
     const uiTypes = UiCommandSchema.options.map((o) => o.shape.type.value)
-    expect(uiTypes).toHaveLength(42)
+    expect(uiTypes).toHaveLength(43)
     for (const type of uiTypes) expect(handled.has(type), type).toBe(true)
-    expect(handled.size).toBe(42 + 6)
+    expect(handled.size).toBe(43 + 6)
     expect([...handled].filter((type) => !exercised.has(type))).toEqual([])
   })
 })

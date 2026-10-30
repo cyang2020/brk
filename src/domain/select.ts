@@ -274,13 +274,22 @@ export function menuFor(state: StateImpl, windowId: WindowId, menu: PopupMenu): 
       const pinTarget = item.kind === 'split' ? item.children[0] : item.id
       const head = [entry(ACTIONS.pinTab.label, { type: 'tab/toggle-pin', target: pinTarget })]
       if (item.kind === 'split') return moves.length > 0 ? [...head, SEPARATOR, ...moves] : head
+      // Today: one "Archive Tab" (tab/close archives). Pinned/Favorites: "Close and Keep Pinned" (tab/close unloads
+      // but keeps the row) and a separate "Archive Tab" (tab/archive) that actually archives it.
+      const closeEntries =
+        where.section === 'today'
+          ? [entry(ACTIONS.archiveTab.label, { type: 'tab/close', target: item.id })]
+          : [
+              entry(COPY.sidebar.closeKeepPinned, { type: 'tab/close', target: item.id }),
+              entry(ACTIONS.archiveTab.label, { type: 'tab/archive', target: item.id }),
+            ]
       return [
         ...head,
         entry(ACTIONS.renameItem.label, { type: 'item/begin-rename', target: item.id }),
         ...(item.pinnedUrl !== null && item.pinnedUrl !== item.url ? [entry(ACTIONS.resetTab.label, { type: 'tab/reset', target: item.id })] : []),
         ...(moves.length > 0 ? [SEPARATOR, ...moves] : []),
         SEPARATOR,
-        entry(ACTIONS.archiveTab.label, { type: 'tab/close', target: item.id }),
+        ...closeEntries,
       ]
     }
   }

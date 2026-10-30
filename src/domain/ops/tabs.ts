@@ -215,6 +215,15 @@ export const tabHandlers = {
     else return
     replaceShown(draft, tabId, ctx)
   },
+  // "Archive Tab" from the context menu: archive the tab whatever its section (unlike tab/close, which keeps a Pinned
+  // or Favorites tab). Then move any window showing it to the most recent other loaded item of that space.
+  'tab/archive': (draft, command, ctx) => {
+    const tabId = resolveTab(draft, ctx.windowId, command.target)
+    if (!tabId || !locate(draft.doc, tabId)) return
+    refocusSplitWithout(draft, tabId)
+    archiveItems(draft, [tabId], 'manual', ctx)
+    replaceShown(draft, tabId, ctx)
+  },
   // Resolve target to a tab (a split pane toggles the whole split). Today -> moveItem to end of space Pinned;
   // Pinned/Favorites (any depth) -> moveItem to top of Today (a Favorites tab goes to the window's current space).
   // moveItem maintains pinnedUrl.

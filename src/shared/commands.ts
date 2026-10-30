@@ -98,6 +98,11 @@ export const UiCommandSchema = z.discriminatedUnion('type', [
    * (its webContents closes), which is Arc's "Close and Keep Pinned".
    */
   z.object({ type: z.literal('tab/close'), target: ItemRefSchema }),
+  /**
+   * Context-menu "Archive Tab": archive the target tab whatever its section. On a Pinned or Favorites tab this is the
+   * explicit archive, distinct from `tab/close` there (which is "Close and Keep Pinned": unload but keep the row).
+   */
+  z.object({ type: z.literal('tab/archive'), target: ItemRefSchema }),
   /** Cmd+D: Today -> end of Pinned; Pinned or Favorites -> top of Today. */
   z.object({ type: z.literal('tab/toggle-pin'), target: ItemRefSchema }),
   /** "Reset Tab to Original URL": navigate a pinned tab back to the URL it was pinned with. */
