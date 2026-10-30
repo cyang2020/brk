@@ -89,6 +89,15 @@ final class VocabularyTests: XCTestCase {
         XCTAssertEqual(t.advanced(by: .seconds(2)).since(t), .seconds(2))
     }
 
+    /// Every item icon has a space form and back, so the two enums cannot drift apart.
+    func testSpaceIconWrapsEveryCustomIcon() {
+        for icon in [CustomIcon.emoji("x"), .named(.heart), .symbol("star.fill")] {
+            XCTAssertEqual(SpaceIcon(icon).custom, icon)
+        }
+        XCTAssertNil(SpaceIcon(nil).custom)
+        XCTAssertEqual(SpaceIcon(nil), .none)
+    }
+
     func testAutoArchiveChoicesMatchArc() {
         XCTAssertEqual(AutoArchiveThreshold.twelveHours.interval, .seconds(43_200))
         XCTAssertNil(AutoArchiveThreshold.never.interval)
@@ -99,6 +108,11 @@ final class VocabularyTests: XCTestCase {
         let commands: [Command] = [
             .commandBar(.open(.newTab)), .tab(.togglePin(.focused)), .item(.move(ItemID("x"), to: .space(SpaceID("s")))),
             .split(.resize(ItemID("sp"), fractions: [ItemID("a"): 0.4, ItemID("b"): 0.6])), .settings(.autoArchive(.oneHour)),
+            .item(.setIcon(ItemID("x"), .named(.star))), .item(.setIcon(ItemID("x"), nil)),
+            .split(.setOrientation(ItemID("sp"), .vertical)),
+            .space(.create(title: "Work", icon: .custom(.emoji("W")),
+                           theme: SpaceTheme(colors: [RGBA(hex: "#4B3B58")], wheel: .complementary, texture: .denim, noise: 0.3, intensity: 0.6, appearance: .dark))),
+            .space(.update(SpaceID("s"), title: nil, icon: .none, theme: nil)),
         ]
         for command in commands {
             let data = try JSONEncoder().encode(command)

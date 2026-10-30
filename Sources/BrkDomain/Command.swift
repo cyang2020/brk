@@ -123,6 +123,9 @@ public enum ItemCommand: Hashable, Sendable, Codable {
     case toggleFolder(ItemID)
     /// "Deleting this folder will archive the tabs inside it."
     case deleteFolder(ItemID)
+    /// Context menu "Change Icon" on a tab, folder or split (Arc: `SidebarCustomIcon`); nil restores the default
+    /// (favicon or folder glyph).
+    case setIcon(ItemID, CustomIcon?)
 }
 
 public enum SpaceCommand: Hashable, Sendable, Codable {
@@ -146,6 +149,8 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     case closePane
     /// Divider drag. Relative fractions; the reducer normalizes and enforces Metrics.content.minPaneFraction.
     case resize(ItemID, fractions: [ItemID: Double])
+    /// Context menu on a split (Arc: `layoutOrientation`). Saved with the split; v1's layout draws both.
+    case setOrientation(ItemID, SplitOrientation)
 }
 
 public enum SidebarCommand: Hashable, Sendable, Codable {

@@ -64,6 +64,12 @@ final class PolicySpecTests: XCTestCase {
     /// lets a forced appearance override the luminance
     func test_letsAForcedAppearanceOverrideTheLuminance() throws { throw XCTSkip(pendingW1) }
 
+    /// the complementary wheel puts the companion at the opposite hue; analogous at +-30 degrees (W5)
+    func test_wheelRuleDerivesCompanionHues() throws { throw XCTSkip(pendingW5) }
+
+    /// noise and intensity resolve separately: noise sets the texture contrast, intensity the texture opacity and wash (W5)
+    func test_noiseAndIntensityResolveSeparately() throws { throw XCTSkip(pendingW5) }
+
     // MARK: themeFromPrimary
     /// keeps the primary first and adds two analogous companions with grain 0.25 and auto appearance
     func test_keepsThePrimaryFirstAndAddsTwoAnalogousCompanionsWithGrain025AndAutoAppearance() throws { throw XCTSkip(pendingW1) }

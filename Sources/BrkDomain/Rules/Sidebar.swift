@@ -14,6 +14,7 @@ extension Work {
         //   lastActiveAt of moved tabs (regression finding 5: a dragged tab is not swept right after).
         // .newFolder: folder "New Folder" at top of current Pinned, expand Pinned, renaming = folder.
         // .toggleFolder(id): collapsed.toggle(). .deleteFolder(id): archive its tabs (.containerDeleted), remove.
+        // .setIcon(id, icon): updateTab/updateFolder/updateSplit by the item's kind; unknown id -> no-op.
         fatalError("not implemented")
     }
 

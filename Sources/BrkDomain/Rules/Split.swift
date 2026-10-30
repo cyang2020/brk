@@ -19,6 +19,9 @@ extension Work {
         case .resize(let split, let fractions):
             // TODO(W1): normalize to sum 1, clamp each to Metrics.content.minPaneFraction, store as widths.
             _ = (split, fractions)
+        case .setOrientation(let split, let orientation):
+            // TODO(W1): updateSplit { $0.orientation = orientation }; unknown id or not a split -> no-op.
+            _ = (split, orientation)
         }
         fatalError("not implemented")
     }

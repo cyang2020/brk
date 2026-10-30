@@ -110,6 +110,8 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var title: String
     public var url: URL?
     public var favicon: URL?
+    /// User-chosen icon; drawn instead of the favicon when set.
+    public var icon: CustomIcon?
     public var status: RowStatus
     public var loading: Bool
     /// Has a live page. Unloaded Pinned and Favorites tabs draw dimmer.
@@ -123,6 +125,7 @@ public struct FolderRow: Sendable, Equatable, Codable {
     public var section: SectionKind
     public var title: String
     public var collapsed: Bool
+    public var icon: CustomIcon?
     public var children: [Row]
 }
 
@@ -130,6 +133,8 @@ public struct SplitRow: Sendable, Equatable, Codable {
     public var id: ItemID
     public var section: SectionKind
     public var status: RowStatus
+    public var icon: CustomIcon?
+    public var orientation: SplitOrientation
     public var panes: [TabRow]
 }
 
@@ -148,6 +153,8 @@ public struct ContentSnapshot: Sendable, Equatable, Codable {
     public var panes: [Pane]
     /// Set when the shown item is a split; divider drags dispatch `.split(.resize)` for it.
     public var split: ItemID?
+    /// How the panes are laid out (`.horizontal` for a single pane).
+    public var orientation: SplitOrientation
 }
 
 public struct Pane: Sendable, Equatable, Codable {

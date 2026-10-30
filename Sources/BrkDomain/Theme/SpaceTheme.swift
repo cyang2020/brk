@@ -2,8 +2,10 @@ import BrkBase
 import Foundation
 
 // Owner: W5 (theme). Space themes as stored, Arc's observed presets and sidebar tokens, and the derived values
-// every view paints with. Simplified from Arc's `WindowTheme` (anatomy 1.13, 4.5): a blended gradient of 1 to 3
-// base colors, one texture overlay with an intensity, and an appearance choice.
+// every view paints with. Follows Arc's `WindowTheme` / `BlendedGradientConfiguration` / `BlendedBackgroundModifiers`
+// (anatomy 1.13, 4.5): 1 to 3 base colors with a wheel rule for their companions, one texture overlay with a noise
+// amount and a strength, and an appearance choice. The editor's controls (anatomy, "Space theme editor") map one
+// to one: color pad, wheel, noise dial, intensity sine slider, light/dark/auto toggle, preset pages.
 
 /// A color as Arc stores it (`ARCUI.StorableColor`: extended sRGB components 0...1 plus alpha).
 public struct RGBA: Hashable, Sendable, Codable {
@@ -36,23 +38,36 @@ public enum AppearanceChoice: String, Hashable, Sendable, Codable, CaseIterable 
 
 public enum Scheme: String, Hashable, Sendable, Codable { case light, dark }
 
+/// How companion colors are derived from the base colors (Arc: `BlendedGradientConfiguration.wheel`, spelled
+/// `complimentary` there).
+public enum ColorWheel: String, Hashable, Sendable, Codable, CaseIterable { case analogous, complementary }
+
 /// What a space stores. Arc: `WindowTheme` with a `blendedGradient` background.
 public struct SpaceTheme: Hashable, Sendable, Codable {
     /// Primary first; 1 to 3 entries (Arc: `BlendedGradientConfiguration.baseColors`). The reducer clamps the count.
     public var colors: [RGBA]
+    public var wheel: ColorWheel
     public var texture: Texture
-    /// 0...1 (Arc: `noiseFactor`/`intensityFactor` collapsed to one control).
+    /// 0...1 (Arc: `noiseFactor`, the editor's dial). How much of the texture's own variation shows: the renderer
+    /// scales the tile's contrast by it. Its exact role in Arc's shader was not recovered (layout-constants.md,
+    /// "Not recovered"); this is our reading of the two separate controls.
+    public var noise: Double
+    /// 0...1 (Arc: `intensityFactor`, the editor's sine slider). Texture opacity = intensity x the texture's
+    /// multiplier (Metrics.theme.*Opacity); wash opacity = min(0.2 + 0.55 x intensity, 0.5).
     public var intensity: Double
     public var appearance: AppearanceChoice
 
-    public init(colors: [RGBA], texture: Texture, intensity: Double, appearance: AppearanceChoice) {
+    public init(colors: [RGBA], wheel: ColorWheel = .analogous, texture: Texture, noise: Double = 0.5,
+                intensity: Double, appearance: AppearanceChoice) {
         self.colors = colors
+        self.wheel = wheel
         self.texture = texture
+        self.noise = noise
         self.intensity = intensity
         self.appearance = appearance
     }
 
-    /// Arc's default theme for a new space is not in static data (guess: Brand 8, grain at 0.25).
+    /// Arc's default theme for a new space is not in static data (guess: Brand 8, grain, noise 0.5, intensity 0.25).
     public static let `default` = SpaceTheme(colors: [ThemePresets.brand[7]], texture: .grain, intensity: 0.25, appearance: .auto)
 }
 
@@ -116,6 +131,8 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var texture: Texture
     /// intensity x the texture's multiplier (Metrics.theme.*Opacity).
     public var textureOpacity: Double
+    /// The stored `noise`, 0...1: the renderer multiplies the tile's deviation from mid grey by it.
+    public var textureContrast: Double
     /// White (light) or black at 35% (dark), with opacity min(0.2 + 0.55 x intensity, 0.5).
     public var wash: RGBA
     public var tokens: SidebarTokens
@@ -126,8 +143,9 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 /// Pure: stored theme -> paint values. Light or dark comes from the primary color's luminance unless forced.
 public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
     // TODO(W5): scheme = appearance forced, else luminance(colors[0]) > 0.5 ? .light : .dark (WCAG relative
-    // luminance); gradient stops: Arc blends base colors with analogous neighbours (wheel) - v1: base colors plus a
-    // lightened/darkened variant of the primary; textureOpacity = intensity * Metrics.theme.<texture>Opacity;
-    // wash per Metrics.theme.wash*; tokens = scheme == .light ? .light : .dark.
+    // luminance); gradient stops = the base colors plus companions by `wheel`: analogous rotates the primary's hue
+    // by +-Metrics.theme.analogousHueOffset, complementary by Metrics.theme.complementaryHueOffset, keeping
+    // saturation and nudging lightness; textureOpacity = intensity * Metrics.theme.<texture>Opacity;
+    // textureContrast = noise; wash per Metrics.theme.wash*; tokens = scheme == .light ? .light : .dark.
     fatalError("not implemented")
 }

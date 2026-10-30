@@ -76,9 +76,13 @@ private struct StoredDocV1: Codable {
     }
     struct StoredTab: Codable {
         var url: URL?, title: String, customTitle: String?, favicon: URL?, pinnedURL: URL?, lastActiveAt: Instant
+        var icon: CustomIcon?
     }
-    struct StoredFolder: Codable { var title: String, collapsed: Bool }
-    struct StoredSplit: Codable { var widths: [ItemID: Double], focused: ItemID, lastActiveAt: Instant }
+    struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon? }
+    struct StoredSplit: Codable {
+        var widths: [ItemID: Double], focused: ItemID, orientation: SplitOrientation, lastActiveAt: Instant
+        var icon: CustomIcon?
+    }
     struct StoredSection: Codable { var kind: SectionKind, space: SpaceID?, profile: ProfileID? }
     struct StoredSpace: Codable {
         var title: String, icon: SpaceIcon, theme: SpaceTheme, profile: ProfileID
