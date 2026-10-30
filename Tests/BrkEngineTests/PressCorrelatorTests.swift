@@ -36,6 +36,17 @@ final class PressCorrelatorTests: XCTestCase {
         XCTAssertEqual(c.afterPage(t, at: later.advanced(by: .milliseconds(1))), PressID(raw: 3))
     }
 
+    /// A press the app took before the page never reaches the page: CEF sends no after-page call for it and Chromium
+    /// drops its key-up. It must not become the partner of the next press of the chord, whose after-page call would
+    /// then carry the id routing just dispatched (KeyRouting rule 4) and be ignored by the app after the page let it go.
+    /// (ChromePage records every before-page key-down; the first one here is the press the app dispatched.)
+    func testAPressTheAppTookBeforeThePageIsNoPartner() {
+        var c = PressCorrelator()
+        c.beforePage(t, id: PressID(raw: 1), at: t0)
+        c.beforePage(t, id: PressID(raw: 2), at: t0.advanced(by: .milliseconds(1500)))
+        XCTAssertEqual(c.afterPage(t, at: t0.advanced(by: .milliseconds(1510))), PressID(raw: 2))
+    }
+
     func testPressIDFromEventTimestampIsMonotonicAndDistinct() {
         let a = PressID(eventTimestamp: 1234.000001), b = PressID(eventTimestamp: 1234.000002)
         XCTAssertNotEqual(a, b)
