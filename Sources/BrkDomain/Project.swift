@@ -267,8 +267,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     case nil: nil
     }
 
+    // Incognito has its own dark chrome. Greyscale 7 is an existing preset, chosen pending an Arc comparison;
+    // it never edits the space's saved theme or the appearance of its standard windows.
+    let theme = doc.kind == .incognito
+        ? SpaceTheme(colors: [ThemePresets.greyscale[6]], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
+        : space.theme
     return WindowSnapshot(
-        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(space.theme),
+        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
         renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, overlay: overlay, focus: focus,

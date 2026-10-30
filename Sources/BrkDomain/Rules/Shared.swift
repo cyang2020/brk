@@ -108,7 +108,7 @@ extension Work {
             for (space, shown) in window.activeBySpace.sorted(by: { $0.key < $1.key }) {
                 let affected = state.locate(shown) == nil || shown == tab || state.panes(of: shown).contains(tab)
                 guard affected else { continue }
-                state.doc.windows[id]!.activeBySpace[space] = state.mostRecentLoaded(in: space, excluding: shown)
+                state.doc.windows[id]!.activeBySpace[space] = state.mostRecentLoaded(in: space, window: id, excluding: shown)
             }
         }
     }

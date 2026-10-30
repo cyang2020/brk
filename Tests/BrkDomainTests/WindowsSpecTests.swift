@@ -6,6 +6,47 @@ import XCTest
 
 /// Owner: F3. Window kinds (standard, incognito, Little Arc), Peek, "Open in", and links from other apps.
 final class WindowsSpecTests: XCTestCase {
+    func test_incognitoCloseNeverArchivesAndSelectsAnotherPrivateTab() throws {
+        let d = Driver()
+        let standard = d.paneIDs
+        d.user(.window(.newIncognito))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        d.user(.commandBar(.submit("https://example.com/private-a")), in: window)
+        let a = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
+        d.user(.commandBar(.submit("https://example.com/private-b")), in: window)
+        d.user(.tab(.close(.focused)), in: window)
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [a])
+        XCTAssertTrue(d.archive().isEmpty, "closing an incognito tab must not put its URL in the normal archive")
+        d.user(.tab(.archive(.item(a))), in: window)
+        XCTAssertTrue(d.view(of: window).scratch?.rows.isEmpty == true)
+        XCTAssertTrue(d.view(of: window).content.panes.isEmpty)
+        XCTAssertTrue(d.archive().isEmpty)
+        XCTAssertEqual(d.paneIDs, standard)
+        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("private-"))
+    }
+
+    func test_incognitoTabWalkingUsesOnlyItsScratchContainer() throws {
+        let d = Driver()
+        let standard = d.paneIDs
+        d.user(.window(.newIncognito))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        d.user(.commandBar(.submit("https://example.com/private-a")), in: window)
+        let a = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
+        d.user(.commandBar(.submit("https://example.com/private-b")), in: window)
+        let b = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
+        d.user(.tab(.step(.next)), in: window)
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [a])
+        d.user(.tab(.step(.previous)), in: window)
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [b])
+        d.system(.window(window, .modifiersChanged(held: .control)))
+        d.user(.tab(.cycleRecent(.next)), in: window)
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [a])
+        d.user(.tab(.cycleRecent(.next)), in: window)
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [b])
+        d.system(.window(window, .modifiersChanged(held: [])))
+        XCTAssertEqual(d.paneIDs, standard)
+    }
+
     /// .window(.new) opens a second standard window on the same space that shares the sidebar
     func test_newWindowSharesTheSidebar() throws {
         let d = Driver()

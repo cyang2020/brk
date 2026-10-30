@@ -97,7 +97,7 @@ private func repairShownItems(_ state: inout AppState, _ repairs: inout [String]
                 state.doc.windows[id]!.activeBySpace[space] = split
                 continue
             }
-            let next = state.mostRecentLoaded(in: space, excluding: item)
+            let next = state.mostRecentLoaded(in: space, window: id, excluding: item)
             repairs.append("window \(id) showed \(item) in space \(space), now \(next.map(\.rawValue) ?? "nothing")")
             state.doc.windows[id]!.activeBySpace[space] = next
         }

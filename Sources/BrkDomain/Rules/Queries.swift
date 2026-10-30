@@ -114,11 +114,20 @@ extension AppState {
             + tree.units(under: s.todayRoot, skipCollapsed: true)
     }
 
-    /// The replacement when what a space shows goes away: its most recent loaded tab or split (a loaded Favorites
-    /// tab included) other than `exclude`; nil when there is none. Ties keep sidebar order.
-    func mostRecentLoaded(in space: SpaceID, excluding exclude: ItemID?) -> ItemID? {
+    /// The window's tab stops: standard windows share the space, ephemeral windows use only their own tree.
+    func units(in window: WindowID, space: SpaceID? = nil, skipCollapsed: Bool = false) -> [ItemID] {
+        guard let doc = doc.windows[window] else { return [] }
+        if doc.kind == .standard {
+            return skipCollapsed ? sidebarStops(space ?? doc.space) : unitsOfSpace(space ?? doc.space)
+        }
+        guard let tree = session.scratch[window], let root = tree.root(for: .scratch(window)) else { return [] }
+        return tree.units(under: root, skipCollapsed: skipCollapsed)
+    }
+
+    /// The replacement when a window's shown item goes away, restricted to its container. Ties keep sidebar order.
+    func mostRecentLoaded(in space: SpaceID, window: WindowID, excluding exclude: ItemID?) -> ItemID? {
         var best: (ItemID, Instant)?
-        for unit in unitsOfSpace(space) where unit != exclude {
+        for unit in units(in: window, space: space) where unit != exclude {
             guard panes(of: unit).contains(where: { $0 != exclude && session.loaded.contains($0) }) else { continue }
             let at = lastActiveOf(unit)
             if best == nil || at > best!.1 { best = (unit, at) }
