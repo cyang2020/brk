@@ -48,9 +48,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         card.wantsLayer = true
         card.layer?.cornerCurve = .continuous
         card.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
-        card.layer?.shadowOpacity = 1
-        card.layer?.shadowRadius = OverlayMetrics.commandBar.shadowRadius.value
-        card.layer?.shadowOffset = CGSize(width: 0, height: -OverlayMetrics.commandBar.shadowOffset.value)
         hairline.wantsLayer = true
         card.addSubview(input)
         card.addSubview(hairline)
@@ -185,7 +182,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         for (i, row) in rows.enumerated() where i < results.count {
             row.frame = CGRect(x: o.rowInset.value, y: top + CGFloat(i) * rowHeight, width: card.bounds.width - 2 * o.rowInset.value, height: rowHeight)
         }
-        card.layer?.shadowPath = CGPath(roundedRect: card.bounds, cornerWidth: o.cornerRadius.value, cornerHeight: o.cornerRadius.value, transform: nil)
     }
 
     private func applyColors(_ scheme: Scheme) {
@@ -193,7 +189,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         colors = OverlayColors.of(scheme)
         appearance = .of(scheme)
         card.layer?.backgroundColor = colors.popover.cgColor
-        card.layer?.shadowColor = colors.popoverShadow.cgColor
+        card.shadow = .popover(colors)
         hairline.layer?.backgroundColor = colors.hairline.cgColor
         input.textColor = colors.textPrimary
         input.placeholderAttributedString = NSAttributedString(string: Copy.urlPlaceholder, attributes: [
@@ -355,6 +351,18 @@ final class ResultRowView: NSView {
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
         if bounds.contains(convert(event.locationInWindow, from: nil)) { onChoose() }
+    }
+}
+
+extension NSShadow {
+    /// Arc's popover shadow (PopoverShadow color; blur and drop are ours). Set through `NSView.shadow`, which AppKit
+    /// keeps in sync with the layer, so it is not lost when AppKit updates a layer-backed view.
+    static func popover(_ colors: OverlayColors) -> NSShadow {
+        let shadow = NSShadow()
+        shadow.shadowColor = colors.popoverShadow
+        shadow.shadowBlurRadius = OverlayMetrics.commandBar.shadowRadius.value
+        shadow.shadowOffset = NSSize(width: 0, height: -OverlayMetrics.commandBar.shadowOffset.value)
+        return shadow
     }
 }
 
