@@ -10,6 +10,7 @@ import BrkCEF
 import BrkEngine
 
 MainActor.assumeIsolated {
+    CrashBacktrace.install()
     let options = LaunchOptions()
     let engine: any WebEngine
     switch options.engine {
