@@ -180,6 +180,11 @@ export interface WindowSession {
   readonly renamingId: ItemId | null
   readonly dialog: SidebarDialog | null
   readonly recentCycle: RecentCycle | null
+  /**
+   * The set of visible tabs (every window) captured when a Ctrl+Tab cycle began, so the net "entered/left the screen"
+   * change is stamped when the cycle ends rather than on each provisional walk step. Null outside a cycle.
+   */
+  readonly cycleBaseline: readonly ItemId[] | null
 }
 
 /** `openId` = overlayOpens when this overlay opened; becomes OverlayView.openId (src/shared/view.ts). */

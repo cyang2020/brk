@@ -12,11 +12,12 @@
  * (`sidebar/toggle`, `tab/toggle-pin`) are toggles by definition; input.ts guarantees one dispatch per key press.
  */
 import { produce, type Draft } from 'immer'
-import type { Instant, WindowId } from '../shared/base'
+import type { Instant, ItemId, WindowId } from '../shared/base'
 import type { Input, SystemCommand, UiCommand, UiCommandType } from '../shared/commands'
 import type { Effect } from './effects'
 import { open, seal, type AppState, type Overlay, type StateImpl } from './model'
 import { normalize } from './normalize'
+import { onScreenTabIds } from './select'
 import { archiveHandlers } from './ops/archive'
 import { sidebarHandlers } from './ops/sidebar'
 import { spaceHandlers } from './ops/spaces'
@@ -82,12 +83,45 @@ export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
     const windowId: WindowId | null = input.origin === 'ui' ? input.windowId : 'windowId' in command ? command.windowId : null
     if (input.origin === 'ui' && !draft.doc.windows[input.windowId]) return // stale window: drop
     if (input.origin === 'ui' && !keepsOverlay(input.command.type, draft.session.windows[input.windowId]?.overlay?.kind ?? null)) closeOverlay(draft, input.windowId)
+    const before = onScreenTabIds(draft)
+    const cycleWas = windowId !== null && draft.session.windows[windowId]?.recentCycle != null
     const handler = HANDLERS[command.type] as Handler<AnyCommand>
     handler(draft, command, { ...ctx, windowId, emit: (effect) => effects.push(effect) })
     normalize(draft, ctx)
+    stampScreenChange(draft, before, windowId, cycleWas, ctx.now)
   })
   const sealed = next === prev ? next : produce(next, (draft) => {
     draft.session.rev += 1
   })
   return { state: seal(sealed), effects, docChanged: sealed.doc !== prev.doc }
+}
+
+/**
+ * The one place lastActiveAt is stamped: after each command (handler then normalize), stamp `now` on every tab that
+ * entered or left the on-screen set (any window), so auto-archive's idle timer always runs from the last time a tab
+ * was actually on screen — whether it left through a focus, a space switch, a dock-drop `item/move`, a close, or a
+ * Ctrl+Tab commit. A continuously-visible tab is never stamped and never archived (the "visible is never archived"
+ * rule), and is stamped only when it finally leaves.
+ *
+ * A Ctrl+Tab walk is provisional: its intermediate focus changes must not count as the tab being used. While the
+ * command's window is mid-cycle, nothing is stamped and the pre-cycle on-screen set is remembered as the baseline;
+ * when the cycle ends, the net change is stamped against that baseline, so the tab shown when the walk began is
+ * stamped (it left) and the chosen tab is stamped (it entered), both at commit time.
+ */
+function stampScreenChange(draft: Draft<StateImpl>, before: ReadonlySet<ItemId>, windowId: WindowId | null, cycleWas: boolean, now: Instant): void {
+  const ws = windowId !== null ? draft.session.windows[windowId] : undefined
+  if (ws?.recentCycle != null) {
+    if (!cycleWas) ws.cycleBaseline = [...before] // first step of a cycle: remember where the screen was
+    return // provisional walk: stamp nothing yet
+  }
+  const baseline = cycleWas && ws?.cycleBaseline != null ? new Set(ws.cycleBaseline) : before
+  const after = onScreenTabIds(draft)
+  for (const id of baseline) if (!after.has(id)) stampLastActive(draft, id, now) // left the screen
+  for (const id of after) if (!baseline.has(id)) stampLastActive(draft, id, now) // entered the screen
+  if (ws?.cycleBaseline != null) ws.cycleBaseline = null
+}
+
+function stampLastActive(draft: Draft<StateImpl>, id: ItemId, now: Instant): void {
+  const item = draft.doc.items[id]
+  if (item?.kind === 'tab' && item.lastActiveAt !== now) item.lastActiveAt = now
 }

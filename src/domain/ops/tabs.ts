@@ -8,7 +8,7 @@ import type { ItemRef } from '../../shared/commands'
 import { isAllowedUrl, resolveTypedInput } from '../../shared/url'
 import { own, type LiveTab, type StateImpl, type TabItem } from '../model'
 import type { Ctx, HandlerCtx, Handlers } from '../reduce'
-import { activeItemId, focusedTabId, lastActiveOf, mostRecentLoaded, shownTabIds, unitsOfSpace, visibleTabIds } from '../select'
+import { activeItemId, focusedTabId, lastActiveOf, mostRecentLoaded, unitsOfSpace, visibleTabIds } from '../select'
 import { getItem, insertItem, locate, moveItem, sidebarOrder, type Slot } from '../tree'
 import { archiveItems } from './archive'
 import { closeOverlay } from './window'
@@ -19,38 +19,17 @@ export interface OpenTabOptions {
   readonly focus: boolean
 }
 
-/** What is on screen in the window as stampable units: the active split (if any) and the visible tabs. */
-function screenUnits(draft: Draft<StateImpl>, windowId: WindowId): readonly ItemId[] {
-  const active = activeItemId(draft, windowId)
-  return active === null ? [] : [active, ...visibleTabIds(draft, windowId)]
-}
-
 /**
- * Runs `change` (which alters what window `windowId` shows) and stamps `lastActiveAt = now` on every tab and split
- * that left or entered the screen. This is the one rule for lastActiveAt: "the last time it stopped or started
- * being on screen".
+ * Switches the window to `spaceId` (no-op when already there). lastActiveAt is stamped once, centrally, by `reduce`
+ * diffing the visible-tab set around the whole command (src/domain/reduce.ts), so this only changes what is shown.
  */
-export function changeScreen(draft: Draft<StateImpl>, windowId: WindowId, ctx: Ctx, change: () => void): void {
-  const before = screenUnits(draft, windowId)
-  change()
-  for (const id of new Set([...before, ...screenUnits(draft, windowId)])) stamp(draft, id, ctx.now)
-}
-
-export function stamp(draft: Draft<StateImpl>, itemId: ItemId, now: Instant): void {
-  const item = draft.doc.items[itemId]
-  if ((item?.kind === 'tab' || item?.kind === 'split') && item.lastActiveAt !== now) item.lastActiveAt = now
-}
-
-/** Switches the window to `spaceId` (no-op when already there), stamping what leaves and enters the screen. */
-export function showSpace(draft: Draft<StateImpl>, windowId: WindowId, spaceId: SpaceId, ctx: Ctx): void {
+export function showSpace(draft: Draft<StateImpl>, windowId: WindowId, spaceId: SpaceId, _ctx: Ctx): void {
   const win = draft.doc.windows[windowId]
   const ws = draft.session.windows[windowId]
   if (!win || !ws || !own(draft.doc.spaces, spaceId)) return
   if (ws.peek) ws.peek = false
   if (win.spaceId === spaceId) return
-  changeScreen(draft, windowId, ctx, () => {
-    win.spaceId = spaceId
-  })
+  win.spaceId = spaceId
   if (ws.recentCycle) ws.recentCycle = null
 }
 
@@ -78,12 +57,13 @@ export function openTab(draft: Draft<StateImpl>, windowId: WindowId, url: string
 
 /**
  * Makes `itemId` what the window shows. A split pane focuses its split with that pane focused; a tab in another
- * space switches the window to that space; a Favorites tab stays in the current space. Unless `stamp` is false
- * (Ctrl+Tab in progress), stamps `lastActiveAt = now` on the outgoing and incoming visible tabs and ends any
- * recent-tab cycle. Sets activeBySpace[space] = the item (or its split), which is the only way an absent entry gets
- * filled. Already showing it, with that pane focused: no change at all.
+ * space switches the window to that space; a Favorites tab stays in the current space. Sets activeBySpace[space] = the
+ * item (or its split), which is the only way an absent entry gets filled. Already showing it, with that pane focused:
+ * no change at all. lastActiveAt is stamped once, centrally, by `reduce` diffing the visible-tab set around the whole
+ * command. `endsCycle` false (Ctrl+Tab in progress) keeps the recent-tab cycle so its provisional walk is not stamped;
+ * every other focus ends the cycle.
  */
-export function focusItem(draft: Draft<StateImpl>, windowId: WindowId, itemId: ItemId, ctx: Ctx, stamp = true): void {
+export function focusItem(draft: Draft<StateImpl>, windowId: WindowId, itemId: ItemId, _ctx: Ctx, endsCycle = true): void {
   const doc = draft.doc
   const win = doc.windows[windowId]
   const ws = draft.session.windows[windowId]
@@ -97,16 +77,12 @@ export function focusItem(draft: Draft<StateImpl>, windowId: WindowId, itemId: I
   const spaceId = locate(doc, shown)?.spaceId ?? win.spaceId
   const already = win.spaceId === spaceId && win.activeBySpace[spaceId] === shown && (pane === null || split?.focusedId === pane)
   if (!already) {
-    const change = (): void => {
-      if (win.spaceId !== spaceId) win.spaceId = spaceId
-      if (win.activeBySpace[spaceId] !== shown) win.activeBySpace[spaceId] = shown
-      const draftSplit = doc.items[shown]
-      if (pane !== null && draftSplit?.kind === 'split' && draftSplit.focusedId !== pane) draftSplit.focusedId = pane
-    }
-    if (stamp) changeScreen(draft, windowId, ctx, change)
-    else change()
+    if (win.spaceId !== spaceId) win.spaceId = spaceId
+    if (win.activeBySpace[spaceId] !== shown) win.activeBySpace[spaceId] = shown
+    const draftSplit = doc.items[shown]
+    if (pane !== null && draftSplit?.kind === 'split' && draftSplit.focusedId !== pane) draftSplit.focusedId = pane
   }
-  if (stamp && ws.recentCycle) ws.recentCycle = null
+  if (endsCycle && ws.recentCycle) ws.recentCycle = null
 }
 
 /** 'focused' -> the focused pane's tab in the dispatching window; an id -> that tab. Null when there is no such tab. */
@@ -125,11 +101,10 @@ export function refocusSplitWithout(draft: Draft<StateImpl>, tabId: ItemId): voi
   if (neighbour !== undefined) split.focusedId = neighbour
 }
 
-/** Drops a tab's webContents (Close and Keep Pinned). The item stays where it is. */
-export function unload(draft: Draft<StateImpl>, tabId: ItemId, ctx: Ctx): void {
+/** Drops a tab's webContents (Close and Keep Pinned). The item stays where it is; reduce stamps it as it leaves screen. */
+export function unload(draft: Draft<StateImpl>, tabId: ItemId, _ctx: Ctx): void {
   if (draft.session.loaded[tabId]) delete draft.session.loaded[tabId]
   if (draft.session.live[tabId]) delete draft.session.live[tabId]
-  stamp(draft, tabId, ctx.now)
 }
 
 /**
@@ -137,7 +112,7 @@ export function unload(draft: Draft<StateImpl>, tabId: ItemId, ctx: Ctx): void {
  * tab or split of that space, or is deleted (the space then shows an empty content card). Entries showing an item
  * that is gone get the same treatment.
  */
-function replaceShown(draft: Draft<StateImpl>, tabId: ItemId, ctx: Ctx): void {
+function replaceShown(draft: Draft<StateImpl>, tabId: ItemId, _ctx: Ctx): void {
   const doc = draft.doc
   for (const windowId of Object.keys(doc.windows) as WindowId[]) {
     const win = doc.windows[windowId]!
@@ -146,12 +121,8 @@ function replaceShown(draft: Draft<StateImpl>, tabId: ItemId, ctx: Ctx): void {
       const affected = !item || shown === tabId || (item.kind === 'split' && item.children.includes(tabId))
       if (!affected) continue
       const next = mostRecentLoaded(draft, spaceId, shown)
-      const apply = (): void => {
-        if (next === null) delete win.activeBySpace[spaceId]
-        else win.activeBySpace[spaceId] = next
-      }
-      if (win.spaceId === spaceId) changeScreen(draft, windowId, ctx, apply)
-      else apply()
+      if (next === null) delete win.activeBySpace[spaceId]
+      else win.activeBySpace[spaceId] = next
     }
   }
 }
@@ -220,14 +191,11 @@ export const tabHandlers = {
     cycle.index = (((cycle.index + command.delta) % n) + n) % n
     focusItem(draft, w, cycle.order[cycle.index]!, ctx, false)
   },
-  // If recentCycle: stamp the chosen tab, clear recentCycle; else no-op.
-  'tab/cycle-recent-commit': (draft, command, ctx) => {
+  // Ctrl released: end the cycle. The net "entered/left the screen" change (the tab shown when the cycle began left,
+  // the chosen one entered) is stamped centrally by reduce against the cycle's baseline.
+  'tab/cycle-recent-commit': (draft, command) => {
     const ws = draft.session.windows[command.windowId]
-    const cycle = ws?.recentCycle
-    if (!ws || !cycle) return
-    const chosen = cycle.order[cycle.index]
-    if (chosen !== undefined) for (const id of [chosen, ...shownTabIds(draft.doc, chosen)]) stamp(draft, id, ctx.now)
-    ws.recentCycle = null
+    if (ws?.recentCycle) ws.recentCycle = null
   },
   // Resolve target. Today tab (or a Today split's pane): archiveItems([id], 'manual'). Pinned or Favorites tab
   // (Arc's "Close and Keep Pinned"): delete it from session.loaded (main then closes its webContents) and keep the

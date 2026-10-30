@@ -24,6 +24,7 @@ export const freshWindowSession = (contentSize: { readonly width: number; readon
   renamingId: null,
   dialog: null,
   recentCycle: null,
+  cycleBaseline: null,
 })
 
 /** Whether `itemId` is something space `spaceId` can show: a tab (not a pane) or a split, in that space or Favorites. */

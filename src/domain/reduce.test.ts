@@ -420,7 +420,7 @@ describe('reduce: tabs', () => {
     expect(d.view().content.splitId).toBe(split)
   })
 
-  it('tab/cycle-recent freezes the recent order on the first press; tab/cycle-recent-commit stamps only the chosen tab', () => {
+  it('tab/cycle-recent freezes the recent order on the first press; the commit stamps the net on-screen change', () => {
     const d = new Driver()
     const [a] = d.todayIds()
     d.advance(HOUR)
@@ -439,11 +439,12 @@ describe('reduce: tabs', () => {
     expect(paneIds(d)).toEqual([a])
     d.sys({ type: 'tab/cycle-recent-commit', windowId: d.w })
     unchanged(d.state, d.sys({ type: 'tab/cycle-recent-commit', windowId: d.w }))
-    // Only a was stamped (at T0+5h). c left the screen during the cycle without a stamp, so at T0+2h+12h both b
-    // (stamped T0+2h) and c (last stamped at its creation, T0+2h) are 12h idle and auto-archived; a is on screen.
+    // The walk is provisional: no stamp per step. At commit the net change is stamped against the pre-cycle screen —
+    // c (shown when the walk began) left and a (chosen) entered, both at T0+5h. b keeps its T0+2h stamp. So at T0+14h
+    // b is 12h idle and archived, while c (stamped T0+5h) and the on-screen a survive.
     d.advance(9 * HOUR) // T0 + 14h
     d.sys({ type: 'clock/tick' })
-    expect(d.todayIds()).toEqual([a])
+    expect(d.todayIds()).toEqual([c, a])
   })
 
   it('tab/cycle-recent with one tab is a no-op', () => {
