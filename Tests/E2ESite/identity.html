@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Identity document</title>
+<style>html,body { margin: 0; height: 100%; background: white } textarea { position:fixed; inset:30px; width:80%; height:80%; font:24px sans-serif }</style>
+<textarea id="editor" autofocus aria-label="Independent value"></textarea>
+<script>
+editor.addEventListener('input', () => document.title = 'value:' + editor.value);
+window.reportValue = () => document.title = 'value:' + editor.value;
+</script>

@@ -19,7 +19,7 @@ public struct ProjectionContext: Sendable {
 /// - row status (current/visible/idle) from the window's shown item and split focus; a split row is current while
 ///   it is what the window shows;
 /// - row titles (custom title, page title, display URL, "New Tab");
-/// - `pages`: every loaded tab of every container -> PageSpec(initialURL: tab.url, profile of its section);
+/// - `pages`: each demanded window/tab slot with its requested or committed URL and browsing context;
 /// - pane fractions: split widths through `clampFractions` (the same numbers `.split(.resize)` stores);
 /// - `focus`: command bar input > rename field > space dialog > (archive open: none) > focused pane's page > none;
 /// - `enabledActions`: which table actions do something right now (menu validation greys out the others);
@@ -31,15 +31,24 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
     for id in state.doc.windows.keys {
         if let window = projectWindow(id, state, ctx) { windows[id] = window }
     }
-    return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state))
+    return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
+                       observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
+                           (page, PageObservation(browser: state.session.live[page]?.browser,
+                                                  document: state.session.live[page]?.document ?? .unavailable,
+                                                  requestedURL: state.session.live[page]?.requestedURL,
+                                                  committedURL: state.doc.windows[page.window]?.slots[page.item]?.committedURL))
+                       }))
 }
 
-/// Every loaded tab, app-wide, sorted by id (stable for the engine's reconcile), in the request context of its
+/// Every demanded window/tab slot, sorted by composite id (stable for the engine's reconcile), in the request context of its
 /// section's profile (incognito for an incognito window's tabs).
 func projectPages(_ state: AppState) -> [PageSpec] {
-    state.session.loaded.sorted().compactMap { tab in
-        guard let scope = state.locate(tab), let tree = state.tree(scope), case .tab(let t)? = tree[tab]?.body else { return nil }
-        return PageSpec(id: PageID(tab), initialURL: t.url, context: state.browsingContext(of: tab))
+    state.session.loaded.sorted().compactMap { page in
+        guard state.owns(page) else { return nil }
+        let live = state.session.live[page]
+        let context = state.browsingContext(of: page.item)
+        let requested = live?.requestContext == context ? live?.requestedURL : nil
+        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context)
     }
 }
 
@@ -99,7 +108,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     var fractions: [Double] = []
     switch shown?.body {
     case .split(let s)?:
-        panes = s.panes.ids; focusedPane = s.focused; splitID = shown!.id; orientation = s.orientation
+        panes = s.panes.ids; focusedPane = state.focusedPane(of: shown!.id, in: id); splitID = shown!.id; orientation = s.orientation
         fractions = clampFractions(s.panes.ids.map { s.widths[$0] ?? 1 })
     case .tab?:
         panes = [shown!.id]; focusedPane = shown!.id; fractions = [1]
@@ -109,9 +118,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     func status(_ tab: ItemID) -> RowStatus { tab == focusedPane ? .current : panes.contains(tab) ? .visible : .idle }
 
-    func tabRow(_ tab: ItemID, _ t: Tab, _ kind: SectionKind) -> TabRow {
-        TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
-               loading: state.session.live[tab]?.loading ?? false, loaded: state.session.loaded.contains(tab),
+    func tabRow(_ tab: ItemID, _ original: Tab, _ kind: SectionKind) -> TabRow {
+        let t = state.displayedTab(tab, in: id) ?? original
+        return TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
+               loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
     }
 
@@ -155,8 +165,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     // Content.
     let contentPanes = zip(panes, fractions).map { p, fraction -> Pane in
         let content: PaneContent
-        if case .tab(let t)? = tree[p]?.body, t.url != nil, state.session.loaded.contains(p) {
-            content = (state.session.live[p]?.crashed ?? false) ? .crashed(PageID(p)) : .page(PageID(p))
+        if state.address(of: p, in: id, for: .visible) != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
+            content = (state.session.live[PageID(window: id, item: p)]?.crashed ?? false) ? .crashed(PageID(window: id, item: p)) : .page(PageID(window: id, item: p))
         } else {
             content = .blank
         }
@@ -167,10 +177,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     // URL pill. The profile badge shows a non-default profile, or incognito (F2).
     var pill = URLPillSnapshot(text: nil, loading: false, canGoBack: false, canGoForward: false, profile: nil)
     var focusedTab: Tab?
-    if let focusedPane, case .tab(let t)? = tree[focusedPane]?.body {
+    if let focusedPane, let t = state.displayedTab(focusedPane, in: id) {
         focusedTab = t
         pill.text = t.url.map(displayURL)
-        if let live = state.session.live[focusedPane] {
+        if let live = state.session.live[PageID(window: id, item: focusedPane)] {
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward
         }
     }
@@ -194,7 +204,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         var placement = CommandBarPlacement.centered, initialQuery = ""
         if case .navigate(let tab, let overPill) = target {
             placement = overPill ? .overURLPill : .centered
-            if case .tab(let t)? = tree[tab]?.body { initialQuery = t.url?.absoluteString ?? "" }
+            initialQuery = state.address(of: tab, in: id, for: .visible)?.absoluteString ?? ""
         }
         let engine = state.searchEngine(in: id)
         let profile = space.profile
@@ -205,7 +215,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
         overlay = .commandBar(CommandBarSnapshot(
             openID: openID, placement: placement, initialQuery: initialQuery,
-            tabs: switchCandidates(state, tree: tree, space: space, focused: focusedPane),
+            tabs: switchCandidates(state, window: id, tree: tree, space: space, focused: focusedPane),
             history: state.doc.history.filter { $0.profile == profile }.map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
             actions: listed,
             keys: Dictionary(uniqueKeysWithValues: listed.compactMap { action in
@@ -236,7 +246,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     case .peek(let openID, let tab)?:
         // The peeked tab lives in the window's own scratch tree, whatever the window's container is.
         if case .tab(let t)? = state.session.scratch[id]?[tab]?.body {
-            let page: PageID? = t.url != nil && state.session.loaded.contains(tab) ? PageID(tab) : nil
+            let page: PageID? = state.address(of: tab, in: id, for: .visible) != nil && state.session.loaded.contains(PageID(window: id, item: tab)) ? PageID(window: id, item: tab) : nil
             peekPage = page
             overlay = .peek(PeekSnapshot(openID: openID, tab: tabRow(tab, t, .scratch), page: page))
         }
@@ -304,9 +314,9 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
     if let (id, tab) = focused {
-        if !state.session.loaded.contains(id) || tab.url == nil { enabled.subtract(pageActions) }
-        if state.session.live[id]?.canGoBack != true { enabled.remove(.goBack) }
-        if state.session.live[id]?.canGoForward != true { enabled.remove(.goForward) }
+        if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
+        if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }
+        if state.session.live[PageID(window: window, item: id)]?.canGoForward != true { enabled.remove(.goForward) }
         if tab.url == nil { enabled.remove(.copyCurrentURL) }
         if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
     } else {
@@ -326,12 +336,12 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
 
 /// Open tabs for the command bar: every tab with a url in the container (every space's Pinned and Today, then
 /// Favorites), the focused one first, then by recency, ties in that order.
-private func switchCandidates(_ state: AppState, tree: SidebarTree, space: Space, focused: ItemID?) -> [SwitchCandidate] {
+private func switchCandidates(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, focused: ItemID?) -> [SwitchCandidate] {
     var out: [(SwitchCandidate, Instant)] = []
     for s in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
         for root in [s.pinnedRoot, s.todayRoot] {
             for tab in tree.tabs(under: root) {
-                guard case .tab(let t)? = tree[tab]?.body, let url = t.url else { continue }
+                guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
                 out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: state.displayTitle(of: s.id),
                                             inCurrentSpace: s.id == space.id, isFocused: tab == focused), t.lastActiveAt))
             }
@@ -339,7 +349,7 @@ private func switchCandidates(_ state: AppState, tree: SidebarTree, space: Space
     }
     if let favorites = state.favoritesRoot(for: space) {
         for tab in tree.tabs(under: favorites) {
-            guard case .tab(let t)? = tree[tab]?.body, let url = t.url else { continue }
+            guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: nil,
                                         inCurrentSpace: true, isFocused: tab == focused), t.lastActiveAt))
         }

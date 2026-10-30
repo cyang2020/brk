@@ -9,9 +9,9 @@ import Foundation
 // never the shape.
 //
 // Versioning: `StoredFile` reads the version alone, so any file whose version we know can be routed to its decoder
-// and migrated forward (`migrate`), and one we do not know is `rejected` without guessing. v2 is current: wave 2
+// and migrated forward (`migrate`), and one we do not know is `rejected` without guessing. v3 stores window slot addresses, split focus and explicit empty selections. Wave 2
 // added the settings model, profiles, downloads, Air Traffic Control routes, shortcut overrides and per-profile
-// history. A v1 file (`StoredDocV1`, frozen) becomes a v2 doc through `StoredDocV2.init(v1:)`: its one setting,
+// history. A v1 file (`StoredDocV1`, frozen) becomes a current doc through `StoredDocV3.init(v1:)`: its one setting,
 // `autoArchive`, is the default profile's threshold; its history belongs to the default profile.
 //
 // `ExportCodec` (bottom) is the "Share…" file format (JSON, Netscape bookmark HTML): a domain format, so it lives
@@ -61,20 +61,20 @@ private struct StoredFileV1: Decodable {
     var doc: StoredDocV1
 }
 
-private struct StoredFileV2: Codable {
+private struct StoredFileV3: Codable {
     var version: Int
-    var doc: StoredDocV2
+    var doc: StoredDocV3
 }
 
 public enum StateCodec {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     /// Doc only, deterministic key order (sorted keys) so identical state writes identical bytes.
     public static func encode(_ state: AppState) -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
         // Encoding our own Codable DTOs cannot fail; a failure here is a programming error.
-        return try! encoder.encode(StoredFileV2(version: currentVersion, doc: StoredDocV2(state.doc)))
+        return try! encoder.encode(StoredFileV3(version: currentVersion, doc: StoredDocV3(state.doc)))
     }
 
     /// Parse, migrate, validate, repair, normalize. Never throws: an unusable file is `.rejected` with a fresh state.
@@ -92,8 +92,27 @@ public enum StateCodec {
     /// Envelope -> versioned doc -> validated Doc -> normalized state.
     static func decode(_ data: Data, seed: RestoreSeed, ctx: Context) throws(CodecError) -> (AppState, repairs: [String]) {
         let envelope = try readEnvelope(data)
-        let v1 = try migrate(data, from: envelope.version)
-        let (doc, repairs) = try v1.validated(ctx: ctx)
+        let stored = try migrate(data, from: envelope.version)
+        var (doc, repairs) = try stored.validated(ctx: ctx)
+        if envelope.version < 3 {
+            for window in doc.windows.keys {
+                doc.windows[window]!.slots = [:]
+                doc.windows[window]!.splitFocus = [:]
+                doc.windows[window]!.emptySelections = []
+                for item in doc.windows[window]!.activeBySpace.values {
+                    let panes: [ItemID]
+                    if case .split(let split)? = doc.tree[item]?.body {
+                        panes = split.panes.ids
+                        let oldFocus = stored.items[item]?.split?.focused
+                        doc.windows[window]!.splitFocus[item] = oldFocus.flatMap { panes.contains($0) ? $0 : nil } ?? panes.first
+                    } else { panes = [item] }
+                    for pane in panes {
+                        if case .tab(let tab)? = doc.tree[pane]?.body { doc.windows[window]!.slots[pane] = SavedSlot(committedURL: tab.url, observedTitle: tab.title, favicon: tab.favicon) }
+                    }
+                }
+            }
+            repairs.append("migrated window page addresses and split focus to v3")
+        }
         var state = AppState(doc: doc, session: Session.fresh(for: doc, contentSize: seed.contentSize))
         let normalized = normalize(&state)
         return (state, repairs + normalized)
@@ -103,13 +122,13 @@ public enum StateCodec {
         do { return try JSONDecoder().decode(StoredFile.self, from: data) } catch { throw .unreadable("\(error)") }
     }
 
-    /// Decodes a file of a known version and brings it to the current stored shape (v2).
-    static func migrate(_ data: Data, from version: Int) throws(CodecError) -> StoredDocV2 {
+    /// Decodes a file of a known version and brings it to the current stored shape (v3).
+    static func migrate(_ data: Data, from version: Int) throws(CodecError) -> StoredDocV3 {
         switch version {
         case 1:
-            do { return StoredDocV2(v1: try JSONDecoder().decode(StoredFileV1.self, from: data).doc) } catch { throw .unreadable("\(error)") }
-        case 2:
-            do { return try JSONDecoder().decode(StoredFileV2.self, from: data).doc } catch { throw .unreadable("\(error)") }
+            do { return StoredDocV3(v1: try JSONDecoder().decode(StoredFileV1.self, from: data).doc) } catch { throw .unreadable("\(error)") }
+        case 2, 3:
+            do { return try JSONDecoder().decode(StoredFileV3.self, from: data).doc } catch { throw .unreadable("\(error)") }
         default:
             throw .unknownVersion(version)
         }
@@ -127,12 +146,12 @@ public enum StateCodec {
         tree.makeRoot(pinnedRoot, .pinned(space), createdAt: now)
         tree.makeRoot(todayRoot, .today(space), createdAt: now)
         var activeBySpace: [SpaceID: ItemID] = [:]
-        var loaded: Set<ItemID> = []
-        if let url = seed.startURL {
+        var loaded: Set<PageID> = []
+        if seed.startURL != nil {
             let tab = ItemID(ctx.newID())
-            try? tree.insert(tab, .tab(Tab(url: url, title: "", lastActiveAt: now)), at: .into(parent: todayRoot, index: 0), createdAt: now)
+            try? tree.insert(tab, .tab(Tab(url: nil, title: "", lastActiveAt: now)), at: .into(parent: todayRoot, index: 0), createdAt: now)
             activeBySpace[space] = tab
-            loaded.insert(tab)
+            loaded.insert(PageID(window: window, item: tab))
         }
         let doc = Doc(
             tree: tree,
@@ -147,6 +166,7 @@ public enum StateCodec {
         )
         var session = Session.fresh(for: doc, contentSize: seed.contentSize)
         session.loaded = loaded
+        for page in loaded { session.live[page] = LivePage(requestedURL: seed.startURL, requestContext: .profile(.default)) }
         if seed.startURL == nil {
             session.windows[window]!.overlay = .commandBar(openID: 1, target: .newTab)
             session.windows[window]!.overlayOpens = 1
@@ -169,23 +189,23 @@ extension Session {
     }
 }
 
-/// The v1 stored shape, frozen: decoded from old files only and converted by `StoredDocV2.init(v1:)`.
+/// The v1 stored shape, frozen: decoded from old files only and converted by `StoredDocV3.init(v1:)`.
 struct StoredDocV1: Decodable {
-    var items: [ItemID: StoredDocV2.StoredItem]
-    var spaces: [SpaceID: StoredDocV2.StoredSpace]
+    var items: [ItemID: StoredDocV3.StoredItem]
+    var spaces: [SpaceID: StoredDocV3.StoredSpace]
     var spaceOrder: [SpaceID]
     var favorites: [ProfileID: ItemID]
-    var archive: [StoredDocV2.StoredArchived]
+    var archive: [StoredDocV3.StoredArchived]
     var history: [StoredHistory]
-    var windows: [WindowID: StoredDocV2.StoredWindow]
+    var windows: [WindowID: StoredDocV3.StoredWindow]
     var autoArchive: AutoArchiveThreshold
 
     struct StoredHistory: Decodable { var url: URL, title: String, visitedAt: Instant }
 }
 
-/// The v2 stored shape. Every field of `Doc` appears here, and `init(_ doc:)` / `validated(ctx:)` construct fields
+/// The v3 stored shape. New window fields are optional when decoding v1/v2. Every field of `Doc` appears here, and `init(_ doc:)` / `validated(ctx:)` construct fields
 /// explicitly, so a field added to `Doc` but not here is a compile error in one of the two.
-struct StoredDocV2: Codable {
+struct StoredDocV3: Codable {
     var items: [ItemID: StoredItem]
     var spaces: [SpaceID: StoredSpace]
     var spaceOrder: [SpaceID]
@@ -255,7 +275,7 @@ struct StoredDocV2: Codable {
     }
     struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon? }
     struct StoredSplit: Codable {
-        var widths: [ItemID: Double], focused: ItemID, orientation: SplitOrientation, lastActiveAt: Instant
+        var widths: [ItemID: Double], focused: ItemID?, orientation: SplitOrientation, lastActiveAt: Instant
         var icon: CustomIcon?
     }
     /// `scratch` roots are never written (they live in Session); one in a file is repaired away as an unknown kind.
@@ -275,6 +295,9 @@ struct StoredDocV2: Codable {
         var activeBySpace: [SpaceID: ItemID]
         var sidebarVisible: Bool
         var sidebarWidth: Double
+        var slots: [ItemID: SavedSlot]?
+        var splitFocus: [ItemID: ItemID]?
+        var emptySelections: [SpaceID]?
     }
 
     /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
@@ -287,7 +310,7 @@ struct StoredDocV2: Codable {
             case .tab(let t): stored.tab = StoredTab(t)
             case .folder(let f): stored.folder = StoredFolder(title: f.title, collapsed: f.collapsed, icon: f.icon)
             case .split(let s):
-                stored.split = StoredSplit(widths: s.widths, focused: s.focused, orientation: s.orientation, lastActiveAt: s.lastActiveAt, icon: s.icon)
+                stored.split = StoredSplit(widths: s.widths, focused: nil, orientation: s.orientation, lastActiveAt: s.lastActiveAt, icon: s.icon)
             case .section(let s):
                 switch s.role {
                 case .favorites(let profile): stored.section = StoredSection(kind: .favorites, space: nil, profile: profile)
@@ -310,7 +333,8 @@ struct StoredDocV2: Codable {
         }
         history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) }
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
-            StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth)
+            StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
+                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted())
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
@@ -371,7 +395,7 @@ struct StoredDocV2: Codable {
             case .folder: payload = stored.folder.map { .folder(title: $0.title, collapsed: $0.collapsed, icon: $0.icon) }
             case .split:
                 payload = stored.split.map {
-                    .split(widths: $0.widths, focused: $0.focused, orientation: $0.orientation,
+                    .split(widths: $0.widths, orientation: $0.orientation,
                            lastActiveAt: usable($0.lastActiveAt, "\(id): lastActiveAt"), icon: $0.icon)
                 }
             case .section:
@@ -450,7 +474,9 @@ struct StoredDocV2: Codable {
             // A window that showed a split the repair dissolved shows the pane that took its place.
             let shown = w.activeBySpace.mapValues { dissolved[$0] ?? $0 }
             docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: shown,
-                                       sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
+                                       emptySelections: Set(w.emptySelections ?? []),
+                                       slots: (w.slots ?? [:]).filter { tree[$0.key]?.kind == .tab && opens($0.value.committedURL, "slot \(id)/\($0.key)") },
+                                       splitFocus: w.splitFocus ?? [:], sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
         }
         if docWindows.isEmpty {
             let id = WindowID(ctx.newID())
@@ -489,7 +515,7 @@ struct StoredDocV2: Codable {
     }
 }
 
-extension StoredDocV2.StoredTab {
+extension StoredDocV3.StoredTab {
     init(_ tab: Tab) {
         self.init(url: tab.url, title: tab.title, customTitle: tab.customTitle, favicon: tab.favicon, pinnedURL: tab.pinnedURL,
                   lastActiveAt: tab.lastActiveAt, icon: tab.icon)
@@ -497,7 +523,7 @@ extension StoredDocV2.StoredTab {
 }
 
 extension Tab {
-    init(_ stored: StoredDocV2.StoredTab) {
+    init(_ stored: StoredDocV3.StoredTab) {
         self.init(url: stored.url, title: stored.title, customTitle: stored.customTitle, favicon: stored.favicon,
                   pinnedURL: stored.pinnedURL, lastActiveAt: stored.lastActiveAt, icon: stored.icon)
     }

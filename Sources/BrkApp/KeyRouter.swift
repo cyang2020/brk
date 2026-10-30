@@ -16,14 +16,16 @@ final class KeyRouter: WebEngineDelegate {
 
     init(store: AppStore) { self.store = store }
 
-    func engine(_ engine: any WebEngine, page: PageID, didEmit event: PageEvent) {
+    func engine(_ engine: any WebEngine, page: BrowserToken, didEmit event: PageEvent) {
         store.dispatch(.system(.page(page, event)))
     }
 
-    /// Only a shown page can have keyboard focus, so the window is the one whose snapshot shows the page (derived
-    /// from the current snapshot on each key, not kept in a second map).
+    /// Physical input requires the origin slot to be visible and attached to its owner's native window.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
-        guard let window = store.window(showing: page) else { return false }
+        guard store.window(showing: page) == page.window,
+              let controller = store.windowController(page.window), let surface = engine.surface(for: page),
+              surface.window === controller.window, !surface.isHiddenOrHasHiddenAncestor else { return false }
+        let window = page.window
         return store.dispatchKey(window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
@@ -49,11 +51,10 @@ final class KeyRouter: WebEngineDelegate {
     /// example.com peeks. Everything else goes through (redirects are never asked about; a URL without a host, a
     /// tab without one, a Peek or Little Arc page, or the setting off).
     func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool {
-        guard userGesture, store.snapshot.settings.links.peekFromPinnedAndFavorites, let window = store.window(showing: page),
-              let view = store.snapshot.windows[window] else { return true }
+        guard userGesture, store.snapshot.settings.links.peekFromPinnedAndFavorites, let view = store.snapshot.windows[page.window] else { return true }
         let tab = view.favorites.tiles.first { $0.id == page.item } ?? pinnedTabs(view.space.pinned.rows).first { $0.id == page.item }
-        guard let tab, let from = tab.url?.host, let to = url.host, !sameSite(from, to) else { return true }
-        store.dispatch(.user(window, .peek(.open(url))))
+        guard tab != nil, let from = store.snapshot.observations[page]?.committedURL?.host, let to = url.host, !sameSite(from, to) else { return true }
+        store.dispatch(.user(page.window, .peek(.open(url))))
         return false
     }
 

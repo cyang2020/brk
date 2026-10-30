@@ -29,7 +29,7 @@ enum NativeScenarios {
         try app.press("escape")
         try app.waitUntil("Esc to close the bar and return focus to keys.html") {
             let v = try app.view(), n = try app.native()
-            return v.overlay == nil && n.focusedPage == PageID(keys.id)
+            return v.overlay == nil && n.focusedPage == PageID(window: app.window!, item: keys.id)
         }
         try app.press("cmd+shift+k")
         try waitForTitle(app, keys.id, keyTitle("cmd+shift+k"))
@@ -77,7 +77,7 @@ enum NativeScenarios {
         try app.waitUntil("Esc to give the page focus back") {
             let v = try app.view(), n = try app.native()
             try expect(v.overlay == nil, "the command bar is still open")
-            try expect(n.focusedPage == PageID(keys.id), "focused page is \(n.focusedPage?.description ?? "none"), first responder \(n.firstResponder)")
+            try expect(n.focusedPage == PageID(window: app.window!, item: keys.id), "focused page is \(n.focusedPage?.description ?? "none"), first responder \(n.firstResponder)")
             return true
         }
         try app.type("y")
@@ -165,7 +165,9 @@ enum NativeScenarios {
     /// a closed entry for every created page (the CEF shutdown order; on the stub only the mechanism runs).
     @Sendable static func cleanQuit(_ app: AppUnderTest) throws {
         _ = try app.load(app.site.url("page2.html"))
-        _ = try app.load(app.site.url("red.html"))
+        let redURL = app.site.url("red.html")
+        let red = try app.load(redURL)
+        try app.waitForPageInput(PageID(window: app.window!, item: red), at: redURL)
         try app.press("ctrl+shift+=")
         try app.waitUntil("the split's command bar") { isCommandBar(try app.view().overlay) }
         try app.type(app.site.url("index.html?pane").absoluteString)   // not an open tab's URL

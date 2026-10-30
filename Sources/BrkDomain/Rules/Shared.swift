@@ -11,14 +11,16 @@ extension Work {
     /// change. Loading follows from normalize (every visible tab is loaded); stamping from `finish`.
     mutating func focus(_ item: ItemID, in window: WindowID) {
         guard let doc = state.doc.windows[window], let scope = state.locate(item), let tree = state.tree(scope),
+              (scope == .global ? doc.kind == .standard : scope == .window(window)),
               let node = tree[item], node.kind == .tab || node.kind == .split else { return }
         let split = tree.splitContaining(item)
         let shown = split ?? item
         let space = tree.role(of: shown)?.space ?? doc.space
         guard state.doc.spaces[space] != nil else { return }
         if doc.space != space { state.doc.windows[window]!.space = space }
-        if doc.activeBySpace[space] != shown { state.doc.windows[window]!.activeBySpace[space] = shown }
-        if split != nil { state.withTree(scope) { $0.focusPane(item) } }
+        select(shown, in: window, space: space)
+        if let split { state.doc.windows[window]!.splitFocus[split] = item }
+        for pane in state.panes(of: shown) { state.demand(PageID(window: window, item: pane)) }
     }
 
     /// Switches the window to `space` (and ends a peek). Unknown space: no-op.
@@ -35,9 +37,10 @@ extension Work {
         guard let today = state.doc.spaces[space]?.todayRoot else { return nil }
         let id = ItemID(ctx.newID())
         do {
-            try state.doc.tree.insert(id, .tab(Tab(url: url, title: "", lastActiveAt: ctx.now)), at: .into(parent: today, index: 0), createdAt: ctx.now)
+            try state.doc.tree.insert(id, .tab(Tab(url: nil, title: "", lastActiveAt: ctx.now)), at: .into(parent: today, index: 0), createdAt: ctx.now)
         } catch { return nil }
-        if focusIt { focus(id, in: window) } else { state.session.loaded.insert(id) }
+        request(url, for: PageID(window: window, item: id))
+        if focusIt { focus(id, in: window) }
         return id
     }
 
@@ -97,8 +100,7 @@ extension Work {
 
     /// Drops a tab's page (Close and Keep Pinned): it leaves `loaded`, so the engine closes it; the row stays.
     mutating func unload(_ tab: ItemID) {
-        state.session.loaded.remove(tab)
-        state.session.live[tab] = nil
+        for page in state.session.loaded.filter({ $0.item == tab }).sorted() { unload(page) }
     }
 
     /// Every window entry that shows `tab`, a split containing it, or an item that is gone moves to the most
@@ -108,21 +110,21 @@ extension Work {
             for (space, shown) in window.activeBySpace.sorted(by: { $0.key < $1.key }) {
                 let affected = state.locate(shown) == nil || shown == tab || state.panes(of: shown).contains(tab)
                 guard affected else { continue }
-                state.doc.windows[id]!.activeBySpace[space] = state.mostRecentLoaded(in: space, window: id, excluding: shown)
+                select(state.mostRecentLoaded(in: space, window: id, excluding: shown), in: id, space: space)
             }
         }
     }
 
-    /// Cmd+W, the hover x, and a page closing itself. Today (and scratch): archive it (reason manual). Pinned or
+    /// Cmd+W, the hover x, and a scratch page closing itself. Today (and scratch): archive it (reason manual). Pinned or
     /// Favorites ("Close and Keep Pinned"): unload it and keep the row; an unloaded one is a no-op. Then every
     /// window showing it moves on (`replaceShown`). Normalize never refills a deleted entry.
-    mutating func closeTab(_ tab: ItemID) {
+    mutating func closeTab(_ tab: ItemID, in window: WindowID) {
         guard let role = state.role(of: tab) else { return }
         switch role.kind {
         case .today, .scratch:
-            archiveTabs([tab], reason: .manual)
+            archiveTabs([tab], reason: .manual, in: window)
         case .pinned, .favorites:
-            guard state.session.loaded.contains(tab) else { return }
+            guard state.session.loaded.contains(where: { $0.item == tab }) else { return }
             unload(tab)
         }
         replaceShown(tab)

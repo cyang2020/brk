@@ -14,7 +14,7 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         let d = Driver()
         let old = try XCTUnwrap(d.current?.id)
         _ = d.open("https://example.com/active")
-        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV3.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         stored.items[old]?.tab?.lastActiveAt = Instant(milliseconds: Int64.min)
         let bad = try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))
         let restored = Driver(file: jsonData(["version": StateCodec.currentVersion, "doc": bad]))
@@ -44,6 +44,7 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         let pane = try XCTUnwrap(d.paneIDs.last)
         let original = url("https://example.com/original")
         d.user(.commandBar(.submit(original.absoluteString)))
+        d.commitRequested()
         XCTAssertEqual(d.state.tab(pane)?.pinnedURL, original)
         d.page(pane, .committed(url("https://example.com/away")))
         XCTAssertEqual(d.row(pane)?.canReset, true)
@@ -59,7 +60,7 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         d.user(.tab(.togglePin(.focused)))
         d.user(.commandBar(.open(.editCurrent)))
         d.user(.commandBar(.submit("https://example.com/elsewhere")))
-        XCTAssertEqual(d.state.tab(tab)?.url, url("https://example.com/elsewhere"))
+        XCTAssertEqual(d.state.address(of: tab, in: d.window, for: .visible), url("https://example.com/elsewhere"))
         XCTAssertEqual(d.state.tab(tab)?.pinnedURL, start)
     }
 
@@ -83,7 +84,7 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("https://example.com/second")))
         let split = try XCTUnwrap(d.state.doc.windows[d.window].flatMap { $0.activeBySpace[$0.space] })
-        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV3.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         let panes = try XCTUnwrap(stored.items[split]?.children)
         stored.items[split]?.split?.widths = Dictionary(uniqueKeysWithValues: panes.map { ($0, 1e308) })
         let restored = Driver(file: jsonData(["version": StateCodec.currentVersion, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
@@ -108,7 +109,7 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         let gone = d.open("https://example.com/archived")
         d.user(.tab(.close(.item(gone))))
         let shown = d.open("https://example.com/shown")
-        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV3.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         let script = url("javascript:alert(1)"), inline = url("data:text/html,%3Cscript%3Ealert(1)%3C/script%3E")
         stored.items[shown]?.tab?.url = script
         stored.items[pinned]?.tab?.pinnedURL = inline

@@ -11,14 +11,15 @@ final class ProtocolTests: XCTestCase {
     /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
-        case hello, view, native, dispatch, load, press, hold, type, click, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case setWindowFrame, pageLog, flush, settle, quit, settings, openSettings, externalURL
+        case hello, view, activate, native, dispatch, load, press, hold, type, click, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL
     }
 
     static func tag(of op: ControlOp) -> Tag {
         switch op {
         case .hello: .hello
         case .view: .view
+        case .activate: .activate
         case .native: .native
         case .dispatch: .dispatch
         case .load: .load
@@ -34,6 +35,7 @@ final class ProtocolTests: XCTestCase {
         case .crash: .crash
         case .setWindowFrame: .setWindowFrame
         case .pageLog: .pageLog
+        case .pageObservations: .pageObservations
         case .flush: .flush
         case .settle: .settle
         case .quit: .quit
@@ -44,10 +46,11 @@ final class ProtocolTests: XCTestCase {
     }
 
     static func samples(_ tag: Tag) -> [ControlOp] {
-        let page = PageID(ItemID("t3"))
+        let page = PageID(window: WindowID("w"), item: ItemID("t3"))
         switch tag {
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
+        case .activate: return [.activate(window: WindowID("w"))]
         case .native: return [.native(window: WindowID("w1"))]
         case .dispatch:
             return [.dispatch(window: nil, command: .space(.focus(SpaceID("s2")))),
@@ -68,6 +71,7 @@ final class ProtocolTests: XCTestCase {
         case .crash: return [.crash(page: page, process: .renderer), .crash(page: page, process: .gpu)]
         case .setWindowFrame: return [.setWindowFrame(window: nil, frame: CGRect(x: 5000, y: 4000, width: 1000, height: 700))]
         case .pageLog: return [.pageLog]
+        case .pageObservations: return [.pageObservations]
         case .flush: return [.flush]
         case .settle: return [.settle(timeout: 5)]
         case .quit: return [.quit]
@@ -99,7 +103,7 @@ final class ProtocolTests: XCTestCase {
             .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
             .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),
-            .pageLog([PageLogEntry(page: PageID(ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
+            .pageLog([PageLogEntry(page: PageID(window: WindowID("w"), item: ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
             .failed("no window"),
             .native(NativeFacts(window: WindowID("w1"), windowFrame: CGRect(x: 0, y: 0, width: 1280, height: 776),
                                 contentSize: CGSize(width: 1280, height: 776), backingScale: 2, isKey: true,
@@ -108,7 +112,7 @@ final class ProtocolTests: XCTestCase {
                                                        contentArea: CGRect(x: 10, y: 10, width: 1260, height: 756), cards: [],
                                                        dividers: [], commandBar: nil, library: nil, peek: nil),
                                 actual: ["card-0": ActualView(frame: CGRect(x: 10, y: 10, width: 1260, height: 756), hidden: false, cornerRadius: 6)],
-                                pages: [PageID(ItemID("t1")): PageFacts(surfaceFrame: nil, embeddedViews: [], browserID: nil,
+                                pages: [PageID(window: WindowID("w"), item: ItemID("t1")): PageFacts(surfaceFrame: nil, embeddedViews: [], browserID: nil,
                                                                         hostWindowNumber: nil, hasKeyboardFocus: false)],
                                 firstResponder: "NSTextView:command-bar-input", focusedPage: nil,
                                 appWindows: [AppWindowFact(number: 9, className: "BrkApp.BrowserWindow", isKey: true, isVisible: true)])),

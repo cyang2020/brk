@@ -49,11 +49,11 @@ extension Work {
             focus(cycle.order[cycle.index], in: window)
         case .close(let ref):
             guard let tab = state.resolveTab(ref, in: window) else { return }
-            closeTab(tab)
+            closeTab(tab, in: window)
         case .archive(let ref):
             // The Pinned row's explicit "Archive Tab": archive whatever the section.
             guard let tab = state.resolveTab(ref, in: window) else { return }
-            archiveTabs([tab], reason: .manual)
+            archiveTabs([tab], reason: .manual, in: window)
             replaceShown(tab)
         case .togglePin(let ref):
             // Today -> end of the space's Pinned; Pinned or Favorites -> top of Today (a Favorites tab goes to the
@@ -64,8 +64,9 @@ extension Work {
             switch role.kind {
             case .today:
                 guard moveItem(unit, to: .into(parent: space.pinnedRoot, index: Int.max)) else { return }
+                setPinnedAddresses(under: unit, in: window)
                 // Max "renamed pinned tabs": a tidier title from the local AI tool (AIProvider seam).
-                if state.doc.settings.max.renamePinnedTabs, let t = state.tab(tab), let url = t.url, t.customTitle == nil {
+                if state.doc.settings.max.renamePinnedTabs, let t = state.displayedTab(tab, in: window), let url = t.url, t.customTitle == nil {
                     requestAI(.renameTab(tab, title: t.displayTitle, url: url))
                 }
             case .pinned, .favorites: moveItem(unit, to: .into(parent: space.todayRoot, index: 0))
@@ -73,15 +74,14 @@ extension Work {
             }
         case .reset(let ref):
             // A Pinned or Favorites tab whose url drifted goes back to the url it was pinned with.
-            guard let tab = state.resolveTab(ref, in: window), let t = state.tab(tab), let pinned = t.pinnedURL, pinned != t.url else { return }
-            if let scope = state.locate(tab) { state.withTree(scope) { $0.updateTab(tab) { $0.url = pinned } } }
-            if state.session.loaded.contains(tab) { effects.append(.page(PageID(tab), .navigate(pinned))) }
+            guard let tab = state.resolveTab(ref, in: window), let t = state.displayedTab(tab, in: window), let pinned = t.pinnedURL, pinned != t.url else { return }
+            request(pinned, for: PageID(window: window, item: tab))
         case .clearToday:
             // Every Today item of the current space with no pane on screen in any window.
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let onScreen = state.onScreenTabs()
             let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.panes(of: $0).contains(where: onScreen.contains) }
-            archiveTabs(idle, reason: .clearToday)
+            archiveTabs(idle, reason: .clearToday, in: window)
         }
     }
 
@@ -89,8 +89,8 @@ extension Work {
     /// target emits nothing. Copying needs only a url. None of them change state.
     mutating func pages(_ command: PageCommand, in window: WindowID) {
         func emit(_ ref: ItemRef, _ action: PageAction) {
-            guard let tab = state.resolveTab(ref, in: window), state.session.loaded.contains(tab) else { return }
-            effects.append(.page(PageID(tab), action))
+            guard let tab = state.resolveTab(ref, in: window), state.session.loaded.contains(PageID(window: window, item: tab)) else { return }
+            effects.append(.page(PageID(window: window, item: tab), action))
         }
         switch command {
         case .back(let ref): emit(ref, .goBack)
@@ -100,7 +100,7 @@ extension Work {
         case .zoom(let step): emit(.focused, .zoom(step))
         case .toggleDevTools: emit(.focused, .toggleDevTools)
         case .copyURL(let format):
-            guard let tab = state.resolveTab(.focused, in: window), let t = state.tab(tab), let url = t.url else { return }
+            guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window), let url = t.url else { return }
             let text: String = switch format {
             case .plain: url.absoluteString
             case .markdown: "[\(t.displayTitle)](\(url.absoluteString))"
@@ -112,78 +112,104 @@ extension Work {
 
     /// Page reports. Ignored for archived, unknown or unloaded tabs (a late event after close must not resurrect it);
     /// the same event twice changes nothing the second time.
-    mutating func pageEvent(_ event: PageEvent, for page: PageID) {
-        let tab = page.item
-        guard state.session.loaded.contains(tab), let scope = state.locate(tab),
-              case .tab(let current)? = state.tree(scope)?[tab]?.body else { return }
-        var live = state.session.live[tab] ?? LivePage(loading: false, canGoBack: false, canGoForward: false, failure: nil, crashed: false)
+    mutating func pageEvent(_ event: PageEvent, for token: BrowserToken) {
+        let page = token.page, tab = token.page.item, window = token.page.window
+        guard state.session.loaded.contains(page), state.owns(page), let scope = state.locate(tab),
+              let current = state.tab(tab) else { return }
+        var live = state.session.live[page] ?? LivePage()
+        if case .browserCreated(let context, let document) = event {
+            guard context == state.browsingContext(of: tab), token.generation > (state.session.generations[page] ?? 0) else { return }
+            let sequence: UInt64
+            switch document {
+            case .ready(let doc), .loading(let doc):
+                guard doc.browser == token else { return }
+                sequence = doc.sequence
+            case .unavailable: sequence = 0
+            }
+            state.session.generations[page] = token.generation
+            live = LivePage(requestedURL: live.requestedURL, requestContext: context, browser: token,
+                            document: document, documentSequence: sequence)
+            state.session.live[page] = live
+            return
+        }
+        guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
+        case .browserCreated: break
+        case .documentChanged(let document):
+            switch document {
+            case .loading(let doc):
+                guard doc.browser == token, doc.sequence > live.documentSequence else { return }
+                live.documentSequence = doc.sequence
+            case .ready(let doc):
+                guard doc.browser == token, doc.sequence == live.documentSequence,
+                      live.document == .loading(doc) || live.document == .ready(doc) else { return }
+            case .unavailable: break
+            }
+            live.document = document
+        case .navigationRequested(let url): live.requestedURL = url
         case .committed(let url):
-            if current.url != url { state.withTree(scope) { $0.updateTab(tab) { $0.url = url } } }
-            if case .profile(let profile) = state.browsingContext(of: tab) { recordVisit(url, title: current.title, profile: profile) }
+            state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: live.observedTitle, favicon: state.doc.windows[window]?.slots[tab]?.favicon)
+            live.requestedURL = nil
+            // A first committed document supplies the safe fallback for a new window.
+            if current.url == nil { state.withTree(scope) { $0.updateTab(tab) { $0.url = url } } }
+            if (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites), current.pinnedURL == nil {
+                state.withTree(scope) { $0.updateTab(tab) { $0.pinnedURL = url } }
+            }
+            if case .profile(let profile) = state.browsingContext(of: tab) { recordVisit(url, title: live.observedTitle ?? current.title, profile: profile) }
             live.failure = nil
             live.crashed = false
-            state.session.live[tab] = live
         case .titleChanged(let title):
-            if current.title != title { state.withTree(scope) { $0.updateTab(tab) { $0.title = title } } }  // never customTitle
-            if case .profile(let profile) = state.browsingContext(of: tab),
-               let index = state.doc.history.firstIndex(where: { $0.url == current.url && $0.profile == profile }),
-               state.doc.history[index].title != title { state.doc.history[index].title = title }
-        case .faviconChanged(let url):
-            if current.favicon != url { state.withTree(scope) { $0.updateTab(tab) { $0.favicon = url } } }
-        case .loadingChanged(let isLoading, let back, let forward):
-            live.loading = isLoading
+            live.observedTitle = title
+            if live.requestedURL == nil {
+                state.doc.windows[window]!.slots[tab]?.observedTitle = title
+                if case .profile(let profile) = state.browsingContext(of: tab),
+                   let index = state.doc.history.firstIndex(where: { $0.url == state.doc.windows[window]?.slots[tab]?.committedURL && $0.profile == profile }) {
+                    state.doc.history[index].title = title
+                }
+            }
+        case .faviconChanged(let url): state.doc.windows[window]!.slots[tab]?.favicon = url
+        case .loadingChanged(let loading, let back, let forward):
+            live.loading = loading
             live.canGoBack = back
             live.canGoForward = forward
-            state.session.live[tab] = live
         case .loadFailed(let code, let description, _):
-            // Live state only: a restored tab whose page fails keeps its url and title.
             live.failure = LoadFailure(code: code, description: description)
             live.loading = false
-            state.session.live[tab] = live
+            live.document = .unavailable
         case .rendererGone:
             live.crashed = true
-            state.session.live[tab] = live
+            live.document = .unavailable
             effects.append(.page(page, .recover))
         case .gainedFocus:
-            // A pane the user clicked into becomes its split's focused pane; a tab that is not a pane is a no-op.
-            state.withTree(scope) { $0.focusPane(tab) }
+            if let split = state.tree(scope)?.splitContaining(tab) { state.doc.windows[window]!.splitFocus[split] = tab }
         case .closedByPage:
-            // The page closed itself (window.close()); the engine has already dropped it from its live set. Remove
-            // the page demand so reconcile does not recreate it, exactly as Cmd+W would (Today: archive; Pinned or
-            // Favorites: unload, keep the row), with no effects. Regression finding 7: no blank card behind a row.
-            closeTab(tab)
+            closePage(page)
+            return
         case .openRequested(let url, let disposition):
-            openRequested(url, disposition, from: tab, current)
+            openRequested(url, disposition, from: page, state.displayedTab(tab, in: window, for: .savedDocument) ?? current)
         case .download(let id, let event):
+            if case .started = event { live.requestedURL = nil }
             downloadEvent(id, event, from: page)
         case .closed:
-            // Bookkeeping only: the engine never sends this for an id that is live again with a newer incarnation.
-            state.session.live[tab] = nil
+            live.browser = nil
+            live.document = .unavailable
+            live.loading = false
+            live.canGoBack = false
+            live.canGoForward = false
+            live.failure = nil
+            live.crashed = false
         }
+        state.session.live[page] = live
     }
 
     /// target=_blank, window.open, Cmd+click. A new tab at the top of the opener's space's Today (an opener in
-    /// Favorites: the window's current space), in the window that shows the opener, else one on the opener's space,
-    /// else the first window. Foreground and popup focus it; background keeps focus but loads it. Refused: a url
+    /// Favorites: the window's current space), always in the opener's owning window. Foreground and popup focus it; background keeps focus but loads it. Refused: a url
     /// `isAllowedURL` refuses, and a file url opened from a page that is not a file itself.
-    private mutating func openRequested(_ url: URL, _ disposition: OpenDisposition, from opener: ItemID, _ tab: Tab) {
+    private mutating func openRequested(_ url: URL, _ disposition: OpenDisposition, from page: PageID, _ tab: Tab) {
         guard isAllowedURL(url) else { return }
         if url.isFileURL, tab.url?.isFileURL != true { return }
-        guard let scope = state.locate(opener) else { return }
-        let space = state.role(of: opener)?.space
-        let window: WindowID?
-        if case .window(let owner) = scope {
-            // Scratch pages belong to this window even while another tab is shown. Visibility must never
-            // choose a different browsing context for a private popup or background-tab request.
-            window = owner
-        } else {
-            let windows = state.doc.windows.keys.sorted().filter { state.doc.windows[$0]?.kind == .standard }
-            window = windows.first(where: { state.shownItem(in: $0).map(state.panes(of:))?.contains(opener) == true })
-                ?? windows.first(where: { state.doc.windows[$0]?.space == space }) ?? windows.first
-        }
-        guard let window,
-            let target = space ?? state.doc.windows[window]?.space else { return }
+        let opener = page.item, window = page.window
+        guard state.owns(page), let target = state.role(of: opener)?.space ?? state.doc.windows[window]?.space else { return }
         // Shift+click, Opt+Cmd+click and Pinned/Favorites links to other sites open as a Peek or a Little Arc per the
         // Links settings (Rules/Peek.swift). Private requests stay in their window's own container.
         switch specialOpen(for: url, from: opener, in: window) {

@@ -20,12 +20,18 @@ final class FakeEngine: WebEngine {
     var shutdownOutcome: ShutdownOutcome = .clean
     var onReconcile: (([PageSpec]) -> Void)?
     var onShutdown: (() -> Void)?
+    private var ledger = PageLedger()
+    func token(_ page: PageID) -> BrowserToken { BrowserToken(page: page, generation: ledger.liveGeneration(of: page)!) }
     private var surfaces: [PageID: PageSurfaceView] = [:]
 
     func reconcile(_ pages: [PageSpec]) {
         calls.append("reconcile")
         reconciled.append(pages)
-        for spec in pages where surfaces[spec.id] == nil { surfaces[spec.id] = PageSurfaceView(page: spec.id) }
+        for spec in pages where surfaces[spec.id] == nil && spec.initialURL != nil {
+            surfaces[spec.id] = PageSurfaceView(page: spec.id)
+            let token = ledger.create(spec.id)
+            delegate?.engine(self, page: token, didEmit: .browserCreated(spec.context, .unavailable))
+        }
         for id in surfaces.keys where !pages.contains(where: { $0.id == id }) { surfaces[id] = nil }
         onReconcile?(pages)
     }

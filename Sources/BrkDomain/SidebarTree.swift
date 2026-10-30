@@ -5,14 +5,14 @@ import Foundation
 // non-root item plus ordered children on containers. What an item is lives in `body`, and its kind never changes.
 //
 // Single writer, by construction: `Item.parent`, `Item.body`, `Folder.children`, `Section.children`, `Split.panes`
-// and `Split.focused` are `fileprivate(set)`, `Item.init` is fileprivate and `SidebarTree.items` is `private(set)`,
+// are `fileprivate(set)`, `Item.init` is fileprivate and `SidebarTree.items` is `private(set)`,
 // so only code in this file can create, move or delete items, change the hierarchy, or swap a payload for one of
 // another kind. Rules elsewhere change payload fields through `updateTab`, `updateFolder` and `updateSplit`, whose
-// closures see the payload but cannot reach children, panes or focus.
+// closures see the payload but cannot reach children or panes.
 //
 // Invariants this file keeps (never repaired by `normalize`, because they cannot break):
 // - a root has no parent and a `.section` body; every other item has a parent that lists it once;
-// - a split has 2 to Metrics.content.maxPanes distinct panes (`SplitPanes`), its `focused` is one of them, and a
+// - a split has 2 to Metrics.content.maxPanes distinct panes (`SplitPanes`), and a
 //   split that would drop to one pane is dissolved into that pane in the same mutation (`move`, `removeSubtree`);
 // - nothing is placed inside a split except through `splitInPlace`/`addPane`; `Placement.canPlace` gates the rest;
 // - a tree holds only the roots of its `scope`: saved trees never contain a scratch root, and scratch trees
@@ -119,8 +119,6 @@ struct Folder: Sendable, Equatable {
 /// Arc: `SidebarSplitViewData`. The panes are the item's children, left to right (or top to bottom).
 struct Split: Sendable, Equatable {
     fileprivate(set) var panes: SplitPanes
-    /// One of `panes`; the pane `.focused` targets resolve to. Set through `SidebarTree.focusPane`.
-    fileprivate(set) var focused: ItemID
     /// Relative widths keyed by pane (Arc: `itemWidthFactors`), so removing a pane cannot misalign an array.
     /// A missing key counts as 1. Normalized on read.
     var widths: [ItemID: Double]
@@ -324,7 +322,7 @@ struct SidebarTree: Sendable, Equatable {
         guard let panes = SplitPanes([tab, newPane]) else { throw .invalidHierarchy }
         let index = items[parent]!.children.firstIndex(of: tab) ?? 0
         detach(tab, from: parent)
-        let split = Split(panes: panes, focused: newPane, widths: [:], orientation: .horizontal, lastActiveAt: createdAt, icon: nil)
+        let split = Split(panes: panes, widths: [:], orientation: .horizontal, lastActiveAt: createdAt, icon: nil)
         items[splitID] = Item(id: splitID, createdAt: createdAt, parent: parent, body: .split(split))
         attach(splitID, to: parent, at: index)
         items[tab]!.parent = splitID
@@ -338,22 +336,12 @@ struct SidebarTree: Sendable, Equatable {
         guard items[newPane] == nil, let at = split.panes.ids.firstIndex(of: after) else { throw .invalidHierarchy }
         guard let panes = split.panes.inserting(newPane, at: at + 1) else { throw .splitFull }
         split.panes = panes
-        split.focused = newPane
         items[splitID]!.body = .split(split)
         items[newPane] = Item(id: newPane, createdAt: createdAt, parent: splitID, body: .tab(pane))
         stampPinnedURLs(under: newPane)
     }
 
-    /// Makes `pane` its split's focused pane. False when `pane` is not a pane of a split.
-    @discardableResult
-    mutating func focusPane(_ pane: ItemID) -> Bool {
-        guard let parent = items[pane]?.parent, case .split(var split) = items[parent]!.body, split.panes.contains(pane) else { return false }
-        split.focused = pane
-        items[parent]!.body = .split(split)
-        return true
-    }
-
-    // MARK: Payload writes (kind-preserving; cannot reach children, panes or focus)
+    // MARK: Payload writes (kind-preserving; cannot reach children or panes)
 
     mutating func updateTab(_ id: ItemID, _ change: (inout Tab) -> Void) {
         guard case .tab(var tab)? = items[id]?.body else { return }
@@ -381,7 +369,7 @@ struct SidebarTree: Sendable, Equatable {
         enum Payload: Sendable {
             case tab(Tab)
             case folder(title: String, collapsed: Bool, icon: CustomIcon?)
-            case split(widths: [ItemID: Double], focused: ItemID, orientation: SplitOrientation, lastActiveAt: Instant, icon: CustomIcon?)
+            case split(widths: [ItemID: Double], orientation: SplitOrientation, lastActiveAt: Instant, icon: CustomIcon?)
             case section(SectionRole)
 
             var kind: ItemKind {
@@ -560,12 +548,11 @@ struct SidebarTree: Sendable, Equatable {
                 var folder = Folder(title: title, collapsed: collapsed, icon: icon)
                 folder.children = children
                 body = .folder(folder)
-            case .split(let widths, let focused, let orientation, let lastActiveAt, let icon):
+            case .split(let widths, let orientation, let lastActiveAt, let icon):
                 guard let panes = SplitPanes(children) else { continue }
                 let kept = widths.filter { panes.contains($0.key) && $0.value.isFinite && $0.value > 0 }
                 if kept.count != widths.count { repairs.append("\(id): split widths kept only its panes") }
-                if !panes.contains(focused) { repairs.append("\(id): split focused a missing pane") }
-                body = .split(Split(panes: panes, focused: panes.contains(focused) ? focused : panes.ids[0], widths: kept,
+                body = .split(Split(panes: panes, widths: kept,
                                     orientation: orientation, lastActiveAt: lastActiveAt, icon: icon))
             case .section(let role):
                 body = .section(Section(role: role, children: children))
@@ -673,7 +660,6 @@ struct SidebarTree: Sendable, Equatable {
         case .split(var sp):
             if let panes = sp.panes.removing(id) {
                 // The pane that loses focus hands it to its left neighbour, else its right one (Electron rule).
-                if sp.focused == id, let at = sp.panes.ids.firstIndex(of: id) { sp.focused = sp.panes.ids[at > 0 ? at - 1 : at + 1] }
                 sp.panes = panes
                 sp.widths[id] = nil
                 items[parent]!.body = .split(sp)

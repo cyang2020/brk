@@ -376,7 +376,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 // MARK: - System events
 
 public enum SystemEvent: Sendable, Equatable {
-    case page(PageID, PageEvent)
+    case page(BrowserToken, PageEvent)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
     case window(WindowID, WindowEvent)

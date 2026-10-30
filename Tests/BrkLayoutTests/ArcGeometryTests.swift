@@ -114,9 +114,9 @@ final class ArcGeometryTests: XCTestCase {
     func testContentCardInsetAndRadius() throws {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id
-        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(a)), rect: CGRect(x: 238, y: 10, width: 1032, height: 756), cornerRadius: 6)])
+        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 238, y: 10, width: 1032, height: 756), cornerRadius: 6)])
         d.user(.sidebar(.toggle))
-        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(a)), rect: CGRect(x: 10, y: 10, width: 1260, height: 756), cornerRadius: 6)])
+        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 10, y: 10, width: 1260, height: 756), cornerRadius: 6)])
         XCTAssertEqual(d.frames().frame(of: .card(0)), CGRect(x: 10, y: 10, width: 1260, height: 756))
     }
     /// Floating sidebar: 5 from left, top and bottom.

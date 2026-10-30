@@ -37,10 +37,10 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(b.title, "127.0.0.1:9/b")
         XCTAssertEqual(d.row(a)?.status, .idle)
         XCTAssertNil(d.view.overlay)
-        XCTAssertEqual(d.view.content.panes, [Pane(tab: b.id, content: .page(PageID(b.id)), fraction: 1, focused: true)])
-        XCTAssertEqual(d.view.focus, .page(PageID(b.id)))
+        XCTAssertEqual(d.view.content.panes, [Pane(tab: b.id, content: .page(PageID(window: d.window, item: b.id)), fraction: 1, focused: true)])
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: b.id)))
         XCTAssertEqual(d.loadedIDs, [a, b.id])
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(b.id) }, PageSpec(id: PageID(b.id), initialURL: url("http://127.0.0.1:9/b"), context: .profile(.default)))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: b.id) }, PageSpec(id: PageID(window: d.window, item: b.id), initialURL: url("http://127.0.0.1:9/b"), context: .profile(.default)))
         XCTAssertTrue(t.docChanged)
         XCTAssertEqual(t.effects, [], "the engine creates the page from PageSpec.initialURL")
     }
@@ -69,7 +69,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.bar?.placement, .overURLPill)
         XCTAssertEqual(d.bar?.initialQuery, "http://127.0.0.1:9/a")
         let t = d.user(.commandBar(.submit("example.com/x")))
-        XCTAssertEqual(t.effects, [.page(PageID(a), .navigate(url("https://example.com/x")))])
+        XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .navigate(url("https://example.com/x")))])
         XCTAssertEqual(d.todayIDs, [a])
         XCTAssertEqual(d.row(a)?.url, url("https://example.com/x"))
         XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "example.com/x", loading: false, canGoBack: false, canGoForward: false))
@@ -126,6 +126,7 @@ final class ReduceSpecTests: XCTestCase {
     /// the command bar lists open tabs with the focused one first, then by recency, and the history
     func test_theCommandBarListsOpenTabsWithTheFocusedOneFirstThenByRecencyAndTheHistory() throws {
         let d = Driver()
+        d.user(.library(.clearHistory))
         let a = d.todayIDs[0]
         d.advance(minute)
         let b = d.open("127.0.0.1:9/b")
@@ -315,7 +316,7 @@ final class ReduceSpecTests: XCTestCase {
         d.page(a, .committed(url("http://127.0.0.1:9/elsewhere")))
         XCTAssertTrue(d.view.enabledActions.contains(.resetTab))
         let t = d.user(.tab(.reset(.focused)))
-        XCTAssertEqual(t.effects, [.page(PageID(a), .navigate(start))])
+        XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .navigate(start))])
         XCTAssertEqual(d.row(a)?.url, start)
         XCTAssertEqual(d.row(a)?.canReset, false)
     }
@@ -435,6 +436,7 @@ final class ReduceSpecTests: XCTestCase {
     /// .page events url pushes a history entry, deduplicated by url and capped at Metrics.persistence.historyCap
     func test_pageEventsUrlPushesAHistoryEntryDeduplicatedByUrlAndCappedAtMetricsPersistence() throws {
         let d = Driver()
+        d.user(.library(.clearHistory))
         let a = d.todayIDs[0]
         func visit(_ text: String) {
             d.advance(.milliseconds(1))
@@ -505,7 +507,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.content.panes.map(\.focused), [true, false])
         XCTAssertEqual(d.row(x)?.status, .current)
         XCTAssertEqual(d.row(y)?.status, .visible)
-        XCTAssertEqual(d.view.focus, .page(PageID(x)))
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: x)))
         assertUnchanged(d.state, d.page(x, .gainedFocus))
         d.user(.tab(.close(.focused)))
         XCTAssertEqual(d.archive().first?.url, start)
@@ -525,7 +527,7 @@ final class ReduceSpecTests: XCTestCase {
     func test_browsingCommandsResolveTheFocusedTabIntoEffectsAnUnloadedOrUnknownTarget() throws {
         let d = Driver()
         let a = d.todayIDs[0]
-        let page = PageID(a)
+        let page = PageID(window: d.window, item: a)
         func effects(_ command: Command) -> [Effect] {
             let before = d.state
             let t = d.user(command)
@@ -574,12 +576,12 @@ final class ReduceSpecTests: XCTestCase {
         let d = Driver()
         let a = d.todayIDs[0]
         let t = d.page(a, .rendererGone)
-        XCTAssertEqual(t.effects, [.page(PageID(a), .recover)])
-        XCTAssertEqual(d.view.content.panes.map(\.content), [.crashed(PageID(a))])
+        XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .recover)])
+        XCTAssertEqual(d.view.content.panes.map(\.content), [.crashed(PageID(window: d.window, item: a))])
         XCTAssertEqual(d.view.focus, FocusTarget.none)
         d.page(a, .committed(start))
-        XCTAssertEqual(d.view.content.panes.map(\.content), [.page(PageID(a))])
-        XCTAssertEqual(d.view.focus, .page(PageID(a)))
+        XCTAssertEqual(d.view.content.panes.map(\.content), [.page(PageID(window: d.window, item: a))])
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: a)))
     }
 
     /// A page that closes itself (window.close()) leaves no blank card: a Today tab is archived and the window shows
@@ -590,10 +592,10 @@ final class ReduceSpecTests: XCTestCase {
         let b = d.open("127.0.0.1:9/close.html")
         let t = d.page(b, .closedByPage)
         XCTAssertEqual(t.effects, [])
-        XCTAssertEqual(d.todayIDs, [a])
+        XCTAssertEqual(d.todayIDs, [b, a])
         XCTAssertEqual(d.paneIDs, [a])
-        XCTAssertEqual(d.snapshot.pages.map(\.id), [PageID(a)])
-        XCTAssertEqual(d.archive().map(\.reason), [.manual])
+        XCTAssertEqual(d.snapshot.pages.map(\.id), [PageID(window: d.window, item: a)])
+        XCTAssertTrue(d.archive().isEmpty)
         d.user(.tab(.togglePin(.item(a))))
         d.page(a, .closedByPage)
         XCTAssertEqual(d.pinnedIDs, [a])
@@ -650,6 +652,7 @@ final class ReduceSpecTests: XCTestCase {
         let b = d.open("example.com")
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("example.org")))
+        d.commitRequested()
         let split = try XCTUnwrap(d.view.content.split)
         assertUnchanged(d.state, d.user(.item(.move(a, to: .into(parent: split, index: 0)))))
         assertUnchanged(d.state, d.user(.item(.move(today, to: .into(parent: d.view.space.pinned.root, index: 0)))))
@@ -827,8 +830,8 @@ final class ReduceSpecTests: XCTestCase {
         let pane = v.content.panes[1].tab
         XCTAssertEqual(v.content.panes.map(\.fraction), [0.5, 0.5])
         XCTAssertEqual(v.content.panes.map(\.focused), [false, true])
-        XCTAssertEqual(v.content.panes.map(\.content), [.page(PageID(a)), .blank])
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(pane) }?.initialURL, Optional<URL>.none, "no browser for an empty pane")
+        XCTAssertEqual(v.content.panes.map(\.content), [.page(PageID(window: d.window, item: a)), .blank])
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: pane) }?.initialURL, Optional<URL>.none, "no browser for an empty pane")
         guard case .commandBar(let bar)? = v.overlay else { return XCTFail("no bar") }
         XCTAssertEqual(bar.placement, .centered)
         XCTAssertEqual(bar.initialQuery, "")
@@ -837,8 +840,8 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(t.effects, [])
         XCTAssertNil(d.view.overlay)
         XCTAssertEqual(d.row(pane)?.url, url("http://127.0.0.1:9/page2.html"))
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(pane) }?.initialURL, url("http://127.0.0.1:9/page2.html"))
-        XCTAssertEqual(d.view.focus, .page(PageID(pane)))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: pane) }?.initialURL, url("http://127.0.0.1:9/page2.html"))
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: pane)))
     }
 
     /// .split(.addPane) with nothing shown, or on a Favorites tab, is a no-op
@@ -892,6 +895,7 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.tab(.focus(a)))
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("example.org")))
+        d.commitRequested()
         let pane = d.paneIDs[1]
         XCTAssertTrue(d.view.enabledActions.contains(.removeSplitView))
         d.user(.split(.closePane))
@@ -913,6 +917,7 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.tab(.togglePin(.item(a))))
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("example.org")))
+        d.commitRequested()
         let pane = d.paneIDs[1]
         d.user(.split(.closePane))
         XCTAssertEqual(d.view.space.pinned.rows.map(\.kind), [.tab, .tab])
@@ -929,6 +934,7 @@ final class ReduceSpecTests: XCTestCase {
         let d = Driver()
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("example.org")))
+        d.commitRequested()
         let split = try XCTUnwrap(d.view.content.split)
         let (a, b) = (d.paneIDs[0], d.paneIDs[1])
         d.user(.split(.resize(split, fractions: [a: 3, b: 1])))
@@ -949,6 +955,7 @@ final class ReduceSpecTests: XCTestCase {
         let a = d.todayIDs[0]
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("example.org")))
+        d.commitRequested()
         let pane = d.paneIDs[1]
         d.user(.item(.move(pane, to: .into(parent: d.view.space.pinned.root, index: 0))))
         XCTAssertEqual(d.todayIDs, [a])
@@ -1360,7 +1367,7 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.sidebar(.openDialog(.editSpace(.space(SpaceID("ghost")))))))
         d.user(.sidebar(.openDialog(nil)))
         XCTAssertNil(d.view.dialog)
-        XCTAssertEqual(d.view.focus, .page(PageID(d.todayIDs[0])))
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: d.todayIDs[0])))
     }
 
     /// .sidebar(.popupMenu) emits a native menu built from state whose entries dispatch real commands
@@ -1421,6 +1428,7 @@ final class ReduceSpecTests: XCTestCase {
         d.open("127.0.0.1:9/page2.html")
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("127.0.0.1:9/fail")))
+        d.commitRequested()
         d.user(.item(.rename(w1, title: "Index")))
         d.user(.item(.setIcon(w1, .named(.star))))
         d.user(.sidebar(.resize(width: 300)))
@@ -1461,7 +1469,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(r.view.content.orientation, .horizontal)
         // Session is fresh: no overlay, rev 0, and only the shown panes of the current space are loaded (lazy).
         XCTAssertNil(r.view.overlay)
-        XCTAssertEqual(r.view.rev, 0)
+        XCTAssertEqual(StateCodec.restore(file, seed: RestoreSeed(startURL: nil, contentSize: Driver.contentSize), ctx: d.ctx).state.session.rev, 0)
         XCTAssertEqual(r.loadedIDs, Set(r.paneIDs))
         XCTAssertEqual(r.paneIDs.count, 2)
         XCTAssertGreaterThan(d.loadedIDs.count, 3)
@@ -1489,9 +1497,9 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertTrue(tab.loaded)
         XCTAssertEqual(tab.title, "127.0.0.1:9/a")
         XCTAssertEqual(v.sidebar, SidebarSnapshot(visible: true, width: Metrics.sidebar.defaultWidth.value, peek: false))
-        XCTAssertEqual(v.content.panes, [Pane(tab: tab.id, content: .page(PageID(tab.id)), fraction: 1, focused: true)])
-        XCTAssertEqual(d.snapshot.pages, [PageSpec(id: PageID(tab.id), initialURL: start, context: .profile(.default))])
-        XCTAssertEqual(d.saved["version"] as? Int, 2)
+        XCTAssertEqual(v.content.panes, [Pane(tab: tab.id, content: .page(PageID(window: d.window, item: tab.id)), fraction: 1, focused: true)])
+        XCTAssertEqual(d.snapshot.pages, [PageSpec(id: PageID(window: d.window, item: tab.id), initialURL: start, context: .profile(.default))])
+        XCTAssertEqual(d.saved["version"] as? Int, 3)
     }
 
     /// StateCodec.restore repairs an orphan child reference and reports it in RestoreOutcome.restored(repairs:)
@@ -1583,13 +1591,13 @@ final class ReduceSpecTests: XCTestCase {
         let d = Driver()
         let file = jsonObject(d.savedFile)
         var future = file
-        future["version"] = 3
+        future["version"] = 99
         var noSpaces = file
         var doc = file["doc"] as! [String: Any]
         doc["spaces"] = [String: Any]()
         noSpaces["doc"] = doc
         let cases: [(Data, CodecError?)] = [
-            (jsonData(future), .unknownVersion(3)), (jsonData(noSpaces), .noSpaces), (Data(#"{"version":1"#.utf8), nil), (Data("null".utf8), nil),
+            (jsonData(future), .unknownVersion(99)), (jsonData(noSpaces), .noSpaces), (Data(#"{"version":1"#.utf8), nil), (Data("null".utf8), nil),
         ]
         for (data, expected) in cases {
             let r = Driver(file: data)
@@ -1790,9 +1798,9 @@ final class ReduceSpecTests: XCTestCase {
         let bg = try XCTUnwrap(added.first)
         // Focus stays on the opener (it is still the shown pane).
         XCTAssertEqual(d.paneIDs, [opener])
-        XCTAssertEqual(d.view.focus, .page(PageID(opener)))
+        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: opener)))
         // The engine is told to create its page, with its url.
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(bg) }, PageSpec(id: PageID(bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default)))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: bg) }, PageSpec(id: PageID(window: d.window, item: bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default)))
     }
 
     /// a foreground .openRequested still focuses the new tab and loads it

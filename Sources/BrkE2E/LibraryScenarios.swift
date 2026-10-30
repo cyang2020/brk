@@ -56,7 +56,7 @@ enum LibraryScenarios {
             return row.title == "Fixture Home"
         }
         let tab = try app.view(incognito).scratch!.rows[0].id
-        try app.evaluate(PageID(tab), "document.title = 'Private history marker'")
+        try app.evaluate(PageID(window: incognito, item: tab), "document.title = 'Private history marker'")
         try app.waitUntil("the private title") {
             guard case .tab(let row)? = try app.view(incognito).scratch?.rows.first else { return false }
             return row.title == "Private history marker"

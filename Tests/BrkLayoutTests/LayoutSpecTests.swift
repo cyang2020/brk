@@ -19,7 +19,7 @@ final class LayoutSpecTests: XCTestCase {
         let frames = d.frames()
         XCTAssertEqual(frames.contentSize, size)
         XCTAssertEqual(frames.contentArea, CGRect(x: 238, y: 10, width: 1032, height: 756))
-        XCTAssertEqual(frames.cards, [CardFrame(pane: 0, content: .page(PageID(a)), rect: frames.contentArea, cornerRadius: 6)])
+        XCTAssertEqual(frames.cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: frames.contentArea, cornerRadius: 6)])
         XCTAssertEqual(frames.sidebar?.frame, CGRect(x: 0, y: 0, width: 228, height: 776))
         XCTAssertFalse(frames.sidebarFloats)
         XCTAssertEqual(frames.resizeHandle, CGRect(x: 224, y: 11, width: 8, height: 754))

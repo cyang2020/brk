@@ -123,7 +123,7 @@ final class AppStoreTests: XCTestCase {
         defer { h.cleanUp() }
         h.store.start()
         XCTAssertEqual(h.engine.reconciled.first?.map(\.initialURL), [Harness.startURL])
-        XCTAssertEqual(h.engine.calls, ["reconcile", "surface", "focus", "reconcile", "surface"])
+        XCTAssertEqual(h.engine.calls, ["reconcile", "surface", "focus", "reconcile", "surface", "reconcile", "surface"])
         XCTAssertEqual(h.engine.focused, [h.page])
         XCTAssertNotNil(h.store.windowController(h.window)?.window)
         XCTAssertEqual(h.store.snapshot.windows[h.window]?.bounds, h.store.windowController(h.window)?.window.frame, "the placement was reported back")
@@ -137,7 +137,7 @@ final class AppStoreTests: XCTestCase {
         let bounds = CGRect(x: 11, y: 22, width: 900, height: 700)
         h.store.dispatch(.system(.window(h.window, .geometry(bounds: bounds, contentSize: CGSize(width: 900, height: 700)))))
         XCTAssertEqual(h.store.snapshot.windows[h.window]?.bounds, bounds)
-        XCTAssertEqual(Array(h.engine.calls.dropFirst(5)), ["reconcile", "surface"], "focus did not change, so it is not re-applied")
+        XCTAssertEqual(Array(h.engine.calls.dropFirst(5)), ["reconcile", "surface", "reconcile", "surface"], "focus did not change, so it is not re-applied")
     }
 
     /// effects run even when the state did not change (quit changes nothing)
@@ -160,12 +160,12 @@ final class AppStoreTests: XCTestCase {
         h.engine.onReconcile = { [engine = h.engine] _ in
             guard !fired else { return }
             fired = true
-            engine.delegate?.engine(engine, page: h.page, didEmit: .titleChanged("nested"))
+            engine.delegate?.engine(engine, page: h.engine.token(h.page), didEmit: .titleChanged("nested"))
         }
         h.store.start()
         guard case .tab(let row)? = h.store.snapshot.windows[h.window]?.space.today.rows.first else { return XCTFail("no Today row") }
         XCTAssertEqual(row.title, "nested")
-        XCTAssertEqual(h.engine.reconciled.count, 3, "the nested title event and the placement each ran as their own transition after the first finished")
+        XCTAssertEqual(h.engine.reconciled.count, 4, "the nested title event and the placement each ran as their own transition after the first finished")
     }
 
     /// a CEF before-page press of an app-priority chord is consumed and dispatched once; the same press id again is a
@@ -226,7 +226,7 @@ final class AppStoreTests: XCTestCase {
         guard case .data(let bytes) = h.stateFile.read() else { return XCTFail("state.json missing after flush") }
         XCTAssertFalse(bytes.isEmpty)
         XCTAssertEqual(h.store.window(showing: h.page), h.window)
-        XCTAssertNil(h.store.window(showing: PageID(ItemID("nope"))))
+        XCTAssertNil(h.store.window(showing: PageID(window: h.window, item: ItemID("nope"))))
     }
 
     /// refresh re-renders from the same state without bumping rev
@@ -237,7 +237,7 @@ final class AppStoreTests: XCTestCase {
         let rev = h.store.snapshot.rev
         h.store.refresh()
         XCTAssertEqual(h.store.snapshot.rev, rev)
-        XCTAssertEqual(h.engine.calls.filter { $0 == "surface" }.count, 3)
+        XCTAssertEqual(h.engine.calls.filter { $0 == "surface" }.count, 4)
     }
 }
 

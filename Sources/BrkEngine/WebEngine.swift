@@ -64,7 +64,7 @@ public protocol WebEngine: AnyObject {
 @MainActor
 public protocol WebEngineDelegate: AnyObject {
     /// A page reported something. Delivered on the main actor in the order Chromium produced it.
-    func engine(_ engine: any WebEngine, page: PageID, didEmit event: PageEvent)
+    func engine(_ engine: any WebEngine, page: BrowserToken, didEmit event: PageEvent)
 
     /// A key event reached a page (`.beforePage` or `.afterPage`). Return true to consume it. Must answer
     /// synchronously: CEF blocks on the return value. `pressID` follows the rule on `PressID`: minted from the

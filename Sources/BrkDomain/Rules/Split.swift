@@ -23,8 +23,9 @@ extension Work {
                 if added { state.doc.windows[window]!.activeBySpace[state.doc.windows[window]!.space] = split }
             case .split(let s)?:
                 let weights = s.panes.ids.map { s.widths[$0] ?? 1 }
+                let after = state.focusedPane(of: shown, in: window) ?? s.panes.ids[0]
                 state.withTree(scope) { tree in
-                    added = (try? tree.addPane(to: shown, newPane: pane, empty, after: s.focused, createdAt: ctx.now)) != nil
+                    added = (try? tree.addPane(to: shown, newPane: pane, empty, after: after, createdAt: ctx.now)) != nil
                     if added, !s.widths.isEmpty {
                         // The mean, divided before adding so huge saved widths cannot overflow to infinity.
                         tree.updateSplit(shown) { $0.widths[pane] = weights.reduce(0) { $0 + $1 / Double(weights.count) } }
@@ -34,6 +35,7 @@ extension Work {
                 return
             }
             guard added else { return }
+            focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)
         case .closePane:
             // The focused pane leaves: archived from Today; moved out to sit right after the split and unloaded
@@ -41,12 +43,12 @@ extension Work {
             // one pane dissolves into it in place, and windows that showed the split show that pane.
             guard let shown = state.shownItem(in: window), let scope = state.locate(shown), let tree = state.tree(scope),
                   case .split(let s)? = tree[shown]?.body, let role = tree.role(of: shown) else { return }
-            let tab = s.focused
-            if role.kind == .pinned, state.tab(tab)?.url != nil {
+            let tab = state.focusedPane(of: shown, in: window) ?? s.panes.ids[0]
+            if role.kind == .pinned, state.address(of: tab, in: window, for: .savedDocument) != nil {
                 guard moveItem(tab, to: .after(shown)) else { return }
                 unload(tab)
             } else {
-                archiveTabs([tab], reason: .manual)
+                archiveTabs([tab], reason: .manual, in: window)
             }
         case .resize(let split, let fractions):
             // Fractions keyed by pane must name exactly the split's panes; they are normalized to sum 1 with each at

@@ -161,6 +161,18 @@ final class BrowserClient {
                 )
             }
         }
+        load.pointee.on_load_start = { handlerSelf, browser, frame, _ in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            guard let frame, frame.pointee.is_main?(frame) != 0,
+                  let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
+            let url = frame.pointee.get_url?(frame)
+            let address = CefStringUtil.takingUserFree(url) ?? ""
+            MainActor.assumeIsolated {
+                guard let browser = client.browser else { return }
+                browser.delegate?.browser(browser, didStartMainDocument: URL(string: address))
+            }
+        }
         load.pointee.on_load_error = { handlerSelf, browser, frame, errorCode, errorText, failedURL in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
@@ -178,8 +190,10 @@ final class BrowserClient {
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
             guard let frame, frame.pointee.is_main?(frame) != 0 else { return }
-            guard BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) != nil else { return }
+            guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
+            let address = CefStringUtil.takingUserFree(frame.pointee.get_url?(frame)) ?? ""
             MainActor.assumeIsolated {
+                if let browser = client.browser { browser.delegate?.browser(browser, didFinishMainDocument: URL(string: address)) }
                 // JS ↔ Swift bridge: late shim injection (see CefBridge docs;
                 // production pages should embed CefBridge.javascriptShim).
                 let bridge = CefRuntime.shared.bridge
@@ -658,7 +672,11 @@ extension BrowserClient {
         let handler = cefAllocate(cef_request_handler_t.self, owner: self)
         handler.pointee.on_before_browse = { handlerSelf, browser, frame, request, userGesture, isRedirect in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
-            cefRelease(frame.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            guard let frame, frame.pointee.is_main?(frame) != 0 else {
+                cefRelease(request.map(UnsafeMutableRawPointer.init))
+                return 0
+            }
             var urlString = ""
             if let request {
                 urlString = CefStringUtil.takingUserFree(request.pointee.get_url?(request)) ?? ""

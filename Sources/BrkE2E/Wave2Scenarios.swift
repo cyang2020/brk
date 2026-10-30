@@ -111,7 +111,7 @@ enum Wave2Scenarios {
         try app.dispatch(.profile(.assign(.space(first), to: profile!)))
         try app.waitUntil("the change dialog closed") { try app.view().profileDialog == nil && !isShown(try app.native(), .profileDialog) }
         try waitForTitle(app, readerID, "cookie:brk=1")
-        try expect(try app.pageLog().filter { $0.page == PageID(readerID) && $0.kind == .created }.count == 2,
+        try expect(try app.pageLog().filter { $0.page == PageID(window: app.window!, item: readerID) && $0.kind == .created }.count == 2,
                    "the reader's page was not replaced in the new context")
 
         try app.dispatch(.profile(.openDialog(.delete(profile!))))
@@ -178,7 +178,7 @@ enum Wave2Scenarios {
         try app.click(.row(privateTab))
         try app.waitUntil("clicking the private sidebar row selects its page") {
             guard case .native(let native) = try app.send(.native(window: incognito)) else { return false }
-            return try app.view(incognito!).content.panes.first?.tab == privateTab && native.focusedPage == PageID(privateTab)
+            return try app.view(incognito!).content.panes.first?.tab == privateTab && native.focusedPage == PageID(window: incognito!, item: privateTab)
         }
         // `press` has no window argument and falls back to an arbitrary window when the display is locked.
         // Target this window explicitly; R6 covers the native Ctrl+Tab press/release path.
@@ -223,7 +223,7 @@ enum Wave2Scenarios {
             guard let row = currentTab(try app.view(second!)), row.title == "Fixture Page 2",
                   case .native(let native) = try app.send(.native(window: second)) else { return false }
             return try isShown(native, .row(row.id)) && isShown(app.native(), .row(row.id))
-                && native.focusedPage == PageID(row.id) && native.pages[PageID(row.id)] != nil
+                && native.focusedPage == PageID(window: second!, item: row.id) && native.pages[PageID(window: second!, item: row.id)] != nil
         }
         try app.recordWindows("both-loaded")
         try app.verifyStablePageFocus("both-loaded")
@@ -258,8 +258,8 @@ enum Wave2Scenarios {
         try app.waitUntil("the Little Arc page loaded with keyboard focus") {
             guard case .tab(let row)? = try app.view(little!).scratch?.rows.first,
                   case .native(let native) = try app.send(.native(window: little)) else { return false }
-            return row.title == "Fixture Page 2" && native.focusedPage == PageID(row.id)
-                && native.pages[PageID(row.id)] != nil && !isShown(native, .sidebar)
+            return row.title == "Fixture Page 2" && native.focusedPage == PageID(window: little!, item: row.id)
+                && native.pages[PageID(window: little!, item: row.id)] != nil && !isShown(native, .sidebar)
         }
         try app.screenshot("little-arc", window: little)
         let before = todayIDs(try app.view())
@@ -273,7 +273,7 @@ enum Wave2Scenarios {
         try app.waitUntil("the promoted tab loaded in the standard window") {
             guard let row = currentTab(try app.view()), row.title == "Fixture Page 2" else { return false }
             let native = try app.native()
-            return native.focusedPage == PageID(row.id) && native.pages[PageID(row.id)] != nil && isShown(native, .row(row.id))
+            return native.focusedPage == PageID(window: app.window!, item: row.id) && native.pages[PageID(window: app.window!, item: row.id)] != nil && isShown(native, .row(row.id))
         }
     }
 
@@ -308,7 +308,7 @@ enum Wave2Scenarios {
         try expect(todayIDs(try app.view()) == before, "the peek left a Today tab behind")
         try app.waitUntil("keyboard focus returned to the original page") {
             guard let row = currentTab(try app.view()) else { return false }
-            return try app.native().focusedPage == PageID(row.id)
+            return try app.native().focusedPage == PageID(window: app.window!, item: row.id)
         }
     }
 
@@ -369,7 +369,7 @@ enum Wave2Scenarios {
         try app.press("cmd+e")
         try app.waitUntil("Cmd+E to open the command bar") { isCommandBar(try app.view().overlay) }
         try app.press("escape")
-        try app.waitUntil("focus back on the page") { try app.native().focusedPage == PageID(keys.id) }
+        try app.waitUntil("focus back on the page") { try app.native().focusedPage == PageID(window: app.window!, item: keys.id) }
         try app.press("cmd+t")
         try waitForTitle(app, keys.id, NativeScenarios.keyTitle("cmd+t"))
         try expect(!isCommandBar(try app.view().overlay), "Cmd+T still opened the bar after the remap")

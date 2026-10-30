@@ -51,14 +51,14 @@ final class ProfilesSpecTests: XCTestCase {
         let work = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
         d.user(.profile(.assign(.current, to: work)))
         let t = d.open("http://127.0.0.1:9/work")
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(t) }?.context, .profile(work))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: t) }?.context, .profile(work))
         d.user(.window(.newIncognito))
         let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito })
         d.user(.commandBar(.submit("http://127.0.0.1:9/secret")), in: incognito.id)
         let secret = try XCTUnwrap(d.view(of: incognito.id).scratch?.rows.first?.id)
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(secret) }?.context, .incognito)
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: incognito.id, item: secret) }?.context, .incognito)
         XCTAssertEqual(d.view(of: incognito.id).urlPill.profile, ProfileBadge(name: "Incognito", icon: nil, incognito: true))
-        d.page(secret, .committed(url("http://127.0.0.1:9/secret")))
+        d.page(secret, .committed(url("http://127.0.0.1:9/secret")), in: incognito.id)
         XCTAssertFalse((d.savedDoc["history"] as? [[String: Any]] ?? []).contains { ($0["url"] as? String) == "http://127.0.0.1:9/secret" },
                        "incognito visits are never history")
     }
@@ -120,7 +120,7 @@ final class ProfilesSpecTests: XCTestCase {
         let work = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
         d.user(.tab(.focus(shown)))
         XCTAssertEqual(d.view.space.id, first)
-        func context(_ tab: ItemID) -> BrowsingContext? { d.snapshot.pages.first { $0.id == PageID(tab) }?.context }
+        func context(_ tab: ItemID) -> BrowsingContext? { d.snapshot.pages.first { $0.id == PageID(window: d.window, item: tab) }?.context }
         XCTAssertEqual(context(shown), .profile(.default))
 
         d.user(.profile(.assign(.current, to: work)))

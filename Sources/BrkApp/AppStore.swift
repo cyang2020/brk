@@ -95,13 +95,13 @@ public final class AppStore {
         }
     }
 
-    /// The window whose current snapshot shows `page`: in one of its panes, or in its Peek card (F3), so a key from
+    /// The page's owner, if its current snapshot shows `page`: in one of its panes, or in its Peek card (F3), so a key from
     /// the peeked page (Esc, Cmd+W) routes to that window instead of being passed to the page.
     public func window(showing page: PageID) -> WindowID? {
-        snapshot.windows.first { window in
-            window.value.content.panes.contains { $0.content == .page(page) }
-                || { if case .peek(let peek)? = window.value.overlay { peek.page == page } else { false } }()
-        }?.key
+        guard let window = snapshot.windows[page.window] else { return nil }
+        let visible = window.content.panes.contains { $0.content == .page(page) }
+            || { if case .peek(let peek)? = window.overlay { return peek.page == page }; return false }()
+        return visible ? page.window : nil
     }
 
     public func windowController(_ id: WindowID?) -> WindowController? {

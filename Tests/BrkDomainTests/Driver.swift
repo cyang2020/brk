@@ -38,6 +38,9 @@ final class Driver {
         state = restored.state
         outcome = restored.outcome
         window = project(restored.state, ProjectionContext(now: now, calendar: Driver.calendar)).windows.keys.sorted()[0]
+        announceBrowsers()
+        // The default fixture starts after its initial document has committed. Tests of provisional startup use StateCodec directly.
+        if file == nil { commitRequested() }
     }
 
     var ctx: Context { Context(now: now, newID: ids.next) }
@@ -46,10 +49,21 @@ final class Driver {
     func user(_ command: Command, in window: WindowID? = nil) -> Transition { apply(reduce(state, .user(window ?? self.window, command), ctx)) }
 
     @discardableResult
-    func system(_ event: SystemEvent) -> Transition { apply(reduce(state, .system(event), ctx)) }
+    func system(_ event: SystemEvent) -> Transition {
+        if case .page(_, .closed) = event {
+            let t = reduce(state, .system(event), ctx)
+            state = t.state
+            return t
+        }
+        return apply(reduce(state, .system(event), ctx))
+    }
 
     @discardableResult
-    func page(_ tab: ItemID, _ event: PageEvent) -> Transition { system(.page(PageID(tab), event)) }
+    func page(_ tab: ItemID, _ event: PageEvent, in owner: WindowID? = nil) -> Transition {
+        let page = PageID(window: owner ?? window, item: tab)
+        let token = state.session.live[page]?.browser ?? BrowserToken(page: page, generation: 1)
+        return system(.page(token, event))
+    }
 
     @discardableResult
     func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64, isRepeat: Bool = false, in window: WindowID? = nil) -> Transition {
@@ -107,6 +121,12 @@ final class Driver {
     var saved: [String: Any] { (try? JSONSerialization.jsonObject(with: savedFile) as? [String: Any]) ?? [:] }
     var savedDoc: [String: Any] { saved["doc"] as? [String: Any] ?? [:] }
 
+    func commitRequested(in owner: WindowID? = nil) {
+        for spec in snapshot.pages where owner == nil || spec.id.window == owner {
+            if let requested = state.session.live[spec.id]?.requestedURL { page(spec.id.item, .committed(requested), in: spec.id.window) }
+        }
+    }
+
     /// Cmd+T, type, Enter. Returns the new tab's id.
     @discardableResult
     func open(_ input: String) -> ItemID {
@@ -115,6 +135,7 @@ final class Driver {
         user(.commandBar(.submit(input)))
         let added = todayIDs.filter { !before.contains($0) }
         precondition(added.count == 1, "open(\(input)) added \(added.count) tabs")
+        page(added[0], .committed(resolveTypedInput(input)!))
         return added[0]
     }
 
@@ -125,8 +146,16 @@ final class Driver {
         return view.space.id
     }
 
+    private func announceBrowsers() {
+        for spec in snapshot.pages where spec.initialURL != nil && state.session.live[spec.id]?.browser == nil {
+            let token = BrowserToken(page: spec.id, generation: (state.session.generations[spec.id] ?? 0) + 1)
+            state = reduce(state, .system(.page(token, .browserCreated(spec.context, .unavailable))), ctx).state
+        }
+    }
+
     private func apply(_ t: Transition) -> Transition {
         state = t.state
+        announceBrowsers()
         return t
     }
 }

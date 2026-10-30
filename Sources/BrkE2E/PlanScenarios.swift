@@ -54,7 +54,7 @@ enum PlanScenarios {
         try app.screenshot("one-card")
 
         try app.requireCEF("PageFacts.embeddedViews lists Chromium's two views")
-        guard let page = currentTab(v).map({ PageID($0.id) }), let facts = n.pages[page] else {
+        guard let page = currentTab(v).map({ PageID(window: app.window!, item: $0.id) }), let facts = n.pages[page] else {
             throw Check(description: "native().pages has no facts for the current page")
         }
         try expect(facts.embeddedViews.count == 2, "embedded views \(facts.embeddedViews), expected Chromium's two")
@@ -97,7 +97,7 @@ enum PlanScenarios {
         }
         try app.onCEF("the title \"Fixture Page 2\"") { try waitForTitle(app, row!.id, "Fixture Page 2") }
         let log = try app.pageLog()
-        try expect(log.contains { $0.page == PageID(row!.id) && $0.kind == .created }, "pageLog has no created entry for \(row!.id)")
+        try expect(log.contains { $0.page == PageID(window: app.window!, item: row!.id) && $0.kind == .created }, "pageLog has no created entry for \(row!.id)")
         try app.screenshot("new-tab")
     }
 
@@ -264,7 +264,7 @@ enum PlanScenarios {
     @Sendable static func closeTab(_ app: AppUnderTest) throws {
         let t = try openTab(app, app.site.url("page2.html"))
         try app.settle()
-        let page = PageID(t.id)
+        let page = PageID(window: app.window!, item: t.id)
         try expect(try app.native().pages[page] != nil, "native().pages has no surface for the new tab")
         try app.press("cmd+w")
         try app.waitUntil("the row to leave Today") { try !todayIDs(app.view()).contains(t.id) }
@@ -297,24 +297,28 @@ enum PlanScenarios {
         try app.waitUntil("the sidebar width to be 300") { try app.view().sidebar.width == 300 }
         try app.settle()
 
-        let before = RestoreSummary(try app.view())
+        let before = RestoreSummary(try app.view(), omitting: app.engine == .cef ? fail.id : nil)
         try expect(before.dock.count == 2, "dock \(before.dock), expected two spaces")
         try expect(before.pinned.map(\.id) == [home.id.rawValue], "pinned \(before.pinned), expected only home")
-        try expect(before.today.contains { $0.id == fail.id.rawValue }, "Today \(before.today) lacks the /fail tab")
+        try expect(try todayIDs(app.view()).contains(fail.id), "Today \(before.today) lacks the /fail tab")
         try expect(before.current == page2.id.rawValue, "current \(before.current ?? "nil"), expected page2")
         try app.flush()
         app.passed("two spaces, a pinned tab, a failed load, page2 current, width 300")
         try app.restart()
 
         try app.waitUntil("the restored window to equal the one before restart") {
-            let after = RestoreSummary(try app.view())
+            let after = RestoreSummary(try app.view(), omitting: app.engine == .cef ? fail.id : nil)
             try expect(after == before, "after restart \(after), before \(before)")
             return true
         }
+        if app.engine == .cef {
+            try expect(try todayIDs(app.view()).contains(fail.id), "failed row was not retained")
+            try expect(try tab(fail.id, in: app.view())?.url == nil, "failed request was persisted as a document")
+        }
         let pages = Set(try app.native().pages.keys)
-        try expect(pages == [PageID(page2.id)], "native().pages after restart is \(pages.map(\.description).sorted()), expected only page2")
+        try expect(pages == [PageID(window: app.window!, item: page2.id)], "native().pages after restart is \(pages.map(\.description).sorted()), expected only page2")
         let created = Set(try app.pageLog().filter { $0.kind == .created }.map(\.page))
-        try expect(created == [PageID(page2.id)], "pages created after restart: \(created.map(\.description).sorted()), expected only page2 (lazy restore)")
+        try expect(created == [PageID(window: app.window!, item: page2.id)], "pages created after restart: \(created.map(\.description).sorted()), expected only page2 (lazy restore)")
         if app.engine == .stub { app.note("the stub loads /fail like any URL and titles pages by host, so the failed load is not exercised") }
         try app.screenshot("restored")
     }
@@ -329,9 +333,9 @@ enum PlanScenarios {
         let current: String?
         let width: Double
 
-        init(_ v: WindowSnapshot) {
+        init(_ v: WindowSnapshot, omitting: ItemID? = nil) {
             func tabs(_ rows: [Row]) -> [Tab] {
-                tabRows(rows).map { Tab(id: $0.id.rawValue, url: $0.url?.absoluteString ?? "", title: $0.title) }
+                tabRows(rows).filter { $0.id != omitting }.map { Tab(id: $0.id.rawValue, url: $0.url?.absoluteString ?? "", title: $0.title) }
             }
             dock = v.dock.map { "\($0.id):\($0.title)" }
             space = v.space.id.rawValue

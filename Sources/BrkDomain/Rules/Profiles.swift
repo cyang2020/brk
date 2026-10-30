@@ -53,9 +53,9 @@ extension Work {
             }
             guard let space, let old = state.doc.spaces[space]?.profile else { return }
             if old != profile {
-                let before = state.session.loaded.map { ($0, state.browsingContext(of: $0)) }
+                let before = state.session.loaded.map { ($0, state.browsingContext(of: $0.item)) }
                 state.doc.spaces[space]!.profile = profile
-                for (tab, context) in before where state.browsingContext(of: tab) != context { unload(tab) }
+                for (tab, context) in before where state.browsingContext(of: tab.item) != context { unload(tab) }
             }
             closeProfileDialog(in: window)
         case .openDialog(let request):

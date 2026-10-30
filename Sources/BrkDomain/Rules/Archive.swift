@@ -42,7 +42,7 @@ extension Work {
             for id in state.doc.windows.keys.sorted() where state.doc.windows[id]?.kind == .little {
                 let tabs = state.session.scratch[id]?.allTabs() ?? []
                 guard !tabs.isEmpty, tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
-                archiveTabs(tabs, reason: .auto)
+                archiveTabs(tabs, reason: .auto, in: id)
                 removeWindow(id)
             }
         }
@@ -52,14 +52,18 @@ extension Work {
     /// snapshotted into the archive with their source space and section (one call's tabs in sidebar order, ahead of
     /// older entries) and removed from the tree, `loaded` and `live`. Section roots and unknown ids are skipped.
     /// Empty panes (no URL) are removed without an entry: there is nothing to restore. Normalize applies the cap.
-    mutating func archiveTabs(_ ids: [ItemID], reason: ArchiveReason) {
+    mutating func archiveTabs(_ ids: [ItemID], reason: ArchiveReason, in window: WindowID? = nil) {
         var batch: [ArchivedTab] = []
         for id in ids {
             guard let role = state.role(of: id), state.locate(id).flatMap({ state.tree($0)?[id]?.kind }) != .section else { continue }
             let incognito: Bool
             if case .window(let window)? = state.locate(id) { incognito = state.doc.windows[window]?.kind == .incognito }
             else { incognito = false }
-            for (tabID, tab) in removeItem(id) {
+            let snapshots = Dictionary(uniqueKeysWithValues: (state.locate(id).flatMap { state.tree($0)?.tabs(under: id) } ?? []).map { tab in
+                (tab, archiveTab(tab, in: window))
+            })
+            for (tabID, original) in removeItem(id) {
+                let tab = snapshots[tabID] ?? original
                 unload(tabID)
                 guard !incognito, tab.url != nil else { continue }
                 batch.append(ArchivedTab(id: ArchiveID(ctx.newID()), tabID: tabID, tab: tab, archivedAt: ctx.now, reason: reason,
@@ -67,6 +71,13 @@ extension Work {
             }
         }
         if !batch.isEmpty { state.doc.archive.insert(contentsOf: batch, at: 0) }
+    }
+
+    private func archiveTab(_ id: ItemID, in window: WindowID?) -> Tab {
+        var tab = state.tab(id)!
+        tab.url = state.address(of: id, in: window, for: .savedDocument)
+        if let window { tab.title = state.displayedTab(id, in: window, for: .savedDocument)?.title ?? tab.title }
+        return tab
     }
 
     /// Puts an archived tab back: its space's section when that space still exists (end of Pinned, top of Today),
@@ -93,6 +104,7 @@ extension Work {
         var tab = entry.tab
         tab.lastActiveAt = ctx.now
         do { try state.doc.tree.insert(tabID, .tab(tab), at: position, createdAt: ctx.now) } catch { return nil }
+        state.doc.windows[window]?.slots[tabID] = SavedSlot(committedURL: tab.url, observedTitle: tab.title, favicon: tab.favicon)
         state.doc.archive.remove(at: index)
         return tabID
     }

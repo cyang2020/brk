@@ -58,18 +58,7 @@ extension Work {
         if case .commandBar(_, let open)? = session.overlay { target = open }
         switch target {
         case .navigate(let tab, _) where state.tab(tab) != nil, .fillPane(let tab) where state.tab(tab) != nil:
-            let live = state.session.loaded.contains(tab) && state.tab(tab)?.url != nil
-            // In Pinned or Favorites a pane's first url is also its saved url (Reset Tab); a saved url is kept.
-            let saves = state.role(of: tab).map { $0.kind == .pinned || $0.kind == .favorites } ?? false
-            if let scope = state.locate(tab) {
-                state.withTree(scope) {
-                    $0.updateTab(tab) { t in
-                        t.url = url
-                        if saves, t.pinnedURL == nil { t.pinnedURL = url }
-                    }
-                }
-            }
-            if live { effects.append(.page(PageID(tab), .navigate(url))) }
+            request(url, for: PageID(window: window, item: tab))
             focus(tab, in: window)
         case .newTab, .navigate, .fillPane:
             guard let doc = state.doc.windows[window] else { return }

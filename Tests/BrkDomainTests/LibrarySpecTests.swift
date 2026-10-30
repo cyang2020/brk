@@ -38,15 +38,15 @@ final class LibrarySpecTests: XCTestCase {
         let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
         d.user(.commandBar(.submit(shared.absoluteString)), in: window)
         let tab = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
-        XCTAssertTrue(d.snapshot.pages.contains { $0.id == PageID(tab) && $0.context == .incognito })
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id == PageID(window: window, item: tab) && $0.context == .incognito })
         let history = d.state.doc.history
         let downloads = d.state.doc.downloads
-        d.page(tab, .committed(shared))
-        d.page(tab, .titleChanged("Private title"))
-        d.page(tab, .download(DownloadID("private"), .started(url: shared, filename: "secret.txt", path: "/secret.txt")))
-        d.page(tab, .download(DownloadID("private"), .finished(path: "/secret.txt")))
-        d.page(tab, .download(publicDownload, .progress(received: 123, total: 456)))
-        d.page(tab, .download(publicDownload, .finished(path: "/secret.txt")))
+        d.page(tab, .committed(shared), in: window)
+        d.page(tab, .titleChanged("Private title"), in: window)
+        d.page(tab, .download(DownloadID("private"), .started(url: shared, filename: "secret.txt", path: "/secret.txt")), in: window)
+        d.page(tab, .download(DownloadID("private"), .finished(path: "/secret.txt")), in: window)
+        d.page(tab, .download(publicDownload, .progress(received: 123, total: 456)), in: window)
+        d.page(tab, .download(publicDownload, .finished(path: "/secret.txt")), in: window)
         XCTAssertEqual(d.state.doc.history, history)
         XCTAssertEqual(d.state.doc.downloads, downloads)
         let restored = Driver(file: d.savedFile)
@@ -136,6 +136,7 @@ final class LibrarySpecTests: XCTestCase {
     /// the History page lists the current profile's visits newest first; entries and the whole list can be removed
     func test_historyPage() {
         let d = Driver()
+        d.user(.library(.clearHistory))
         let a = d.todayIDs[0]
         d.page(a, .committed(url("http://127.0.0.1:9/one")))
         d.advance(minute)
@@ -211,6 +212,7 @@ final class LibrarySpecTests: XCTestCase {
     /// Clear asks the engine to forget that profile's site data; an incognito window lists nothing and clears nothing
     func test_historyIsPerProfileAndClearForgetsTheProfilesData() throws {
         let d = Driver()
+        d.user(.library(.clearHistory))
         let home = d.todayIDs[0]
         d.page(home, .committed(url("http://127.0.0.1:9/shared")))
         d.advance(minute)

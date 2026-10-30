@@ -7,13 +7,13 @@ import XCTest
 @MainActor
 final class StubEngineTests: XCTestCase {
     final class Recorder: WebEngineDelegate {
-        var events: [(PageID, PageEvent)] = []
-        func engine(_ engine: any WebEngine, page: PageID, didEmit event: PageEvent) { events.append((page, event)) }
+        var events: [(BrowserToken, PageEvent)] = []
+        func engine(_ engine: any WebEngine, page: BrowserToken, didEmit event: PageEvent) { events.append((page, event)) }
         func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool { false }
         func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision { .deny }
     }
 
-    let a = PageID(ItemID("a")), b = PageID(ItemID("b"))
+    let a = PageID(window: WindowID("w"), item: ItemID("a")), b = PageID(window: WindowID("w"), item: ItemID("b"))
     let url = URL(string: "https://example.com/x")!
 
     func testReconcileCreatesSurfacesAndReportsALoad() {
@@ -22,13 +22,17 @@ final class StubEngineTests: XCTestCase {
         engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default)), PageSpec(id: b, initialURL: nil, context: .profile(.default))])
         XCTAssertNotNil(engine.surface(for: a))
         XCTAssertNil(engine.surface(for: b), "a pane without a URL gets no page")
+        let token = BrowserToken(page: a, generation: 1)
+        let document = DocumentToken(browser: token, sequence: 1)
         XCTAssertEqual(recorder.events.map(\.1), [
+            .browserCreated(.profile(.default), .unavailable), .documentChanged(.loading(document)),
             .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false), .committed(url), .titleChanged("example.com"),
+            .documentChanged(.ready(document)),
             .loadingChanged(isLoading: false, canGoBack: false, canGoForward: false),
         ])
         XCTAssertEqual(engine.pageLog.map(\.kind), [.created])
         engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
-        XCTAssertEqual(recorder.events.count, 4, "reconcile is idempotent")
+        XCTAssertEqual(recorder.events.count, 7, "reconcile is idempotent")
     }
 
     func testDroppingASpecClosesThePageAndAReusedIdGetsAFreshSurface() {
@@ -53,8 +57,8 @@ final class StubEngineTests: XCTestCase {
         recorder.events.removeAll()
         let other = URL(string: "http://localhost:9/page2.html")!
         engine.perform(.navigate(other), on: a)
-        XCTAssertEqual(recorder.events.map(\.1)[1], .committed(other))
-        XCTAssertEqual(recorder.events.map(\.1)[2], .titleChanged("localhost"))
+        XCTAssertEqual(recorder.events.map(\.1)[2], .committed(other))
+        XCTAssertEqual(recorder.events.map(\.1)[3], .titleChanged("localhost"))
         engine.evaluate("document.title = 'x'", in: a)
         XCTAssertEqual((engine.surface(for: a) as? StubSurface)?.evaluated, ["document.title = 'x'"])
         engine.perform(.goBack, on: b)
