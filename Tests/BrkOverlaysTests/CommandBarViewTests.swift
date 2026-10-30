@@ -58,6 +58,17 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(chosen, [.tab(.focus(ItemID("t2")))])
     }
 
+    func testReturnNavigatesToTheTypedURLInsteadOfAPrefixMatch() {
+        let url = "http://127.0.0.1:4000/cookie.html"
+        let view = makeBar(commandBar([candidate("setter", "Cookie", url + "#set", space: "Work")], []))
+        type(url, into: view)
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen, [.commandBar(.submit(url))])
+        press(#selector(NSResponder.moveDown(_:)), in: view)
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen.last, .tab(.focus(ItemID("setter"))), "the fuzzy tab remains an explicit choice")
+    }
+
     /// every edit asks the reducer for suggestions with the text as typed; a reopened bar does not
     func testEveryEditDispatchesTheQuery() {
         let view = makeBar()
@@ -126,6 +137,26 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(sent, [.commandBar(.dismiss)])
         // Other editing commands stay with the text field.
         XCTAssertFalse(press(#selector(NSResponder.deleteBackward(_:)), in: view))
+    }
+
+    func testSiteSearchTakesEscapeBeforeTheWindowsExitShortcut() throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: box, styleMask: [.titled], backing: .buffered, defer: false)
+        let view = makeBar(commandBar([], [], siteSearch: [bing]))
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.orderOut(nil) }
+        XCTAssertTrue(view.focusInput())
+        type("bing", into: view)
+        press(#selector(NSResponder.insertTab(_:)), in: view)
+        let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1,
+                                     windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                                     charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: Key.escape.code)!
+        XCTAssertTrue(view.performKeyEquivalent(with: escape), "the window must not run its Exit binding for this press")
+        XCTAssertNil(view.siteSearch)
+        XCTAssertEqual(view.input.stringValue, "bing")
+        XCTAssertTrue(chosen.isEmpty, "leaving site search must not dismiss the bar")
+        XCTAssertFalse(view.performKeyEquivalent(with: escape), "the next Escape is available to the window")
     }
 
     func testTheSameOpeningKeepsWhatWasTypedAndANewOpeningStartsFromItsInitialQuery() {

@@ -43,7 +43,7 @@ public enum Suggest {
     ///    of its trigger words up to a word's end (an exact title or trigger first), 3 characters at least, and the
     ///    query is not an address;
     /// 2. open tabs whose title or URL matches (`.tab(.focus(id))`), never the focused one; word-start matches
-    ///    before mid-word;
+    ///    before mid-word. For an address, only exact URL matches precede the typed row; partial matches follow it;
     /// 3. "open what you typed" (`.commandBar(.submit(trimmed))`) when `resolve` accepts it: "Search <q>" when it
     ///    resolves to a search for the text, else "Open <url>"; a typed URL that is also in history shows once;
     /// 4. a site-search row when the query begins an engine's name or keyword (two letters at least), hint
@@ -75,7 +75,8 @@ public enum Suggest {
         let needle = fold(text)
         var typed: Suggestion?
         var isAddress = false
-        if let url = resolve(text) {
+        let resolvedURL = resolve(text)
+        if let url = resolvedURL {
             let search = isSearch(url, for: text)
             isAddress = !search
             if !search { taken.insert(url.absoluteString) }
@@ -83,7 +84,12 @@ public enum Suggest {
                                subtitle: nil, symbol: search ? "magnifyingglass" : "globe", favicon: nil, hint: nil,
                                command: .commandBar(.submit(text)))
         }
-        let switches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }.prefix(tabCap).map(switchRow)
+        let matches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }
+        // A URL is a destination, including its path, query and fragment. Keep fuzzy matches available, but
+        // Return must not switch to cookie.html#set when the user typed cookie.html.
+        let exact = isAddress ? tabs.filter { $0.url == resolvedURL } : []
+        let switches = (isAddress ? exact : matches).prefix(tabCap).map(switchRow)
+        let related = isAddress ? matches.filter { $0.url != resolvedURL }.prefix(max(0, tabCap - switches.count)).map(switchRow) : []
         let site = siteSearchCandidate(needle, bar).map { engine in
             Suggestion(kind: .siteSearch(engine), title: "\(OverlayCopy.searchVerb) \(engine.name)", subtitle: nil, symbol: "magnifyingglass",
                        favicon: nil, hint: OverlayCopy.siteSearchHint, command: .commandBar(.submitSearch(engine: engine.id, query: "")))
@@ -108,7 +114,7 @@ public enum Suggest {
             top = [best.suggestion]
             travel.removeFirst()
         }
-        let rows: [Suggestion] = top + switches + (typed.map { [$0] } ?? []) + (site.map { [$0] } ?? []) + domains + suggestions + history
+        let rows: [Suggestion] = top + switches + (typed.map { [$0] } ?? []) + related + (site.map { [$0] } ?? []) + domains + suggestions + history
             + travel.prefix(actionCap).map(\.suggestion)
         return Array(rows.prefix(limit))
     }

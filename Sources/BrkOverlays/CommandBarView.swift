@@ -41,7 +41,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private var bar: CommandBarSnapshot?
     private var colors = OverlayColors.of(.light)
     private var scheme: Scheme?
-    private var clickMonitor: Any?
+    private var eventMonitor: Any?
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -110,7 +110,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             applySiteSearchLook()
         }
         rerank(keepHighlight: !reopened)
-        installClickMonitor()
+        installEventMonitor()
         if reopened { bounce() }
     }
 
@@ -118,10 +118,25 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         guard !isHidden else { return }
         isHidden = true   // AppKit hands first responder to the window when the focused input's ancestor hides
         bar = nil
-        removeClickMonitor()
+        removeEventMonitor()
     }
 
     // MARK: Keys inside the input
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        takeSiteSearchEscape(event) || super.performKeyEquivalent(with: event)
+    }
+
+    /// The window routes Escape to Exit before the text field's delegate sees it. Site search owns the first
+    /// Escape while its input has focus. The key-equivalent path also covers input in an inactive window.
+    private func takeSiteSearchEscape(_ event: NSEvent) -> Bool {
+        guard !isHiddenOrHasHiddenAncestor, siteSearch != nil, event.type == .keyDown, event.keyCode == Key.escape.code,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+              let window, event.window == nil || event.window === window,
+              let editor = input.currentEditor() as? NSTextView, window.firstResponder === editor, !editor.hasMarkedText() else { return false }
+        leaveSiteSearch()
+        return true
+    }
 
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard !textView.hasMarkedText() else { return false }   // an input method is composing
@@ -302,22 +317,29 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { removeClickMonitor() } else if !isHidden { installClickMonitor() }
+        if window == nil { removeEventMonitor() } else if !isHidden { installEventMonitor() }
     }
 
-    /// A mouse-down anywhere in this window outside the card closes the bar; the click still goes where it was
-    /// aimed (a sidebar row, a page).
-    private func installClickMonitor() {
-        guard clickMonitor == nil, window != nil else { return }
-        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
-            MainActor.assumeIsolated { self?.mouseDownSomewhere(event) }
-            return event
+    /// Site-search Escape runs before the window's shortcut table. Outside clicks still reach their target after
+    /// dismissing the bar.
+    private func installEventMonitor() {
+        guard eventMonitor == nil, window != nil else { return }
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            let consumed = MainActor.assumeIsolated {
+                if event.type == .keyDown {
+                    guard event.window != nil || NSApp.keyWindow === self?.window else { return false }
+                    return self?.takeSiteSearchEscape(event) == true
+                }
+                self?.mouseDownSomewhere(event)
+                return false
+            }
+            return consumed ? nil : event
         }
     }
 
-    private func removeClickMonitor() {
-        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
-        clickMonitor = nil
+    private func removeEventMonitor() {
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        eventMonitor = nil
     }
 
     private func mouseDownSomewhere(_ event: NSEvent) {
