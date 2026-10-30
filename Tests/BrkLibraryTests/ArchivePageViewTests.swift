@@ -1,7 +1,7 @@
 import AppKit
 import XCTest
 
-@testable import BrkOverlays
+@testable import BrkLibrary
 import BrkBase
 @testable import BrkDomain
 
@@ -60,12 +60,12 @@ final class ArchivePageViewTests: XCTestCase {
         XCTAssertEqual(visible(page).compactMap { $0.accessibilityIdentifier() }.filter { $0.hasPrefix("archive-group-") },
                        ["archive-group-today", "archive-group-pastWeek", "archive-group-beyond"])
         XCTAssertEqual(texts(in: view("archive-group-pastWeek", in: page)).first, "Earlier This Week")
-        XCTAssertEqual(texts(in: view("archive-entry-e1", in: page)), ["Swift Forums", "forums.swift.org", "3:05 PM · Closed · Work"])
+        XCTAssertEqual(texts(in: view("archive-entry-e1", in: page)), ["Swift Forums", "forums.swift.org", "3:05 PM · Manually Closed · Work"])
         XCTAssertEqual(texts(in: view("archive-entry-e3", in: page)), ["Release notes", "resources.arc.net/notes", "Mon 3:05 PM · Cleared from Today · Home"])
         XCTAssertEqual(texts(in: view("archive-entry-e4", in: page)), ["Old page", "old.example.com", "Oct 12, 2025 · Folder or Space deleted"])
         // Each entry sits inside its group, so its frame is inside the group's frame on screen.
         XCTAssertTrue(view("archive-entry-e3", in: page)!.isDescendant(of: view("archive-group-pastWeek", in: page)!))
-        XCTAssertEqual(texts(in: page).first, "Archive")
+        XCTAssertEqual(texts(in: page).first, "Archived Tabs")
     }
 
     func testRestoreDispatchesRestoreForThatEntry() {
@@ -120,15 +120,14 @@ final class ArchivePageViewTests: XCTestCase {
         XCTAssertEqual((view("archive-threshold", in: page) as? NSPopUpButton)?.titleOfSelectedItem, "Never")
     }
 
-    func testCloseButtonAndEscapeInAnEmptyFilterCloseTheArchive() {
+    func testEscapeInAnEmptyFilterClosesTheLibrary() {
         let page = makePage()
-        page.closeButton.performClick(nil)
         type("x", in: page)
         // With text in the filter, Esc is the search field's own: it clears the text.
         XCTAssertFalse(page.control(page.filterField, textView: NSTextView(), doCommandBy: #selector(NSResponder.cancelOperation(_:))))
         type("", in: page)
         XCTAssertTrue(page.control(page.filterField, textView: NSTextView(), doCommandBy: #selector(NSResponder.cancelOperation(_:))))
-        XCTAssertEqual(sent, [.commandBar(.dismiss), .commandBar(.dismiss)])
+        XCTAssertEqual(sent, [.library(.close)])
     }
 
     func testTheSameOpeningKeepsTheFilterAndANewOpeningClearsIt() {

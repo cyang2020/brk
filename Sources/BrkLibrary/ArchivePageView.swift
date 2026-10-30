@@ -4,15 +4,15 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// Owner: W4. The archive page, drawn inside the content area like Arc's archive in the content card, so the
-/// sidebar and dock stay clickable around it. Groups by bucket (`ArchiveSnapshot.groups`, in the projection's order),
-/// each entry with favicon, title, display URL, when, why and from which space, and a restore button
-/// (`.archive(.restore(id))`). A local filter field narrows the list; the auto-archive threshold picker dispatches
-/// `.settings(.autoArchive(t))`; Clear Archive asks inline first ("Are you sure you'd like to Clear Archive?": the
-/// same button confirms, Cancel backs out) and then dispatches `.archive(.clear)`. The close button and Esc dispatch
-/// `.commandBar(.dismiss)`, which closes whichever overlay is open.
+/// Owner: F5 (written by W4, moved from BrkOverlays). The Library's archive page, in the content area beside the
+/// Library panel. Groups by bucket (`ArchiveSnapshot.groups`, in the projection's order), each entry with favicon,
+/// title, display URL, when, why and from which space, and a restore button (`.archive(.restore(id))`). A local
+/// filter field narrows the list; the auto-archive threshold picker dispatches `.settings(.autoArchive(t))`; Clear
+/// Archive asks inline first ("Are you sure you'd like to Clear Archive?": the same button confirms, Cancel backs
+/// out) and then dispatches `.archive(.clear)`. Esc in an empty filter closes the Library; the panel's exit button
+/// does too.
 @MainActor
-public final class ArchivePageView: NSView, NSSearchFieldDelegate {
+final class ArchivePageView: NSView, NSSearchFieldDelegate {
     let dispatch: Dispatch
     /// Time zone of the "3:05 PM" style times.
     var timeZone = TimeZone.current
@@ -20,19 +20,18 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
     let thresholdMenu = NSPopUpButton()
     let clearButton = NSButton()
     let cancelClearButton = NSButton()
-    let closeButton = NSButton()
-    private let title = NSTextField(labelWithString: OverlayCopy.archiveTitle)
-    private let thresholdLabel = NSTextField(labelWithString: OverlayCopy.archiveThreshold)
+    private let title = NSTextField(labelWithString: LibraryCopy.title(.archive))
+    private let thresholdLabel = NSTextField(labelWithString: LibraryCopy.archiveThreshold)
     private let confirmText = NSTextField(labelWithString: Copy.clearArchiveConfirm)
     private let scroll = NSScrollView()
     private let list = FlippedView()
     private let emptyLabel = NSTextField(wrappingLabelWithString: "")
     private var archive: ArchiveSnapshot?
     private var scheme: Scheme?
-    private var colors = OverlayColors.of(.light)
+    private var colors = LibraryColors.of(.light)
     private var confirming = false
 
-    public init(dispatch: @escaping Dispatch) {
+    init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
         isHidden = true
@@ -41,43 +40,37 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.content.cornerRadius.value
         layer?.masksToBounds = true
-        let a = OverlayMetrics.archive
+        let a = LibraryDraw.archive
         title.font = .systemFont(ofSize: a.titleFontSize.value, weight: .bold)
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: OverlayCopy.close)
-        closeButton.bezelStyle = .accessoryBarAction
-        closeButton.isBordered = false
-        closeButton.toolTip = OverlayCopy.close
-        closeButton.target = self
-        closeButton.action = #selector(closeClicked)
-        filterField.placeholderString = OverlayCopy.archiveFilter
-        filterField.setAccessibilityLabel(OverlayCopy.archiveFilter)
+        filterField.placeholderString = LibraryCopy.archiveFilter
+        filterField.setAccessibilityLabel(LibraryCopy.archiveFilter)
         filterField.delegate = self
         filterField.sendsSearchStringImmediately = true
         thresholdLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         thresholdMenu.identify(.archiveThreshold)
         thresholdMenu.controlSize = .small
-        thresholdMenu.addItems(withTitles: AutoArchiveThreshold.allCases.map(OverlayCopy.threshold))
+        thresholdMenu.addItems(withTitles: AutoArchiveThreshold.allCases.map(LibraryCopy.threshold))
         thresholdMenu.target = self
         thresholdMenu.action = #selector(thresholdChosen)
         clearButton.identify(.archiveClear)
-        clearButton.title = OverlayCopy.clearArchive
+        clearButton.title = LibraryCopy.clearArchive
         clearButton.controlSize = .small
         clearButton.bezelStyle = .push
         clearButton.target = self
         clearButton.action = #selector(clearClicked)
-        cancelClearButton.title = OverlayCopy.cancel
+        cancelClearButton.title = LibraryCopy.cancel
         cancelClearButton.controlSize = .small
         cancelClearButton.bezelStyle = .push
         cancelClearButton.target = self
         cancelClearButton.action = #selector(cancelClearClicked)
         confirmText.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         emptyLabel.alignment = .center
-        emptyLabel.font = .systemFont(ofSize: OverlayMetrics.archive.entryTitleFontSize.value)
+        emptyLabel.font = .systemFont(ofSize: LibraryDraw.archive.entryTitleFontSize.value)
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = list
-        for view in [title, closeButton, filterField, thresholdLabel, thresholdMenu, confirmText, cancelClearButton, clearButton, scroll, emptyLabel] {
+        for view in [title, filterField, thresholdLabel, thresholdMenu, confirmText, cancelClearButton, clearButton, scroll, emptyLabel] {
             addSubview(view)
         }
     }
@@ -85,19 +78,15 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    public override var isFlipped: Bool { true }
+    override var isFlipped: Bool { true }
 
-    public func render(_ archive: ArchiveSnapshot?, frames: WindowFrames, palette: Palette) {
-        guard let archive, let frame = frames.library?.page else {
-            isHidden = true
-            self.archive = nil
-            return
-        }
-        show(archive, in: frame, scheme: palette.scheme)
+    func hide() {
+        isHidden = true
+        archive = nil
     }
 
-    /// `render` once the slice and its frame are known. A new opening clears the filter and any pending Clear
-    /// question; the same opening keeps them and the scroll position.
+    /// Shows `archive` in `frame` (the Library's page area, in the Library view's coordinates). A new opening clears
+    /// the filter and any pending Clear question; the same opening keeps them and the scroll position.
     func show(_ archive: ArchiveSnapshot, in frame: CGRect, scheme: Scheme) {
         let reopened = archive.openID != self.archive?.openID
         guard reopened || isHidden || archive != self.archive || frame != self.frame || scheme != self.scheme else { return }
@@ -117,8 +106,6 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
     }
 
     // MARK: Controls
-
-    @objc private func closeClicked() { dispatch(.commandBar(.dismiss)) }
 
     @objc private func thresholdChosen() {
         let index = thresholdMenu.indexOfSelectedItem
@@ -143,15 +130,15 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
         layoutPage()
     }
 
-    public func controlTextDidChange(_ notification: Notification) {
+    func controlTextDidChange(_ notification: Notification) {
         rebuildList()
         layoutPage()
     }
 
-    /// Esc in the filter clears it first, then closes the archive.
-    public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+    /// Esc in the filter clears it first, then closes the Library.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard selector == #selector(NSResponder.cancelOperation(_:)), filterField.stringValue.isEmpty else { return false }
-        dispatch(.commandBar(.dismiss))
+        dispatch(.library(.close))
         return true
     }
 
@@ -183,19 +170,17 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
             list.addSubview(section)
         }
         let hasEntries = !(archive?.groups.isEmpty ?? true)
-        emptyLabel.stringValue = hasEntries ? OverlayCopy.noMatch : Copy.archiveEmpty
+        emptyLabel.stringValue = hasEntries ? LibraryCopy.noMatch : Copy.archiveEmpty
         emptyLabel.isHidden = !groups.isEmpty
     }
 
     private func layoutPage() {
-        let a = OverlayMetrics.archive
+        let a = LibraryDraw.archive
         let column = min(bounds.width - 2 * a.padding.value, a.columnMaxWidth.value)
         let left = ((bounds.width - column) / 2).rounded()
         var y = a.padding.value
         let titleHeight = title.intrinsicContentSize.height
-        title.frame = CGRect(x: left, y: y + (a.headerHeight.value - titleHeight) / 2, width: column / 2, height: titleHeight)
-        let close = a.toolbarHeight.value
-        closeButton.frame = CGRect(x: left + column - close, y: y + (a.headerHeight.value - close) / 2, width: close, height: close)
+        title.frame = CGRect(x: left, y: y + (a.headerHeight.value - titleHeight) / 2, width: column, height: titleHeight)
         y += a.headerHeight.value + a.gap.value
 
         // Toolbar: filter on the left; the threshold picker, or the Clear question, then Clear on the right.
@@ -235,14 +220,13 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
 
     private func applyColors(_ scheme: Scheme) {
         self.scheme = scheme
-        colors = OverlayColors.of(scheme)
-        appearance = .of(scheme)
+        colors = LibraryColors.of(scheme)
+        appearance = .library(scheme)
         layer?.backgroundColor = colors.page.cgColor
         title.textColor = colors.foregroundPrimary
         thresholdLabel.textColor = colors.foregroundSecondary
         confirmText.textColor = colors.foregroundPrimary
         emptyLabel.textColor = colors.foregroundSecondary
-        closeButton.contentTintColor = colors.foregroundSecondary
     }
 }
 
@@ -251,12 +235,12 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
 final class ArchiveGroupView: NSView {
     let height: CGFloat
 
-    init(bucket: ArchiveBucket, entries: [ArchiveEntry], formatter: ArchiveTime, colors: OverlayColors, restore: @escaping (ArchiveID) -> Void) {
-        let a = OverlayMetrics.archive
+    init(bucket: ArchiveBucket, entries: [ArchiveEntry], formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void) {
+        let a = LibraryDraw.archive
         height = a.groupHeaderHeight.value + CGFloat(entries.count) * a.entryHeight.value
         super.init(frame: .zero)
         identify(.archiveGroup(bucket))
-        let header = NSTextField(labelWithString: OverlayCopy.bucket(bucket))
+        let header = NSTextField(labelWithString: LibraryCopy.bucket(bucket))
         header.font = .systemFont(ofSize: a.groupFontSize.value, weight: .semibold)
         header.textColor = colors.foregroundSecondary
         addSubview(header)
@@ -272,7 +256,7 @@ final class ArchiveGroupView: NSView {
 
     override func layout() {
         super.layout()
-        let a = OverlayMetrics.archive
+        let a = LibraryDraw.archive
         var y = a.groupHeaderHeight.value
         for view in subviews {
             if let entry = view as? ArchiveEntryView {
@@ -294,16 +278,16 @@ final class ArchiveEntryView: NSView {
     private let url: NSTextField
     private let meta: NSTextField
     private let restoreButton = NSButton()
-    private let colors: OverlayColors
+    private let colors: LibraryColors
     private let onRestore: () -> Void
 
-    init(entry: ArchiveEntry, bucket: ArchiveBucket, formatter: ArchiveTime, colors: OverlayColors, restore: @escaping (ArchiveID) -> Void) {
-        let a = OverlayMetrics.archive
+    init(entry: ArchiveEntry, bucket: ArchiveBucket, formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void) {
+        let a = LibraryDraw.archive
         self.colors = colors
         onRestore = { restore(entry.id) }
         title = NSTextField(labelWithString: entry.title)
         url = NSTextField(labelWithString: entry.url.map(displayURL) ?? "")
-        meta = NSTextField(labelWithString: [formatter.text(entry.archivedAt, in: bucket), OverlayCopy.reason(entry.reason), entry.fromSpaceTitle]
+        meta = NSTextField(labelWithString: [formatter.text(entry.archivedAt, in: bucket), LibraryCopy.reason(entry.reason), entry.fromSpaceTitle]
             .compactMap { $0 }.joined(separator: " · "))
         super.init(frame: .zero)
         identify(.archiveEntry(entry.id))
@@ -325,7 +309,7 @@ final class ArchiveEntryView: NSView {
             FaviconCache.shared.image(for: url) { [weak self] image in self?.icon.image = image }
         } ?? globe
         restoreButton.identify(.archiveRestore(entry.id))
-        restoreButton.title = OverlayCopy.restore
+        restoreButton.title = LibraryCopy.restore
         restoreButton.controlSize = .small
         restoreButton.bezelStyle = .push
         restoreButton.target = self
@@ -343,7 +327,7 @@ final class ArchiveEntryView: NSView {
 
     override func layout() {
         super.layout()
-        let a = OverlayMetrics.archive
+        let a = LibraryDraw.archive
         let inset = a.gap.value / 2
         let side = a.faviconSize.value
         icon.frame = CGRect(x: inset, y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
