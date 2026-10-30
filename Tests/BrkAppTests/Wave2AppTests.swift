@@ -106,7 +106,28 @@ final class Wave2AppTests: XCTestCase {
         throw XCTSkip("F3: LittleWindowController hosts .little windows in an NSPanel at Metrics.littleArc.defaultSize")
     }
 
+    /// the engine's download question is answered from the page's profile: its Download Location (the system
+    /// Downloads folder when unset) and Ask where to save; the engine's events then reach the Downloads page
     func test_downloadDecisionReadsTheProfilesSettings() throws {
-        throw XCTSkip("F5: KeyRouter.decideDownload answers .save or .ask from the page's profile settings; the engine's download events reach the ledger")
+        let h = Harness()
+        defer { h.cleanUp() }
+        let file = URL(string: "http://127.0.0.1:9/download")!
+        func decide() -> DownloadDecision { h.router.engine(h.engine, page: h.page, decideDownload: "fixture.txt", from: file) }
+        let system = try XCTUnwrap(FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path)
+        XCTAssertEqual(decide(), .save(directory: system))
+        h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("/tmp/brk-downloads")))))
+        XCTAssertEqual(decide(), .save(directory: "/tmp/brk-downloads"))
+        h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("~/Desktop")))))
+        XCTAssertEqual(decide(), .save(directory: NSHomeDirectory() + "/Desktop"))
+        h.store.dispatch(.user(h.window, .settings(.profile(.default, .promptForDownloadLocation(true)))))
+        XCTAssertEqual(decide(), .ask(directory: NSHomeDirectory() + "/Desktop"))
+
+        let id = DownloadID("x-1-1")
+        h.router.engine(h.engine, page: h.page, didEmit: .download(id, .started(url: file, filename: "fixture.txt", path: "/tmp/brk-downloads/fixture.txt")))
+        h.router.engine(h.engine, page: h.page, didEmit: .download(id, .finished(path: "/tmp/brk-downloads/fixture.txt")))
+        h.store.dispatch(.user(h.window, .library(.open(.downloads))))
+        guard case .library(let library)? = h.store.snapshot.windows[h.window]?.overlay else { return XCTFail("no Library") }
+        XCTAssertEqual(library.downloads.map(\.path), ["/tmp/brk-downloads/fixture.txt"])
+        XCTAssertEqual(library.downloads.map(\.state), [.finished])
     }
 }

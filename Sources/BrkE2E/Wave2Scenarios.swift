@@ -23,8 +23,8 @@ enum Wave2Scenarios {
         Scenario("W2-9", "a remapped shortcut routes and the old chord reaches the page; the Shortcuts pane shows the state",
                  cefOnly: "page titles written by keys.html's key listener", pending: "F4", remap),
         Scenario("W2-10", "typing in the command bar fetches the engine's suggestions and shows them", pending: "F4", suggestions),
-        Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", pending: "F5", downloads),
-        Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", pending: "F5", history),
+        Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
+        Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", history),
     ]
 
     /// W2-1 (F1): `openSettings(.links)` shows the settings window; `settings` reports the pane; a click on the
@@ -282,7 +282,8 @@ enum Wave2Scenarios {
     }
 
     /// W2-11 (F5): with the profile's download location set to the data directory, loading `/download` saves
-    /// `fixture.txt` there; the Downloads page lists it finished with its path, and the file exists.
+    /// `fixture.txt` there; the Downloads page lists it finished with its path, and the file exists. A second
+    /// download of the same name lands beside it as `fixture (1).txt`.
     @Sendable static func downloads(_ app: AppUnderTest) throws {
         let directory = app.dataDirectory.appendingPathComponent("downloads", isDirectory: true).path
         try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory))))
@@ -298,10 +299,19 @@ enum Wave2Scenarios {
             return isShown(try app.native(), .downloadEntry(row.id))
         }
         try app.screenshot("downloads")
+        try app.load(app.site.url("download"))
+        try app.press("cmd+shift+j")
+        try app.waitUntil("a second download of the same name, numbered", timeout: 15) {
+            guard case .library(let library)? = try app.view().overlay, library.page == .downloads else { return false }
+            let paths = library.downloads.filter { $0.state == .finished }.compactMap(\.path)
+            guard paths.count == 2 else { return false }
+            try expect(Set(paths) == [directory + "/fixture.txt", directory + "/fixture (1).txt"], "downloads at \(paths)")
+            return paths.allSatisfy { FileManager.default.fileExists(atPath: $0) }
+        }
     }
 
     /// W2-12 (F5): after visiting page2, Cmd+Y opens the Library on History with both visits newest first; the
-    /// history rows are on screen inside the Library's page area.
+    /// history rows are on screen inside the Library's page area (the content area beside its panel).
     @Sendable static func history(_ app: AppUnderTest) throws {
         try openTab(app, app.site.url("page2.html"))
         try app.settle()
@@ -312,8 +322,10 @@ enum Wave2Scenarios {
                    "history is \(library.history.map(\.url.absoluteString))")
         try app.waitUntil("the rows inside the Library's page area") {
             let n = try app.native()
+            guard let area = n.computed.library?.page else { throw Check(description: "computed frames have no library") }
             let host = try visible(n, .library), row = try visible(n, .historyEntry(0))
             try expect(contains(host, row), "history row \(row.frame) outside the library \(host.frame)")
+            try expect(area.insetBy(dx: -0.5, dy: -0.5).contains(row.frame), "history row \(row.frame) outside the page area \(area)")
             return true
         }
         try app.screenshot("history")

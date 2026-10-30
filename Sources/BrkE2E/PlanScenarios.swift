@@ -223,7 +223,8 @@ enum PlanScenarios {
     }
 
     /// 7: with B open, A goes idle; 13 h later A is archived (reason auto, in today's group) and B is not; the Library
-    /// opens on the archive page, which fills the Library's page area; restoring A brings it back to Today.
+    /// opens on the archive page, which fills the content area beside the Library panel (in the sidebar's place);
+    /// restoring A brings it back to Today.
     @Sendable static func autoArchive(_ app: AppUnderTest) throws {
         guard let a = tabRows(try app.view().space.today.rows).first(where: { $0.status == .current }) else {
             throw Check(description: "no current Today tab at launch")
@@ -246,7 +247,8 @@ enum PlanScenarios {
             let n = try app.native()
             let page = try visible(n, .archive)
             guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
-            try expect(near(library.frame, n.computed.contentArea), "library at \(library.frame), content area \(n.computed.contentArea)")
+            try expect(near(library.page, n.computed.contentArea), "library page area \(library.page), content area \(n.computed.contentArea)")
+            try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
             try expect(near(page.frame, library.page), "archive at \(page.frame), library page area \(library.page)")
             let group = try visible(n, .archiveGroup(.today)), row = try visible(n, .archiveEntry(entry.1.id))
             try expect(contains(group, row), "archive-entry \(row.frame) is outside archive-group-today \(group.frame)")

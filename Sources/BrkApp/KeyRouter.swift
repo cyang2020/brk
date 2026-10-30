@@ -27,8 +27,9 @@ final class KeyRouter: WebEngineDelegate {
         return store.dispatchKey(window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
-    /// A download is about to start: the page's profile settings decide where it goes ("Download location", "Ask
-    /// where to save"). TODO(F5): the save panel for `.ask`; today it saves to the directory without asking.
+    /// A download is about to start: the page's profile settings decide where it goes ("Download Location", "Ask
+    /// where to save"); an incognito page follows the default profile's. No location set: the system Downloads
+    /// folder. The engine names the file in the directory, or shows the save panel for `.ask`.
     func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision {
         let context = store.snapshot.pages.first { $0.id == page }?.context ?? .profile(.default)
         let profile: ProfileID = switch context {
@@ -36,7 +37,8 @@ final class KeyRouter: WebEngineDelegate {
         case .incognito: .default
         }
         let settings = store.snapshot.settings.profiles.first { $0.profile.id == profile }?.settings ?? .default
-        let directory = settings.downloadsDirectory ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path ?? NSHomeDirectory()
+        let directory = settings.downloadsDirectory.map { ($0 as NSString).expandingTildeInPath }
+            ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path ?? NSHomeDirectory()
         return settings.promptForDownloadLocation ? .ask(directory: directory) : .save(directory: directory)
     }
 
