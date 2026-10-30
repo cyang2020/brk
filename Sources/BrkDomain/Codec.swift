@@ -264,7 +264,8 @@ struct StoredDocV1: Codable {
     ///    root; sections nothing points at are dropped (their contents re-attach elsewhere);
     /// 5. the tree is rebuilt and repaired by `SidebarTree.restored`;
     /// 6. windows: at least one (a new standard window on the first space); a window on a missing space moves to the
-    ///    first. `activeBySpace` entries and widths are left to `normalize`.
+    ///    first; an entry naming a split step 5 dissolved names its remaining pane. Other `activeBySpace` repairs and
+    ///    widths are left to `normalize`.
     func validated(ctx: Context) throws(CodecError) -> (doc: Doc, repairs: [String]) {
         var repairs: [String] = []
         typealias Record = SidebarTree.RestoredItem
@@ -338,7 +339,7 @@ struct StoredDocV1: Codable {
         }
         // Today roots of the first space first, so `restored`'s fallbacks land in the first space.
         let others = records.keys.filter { !claimed.contains($0) }.sorted()
-        let (tree, treeRepairs) = SidebarTree.restored((roots + others).compactMap { records[$0] }, scope: .global)
+        let (tree, treeRepairs, dissolved) = SidebarTree.restored((roots + others).compactMap { records[$0] }, scope: .global)
         repairs += treeRepairs
 
         var docWindows: [WindowID: WindowDoc] = [:]
@@ -348,7 +349,9 @@ struct StoredDocV1: Codable {
                 repairs.append("window \(id) was on a missing space")
                 space = order[0]
             }
-            docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: w.activeBySpace,
+            // A window that showed a split the repair dissolved shows the pane that took its place.
+            let shown = w.activeBySpace.mapValues { dissolved[$0] ?? $0 }
+            docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: shown,
                                        sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
         }
         if docWindows.isEmpty {

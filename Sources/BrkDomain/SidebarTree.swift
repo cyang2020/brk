@@ -413,8 +413,9 @@ struct SidebarTree: Sendable, Equatable {
     /// 4. splits with fewer than two panes are dissolved (the pane takes the split's place); a split's focus that
     ///    is not a pane becomes its first pane, and widths keep only panes with positive finite values;
     /// 5. `pinnedURL` is set exactly under Pinned and Favorites (kept, else the tab's url) and cleared elsewhere.
-    /// Returns one line per repair, for `RestoreOutcome.restored(repairs:)`.
-    static func restored(_ records: [RestoredItem], scope: ContainerScope) -> (tree: SidebarTree, repairs: [String]) {
+    /// Returns one line per repair, for `RestoreOutcome.restored(repairs:)`, and the splits step 4 dissolved with the
+    /// pane that took each one's place (the codec points windows that showed such a split at that pane).
+    static func restored(_ records: [RestoredItem], scope: ContainerScope) -> (tree: SidebarTree, repairs: [String], dissolved: [ItemID: ItemID]) {
         var repairs: [String] = []
         var byID: [ItemID: RestoredItem] = [:]
         var order: [ItemID] = []
@@ -516,6 +517,7 @@ struct SidebarTree: Sendable, Equatable {
         }
 
         // Splits below two panes dissolve into their pane, in place.
+        var dissolved: [ItemID: ItemID] = [:]
         for id in order where byID[id]?.payload.kind == .split && visited.contains(id) {
             let panes = childrenOf[id] ?? []
             guard panes.count < 2, let parent = parentOf[id] else { continue }
@@ -525,6 +527,7 @@ struct SidebarTree: Sendable, Equatable {
             if let pane = panes.first {
                 siblings.insert(pane, at: min(at, siblings.count))
                 parentOf[pane] = parent
+                dissolved[id] = pane
                 repairs.append("\(id): split with one pane became tab \(pane)")
             } else {
                 repairs.append("\(id): split with no panes was removed")
@@ -568,7 +571,7 @@ struct SidebarTree: Sendable, Equatable {
             }
             tree.items[id] = Item(id: id, createdAt: record.createdAt, parent: parentOf[id], body: body)
         }
-        return (tree, repairs)
+        return (tree, repairs, dissolved)
     }
 
     // MARK: Reads

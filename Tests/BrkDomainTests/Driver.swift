@@ -4,7 +4,6 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-let pendingW1 = "W1: not implemented yet"
 let pendingW4 = "W4: not implemented yet"
 let pendingW5 = "W5: not implemented yet"
 

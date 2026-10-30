@@ -1545,6 +1545,36 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(Driver(file: r.savedFile).outcome, .restored(repairs: []))
     }
 
+    /// StateCodec.restore repairs a stored split: one with a missing pane dissolves into the other, in place, and the
+    /// window that showed it shows that pane; a focus on a missing pane and widths of non-panes are dropped.
+    func testRestoreRepairsAStoredSplit() throws {
+        let d = Driver()
+        let a = d.todayIDs[0]
+        let b = d.open("b.example.com")
+        d.user(.tab(.focus(a)))
+        d.user(.split(.addPane))
+        d.user(.commandBar(.submit("c.example.com")))
+        let split = try XCTUnwrap(d.view.content.split)
+        let c = d.paneIDs[1]
+        var file = jsonObject(d.savedFile)
+        var doc = file["doc"] as! [String: Any]
+        var items = doc["items"] as! [String: Any]
+        var splitItem = items[split.rawValue] as! [String: Any]
+        splitItem["children"] = [a.rawValue, "ghost-pane"]
+        items[split.rawValue] = splitItem
+        items[c.rawValue] = nil
+        doc["items"] = items
+        file["doc"] = doc
+        let r = Driver(file: jsonData(file))
+        guard case .restored(let repairs) = r.outcome else { return XCTFail("\(r.outcome)") }
+        XCTAssertTrue(repairs.contains { $0.contains("ghost-pane") }, "\(repairs)")
+        XCTAssertTrue(repairs.contains { $0.contains(split.rawValue) }, "\(repairs)")
+        XCTAssertEqual(r.todayIDs, [b, a])
+        XCTAssertEqual(r.paneIDs, [a], "the window shows the pane that took the split's place")
+        XCTAssertNil(r.view.content.split)
+        XCTAssertEqual(Driver(file: r.savedFile).outcome, .restored(repairs: []))
+    }
+
     /// StateCodec.restore rejects a file with an unknown version, and a file whose doc has no spaces
     func test_statecodecRestoreRejectsAFileWithAnUnknownVersionAndAFileWhoseDocHasNoSpaces() throws {
         let d = Driver()
