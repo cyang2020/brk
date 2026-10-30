@@ -44,7 +44,7 @@ public final class CEFEngine: WebEngine {
     private var pendingFocus: PageID?
     /// The page the app last gave keyboard focus to (nil once a native view took it). Chromium replaces the page's
     /// input view when a navigation commits in a new renderer, and AppKit then makes the window first responder;
-    /// the commit event re-applies the focus to the new view.
+    /// the page's next event (commit, loading, title) re-applies the focus to the new view.
     private var focusedPage: PageID?
     private let log = Logger(subsystem: "brk", category: "cef")
 
@@ -235,9 +235,16 @@ public final class CEFEngine: WebEngine {
 
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
         guard phase == .running, live[page.id] === page else { return }  // events from a retired incarnation are dropped
-        if case .committed = event, focusedPage == page.id, !page.surface.containsFirstResponder, page.surface.isReadyForFocus {
-            log.notice("page \(page.id.description, privacy: .public): input view replaced at commit; focus re-applied")
-            page.takeFocus()
+        switch event {
+        case .committed, .loadingChanged, .titleChanged:
+            let holds = page.surface.containsFirstResponder, ready = page.surface.isReadyForFocus
+            log.debug("page \(page.id.description, privacy: .public): \(String(describing: event).prefix(40), privacy: .public) focused=\(self.focusedPage == page.id, privacy: .public) holdsFirstResponder=\(holds, privacy: .public) ready=\(ready, privacy: .public)")
+            if focusedPage == page.id, !holds, ready {
+                log.notice("page \(page.id.description, privacy: .public): input view replaced; focus re-applied")
+                page.takeFocus()
+            }
+        default:
+            break
         }
         delegate?.engine(self, page: page.id, didEmit: event)
     }

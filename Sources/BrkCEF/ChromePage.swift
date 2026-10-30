@@ -67,10 +67,15 @@ final class ChromePage: CefBrowserDelegate {
     /// Keyboard focus into the page: our window (never the host) becomes key and Chromium's input view inside the
     /// surface becomes first responder; Chromium is told it has focus (the spike's focus sequence, u2-bar).
     func takeFocus() {
-        guard let window = surface.window else { return }
+        guard let window = surface.window else {
+            log.notice("page \(self.id.description, privacy: .public): takeFocus with no window")
+            return
+        }
         if !window.isKeyWindow { window.makeKey() }
-        window.makeFirstResponder(surface.keyboardTarget)
+        let target = surface.keyboardTarget
+        let accepted = window.makeFirstResponder(target)
         chrome.browser.setFocus(true)
+        log.notice("page \(self.id.description, privacy: .public): takeFocus -> \(NSStringFromClass(type(of: target)), privacy: .public) accepted=\(accepted, privacy: .public) firstResponder=\(window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil", privacy: .public)")
     }
 
     func dropFocus() { chrome.browser.setFocus(false) }
