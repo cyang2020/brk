@@ -1,8 +1,0 @@
-{
-  // Renderer surfaces (sidebar, overlay). Composite with only src/renderer and src/shared included, so an import
-  // of src/main/*, src/domain/* or src/ipc/* from a renderer fails the typecheck with TS6307 (module-map rule 4).
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "composite": true, "tsBuildInfoFile": "node_modules/.tmp/tsc-web.tsbuildinfo", "lib": ["ES2023", "DOM", "DOM.Iterable"], "types": [], "jsx": "react-jsx" },
-  "include": ["src/renderer", "src/shared"],
-  "exclude": ["src/**/*.test.ts"]
-}
