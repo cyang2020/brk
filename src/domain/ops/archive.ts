@@ -127,9 +127,11 @@ function restoreAndFocus(draft: Draft<StateImpl>, entryId: ArchiveId, ctx: Handl
 
 export const archiveHandlers = {
   'archive/restore': (draft, command, ctx) => restoreAndFocus(draft, command.entryId, ctx),
+  // Cmd+Shift+T restores the tab the user just closed or cleared, not one the sweep archived after it: the newest
+  // entry whose reason is 'manual' or 'clear', falling back to the newest of any reason.
   'archive/restore-last': (draft, _command, ctx) => {
-    const last = draft.doc.archive[0]
-    if (last) restoreAndFocus(draft, last.id, ctx)
+    const entry = draft.doc.archive.find((e) => e.reason === 'manual' || e.reason === 'clear') ?? draft.doc.archive[0]
+    if (entry) restoreAndFocus(draft, entry.id, ctx)
   },
   'archive/clear': (draft) => {
     if (draft.doc.archive.length > 0) draft.doc.archive = []

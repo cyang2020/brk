@@ -1099,6 +1099,19 @@ describe('reduce: spaces and archive', () => {
     expect(d.current()?.id).toBe(b)
   })
 
+  it('archive/restore-last prefers the newest manual/clear entry over an auto-archived one that landed later', () => {
+    const d = new Driver()
+    d.advance(HOUR)
+    d.open('127.0.0.1:9/b')
+    d.advance(HOUR)
+    const closed = d.open('127.0.0.1:9/closed')
+    d.ui({ type: 'tab/close', target: closed }) // the user closes it: a 'manual' entry
+    d.advance(13 * HOUR)
+    d.sys({ type: 'clock/tick' }) // the sweep then auto-archives the idle start tab (a newer entry)
+    d.ui({ type: 'archive/restore-last' })
+    expect(d.todayIds()).toContain(closed) // Cmd+Shift+T brings back the user's closed tab, not the sweep's
+  })
+
   it('a restored tab is not swept again at once even if it was idle for long', () => {
     const d = new Driver()
     const b = d.open('b.example.com')
