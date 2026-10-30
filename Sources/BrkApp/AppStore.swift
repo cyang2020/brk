@@ -40,6 +40,7 @@ public final class AppStore {
     private let calendar = Calendar.autoupdatingCurrent
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
+    let destinations = DownloadSheets()
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -54,6 +55,7 @@ public final class AppStore {
     /// this publish like any other re-entrant one, not run in the middle of it.
     public func start() {
         dispatching = true
+        for request in state.pendingContextDisposals { engine.disposeContext(request) }
         publish(docChanged: false)
         dispatching = false
         drain()
@@ -121,6 +123,8 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> Bool {
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
+        // Revocation must happen before reconcile sees the new demand, including synchronous engine callbacks.
+        for effect in t.effects { if case .disposeContext(let request) = effect { engine.disposeContext(request) } }
         if t.changed {
             state = t.state
             publish(docChanged: t.docChanged)
@@ -137,6 +141,7 @@ public final class AppStore {
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
+            destinations.ownerGone(id)
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
@@ -223,8 +228,8 @@ public final class AppStore {
                 }
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
-            case .forgetBrowsingData(let context):
-                engine.forget(context)
+            case .disposeContext: break
+            case .cancelDownload(let id): engine.cancelDownload(id)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }

@@ -246,9 +246,13 @@ struct Download: Sendable, Equatable {
     let startedAt: Instant
     /// The profile of the page that started it (the Downloads page lists the current space's profile).
     let profile: ProfileID
+    var end: DownloadEnd?
 }
 
-public enum DownloadState: String, Hashable, Sendable, Codable { case inProgress, finished, failed, cancelled }
+public enum DownloadState: String, Hashable, Sendable, Codable {
+    case choosingDestination, inProgress, cancelling, finished, failed, cancelled, interrupted
+    public var isActive: Bool { self == .choosingDestination || self == .inProgress || self == .cancelling }
+}
 
 /// Something the local AI tool is asked to do (`Effect.ai`). The prompt text is built by BrkApp's provider from
 /// the task; the reducer applies the outcome (`SystemEvent.aiResult`) to the item the task names.

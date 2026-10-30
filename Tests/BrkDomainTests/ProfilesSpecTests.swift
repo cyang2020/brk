@@ -56,7 +56,7 @@ final class ProfilesSpecTests: XCTestCase {
         let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito })
         d.user(.commandBar(.submit("http://127.0.0.1:9/secret")), in: incognito.id)
         let secret = try XCTUnwrap(d.view(of: incognito.id).scratch?.rows.first?.id)
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: incognito.id, item: secret) }?.context, .incognito)
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: incognito.id, item: secret) }?.context, .incognito(d.state.session.privateSession!))
         XCTAssertEqual(d.view(of: incognito.id).urlPill.profile, ProfileBadge(name: "Incognito", icon: nil, incognito: true))
         d.page(secret, .committed(url("http://127.0.0.1:9/secret")), in: incognito.id)
         XCTAssertFalse((d.savedDoc["history"] as? [[String: Any]] ?? []).contains { ($0["url"] as? String) == "http://127.0.0.1:9/secret" },
@@ -75,7 +75,11 @@ final class ProfilesSpecTests: XCTestCase {
         d.user(.profile(.rename(work, name: "Side")))
         XCTAssertEqual(d.snapshot.settings.profiles.last?.profile.name, "Side")
         let t = d.user(.profile(.delete(work)))
-        XCTAssertEqual(t.effects, [.forgetBrowsingData(.profile(work))])
+        guard case .disposeContext(let disposal)? = t.effects.first else { return XCTFail("missing disposal") }
+        XCTAssertEqual(disposal.context, .profile(work))
+        XCTAssertEqual(d.state.doc.deletingProfiles[work]?.id, disposal.id)
+        d.system(.contextDisposed(.completed(disposal.id, disposal.context, .deletionScheduledForNextLaunch)))
+        XCTAssertNil(d.state.doc.deletingProfiles[work])
         XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), [.default])
         XCTAssertEqual(Driver(file: d.savedFile).outcome, .restored(repairs: []))
     }
@@ -86,7 +90,8 @@ final class ProfilesSpecTests: XCTestCase {
         d.user(.window(.newIncognito))
         let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito })
         let t = d.user(.window(.close), in: incognito.id)
-        XCTAssertEqual(t.effects, [.forgetBrowsingData(.incognito)])
+        guard case .disposeContext(let disposal)? = t.effects.first, case .incognito = disposal.context else { return XCTFail("missing private disposal") }
+        XCTAssertNil(d.state.session.privateSession)
         XCTAssertNil(d.snapshot.windows[incognito.id])
     }
 

@@ -77,6 +77,36 @@ final class FixtureServer: @unchecked Sendable {
         var path = target
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         countLock.withLock { counts[path, default: 0] += 1 }
+        if path.hasPrefix("/transfer-") {
+            let post = path.contains("post")
+            let query = URLComponents(string: target)?.queryItems ?? []
+            let name = query.first { $0.name == "name" }?.value ?? String(path.dropFirst()) + ".bin"
+            if post {
+                let headerEnd = request.range(of: Data("\r\n\r\n".utf8))!.upperBound
+                let header = String(decoding: request[..<headerEnd], as: UTF8.self)
+                let length = header.components(separatedBy: "\r\n").first { $0.lowercased().hasPrefix("content-length:") }
+                    .flatMap { Int($0.split(separator: ":", maxSplits: 1)[1].trimmingCharacters(in: .whitespaces)) } ?? 0
+                while request.count - headerEnd < length {
+                    let n = read(fd, &chunk, chunk.count); if n <= 0 { return }
+                    request.append(contentsOf: chunk[0..<n])
+                }
+                guard parts[0] == "POST", String(decoding: request[headerEnd...], as: UTF8.self).contains("secret=original-body") else { return }
+                countLock.withLock { counts[path + "-valid-post", default: 0] += 1 }
+            }
+            let payload = Data(repeating: post ? 80 : 65, count: 16_384)
+            let total = payload.count * 256
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"\(name)\"\r\nContent-Length: \(total)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+            if header.withUnsafeBytes({ write(fd, $0.baseAddress!, $0.count) }) != header.count { return }
+            for _ in 0..<256 {
+                Thread.sleep(forTimeInterval: 0.025)
+                let n = payload.withUnsafeBytes { write(fd, $0.baseAddress!, $0.count) }
+                if n <= 0 { countLock.withLock { counts[path + "-stopped", default: 0] += 1 }; return }
+                countLock.withLock { counts[path + "-bytes", default: 0] += n }
+                if n != payload.count { return }
+            }
+            countLock.withLock { counts[path + "-complete", default: 0] += 1 }
+            return
+        }
         if path == "/fail" { return }   // drop the connection: no status line, no body
         if path == "/slow-document" {
             let prefix = Data("<html><title>Slow document</title><body>pending".utf8)

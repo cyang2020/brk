@@ -70,6 +70,21 @@ final class BrowserClient {
         cefOwner(BrowserClient.self, cefSelf)
     }
 
+    /// Release our initial handler references after OnBeforeClose. CEF owns its own retained references.
+    func releaseHandlers() {
+        if let pointer = lifeSpanPointer { lifeSpanPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = loadPointer { loadPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = displayPointer { displayPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = downloadPointer { downloadPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = jsDialogPointer { jsDialogPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = contextMenuPointer { contextMenuPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = permissionPointer { permissionPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = requestPointer { requestPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = keyboardPointer { keyboardPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = focusPointer { focusPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = renderPointer { renderPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+    }
+
     // MARK: Struct construction
 
     /// Builds the cef_client_t graph. The returned pointer carries one
@@ -104,6 +119,7 @@ final class BrowserClient {
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             MainActor.assumeIsolated {
                 client.browser?.handleBeforeClose()
+                client.releaseHandlers()
             }
         }
         lifeSpan.pointee.on_before_popup = {
@@ -317,7 +333,7 @@ final class BrowserClient {
             guard let item, let callback else {
                 cefRelease(item.map(UnsafeMutableRawPointer.init))
                 cefRelease(callback.map(UnsafeMutableRawPointer.init))
-                return 0  // default handling
+                return 1  // deny without handing ownership to Chrome UI
             }
             // Snapshot the item; references to it must not outlive this call.
             let download = CefDownload(item: item)
@@ -325,35 +341,35 @@ final class BrowserClient {
             let name = CefStringUtil.string(from: suggestedName)
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else {
                 cefRelease(UnsafeMutableRawPointer(callback))
-                return 0
+                return 1
             }
             return MainActor.assumeIsolated {
-                defer { cefRelease(UnsafeMutableRawPointer(callback)) }
-                guard let cefBrowser = client.browser else { return 0 }
-                let decision = cefBrowser.delegate?.browser(
-                    cefBrowser, decidePolicyForDownload: download, suggestedName: name
-                ) ?? .allow(destination: nil)
-                if let destination = CefDownloadDestination.resolve(decision: decision, suggestedName: name) {
-                    CefStringUtil.withCefString(destination.path) { path in
-                        callback.pointee.cont?(callback, path, 0)
-                    }
+                let decision = CefDownloadDecisionCallback(taking: callback)
+                guard let cefBrowser = client.browser, let delegate = cefBrowser.delegate else {
+                    decision.resolve(nil)
+                    return 1
                 }
-                // .deny: return 1 without executing the callback — CEF
-                // cancels the download when the callback is destroyed
-                // unexecuted.
+                delegate.browser(cefBrowser, download: download, suggestedName: name, decision: decision)
                 return 1
             }
         }
         download.pointee.on_download_updated = { handlerSelf, browser, item, callback in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
-            cefRelease(callback.map(UnsafeMutableRawPointer.init))  // cancel/pause/resume unused
-            guard let item else { return }
+            guard let item else {
+                cefRelease(callback.map(UnsafeMutableRawPointer.init))
+                return
+            }
             let download = CefDownload(item: item)
             cefRelease(UnsafeMutableRawPointer(item))
-            guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             MainActor.assumeIsolated {
-                guard let cefBrowser = client.browser else { return }
-                cefBrowser.delegate?.browser(cefBrowser, downloadDidProgress: download)
+                let control = callback.map { CefDownloadControl(taking: $0) }
+                guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)),
+                      let cefBrowser = client.browser, let delegate = cefBrowser.delegate else {
+                    if download.isInProgress { control?.cancel() }
+                    control?.release()
+                    return
+                }
+                delegate.browser(cefBrowser, download: download, control: control)
             }
         }
         downloadPointer = download
@@ -588,7 +604,7 @@ extension BrowserClient {
             }
             if !isOSR {
                 cefRelease(UnsafeMutableRawPointer(callback))
-                return 0
+                return 1
             }
             let menu = CefMenuModel(raw: model)
             let viewPoint = params.map { CGPoint(x: CGFloat($0.pointee.get_xcoord?($0) ?? 0), y: CGFloat($0.pointee.get_ycoord?($0) ?? 0)) } ?? .zero

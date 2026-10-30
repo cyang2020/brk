@@ -187,9 +187,6 @@ extension Work {
             return
         case .openRequested(let url, let disposition):
             openRequested(url, disposition, from: page, state.displayedTab(tab, in: window, for: .savedDocument) ?? current)
-        case .download(let id, let event):
-            if case .started = event { live.requestedURL = nil }
-            downloadEvent(id, event, from: page)
         case .closed:
             live.browser = nil
             live.document = .unavailable

@@ -17,7 +17,7 @@ final class LibrarySpecTests: XCTestCase {
             d.page(tab, .committed(url("https://example.com/history-only")))
             let profiles = d.snapshot.settings.profiles.map(\.profile.id)
             let result = d.user(.library(.clearHistory))
-            XCTAssertFalse(result.effects.contains { if case .forgetBrowsingData = $0 { return true }; return false },
+            XCTAssertFalse(result.effects.contains { if case .disposeContext = $0 { return true }; return false },
                            "clearing history must not schedule profile disposal")
             XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), profiles)
             d.user(.library(.open(.history)))
@@ -33,20 +33,20 @@ final class LibrarySpecTests: XCTestCase {
         d.page(home, .committed(shared))
         d.page(home, .titleChanged("Public title"))
         let publicDownload = DownloadID("public")
-        d.page(home, .download(publicDownload, .started(url: shared, filename: "public.txt", path: "/public.txt")))
+        d.download(home, publicDownload, .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: shared, suggestedName: "public.txt"))
         d.user(.window(.newIncognito))
         let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
         d.user(.commandBar(.submit(shared.absoluteString)), in: window)
         let tab = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
-        XCTAssertTrue(d.snapshot.pages.contains { $0.id == PageID(window: window, item: tab) && $0.context == .incognito })
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id == PageID(window: window, item: tab) && $0.context == .incognito(d.state.session.privateSession!) })
         let history = d.state.doc.history
         let downloads = d.state.doc.downloads
         d.page(tab, .committed(shared), in: window)
         d.page(tab, .titleChanged("Private title"), in: window)
-        d.page(tab, .download(DownloadID("private"), .started(url: shared, filename: "secret.txt", path: "/secret.txt")), in: window)
-        d.page(tab, .download(DownloadID("private"), .finished(path: "/secret.txt")), in: window)
-        d.page(tab, .download(publicDownload, .progress(received: 123, total: 456)), in: window)
-        d.page(tab, .download(publicDownload, .finished(path: "/secret.txt")), in: window)
+        d.download(tab, DownloadID("private"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: shared, suggestedName: "secret.txt"), in: window)
+        d.download(tab, DownloadID("private"), .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/secret.txt"), bytes: 100))), in: window)
+        d.download(tab, publicDownload, .receiving(TransferProgress(received: 123, total: 456)), in: window)
+        d.download(tab, publicDownload, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/secret.txt"), bytes: 100))), in: window)
         XCTAssertEqual(d.state.doc.history, history)
         XCTAssertEqual(d.state.doc.downloads, downloads)
         let restored = Driver(file: d.savedFile)
@@ -103,14 +103,14 @@ final class LibrarySpecTests: XCTestCase {
         let d = Driver()
         let a = d.todayIDs[0]
         let id = DownloadID("1-7")
-        d.page(a, .download(id, .started(url: url("https://example.com/f.zip"), filename: "f.zip", path: nil)))
-        d.page(a, .download(id, .progress(received: 10, total: 100)))
+        d.download(a, id, .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/f.zip"), suggestedName: "f.zip"))
+        d.download(a, id, .receiving(TransferProgress(received: 10, total: 100)))
         d.user(.library(.open(.downloads)))
         guard case .library(let library)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(library.downloads.map(\.filename), ["f.zip"])
         XCTAssertEqual(library.downloads.first?.received, 10)
         XCTAssertEqual(library.downloads.first?.state, .inProgress)
-        d.page(a, .download(id, .finished(path: "/tmp/f.zip")))
+        d.download(a, id, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/f.zip"), bytes: 100))))
         guard case .library(let done)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(done.downloads.first?.state, .finished)
         XCTAssertEqual(done.downloads.first?.path, "/tmp/f.zip")
@@ -124,13 +124,13 @@ final class LibrarySpecTests: XCTestCase {
         d.user(.library(.removeDownload(id)))
         guard case .library(let empty)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(empty.downloads, [])
-        d.page(a, .download(DownloadID("1-8"), .started(url: url("https://example.com/g.zip"), filename: "g.zip", path: nil)))
+        d.download(a, DownloadID("1-8"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/g.zip"), suggestedName: "g.zip"))
         d.user(.library(.clearDownloads))
         guard case .library(let kept)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(kept.downloads.map(\.filename), ["g.zip"], "in-progress downloads survive Clear")
-        d.page(a, .download(DownloadID("1-8"), .cancelled))
-        d.page(a, .download(DownloadID("1-9"), .failed))
-        assertUnchanged(d.state, d.page(a, .download(DownloadID("ghost"), .progress(received: 1, total: nil))))
+        d.download(a, DownloadID("1-8"), .terminal(.cancelled(.removed)))
+        d.download(a, DownloadID("1-9"), .terminal(.failed(reason: "fixture failure", .absent)))
+        assertUnchanged(d.state, d.download(a, DownloadID("1-8"), .receiving(TransferProgress(received: 1, total: nil))))
     }
 
     /// the History page lists the current profile's visits newest first; entries and the whole list can be removed
@@ -181,18 +181,18 @@ final class LibrarySpecTests: XCTestCase {
     func test_theDownloadsPageListsTheProfilesDownloadsWithProgress() throws {
         let d = Driver()
         let home = d.todayIDs[0]
-        d.page(home, .download(DownloadID("1-1"), .started(url: url("https://example.com/home.zip"), filename: "home.zip", path: "/tmp/home.zip")))
-        d.page(home, .download(DownloadID("1-1"), .finished(path: "/tmp/home.zip")))
+        d.download(home, DownloadID("1-1"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/home.zip"), suggestedName: "home.zip"))
+        d.download(home, DownloadID("1-1"), .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/home.zip"), bytes: 100))))
         d.newSpace("Work")
         d.user(.profile(.create(name: "Work", icon: nil)))
         let work = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
         d.user(.profile(.assign(.current, to: work)))
         let tab = d.open("http://127.0.0.1:9/work")
-        d.page(tab, .download(DownloadID("2-1"), .started(url: url("https://example.com/big.iso"), filename: "big.iso", path: "/tmp/big.iso")))
-        d.page(tab, .download(DownloadID("2-1"), .progress(received: 512, total: nil)))
-        d.page(tab, .download(DownloadID("2-2"), .started(url: url("https://example.com/w.pdf"), filename: "w.pdf", path: "/tmp/w.pdf")))
-        d.page(tab, .download(DownloadID("2-2"), .progress(received: 30, total: 60)))
-        d.page(tab, .download(DownloadID("2-2"), .finished(path: "/tmp/w.pdf")))
+        d.download(tab, DownloadID("2-1"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/big.iso"), suggestedName: "big.iso"))
+        d.download(tab, DownloadID("2-1"), .receiving(TransferProgress(received: 512, total: nil)))
+        d.download(tab, DownloadID("2-2"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/w.pdf"), suggestedName: "w.pdf"))
+        d.download(tab, DownloadID("2-2"), .receiving(TransferProgress(received: 30, total: 60)))
+        d.download(tab, DownloadID("2-2"), .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/w.pdf"), bytes: 60))))
         d.user(.library(.open(.downloads)))
         guard case .library(let inWork)? = d.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(inWork.downloads.map(\.filename), ["w.pdf", "big.iso"], "the Work space lists Work's downloads, newest first")
@@ -271,33 +271,25 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertEqual(cleared.archive?.groups, [])
     }
 
-    /// the engine's download events: progress before `started` and events of unknown downloads are ignored; an
-    /// incognito page's download is not listed; a cancelled download stays cancelled unless its file lands anyway
-    func test_downloadEventsFollowTheEngineAndTheUsersCancel() throws {
+    func test_downloadEventsFollowActualCancellationAndTerminalResults() throws {
         let d = Driver()
-        let a = d.todayIDs[0]
-        let early = DownloadID("1-1")
-        assertUnchanged(d.state, d.page(a, .download(early, .progress(received: 5, total: 10))))
-        d.page(a, .download(early, .started(url: url("https://example.com/a.bin"), filename: "a.bin", path: "/tmp/a.bin")))
-        assertUnchanged(d.state, d.page(a, .download(early, .started(url: url("https://example.com/b.bin"), filename: "b.bin", path: nil))))
-        d.page(a, .download(early, .failed))
-        assertUnchanged(d.state, d.page(a, .download(early, .progress(received: 9, total: 10))))
-        let late = DownloadID("1-2")
-        d.page(a, .download(late, .started(url: url("https://example.com/c.bin"), filename: "c.bin", path: "/tmp/c.bin")))
-        d.user(.library(.cancelDownload(late)))
-        assertUnchanged(d.state, d.page(a, .download(late, .progress(received: 1, total: 2))))
-        assertUnchanged(d.state, d.page(a, .download(late, .failed)))
-        d.user(.library(.open(.downloads)))
-        guard case .library(let library)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(library.downloads.map(\.state), [.cancelled, .failed])
-        d.page(a, .download(late, .finished(path: "/tmp/c.bin")))
-        guard case .library(let landed)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(landed.downloads.first?.state, .finished, "the file is on disk, so the row says so")
-
-        d.user(.window(.newIncognito))
-        let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
-        d.user(.commandBar(.submit("http://127.0.0.1:9/secret")), in: incognito)
-        let secret = try XCTUnwrap(d.view(of: incognito).scratch?.rows.first?.id)
-        assertUnchanged(d.state, d.page(secret, .download(DownloadID("3-1"), .started(url: url("https://example.com/s.bin"), filename: "s.bin", path: "/tmp/s.bin"))))
+        let tab = d.todayIDs[0], id = DownloadID("cancel-race")
+        d.download(tab, id, .receiving(TransferProgress(received: 5, total: 10)),
+                   details: DownloadDetails(url: url("https://example.com/a.bin"), suggestedName: "a.bin"))
+        XCTAssertEqual(d.state.doc.downloads.first?.received, 5)
+        XCTAssertEqual(d.user(.library(.cancelDownload(id))).effects, [.cancelDownload(id)])
+        XCTAssertEqual(d.state.doc.downloads.first?.state, .cancelling)
+        d.download(tab, id, .cancelling(TransferProgress(received: 7, total: 10)))
+        XCTAssertEqual(d.state.doc.downloads.first?.received, 7)
+        d.download(tab, id, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/a.bin"), bytes: 10))))
+        XCTAssertEqual(d.state.doc.downloads.first?.state, .finished, "native completion wins an unconfirmed cancellation")
+        assertUnchanged(d.state, d.download(tab, id, .terminal(.cancelled(.removed))))
+        assertUnchanged(d.state, d.download(tab, id, .receiving(TransferProgress(received: 1, total: 10))))
+        let other = DownloadID("cancelled")
+        d.download(tab, other, .receiving(TransferProgress(received: 7, total: 10)))
+        d.user(.library(.cancelDownload(other)))
+        d.download(tab, other, .terminal(.cancelled(.removed)))
+        XCTAssertEqual(d.state.doc.downloads.first?.state, .cancelled)
+        assertUnchanged(d.state, d.download(tab, other, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/other"), bytes: 10)))))
     }
 }

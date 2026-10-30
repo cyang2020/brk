@@ -53,7 +53,7 @@ public typealias WindowID = ID<WindowTag>
 public typealias ArchiveID = ID<ArchiveTag>
 /// Arc: `ADKModels.Profile`. Spaces, favorites roots, settings and pages carry one; `Doc.profiles` lists them.
 public typealias ProfileID = ID<ProfileTag>
-/// One file download (Arc: `StorableDownloadMetadata`). Minted by the engine as "<browser id>-<CEF download id>".
+/// One file download (Arc: `StorableDownloadMetadata`). Minted by the engine on the first native callback.
 public typealias DownloadID = ID<DownloadTag>
 /// One Air Traffic Control route (Arc: `StorableLinkRouting`).
 public typealias LinkRouteID = ID<LinkRouteTag>

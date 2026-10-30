@@ -49,10 +49,9 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
-    /// Drops a request context's data: `.incognito` when its last window closed (the in-memory context is
-    /// released), `.profile(p)` when the profile was deleted (its on-disk storage goes, at once or at the next
-    /// launch if Chromium still holds it). A no-op for the default profile and for a context never used. F2.
-    func forget(_ context: BrowsingContext)
+    func cancelDownload(_ id: DownloadID)
+    /// Revokes synchronously. Final drain results arrive through the delegate.
+    func disposeContext(_ request: ContextDisposal)
 
     /// Ordered teardown, idempotent: after it returns no browser is alive and every borrowed view is back where it
     /// came from. `.clean` means the runtime is shut down too and the process may exit; `.timedOut` means some
@@ -71,10 +70,12 @@ public protocol WebEngineDelegate: AnyObject {
     /// current event before the page, paired by `PressCorrelator` after it.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool
 
-    /// A page is about to download a file (CEF's OnBeforeDownload, synchronous). The app answers from the page's
-    /// profile settings ("Download location", "Ask where to save"); the engine then reports
-    /// `PageEvent.download(id, .started(...))` and the rest. F5.
-    func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision
+    func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow?
+    func engine(_ engine: any WebEngine, download update: DownloadUpdate)
+    func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt,
+                reply: @escaping @MainActor (DestinationAnswer) -> Void)
+    func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket)
+    func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult)
 
     /// A page's main frame is about to navigate (CEF's OnBeforeBrowse, synchronous). False cancels it; the app
     /// uses this for Arc's "Open a Peek window when clicking on links to other sites" on Pinned and Favorites tabs
@@ -83,6 +84,12 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngineDelegate {
+    public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
+    public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}
+    public func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
+    public func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) {}
+    public func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult) {}
+
     /// Allow by default: a delegate that does not route links (tests, tools) lets every navigation through.
     public func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool { true }
 }

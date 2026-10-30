@@ -25,6 +25,12 @@ extension Work {
             profile.name = ProfileCopy.trimmed(name)
             state.doc.profiles[id] = profile
         case .delete(let id):
+            if let pending = state.doc.deletingProfiles[id], pending.failure != nil {
+                let disposal = DisposalID(ctx.newID())
+                state.doc.deletingProfiles[id] = ProfileDeletion(id: disposal, name: pending.name)
+                effects.append(.disposeContext(ContextDisposal(id: disposal, context: .profile(id))))
+                return
+            }
             // Refused for the default profile and for a profile some space uses (the dialog's `deleteRefusal`). Its
             // Favorites are archived (reason containerDeleted), its history and downloads entries go, and the engine
             // forgets its browsing data (the Chromium directory goes at the next launch).
@@ -38,7 +44,9 @@ extension Work {
             state.doc.profiles[id] = nil
             if state.doc.history.contains(where: { $0.profile == id }) { state.doc.history.removeAll { $0.profile == id } }
             if state.doc.downloads.contains(where: { $0.profile == id }) { state.doc.downloads.removeAll { $0.profile == id } }
-            effects.append(.forgetBrowsingData(.profile(id)))
+            let disposal = DisposalID(ctx.newID())
+            state.doc.deletingProfiles[id] = ProfileDeletion(id: disposal, name: profile.name)
+            effects.append(.disposeContext(ContextDisposal(id: disposal, context: .profile(id))))
             closeProfileDialog(in: window)
         case .assign(let ref, let profile):
             // "Change Profile": the space's Favorites, settings and new pages follow the profile. Every loaded tab
@@ -81,6 +89,10 @@ extension Work {
 }
 
 extension AppState {
+    public var pendingContextDisposals: [ContextDisposal] {
+        doc.deletingProfiles.map { ContextDisposal(id: $0.value.id, context: .profile($0.key)) }
+    }
+
     /// A profile as the dialogs and the Profiles pane list it.
     func profileRow(_ profile: Profile) -> ProfileRow {
         ProfileRow(id: profile.id, name: profile.name, icon: profile.icon,

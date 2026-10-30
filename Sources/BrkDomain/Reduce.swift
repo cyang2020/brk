@@ -116,10 +116,19 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
+        case .download(let update): downloadEvent(update)
+        case .contextDisposed(let result):
+            switch result {
+            case .completed(let id, .profile(let profile), _):
+                if state.doc.deletingProfiles[profile]?.id == id { state.doc.deletingProfiles[profile] = nil }
+            case .failed(let id, .profile(let profile), let reason):
+                if state.doc.deletingProfiles[profile]?.id == id { state.doc.deletingProfiles[profile]?.failure = reason }
+            default: break
+            }
         case .clockTick: sweepAutoArchive()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)

@@ -23,6 +23,8 @@ final class Driver {
     let window: WindowID
     let outcome: RestoreOutcome
     private let ids = Counter()
+    private var transferDetails: [DownloadID: DownloadDetails] = [:]
+    private var transferRevisions: [DownloadID: UInt64] = [:]
     static let calendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!
@@ -63,6 +65,18 @@ final class Driver {
         let page = PageID(window: owner ?? window, item: tab)
         let token = state.session.live[page]?.browser ?? BrowserToken(page: page, generation: 1)
         return system(.page(token, event))
+    }
+
+    @discardableResult
+    func download(_ tab: ItemID, _ id: DownloadID, _ stage: DownloadStage, details: DownloadDetails? = nil, in owner: WindowID? = nil) -> Transition {
+        if let details { transferDetails[id] = details }
+        transferRevisions[id, default: 0] += 1
+        let page = PageID(window: owner ?? window, item: tab)
+        let browser = state.session.live[page]?.browser ?? BrowserToken(page: page, generation: 1)
+        return system(.download(DownloadUpdate(id: id,
+            owner: DownloadOwner(browser: browser, context: ContextEpoch(context: state.browsingContext(of: tab), generation: 1), policy: .default),
+            details: transferDetails[id] ?? DownloadDetails(url: start, suggestedName: "fixture"),
+            revision: transferRevisions[id]!, stage: stage)))
     }
 
     @discardableResult

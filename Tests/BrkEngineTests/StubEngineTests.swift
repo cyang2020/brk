@@ -10,7 +10,6 @@ final class StubEngineTests: XCTestCase {
         var events: [(BrowserToken, PageEvent)] = []
         func engine(_ engine: any WebEngine, page: BrowserToken, didEmit event: PageEvent) { events.append((page, event)) }
         func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool { false }
-        func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision { .deny }
     }
 
     let a = PageID(window: WindowID("w"), item: ItemID("a")), b = PageID(window: WindowID("w"), item: ItemID("b"))

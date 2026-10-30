@@ -27,7 +27,7 @@ final class DownloadsPageView: LibraryListPage {
     }
 
     override var hasRows: Bool { !rows.isEmpty }
-    override var actionEnabled: Bool { rows.contains { $0.state != .inProgress } }
+    override var actionEnabled: Bool { rows.contains { !$0.state.isActive } }
     override var emptySubtitle: String { LibraryCopy.downloadsEmpty }
     override var emptyGlyph: LibraryPage { .downloads }
     override func performAction() { dispatch(.library(.clearDownloads)) }
@@ -50,16 +50,16 @@ final class DownloadsPageView: LibraryListPage {
         if onDisk, let file {
             menu.append((LibraryCopy.open, { [weak self] in self?.openFile(file) }))
         }
-        if download.path != nil, download.state != .failed {
+        if download.path != nil {
             let reveal: () -> Void = { [weak self] in self?.dispatch(.library(.revealDownload(id))) }
             accessories.append(.init(symbol: "magnifyingglass", tooltip: LibraryCopy.showInFinder, action: reveal))
             menu.append((LibraryCopy.showInFinder, reveal))
         }
-        if download.state == .inProgress {
+        if download.state == .inProgress || download.state == .choosingDestination {
             let cancel: () -> Void = { [weak self] in self?.dispatch(.library(.cancelDownload(id))) }
             accessories.append(.init(symbol: "xmark.circle", tooltip: LibraryCopy.cancelDownload, action: cancel))
             menu.append((LibraryCopy.cancelDownload, cancel))
-        } else {
+        } else if !download.state.isActive {
             let remove: () -> Void = { [weak self] in self?.dispatch(.library(.removeDownload(id))) }
             accessories.append(.init(symbol: "xmark", tooltip: LibraryCopy.removeFromList, action: remove))
             menu.append((LibraryCopy.removeFromList, remove))
@@ -75,7 +75,19 @@ final class DownloadsPageView: LibraryListPage {
     private func detail(_ download: DownloadRow, onDisk: Bool) -> String {
         let host = download.url.host ?? download.url.absoluteString
         func size(_ bytes: Int64) -> String { ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
+        if let end = download.end {
+            switch end {
+            case .failed(let reason, .retained(let url, _)), .interrupted(let reason, .retained(let url, _)):
+                return reason + " · File retained at " + url.path
+            case .failed(let reason, .unknown): return reason + " · File state unknown"
+            case .interrupted(let reason, _): return reason
+            default: break
+            }
+        }
         switch download.state {
+        case .choosingDestination: return "Choose a destination"
+        case .cancelling: return "Cancelling · \(size(download.received))"
+        case .interrupted: return "Interrupted"
         case .inProgress: return LibraryCopy.downloading(size(download.received), of: download.total.map(size))
         case .finished: return onDisk ? "\(size(download.total ?? download.received)) · \(host)" : LibraryCopy.fileMissing
         case .failed: return "\(LibraryCopy.failed) · \(host)"

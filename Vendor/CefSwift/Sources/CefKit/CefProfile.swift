@@ -45,6 +45,11 @@ public final class CefProfile {
         }
     }
 
+    /// Explicit UI-thread release before the runtime unloads.
+    public func release() {
+        if let raw { self.raw = nil; cefRelease(UnsafeMutableRawPointer(raw)) }
+    }
+
     /// The global (default) profile — shares storage with the runtime's
     /// configured cache path.
     public static var `default`: CefProfile {

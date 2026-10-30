@@ -23,7 +23,8 @@ public enum Effect: Hashable, Sendable {
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.
     case fetchSuggestions(WindowID, query: String, url: URL)
     /// Drop a request context's data: incognito when its last window closed, a profile when it was deleted.
-    case forgetBrowsingData(BrowsingContext)
+    case disposeContext(ContextDisposal)
+    case cancelDownload(DownloadID)
     /// Reveal a downloaded file in the Finder.
     case revealFile(String)
 }

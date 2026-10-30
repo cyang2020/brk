@@ -29,25 +29,24 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
-    private var live: [PageID: ChromePage] = [:]
-    private var closing: [PageLedger.Incarnation: ChromePage] = [:]
-    /// Pages whose browser was asked to close and whose host window CEF has not destroyed yet.
-    private var destroying: [PageLedger.Incarnation: ChromePage] = [:]
+    private let resources = BrowserResources<ChromePage>()
+    private var live: [PageID: ChromePage] {
+        Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
+    }
+    private let transfers = Transfers()
+    private var contexts = ContextLifetimes()
+    private var disposals: [DisposalID: ContextDisposal] = [:]
+    private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
     private var ledger = PageLedger()
     /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
     /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profile-<id>`; incognito is in memory.
     private var profiles: [BrowsingContext: CefProfile] = [:]
     /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
     private var loaders: [ProfileID: ProfileLoader] = [:]
-    private var readyProfiles: Set<ProfileID> = []
     /// The last `reconcile` input, replayed when a profile finishes loading.
     private var wanted: [PageSpec] = []
     private var phase: ShutdownPhase = .running
     private var shutdownTask: Task<ShutdownOutcome, Never>?
-    /// Resumed with true when the last closing browser reports OnBeforeClose, with false by the timeout.
-    private var closeWaiter: CheckedContinuation<Bool, Never>?
-    /// Resumed when the last host window is destroyed (or by a short timeout: not a failure).
-    private var windowWaiter: CheckedContinuation<Void, Never>?
     /// Each native window keeps its own page intent, including while a profile or input view is being created.
     /// A native editor in another window must not cancel this request. Weak ownership permits window teardown.
     private struct FocusRequest {
@@ -93,7 +92,25 @@ public final class CEFEngine: WebEngine {
         return CEFEngine()
     }
 
-    private init() {}
+    private init() {
+        transfers.publish = { [weak self] update in
+            guard let self else { return }
+            self.delegate?.engine(self, download: update)
+        }
+        transfers.prompt = { [weak self] prompt, reply in
+            guard let self, let delegate = self.delegate else { reply(.ownerGone); return }
+            delegate.engine(self, destination: prompt, reply: reply)
+        }
+        transfers.dismiss = { [weak self] ticket in
+            guard let self else { return }; self.delegate?.engine(self, dismissDestination: ticket)
+        }
+        transfers.acquire = { [weak self] id, browser in self?.resources.acquire(.transfer(id), browser: browser) ?? false }
+        transfers.release = { [weak self] id, browser in
+            guard let self else { return }
+            self.resources.release(.transfer(id), browser: browser)
+            self.closeIfUnowned(browser)
+        }
+    }
 
     private static func realPath(of directory: URL) -> URL {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -104,20 +121,21 @@ public final class CEFEngine: WebEngine {
 
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
+        let pages = pages.filter { contexts.permitsWork($0.context) }
         self.wanted = pages
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.
         focusRequests = focusRequests.filter { $0.value.window != nil && wanted[$0.value.page] != nil }
         for (id, page) in live where wanted[id]?.context != page.context {
-            live[id] = nil
             retire(page)
         }
-        for spec in pages where live[spec.id] == nil {
+        for spec in pages {
+            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
-            live[spec.id] = page
+            resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
             record(.created, page)
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
         }
@@ -180,33 +198,73 @@ public final class CEFEngine: WebEngine {
 
     public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
 
-    /// Releases the context so Chromium drops it once its last page has closed (incognito: everything it held is
-    /// in memory and goes with it; the next incognito page gets a fresh one). A deleted profile's directory is
-    /// Chromium's while the runtime runs, so it is marked and removed at the next launch, before CEF starts
-    /// (`ProfileDirectories`).
-    public func forget(_ context: BrowsingContext) {
-        guard phase == .running, context != .profile(.default) else { return }
-        profiles[context] = nil
-        if case .profile(let id) = context {
-            loaders.removeValue(forKey: id)?.release()
-            readyProfiles.remove(id)
-            profileDirectories?.mark(id)
+    public func cancelDownload(_ id: DownloadID) { transfers.cancel(id) }
+
+    public func disposeContext(_ request: ContextDisposal) {
+        guard disposalResults[request.id] == nil, disposals[request.id] == nil else { return }
+        guard request.context != .profile(.default) else {
+            finishDisposal(request, .failed(request.id, request.context, reason: "Default profile cannot be disposed"))
+            return
+        }
+        // No asynchronous hop before revocation. A late loader may finish but cannot publish new demand.
+        contexts.revoke(request.context)
+        wanted.removeAll { $0.context == request.context }
+        disposals[request.id] = request
+        transfers.revoke(request.context)
+        for page in live.values where page.context == request.context { retire(page) }
+        Task { @MainActor in
+            let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
+                !self.resources.entries.values.contains { $0.context.context == request.context }
+                    && !self.transfers.contains(context: request.context)
+                    && self.contexts.isDrained(request.context)
+            }
+            guard drained else {
+                self.transfers.reportTimeout(context: request.context)
+                self.finishDisposal(request, .failed(request.id, request.context, reason: "Context callbacks or native hosts did not drain"))
+                return
+            }
+            self.profiles[request.context]?.release()
+            self.profiles[request.context] = nil
+            do {
+                let disposition: DataDisposition
+                switch request.context {
+                case .profile(let id):
+                    self.loaders.removeValue(forKey: id)?.release()
+                    guard let directories = self.profileDirectories else { throw CocoaError(.fileWriteUnknown) }
+                    try directories.mark(id)
+                    disposition = .deletionScheduledForNextLaunch
+                case .incognito: disposition = .memoryReleased
+                }
+                self.finishDisposal(request, .completed(request.id, request.context, disposition))
+            } catch { self.finishDisposal(request, .failed(request.id, request.context, reason: error.localizedDescription)) }
         }
     }
 
+    private func finishDisposal(_ request: ContextDisposal, _ result: ContextDisposalResult) {
+        guard disposalResults[request.id] == nil else { return }
+        disposals[request.id] = nil
+        disposalResults[request.id] = result
+        Task { @MainActor [weak self] in
+            guard let self else { return }; self.delegate?.engine(self, contextDisposed: result)
+        }
+    }
     /// Whether pages can be created in `context` now. The default profile and incognito (an off-the-record profile
     /// of the loaded default one) always can; a persistent profile once Chromium has loaded it (`ProfileLoader`),
     /// after which every waiting page is created by replaying the last `reconcile`.
     private func isReady(_ context: BrowsingContext) -> Bool {
-        guard case .profile(let id) = context, id != .default else { return true }
-        if readyProfiles.contains(id) { return true }
-        if loaders[id] == nil, let root = CefRuntime.shared.configuration?.rootCachePath {
+        guard phase == .running, contexts.permitsWork(context) else { return false }
+        if contexts.isReady(context) { return true }
+        guard case .profile(let id) = context, let root = CefRuntime.shared.configuration?.rootCachePath else { return false }
+        if contexts.beginLoading(context) {
             let path = root.appendingPathComponent(ProfileDirectories.directoryName(id), isDirectory: true)
             loaders[id] = ProfileLoader(cachePath: path) { [weak self] in
-                guard let self, self.phase == .running, self.loaders[id] != nil else { return }
-                self.log.notice("profile \(id.rawValue, privacy: .public) loaded")
-                self.readyProfiles.insert(id)
-                self.reconcile(self.wanted)
+                guard let self else { return }
+                self.contexts.initialized(context)
+                // A synchronous readiness callback cannot replay until the loader has been installed.
+                Task { @MainActor [weak self] in
+                    guard let self, self.phase == .running, self.contexts.isReady(context) else { return }
+                    self.reconcile(self.wanted)
+                }
             }
         }
         return false
@@ -215,8 +273,9 @@ public final class CEFEngine: WebEngine {
     /// The request context for a page's browsing context (BrkEngine/WebEngine.swift `BrowsingContext`): nil for the
     /// default profile (the runtime's own cache, `<rootCachePath>/Default`), one persistent context per other
     /// profile in `<rootCachePath>/Profile-<id>`, one shared off-the-record context for every incognito page.
-    /// Created on first use and reused until `forget`.
+    /// Created on first use and released only after context disposal drains its owners.
     func profile(for context: BrowsingContext) -> CefProfile? {
+        precondition(contexts.permitsWork(context) && phase == .running)
         if let existing = profiles[context] { return existing }
         let profile: CefProfile
         switch context {
@@ -251,61 +310,41 @@ public final class CEFEngine: WebEngine {
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
-        log.notice("shutdown: \(self.live.count, privacy: .public) live, \(self.closing.count, privacy: .public) closing")
         phase = .restoringViews
         focusRequests.removeAll()
-        for page in live.values { page.surface.returnViews() }
-        for page in closing.values { page.surface.returnViews() }
-        phase = .closingBrowsers
-        for (id, page) in live {
-            live[id] = nil
-            retire(page)
+        wanted = []
+        contexts.stop()
+        transfers.stop()
+        for page in live.values { retire(page) }
+        let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
+            self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
         }
-        let closedAll = await waitForBrowsersToClose(timeout: Metrics.persistence.shutdownTimeout.value)
-        guard closedAll else {
-            let unclosed = closing.values.map(\.id).sorted()
-            for page in closing.values {
-                log.fault("shutdown: page \(page.id.description, privacy: .public) generation \(page.incarnation.generation, privacy: .public) (browser \(page.browser.id, privacy: .public)) never reported OnBeforeClose")
-            }
+        guard drained else {
+            transfers.reportTimeout()
+            log.fault("shutdown did not drain: \(self.resources.entries.count, privacy: .public) browser/host records; transfers empty=\(self.transfers.isEmpty, privacy: .public); readiness drained=\(self.contexts.readinessDrained, privacy: .public)")
             phase = .done
-            return .timedOut(unclosed: unclosed)
+            return .timedOut(unclosed: resources.entries.keys.map(\.page).sorted())
         }
-        await waitForHostWindows(timeout: 1.0)
+        phase = .closingBrowsers
+        for profile in profiles.values { profile.release() }
+        profiles.removeAll()
+        for loader in loaders.values { loader.release() }
+        loaders.removeAll()
         HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
-        log.notice("shutdown: every browser closed (\(self.destroying.count, privacy: .public) host windows still alive); cef_shutdown")
         CefRuntime.shared.shutdown()
         phase = .done
         log.notice("shutdown: clean")
         return .clean
     }
 
-    private func waitForBrowsersToClose(timeout: Double) async -> Bool {
-        if closing.isEmpty { return true }
-        return await withCheckedContinuation { continuation in
-            closeWaiter = continuation
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(timeout))
-                if let waiter = self.closeWaiter {
-                    self.closeWaiter = nil
-                    waiter.resume(returning: false)
-                }
-            }
+    private func waitUntil(timeout: Double, _ predicate: @escaping @MainActor () -> Bool) async -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while !predicate() {
+            if ProcessInfo.processInfo.systemUptime >= deadline { return false }
+            try? await Task.sleep(for: .milliseconds(20))
         }
-    }
-
-    private func waitForHostWindows(timeout: Double) async {
-        if destroying.isEmpty { return }
-        await withCheckedContinuation { continuation in
-            windowWaiter = continuation
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(timeout))
-                if let waiter = self.windowWaiter {
-                    self.windowWaiter = nil
-                    waiter.resume()
-                }
-            }
-        }
+        return true
     }
 
     // MARK: Called by ChromePage
@@ -351,45 +390,55 @@ public final class CEFEngine: WebEngine {
     /// (`window.close()`), reported as `.closedByPage` so the domain drops the page demand, then `.closed`.
     func pageDidClose(_ page: ChromePage) {
         record(.closed, page)
-        switch ledger.closed(page.incarnation) {
-        case .retiredClosed(let idLiveAgain):
-            closing[page.incarnation] = nil
-            if !idLiveAgain, phase == .running { delegate?.engine(self, page: page.incarnation, didEmit: .closed) }
+        let effect = ledger.closed(page.incarnation)
+        resources.unpresent(page.incarnation)
+        resources.browserClosed(page.incarnation)
+        transfers.browserClosed(page.incarnation)
+        switch effect {
+        case .retiredClosed(let liveAgain):
+            if !liveAgain, phase == .running { delegate?.engine(self, page: page.incarnation, didEmit: .closed) }
         case .liveClosedByPage:
-            if live[page.id] === page { live[page.id] = nil }
             focusRequests = focusRequests.filter { $0.value.page != page.id }
             page.surface.returnViews()
-            destroying[page.incarnation] = page
             if phase == .running {
                 delegate?.engine(self, page: page.incarnation, didEmit: .closedByPage)
                 delegate?.engine(self, page: page.incarnation, didEmit: .closed)
             }
-        case .stale:
-            log.error("OnBeforeClose for unknown incarnation \(page.id.description, privacy: .public)#\(page.incarnation.generation, privacy: .public)")
-        }
-        if closing.isEmpty, let waiter = closeWaiter {
-            closeWaiter = nil
-            waiter.resume(returning: true)
+        case .stale: break
         }
     }
 
-    /// CEF destroyed the page's host window: the last trace of the browser is gone.
-    func pageWindowDidClose(_ page: ChromePage) {
-        destroying[page.incarnation] = nil
-        if destroying.isEmpty, let waiter = windowWaiter {
-            windowWaiter = nil
-            waiter.resume()
-        }
-    }
-
-    // MARK: Private
+    func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
 
     private func retire(_ page: ChromePage) {
-        guard let incarnation = ledger.retire(page.id), incarnation == page.incarnation else { return }
-        closing[incarnation] = page
-        destroying[incarnation] = page
+        guard ledger.retire(page.id) == page.incarnation else { return }
+        resources.unpresent(page.incarnation)
+        transfers.sourceGone(page.incarnation)
+        page.surface.park()
+        closeIfUnowned(page.incarnation)
+    }
+    private func closeIfUnowned(_ browser: BrowserToken) {
+        guard resources.beginClose(browser), let page = resources.entries[browser]?.resource else { return }
         record(.closeRequested, page)
         page.close()
+    }
+
+    private func downloadOwner(_ page: ChromePage) -> DownloadOwner {
+        DownloadOwner(browser: page.incarnation, context: contexts.epoch(for: page.context), policy: page.downloadPolicy)
+    }
+    func download(_ page: ChromePage, item: CefDownload, name: String, decision: CefDownloadDecisionCallback) {
+        let owner = delegate?.engine(self, ownerWindow: page.id.window)
+        transfers.decision(item, name: name, owner: downloadOwner(page), available: { [weak self, weak page, weak owner] in
+            guard let self, let page, let owner else { return false }
+            return self.isLive(page) && owner.isVisible
+        }, callback: decision)
+    }
+    func download(_ page: ChromePage, item: CefDownload, control: CefDownloadControl?) {
+        let owner = delegate?.engine(self, ownerWindow: page.id.window)
+        transfers.update(item, owner: downloadOwner(page), available: { [weak self, weak page, weak owner] in
+            guard let self, let page, let owner else { return false }
+            return self.isLive(page) && owner.isVisible
+        }, control: control)
     }
 
     private func record(_ kind: PageLogEntry.Kind, _ page: ChromePage) {

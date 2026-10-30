@@ -5,7 +5,7 @@ import os
 
 /// Owner: F2. Deleting a profile's Chromium data. A persistent profile lives in `<rootCachePath>/Profile-<name>`
 /// (CefSwift's layout, `CefProfile.persistent`: the Chrome runtime only loads a profile directly under its root),
-/// and Chromium holds that directory while the runtime runs, so `CEFEngine.forget` only marks it: the directory's
+/// and Chromium holds that directory while the runtime runs, so `CEFEngine.disposeContext` marks it after draining: the directory's
 /// name goes into `<data dir>/profiles-to-delete`, one per line. The next launch deletes every marked directory
 /// before CEF starts, then the marker.
 ///
@@ -46,12 +46,12 @@ struct ProfileDirectories {
     }
 
     /// Adds the profile's directory to the marker.
-    func mark(_ id: ProfileID) {
+    func mark(_ id: ProfileID) throws {
         var names = Self.names(in: readMarker())
         let name = Self.directoryName(id)
         guard !names.contains(name) else { return }
         names.append(name)
-        write(names)
+        try write(names)
         log.notice("profile \(id.rawValue, privacy: .public): directory \(name, privacy: .public) marked for deletion at the next launch")
     }
 
@@ -71,21 +71,18 @@ struct ProfileDirectories {
                 left.append(name)
             }
         }
-        if left.isEmpty { try? FileManager.default.removeItem(at: marker) } else { write(left) }
+        if left.isEmpty { try? FileManager.default.removeItem(at: marker) } else { try? write(left) }
     }
 
     private func readMarker() -> String {
         (try? Data(contentsOf: marker)).map { String(decoding: $0, as: UTF8.self) } ?? ""
     }
 
-    private func write(_ names: [String]) {
-        do {
-            try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data((names.joined(separator: "\n") + "\n").utf8).write(to: marker, options: .atomic)
-        } catch {
-            log.error("could not write \(marker.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+    private func write(_ names: [String]) throws {
+        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data((names.joined(separator: "\n") + "\n").utf8).write(to: marker, options: .atomic)
     }
+
 }
 
 /// Owner: F2. Starts Chromium loading a persistent profile and says when it is ready. The Chrome runtime creates a

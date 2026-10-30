@@ -29,20 +29,15 @@ final class KeyRouter: WebEngineDelegate {
         return store.dispatchKey(window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
-    /// A download is about to start: the page's profile settings decide where it goes ("Download Location", "Ask
-    /// where to save"); an incognito page follows the default profile's. No location set: the system Downloads
-    /// folder. The engine names the file in the directory, or shows the save panel for `.ask`.
-    func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision {
-        let context = store.snapshot.pages.first { $0.id == page }?.context ?? .profile(.default)
-        let profile: ProfileID = switch context {
-        case .profile(let p): p
-        case .incognito: .default
-        }
-        let settings = store.snapshot.settings.profiles.first { $0.profile.id == profile }?.settings ?? .default
-        let directory = settings.downloadsDirectory.map { ($0 as NSString).expandingTildeInPath }
-            ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path ?? NSHomeDirectory()
-        return settings.promptForDownloadLocation ? .ask(directory: directory) : .save(directory: directory)
+    func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { store.windowController(id)?.window }
+    func engine(_ engine: any WebEngine, download update: DownloadUpdate) {
+        store.dispatch(.system(.download(update)))
     }
+    func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) {
+        store.destinations.present(prompt, in: store.windowController(prompt.window)?.window, reply: reply)
+    }
+    func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) { store.destinations.dismiss(ticket) }
+    func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult) { store.dispatch(.system(.contextDisposed(result))) }
 
     /// Arc's Links setting "Open a Peek window when clicking on links to other sites" ("This only affects Favorites
     /// and Pinned tabs"): a user-made navigation of a Pinned or Favorites tab to another site opens a Peek in the

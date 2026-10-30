@@ -73,8 +73,9 @@ struct Doc: Sendable, Equatable {
     var settings: Settings
     /// Arc: `ADKModels.Profile`. The default profile is always present (normalize). F2 owns the rules.
     var profiles: [ProfileID: Profile]
-    /// Newest first (Arc: `StorableDownloadMetadata`). Fed by `PageEvent.download`; F5 owns the rules.
+    /// Newest first (Arc: `StorableDownloadMetadata`). Fed by `SystemEvent.download`; private transfers are omitted.
     var downloads: [Download]
+    var deletingProfiles: [ProfileID: ProfileDeletion] = [:]
     /// Air Traffic Control, in priority order: the first route whose pattern matches wins. F3 owns the rules.
     var linkRoutes: [LinkRoute]
     /// Arc: `StorableKeyBindings.userOverrides`. `KeyBindings.resolve` combines them with the table. F4 owns the rules.
@@ -231,6 +232,9 @@ struct Session: Sendable, Equatable {
     /// What loaded pages report.
     var live: [PageID: LivePage]
     var generations: [PageID: UInt64] = [:]
+    var privateSession: PrivateSessionID?
+    var terminalDownloads: Set<DownloadID> = []
+    var downloadRevisions: [DownloadID: UInt64] = [:]
     /// Ephemeral containers by window (`ContainerScope.window`): Little Arc, Peek and incognito trees. Never
     /// saved. Normalize gives every window one with a `SectionRole.scratch(window)` root.
     var scratch: [WindowID: SidebarTree]
@@ -336,4 +340,10 @@ struct LivePage: Sendable, Equatable {
 public struct LoadFailure: Hashable, Sendable, Codable {
     public let code: Int
     public let description: String
+}
+
+struct ProfileDeletion: Sendable, Equatable, Codable {
+    let id: DisposalID
+    let name: String
+    var failure: String?
 }

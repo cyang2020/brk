@@ -83,6 +83,16 @@ final class EmbeddedSurface: PageSurfaceView {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.pollInterval) { [weak self] in self?.waitForInputView(attempt: attempt + 1) }
     }
 
+    /// Hide an unpresented browser while its operations keep its borrowed views and host alive.
+    func park() {
+        onReadyForFocus = nil
+        removeFromSuperview()
+        chrome?.browser.setFocus(false)
+        chrome?.browser.wasHidden(true)
+        if let host { host.parent?.removeChildWindow(host); host.orderOut(nil) }
+        stopObservingMoves()
+    }
+
     /// Gives the borrowed views back to where they came from and detaches the host window from ours. Idempotent;
     /// also stops a pending embed. Must run before the browser closes (shutdown phase 1, and every page close).
     func returnViews() {

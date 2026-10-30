@@ -150,7 +150,7 @@ final class IdentityIntegrationTests: XCTestCase {
         d.user(.commandBar(.open(.newTab)))
         d.user(.commandBar(.submit("https://example.com/attachment-only")))
         let blank = try XCTUnwrap(d.current?.id)
-        d.page(blank, .download(DownloadID("d"), .started(url: url("https://example.com/attachment-only"), filename: "x", path: nil)))
+        d.download(blank, DownloadID("d"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/attachment-only"), suggestedName: "x"))
         d.user(.profile(.assign(.current, to: .default)))
         XCTAssertNil(d.snapshot.pages.first { $0.id.item == blank }?.initialURL)
         XCTAssertEqual(Driver(file: d.savedFile).view.content.panes.first?.content, .blank)
