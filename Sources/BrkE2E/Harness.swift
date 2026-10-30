@@ -175,6 +175,7 @@ final class AppUnderTest {
         environment["BRK_DATA_DIR"] = dataDirectory.path
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_START_URL"] = site.url("index.html").absoluteString
+        environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)
@@ -294,8 +295,11 @@ final class AppUnderTest {
         guard result == .ok else { throw Check(description: "\(Self.describe(op)) answered \(Self.describe(result))") }
     }
 
-    func view() throws -> WindowSnapshot {
-        let result = try send(.view(window: window))
+    func view() throws -> WindowSnapshot { try view(window) }
+
+    /// Another window's snapshot (wave 2: a second standard window, an incognito or Little Arc window).
+    func view(_ id: WindowID?) throws -> WindowSnapshot {
+        let result = try send(.view(window: id))
         guard case .view(let snapshot) = result else { throw Check(description: "view answered \(Self.describe(result))") }
         return snapshot
     }
@@ -350,9 +354,9 @@ final class AppUnderTest {
 
     /// `<out>/shots/<scenario>-<name>.png`; returns its path and pixel size.
     @discardableResult
-    func screenshot(_ name: String) throws -> (url: URL, width: Int, height: Int) {
+    func screenshot(_ name: String, window id: WindowID? = nil) throws -> (url: URL, width: Int, height: Int) {
         let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
-        let result = try send(.screenshot(window: window, path: url.path))
+        let result = try send(.screenshot(window: id ?? window, path: url.path))
         guard case .screenshot(_, let w, let h) = result else { throw Check(description: "screenshot answered \(Self.describe(result))") }
         if !screenshots.contains(url) { screenshots.append(url) }
         return (url, w, h)

@@ -17,12 +17,16 @@ struct Scenario: Sendable {
     let id: String
     let title: String
     let cefOnly: String?
+    /// The wave-2 worker whose feature this scenario proves; while set, the scenario is SKIPPED without a launch
+    /// (its body is the contract the worker makes pass, then removes the tag).
+    let pending: String?
     let run: @Sendable (AppUnderTest) throws -> Void
 
-    init(_ id: String, _ title: String, cefOnly: String? = nil, _ run: @escaping @Sendable (AppUnderTest) throws -> Void) {
+    init(_ id: String, _ title: String, cefOnly: String? = nil, pending: String? = nil, _ run: @escaping @Sendable (AppUnderTest) throws -> Void) {
         self.id = id
         self.title = title
         self.cefOnly = cefOnly
+        self.pending = pending
         self.run = run
     }
 }
@@ -58,7 +62,7 @@ enum Scenarios {
         Scenario("N2", "focus goes to the command bar and back to the page; no CEF host window is ever key", NativeScenarios.focusRoundTrip),
         Scenario("N3", "pixel layout: title row, URL pill, favorites, rows, dock frames equal the constants", NativeScenarios.pixelLayout),
         Scenario("N4", "quit with three pages and a split exits 0 with no crash report", NativeScenarios.cleanQuit),
-    ]
+    ] + Wave2Scenarios.all
 }
 
 // MARK: - Shared reading helpers
@@ -91,7 +95,8 @@ func pinnedIDs(_ v: WindowSnapshot) -> [ItemID] { v.space.pinned.rows.map(\.id) 
 func tab(_ id: ItemID, in v: WindowSnapshot) -> TabRow? { allTabs(v).first { $0.id == id } }
 
 func isCommandBar(_ overlay: OverlaySnapshot?) -> Bool { if case .commandBar? = overlay { true } else { false } }
-func isArchive(_ overlay: OverlaySnapshot?) -> Bool { if case .archive? = overlay { true } else { false } }
+/// The Library is open on its archive page.
+func isArchive(_ overlay: OverlaySnapshot?) -> Bool { if case .library(let l)? = overlay { l.page == .archive } else { false } }
 
 /// The visible actual view for `id`, or a Check naming what is there instead.
 func visible(_ n: NativeFacts, _ id: ViewID) throws -> ActualView {

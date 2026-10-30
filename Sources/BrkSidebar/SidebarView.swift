@@ -263,7 +263,7 @@ final class URLPillView: HoverView {
         shimmer.isHidden = true
         layer?.addSublayer(shimmer)
         addSubview(label)
-        copyLink.action = { _ in dispatch(.page(.copyURL)) }
+        copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
         identify(.urlPill)

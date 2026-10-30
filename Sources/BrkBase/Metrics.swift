@@ -61,6 +61,9 @@ public struct MetricsTable: MetricGroup {
     public let motion = MotionMetrics()
     public let theme = ThemeMetrics()
     public let littleArc = LittleArcMetrics()
+    public let peek = PeekMetrics()
+    public let library = LibraryMetrics()
+    public let settings = SettingsMetrics()
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
 }
@@ -195,6 +198,9 @@ public struct CommandBarMetrics: MetricGroup {
     public let contentInset = Metric(12.0, .arc("Command bar inner spacing", .medium, note: "inset 12"))
     public let openBounceFrom = Metric(0.95, .arc("Command bar opening bounce", .medium))
     public let littleArcWidth = Metric(500.0, .arc("Little Arc command bar width", .low))
+    /// Typing pause before the default engine's suggest endpoint is asked (`Effect.fetchSuggestions`).
+    public let suggestionDebounce = Metric(0.15, .guess("debounce before a search-suggestion fetch; Arc's value was not traced"))
+    public let maxSearchSuggestions = Metric(5, .guess("search-engine suggestions shown; Arc shows a handful under the typed row"))
 }
 
 public struct MotionMetrics: MetricGroup {
@@ -238,6 +244,32 @@ public struct ThemeMetrics: MetricGroup {
 public struct LittleArcMetrics: MetricGroup {
     public let defaultSize = Metric(CGSize(width: 1185, height: 832), .arc("Little Arc default window size", .medium))
     public let cascade = Metric(30.0, .arc("Little Arc default window size", .medium, note: "new windows cascade by 30"))
+    /// The other sizes Arc's `LittleBrowserWindow` uses in other branches; which branch is which was not traced.
+    public let compactSize = Metric(CGSize(width: 800, height: 600), .arc("Little Arc default window size", .medium, note: "800 x 600 in another branch"))
+    public let commandBarWidth = Metric(500.0, .arc("Little Arc command bar width", .low))
+}
+
+/// Peek (Arc: `modalV2`): a card over the content area. Its geometry was not recovered from Arc; these are ours.
+public struct PeekMetrics: MetricGroup {
+    /// The Peek card is the content area inset by this on every side.
+    public let inset = Metric(40.0, .guess("Peek card inset from the content area; Arc's modal frame math was not traced"))
+    public let cornerRadius = Metric(12.0, .guess("Peek card corner radius; visual-and-copy.md shows a rounded modal, the value was not traced"))
+    public let shadowRadius = Metric(24.0, .guess("Peek card shadow radius; not traced"))
+    /// The hint strip under the Peek card ("Click “Open in” to move this page in a full window, or ⌘W to close").
+    public let hintHeight = Metric(28.0, .guess("height of the Peek and Little Arc hint strip; not traced"))
+}
+
+/// The Library host inside the content card (downloads, history, archive, media, easels and notes, boosts, spaces).
+/// Arc's Library replaces the sidebar with a panel (Metrics.sidebar.libraryMinWidth); ours draws a page strip
+/// inside the card, so the strip height is ours.
+public struct LibraryMetrics: MetricGroup {
+    public let stripHeight = Metric(44.0, .guess("height of the Library page strip above the page; Arc has a side panel instead"))
+    public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "download and history rows reuse the sidebar row height"))
+}
+
+/// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar).
+public struct SettingsMetrics: MetricGroup {
+    public let windowSize = Metric(CGSize(width: 760, height: 560), .guess("settings window content size; Arc's pane window was not measured"))
 }
 
 public struct PersistenceMetrics: MetricGroup {

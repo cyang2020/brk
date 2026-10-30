@@ -35,7 +35,7 @@ public enum Suggest {
     ///    formatted first key.
     /// Matching is case- and diacritic-insensitive on titles and URLs. `resolve` is the domain's URL policy.
     public static func rank(query: String, bar: CommandBarSnapshot, appName: String,
-                            resolve: (String) -> URL? = resolveTypedInput) -> [Suggestion] {
+                            resolve: (String) -> URL? = { resolveTypedInput($0) }) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let tabs = bar.tabs.filter { !$0.isFocused }

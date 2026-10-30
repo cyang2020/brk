@@ -63,6 +63,9 @@ public final class StubEngine: WebEngine {
         pages[page]?.evaluated.append(script)
     }
 
+    /// The stub has no request contexts; nothing to forget.
+    public func forget(_ context: BrowsingContext) {}
+
     public func facts(for page: PageID) -> PageFacts? {
         guard let surface = pages[page] else { return nil }
         return PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: [], browserID: nil, hostWindowNumber: nil,
@@ -136,6 +139,11 @@ final class StubSurface: PageSurfaceView {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// The stub page consumes no key, so the window's shortcut table may decide before AppKit's own handling
+    /// (NSWindow takes Ctrl+Tab for keyboard navigation before any view's `keyDown`); a real engine's surface keeps
+    /// the default, because Chromium must see the key first (CEF's handler then routes it).
+    override var routesKeysThroughWindow: Bool { true }
 
     func show(_ url: URL) {
         self.url = url

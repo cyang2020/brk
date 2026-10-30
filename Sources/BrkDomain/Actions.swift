@@ -1,35 +1,57 @@
 import BrkBase
 import Foundation
 
-// The one shortcut table. Three consumers derive from it and from nothing else:
+// The one shortcut table: Arc's menu nib as data (anatomy-m 2.3, every row). Three consumers derive from it and
+// from nothing else:
 // - the AppKit main menu (BrkApp/MainMenu.swift): menus in `MenuName` order, items in `ActionID` order within a
-//   menu, separators between groups, key equivalents from the first binding;
-// - key routing while a page has focus (KeyRouting.swift, called from the CEF key handler): every binding;
-// - the command bar's action rows (`CommandBarSnapshot.actions`): entries with `commandBar != nil`.
+//   menu, submenus from `submenu`, separators between groups, key equivalents from `KeyBindings.resolve` (so a
+//   remapped or conflicting shortcut shows what routing really does), hidden rows hidden (their keys still work);
+// - key routing while a page has focus (KeyRouting.swift, called from the CEF key handler): `KeyMap`, built from the
+//   table plus `Doc.keyOverrides`;
+// - the command bar's action rows (`CommandBarSnapshot.actions`): entries with `commandBar != nil` whose command is
+//   not `.later`; F4's type-travel index ranks them by title and `CommandBarListing.triggers`.
 //
-// Titles, keys and priorities are Arc's menu nib (anatomy 2.3). `ActionID` raw values are Arc's `arcKeyBindingID`
-// of the primary binding, so a later remap file (Arc: `StorableKeyBindings.json`) can use Arc's ids.
-// Adding a case to `ActionID` without a `spec` fails to compile (exhaustive switch); the table has no second list.
+// `ActionID` raw values are Arc's `arcKeyBindingID` where the row has one (so a remap file written for Arc names the
+// same actions), else a name from the row's selector. `row` is the row number in anatomy-m 2.3; ActionsTests pins
+// that every row of the table is an action, an alternate binding, a standard AppKit item or a row the user dropped.
+// Rows whose feature is a later wave carry `.later(feature)`: they exist with Arc's key, priority and placement
+// and are greyed out until the feature lands. Adding a case to `ActionID` without a `spec` fails to compile.
 
 public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingKeyRepresentable {
-    // App menu
-    case hideArc, hideOthers, quitArc
-    // File
-    case newTab, reopenLastClosedTab, addressBar, archiveTab
-    // Edit (standard Undo/Cut/Copy/Paste/Select All are AppKit items, not actions; Chromium handles them in pages)
-    case copyCurrentURL
-    // View
-    case showSidebar, stopLoading, reloadPage, forceReloadPage, addSplitView, removeSplitView
-    case resetZoom, zoomIn, zoomOut, developerTools, fullscreen, exit
-    // Spaces
-    case newSpace, editSpaceTheme, focusNextSpace, focusPreviousSpace, togglePinnedSection
-    // Tabs
-    case pinTab, newFolder, rename, selectNextTab, selectPreviousTab, cycleNextTab, cyclePreviousTab
-    case clearExplore, resetTab
-    // Archive (Arc's Archive menu also holds history navigation)
-    case goBack, goForward, viewArchive, clearArchive
-    // Window
-    case minimize
+    // Arc menu (rows 2 to 14). Share Arc, Sign Out and Privacy Policy are dropped (no account, no referrals, no
+    // Browser Company links); Services and Show All are AppKit items.
+    case aboutArc, viewPreferences, setAsDefaultBrowser, importFromBrowser, checkForUpdates, hideArc, hideOthers, quitArc
+    // File (16 to 39). Send to Dia is dropped (open question in wave2.md).
+    case newTab, newWindow, newBlankWindow, newIncognitoWindow, showLittleArc, reopenLastClosedTab, addressBar
+    case newBoost, editBoost, newLegacyBoost, boostGallery, newProfile, newNote, newNoteInSplitView, newEasel
+    case closeWindow, archiveTab, share, capturePage, captureFullPage, capturePrettyScreenshot, savePageAs, printPage
+    // Edit (45 to 58). Undo through Select All and the Spelling, Substitutions, Transformations, Speech and Font
+    // submenus are AppKit first-responder items (MainMenu.standardEditItems); Chromium handles them in pages.
+    case copyCurrentURL, copyCurrentURLMarkdown, copyCurrentURLAsQuote
+    case find, findAndReplace, findNext, findPrevious, useSelectionForFind, jumpToSelection
+    // View (88 to 122). Rows 107, 108, 110 and 115 are alternate keys of zoomIn, zoomOut and developerTools.
+    case appearanceAutomatic, appearanceLight, appearanceDark
+    case showSidebar, toggleToolbar, expandPinnedSection, collapsePinnedSection, focusSidebar
+    case stopLoading, reloadPage, forceReloadPage, clearCookies, clearCache
+    case addSplitView, removeSplitView, separateTabFromSplitView, maximizeSplitPane
+    case resetZoom, zoomIn, zoomOut, cast
+    case viewSource, developerTools, inspectElements, javaScriptConsole, networkInspector, allowJavaScriptFromAppleEvents, toggleDeveloperMode
+    case fullscreen, exit
+    // Spaces (124 to 130)
+    case newSpace, editSpaceTheme, renameSpace, changeProfile, focusNextSpace, focusPreviousSpace, openSpaceManager
+    // Tabs (133 to 155). Row 132 is a second New Tab… (same action); rows 150 to 152 are nib placeholders.
+    case gptMessage, joinLiveMeeting, peekEmail, pinTab, openTabIn, newFolder, duplicate, rename, collapseAllFolders, expandAllFolders
+    case selectNextTab, selectPreviousTab, cycleNextTab, cyclePreviousTab, cycleTabForward, cycleTabBackward, revealTabInSidebar
+    case clearExplore, resetSpace, resetTab
+    // Archive (157 to 163). Rows 158 and 160 are the arrow-key alternates of goBack and goForward.
+    case goBack, goForward, viewHistory, viewArchive, clearArchive
+    // Extensions (165, 166)
+    case addExtension, manageExtensions
+    // Window (168 to 174). Zoom and Bring All to Front are AppKit items.
+    case minimize, viewLibrary, viewDownloads, viewEaselsAndNotes, viewMedia, viewBoosts
+    // Help (177 to 189)
+    case gettingStarted, keyboardShortcutsEDU, releaseNotes, contactTheTeam, visitHelpCenter, restoreData, exportArcNotes
+    case recordTrace, cancelTrace, openTaskManager, revealArcData, copyArcInfo
 }
 
 /// Arc's `KeyBinding.Priority` (anatomy 1.14, 2.2), named for what happens:
@@ -37,7 +59,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
 /// - `pageThenApp` (promptAfterConsumedByWebView): the page gets it first; if the page consumed it, pressing it
 ///   again within Metrics.keys.pressTwiceWindow takes it for the app ("press twice to use Arc's shortcut").
 /// - `page` (low, or unset in the nib): the page gets it first; the app acts only if the page did not consume it.
-public enum KeyPriority: String, Hashable, Sendable, Codable { case app, pageThenApp, page }
+public enum KeyPriority: String, Hashable, Sendable, Codable, CaseIterable { case app, pageThenApp, page }
 
 /// One key binding of an action. Arc gives alternates their own binding id and priority (goBack is
 /// overrideWebView on Cmd+[ but unset on Cmd+Left, so Cmd+Left still moves the caret in a text field).
@@ -50,8 +72,15 @@ public struct KeyBinding: Hashable, Sendable {
     }
 }
 
-/// Menu bar position, left to right (Arc's order; Extensions and Help land later).
-public enum MenuName: String, Hashable, Sendable, CaseIterable { case app, file, edit, view, spaces, tabs, archive, window }
+/// Menu bar position, left to right (Arc's order, anatomy-m 2.3).
+public enum MenuName: String, Hashable, Sendable, Codable, CaseIterable {
+    case app, file, edit, view, spaces, tabs, archive, extensions, window, help
+}
+
+/// Arc's submenus that hold actions (Edit > Find, View > Appearance, View > Developer, Help > Troubleshooting).
+/// Titles are in MainMenu. The AppKit-only submenus (Spelling and Grammar, Substitutions, Transformations, Speech,
+/// Format > Font, Services) are built there too.
+public enum Submenu: String, Hashable, Sendable, Codable, CaseIterable { case find, appearance, developer, troubleshooting }
 
 public struct CommandBarListing: Hashable, Sendable {
     /// Extra search words (Arc: `arcTypeTravelTriggers`).
@@ -64,22 +93,38 @@ public struct ActionSpec: Hashable, Sendable {
     /// Menu title and command bar row text. `{app}` is replaced with `Product.name`.
     public let title: String
     public let menu: MenuName
-    /// Separators fall between different groups of one menu.
+    public let submenu: Submenu?
+    /// Separators fall between different groups of one menu (or submenu).
     public let group: Int
-    /// The first binding is the menu's key equivalent; all of them route while a page has focus.
+    /// The first binding is the primary, remappable one (Arc's `arcKeyBindingID`); the rest are Arc's hidden
+    /// alternates (own rows in the nib, own priority). All of them route while a page has focus.
     public let bindings: [KeyBinding]
-    /// Argument-free; resolved against the dispatching window (`.focused`, `.current`).
+    /// Argument-free; resolved against the dispatching window (`.focused`, `.current`). `.later(feature)` for a
+    /// row whose feature is a later wave.
     public let command: Command
     public let commandBar: CommandBarListing?
     /// Auto-repeat dispatches again (stepping, cycling, zoom); toggles ignore repeats.
     public let repeats: Bool
+    /// Arc: "hidden, key works while hidden". Not shown in the menu; the key equivalent still fires.
+    public let hidden: Bool
+    /// Arc: an alternate item that replaces the one above it while its extra modifier is held (Force Refresh).
+    public let alternate: Bool
+    /// The row in anatomy-m 2.3 this action comes from.
+    public let row: Int
+
+    /// A greyed-out row of a later wave.
+    public var later: LaterFeature? {
+        if case .later(let feature) = command { return feature }
+        return nil
+    }
 }
 
 private func entry(
-    _ title: String, _ menu: MenuName, _ group: Int, _ bindings: [KeyBinding], _ command: Command,
-    bar: CommandBarListing? = nil, repeats: Bool = false
+    _ row: Int, _ title: String, _ menu: MenuName, _ group: Int, _ bindings: [KeyBinding], _ command: Command,
+    in submenu: Submenu? = nil, bar: CommandBarListing? = nil, repeats: Bool = false, hidden: Bool = false, alternate: Bool = false
 ) -> ActionSpec {
-    ActionSpec(title: title, menu: menu, group: group, bindings: bindings, command: command, commandBar: bar, repeats: repeats)
+    ActionSpec(title: title, menu: menu, submenu: submenu, group: group, bindings: bindings, command: command, commandBar: bar,
+               repeats: repeats, hidden: hidden, alternate: alternate, row: row)
 }
 
 private func listing(_ symbol: String, _ triggers: String...) -> CommandBarListing {
@@ -88,107 +133,275 @@ private func listing(_ symbol: String, _ triggers: String...) -> CommandBarListi
 
 private let cmd = Modifiers.command, shift = Modifiers.shift, opt = Modifiers.option, ctrl = Modifiers.control
 
+/// Arc's priority column: overrideWebView -> `.app`, promptAfterConsumedByWebView -> `.pageThenApp`, blank -> `.page`.
+private func key(_ modifiers: Modifiers, _ key: Key, _ priority: KeyPriority) -> KeyBinding { KeyBinding(KeyChord(modifiers, key), priority) }
+
 extension ActionID {
     public var spec: ActionSpec {
         switch self {
-        case .hideArc: entry("Hide {app}", .app, 1, [.init(.init(cmd, .h), .app)], .app(.hide))
-        case .hideOthers: entry("Hide Other Windows", .app, 1, [.init(.init([opt, cmd], .h), .page)], .app(.hideOthers))
-        case .quitArc: entry("Quit {app}", .app, 2, [.init(.init(cmd, .q), .app)], .app(.quit))
+        // MARK: Arc menu
+        case .aboutArc: entry(2, "About {app}", .app, 0, [], .app(.showAbout))
+        case .viewPreferences:
+            entry(3, "Preferences…", .app, 0, [key(cmd, .comma, .page)], .settings(.openPane(.general)), bar: listing("gearshape", "settings", "preferences"))
+        case .setAsDefaultBrowser: entry(5, "Set as Default Browser", .app, 1, [], .app(.setAsDefaultBrowser), bar: listing("checkmark.seal", "default browser"))
+        case .importFromBrowser: entry(6, "Import from Another Browser…", .app, 1, [], .later(.importer))
+        case .checkForUpdates: entry(7, "Check for Updates…", .app, 1, [], .later(.updater))
+        case .hideArc: entry(10, "Hide {app}", .app, 2, [key(cmd, .h, .app)], .app(.hide))
+        case .hideOthers: entry(11, "Hide Other Windows", .app, 2, [key([opt, cmd], .h, .page)], .app(.hideOthers))
+        case .quitArc: entry(14, "Quit {app}", .app, 3, [key(cmd, .q, .app)], .app(.quit))
 
-        case .newTab: entry("New Tab…", .file, 0, [.init(.init(cmd, .t), .app)], .commandBar(.open(.newTab)))
+        // MARK: File
+        case .newTab: entry(16, "New Tab…", .file, 0, [key(cmd, .t, .app)], .commandBar(.open(.newTab)))
+        case .newWindow: entry(17, "New Window", .file, 0, [key(cmd, .n, .app)], .window(.new), bar: listing("macwindow", "window"))
+        case .newBlankWindow: entry(18, "Blank Window", .file, 0, [key([ctrl, cmd], .n, .page)], .later(.blankWindow))
+        case .newIncognitoWindow:
+            entry(19, "New Incognito Window", .file, 0, [key([shift, cmd], .n, .app)], .window(.newIncognito), bar: listing("eyeglasses", "incognito", "private"))
+        case .showLittleArc:
+            entry(20, "New Little {app} Window", .file, 0, [key([opt, cmd], .n, .app)], .window(.newLittle(nil)), bar: listing("macwindow.on.rectangle", "little arc", "little window"))
         case .reopenLastClosedTab:
-            entry("Restore Last Closed Tab", .file, 0, [.init(.init([shift, cmd], .t), .app)], .archive(.restoreLast),
-                 bar: listing("arrow.uturn.backward", "reopen", "undo close"))
-        case .addressBar: entry("Open Command Bar", .file, 0, [.init(.init(cmd, .l), .app)], .commandBar(.open(.editCurrent)))
+            entry(21, "Restore Last Closed Tab", .file, 0, [key([shift, cmd], .t, .app)], .archive(.restoreLast),
+                  bar: listing("arrow.uturn.backward", "reopen", "undo close"))
+        case .addressBar: entry(22, "Open Command Bar", .file, 0, [key(cmd, .l, .app)], .commandBar(.open(.editCurrent)))
+        case .newBoost: entry(23, "New Boost", .file, 1, [], .later(.boosts), hidden: true)
+        case .editBoost: entry(24, "Edit Boost", .file, 1, [], .later(.boosts), hidden: true)
+        case .newLegacyBoost: entry(25, "New Legacy Boost (Advanced)", .file, 1, [], .later(.boosts), hidden: true)
+        case .boostGallery: entry(26, "Boost Gallery", .file, 1, [], .later(.boosts), hidden: true)
+        case .newProfile: entry(27, "New Profile", .file, 2, [], .profile(.openDialog(.create)), bar: listing("person.crop.circle.badge.plus", "profile"))
+        case .newNote: entry(28, "New Note", .file, 3, [key([ctrl, shift], .n, .pageThenApp)], .later(.notes))
+        case .newNoteInSplitView: entry(29, "New Note (in Split)", .file, 3, [key([ctrl, opt], .n, .pageThenApp)], .later(.notes), hidden: true)
+        case .newEasel: entry(30, "New Easel", .file, 3, [key([ctrl, shift], .e, .page)], .later(.easels))
+        case .closeWindow: entry(31, "Close Window", .file, 4, [key([shift, cmd], .w, .app)], .window(.close))
         case .archiveTab:
-            entry("Archive Tab", .file, 1, [.init(.init(cmd, .w), .app)], .tab(.close(.focused)), bar: listing("archivebox", "close"))
+            entry(32, "Archive Tab", .file, 4, [key(cmd, .w, .app)], .tab(.close(.focused)), bar: listing("archivebox", "close"))
+        case .share: entry(33, "Share…", .file, 5, [], .app(.export(.focusedTab)), bar: listing("square.and.arrow.up", "share", "export"))
+        case .capturePage: entry(35, "Capture…", .file, 6, [key([shift, cmd], .two, .page)], .later(.captures))
+        case .captureFullPage: entry(36, "Capture Full Page", .file, 6, [], .later(.captures))
+        case .capturePrettyScreenshot: entry(37, "Capture in Portrait Mode", .file, 6, [], .later(.captures))
+        case .savePageAs: entry(38, "Save Page As", .file, 7, [key([shift, cmd], .s, .page)], .later(.savePage))
+        case .printPage: entry(39, "Print", .file, 7, [key(cmd, .p, .pageThenApp)], .later(.print))
 
+        // MARK: Edit
         case .copyCurrentURL:
-            entry("Copy URL", .edit, 1, [.init(.init([shift, cmd], .c), .app)], .page(.copyURL), bar: listing("link", "copy link"))
+            entry(45, "Copy URL", .edit, 0, [key([shift, cmd], .c, .app)], .page(.copyURL(.plain)), bar: listing("link", "copy link"))
+        case .copyCurrentURLMarkdown:
+            entry(46, "Copy URL as Markdown", .edit, 0, [key([opt, shift, cmd], .c, .app)], .page(.copyURL(.markdown)), bar: listing("link", "markdown"))
+        case .copyCurrentURLAsQuote:
+            entry(47, "Copy URL as Quote", .edit, 0, [key([ctrl, shift, cmd], .c, .app)], .page(.copyURL(.quote)))
+        case .find: entry(53, "Find…", .edit, 1, [key(cmd, .f, .page)], .later(.findInPage), in: .find)
+        case .findAndReplace: entry(54, "Find and Replace", .edit, 1, [key([opt, cmd], .f, .page)], .later(.findInPage), in: .find)
+        case .findNext: entry(55, "Find Next", .edit, 1, [key(cmd, .g, .page)], .later(.findInPage), in: .find)
+        case .findPrevious: entry(56, "Find Previous", .edit, 1, [key([shift, cmd], .g, .page)], .later(.findInPage), in: .find)
+        case .useSelectionForFind: entry(57, "Use Selection to Find", .edit, 1, [], .later(.findInPage), in: .find)
+        case .jumpToSelection: entry(58, "Jump to Selection", .edit, 1, [key(cmd, .j, .page)], .later(.findInPage), in: .find)
 
+        // MARK: View
+        case .appearanceAutomatic: entry(88, "Automatic", .view, 0, [], .settings(.general(.webAppearance(.automatic))), in: .appearance)
+        case .appearanceLight: entry(89, "Light", .view, 0, [], .settings(.general(.webAppearance(.light))), in: .appearance)
+        case .appearanceDark: entry(90, "Dark", .view, 0, [], .settings(.general(.webAppearance(.dark))), in: .appearance)
         case .showSidebar:
-            entry("Show/Hide Sidebar", .view, 0, [.init(.init(cmd, .s), .pageThenApp)], .sidebar(.toggle),
-                 bar: listing("sidebar.leading", "toggle sidebar"))
-        case .stopLoading: entry("Stop Loading", .view, 1, [.init(.init(cmd, .period), .page)], .page(.stop(.focused)))
+            entry(91, "Show/Hide Sidebar", .view, 1, [key(cmd, .s, .pageThenApp)], .sidebar(.toggle), bar: listing("sidebar.leading", "toggle sidebar"))
+        case .toggleToolbar: entry(92, "Show/Hide Toolbar", .view, 1, [key([shift, cmd], .d, .pageThenApp)], .later(.toolbar), hidden: true)
+        case .expandPinnedSection: entry(93, "Expand Pinned Section", .view, 1, [], .space(.togglePinnedSection(.current)), hidden: true)
+        case .collapsePinnedSection: entry(94, "Collapse Pinned Section", .view, 1, [], .space(.togglePinnedSection(.current)), hidden: true)
+        case .focusSidebar: entry(95, "Reveal Current Tab", .view, 1, [key(ctrl, .space, .pageThenApp)], .later(.sidebarKeyboardFocus), hidden: true)
+        case .stopLoading: entry(96, "Stop Loading", .view, 2, [key(cmd, .period, .page)], .page(.stop(.focused)))
         case .reloadPage:
-            entry("Refresh the Page", .view, 1, [.init(.init(cmd, .r), .page)], .page(.reload(.focused, ignoringCache: false)),
-                 bar: listing("arrow.clockwise", "reload"))
+            entry(97, "Refresh the Page", .view, 2, [key(cmd, .r, .page)], .page(.reload(.focused, ignoringCache: false)),
+                  bar: listing("arrow.clockwise", "reload"))
         case .forceReloadPage:
-            entry("Force Refresh the Page", .view, 1, [.init(.init([shift, cmd], .r), .page)], .page(.reload(.focused, ignoringCache: true)))
+            entry(98, "Force Refresh the Page", .view, 2, [key([shift, cmd], .r, .page)], .page(.reload(.focused, ignoringCache: true)), alternate: true)
+        case .clearCookies: entry(99, "Clear Cookies and Refresh", .view, 2, [], .later(.siteData))
+        case .clearCache: entry(100, "Clear Cache and Refresh", .view, 2, [], .later(.siteData))
         case .addSplitView:
-            entry("Add Split View", .view, 2, [.init(.init([ctrl, shift], .equals), .pageThenApp)], .split(.addPane),
-                 bar: listing("rectangle.split.2x1", "split"))
+            entry(101, "Add Split View", .view, 3, [key([ctrl, shift], .equals, .pageThenApp)], .split(.addPane),
+                  bar: listing("rectangle.split.2x1", "split"))
         case .removeSplitView:
-            entry("Close this Split Pane", .view, 2, [.init(.init([ctrl, shift], .minus), .pageThenApp)], .split(.closePane))
-        case .resetZoom: entry("Zoom to Actual Size", .view, 3, [.init(.init(cmd, .zero), .page)], .page(.zoom(.reset)))
+            entry(102, "Close this Split Pane", .view, 3, [key([ctrl, shift], .minus, .pageThenApp)], .split(.closePane))
+        case .separateTabFromSplitView: entry(103, "Separate Page from Split View", .view, 3, [], .later(.splitTools))
+        case .maximizeSplitPane: entry(104, "Expand Current Split", .view, 3, [], .later(.splitTools))
+        case .resetZoom: entry(105, "Zoom to Actual Size", .view, 4, [key(cmd, .zero, .page)], .page(.zoom(.reset)))
         case .zoomIn:
-            entry("Zoom In", .view, 3, [.init(.init([shift, cmd], .equals), .page), .init(.init(cmd, .equals), .page)],
-                 .page(.zoom(.zoomIn)), repeats: true)
+            entry(106, "Zoom In", .view, 4, [key([shift, cmd], .equals, .page), key(cmd, .equals, .page)], .page(.zoom(.zoomIn)), repeats: true)
         case .zoomOut:
-            entry("Zoom Out", .view, 3, [.init(.init(cmd, .minus), .page), .init(.init([shift, cmd], .minus), .page)],
-                 .page(.zoom(.zoomOut)), repeats: true)
+            entry(109, "Zoom Out", .view, 4, [key(cmd, .minus, .page), key([shift, cmd], .minus, .page)], .page(.zoom(.zoomOut)), repeats: true)
+        case .cast: entry(111, "Cast", .view, 5, [], .later(.cast))
+        case .viewSource: entry(113, "View Source", .view, 6, [key([opt, cmd], .u, .pageThenApp)], .later(.developerMenu), in: .developer)
         case .developerTools:
-            entry("Developer Tools", .view, 4, [.init(.init([opt, cmd], .i), .pageThenApp), .init(.init([], .f12), .pageThenApp)],
-                 .page(.toggleDevTools), bar: listing("hammer", "inspect", "devtools"))
+            entry(114, "Developer Tools", .view, 6, [key([opt, cmd], .i, .pageThenApp), key([], .f12, .pageThenApp)],
+                  .page(.toggleDevTools), in: .developer, bar: listing("hammer", "inspect", "devtools"))
+        case .inspectElements: entry(116, "Inspect Elements", .view, 6, [key([opt, cmd], .c, .pageThenApp)], .later(.developerMenu), in: .developer)
+        case .javaScriptConsole: entry(117, "JavaScript Console", .view, 6, [key([opt, cmd], .j, .page)], .later(.developerMenu), in: .developer)
+        case .networkInspector: entry(118, "Network Inspector", .view, 6, [], .later(.developerMenu), in: .developer)
+        case .allowJavaScriptFromAppleEvents: entry(119, "Allow JavaScript from Apple Events", .view, 6, [], .later(.developerMenu), in: .developer)
+        case .toggleDeveloperMode: entry(120, "Toggle Developer Mode", .view, 6, [key(ctrl, .d, .pageThenApp)], .later(.developerMenu), in: .developer)
         case .fullscreen:
-            entry("Enter/Exit Full Screen", .view, 4, [.init(.init([ctrl, cmd], .f), .pageThenApp)], .app(.toggleFullScreen))
-        case .exit: entry("Exit", .view, 4, [.init(.init([], .escape), .pageThenApp)], .app(.exit))
+            entry(121, "Enter/Exit Full Screen", .view, 7, [key([ctrl, cmd], .f, .pageThenApp)], .app(.toggleFullScreen))
+        case .exit: entry(122, "Exit", .view, 7, [key([], .escape, .pageThenApp)], .app(.exit))
 
+        // MARK: Spaces
         case .newSpace:
-            entry("New Space…", .spaces, 0, [], .sidebar(.openDialog(.newSpace)), bar: listing("plus.square.on.square", "create space"))
+            entry(124, "New Space…", .spaces, 0, [], .sidebar(.openDialog(.newSpace)), bar: listing("plus.square.on.square", "create space"))
         case .editSpaceTheme:
-            entry("Edit Theme…", .spaces, 0, [], .sidebar(.openDialog(.editSpace(.current))), bar: listing("paintpalette", "theme", "color"))
+            entry(125, "Edit Theme…", .spaces, 0, [], .sidebar(.openDialog(.editSpace(.current))), bar: listing("paintpalette", "theme", "color"))
+        case .renameSpace: entry(126, "Rename Space", .spaces, 0, [], .sidebar(.openDialog(.editSpace(.current))), bar: listing("pencil", "rename space"))
+        case .changeProfile:
+            entry(127, "Change Profile", .spaces, 0, [], .profile(.openDialog(.change(.current))), bar: listing("person.crop.circle", "profile"))
         case .focusNextSpace:
-            entry("Next Space", .spaces, 1, [.init(.init([opt, cmd], .rightArrow), .page)], .space(.step(.next)), repeats: true)
+            entry(128, "Next Space", .spaces, 1, [key([opt, cmd], .rightArrow, .page)], .space(.step(.next)), repeats: true)
         case .focusPreviousSpace:
-            entry("Previous Space", .spaces, 1, [.init(.init([opt, cmd], .leftArrow), .page)], .space(.step(.previous)), repeats: true)
-        case .togglePinnedSection:
-            entry("Expand/Collapse Pinned Section", .spaces, 1, [], .space(.togglePinnedSection(.current)))
+            entry(129, "Previous Space", .spaces, 1, [key([opt, cmd], .leftArrow, .page)], .space(.step(.previous)), repeats: true)
+        case .openSpaceManager: entry(130, "Manage Spaces…", .spaces, 2, [], .later(.spaceManager))
 
+        // MARK: Tabs
+        case .gptMessage: entry(133, "New ChatGPT Message…", .tabs, 0, [key([opt, cmd], .g, .page)], .later(.aiCommandBar), hidden: true)
+        case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .later(.joinMeeting), hidden: true)
+        case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .later(.peekEmail), hidden: true)
         case .pinTab:
-            entry("Pin/Unpin Tab", .tabs, 0, [.init(.init(cmd, .d), .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "pin"))
+            entry(136, "Pin/Unpin Tab", .tabs, 1, [key(cmd, .d, .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "pin"))
+        case .openTabIn:
+            entry(137, "Open Little {app} or Peek in…", .tabs, 1, [key(cmd, .o, .pageThenApp)], .window(.openIn(.current)), bar: listing("arrow.up.forward.square", "open in"))
         case .newFolder:
-            entry("New Folder…", .tabs, 0, [.init(.init([shift, cmd], .n), .page)], .item(.newFolder), bar: listing("folder.badge.plus", "folder"))
-        case .rename: entry("Rename Current Item", .tabs, 0, [], .item(.beginRename(.focused)), bar: listing("pencil", "rename"))
+            entry(138, "New Folder…", .tabs, 1, [key([shift, cmd], .n, .page)], .item(.newFolder), bar: listing("folder.badge.plus", "folder"))
+        case .duplicate: entry(139, "Duplicate", .tabs, 1, [], .later(.duplicate), hidden: true)
+        case .rename: entry(140, "Rename Current Item", .tabs, 1, [], .item(.beginRename(.focused)), bar: listing("pencil", "rename"), hidden: true)
+        case .collapseAllFolders: entry(141, "Collapse All Folders", .tabs, 1, [], .later(.folderTools), hidden: true)
+        case .expandAllFolders: entry(142, "Expand All Folders", .tabs, 1, [], .later(.folderTools), hidden: true)
         case .selectNextTab:
-            entry("Next Tab", .tabs, 1, [.init(.init([opt, cmd], .downArrow), .app)], .tab(.step(.next)), repeats: true)
+            entry(143, "Next Tab", .tabs, 2, [key([opt, cmd], .downArrow, .app)], .tab(.step(.next)), repeats: true)
         case .selectPreviousTab:
-            entry("Previous Tab", .tabs, 1, [.init(.init([opt, cmd], .upArrow), .app)], .tab(.step(.previous)), repeats: true)
+            entry(144, "Previous Tab", .tabs, 2, [key([opt, cmd], .upArrow, .app)], .tab(.step(.previous)), repeats: true)
         case .cycleNextTab:
-            entry("Tab Switcher (forward)", .tabs, 1, [.init(.init(ctrl, .tab), .app)], .tab(.cycleRecent(.next)), repeats: true)
+            entry(145, "Tab Switcher (forward)", .tabs, 2, [key(ctrl, .tab, .app)], .tab(.cycleRecent(.next)), repeats: true, hidden: true)
         case .cyclePreviousTab:
-            entry("Tab Switcher (backward)", .tabs, 1, [.init(.init([ctrl, shift], .tab), .app)], .tab(.cycleRecent(.previous)), repeats: true)
+            entry(146, "Tab Switcher (backward)", .tabs, 2, [key([ctrl, shift], .tab, .app)], .tab(.cycleRecent(.previous)), repeats: true, hidden: true)
+        case .cycleTabForward: entry(147, "Cycle Tab Forward", .tabs, 2, [key([ctrl, cmd], .rightArrow, .app)], .later(.linearTabCycling), hidden: true)
+        case .cycleTabBackward: entry(148, "Cycle Tab Backward", .tabs, 2, [key([ctrl, cmd], .leftArrow, .app)], .later(.linearTabCycling), hidden: true)
+        case .revealTabInSidebar: entry(149, "Reveal Tab in Sidebar", .tabs, 2, [], .later(.sidebarKeyboardFocus))
         case .clearExplore:
-            entry("Clear Unpinned Tabs", .tabs, 2, [.init(.init([shift, cmd], .k), .page)], .tab(.clearToday), bar: listing("xmark.bin", "clear today"))
-        case .resetTab: entry("Reset Tab to Original URL", .tabs, 2, [], .tab(.reset(.focused)), bar: listing("arrow.uturn.left", "reset"))
+            entry(153, "Clear Unpinned Tabs", .tabs, 3, [key([shift, cmd], .k, .page)], .tab(.clearToday), bar: listing("xmark.bin", "clear today"))
+        case .resetSpace: entry(154, "Reset all tabs in this Space", .tabs, 3, [], .later(.resetSpace))
+        case .resetTab: entry(155, "Reset Tab to Original URL", .tabs, 3, [], .tab(.reset(.focused)), bar: listing("arrow.uturn.left", "reset"), hidden: true)
 
+        // MARK: Archive
         case .goBack:
-            entry("Go Back", .archive, 0, [.init(.init(cmd, .leftBracket), .app), .init(.init(cmd, .leftArrow), .page)],
-                 .page(.back(.focused)), repeats: true)
+            entry(157, "Go Back", .archive, 0, [key(cmd, .leftBracket, .app), key(cmd, .leftArrow, .page)], .page(.back(.focused)), repeats: true)
         case .goForward:
-            entry("Go Forward", .archive, 0, [.init(.init(cmd, .rightBracket), .app), .init(.init(cmd, .rightArrow), .page)],
-                 .page(.forward(.focused)), repeats: true)
-        case .viewArchive: entry("View Archive", .archive, 1, [], .archive(.open), bar: listing("archivebox", "archive", "history"))
-        case .clearArchive: entry("Clear Archive", .archive, 1, [], .archive(.clear))
+            entry(159, "Go Forward", .archive, 0, [key(cmd, .rightBracket, .app), key(cmd, .rightArrow, .page)], .page(.forward(.focused)), repeats: true)
+        case .viewHistory: entry(161, "View History", .archive, 1, [key(cmd, .y, .page)], .library(.open(.history)), bar: listing("clock.arrow.circlepath", "history"))
+        case .viewArchive: entry(162, "View Archive", .archive, 1, [], .library(.open(.archive)), bar: listing("archivebox", "archive"))
+        case .clearArchive: entry(163, "Clear Archive", .archive, 1, [], .archive(.clear))
 
-        case .minimize: entry("Minimize Window", .window, 0, [.init(.init(cmd, .m), .app)], .app(.minimize))
+        // MARK: Extensions
+        case .addExtension: entry(165, "Add Extension…", .extensions, 0, [], .later(.extensions))
+        case .manageExtensions: entry(166, "Manage Extensions…", .extensions, 0, [], .later(.extensions))
+
+        // MARK: Window
+        case .minimize: entry(168, "Minimize Window", .window, 0, [key(cmd, .m, .app)], .app(.minimize))
+        case .viewLibrary: entry(170, "View Library", .window, 1, [key([shift, cmd], .l, .page)], .library(.open(nil)), bar: listing("books.vertical", "library"))
+        case .viewDownloads: entry(171, "View Downloads", .window, 1, [key([shift, cmd], .j, .page)], .library(.open(.downloads)), bar: listing("arrow.down.circle", "downloads"))
+        case .viewEaselsAndNotes: entry(172, "View Easels & Notes", .window, 1, [], .library(.open(.easelsAndNotes)), bar: listing("note.text", "easels", "notes"))
+        case .viewMedia: entry(173, "View Media", .window, 1, [], .library(.open(.media)), bar: listing("photo.on.rectangle", "media", "captures", "screenshots"))
+        case .viewBoosts: entry(174, "View Boosts", .window, 1, [], .library(.open(.boosts)), bar: listing("wand.and.stars", "boosts"))
+
+        // MARK: Help
+        case .gettingStarted: entry(177, "Getting Started", .help, 0, [], .later(.onboarding))
+        case .keyboardShortcutsEDU:
+            entry(178, "Essential Keyboard Shortcuts", .help, 0, [], .settings(.openPane(.shortcuts)), bar: listing("keyboard", "shortcuts", "keyboard"))
+        case .releaseNotes: entry(179, "Release Notes", .help, 0, [], .later(.help))
+        case .contactTheTeam: entry(180, "Contact the Team", .help, 0, [], .later(.help))
+        case .visitHelpCenter: entry(181, "Visit Help Center", .help, 0, [], .later(.help))
+        case .restoreData: entry(182, "Restore Data", .help, 1, [], .later(.restoreData))
+        case .exportArcNotes: entry(183, "Export {app} Notes", .help, 1, [], .later(.notes))
+        case .recordTrace: entry(185, "Record Trace", .help, 2, [], .later(.troubleshooting), in: .troubleshooting)
+        case .cancelTrace: entry(186, "Cancel Trace", .help, 2, [], .later(.troubleshooting), in: .troubleshooting, hidden: true)
+        case .openTaskManager: entry(187, "Open Task Manager", .help, 2, [], .later(.troubleshooting), in: .troubleshooting)
+        case .revealArcData: entry(188, "Reveal {app} Data", .help, 2, [], .app(.revealDataDirectory), in: .troubleshooting)
+        case .copyArcInfo: entry(189, "Copy {app} Info", .help, 2, [], .later(.troubleshooting), in: .troubleshooting)
         }
     }
 
     /// The menu title with `{app}` filled in.
     public func title(appName: String) -> String { spec.title.replacingOccurrences(of: "{app}", with: appName) }
+
+    /// Rows of anatomy-m 2.3 that are not actions, so ActionsTests can prove the table covers the whole menu:
+    /// menu titles and submenu headers, AppKit first-responder items (MainMenu.standardEditItems and the Window and
+    /// app standards), alternate keys of an action above, nib placeholders and the label row, and rows the user
+    /// dropped (Share Arc, Privacy Policy, Sign Out, Send to Dia).
+    public static let menuTitleRows: Set<Int> = [1, 15, 40, 52, 59, 65, 73, 77, 80, 81, 85, 86, 112, 123, 131, 156, 164, 167, 176, 184]
+    public static let standardItemRows: Set<Int> = [8, 12, 41, 42, 43, 44, 48, 49, 50, 51, 60, 61, 62, 63, 64, 66, 67, 68, 69, 70, 71, 72,
+                                                   74, 75, 76, 78, 79, 82, 83, 84, 169, 175]
+    public static let alternateKeyRows: Set<Int> = [107, 108, 110, 115, 132, 158, 160]
+    public static let placeholderRows: Set<Int> = [87, 150, 151, 152]
+    public static let droppedRows: Set<Int> = [4, 9, 13, 34]
 }
 
-/// Chord -> action, built once from the table. Arc's nib has one real collision (Shift+Cmd+N on New Incognito
-/// Window and New Folder, anatomy 2.4); v1 has no incognito action, and ActionsTests pins that no chord maps to two
-/// actions until the remap layer gives conflicts a state (Arc: `KeyBinding.State.conflict`).
+// MARK: - Key bindings: table plus user overrides
+
+/// Arc: `KeyBinding.State`. A conflict is a first-class state: neither action routes until the user resolves it
+/// (the Shortcuts pane shows "Remove Conflicting Shortcut"). Arc's own nib has one: Shift+Cmd+N on New Incognito
+/// Window and New Folder (anatomy-m 2.4).
+public enum KeyBindingState: Hashable, Sendable, Codable {
+    case valid(KeyChord)
+    case conflict(KeyChord, with: [ActionID])
+    case unset
+}
+
+/// Arc: `KeyBinding.Source`.
+public enum KeyBindingSource: String, Hashable, Sendable, Codable { case `default`, userDefined }
+
+/// One action's primary shortcut after overrides. The table's alternates (Cmd+Left for Go Back) are not remappable
+/// and ride along in `KeyMap` unchanged.
+public struct ResolvedBinding: Hashable, Sendable {
+    public let action: ActionID
+    public let state: KeyBindingState
+    public let source: KeyBindingSource
+    public let priority: KeyPriority
+}
+
+/// Owner: F4. Builds the resolved primary bindings from the table and `Doc.keyOverrides`: an override's chord (or
+/// `unset`) replaces the table's first binding, its priority replaces the table's; two actions on one chord are
+/// both `.conflict` naming each other. Pure, O(actions).
+public enum KeyBindings {
+    public static func resolve(overrides: [ActionID: KeyOverride], actions: [ActionID] = ActionID.allCases) -> [ActionID: ResolvedBinding] {
+        var chords: [ActionID: KeyChord?] = [:]
+        var priorities: [ActionID: KeyPriority] = [:]
+        var sources: [ActionID: KeyBindingSource] = [:]
+        for action in actions {
+            let first = action.spec.bindings.first
+            let override = overrides[action]
+            chords[action] = override.map(\.chord) ?? first?.chord
+            priorities[action] = override?.priority ?? first?.priority ?? .page
+            sources[action] = override == nil ? .default : .userDefined
+        }
+        var byChord: [KeyChord: [ActionID]] = [:]
+        for action in actions { if let chord = chords[action], let chord { byChord[chord, default: []].append(action) } }
+        var out: [ActionID: ResolvedBinding] = [:]
+        for action in actions {
+            let state: KeyBindingState
+            if let chord = chords[action], let chord {
+                let others = (byChord[chord] ?? []).filter { $0 != action }
+                state = others.isEmpty ? .valid(chord) : .conflict(chord, with: others)
+            } else {
+                state = .unset
+            }
+            out[action] = ResolvedBinding(action: action, state: state, source: sources[action] ?? .default, priority: priorities[action] ?? .page)
+        }
+        return out
+    }
+}
+
+/// Chord -> action, for routing. Built from `KeyBindings.resolve` (valid primaries, overrides applied) plus the
+/// table's alternate bindings. A chord in conflict routes to no one.
 public struct KeyMap: Sendable {
     public let entries: [KeyChord: (action: ActionID, priority: KeyPriority)]
 
-    public init(actions: [ActionID] = ActionID.allCases) {
+    public init(actions: [ActionID] = ActionID.allCases, overrides: [ActionID: KeyOverride] = [:]) {
         var entries: [KeyChord: (action: ActionID, priority: KeyPriority)] = [:]
+        for (action, binding) in KeyBindings.resolve(overrides: overrides, actions: actions) {
+            if case .valid(let chord) = binding.state { entries[chord] = (action, binding.priority) }
+        }
         for action in actions {
-            for binding in action.spec.bindings where entries[binding.chord] == nil {
+            for binding in action.spec.bindings.dropFirst() where entries[binding.chord] == nil {
                 entries[binding.chord] = (action, binding.priority)
             }
         }

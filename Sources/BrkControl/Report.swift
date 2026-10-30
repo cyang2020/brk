@@ -103,6 +103,8 @@ public enum E2EReport {
         case "BrkOverlays": return "W4"
         case "BrkTheme": return "W5"
         case "BrkControl", "BrkE2E": return "W6"
+        case "BrkSettings": return "F1"
+        case "BrkLibrary": return "F5"
         default: return "unknown owner"
         }
     }

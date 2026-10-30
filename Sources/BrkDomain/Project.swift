@@ -31,21 +31,62 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
     for id in state.doc.windows.keys {
         if let window = projectWindow(id, state, ctx) { windows[id] = window }
     }
-    return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state))
+    return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state))
 }
 
-/// Every loaded tab, app-wide, sorted by id (stable for the engine's reconcile).
+/// Every loaded tab, app-wide, sorted by id (stable for the engine's reconcile), in the request context of its
+/// section's profile (incognito for an incognito window's tabs).
 func projectPages(_ state: AppState) -> [PageSpec] {
     state.session.loaded.sorted().compactMap { tab in
         guard let scope = state.locate(tab), let tree = state.tree(scope), case .tab(let t)? = tree[tab]?.body else { return nil }
-        let profile: ProfileID
-        switch tree.role(of: tab) {
-        case .favorites(let p)?: profile = p
-        case .pinned(let s)?, .today(let s)?: profile = state.doc.spaces[s]?.profile ?? .default
-        case .scratch?, nil: profile = .default
-        }
-        return PageSpec(id: PageID(tab), initialURL: t.url, profile: profile)
+        return PageSpec(id: PageID(tab), initialURL: t.url, context: state.browsingContext(of: tab))
     }
+}
+
+/// Owner: F1. The settings window's data: saved values, the resolved shortcut table, what the Max pane can offer.
+func projectSettings(_ state: AppState) -> SettingsSnapshot {
+    let doc = state.doc
+    func row(_ profile: Profile) -> ProfileRow {
+        ProfileRow(id: profile.id, name: profile.name, icon: profile.icon,
+                   spaceTitles: doc.spaceOrder.filter { doc.spaces[$0]?.profile == profile.id }.map(state.displayTitle(of:)),
+                   isDefault: profile.id == .default)
+    }
+    let profiles = doc.profiles.values.sorted { a, b in
+        if (a.id == .default) != (b.id == .default) { return a.id == .default }
+        return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending || (a.name == b.name && a.id < b.id)
+    }
+    func destinationTitle(_ destination: LinkDestination) -> String {
+        switch destination {
+        case .space(let id): state.displayTitle(of: id)
+        case .littleArc: "Little Arc"
+        case .mostRecentSpace: "Most Recent Space"
+        }
+    }
+    let bindings = KeyBindings.resolve(overrides: doc.keyOverrides)
+    let shortcuts = ActionID.allCases.compactMap { action -> ShortcutRow? in
+        guard let binding = bindings[action] else { return nil }
+        return ShortcutRow(action: action, title: action.spec.title, menu: action.spec.menu, state: binding.state, source: binding.source,
+                           priority: binding.priority)
+    }
+    let active: AIProviderKind? = switch doc.settings.max.provider {
+    case .off: nil
+    case .claude: state.session.detectedAI.contains(.claude) ? .claude : nil
+    case .codex: state.session.detectedAI.contains(.codex) ? .codex : nil
+    case .auto: state.session.detectedAI.contains(.claude) ? .claude : (state.session.detectedAI.contains(.codex) ? .codex : nil)
+    }
+    return SettingsSnapshot(
+        pane: state.session.settingsPane, general: doc.settings.general,
+        profiles: profiles.map { ProfileSettingsRow(profile: row($0), settings: state.profileSettings($0.id)) },
+        links: doc.settings.links,
+        routes: doc.linkRoutes.map { LinkRouteRow(route: $0, destinationTitle: destinationTitle($0.destination)) },
+        spaces: doc.spaceOrder.compactMap { id in
+            doc.spaces[id].map { SpaceCandidate(id: id, title: state.displayTitle(of: id), icon: $0.icon, isCurrent: false) }
+        },
+        engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
+        shortcuts: shortcuts,
+        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active),
+        advanced: doc.settings.advanced
+    )
 }
 
 func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) -> WindowSnapshot? {
@@ -123,8 +164,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     }
     let content = ContentSnapshot(panes: contentPanes, split: splitID, orientation: orientation)
 
-    // URL pill.
-    var pill = URLPillSnapshot(text: nil, loading: false, canGoBack: false, canGoForward: false)
+    // URL pill. The profile badge shows a non-default profile, or incognito (F2).
+    var pill = URLPillSnapshot(text: nil, loading: false, canGoBack: false, canGoForward: false, profile: nil)
     var focusedTab: Tab?
     if let focusedPane, case .tab(let t)? = tree[focusedPane]?.body {
         focusedTab = t
@@ -133,9 +174,21 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward
         }
     }
+    if doc.kind == .incognito {
+        pill.profile = ProfileBadge(name: "Incognito", icon: nil, incognito: true)
+    } else if space.profile != .default, let profile = state.doc.profiles[space.profile] {
+        pill.profile = ProfileBadge(name: profile.name, icon: profile.icon, incognito: false)
+    }
+
+    // The window's own container (ephemeral kinds): its tabs as a section.
+    var scratch: SectionSnapshot?
+    if doc.kind != .standard, let root = tree.root(for: .scratch(id)) {
+        scratch = SectionSnapshot(root: root, kind: .scratch, collapsed: false, rows: rows(under: root, .scratch))
+    }
 
     // Overlay.
     var overlay: OverlaySnapshot?
+    var peekPage: PageID?
     switch session.overlay {
     case .commandBar(let openID, let target)?:
         var placement = CommandBarPlacement.centered, initialQuery = ""
@@ -143,12 +196,41 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             placement = overPill ? .overURLPill : .centered
             if case .tab(let t)? = tree[tab]?.body { initialQuery = t.url?.absoluteString ?? "" }
         }
-        overlay = .commandBar(CommandBarSnapshot(openID: openID, placement: placement, initialQuery: initialQuery,
-                                                 tabs: switchCandidates(state, tree: tree, space: space, focused: focusedPane),
-                                                 history: state.doc.history.map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
-                                                 actions: ActionID.allCases.filter { $0.spec.commandBar != nil }))
-    case .archive(let openID)?:
-        overlay = .archive(ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.doc.settings.autoArchive))
+        let engine = state.searchEngine(in: id)
+        let profile = space.profile
+        overlay = .commandBar(CommandBarSnapshot(
+            openID: openID, placement: placement, initialQuery: initialQuery,
+            tabs: switchCandidates(state, tree: tree, space: space, focused: focusedPane),
+            history: state.doc.history.filter { $0.profile == profile }.map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            actions: ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil },
+            spaces: state.doc.spaceOrder.compactMap { sid in
+                state.doc.spaces[sid].map { SpaceCandidate(id: sid, title: state.displayTitle(of: sid), icon: $0.icon, isCurrent: sid == space.id) }
+            },
+            engine: SearchEngineCandidate(id: engine.id, name: engine.name, keyword: engine.keyword),
+            siteSearch: SearchEngine.builtIn.filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
+            suggestions: session.suggestions?.results ?? [],
+            suggestedFor: session.suggestions?.query
+        ))
+    case .library(let openID, let page)?:
+        let profile = space.profile
+        overlay = .library(LibrarySnapshot(
+            openID: openID, page: page,
+            archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(profile).autoArchive) : nil,
+            downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == profile }.map {
+                DownloadRow(id: $0.id, filename: $0.filename, url: $0.url, path: $0.path, received: $0.received, total: $0.total,
+                            state: $0.state, startedAt: $0.startedAt)
+            } : [],
+            history: page == .history ? state.doc.history.filter { $0.profile == profile }.map {
+                HistoryRow(url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
+            } : []
+        ))
+    case .peek(let openID, let tab)?:
+        // The peeked tab lives in the window's own scratch tree, whatever the window's container is.
+        if case .tab(let t)? = state.session.scratch[id]?[tab]?.body {
+            let page: PageID? = t.url != nil && state.session.loaded.contains(tab) ? PageID(tab) : nil
+            peekPage = page
+            overlay = .peek(PeekSnapshot(openID: openID, tab: tabRow(tab, t, .scratch), page: page))
+        }
     case nil:
         break
     }
@@ -158,7 +240,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
     else if session.dialog != nil { focus = .spaceDialog }
-    else if case .archive? = session.overlay { focus = .none }
+    else if session.profileDialog != nil { focus = .profileDialog }
+    else if case .library? = session.overlay { focus = .none }
+    else if let peekPage { focus = .page(peekPage) }
     else if let focusedPane, case .page(let page)? = contentPanes.first(where: { $0.tab == focusedPane })?.content { focus = .page(page) }
     else { focus = .none }
 
@@ -167,23 +251,47 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     case .editSpace(let sid)?: state.doc.spaces[sid].map { .editSpace(id: sid, title: $0.title, icon: $0.icon, theme: $0.theme) }
     case nil: nil
     }
+    let profileDialog: ProfileDialogSnapshot? = switch session.profileDialog {
+    case .create?: .create
+    case .change(let sid)?: state.doc.spaces[sid].map { .change(space: sid, current: $0.profile, profiles: profileRows(state)) }
+    case .delete(let pid)?: profileRows(state).first { $0.id == pid }.map { .delete($0) }
+    case nil: nil
+    }
 
     return WindowSnapshot(
-        id: id, rev: state.session.rev, now: ctx.now, bounds: doc.bounds, theme: resolveTheme(space.theme),
+        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(space.theme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
-        urlPill: pill, favorites: favorites, space: spaceSnapshot, dock: dock, content: content,
-        renaming: session.renaming, dialog: dialog, overlay: overlay, focus: focus,
-        enabledActions: enabledActions(state, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
+        urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
+        renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, overlay: overlay, focus: focus,
+        enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
     )
+}
+
+/// Every profile as the dialogs list it: default first, then by name.
+private func profileRows(_ state: AppState) -> [ProfileRow] {
+    state.doc.profiles.values.sorted { a, b in
+        if (a.id == .default) != (b.id == .default) { return a.id == .default }
+        return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending || (a.name == b.name && a.id < b.id)
+    }.map { profile in
+        ProfileRow(id: profile.id, name: profile.name, icon: profile.icon,
+                   spaceTitles: state.doc.spaceOrder.filter { state.doc.spaces[$0]?.profile == profile.id }.map(state.displayTitle(of:)),
+                   isDefault: profile.id == .default)
+    }
 }
 
 /// The table actions that do something now. Everything is enabled except: actions on the focused tab when nothing
 /// is focused; page actions when the focused tab has no live page; Copy URL without a url; Go Back and Go Forward
 /// when the page cannot; Reset Tab when the url did not drift; Add Split View when nothing (or a Favorites tab, or
 /// a full split) is shown; Close this Split Pane without a split; Next and Previous Space at the ends of the dock;
-/// Restore Last Closed Tab and Clear Archive with an empty archive.
-private func enabledActions(_ state: AppState, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
-    var enabled = Set(ActionID.allCases)
+/// Restore Last Closed Tab and Clear Archive with an empty archive; every `.later` row; "Open Little Arc or Peek
+/// in…" when the window holds no Little Arc tab or Peek; in an ephemeral window, what needs a space's sidebar.
+private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
+    var enabled = Set(ActionID.allCases.filter { $0.spec.later == nil })
+    if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
+    if state.doc.windows[window]?.kind != .standard {
+        enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
+                          .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection])
+    }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(id) || tab.url == nil { enabled.subtract(pageActions) }

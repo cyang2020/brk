@@ -88,7 +88,7 @@ public final class ArchivePageView: NSView, NSSearchFieldDelegate {
     public override var isFlipped: Bool { true }
 
     public func render(_ archive: ArchiveSnapshot?, frames: WindowFrames, palette: Palette) {
-        guard let archive, let frame = frames.archive else {
+        guard let archive, let frame = frames.library?.page else {
             isHidden = true
             self.archive = nil
             return

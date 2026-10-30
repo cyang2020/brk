@@ -361,8 +361,8 @@ final class PolicySpecTests: XCTestCase {
         let d = Driver(file: jsonData(file))
         XCTAssertEqual(d.outcome, .restored(repairs: []))
         d.advance(now.since(d.now))
-        d.user(.archive(.open))
-        guard case .archive(let page)? = d.view.overlay else {
+        d.user(.library(.open(.archive)))
+        guard case .library(let library)? = d.view.overlay, let page = library.archive else {
             XCTFail("the archive did not open")
             return []
         }

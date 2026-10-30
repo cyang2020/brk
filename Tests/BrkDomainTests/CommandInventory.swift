@@ -7,15 +7,19 @@ import Foundation
 /// case does not compile until it has a name here, and the pinned counts in ReduceSpecTests then ask for a sample
 /// and a behavior test (found by scanning the test sources for a dispatch of that case).
 enum CommandInventory {
-    static let item = ItemID("ghost-item"), space = SpaceID("ghost-space")
+    static let item = ItemID("ghost-item"), space = SpaceID("ghost-space"), profile = ProfileID("ghost-profile")
+    static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route")
+    static let example = URL(string: "https://example.com/")!
 
+    /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
-        .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.dismiss),
-        .archive(.open), .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.clear),
+        .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.submitSearch(engine: SearchEngine.duckDuckGo.id, query: "x")),
+        .commandBar(.queryChanged("exa")), .commandBar(.dismiss),
+        .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.clear),
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
         .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
-        .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL),
+        .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
@@ -25,7 +29,18 @@ enum CommandInventory {
         .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
-        .settings(.autoArchive(.sevenDays)),
+        .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
+        .settings(.autoArchive(.sevenDays)), .settings(.general(.warnBeforeQuitting(true))), .settings(.profile(.default, .searchSuggestions(false))),
+        .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
+        .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
+        .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
+        .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
+        .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
+        .peek(.open(example)), .peek(.close),
+        .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
+        .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
+        .later(.boosts),
+        .window(.close),
     ]
 
     static let events: [SystemEvent] = [
@@ -33,10 +48,13 @@ enum CommandInventory {
         .page(PageID(item), .faviconChanged(nil)), .page(PageID(item), .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)),
         .page(PageID(item), .loadFailed(code: -1, description: "x", url: "x")), .page(PageID(item), .rendererGone),
         .page(PageID(item), .closedByPage), .page(PageID(item), .gainedFocus),
-        .page(PageID(item), .openRequested(URL(string: "https://example.com/")!, .foregroundTab)), .page(PageID(item), .closed),
+        .page(PageID(item), .openRequested(URL(string: "https://example.com/")!, .foregroundTab)),
+        .page(PageID(item), .download(download, .started(url: example, filename: "x.zip", path: nil))), .page(PageID(item), .closed),
         .clockTick,
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
+        .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
+        .aiResult(AIRequestID("ghost"), .unavailable),
     ]
 
     static func area(_ command: Command) -> String {
@@ -51,13 +69,25 @@ enum CommandInventory {
         case .sidebar: "sidebar"
         case .app: "app"
         case .settings: "settings"
+        case .library: "library"
+        case .window: "window"
+        case .peek: "peek"
+        case .profile: "profile"
+        case .later: "later"
         }
     }
 
     static func name(_ command: Command) -> String {
         let leaf: String = switch command {
-        case .commandBar(let c): switch c { case .open: "open"; case .submit: "submit"; case .dismiss: "dismiss" }
-        case .archive(let c): switch c { case .open: "open"; case .restore: "restore"; case .restoreLast: "restoreLast"; case .clear: "clear" }
+        case .commandBar(let c):
+            switch c {
+            case .open: "open"
+            case .submit: "submit"
+            case .submitSearch: "submitSearch"
+            case .queryChanged: "queryChanged"
+            case .dismiss: "dismiss"
+            }
+        case .archive(let c): switch c { case .restore: "restore"; case .restoreLast: "restoreLast"; case .clear: "clear" }
         case .tab(let c):
             switch c {
             case .focus: "focus"
@@ -116,8 +146,52 @@ enum CommandInventory {
             case .minimize: "minimize"
             case .toggleFullScreen: "toggleFullScreen"
             case .exit: "exit"
+            case .showAbout: "showAbout"
+            case .setAsDefaultBrowser: "setAsDefaultBrowser"
+            case .export: "export"
+            case .revealDataDirectory: "revealDataDirectory"
             }
-        case .settings(let c): switch c { case .autoArchive: "autoArchive" }
+        case .settings(let c):
+            switch c {
+            case .autoArchive: "autoArchive"
+            case .general: "general"
+            case .profile: "profile"
+            case .links: "links"
+            case .shortcuts: "shortcuts"
+            case .max: "max"
+            case .advanced: "advanced"
+            case .openPane: "openPane"
+            case .closeWindow: "closeWindow"
+            }
+        case .library(let c):
+            switch c {
+            case .open: "open"
+            case .close: "close"
+            case .cancelDownload: "cancelDownload"
+            case .revealDownload: "revealDownload"
+            case .removeDownload: "removeDownload"
+            case .clearDownloads: "clearDownloads"
+            case .removeHistory: "removeHistory"
+            case .clearHistory: "clearHistory"
+            }
+        case .window(let c):
+            switch c {
+            case .new: "new"
+            case .newIncognito: "newIncognito"
+            case .newLittle: "newLittle"
+            case .close: "close"
+            case .openIn: "openIn"
+            }
+        case .peek(let c): switch c { case .open: "open"; case .close: "close" }
+        case .profile(let c):
+            switch c {
+            case .create: "create"
+            case .rename: "rename"
+            case .delete: "delete"
+            case .assign: "assign"
+            case .openDialog: "openDialog"
+            }
+        case .later(let feature): feature.rawValue
         }
         return "\(area(command)).\(leaf)"
     }
@@ -135,6 +209,7 @@ enum CommandInventory {
             case .closedByPage: "page.closedByPage"
             case .gainedFocus: "page.gainedFocus"
             case .openRequested: "page.openRequested"
+            case .download: "page.download"
             case .closed: "page.closed"
             }
         case .clockTick: "clockTick"
@@ -144,20 +219,27 @@ enum CommandInventory {
             case .modifiersChanged: "window.modifiersChanged"
             case .closed: "window.closed"
             }
+        case .externalURL: "externalURL"
+        case .suggestions: "suggestions"
+        case .aiProvidersDetected: "aiProvidersDetected"
+        case .aiResult: "aiResult"
         }
     }
 
     /// What a dispatch of the case looks like in a test: `.tab(.focus(` for commands, the event's own case for page
-    /// and window events (tests send those through `d.page(tab, ...)` and `.window(window, ...)`).
+    /// and window events (tests send those through `d.page(tab, ...)` and `.window(window, ...)`), the bare case
+    /// name for the app-wide events.
     static func pattern(for name: String) -> String {
         let parts = name.split(separator: ".").map(String.init)
         switch name {
         case "page.closed": return #"page\([^\n]*\.closed\)"#
         case "window.closed": return #"\.window\([^\n]*\.closed\)"#
-        case "clockTick": return #"\.clockTick\b"#
+        case "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
         default:
+            if parts.count == 1 { return #"\."# + parts[0] + #"\b"# }
+            if name.hasPrefix("later.") { return #"\.later\(\s*\."# + parts[1] + #"\b"# }
             if name.hasPrefix("page."), events.contains(where: { Self.name($0) == name }) { return #"\."# + parts[1] + #"\b"# }
-            if name.hasPrefix("window.") { return #"\."# + parts[1] + #"\("# }
+            if name.hasPrefix("window.") && events.contains(where: { Self.name($0) == name }) { return #"\."# + parts[1] + #"\("# }
             return #"\."# + parts[0] + #"\(\s*\."# + parts[1] + #"\b"#
         }
     }

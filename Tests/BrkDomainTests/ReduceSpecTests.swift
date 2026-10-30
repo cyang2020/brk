@@ -40,7 +40,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.content.panes, [Pane(tab: b.id, content: .page(PageID(b.id)), fraction: 1, focused: true)])
         XCTAssertEqual(d.view.focus, .page(PageID(b.id)))
         XCTAssertEqual(d.loadedIDs, [a, b.id])
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(b.id) }, PageSpec(id: PageID(b.id), initialURL: url("http://127.0.0.1:9/b"), profile: .default))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(b.id) }, PageSpec(id: PageID(b.id), initialURL: url("http://127.0.0.1:9/b"), context: .profile(.default)))
         XCTAssertTrue(t.docChanged)
         XCTAssertEqual(t.effects, [], "the engine creates the page from PageSpec.initialURL")
     }
@@ -99,11 +99,11 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.archive(.restoreLast))
         XCTAssertNil(d.view.overlay)
         XCTAssertTrue(d.todayIDs.contains(t))
-        d.user(.archive(.open))
+        d.user(.library(.open(.archive)))
         d.user(.settings(.autoArchive(.oneHour)))
-        guard case .archive? = d.view.overlay else { return XCTFail("archive closed") }
+        guard case .library? = d.view.overlay else { return XCTFail("archive closed") }
         d.user(.archive(.clear))
-        guard case .archive? = d.view.overlay else { return XCTFail("archive closed") }
+        guard case .library? = d.view.overlay else { return XCTFail("archive closed") }
     }
 
     /// .commandBar(.open) edit-current is centered while the sidebar is hidden, and new-tab when nothing is shown
@@ -158,8 +158,8 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.sidebar(.toggle))
         XCTAssertNil(d.view.overlay)
         d.user(.commandBar(.open(.newTab)))
-        d.user(.archive(.open))
-        guard case .archive? = d.view.overlay else { return XCTFail("the archive replaces the bar") }
+        d.user(.library(.open(.archive)))
+        guard case .library? = d.view.overlay else { return XCTFail("the archive replaces the bar") }
     }
 
     /// .tab(.focus) on the already focused tab returns the same state object (no rev bump, docChanged false)
@@ -538,7 +538,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(effects(.page(.stop(.focused))), [.page(page, .stop)])
         XCTAssertEqual(effects(.page(.zoom(.zoomIn))), [.page(page, .zoom(.zoomIn))])
         XCTAssertEqual(effects(.page(.toggleDevTools)), [.page(page, .toggleDevTools)])
-        XCTAssertEqual(effects(.page(.copyURL)), [.copyToPasteboard("http://127.0.0.1:9/a")])
+        XCTAssertEqual(effects(.page(.copyURL(.plain))), [.copyToPasteboard("http://127.0.0.1:9/a")])
         XCTAssertEqual(effects(.app(.toggleFullScreen)), [.window(d.window, .toggleFullScreen)])
         XCTAssertEqual(effects(.app(.minimize)), [.window(d.window, .miniaturize)])
         XCTAssertEqual(effects(.app(.quit)), [.app(.quit)])
@@ -1178,8 +1178,8 @@ final class ReduceSpecTests: XCTestCase {
         d.open("example.com")
         d.user(.settings(.autoArchive(.oneHour)))
         XCTAssertEqual(d.archive(), [])
-        d.user(.archive(.open))
-        guard case .archive(let page)? = d.view.overlay else { return XCTFail("no archive") }
+        d.user(.library(.open(.archive)))
+        guard case .library(let library)? = d.view.overlay, let page = library.archive else { return XCTFail("no archive") }
         XCTAssertEqual(page.threshold, .oneHour)
         assertUnchanged(d.state, d.user(.settings(.autoArchive(.oneHour))))
         d.advance(hour)
@@ -1204,21 +1204,23 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.tab(.clearToday)))
     }
 
-    /// .archive(.open) opens the archive in the content card and is idempotent; .archive(.clear) empties it
+    /// .library(.open(.archive)) opens the archive in the content card and is idempotent; .archive(.clear) empties it
     func test_archiveOpenOpensTheArchiveInTheContentCardAndIsIdempotentArchiveClearEmpties() throws {
         let d = Driver()
         let b = d.open("example.com")
         d.user(.tab(.close(.item(b))))
         XCTAssertTrue(d.view.enabledActions.contains(.clearArchive))
-        d.user(.archive(.open))
-        guard case .archive(let page)? = d.view.overlay else { return XCTFail("no archive") }
+        d.user(.library(.open(.archive)))
+        guard case .library(let library)? = d.view.overlay, let page = library.archive else { return XCTFail("no archive") }
         XCTAssertEqual(page.groups.map(\.bucket), [.today])
         XCTAssertEqual(page.groups.first?.entries.map(\.url), [url("https://example.com/")])
         XCTAssertEqual(d.view.focus, FocusTarget.none, "the archive page, not the page under it")
-        assertUnchanged(d.state, d.user(.archive(.open)))
+        assertUnchanged(d.state, d.user(.library(.open(.archive))))
         let t = d.user(.archive(.clear))
         XCTAssertTrue(t.docChanged)
-        XCTAssertEqual(d.view.overlay, .archive(ArchiveSnapshot(openID: page.openID, groups: [], threshold: .twelveHours)))
+        XCTAssertEqual(d.view.overlay, .library(LibrarySnapshot(openID: page.openID, page: .archive,
+                                                                archive: ArchiveSnapshot(openID: page.openID, groups: [], threshold: .twelveHours),
+                                                                downloads: [], history: [])))
         XCTAssertFalse(d.view.enabledActions.contains(.clearArchive))
         assertUnchanged(d.state, d.user(.archive(.clear)))
     }
@@ -1234,7 +1236,7 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.item(.move(a, to: .into(parent: folder, index: 0))))
         let b = d.open("b.example.com")
         d.user(.item(.deleteFolder(folder)))
-        d.user(.archive(.open))
+        d.user(.library(.open(.archive)))
         let entry = try XCTUnwrap(d.archive().first)
         d.user(.archive(.restore(entry.id)))
         // Back at the end of its space's Pinned (the folder is gone), focused, with its pinned identity.
@@ -1243,7 +1245,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.row(a)?.url, start)
         XCTAssertEqual(d.row(a)?.canReset, false)
         XCTAssertEqual(d.row(a)?.status, .current)
-        guard case .archive? = d.view.overlay else { return XCTFail("the archive stays open") }
+        guard case .library? = d.view.overlay else { return XCTFail("the archive stays open") }
         XCTAssertEqual(d.archive(), [])
         // A tab whose space was deleted comes back to the current space's Today.
         let gone = d.newSpace("Gone", color: ThemePresets.brand[0])
@@ -1487,8 +1489,8 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(tab.title, "127.0.0.1:9/a")
         XCTAssertEqual(v.sidebar, SidebarSnapshot(visible: true, width: Metrics.sidebar.defaultWidth.value, peek: false))
         XCTAssertEqual(v.content.panes, [Pane(tab: tab.id, content: .page(PageID(tab.id)), fraction: 1, focused: true)])
-        XCTAssertEqual(d.snapshot.pages, [PageSpec(id: PageID(tab.id), initialURL: start, profile: .default)])
-        XCTAssertEqual(d.saved["version"] as? Int, 1)
+        XCTAssertEqual(d.snapshot.pages, [PageSpec(id: PageID(tab.id), initialURL: start, context: .profile(.default))])
+        XCTAssertEqual(d.saved["version"] as? Int, 2)
     }
 
     /// StateCodec.restore repairs an orphan child reference and reports it in RestoreOutcome.restored(repairs:)
@@ -1580,13 +1582,13 @@ final class ReduceSpecTests: XCTestCase {
         let d = Driver()
         let file = jsonObject(d.savedFile)
         var future = file
-        future["version"] = 2
+        future["version"] = 3
         var noSpaces = file
         var doc = file["doc"] as! [String: Any]
         doc["spaces"] = [String: Any]()
         noSpaces["doc"] = doc
         let cases: [(Data, CodecError?)] = [
-            (jsonData(future), .unknownVersion(2)), (jsonData(noSpaces), .noSpaces), (Data(#"{"version":1"#.utf8), nil), (Data("null".utf8), nil),
+            (jsonData(future), .unknownVersion(3)), (jsonData(noSpaces), .noSpaces), (Data(#"{"version":1"#.utf8), nil), (Data("null".utf8), nil),
         ]
         for (data, expected) in cases {
             let r = Driver(file: data)
@@ -1715,8 +1717,8 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 52, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 14, "a SystemEvent case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 86, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.events.count, 19, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
             .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }
@@ -1789,7 +1791,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.paneIDs, [opener])
         XCTAssertEqual(d.view.focus, .page(PageID(opener)))
         // The engine is told to create its page, with its url.
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(bg) }, PageSpec(id: PageID(bg), initialURL: url("http://127.0.0.1:9/bg"), profile: .default))
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(bg) }, PageSpec(id: PageID(bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default)))
     }
 
     /// a foreground .openRequested still focuses the new tab and loads it
@@ -1849,20 +1851,20 @@ final class ReduceSpecTests: XCTestCase {
     func test_hideTheSidebarOpenTheArchivePeekTheArchiveStaysOpenAndTheSidebarFloatsOver() throws {
         let d = Driver()
         d.user(.sidebar(.toggle))
-        d.user(.archive(.open))
-        guard case .archive? = d.view.overlay else { return XCTFail("no archive") }
+        d.user(.library(.open(.archive)))
+        guard case .library? = d.view.overlay else { return XCTFail("no archive") }
         d.user(.sidebar(.peek(true)))
         XCTAssertTrue(d.view.sidebar.peek)
-        guard case .archive? = d.view.overlay else { return XCTFail("the peek closed the archive") }
+        guard case .library? = d.view.overlay else { return XCTFail("the peek closed the archive") }
     }
 
     /// dragging the resize handle while the archive is open keeps it open
     func test_draggingTheResizeHandleWhileTheArchiveIsOpenKeepsItOpen() throws {
         let d = Driver()
-        d.user(.archive(.open))
+        d.user(.library(.open(.archive)))
         d.user(.sidebar(.resize(width: 300)))
         XCTAssertEqual(d.view.sidebar.width, 300)
-        guard case .archive? = d.view.overlay else { return XCTFail("the resize closed the archive") }
+        guard case .library? = d.view.overlay else { return XCTFail("the resize closed the archive") }
     }
 
     /// a resize still keeps an open command bar, while toggling the sidebar closes it

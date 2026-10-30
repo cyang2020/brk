@@ -8,8 +8,9 @@ import Foundation
 ///
 /// 1. (Split membership, pane count, split focus and `pinnedURL` are kept by `SidebarTree` itself and need no
 ///    repair at run time; `SidebarTree.restored` repairs them in a file.)
-/// 2. Every window's space exists (else the first space); `spaceOrder` lists exactly the spaces; every saved window
-///    has a session and no session outlives its window.
+/// 2. Every window's space exists (else the first space); `spaceOrder` lists exactly the spaces; every window has
+///    a session and a scratch tree with its `SectionRole.scratch` root, and neither outlives its window; the default
+///    profile exists and every profile has a settings record and a Favorites root.
 /// 3. `activeBySpace` entries: an entry for a missing space is deleted; one naming a split pane names its split;
 ///    one naming something the space cannot show (gone, not a tab or split, under another space) is repaired to the
 ///    space's most recent loaded item, or deleted when there is none.
@@ -20,6 +21,7 @@ import Foundation
 @discardableResult
 func normalize(_ state: inout AppState) -> [String] {
     var repairs: [String] = []
+    repairProfiles(&state, &repairs)
     repairSpaces(&state, &repairs)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
@@ -42,14 +44,41 @@ private func repairSpaces(_ state: inout AppState, _ repairs: inout [String]) {
             state.doc.windows[id]!.space = first
         }
         if state.session.windows[id] == nil {
-            state.session.windows[id] = WindowSession(contentSize: Metrics.window.defaultSize.value, overlay: nil, overlayOpens: 0,
-                                                      peek: false, renaming: nil, dialog: nil, recentCycle: nil, heldModifiers: [],
-                                                      keyRouting: .empty)
+            state.session.windows[id] = .fresh(contentSize: Metrics.window.defaultSize.value)
+        }
+        if state.session.scratch[id] == nil {
+            // The window's own container (Peek's tab in a standard window; every tab of an ephemeral one). Ids come
+            // from the window id, so the repair is deterministic without a `Context`.
+            var tree = SidebarTree(scope: .window(id))
+            tree.makeRoot(ItemID("scratch-\(id.rawValue)"), .scratch(id), createdAt: Instant(milliseconds: 0))
+            state.session.scratch[id] = tree
         }
     }
     for id in state.session.windows.keys where state.doc.windows[id] == nil {
         state.session.windows[id] = nil
+    }
+    for id in state.session.scratch.keys where state.doc.windows[id] == nil {
         state.session.scratch[id] = nil
+    }
+}
+
+/// The default profile always exists; every profile a space names exists; every profile has a settings record and
+/// a Favorites root (the codec repairs roots in a file; a profile created at run time gets one from its rule, so
+/// this only guards against a profile named by a space but missing from `profiles`).
+private func repairProfiles(_ state: inout AppState, _ repairs: inout [String]) {
+    if state.doc.profiles[.default] == nil {
+        repairs.append("added the default profile")
+        state.doc.profiles[.default] = .default
+    }
+    for space in state.doc.spaces.values where state.doc.profiles[space.profile] == nil {
+        repairs.append("space \(space.id) named a missing profile \(space.profile); profile added")
+        state.doc.profiles[space.profile] = Profile(id: space.profile, name: space.profile.rawValue, icon: nil)
+    }
+    for id in state.doc.profiles.keys where state.doc.settings.profiles[id] == nil {
+        state.doc.settings.profiles[id] = .default
+    }
+    for id in state.doc.settings.profiles.keys where state.doc.profiles[id] == nil {
+        state.doc.settings.profiles[id] = nil
     }
 }
 
@@ -74,11 +103,12 @@ private func repairShownItems(_ state: inout AppState, _ repairs: inout [String]
     }
 }
 
-/// A tab (not a pane) or a split, under the space's own sections or Favorites.
+/// A tab (not a pane) or a split, under the space's own sections or Favorites; in a window's own container
+/// (an ephemeral window's tree), any of its tabs.
 private func showable(_ item: ItemID, in space: SpaceID, _ tree: SidebarTree) -> Bool {
     guard let node = tree[item], node.kind == .tab || node.kind == .split, tree.splitContaining(item) == nil,
           let role = tree.role(of: item) else { return false }
-    return role.space == space || role.kind == .favorites
+    return role.space == space || role.kind == .favorites || role.kind == .scratch
 }
 
 private func repairSessionTargets(_ state: inout AppState) {
@@ -90,10 +120,18 @@ private func repairSessionTargets(_ state: inout AppState) {
         switch session.overlay {
         case .commandBar(_, .navigate(let tab, _)), .commandBar(_, .fillPane(let tab)):
             if tree?[tab]?.kind != .tab { session.overlay = nil }
-        case .commandBar(_, .newTab), .archive, nil:
+        case .peek(_, let tab):
+            if state.session.scratch[id]?[tab]?.kind != .tab { session.overlay = nil }
+        case .commandBar(_, .newTab), .library, nil:
             break
         }
+        if case .commandBar? = session.overlay {} else if session.suggestions != nil { session.suggestions = nil }
         if case .editSpace(let space)? = session.dialog, state.doc.spaces[space] == nil { session.dialog = nil }
+        switch session.profileDialog {
+        case .change(let space)? where state.doc.spaces[space] == nil: session.profileDialog = nil
+        case .delete(let profile)? where state.doc.profiles[profile] == nil: session.profileDialog = nil
+        default: break
+        }
         if let cycle = session.recentCycle {
             let order = cycle.order.filter { tree?[$0] != nil }
             if order.count < 2 { session.recentCycle = nil }

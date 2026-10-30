@@ -27,12 +27,15 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     /// Drag handles in the gaps between cards.
     public var dividers: [CGRect]
     public var commandBar: CGRect?
-    /// The archive page draws inside the content area, like Arc's archive in the content card.
-    public var archive: CGRect?
+    /// The Library host draws inside the content area (the archive is one of its pages), like Arc's archive in the
+    /// content card. Nil unless the Library is open.
+    public var library: LibraryFrames?
+    /// The Peek card over the content area (Metrics.peek), nil unless a Peek is open.
+    public var peek: CGRect?
 
     public init(contentSize: CGSize, sidebar: SidebarFrames?, sidebarFloats: Bool, resizeHandle: CGRect?,
                 revealStrip: CGRect?, contentArea: CGRect, cards: [CardFrame], dividers: [CGRect],
-                commandBar: CGRect?, archive: CGRect?) {
+                commandBar: CGRect?, library: LibraryFrames?, peek: CGRect?) {
         self.contentSize = contentSize
         self.sidebar = sidebar
         self.sidebarFloats = sidebarFloats
@@ -42,7 +45,25 @@ public struct WindowFrames: Sendable, Equatable, Codable {
         self.cards = cards
         self.dividers = dividers
         self.commandBar = commandBar
-        self.archive = archive
+        self.library = library
+        self.peek = peek
+    }
+}
+
+/// The Library host: the whole content area, a page strip along the top (one cell per `LibraryPage`, in
+/// `LibraryPage.allCases` order) and the page area under it, which the current page's view fills (the archive
+/// page, the downloads list, ...). Owner: F5 (SidebarLayout-style math in BrkLayout/LibraryLayout.swift).
+public struct LibraryFrames: Sendable, Equatable, Codable {
+    public var frame: CGRect
+    public var strip: CGRect
+    public var pageCells: [LibraryPage: CGRect]
+    public var page: CGRect
+
+    public init(frame: CGRect, strip: CGRect, pageCells: [LibraryPage: CGRect], page: CGRect) {
+        self.frame = frame
+        self.strip = strip
+        self.pageCells = pageCells
+        self.page = page
     }
 }
 
@@ -107,6 +128,17 @@ public enum ViewID: Hashable, Sendable, Codable {
     case archive, archiveGroup(ArchiveBucket), archiveEntry(ArchiveID), archiveRestore(ArchiveID), archiveClear, archiveThreshold
     case spaceDialog
     case themeBackground
+    // Wave 2
+    /// The Library host, its page strip cells, its close button; the Downloads and History rows (F5).
+    case library, libraryPage(LibraryPage), libraryClose, downloadEntry(DownloadID), historyEntry(Int)
+    /// The Peek card, its close and "Open in" buttons (F3).
+    case peek, peekClose, peekOpenIn
+    /// The scratch section of an ephemeral window's sidebar and the Little Arc hint strip (F3).
+    case littleHint
+    /// The profile badge in the URL pill and the profile dialog (F2).
+    case profileBadge, profileDialog
+    /// The settings window: its pane toolbar buttons and one id per field, by the setting's name (F1).
+    case settingsWindow, settingsPane(SettingsPane), settingsField(String)
 
     public var identifier: String {
         switch self {
@@ -141,6 +173,20 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .archiveThreshold: "archive-threshold"
         case .spaceDialog: "space-dialog"
         case .themeBackground: "theme-background"
+        case .library: "library"
+        case .libraryPage(let page): "library-page-\(page.rawValue)"
+        case .libraryClose: "library-close"
+        case .downloadEntry(let id): "download-\(id)"
+        case .historyEntry(let i): "history-\(i)"
+        case .peek: "peek"
+        case .peekClose: "peek-close"
+        case .peekOpenIn: "peek-open-in"
+        case .littleHint: "little-hint"
+        case .profileBadge: "profile-badge"
+        case .profileDialog: "profile-dialog"
+        case .settingsWindow: "settings"
+        case .settingsPane(let pane): "settings-pane-\(pane.rawValue)"
+        case .settingsField(let name): "settings-field-\(name)"
         }
     }
 }
@@ -171,9 +217,14 @@ extension WindowFrames {
         case .card(let i): return i < cards.count ? cards[i].rect : nil
         case .divider(let i): return i < dividers.count ? dividers[i] : nil
         case .commandBar: return commandBar
-        case .archive: return archive
+        case .library: return library?.frame
+        case .libraryPage(let page): return library?.pageCells[page]
+        case .archive: return library?.page   // the archive page fills the Library's page area while it is the open page
+        case .peek: return peek
         case .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
-             .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground:
+             .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
+             .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
+             .settingsField:
             return nil   // view-owned: reported by `actual` only
         }
     }

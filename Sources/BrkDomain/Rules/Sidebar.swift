@@ -259,6 +259,13 @@ extension Work {
         case .hideOthers: effects.append(.app(.hideOthers))
         case .minimize: effects.append(.window(window, .miniaturize))
         case .toggleFullScreen: effects.append(.window(window, .toggleFullScreen))
+        case .showAbout: effects.append(.app(.showAbout))
+        case .setAsDefaultBrowser: effects.append(.app(.registerAsDefaultBrowser))
+        case .revealDataDirectory: effects.append(.app(.revealDataDirectory))
+        case .export(let subject):
+            // Share-by-link replaced by a file (user decision): the document is built here from state, so the
+            // writer (BrkApp/ShareExport.swift) never reads the tree.
+            if let document = exportDocument(for: subject, in: window) { effects.append(.export(document)) }
         case .exit:
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,
             // else cancel a rename or dialog, else leave full screen (the window decides whether it is in one).
@@ -291,10 +298,56 @@ extension Work {
             let missedRelease = held == was && held.contains(.control)
             if controlChanged || missedRelease { commitCycle(in: window) }
         case .closed:
-            // Keep the WindowDoc so the next launch restores it (v1 has one window). Quitting after the last window
-            // closes is AppKit's applicationShouldTerminateAfterLastWindowClosed, which reaches the same ordered quit
-            // as Cmd+Q; the reducer does not emit a second quit.
-            break
+            // A standard window keeps its WindowDoc when it is the last one (the next launch restores it; quitting
+            // after the last window closes is AppKit's applicationShouldTerminateAfterLastWindowClosed) and is
+            // removed otherwise; an ephemeral window goes with its tree (`WindowCommand.close` does the archiving).
+            guard let doc = state.doc.windows[window] else { return }
+            switch doc.kind {
+            case .standard:
+                if state.doc.windows.values.contains(where: { $0.kind == .standard && $0.id != window }) { removeWindow(window) }
+            case .little, .incognito:
+                windows(.close, in: window)
+            }
+        }
+    }
+
+    /// "Share…": a space (its Pinned and Today with folders), the focused tab, or chosen items, as an export
+    /// document. Nil when there is nothing to export.
+    func exportDocument(for subject: ExportSubject, in window: WindowID) -> ExportDocument? {
+        let tree = state.doc.tree
+        func entries(under parent: ItemID) -> [ExportEntry] {
+            (tree[parent]?.children ?? []).flatMap { child -> [ExportEntry] in
+                guard let item = tree[child] else { return [] }
+                switch item.body {
+                case .tab(let t): return t.url.map { [.link(title: t.displayTitle, url: $0)] } ?? []
+                case .folder(let f): return [.folder(title: f.title, children: entries(under: child))]
+                case .split: return entries(under: child)
+                case .section: return []
+                }
+            }
+        }
+        switch subject {
+        case .space(let ref):
+            let id: SpaceID? = switch ref {
+            case .current: state.doc.windows[window]?.space
+            case .space(let s): s
+            }
+            guard let id, let space = state.doc.spaces[id] else { return nil }
+            return ExportDocument(title: state.displayTitle(of: id), entries: entries(under: space.pinnedRoot) + entries(under: space.todayRoot))
+        case .focusedTab:
+            guard let tab = state.resolveTab(.focused, in: window), let t = state.tab(tab), let url = t.url else { return nil }
+            return ExportDocument(title: t.displayTitle, entries: [.link(title: t.displayTitle, url: url)])
+        case .items(let ids):
+            let list = ids.flatMap { id -> [ExportEntry] in
+                guard let item = tree[id] else { return [] }
+                switch item.body {
+                case .tab(let t): return t.url.map { [.link(title: t.displayTitle, url: $0)] } ?? []
+                case .folder(let f): return [.folder(title: f.title, children: entries(under: id))]
+                case .split: return entries(under: id)
+                case .section: return []
+                }
+            }
+            return list.isEmpty ? nil : ExportDocument(title: "Tabs", entries: list)
         }
     }
 }

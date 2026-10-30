@@ -15,12 +15,17 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
     public var windows: [WindowID: WindowSnapshot]
     /// Every page that should be live, app-wide. Input to `WebEngine.reconcile`.
     public var pages: [PageSpec]
+    /// The settings values and the settings window's pane (nil while closed). App-wide, like the window. F1.
+    public var settings: SettingsSnapshot
 }
 
 public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var id: WindowID
     public var rev: Int
     public var now: Instant
+    /// Standard, incognito or Little Arc: picks the host (`WindowController` or `LittleWindowController`) and what
+    /// the sidebar shows (`scratch` for the ephemeral kinds).
+    public var kind: WindowKind
     /// Saved outer frame (screen coordinates) to restore; nil for a new window.
     public var bounds: CGRect?
     /// The current space's theme. A change crossfades (Metrics.motion.themeCrossfade).
@@ -29,11 +34,15 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var urlPill: URLPillSnapshot
     public var favorites: FavoritesSnapshot
     public var space: SpaceSnapshot
+    /// The window's own container (`SectionRole.scratch(window)`): an incognito window's tabs, a Little Arc's one
+    /// tab. Nil for a standard window (its scratch tree holds only a Peek's tab, shown through `overlay`).
+    public var scratch: SectionSnapshot?
     /// Dock row, in space order.
     public var dock: [DockItem]
     public var content: ContentSnapshot
     public var renaming: ItemID?
     public var dialog: SpaceDialogSnapshot?
+    public var profileDialog: ProfileDialogSnapshot?
     public var overlay: OverlaySnapshot?
     /// Who should have keyboard focus. Applied by the window controller only when it changes.
     public var focus: FocusTarget
@@ -54,6 +63,15 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var loading: Bool
     public var canGoBack: Bool
     public var canGoForward: Bool
+    /// Arc's `ProfileIndicatorView`: shown when the space's profile is not the default one, or the window is
+    /// incognito. F2.
+    public var profile: ProfileBadge?
+}
+
+public struct ProfileBadge: Sendable, Equatable, Codable {
+    public var name: String
+    public var icon: CustomIcon?
+    public var incognito: Bool
 }
 
 public struct FavoritesSnapshot: Sendable, Equatable, Codable {
@@ -179,9 +197,62 @@ public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
     case editSpace(id: SpaceID, title: String, icon: SpaceIcon, theme: SpaceTheme)
 }
 
+/// Arc: `ProfilesUI`. `profiles` lists every profile for the change dialog; `inUse` says which cannot be deleted.
+public enum ProfileDialogSnapshot: Sendable, Equatable, Codable {
+    case create
+    case change(space: SpaceID, current: ProfileID, profiles: [ProfileRow])
+    case delete(ProfileRow)
+}
+
+public struct ProfileRow: Sendable, Equatable, Codable {
+    public var id: ProfileID
+    public var name: String
+    public var icon: CustomIcon?
+    /// Titles of the spaces on this profile (a profile with spaces cannot be deleted).
+    public var spaceTitles: [String]
+    public var isDefault: Bool
+}
+
 public enum OverlaySnapshot: Sendable, Equatable, Codable {
     case commandBar(CommandBarSnapshot)
-    case archive(ArchiveSnapshot)
+    case library(LibrarySnapshot)
+    case peek(PeekSnapshot)
+}
+
+/// The Library host and its current page. Only the current page's data is projected; the archive keeps its own
+/// snapshot type (the archive page view is unchanged). Pages of later waves are empty placeholders.
+public struct LibrarySnapshot: Sendable, Equatable, Codable {
+    public var openID: Int
+    public var page: LibraryPage
+    public var archive: ArchiveSnapshot?
+    /// Newest first, the current space's profile only. F5.
+    public var downloads: [DownloadRow]
+    /// Newest first, the current space's profile only. F5.
+    public var history: [HistoryRow]
+}
+
+public struct DownloadRow: Sendable, Equatable, Codable {
+    public var id: DownloadID
+    public var filename: String
+    public var url: URL
+    public var path: String?
+    public var received: Int64
+    public var total: Int64?
+    public var state: DownloadState
+    public var startedAt: Instant
+}
+
+public struct HistoryRow: Sendable, Equatable, Codable {
+    public var url: URL
+    public var title: String
+    public var visitedAt: Instant
+}
+
+/// Peek: the held scratch tab and its page (nil until the page exists), drawn in `WindowFrames.peek`.
+public struct PeekSnapshot: Sendable, Equatable, Codable {
+    public var openID: Int
+    public var tab: TabRow
+    public var page: PageID?
 }
 
 public struct CommandBarSnapshot: Sendable, Equatable, Codable {
@@ -192,8 +263,31 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var initialQuery: String
     public var tabs: [SwitchCandidate]
     public var history: [HistoryCandidate]
-    /// Actions listed in the bar, in table order (`ActionSpec.commandBar != nil`).
+    /// Actions listed in the bar, in table order: every action with a `CommandBarListing` whose command is not
+    /// `.later`. F4's type-travel index ranks them by title and triggers.
     public var actions: [ActionID]
+    /// Spaces, for "focus space" and "move to space" results (Arc: `TypeTravelCandidate.focusSpace/moveToSpace`). F4.
+    public var spaces: [SpaceCandidate]
+    /// The profile's default engine (the "Search" row) and the engines site search knows (Tab or Space). F4.
+    public var engine: SearchEngineCandidate
+    public var siteSearch: [SearchEngineCandidate]
+    /// The engine's suggestions for the bar's last answered `queryChanged`, and the query they answer; the view
+    /// drops them when its text has moved on. Empty until they arrive. F4.
+    public var suggestions: [String]
+    public var suggestedFor: String?
+}
+
+public struct SpaceCandidate: Sendable, Equatable, Codable {
+    public var id: SpaceID
+    public var title: String
+    public var icon: SpaceIcon
+    public var isCurrent: Bool
+}
+
+public struct SearchEngineCandidate: Sendable, Equatable, Codable {
+    public var id: SearchEngineID
+    public var name: String
+    public var keyword: String
 }
 
 public enum CommandBarPlacement: String, Sendable, Equatable, Codable {
@@ -251,7 +345,58 @@ public enum FocusTarget: Sendable, Equatable, Codable {
     case commandBarInput
     case renameField(ItemID)
     case spaceDialog
+    case profileDialog
     /// A native view in the sidebar (e.g. after Ctrl+Space later).
     case sidebar
     case none
+}
+
+// MARK: - Settings
+
+/// What the settings window renders and the control socket's `settings` op returns. Values are the saved
+/// settings; `pane` is the open pane (nil: window closed). `shortcuts` is the resolved table (defaults plus
+/// overrides) with Arc's three states. F1 owns the projection; F2 (profiles), F3 (links), F4 (shortcuts) read it.
+public struct SettingsSnapshot: Sendable, Equatable, Codable {
+    public var pane: SettingsPane?
+    public var general: GeneralSettings
+    /// In `Doc.profiles` order: default first, then by name.
+    public var profiles: [ProfileSettingsRow]
+    public var links: LinkSettings
+    /// Routes with their destination's display title, in priority order.
+    public var routes: [LinkRouteRow]
+    /// Spaces a route or the Change Profile dialog can name.
+    public var spaces: [SpaceCandidate]
+    public var engines: [SearchEngineCandidate]
+    public var shortcuts: [ShortcutRow]
+    public var max: MaxSnapshot
+    public var advanced: AdvancedSettings
+}
+
+public struct ProfileSettingsRow: Sendable, Equatable, Codable {
+    public var profile: ProfileRow
+    public var settings: ProfileSettings
+}
+
+public struct LinkRouteRow: Sendable, Equatable, Codable {
+    public var route: LinkRoute
+    /// "Personal", "Little Arc" or "Most Recent Space".
+    public var destinationTitle: String
+}
+
+/// One remappable action as the Shortcuts pane lists it (Arc: `KeyBinding`).
+public struct ShortcutRow: Sendable, Equatable, Codable {
+    public var action: ActionID
+    public var title: String
+    public var menu: MenuName
+    public var state: KeyBindingState
+    public var source: KeyBindingSource
+    public var priority: KeyPriority
+}
+
+public struct MaxSnapshot: Sendable, Equatable, Codable {
+    public var settings: MaxSettings
+    /// Found on PATH at launch; empty means `.auto` behaves as `.off`.
+    public var detected: [AIProviderKind]
+    /// What `.auto` or the explicit choice resolves to right now, nil when nothing can answer.
+    public var active: AIProviderKind?
 }

@@ -10,6 +10,7 @@ final class StubEngineTests: XCTestCase {
         var events: [(PageID, PageEvent)] = []
         func engine(_ engine: any WebEngine, page: PageID, didEmit event: PageEvent) { events.append((page, event)) }
         func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool { false }
+        func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision { .deny }
     }
 
     let a = PageID(ItemID("a")), b = PageID(ItemID("b"))
@@ -18,7 +19,7 @@ final class StubEngineTests: XCTestCase {
     func testReconcileCreatesSurfacesAndReportsALoad() {
         let engine = StubEngine(), recorder = Recorder()
         engine.delegate = recorder
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default), PageSpec(id: b, initialURL: nil, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default)), PageSpec(id: b, initialURL: nil, context: .profile(.default))])
         XCTAssertNotNil(engine.surface(for: a))
         XCTAssertNil(engine.surface(for: b), "a pane without a URL gets no page")
         XCTAssertEqual(recorder.events.map(\.1), [
@@ -26,20 +27,20 @@ final class StubEngineTests: XCTestCase {
             .loadingChanged(isLoading: false, canGoBack: false, canGoForward: false),
         ])
         XCTAssertEqual(engine.pageLog.map(\.kind), [.created])
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
         XCTAssertEqual(recorder.events.count, 4, "reconcile is idempotent")
     }
 
     func testDroppingASpecClosesThePageAndAReusedIdGetsAFreshSurface() {
         let engine = StubEngine(), recorder = Recorder()
         engine.delegate = recorder
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
         let first = engine.surface(for: a)
         engine.reconcile([])
         XCTAssertNil(engine.surface(for: a))
         XCTAssertEqual(recorder.events.last?.1, .closed)
         XCTAssertEqual(engine.pageLog.map(\.kind), [.created, .closeRequested, .closed])
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
         XCTAssertNotNil(engine.surface(for: a))
         XCTAssertFalse(engine.surface(for: a) === first)
         XCTAssertEqual(engine.pageLog.last?.generation, 2)
@@ -48,7 +49,7 @@ final class StubEngineTests: XCTestCase {
     func testNavigateAndEvaluateReachThePage() {
         let engine = StubEngine(), recorder = Recorder()
         engine.delegate = recorder
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
         recorder.events.removeAll()
         let other = URL(string: "http://localhost:9/page2.html")!
         engine.perform(.navigate(other), on: a)
@@ -64,14 +65,14 @@ final class StubEngineTests: XCTestCase {
     func testShutdownIsCleanIdempotentAndClosesEverything() async {
         let engine = StubEngine(), recorder = Recorder()
         engine.delegate = recorder
-        engine.reconcile([PageSpec(id: a, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: a, initialURL: url, context: .profile(.default))])
         let first = await engine.shutdown()
         XCTAssertEqual(first, .clean)
         let second = await engine.shutdown()
         XCTAssertEqual(second, .clean)
         XCTAssertNil(engine.surface(for: a))
         XCTAssertEqual(engine.pageLog.map(\.kind), [.created, .closeRequested, .closed])
-        engine.reconcile([PageSpec(id: b, initialURL: url, profile: .default)])
+        engine.reconcile([PageSpec(id: b, initialURL: url, context: .profile(.default))])
         XCTAssertNil(engine.surface(for: b), "nothing is created after shutdown")
     }
 }

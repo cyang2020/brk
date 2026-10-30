@@ -89,8 +89,8 @@ final class Driver {
 
     /// The archive list the archive page would show (groups flattened, newest first), read without changing state.
     func archive() -> [ArchiveEntry] {
-        let opened = reduce(state, .user(window, .archive(.open)), ctx).state
-        guard case .archive(let page)? = project(opened, ProjectionContext(now: now, calendar: Driver.calendar)).windows[window]?.overlay else {
+        let opened = reduce(state, .user(window, .library(.open(.archive))), ctx).state
+        guard case .library(let library)? = project(opened, ProjectionContext(now: now, calendar: Driver.calendar)).windows[window]?.overlay, let page = library.archive else {
             XCTFail("the archive did not open")
             return []
         }

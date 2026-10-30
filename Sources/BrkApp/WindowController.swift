@@ -12,6 +12,9 @@ import os
 @MainActor
 public final class WindowController: NSObject, NSWindowDelegate {
     public let id: WindowID
+    /// Standard, incognito or Little Arc. TODO(F3): a `LittleWindowController` over an NSPanel for `.little`; today
+    /// the little window is a standard window at Little Arc's default size with no sidebar.
+    public let kind: WindowKind
     public let window: BrowserWindow
     let root: WindowRootView
     private let engine: any WebEngine
@@ -21,12 +24,17 @@ public final class WindowController: NSObject, NSWindowDelegate {
     private var pendingFocus: FocusTarget?
     private var placed = false
 
-    init(id: WindowID, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void) {
+    /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
+    /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
+    /// shortcuts work with a native view focused, where AppKit's menu would not fire for a hidden item.
+    init(id: WindowID, kind: WindowKind = .standard, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void,
+         routeKey: @escaping @MainActor (KeyInput) -> Bool = { _ in false }) {
         self.id = id
+        self.kind = kind
         self.engine = engine
         self.send = send
         window = BrowserWindow(
-            contentRect: CGRect(origin: .zero, size: Metrics.window.defaultSize.value),
+            contentRect: CGRect(origin: .zero, size: kind == .little ? Metrics.littleArc.defaultSize.value : Metrics.window.defaultSize.value),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
@@ -37,6 +45,10 @@ public final class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        window.onKeyEquivalent = { event in
+            guard let input = KeyInput(menuEvent: event) else { return false }
+            return routeKey(input)
+        }
         window.onFlagsChanged = { [weak self] flags in
             guard let self else { return }
             let held = Modifiers(rawValue: flags.intersection(.deviceIndependentFlagsMask).rawValue
@@ -82,7 +94,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
             engine.focus(page)
         case .none:
             engine.focus(nil)
-        case .commandBarInput, .renameField, .spaceDialog, .sidebar:
+        case .commandBarInput, .renameField, .spaceDialog, .profileDialog, .sidebar:
             engine.focus(nil)
             if !root.focus(target) {
                 // The view is not on screen yet (same render that opened it): re-applied by the next render.
@@ -114,6 +126,9 @@ public final class WindowController: NSObject, NSWindowDelegate {
 public final class BrowserWindow: NSWindow {
     /// Called for every `flagsChanged`, so Control going up or down reaches the reducer whoever has focus.
     var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+    /// A key equivalent the window's views did not take (a native view has focus, or none): the shortcut table
+    /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
+    var onKeyEquivalent: ((NSEvent) -> Bool)?
     private let keyLog = Logger(subsystem: "brk", category: "keys")
 
     public override func sendEvent(_ event: NSEvent) {
@@ -121,13 +136,40 @@ public final class BrowserWindow: NSWindow {
         if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {
             keyLog.notice("window.sendEvent keyDown code=\(event.keyCode, privacy: .public) eventWindow=\(event.windowNumber, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
         }
+        // With a native view (or nothing) focused the table decides first, the way Arc's key-binding layer does
+        // before AppKit's menu: AppKit never fires a hidden menu item's key equivalent and only offers Command
+        // chords to `performKeyEquivalent`, so Ctrl+Tab and Arc's hidden rows would otherwise die here. An unbound
+        // key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium gets
+        // the event and CEF's key handler routes it (before and after the page).
+        if event.type == .keyDown, Self.surface(containing: firstResponder)?.routesKeysThroughWindow ?? true, routeKeyEquivalent(event) { return }
         super.sendEvent(event)
+    }
+
+    /// The page surface the responder sits in (the engine's views), if any.
+    static func surface(containing responder: NSResponder?) -> PageSurfaceView? {
+        var view = responder as? NSView
+        while let v = view {
+            if let surface = v as? PageSurfaceView { return surface }
+            view = v.superview
+        }
+        return nil
     }
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let handled = super.performKeyEquivalent(with: event)
         keyLog.notice("window.performKeyEquivalent code=\(event.keyCode, privacy: .public) handledByViews=\(handled, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
-        return handled
+        if handled { return true }
+        return routeKeyEquivalent(event)
+    }
+
+    /// The table's turn after the views: with a page focused Chromium's view already took the event, so this only
+    /// runs with a native view (or nothing) focused. Also called by the control socket's injector, which delivers
+    /// to the content view and the menu by hand when the window is not key.
+    func routeKeyEquivalent(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, let route = onKeyEquivalent else { return false }
+        let routed = route(event)
+        if routed { keyLog.notice("window.routeKeyEquivalent code=\(event.keyCode, privacy: .public) consumed by the table") }
+        return routed
     }
 
     static func describe(_ responder: NSResponder?) -> String {

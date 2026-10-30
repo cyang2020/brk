@@ -99,6 +99,7 @@ final class EventInjector {
         }
         if current.type == .keyDown, ViewTree.page(containing: window.firstResponder) == nil {
             if (window.contentView?.superview ?? window.contentView)?.performKeyEquivalent(with: current) == true { return }
+            if (window as? BrowserWindow)?.routeKeyEquivalent(current) == true { return }
             if NSApp.mainMenu?.performKeyEquivalent(with: current) == true { return }
         }
         window.sendEvent(current)

@@ -34,7 +34,8 @@ final class ChromePage: CefBrowserDelegate {
         options.showsChromeToolbar = false
         options.backgroundColor = .white
         options.initialBounds = Self.offscreenBounds
-        // TODO(W2): profiles: spec.profile != .default -> a CefProfile (request context) per profile, created lazily.
+        // The page's request context: a profile's persistent context or the shared incognito one (F2 proves it).
+        options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         chrome.browser.delegate = self
         chrome.onWindowDestroyed = { [weak self] in
@@ -134,6 +135,17 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browserDidClose(_ b: CefBrowser) { engine.pageDidClose(self) }
+
+    /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
+    /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
+    func browser(_ b: CefBrowser, decidePolicyForNavigation url: URL?, isRedirect: Bool, userGesture: Bool) -> CefNavigationDecision {
+        guard let url, !isRedirect else { return .allow }
+        return engine.pageShouldNavigate(self, to: url, userGesture: userGesture) ? .allow : .cancel
+    }
+
+    // TODO(F5): downloads. `browser(_:decidePolicyForDownload:suggestedName:)` asks the engine's delegate
+    // (`decideDownload`) and answers `.allow(destination:)` or `.deny`; `browser(_:downloadDidProgress:)` emits
+    // `PageEvent.download(id, .progress/.finished/.cancelled)` with `DownloadID("\(browser.id)-\(download.id)")`.
 
     /// CEF's two key callbacks. Before the page (`OnPreKeyEvent`) the id is minted from the event being dispatched;
     /// after the page (`OnKeyEvent`, only when the page did not consume it) the id is the partner's, paired by

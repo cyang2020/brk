@@ -67,6 +67,13 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Starts the ordered quit. The reply comes before the process exits; the runner then waits for exit and checks
     /// the exit status and that no new crash report appeared.
     case quit
+    /// The settings values and the settings window's pane (`AppSnapshot.settings`). F1.
+    case settings
+    /// Opens the settings window on a pane, as the Preferences… menu item does (`.settings(.openPane)` on the key
+    /// window). F1.
+    case openSettings(pane: SettingsPane)
+    /// A link from another app, as the GetURL Apple Event delivers it (`SystemEvent.externalURL`). F3.
+    case externalURL(url: URL)
 }
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
@@ -91,6 +98,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case screenshot(path: String, pixelWidth: Int, pixelHeight: Int)
     case clock(now: Instant)
     case pageLog([PageLogEntry])
+    case settings(SettingsSnapshot)
     case failed(String)
 }
 

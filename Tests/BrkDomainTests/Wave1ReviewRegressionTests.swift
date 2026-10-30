@@ -14,10 +14,10 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         let d = Driver()
         let old = try XCTUnwrap(d.current?.id)
         _ = d.open("https://example.com/active")
-        var stored = try JSONDecoder().decode(StoredDocV1.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         stored.items[old]?.tab?.lastActiveAt = Instant(milliseconds: Int64.min)
         let bad = try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))
-        let restored = Driver(file: jsonData(["version": 1, "doc": bad]))
+        let restored = Driver(file: jsonData(["version": StateCodec.currentVersion, "doc": bad]))
         guard case .restored(let repairs) = restored.outcome else { return XCTFail("\(restored.outcome)") }
         XCTAssertTrue(repairs.contains { $0.hasPrefix("\(old)") && $0.contains("lastActiveAt") }, "\(repairs)")
         XCTAssertEqual(restored.state.tab(old)?.lastActiveAt, T0)
@@ -83,10 +83,10 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         d.user(.split(.addPane))
         d.user(.commandBar(.submit("https://example.com/second")))
         let split = try XCTUnwrap(d.state.doc.windows[d.window].flatMap { $0.activeBySpace[$0.space] })
-        var stored = try JSONDecoder().decode(StoredDocV1.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         let panes = try XCTUnwrap(stored.items[split]?.children)
         stored.items[split]?.split?.widths = Dictionary(uniqueKeysWithValues: panes.map { ($0, 1e308) })
-        let restored = Driver(file: jsonData(["version": 1, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
+        let restored = Driver(file: jsonData(["version": StateCodec.currentVersion, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
         XCTAssertEqual(restored.view.content.panes.map(\.fraction), [0.5, 0.5])
         restored.user(.split(.addPane))
         guard case .split(let s)? = restored.state.doc.tree[split]?.body else { return XCTFail("no split") }
@@ -108,13 +108,13 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         let gone = d.open("https://example.com/archived")
         d.user(.tab(.close(.item(gone))))
         let shown = d.open("https://example.com/shown")
-        var stored = try JSONDecoder().decode(StoredDocV1.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        var stored = try JSONDecoder().decode(StoredDocV2.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
         let script = url("javascript:alert(1)"), inline = url("data:text/html,%3Cscript%3Ealert(1)%3C/script%3E")
         stored.items[shown]?.tab?.url = script
         stored.items[pinned]?.tab?.pinnedURL = inline
         stored.archive[0].tab.url = inline
-        stored.history.append(.init(url: script, title: "script", visitedAt: T0))
-        let restored = Driver(file: jsonData(["version": 1, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
+        stored.history.append(.init(url: script, title: "script", visitedAt: T0, profile: .default))
+        let restored = Driver(file: jsonData(["version": StateCodec.currentVersion, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
         let mayNotOpen: (URL?) -> Bool = { ["javascript", "data"].contains($0?.scheme) }
         XCTAssertFalse(restored.snapshot.pages.contains { mayNotOpen($0.initialURL) }, "\(restored.snapshot.pages)")
         XCTAssertNil(restored.row(shown), "the tab whose URL may not open is dropped")

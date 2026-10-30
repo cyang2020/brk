@@ -30,6 +30,9 @@ public final class AppStore {
     private let engine: any WebEngine
     private let stateFile: StateFile
     private var windows: [WindowID: WindowController] = [:]
+    /// The one settings window, created on first use (F1).
+    private var settingsWindow: SettingsWindowController?
+    private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
     private var queue: [Input] = []
     private var dispatching = false
     private let calendar = Calendar.autoupdatingCurrent
@@ -131,12 +134,27 @@ public final class AppStore {
             windows[id] = nil
         }
         for id in snapshot.windows.keys.sorted() where windows[id] == nil {
-            let controller = WindowController(id: id, engine: engine, send: { [weak self] in self?.dispatch($0) })
+            // TODO(F3): a `LittleWindowController` (NSPanel at Metrics.littleArc.defaultSize) for `.little`.
+            let controller = WindowController(id: id, kind: snapshot.windows[id]!.kind, engine: engine, send: { [weak self] in self?.dispatch($0) },
+                                              routeKey: { [weak self] input in self?.dispatchKey(id, input) ?? false })
             windows[id] = controller
             controller.place(snapshot.windows[id]!)
             controller.window.makeKeyAndOrderFront(nil)
         }
         renderWindows()
+        renderSettings()
+    }
+
+    /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens).
+    private func renderSettings() {
+        if settingsWindow == nil, snapshot.settings.pane == nil { return }
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(send: { [weak self] command in
+                guard let self, let window = self.windowController(nil)?.id else { return }
+                self.dispatch(.user(window, command))
+            })
+        }
+        settingsWindow?.render(snapshot.settings)
     }
 
     private func projected() -> AppSnapshot {
@@ -147,6 +165,7 @@ public final class AppStore {
         for (id, controller) in windows {
             if let window = snapshot.windows[id] { controller.render(window) }
         }
+        renderSettings()
     }
 
     private func run(_ effects: [Effect]) {
@@ -163,6 +182,7 @@ public final class AppStore {
                 case .toggleFullScreen: window.toggleFullScreen(nil)
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
                 case .miniaturize: window.miniaturize(nil)
+                case .close: window.performClose(nil)
                 }
             case .app(let effect):
                 switch effect {
@@ -170,11 +190,28 @@ public final class AppStore {
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
+                case .showAbout: NSApp.orderFrontStandardAboutPanel(nil)
+                case .registerAsDefaultBrowser: DefaultBrowser.register()
+                case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
                 }
             case .popupMenu(let id, let model, let at):
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 menu.popUp(positioning: nil, at: at, in: controller.root)
+            case .export(let document):
+                ShareExport.run(document, in: windowController(nil)?.window)
+            case .ai(let id, let task, let choice):
+                let detected = snapshot.settings.max.detected
+                Task { @MainActor [weak self] in
+                    let outcome = await AIProviderSeam.answer(task, choice: choice, detected: detected)
+                    self?.dispatch(.system(.aiResult(id, outcome)))
+                }
+            case .fetchSuggestions(let window, let query, let url):
+                suggestions.fetch(window, query: query, url: url)
+            case .forgetBrowsingData(let context):
+                engine.forget(context)
+            case .revealFile(let path):
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         }
     }

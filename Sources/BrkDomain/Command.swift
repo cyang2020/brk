@@ -11,11 +11,13 @@ import Foundation
 // so the control socket's boundary parse is structural only (JSON -> Command). Adding a case is one line here plus
 // one `case` in the area's rule file; Swift's exhaustive switch fails the build until both exist.
 //
-// Overlay rule, enforced once in `reduce` (`Command.keepsCommandBar` / `keepsArchive`): every command first closes
-// an open command bar except `.commandBar` itself and the sidebar's peek and resize (pointer motion at the edge
-// must not dismiss what the user is typing); every command closes an open archive page except `.archive`,
-// `.settings`, `.sidebar(.peek)` and `.sidebar(.resize)`. Picking an action or a tab in the command bar is therefore
-// just dispatching that action's command. OverlayPolicyTests pins the table against the behavioral inventory.
+// Overlay rule, enforced once in `reduce` (`Command.keepsCommandBar` / `keepsLibrary` / `keepsPeek`): every command
+// first closes an open command bar except `.commandBar` itself and the sidebar's peek and resize (pointer motion
+// at the edge must not dismiss what the user is typing); every command closes an open Library page except
+// `.library`, `.archive`, `.settings`, `.sidebar(.peek)` and `.sidebar(.resize)`; every command closes an open Peek
+// except `.peek`, `.page` (browsing acts on the peeked page), `.settings` and the sidebar's peek and resize.
+// Picking an action or a tab in the command bar is therefore just dispatching that action's command.
+// OverlayPolicyTests pins the table against the behavioral inventory.
 
 public enum Input: Sendable, Equatable {
     case user(WindowID, Command)
@@ -36,6 +38,27 @@ public enum Command: Hashable, Sendable, Codable {
     case sidebar(SidebarCommand)
     case app(AppCommand)
     case settings(SettingsCommand)
+    /// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). F5.
+    case library(LibraryCommand)
+    /// Windows: new standard, incognito and Little Arc windows, closing, "Open in <space>". F3.
+    case window(WindowCommand)
+    /// Peek: a link previewed in a card over the content. F3.
+    case peek(PeekCommand)
+    /// Profiles: create, rename, delete, assign to a space, the dialogs. F2.
+    case profile(ProfileCommand)
+    /// A menu row whose feature is a later wave: the reducer ignores it, `enabledActions` greys it out and the
+    /// command bar does not list it. Every Arc menu row exists in `ActionID` with its key, so remapping, the
+    /// menu and the command bar index are complete before the features are.
+    case later(LaterFeature)
+}
+
+/// Features behind the greyed-out menu rows. One case per feature, not per row, so a wave that ships a feature
+/// replaces every `.later(x)` in the table with real commands and deletes the case.
+public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
+    case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, findInPage, toolbar
+    case sidebarKeyboardFocus, siteData, splitTools, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
+    case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding, help, restoreData
+    case troubleshooting
 }
 
 /// "What the user is looking at" or an explicit item.
@@ -61,14 +84,19 @@ public enum CommandBarMode: String, Hashable, Sendable, Codable {
 
 public enum CommandBarCommand: Hashable, Sendable, Codable {
     case open(CommandBarMode)
-    /// Typed text or a history URL; resolved by `resolveTypedInput` and applied per the open bar's target.
+    /// Typed text or a history URL; resolved by `resolveTypedInput` with the profile's engine and applied per the
+    /// open bar's target.
     case submit(String)
+    /// Site search (Tab or Space on a known engine's name): `query` searched with `engine`, applied like `submit`.
+    case submitSearch(engine: SearchEngineID, query: String)
+    /// The typed query changed (the view keeps the text; this asks for search suggestions when the profile allows
+    /// them: `Effect.fetchSuggestions`, answered by `SystemEvent.suggestions`). F4.
+    case queryChanged(String)
     /// Esc in the bar.
     case dismiss
 }
 
 public enum ArchiveCommand: Hashable, Sendable, Codable {
-    case open
     case restore(ArchiveID)
     /// Cmd+Shift+T: newest manual or clear entry first, then auto.
     case restoreLast
@@ -102,8 +130,16 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case stop(ItemRef)
     case zoom(ZoomStep)
     case toggleDevTools
-    /// Cmd+Shift+C.
-    case copyURL
+    /// Cmd+Shift+C (plain), Opt+Shift+Cmd+C (Markdown), Ctrl+Shift+Cmd+C (quote: Arc rows 45 to 47).
+    case copyURL(CopyURLFormat)
+}
+
+public enum CopyURLFormat: String, Hashable, Sendable, Codable {
+    case plain
+    /// `[title](url)`.
+    case markdown
+    /// `> title` then the url (Arc's "Copy URL as Quote" is disabled in the nib; ours copies the same shape).
+    case quote
 }
 
 /// Where a dragged item lands.
@@ -188,10 +224,151 @@ public enum AppCommand: Hashable, Sendable, Codable {
     case toggleFullScreen
     /// Arc's "Exit" (Esc): close the open overlay, else leave full screen.
     case exit
+    /// "About {app}": the standard about panel (`AppEffect.showAbout`).
+    case showAbout
+    /// "Set as Default Browser" (`AppEffect.registerAsDefaultBrowser`).
+    case setAsDefaultBrowser
+    /// Share-by-link, replaced by file export (user decision): the reducer builds an `ExportDocument` from the
+    /// subject and emits `Effect.export`; BrkApp asks where to save it and writes JSON or HTML.
+    case export(ExportSubject)
+    /// Help > Troubleshooting > "Reveal {app} Data": the data directory in the Finder.
+    case revealDataDirectory
 }
 
+/// What "Share…" exports. Arc shares spaces, folders, tab sets and Easels by link.
+public enum ExportSubject: Hashable, Sendable, Codable {
+    case space(SpaceRef)
+    case focusedTab
+    case items([ItemID])
+}
+
+/// Every settings field has a case, so the window, the control socket and the tests change settings the same way.
+/// `autoArchive` is the archive page's picker: it sets the current space's profile. `openPane` and `closeWindow`
+/// are the settings window itself (one, app-wide).
 public enum SettingsCommand: Hashable, Sendable, Codable {
     case autoArchive(AutoArchiveThreshold)
+    case general(GeneralSetting)
+    case profile(ProfileID, ProfileSetting)
+    case links(LinkSetting)
+    case shortcuts(ShortcutSetting)
+    case max(MaxSetting)
+    case advanced(AdvancedSetting)
+    case openPane(SettingsPane)
+    case closeWindow
+}
+
+public enum GeneralSetting: Hashable, Sendable, Codable {
+    case warnBeforeQuitting(Bool)
+    case dismissDefaultBrowserPrompt
+    case webAppearance(WebAppearance)
+}
+
+public enum ProfileSetting: Hashable, Sendable, Codable {
+    case searchEngine(SearchEngineID)
+    case searchSuggestions(Bool)
+    case autoArchive(AutoArchiveThreshold)
+    /// Nil: the system Downloads folder.
+    case downloadsDirectory(String?)
+    case promptForDownloadLocation(Bool)
+}
+
+public enum LinkSetting: Hashable, Sendable, Codable {
+    case externalLinksInLittleArc(Bool)
+    case optionCommandClickLittleArc(Bool)
+    case shiftClickPeek(Bool)
+    case peekFromPinnedAndFavorites(Bool)
+    case littleArcAutoArchive(AutoArchiveThreshold)
+    case defaultRoute(LinkDestination?)
+    /// Air Traffic Control: a route is added at the end (the first match wins), edited in place, or removed.
+    case addRoute(LinkRoute)
+    case updateRoute(LinkRoute)
+    case removeRoute(LinkRouteID)
+    case moveRoute(LinkRouteID, index: Int)
+}
+
+/// The Shortcuts pane (Arc: "Customized Shortcuts", "Reset Shortcut to Default", "Reset All Shortcuts",
+/// "Remove Conflicting Shortcut", the priority picker).
+public enum ShortcutSetting: Hashable, Sendable, Codable {
+    /// Nil unsets the shortcut (Arc: `KeyBinding.State.unset`).
+    case setChord(ActionID, KeyChord?)
+    case setPriority(ActionID, KeyPriority)
+    case reset(ActionID)
+    case resetAll
+}
+
+public enum MaxSetting: Hashable, Sendable, Codable {
+    case provider(AIProviderChoice)
+    case renamePinnedTabs(Bool)
+    case tidyTabs(Bool)
+}
+
+public enum AdvancedSetting: Hashable, Sendable, Codable {
+    case restoreWindowsOnLaunch(Bool)
+    case soundEffects(Bool)
+    case hapticsOnReorder(Bool)
+    case showFullURLInToolbar(Bool)
+    case windowDraggingFromPages(Bool)
+    case autoPictureInPicture(Bool)
+    case themeToCSS(Bool)
+    case boostsEnabled(Bool)
+    case sharedQuotes(Bool)
+}
+
+/// The Library inside the content card. Searching within a page is view-local (like the archive's filter).
+public enum LibraryCommand: Hashable, Sendable, Codable {
+    /// Shift+Cmd+L, the dock's Library button, View Archive, View Downloads, Cmd+Y. Nil reopens the window's last
+    /// page, else the archive. The same page already open is a no-op that keeps its `openID`.
+    case open(LibraryPage?)
+    case close
+    case cancelDownload(DownloadID)
+    /// Reveal the file in the Finder (`Effect.revealFile`).
+    case revealDownload(DownloadID)
+    case removeDownload(DownloadID)
+    case clearDownloads
+    case removeHistory(URL)
+    case clearHistory
+}
+
+/// Window commands. The dispatching window is the one the command came from; a new window takes its space.
+public enum WindowCommand: Hashable, Sendable, Codable {
+    /// Cmd+N: a second standard window on the current space, sharing the global sidebar.
+    case new
+    /// Shift+Cmd+N (Arc's nib; conflicts with New Folder, see `KeyBindings`): a session-only window whose pages
+    /// browse in `BrowsingContext.incognito`.
+    case newIncognito
+    /// Opt+Cmd+N: Little Arc with `url`, or with the command bar open when nil.
+    case newLittle(URL?)
+    /// Shift+Cmd+W: this window. The last standard window closing quits (AppKit). An ephemeral window's tabs
+    /// are archived from a Little Arc (reason manual, source littleArc) and dropped from incognito.
+    case close
+    /// Cmd+O "Open Little Arc or Peek in…": the held tab (a Little Arc's tab, or the peeked tab) moves to the top of
+    /// that space's Today and a standard window on that space shows it; the Little Arc window or Peek closes.
+    /// `.current` is the most recently focused standard window's space.
+    case openIn(SpaceRef)
+}
+
+/// Peek (Arc: `modalV2`): a card over the content showing a scratch tab of this window.
+public enum PeekCommand: Hashable, Sendable, Codable {
+    /// Shift+click, or a link from a Pinned or Favorites tab to another site per `LinkSettings`.
+    case open(URL)
+    /// Esc, the card's close button, Cmd+W while peeking.
+    case close
+}
+
+public enum ProfileCommand: Hashable, Sendable, Codable {
+    case create(name: String, icon: CustomIcon?)
+    case rename(ProfileID, name: String)
+    /// Refused for the default profile and for a profile with spaces. `Effect.forgetBrowsingData` follows.
+    case delete(ProfileID)
+    /// "Change Profile" for a space: its Favorites, settings and new pages follow the profile.
+    case assign(SpaceRef, to: ProfileID)
+    case openDialog(ProfileDialogRequest?)
+}
+
+public enum ProfileDialogRequest: Hashable, Sendable, Codable {
+    case create
+    case change(SpaceRef)
+    case delete(ProfileID)
 }
 
 // MARK: - System events
@@ -201,7 +378,15 @@ public enum SystemEvent: Sendable, Equatable {
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
     case window(WindowID, WindowEvent)
-    // Later: case externalURL(URL)            -- links from other apps (Little Arc, Air Traffic Control routes).
+    /// A link from another app (Apple Event GetURL, BrkApp/Lifecycle.swift). Routed by `Doc.linkRoutes`, else
+    /// `LinkSettings.defaultRoute` and `externalLinksInLittleArc`. F3.
+    case externalURL(URL)
+    /// The default engine answered `Effect.fetchSuggestions` for this query (stale answers are dropped). F4.
+    case suggestions(WindowID, query: String, [String])
+    /// Which local AI command-line tools BrkApp found on PATH at launch (`AIProviderSeam.detect`).
+    case aiProvidersDetected([AIProviderKind])
+    /// The provider answered (or could not) an `Effect.ai` request.
+    case aiResult(AIRequestID, AIOutcome)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 
@@ -225,10 +410,20 @@ extension Command {
         }
     }
 
-    /// Whether this command leaves an open archive page open.
-    var keepsArchive: Bool {
+    /// Whether this command leaves an open Library page open (the archive's own commands, settings such as the
+    /// threshold picker, and the sidebar's pointer-driven peek and resize).
+    var keepsLibrary: Bool {
         switch self {
-        case .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
+        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
+        default: false
+        }
+    }
+
+    /// Whether this command leaves an open Peek open: browsing acts on the peeked page; everything that changes
+    /// what the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
+    var keepsPeek: Bool {
+        switch self {
+        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize): true
         default: false
         }
     }

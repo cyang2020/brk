@@ -107,17 +107,22 @@ final class ControlExecutor {
                 flags = m
             }
             let at: CGPoint
+            var target: NSWindow = c.window
             if let viewID {
-                guard let view = ViewTree.find(viewID.identifier, in: c.window) else {
-                    throw Failure(message: "no visible view \(viewID.identifier) in window \(c.id)")
+                // The browser window first, then any other app window (the settings window, wave 2).
+                let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
+                    ?? NSApp.windows.lazy.compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
+                guard let (view, window) = found else {
+                    throw Failure(message: "no visible view \(viewID.identifier) in any window")
                 }
+                target = window
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
             } else if let point {
                 at = c.root.convert(point, to: nil)
             } else {
                 throw Failure(message: "click needs a view or a point")
             }
-            try events.click(at: at, modifiers: flags, count: max(1, count), in: c.window)
+            try events.click(at: at, modifiers: flags, count: max(1, count), in: target)
             return .ok
 
         case .hover(let point):
@@ -199,6 +204,18 @@ final class ControlExecutor {
             // Normally answered by ControlServer before the quit starts; kept total for a direct call.
             startQuit()
             return .ok
+
+        case .settings:
+            return .settings(store.snapshot.settings)
+
+        case .openSettings(let pane):
+            let c = try controller(nil)
+            store.dispatch(.user(c.id, .settings(.openPane(pane))))
+            return .dispatched(rev: store.snapshot.rev)
+
+        case .externalURL(let url):
+            store.dispatch(.system(.externalURL(url)))
+            return .dispatched(rev: store.snapshot.rev)
         }
     }
 

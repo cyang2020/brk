@@ -52,7 +52,8 @@ struct KeyRoutingMemory: Hashable, Sendable {
 }
 
 enum KeyRouting {
-    static let map = KeyMap()
+    /// The table alone, for the common case of no overrides (built once).
+    static let defaultMap = KeyMap()
 
     /// Rules, in order:
     /// 1. `.up` -> `.ignore`.
@@ -65,7 +66,7 @@ enum KeyRouting {
     ///    `.page` -> `.passToPage`.
     /// 7. `afterPage` (the page did not consume it) -> `.dispatch`, clear pending.
     /// Every `.dispatch` sets `lastDispatchedPress = pressID`.
-    static func decide(_ input: KeyInput, memory: inout KeyRoutingMemory, now: Instant) -> KeyDecision {
+    static func decide(_ input: KeyInput, map: KeyMap = defaultMap, memory: inout KeyRoutingMemory, now: Instant) -> KeyDecision {
         let press = input.press
         guard press.phase == .down else { return .ignore }                                   // 1
         let passOrIgnore: KeyDecision = input.stage == .beforePage ? .passToPage : .ignore

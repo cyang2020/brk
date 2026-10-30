@@ -19,34 +19,66 @@ extension Work {
             if case .commandBar(_, let open)? = state.session.windows[window]?.overlay, open == target { return }
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)
         case .submit(let text):
-            guard let url = resolveTypedInput(text), let session = state.session.windows[window] else { return }
-            var target = CommandBarTarget.newTab
-            if case .commandBar(_, let open)? = session.overlay { target = open }
-            switch target {
-            case .navigate(let tab, _) where state.tab(tab) != nil, .fillPane(let tab) where state.tab(tab) != nil:
-                // A live page navigates; a tab without a page (an empty pane) gets its page created from the url. In
-                // Pinned or Favorites a pane's first url is also its saved url (Reset Tab); a saved url is kept.
-                let live = state.session.loaded.contains(tab) && state.tab(tab)?.url != nil
-                let saves = state.role(of: tab).map { $0.kind == .pinned || $0.kind == .favorites } ?? false
-                if let scope = state.locate(tab) {
-                    state.withTree(scope) {
-                        $0.updateTab(tab) { t in
-                            t.url = url
-                            if saves, t.pinnedURL == nil { t.pinnedURL = url }
-                        }
-                    }
-                }
-                if live { effects.append(.page(PageID(tab), .navigate(url))) }
-                focus(tab, in: window)
-            case .newTab, .navigate, .fillPane:
-                guard let space = state.doc.windows[window]?.space else { return }
-                openTab(url, inSpace: space, window: window, focus: true)
+            // Searches use the current space's profile's engine (Profiles pane, "Default Search Engine").
+            guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
+            apply(url, in: window)
+        case .submitSearch(let engine, let query):
+            // Site search: Tab or Space on a known engine's name, then the query (F4 ranks the hint rows).
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let engine = SearchEngine.builtIn(engine), let url = engine.searchURL(trimmed) else { return }
+            apply(url, in: window)
+        case .queryChanged(let query):
+            // Ask the profile's engine for suggestions when the profile allows them; the answer arrives as
+            // `SystemEvent.suggestions`. A blank query clears what is shown. TODO(F4): top domains and the host dedup
+            // list are view-local (Suggest.swift); only the network fetch goes through here.
+            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
+                return
             }
-            state.session.windows[window]!.overlay = nil
+            let settings = state.profileSettings(in: window)
+            guard settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else { return }
+            effects.append(.fetchSuggestions(window, query: trimmed, url: url))
         case .dismiss:
             // Esc in the bar, or the archive's close: an empty pane the bar was filling stays (Ctrl+Shift+- closes it).
             if state.session.windows[window]?.overlay != nil { state.session.windows[window]!.overlay = nil }
         }
+    }
+}
+
+extension Work {
+    /// What a submitted url does per the open bar's target: a live page navigates, a tab without a page (an empty
+    /// pane) gets its page created from the url, a new-tab bar opens a tab; then the bar closes.
+    private mutating func apply(_ url: URL, in window: WindowID) {
+        guard let session = state.session.windows[window] else { return }
+        var target = CommandBarTarget.newTab
+        if case .commandBar(_, let open)? = session.overlay { target = open }
+        switch target {
+        case .navigate(let tab, _) where state.tab(tab) != nil, .fillPane(let tab) where state.tab(tab) != nil:
+            let live = state.session.loaded.contains(tab) && state.tab(tab)?.url != nil
+            // In Pinned or Favorites a pane's first url is also its saved url (Reset Tab); a saved url is kept.
+            let saves = state.role(of: tab).map { $0.kind == .pinned || $0.kind == .favorites } ?? false
+            if let scope = state.locate(tab) {
+                state.withTree(scope) {
+                    $0.updateTab(tab) { t in
+                        t.url = url
+                        if saves, t.pinnedURL == nil { t.pinnedURL = url }
+                    }
+                }
+            }
+            if live { effects.append(.page(PageID(tab), .navigate(url))) }
+            focus(tab, in: window)
+        case .newTab, .navigate, .fillPane:
+            guard let doc = state.doc.windows[window] else { return }
+            if doc.kind == .standard {
+                openTab(url, inSpace: doc.space, window: window, focus: true)
+            } else {
+                // An ephemeral window's new tab lives in its own container.
+                openScratchTab(url, in: window, focus: true)
+            }
+        }
+        state.session.windows[window]!.overlay = nil
     }
 }
 
@@ -56,20 +88,20 @@ extension Work {
 /// - `host[:port][/path]` gets a scheme: http for localhost with a port and IPv4 addresses, https for a dotted
 ///   domain whose last label is 2 to 63 letters ("example.com/x" -> https://example.com/x, "127.0.0.1:9/b" ->
 ///   http://127.0.0.1:9/b); any host with a numeric port is local (http).
-/// - Anything else searches with the default engine (Google, our choice): text with spaces, a bare word, a
-///   number, and a scheme the bar refuses (javascript:, data:), which is searched, never opened.
+/// - Anything else searches with `engine` (the profile's default; Google when none is given): text with spaces, a
+///   bare word, a number, and a scheme the bar refuses (javascript:, data:), which is searched, never opened.
 /// A host and scheme are lowercased and an empty path becomes "/", as Chromium reports committed URLs.
-public func resolveTypedInput(_ text: String) -> URL? {
+public func resolveTypedInput(_ text: String, engine: SearchEngine = .google) -> URL? {
     let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !input.isEmpty else { return nil }
-    if input.contains(where: \.isWhitespace) { return searchURL(input) }
+    if input.contains(where: \.isWhitespace) { return engine.searchURL(input) }
     let host = hostLike(input)
     if host == nil, schemeOf(input) != nil {
         if let url = URL(string: input).flatMap(canonical), isOpenableURL(url) { return url }
-        return searchURL(input)
+        return engine.searchURL(input)
     }
     if let local = host, let url = URL(string: (local ? "http://" : "https://") + input).flatMap(canonical) { return url }
-    return searchURL(input)
+    return engine.searchURL(input)
 }
 
 /// Whether the user may open `url` by typing it: http and https with a host, file, about:, and chrome: with a host.
@@ -92,16 +124,6 @@ public func isAllowedURL(_ url: URL) -> Bool {
     case "file": return true
     default: return false
     }
-}
-
-/// Our choice: Arc's search engine is a per-profile setting whose default is not in static data.
-private let searchTemplate = "https://www.google.com/search?q="
-
-/// encodeURIComponent: everything but A-Z a-z 0-9 - _ . ! ~ * ' ( ) is percent-encoded.
-private let queryAllowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
-
-private func searchURL(_ query: String) -> URL? {
-    URL(string: searchTemplate + (query.addingPercentEncoding(withAllowedCharacters: queryAllowed) ?? ""))
 }
 
 /// The scheme of "scheme:rest" (letters, digits, + . - after a first letter), lowercased; nil when there is none.

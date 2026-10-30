@@ -213,8 +213,8 @@ final class AppStoreTests: XCTestCase {
         let h = Harness()
         defer { h.cleanUp() }
         h.store.start()
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+l", stage: .beforePage, id: 20)))
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+l", stage: .afterPage, id: 20)))
+        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+y", stage: .beforePage, id: 20)))
+        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+y", stage: .afterPage, id: 20)))
     }
 
     /// flush writes state.json now; the window showing a page is derived from the snapshot
@@ -243,17 +243,28 @@ final class AppStoreTests: XCTestCase {
 
 @MainActor
 final class MenuTests: XCTestCase {
-    /// orders menus by MenuName order, keeps ActionID order within a menu, separates groups, and adds the standard
-    /// Edit items with AppKit selectors
+    /// orders menus by MenuName order, keeps ActionID order within a menu, separates groups, puts Arc's submenus in
+    /// place, hides Arc's hidden rows, and adds the standard Edit items with AppKit selectors
     func test_buildsMenusInTableOrderWithSeparatorsBetweenGroups() {
         let main = MainMenu.build(target: MenuTarget())
         XCTAssertEqual(main.items.map { $0.submenu?.title }, MenuName.allCases.map { MainMenu.title(of: $0) })
         let file = main.items[1].submenu!
-        XCTAssertEqual(file.items.map { $0.isSeparatorItem ? "-" : $0.title }, ["New Tab…", "Restore Last Closed Tab", "Open Command Bar", "-", "Archive Tab"])
+        XCTAssertEqual(file.items.filter { !$0.isHidden }.map { $0.isSeparatorItem ? "-" : $0.title }.prefix(9).map { $0 },
+                       ["New Tab…", "New Window", "Blank Window", "New Incognito Window", "New Little \(Product.name) Window",
+                        "Restore Last Closed Tab", "Open Command Bar", "-", "-"])   // the Boost rows between the separators are hidden
+        XCTAssertEqual(file.items.filter { $0.isHidden }.map(\.title), ["New Boost", "Edit Boost", "New Legacy Boost (Advanced)", "Boost Gallery", "New Note (in Split)"])
         let edit = main.items[2].submenu!
         XCTAssertEqual(edit.items.first?.title, "Undo")
         XCTAssertEqual(edit.items.first(where: { $0.title == "Copy" })?.action, #selector(NSText.copy(_:)))
-        XCTAssertEqual(edit.items.last?.title, "Copy URL")
+        XCTAssertNotNil(edit.items.first(where: { $0.title == "Copy URL" }))
+        XCTAssertEqual(edit.items.last?.title, "Find")
+        XCTAssertEqual(edit.items.last?.submenu?.items.map(\.title), ["Find…", "Find and Replace", "Find Next", "Find Previous", "Use Selection to Find", "Jump to Selection"])
+        let view = main.items[3].submenu!
+        XCTAssertEqual(view.items.first?.submenu?.items.map(\.title), ["Automatic", "Light", "Dark"])
+        XCTAssertTrue(view.items.first(where: { $0.title == "Force Refresh the Page" })!.isAlternate)
+        // Arc's nib conflict (Shift+Cmd+N) shows on neither item until the user resolves it.
+        XCTAssertEqual(main.items[5].submenu!.items.first(where: { $0.title == "New Folder…" })?.keyEquivalent, "")
+        XCTAssertEqual(file.items.first(where: { $0.title == "New Incognito Window" })?.keyEquivalent, "")
     }
 
     /// a table item carries its first binding as key equivalent and mask
