@@ -1,0 +1,47 @@
+{
+  "kind": "ordinary-shell-observation",
+  "root": "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy",
+  "arc_launched": false,
+  "sentinel_before_sha256": "bd0e4d0e5dd14d7e196462835bb7d05e6f0565b20c59f9f747fd71636df6baf4",
+  "compile": {
+    "argv": [
+      "/usr/bin/xcrun",
+      "clang",
+      "/Users/administrator/.t3/worktrees/brk/t3-b785f401/docs/arc-anatomy/offline-reference-lab/probe.c",
+      "-o",
+      "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/probe"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "probe": {
+    "argv": [
+      "/usr/bin/sandbox-exec",
+      "-D",
+      "ROOT=/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy",
+      "-D",
+      "WRITE=/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/allowed",
+      "-f",
+      "/Users/administrator/.t3/worktrees/brk/t3-b785f401/docs/arc-anatomy/offline-reference-lab/probe.sb",
+      "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/probe",
+      "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/allowed/marker",
+      "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/outside/sentinel"
+    ],
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "HOME": "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/allowed",
+      "CFFIXED_USER_HOME": "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/allowed",
+      "TMPDIR": "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-reference-gate.bcog6bhy/allowed/tmp"
+    },
+    "exit": -6,
+    "stdout": "",
+    "stderr": ""
+  },
+  "sentinel_after_sha256": "bd0e4d0e5dd14d7e196462835bb7d05e6f0565b20c59f9f747fd71636df6baf4",
+  "sentinel_unchanged": true,
+  "allowed_marker_exists": false,
+  "gate": "NOT_ESTABLISHED",
+  "scope": "Direct file/socket/Mach probe only; not an Arc GUI or daemon-write proof.",
+  "owned_root_removed": true
+}

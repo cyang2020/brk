@@ -1,0 +1,90 @@
+{
+  "kind": "ordinary-shell-and-file-observation",
+  "installed_path": "/Applications/Arc.app/Contents/MacOS/Arc",
+  "version": "1.170.0",
+  "build": "89123",
+  "bundle_identifier": "company.thebrowser.Browser",
+  "universal_sha256": "25af5f4eaaae5aca25021f2737e90cc4d41fdf195c4a5c4012ea31a1bba4b86a",
+  "info_plist_sha256": "573ab8a227e2ef068907bc2aa97288977ca593d0f762ff05e64f446d76a74cf8",
+  "arm64_sha256": "77be289e16a139056dd9d0bf145ad4707d4e217289bb279a333949dcfd39c52d",
+  "cached_matches_installed": true,
+  "matches_prior_arm64_sha256": true,
+  "checks": [
+    {
+      "address": "0x1018252a0",
+      "installed_file_offset": 111612576,
+      "raw_bytes": "9b18cc97",
+      "decoded_bl_target": "0x100b2b50c",
+      "pass": true
+    },
+    {
+      "address": "0x101825368",
+      "installed_file_offset": 111612776,
+      "raw_bytes": "d6ba7694",
+      "decoded_bl_target": "0x1035d3ec0",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e08",
+      "installed_file_offset": 134532616,
+      "raw_bytes": "11a87497",
+      "decoded_bl_target": "0x100b2ae4c",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e18",
+      "installed_file_offset": 134532632,
+      "raw_bytes": "75a87497",
+      "decoded_bl_target": "0x100b2afec",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e7c",
+      "installed_file_offset": 134532732,
+      "raw_bytes": "407b7897",
+      "decoded_bl_target": "0x100c1fb7c",
+      "pass": true
+    },
+    {
+      "address": "0x102e00eb0",
+      "installed_file_offset": 134532784,
+      "raw_bytes": "86a2a797",
+      "decoded_bl_target": "0x1017e98c8",
+      "pass": true
+    },
+    {
+      "address": "0x102e448f0",
+      "installed_file_offset": 134809840,
+      "raw_bytes": "57997397",
+      "decoded_bl_target": "0x100b2ae4c",
+      "pass": true
+    }
+  ],
+  "codesign": {
+    "argv": [
+      "/usr/bin/codesign",
+      "-dvv",
+      "/Applications/Arc.app"
+    ],
+    "stdout": "",
+    "stderr": "Executable=/Applications/Arc.app/Contents/MacOS/Arc\nIdentifier=company.thebrowser.Browser\nFormat=app bundle with Mach-O universal (x86_64 arm64)\nCodeDirectory v=20500 size=155878 flags=0x10000(runtime) hashes=4860+7 location=embedded\nSignature size=9023\nAuthority=Developer ID Application: The Browser Company of New York Inc. (S6N382Y83G)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTimestamp=Oct 22, 2026 at 5:05:31\u202fAM\nInfo.plist entries=56\nTeamIdentifier=S6N382Y83G\nRuntime Version=26.4.0\nSealed Resources version=2 rules=13 files=728\nInternal requirements count=1 size=220\n"
+  },
+  "entitlements": {
+    "argv": [
+      "/usr/bin/codesign",
+      "-d",
+      "--entitlements",
+      ":-",
+      "/Applications/Arc.app"
+    ],
+    "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"https://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>com.apple.application-identifier</key><string>S6N382Y83G.company.thebrowser.Browser</string><key>com.apple.developer.aps-environment</key><string>production</string><key>com.apple.developer.associated-domains</key><array><string>webcredentials:arc.net</string></array><key>com.apple.developer.icloud-container-environment</key><string>Production</string><key>com.apple.developer.icloud-container-identifiers</key><array><string>iCloud.net.arc.sidebar</string></array><key>com.apple.developer.icloud-services</key><array><string>CloudKit</string></array><key>com.apple.developer.team-identifier</key><string>S6N382Y83G</string><key>com.apple.developer.web-browser.public-key-credential</key><true/><key>com.apple.security.device.audio-input</key><true/><key>com.apple.security.device.camera</key><true/><key>com.apple.security.personal-information.location</key><true/><key>keychain-access-groups</key><array><string>S6N382Y83G.company.thebrowser.browser.webauthn</string><string>S6N382Y83G.company.thebrowser.browser.auth</string></array></dict></plist>\n",
+    "stderr": "Executable=/Applications/Arc.app/Contents/MacOS/Arc\nwarning: Specifying ':' in the path is deprecated and will not work in a future release\n"
+  },
+  "os": {
+    "argv": [
+      "/usr/bin/sw_vers"
+    ],
+    "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+    "stderr": ""
+  }
+}

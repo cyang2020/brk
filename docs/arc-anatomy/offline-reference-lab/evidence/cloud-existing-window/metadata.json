@@ -1,0 +1,83 @@
+{
+  "application" : {
+    "build" : "89123",
+    "bundleIdentifier" : "company.thebrowser.Browser",
+    "bundlePath" : "/Applications/Arc.app",
+    "executablePath" : "/Applications/Arc.app/Contents/MacOS/Arc",
+    "executableSHA256" : "25af5f4eaaae5aca25021f2737e90cc4d41fdf195c4a5c4012ea31a1bba4b86a",
+    "pid" : 45596,
+    "processLaunchTime" : "2026-10-30T14:08:51Z",
+    "processStartMicroseconds" : 520988,
+    "processStartUnixSeconds" : 1793369331,
+    "verifiedCodeRequirement" : "anchor apple generic and identifier \"company.thebrowser.Browser\" and certificate leaf[subject.OU] = \"S6N382Y83G\"",
+    "version" : "1.170.0"
+  },
+  "captureCompletedUTC" : "2026-10-30T18:08:59Z",
+  "captureStartedUTC" : "2026-10-30T18:08:58Z",
+  "contentRectPoints" : {
+    "height" : 800,
+    "width" : 1280,
+    "x" : 320,
+    "y" : 70
+  },
+  "cursorIncluded" : false,
+  "displays" : [
+    {
+      "appKitFramePoints" : {
+        "height" : 1080,
+        "width" : 1920,
+        "x" : 0,
+        "y" : 0
+      },
+      "backingScaleFactor" : 2,
+      "boundsPoints" : {
+        "height" : 1080,
+        "width" : 1920,
+        "x" : 0,
+        "y" : 0
+      },
+      "displayID" : 1,
+      "pixelHeight" : 1080,
+      "pixelWidth" : 1920
+    }
+  ],
+  "label" : "Existing cloud Arc window; no launch or login interaction",
+  "limitations" : [
+    "Human inspection is required to reject partial or privacy-placeholder pixels.",
+    "A window may change contents without changing its ID or bounds."
+  ],
+  "loginState" : "not inspected",
+  "osVersion" : "Version 26.6.2 (Build 25G83)",
+  "pixelHeight" : 1600,
+  "pixelWidth" : 2560,
+  "pngSHA256" : "baabdd7871b7eb799f0f6b1dd4c187bb2ef7fdd07bc1ce509549c084f301b05d",
+  "pointPixelScale" : 2,
+  "schemaVersion" : 1,
+  "screenCaptureKitReportedBundleIdentifier" : "",
+  "separateChildWindowsIncluded" : false,
+  "shadowIncluded" : false,
+  "source" : "actual Arc window pixels via ScreenCaptureKit",
+  "testMode" : "not inspected",
+  "windowAfter" : {
+    "boundsPoints" : {
+      "height" : 800,
+      "width" : 1280,
+      "x" : 320,
+      "y" : 70
+    },
+    "layer" : 0,
+    "ownerPID" : 45596,
+    "windowID" : 16
+  },
+  "windowBefore" : {
+    "boundsPoints" : {
+      "height" : 800,
+      "width" : 1280,
+      "x" : 320,
+      "y" : 70
+    },
+    "layer" : 0,
+    "ownerPID" : 45596,
+    "windowID" : 16
+  }
+}
