@@ -42,6 +42,9 @@ export function archiveItems(draft: Draft<StateImpl>, ids: readonly ItemId[], re
     for (const tab of tabs) {
       const where = locate(doc, tab.id)
       taken.add(tab.id)
+      // An empty split pane (no URL) is removed with its root but never becomes an archive entry: there is nothing to
+      // restore. normalize drops it from `loaded`/`live` once it leaves the tree.
+      if (tab.url === null) continue
       batch.push({
         id: ctx.newId() as ArchiveId,
         tab: snapshot(tab),
