@@ -1,0 +1,290 @@
+import AppKit
+import BrkBase
+import BrkControl
+import BrkDomain
+import BrkEngine
+import BrkLayout
+
+/// Executes control ops against the running app, on the main actor, through the same paths a user takes:
+/// `dispatch` and `load` -> `AppStore.dispatch`; `press`/`hold`/`type`/`click`/`hover` -> in-process NSEvents into
+/// `NSApp.sendEvent` (spike unknown 3: injected events reach CEF's key handler exactly like real ones); `view` -> the
+/// window's last rendered snapshot; `native` -> `WindowLayout.compute` next to a walk of the live view tree;
+/// `screenshot`/`pixel` -> `CGWindowListCreateImage` of the window; `evaluate`/`crash`/`pageLog` -> the engine;
+/// `quit` -> `.app(.quit)` through the store, the same ordered quit as Cmd+Q.
+@MainActor
+final class ControlExecutor {
+    private unowned let store: AppStore
+    private let engine: any WebEngine
+    private let clock: OffsetClock?
+    private let events = EventInjector()
+
+    init(store: AppStore, engine: any WebEngine, clock: OffsetClock?) {
+        self.store = store
+        self.engine = engine
+        self.clock = clock
+    }
+
+    func run(_ op: ControlOp) async -> ControlResult {
+        do { return try await execute(op) } catch let failure as Failure {
+            return .failed(failure.message)
+        } catch {
+            return .failed(String(describing: error))
+        }
+    }
+
+    /// The ordered quit, started after `quit`'s reply is written (ControlServer).
+    func startQuit() {
+        guard let controller = store.windowController(nil) else { return }
+        store.dispatch(.user(controller.id, .app(.quit)))
+    }
+
+    func writeFinalPageLog(named name: String) {
+        guard let data = try? ControlWire.encode(engine.pageLog) else { return }
+        try? data.write(to: Product.dataDirectory().appendingPathComponent(name), options: .atomic)
+    }
+
+    // MARK: Ops
+
+    private struct Failure: Error { let message: String }
+
+    private func controller(_ id: WindowID?) throws -> WindowController {
+        guard let controller = store.windowController(id) else { throw Failure(message: "no window \(id.map(\.rawValue) ?? "(any)")") }
+        return controller
+    }
+
+    private func execute(_ op: ControlOp) async throws -> ControlResult {
+        switch op {
+        case .hello:
+            return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
+                                windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))
+
+        case .view(let window):
+            let c = try controller(window)
+            guard let snapshot = c.lastSnapshot else { throw Failure(message: "window \(c.id) has not rendered yet") }
+            return .view(snapshot)
+
+        case .native(let window):
+            return .native(try nativeFacts(try controller(window)))
+
+        case .dispatch(let window, let command):
+            let c = try controller(window)
+            store.dispatch(.user(c.id, command))
+            return .dispatched(rev: store.snapshot.rev)
+
+        case .load(let window, let url):
+            let c = try controller(window)
+            let before = Set(store.snapshot.windows[c.id].map(allTabIDs) ?? [])
+            store.dispatch(.user(c.id, .commandBar(.open(.newTab))))
+            store.dispatch(.user(c.id, .commandBar(.submit(url.absoluteString))))
+            guard let after = store.snapshot.windows[c.id] else { throw Failure(message: "window \(c.id) is gone") }
+            let fresh = allTabIDs(after).filter { !before.contains($0) }
+            let focused = after.content.panes.first(where: \.focused)?.tab
+            guard let tab = focused.flatMap({ fresh.contains($0) ? $0 : nil }) ?? fresh.first else {
+                throw Failure(message: "no new tab after opening \(url.absoluteString)")
+            }
+            return .loaded(tab: tab)
+
+        case .press(let text):
+            guard let chord = KeyChord(parsing: text) else { throw Failure(message: "unknown chord \"\(text)\"") }
+            try events.press(chord, in: keyTarget())
+            return .ok
+
+        case .hold(let modifierText, let chordText, let times):
+            guard let held = EventInjector.modifiers(modifierText) else { throw Failure(message: "unknown modifiers \"\(modifierText)\"") }
+            guard let chord = KeyChord(parsing: chordText) else { throw Failure(message: "unknown chord \"\(chordText)\"") }
+            try events.hold(held, chord: chord, times: max(0, times), in: keyTarget())
+            return .ok
+
+        case .type(let text):
+            try events.type(text, in: keyTarget())
+            return .ok
+
+        case .click(let viewID, let point, let modifierText, let count):
+            let c = try controller(nil)
+            var flags = Modifiers()
+            if let modifierText {
+                guard let m = EventInjector.modifiers(modifierText) else { throw Failure(message: "unknown modifiers \"\(modifierText)\"") }
+                flags = m
+            }
+            let at: CGPoint
+            if let viewID {
+                guard let view = ViewTree.find(viewID.identifier, in: c.window) else {
+                    throw Failure(message: "no visible view \(viewID.identifier) in window \(c.id)")
+                }
+                at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+            } else if let point {
+                at = c.root.convert(point, to: nil)
+            } else {
+                throw Failure(message: "click needs a view or a point")
+            }
+            try events.click(at: at, modifiers: flags, count: max(1, count), in: c.window)
+            return .ok
+
+        case .hover(let point):
+            let c = try controller(nil)
+            events.hover(at: c.root.convert(point, to: nil), in: c.window)
+            return .ok
+
+        case .screenshot(let window, let path):
+            let c = try controller(window)
+            let image = try capture(c.window)
+            let bitmap = NSBitmapImageRep(cgImage: image)
+            guard let png = bitmap.representation(using: .png, properties: [:]) else { throw Failure(message: "PNG encoding failed") }
+            do { try png.write(to: URL(fileURLWithPath: path)) } catch { throw Failure(message: "write \(path): \(error.localizedDescription)") }
+            return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
+
+        case .pixel(let window, let point):
+            let c = try controller(window)
+            let image = try capture(c.window)
+            let scale = Double(image.width) / max(1, c.window.frame.width)
+            let x = Int((point.x * scale).rounded(.down)), y = Int((point.y * scale).rounded(.down))
+            guard x >= 0, y >= 0, x < image.width, y < image.height else {
+                throw Failure(message: "point \(point) is outside the \(image.width)x\(image.height) capture")
+            }
+            guard let color = NSBitmapImageRep(cgImage: image).colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else {
+                throw Failure(message: "no color at \(point)")
+            }
+            func channel(_ v: CGFloat) -> Int { Int((v * 255).rounded()) }
+            return .pixel(red: channel(color.redComponent), green: channel(color.greenComponent),
+                          blue: channel(color.blueComponent), alpha: channel(color.alphaComponent))
+
+        case .advanceClock(let seconds):
+            guard let clock else { throw Failure(message: "BRK_TEST_CLOCK not set") }
+            guard seconds.isFinite else { throw Failure(message: "advanceClock(\(seconds)): not a finite number") }
+            let now: Instant
+            do { now = try clock.advance(by: .milliseconds(Int64((seconds * 1000).rounded()))) } catch {
+                throw Failure(message: "the test clock refuses to move backwards (\(seconds) s)")
+            }
+            store.dispatch(.system(.clockTick))
+            return .clock(now: now)
+
+        case .evaluate(let page, let script):
+            guard engine.surface(for: page) != nil else { throw Failure(message: "page \(page) is not live") }
+            engine.evaluate(script, in: page)
+            return .ok
+
+        case .crash(let page, let target):
+            guard engine.surface(for: page) != nil else { throw Failure(message: "page \(page) is not live") }
+            let url = URL(string: target == .renderer ? "chrome://crash" : "chrome://gpucrash")!
+            engine.perform(.navigate(url), on: page)
+            return .ok
+
+        case .setWindowFrame(let window, let frame):
+            // AppKit keeps a titled window on screen, so a frame off every display (finding 8) lands somewhere else.
+            // The frame asked for is then reported to the store as the window's geometry, which is what a window
+            // left on a disconnected display looks like to the saved state.
+            let c = try controller(window)
+            c.window.setFrame(frame, display: true)
+            if !c.window.frame.equalTo(frame) {
+                store.dispatch(.system(.window(c.id, .geometry(bounds: frame, contentSize: c.root.bounds.size))))
+            }
+            return .ok
+
+        case .pageLog:
+            return .pageLog(engine.pageLog)
+
+        case .flush:
+            return store.flush() ? .ok : .failed("state.json write failed (see the app log)")
+
+        case .settle(let timeout):
+            return await settle(timeout: timeout)
+
+        case .quit:
+            // Normally answered by ControlServer before the quit starts; kept total for a direct call.
+            startQuit()
+            return .ok
+        }
+    }
+
+    // MARK: Helpers
+
+    /// The window key events go to: the key window, else the first browser window (made key first).
+    private func keyTarget() throws -> NSWindow {
+        if let key = NSApp.keyWindow { return key }
+        let window = try controller(nil).window
+        window.makeKeyAndOrderFront(nil)
+        return window
+    }
+
+    private func allTabIDs(_ snapshot: WindowSnapshot) -> [ItemID] {
+        func ids(_ rows: [Row]) -> [ItemID] {
+            rows.flatMap { row -> [ItemID] in
+                switch row {
+                case .tab(let t): [t.id]
+                case .folder(let f): ids(f.children)
+                case .split(let s): [s.id] + s.panes.map(\.id)
+                }
+            }
+        }
+        return snapshot.favorites.tiles.map(\.id) + ids(snapshot.space.pinned.rows) + ids(snapshot.space.today.rows)
+    }
+
+    private func nativeFacts(_ c: WindowController) throws -> NativeFacts {
+        guard let snapshot = c.lastSnapshot else { throw Failure(message: "window \(c.id) has not rendered yet") }
+        let window = c.window
+        let computed = WindowLayout.compute(snapshot, contentSize: c.root.bounds.size)
+        var pages: [PageID: PageFacts] = [:]
+        for page in ViewTree.surfaces(in: c.root) {
+            if let facts = engine.facts(for: page) { pages[page] = facts }
+        }
+        let responder = window.firstResponder
+        var focusedPage = ViewTree.page(containing: responder)
+        if focusedPage == nil { focusedPage = pages.first(where: { $0.value.hasKeyboardFocus })?.key }
+        let windows = NSApp.windows.map {
+            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible)
+        }
+        return NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
+                           backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,
+                           actual: ViewTree.identified(in: window, relativeTo: c.root), pages: pages,
+                           firstResponder: ViewTree.describe(responder), focusedPage: focusedPage, appWindows: windows)
+    }
+
+    /// `CGWindowListCreateImage` of one window by id: works for the app's own window without the screen-recording
+    /// permission (spike unknown 8). No fallback: a capture that does not come from the window server would not
+    /// show Chromium's pixels, so it fails instead.
+    private func capture(_ window: NSWindow) throws -> CGImage {
+        guard let image = WindowCapture.image(of: window), image.width > 1, image.height > 1 else {
+            throw Failure(message: "CGWindowListCreateImage returned no image for window \(window.windowNumber)")
+        }
+        return image
+    }
+
+    /// Polls every 50 ms: no row in any window is loading, then two more idle turns of the main queue.
+    private func settle(timeout: Double) async -> ControlResult {
+        let deadline = ProcessInfo.processInfo.systemUptime + max(0, timeout)
+        var quiet = 0
+        while true {
+            let loading = store.snapshot.windows.values.flatMap(loadingTabs)
+            quiet = loading.isEmpty ? quiet + 1 : 0
+            if quiet >= 3 { return .ok }
+            if ProcessInfo.processInfo.systemUptime >= deadline {
+                return .failed("still loading after \(timeout) s: \(loading.map(\.rawValue).joined(separator: ", "))")
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    private func loadingTabs(_ snapshot: WindowSnapshot) -> [ItemID] {
+        func tabs(_ rows: [Row]) -> [TabRow] {
+            rows.flatMap { row -> [TabRow] in
+                switch row {
+                case .tab(let t): [t]
+                case .folder(let f): tabs(f.children)
+                case .split(let s): s.panes
+                }
+            }
+        }
+        let all = snapshot.favorites.tiles + tabs(snapshot.space.pinned.rows) + tabs(snapshot.space.today.rows)
+        return all.filter(\.loading).map(\.id)
+    }
+}
+
+/// The screen-capture call, in one place because the API is deprecated since macOS 14 (still available to the
+/// package's macOS 14 deployment target, and the only by-window-id capture that needs no permission for the app's
+/// own window; ScreenCaptureKit needs the screen-recording permission).
+@MainActor
+enum WindowCapture {
+    static func image(of window: NSWindow) -> CGImage? {
+        CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution])
+    }
+}
