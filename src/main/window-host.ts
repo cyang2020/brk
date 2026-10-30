@@ -154,6 +154,15 @@ export function createWindowHost(windowId: WindowId, initial: WindowSelection, d
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     keys.attach(view.webContents, { windowId, surface: kind })
     void view.webContents.loadURL(surfaces.url(kind)).catch((error: unknown) => console.error(`[arc] ${kind} surface failed to load: ${String(error)}`))
+    // Recover a crashed surface renderer: reload it, then resend the current view once the page is back (its own ready
+    // handshake also asks for it). Without this the sidebar or overlay would stay blank after a renderer crash.
+    view.webContents.on('render-process-gone', () => {
+      if (gone || view.webContents.isDestroyed()) return
+      void view.webContents.loadURL(surfaces.url(kind)).catch((error: unknown) => console.error(`[arc] ${kind} surface failed to reload: ${String(error)}`))
+    })
+    view.webContents.on('did-finish-load', () => {
+      if (!gone && lastView !== null && !view.webContents.isDestroyed()) view.webContents.send(CHANNEL.view, lastView)
+    })
     surfaceViews.set(kind, view)
   }
   const surface = (kind: SurfaceKind): WebContentsView => surfaceViews.get(kind)!
