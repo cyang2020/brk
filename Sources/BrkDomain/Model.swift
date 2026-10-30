@@ -19,6 +19,43 @@ public struct AppState: Sendable, Equatable {
     var session: Session
 }
 
+/// Where a sidebar container's items live. Arc: `SidebarContainerType` (`global`, `incognito(WindowID)`,
+/// `littleBrowser(WindowID)`, `standalone(WindowID)`). This is the seam ephemeral windows enter through: their
+/// items are a `SidebarTree` like the saved one, read by the same rules and the same projection through
+/// `AppState.tree(_:)`, but stored in `Session.scratch`, so the codec cannot write them and they die with the window.
+public enum ContainerScope: Hashable, Sendable, Codable {
+    /// The one saved container: every space's Pinned and Today roots and the per-profile Favorites roots. Shared
+    /// by every standard window.
+    case global
+    /// A window's own container (Little Arc's one tab, Peek's held tab, an incognito window's tabs). Its one root
+    /// is `SectionRole.scratch(window)`. v1 creates none.
+    case window(WindowID)
+}
+
+extension AppState {
+    /// The container's tree, or nil for a window that has none.
+    func tree(_ scope: ContainerScope) -> SidebarTree? {
+        switch scope {
+        case .global: doc.tree
+        case .window(let w): session.scratch[w]
+        }
+    }
+
+    /// Mutates one container's tree in place; a missing scratch tree is a no-op.
+    mutating func withTree(_ scope: ContainerScope, _ change: (inout SidebarTree) -> Void) {
+        switch scope {
+        case .global: change(&doc.tree)
+        case .window(let w): if session.scratch[w] != nil { change(&session.scratch[w]!) }
+        }
+    }
+
+    /// Which container holds `id`: the saved tree first, then the window trees. Nil for an unknown id.
+    func locate(_ id: ItemID) -> ContainerScope? {
+        if doc.tree[id] != nil { return .global }
+        return session.scratch.first { $0.value[id] != nil }.map { .window($0.key) }
+    }
+}
+
 struct Doc: Sendable, Equatable {
     var tree: SidebarTree
     var spaces: [SpaceID: Space]
@@ -47,12 +84,38 @@ struct Space: Sendable, Equatable {
     var pinnedCollapsed: Bool
 }
 
-/// Arc: `SidebarCustomIcon` = emoji | icon(SidebarIconType) | symbol. `.none` draws a dot in the theme color.
+/// A user-chosen icon on a tab, folder, split or space. Arc: `SidebarCustomIcon` = `emoji(Character)` |
+/// `icon(SidebarIconType)` | `symbol(String)`.
+public enum CustomIcon: Hashable, Sendable, Codable {
+    case emoji(String)
+    /// One of Arc's built-in named icons (Ionicons-style names).
+    case named(NamedIcon)
+    /// An SF Symbol name.
+    case symbol(String)
+}
+
+/// Arc's `SidebarIconType` has 61 names; v1 ships this subset. Adding a name is one case here and one glyph in the
+/// icon renderer; the model and the file format do not change.
+public enum NamedIcon: String, Hashable, Sendable, Codable, CaseIterable {
+    case star, bookmark, heart, flag, folder, calendar, mail, terminal, egg, home, briefcase, book, camera,
+         music, globe, code
+}
+
+/// A space's icon. `.none` draws a dot in the theme color (Arc: `CustomInfo.iconType` nil).
 public enum SpaceIcon: Hashable, Sendable, Codable {
     case none
-    case emoji(String)
-    /// An SF Symbol name (Arc: `symbol(String)`); Arc's 61 named Ionicons map later.
-    case symbol(String)
+    case custom(CustomIcon)
+
+    public var custom: CustomIcon? {
+        switch self {
+        case .none: nil
+        case .custom(let icon): icon
+        }
+    }
+
+    public init(_ icon: CustomIcon?) {
+        self = icon.map(SpaceIcon.custom) ?? .none
+    }
 }
 
 /// Arc: `PersistedWindowState`, reduced to v1. `kind` is where Little Arc and incognito windows plug in.
@@ -68,14 +131,21 @@ struct WindowDoc: Sendable, Equatable {
     /// Arc: `SidebarViewPreferences` (`sidebarMode` anchored | noChrome, `sidebarWidth`).
     var sidebarVisible: Bool
     var sidebarWidth: Double
+
+    /// The container this window's sidebar shows. Exhaustive over `kind`, so a new window kind has to say where
+    /// its items live before it compiles.
+    var container: ContainerScope {
+        switch kind {
+        case .standard: .global
+        }
+    }
 }
 
-/// Arc: `WindowStyle` standard | little. v1 builds only `.standard`; the other cases are reserved names so the
-/// switch statements that must handle them already exist when they land.
+/// Arc: `WindowStyle` standard | little. v1 builds only `.standard`. A later kind adds a case here, answers
+/// `WindowDoc.container` (`.window(id)` for Little Arc and incognito), and gets its `SidebarTree` in
+/// `Session.scratch` with one `SectionRole.scratch(id)` root.
 enum WindowKind: Sendable, Equatable {
     case standard
-    // Later: case little(LittleWindow)   -- Arc's Little Arc panel, one tab, own container, auto-archived.
-    // Later: case incognito              -- tabs live in Session only, pages use an off-the-record profile.
 }
 
 struct Settings: Sendable, Equatable {
@@ -138,8 +208,9 @@ struct Session: Sendable, Equatable {
     var loaded: Set<ItemID>
     /// What loaded pages report.
     var live: [ItemID: LivePage]
-    /// Arc's "press twice for Arc's shortcut" memory and the duplicate-press guard (KeyRouting.swift).
-    var keyRouting: KeyRoutingMemory
+    /// Ephemeral containers by window (`ContainerScope.window`): Little Arc, Peek and incognito trees. Never
+    /// saved. Empty in v1.
+    var scratch: [WindowID: SidebarTree]
 }
 
 struct WindowSession: Sendable, Equatable {
@@ -153,6 +224,9 @@ struct WindowSession: Sendable, Equatable {
     var recentCycle: RecentCycle?
     /// Last `WindowEvent.modifiersChanged`, to see Control go down and up.
     var heldModifiers: Modifiers
+    /// Arc's "press twice for Arc's shortcut" memory and the duplicate-press guard (KeyRouting.swift), per window:
+    /// a press in one window never satisfies or suppresses a press in another.
+    var keyRouting: KeyRoutingMemory
 }
 
 enum Overlay: Sendable, Equatable {

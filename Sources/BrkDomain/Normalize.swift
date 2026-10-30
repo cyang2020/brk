@@ -4,7 +4,7 @@ import Foundation
 /// Every rule that spans entities, run after each transition and after decoding a file. It repairs; it never
 /// decides: an absent active item stays absent (the space shows an empty card) until a user action fills it.
 ///
-/// 1. A split with one pane becomes that tab, in place; a split's `focused` names one of its panes.
+/// 1. (Split membership, pane count and focus are kept by `SidebarTree` itself and need no repair.)
 /// 2. `activeBySpace` entries name existing tabs or splits of that window's spaces; dangling entries are removed.
 /// 3. Every window's space exists; `spaceOrder` lists exactly the spaces.
 /// 4. Overlay, rename and dialog targets exist; otherwise they close.
