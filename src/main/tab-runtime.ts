@@ -96,7 +96,17 @@ export function createTabRuntime(dispatch: Dispatch, keys: KeyRouter): TabRuntim
     const navigated = (url: string): void =>
       update({ url, canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), failure: null })
 
-    wc.on('destroyed', () => destroyed.push(webContentsId))
+    wc.on('destroyed', () => {
+      destroyed.push(webContentsId)
+      // `collect` and `retire` delete the entry before calling close(), so if this entry is still current the view was
+      // destroyed from the page side (window.close()) or by a process that vanished, not by us. Drop the stale entry
+      // at once and re-render, so the next render recreates the view instead of leaving an empty card behind a
+      // "current" row until some later unrelated event.
+      if (entries.get(tabId) === entry) {
+        entries.delete(tabId)
+        dispatch({ origin: 'system', command: { type: 'page/updated', tabId, patch: { crashed: true } } })
+      }
+    })
     wc.on('focus', () => {
       if (live()) dispatch({ origin: 'system', command: { type: 'pane/focused', tabId } })
     })
@@ -113,8 +123,10 @@ export function createTabRuntime(dispatch: Dispatch, keys: KeyRouter): TabRuntim
     })
     wc.on('render-process-gone', () => {
       if (!live()) return
-      update({ crashed: true })
+      // Retire first (delete the entry, close the dead webContents), then re-render, so the next render finds no entry
+      // and recreates the view in the same turn rather than reusing the crashed one.
       retire(tabId, entry)
+      dispatch({ origin: 'system', command: { type: 'page/updated', tabId, patch: { crashed: true } } })
     })
     wc.setWindowOpenHandler(({ url, disposition }) => {
       if (live()) dispatch({ origin: 'system', command: { type: 'page/open', openerId: tabId, url, background: disposition === 'background-tab' } })
