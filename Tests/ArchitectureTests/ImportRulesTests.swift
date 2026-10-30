@@ -119,13 +119,17 @@ final class ImportRulesTests: XCTestCase {
         return out
     }
 
+    /// An import declaration as Swift parses it: at the start of a line or after a `;`, after block comments and
+    /// attributes (with or without arguments), any whitespace (newlines included) between its tokens, an optional
+    /// import kind, then the module (the part before the first `.`).
+    static let importDeclaration = try! NSRegularExpression(
+        pattern: #"(?:^|;)\s*(?:/\*[\s\S]*?\*/\s*)*(?:@\w+(?:\([^)]*\))?\s*)*import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)"#,
+        options: [.anchorsMatchLines])
+
     static func imports(in text: String) -> [String] {
-        stripComments(text).split(separator: "\n").compactMap { line in
-            var words = line.split(separator: " ").map(String.init)
-            while let first = words.first, first.hasPrefix("@") { words.removeFirst() }
-            guard words.count >= 2, words[0] == "import" else { return nil }
-            let module = words.count >= 3 && ["struct", "class", "enum", "func", "var", "protocol"].contains(words[1]) ? words[2] : words[1]
-            return String(module.split(separator: ".")[0])
+        let code = stripComments(text)
+        return importDeclaration.matches(in: code, range: NSRange(code.startIndex..., in: code)).map { match in
+            String(code[Range(match.range(at: 1), in: code)!])
         }
     }
 
