@@ -46,7 +46,7 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 
 Totals at this skeleton: 258 XCTest cases, 63 run and pass, 195 `XCTSkip` stubs naming their owner; 51 first-party `fatalError("not implemented")` bodies (BrkDomain 16, BrkE2E 18, BrkCEF 7, BrkTheme 4, BrkApp 2, BrkControl 2, BrkLayout 1, BrkOverlays 1); 24 e2e scenarios registered as `todo`. Everything on the launch-and-idle path (restore, normalize, project, layout, first-pass renders, the stub engine, the store, lifecycle, menu, quit) runs: `BRK_ENGINE=stub swift run Brk` opens the shell.
 
-Wave 2 workers (F1 to F5), their paths, the contracts they write against, their tests and scenarios, and the dependency order are in `wave2.md`. At the wave-2 contract commit: 378 tests run, 30 `XCTSkip` stubs naming their owner, no `fatalError("not implemented")` left (every reducer arm has a total first-pass body), 24 scenarios PASS and W2-1 to W2-12 registered `pending` their owner.
+Wave 2 workers (F1 to F5), their paths, the contracts they write against, their tests and scenarios, and the dependency order are in `wave2.md`. At the wave-2 contract commit: 379 tests run, 30 `XCTSkip` stubs naming their owner, no `fatalError("not implemented")` left (every reducer arm has a total first-pass body), 24 scenarios PASS and W2-1 to W2-12 registered `pending` their owner.
 
 What "first pass" means: the integrator wrote the simplest body that makes the shell open and left `TODO(Wn)` notes where the owner's spec goes further (projection candidates, the space-title counter, favorites drag and drop, rename field, suggestion rows, archive groups, the Metal renderer). Owners replace those bodies; they do not treat them as frozen.
 
