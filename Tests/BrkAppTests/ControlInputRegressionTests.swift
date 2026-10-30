@@ -16,6 +16,9 @@ final class ControlInputRegressionTests: XCTestCase {
         holder.submenu = edit
         menu.addItem(holder)
         edit.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        let fullscreen = NSMenuItem(title: "Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullscreen.keyEquivalentModifierMask = .function
+        edit.addItem(fullscreen)
         NSApp.mainMenu = menu
         defer { NSApp.mainMenu = previousMenu }
         let window = InactiveInputWindow(contentRect: CGRect(x: 100, y: 100, width: 300, height: 100),
@@ -32,9 +35,10 @@ final class ControlInputRegressionTests: XCTestCase {
         XCTAssertFalse(window.isKeyWindow)
 
         try events.press(KeyChord(.command, .a), in: window)
-        try events.type("Personal", in: window)
+        try events.type("Profile", in: window)
 
-        XCTAssertEqual(editor.string, "Personal")
+        XCTAssertEqual(editor.string, "Profile")
+        XCTAssertEqual(window.fullscreenRequests, 0, "plain f must not match Fn+F")
     }
 
     func testRepeatedPreferencesRaisesTheExistingWindow() throws {
@@ -71,4 +75,6 @@ final class ControlInputRegressionTests: XCTestCase {
 
 private final class InactiveInputWindow: NSWindow {
     override var canBecomeKey: Bool { false }
+    private(set) var fullscreenRequests = 0
+    override func toggleFullScreen(_ sender: Any?) { fullscreenRequests += 1 }
 }

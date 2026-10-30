@@ -356,24 +356,10 @@ final class AppUnderTest {
     @discardableResult
     func screenshot(_ name: String, window id: WindowID? = nil) throws -> (url: URL, width: Int, height: Int) {
         let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
-        let deadline = uptime() + 2
-        var retries = 0
-        while true {
-            let result = try send(.screenshot(window: id ?? window, path: url.path))
-            if case .screenshot(_, let w, let h) = result {
-                if retries > 0 { note("WindowServer capture \(name) became available after \(retries) retries") }
-                if !screenshots.contains(url) { screenshots.append(url) }
-                return (url, w, h)
-            }
-            // WindowServer can temporarily have no image during a presentation change. Keep requiring its real
-            // pixels, and fail after two seconds. App deaths, write failures, and other control errors are not retried.
-            guard case .failed(let reason) = result,
-                  reason.hasPrefix("CGWindowListCreateImage returned no image"), uptime() < deadline else {
-                throw Check(description: "screenshot answered \(Self.describe(result))")
-            }
-            retries += 1
-            sleep(0.05)
-        }
+        let result = try send(.screenshot(window: id ?? window, path: url.path))
+        guard case .screenshot(_, let w, let h) = result else { throw Check(description: "screenshot answered \(Self.describe(result))") }
+        if !screenshots.contains(url) { screenshots.append(url) }
+        return (url, w, h)
     }
 
     @discardableResult
