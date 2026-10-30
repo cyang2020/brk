@@ -99,6 +99,7 @@ extension Work {
             // One settings window, app-wide (BrkApp's SettingsWindowController follows this pane); opening another
             // pane switches it. Session state: the window is closed after a restart.
             if state.session.settingsPane != pane { state.session.settingsPane = pane }
+            effects.append(.app(.showSettings))
         case .closeWindow:
             if state.session.settingsPane != nil { state.session.settingsPane = nil }
         }

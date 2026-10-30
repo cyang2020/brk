@@ -64,6 +64,8 @@ public enum AppEffect: Hashable, Sendable {
     case beep
     /// The standard about panel.
     case showAbout
+    /// Raises the existing settings window even when the requested pane is already open.
+    case showSettings
     /// `NSWorkspace.setDefaultApplication(at:toOpenURLsWithScheme:)` for http and https (macOS asks the user).
     case registerAsDefaultBrowser
     /// The data directory in the Finder.

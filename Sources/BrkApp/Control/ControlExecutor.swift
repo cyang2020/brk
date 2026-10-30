@@ -68,11 +68,13 @@ final class ControlExecutor {
 
         case .dispatch(let window, let command):
             let c = try controller(window)
+            store.inputWindow = c.window
             store.dispatch(.user(c.id, command))
             return .dispatched(rev: store.snapshot.rev)
 
         case .load(let window, let url):
             let c = try controller(window)
+            store.inputWindow = c.window
             let before = Set(store.snapshot.windows[c.id].map(allTabIDs) ?? [])
             store.dispatch(.user(c.id, .commandBar(.open(.newTab))))
             store.dispatch(.user(c.id, .commandBar(.submit(url.absoluteString))))
@@ -122,6 +124,7 @@ final class ControlExecutor {
             } else {
                 throw Failure(message: "click needs a view or a point")
             }
+            store.inputWindow = target
             try events.click(at: at, modifiers: flags, count: max(1, count), in: target)
             return .ok
 
@@ -221,9 +224,10 @@ final class ControlExecutor {
 
     // MARK: Helpers
 
-    /// The window key events go to: the key window, else the first browser window (made key first).
+    /// Without a key window, continue in the last presented or clicked window, including Settings.
     private func keyTarget() throws -> NSWindow {
         if let key = NSApp.keyWindow { return key }
+        if let target = store.inputWindow, target.isVisible { return target }
         let window = try controller(nil).window
         window.makeKeyAndOrderFront(nil)
         return window

@@ -32,6 +32,8 @@ public final class AppStore {
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
+    /// Fallback for in-process input while the display is locked or the app has no key window.
+    weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
     private var queue: [Input] = []
     private var dispatching = false
@@ -148,6 +150,7 @@ public final class AppStore {
             windows[id] = controller
             controller.place(snapshot.windows[id]!)
             controller.window.makeKeyAndOrderFront(nil)
+            inputWindow = controller.window
         }
         renderWindows()
         renderSettings()
@@ -199,6 +202,9 @@ public final class AppStore {
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
                 case .showAbout: NSApp.orderFrontStandardAboutPanel(nil)
+                case .showSettings:
+                    settingsWindow?.present()
+                    inputWindow = settingsWindow?.window
                 case .registerAsDefaultBrowser: DefaultBrowser.register()
                 case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
                 }

@@ -40,15 +40,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         host.render(settings)
         if settings.pane != nil {
             guard !shown || changingPane else { return }
-            if let key = NSApp.keyWindow, key !== window { previousKeyWindow = key }
-            shown = true
-            window.makeKeyAndOrderFront(nil)
+            present()
         } else if shown {
             shown = false
             let returnFocus = window.isKeyWindow
             window.orderOut(nil)
             if returnFocus, let previousKeyWindow, previousKeyWindow.isVisible { previousKeyWindow.makeKeyAndOrderFront(nil) }
         }
+    }
+
+    func present() {
+        guard pane != nil else { return }
+        if let key = NSApp.keyWindow, key !== window { previousKeyWindow = key }
+        shown = true
+        window.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
