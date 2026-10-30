@@ -1,0 +1,3207 @@
+{
+  "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+  "method": {
+    "role": "native-shell grounding; production code read-only",
+    "source": "Read actual Swift sources, implementation call sites, test assertions, and cached Arc anatomy; historical_status is provenance only. No Arc launched, no REA run, no cra checkout read or copied.",
+    "verification": "Ran swift test locally: 459 tests, 3 existing skips, zero failures. Read and hash-matched all 520 entries of the parent CEF evidence manifest; all 45 parent scenarios passed. Ran isolated AppKit and domain probes under .build using StubEngine, not real CEF.",
+    "status_policy": "verified is limited to the stated functional acceptance with matching unit and native proof. implemented means the described behavior has a source path but some required checks are missing. partial includes incomplete workflows or runtime wiring. Stored switches, menu rows and placeholders are not completion. No pixel-parity claim.",
+    "ownership_limit": "Exactly 79 assigned IDs. Canonical inventory and audit unchanged. See native-shell.md for the same-tab multiwindow gap and preserved focus/privacy contracts.",
+    "reference_limit": "Cached binary-derived constants and resource observations are distinguished from inferred interaction and measurement claims. No authenticated Arc UI reference on this host."
+  },
+  "features": [
+    {
+      "id": "A001",
+      "section": "Sidebar and tabs",
+      "feature": "Window shell and title row",
+      "arc_evidence": "anatomy-m 1.15 `SidebarHeaderView`; `layout-constants.md`",
+      "description": "Traffic lights, sidebar toggle, back, forward and reload buttons above the URL pill",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Render traffic lights, sidebar toggle, back, forward and reload or stop above the address pill; controls act on the intended window.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ArcGeometryTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Check real control clicks and hidden-sidebar traffic-light behavior against an authenticated reference; same-tab multiwindow ownership remains unresolved."
+      ],
+      "implementation": [
+        "Sources/BrkApp/WindowController.swift",
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkLayout/SidebarLayout.swift"
+      ],
+      "current_behavior": "AppKit title row and native traffic lights render from WindowFrames; page navigation uses the focused tab."
+    },
+    {
+      "id": "A002",
+      "section": "Sidebar and tabs",
+      "feature": "URL pill",
+      "arc_evidence": "anatomy-m 1.15 `CommandBarPlaceholderView`; anatomy-v 3 \"Search or Enter URL…\"",
+      "description": "Shows the focused tab's address; a click opens the command bar on top of it",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Show the focused pane address and open an editable address bar over the pill when clicked.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios N2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add native pill-click and split-pane address checks; no authenticated visual comparison exists."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkDomain/Rules/CommandBar.swift"
+      ],
+      "current_behavior": "URLPillView renders displayURL and opens editCurrent; projection seeds the full URL and selects overURLPill placement."
+    },
+    {
+      "id": "A003",
+      "section": "Sidebar and tabs",
+      "feature": "Sidebar width",
+      "arc_evidence": "anatomy-m 1.8 `SidebarViewPreferences`",
+      "description": "Drag the edge between 164 and 500 pt, snaps, hides below 82",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Dragging the sidebar edge clamps to 164...500 pt, snaps at 228 and hides below 82; restore retains width.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "LayoutSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Run pointer drags across thresholds, snap release and restart; physical haptics and reference animation are unverified."
+      ],
+      "implementation": [
+        "Sources/BrkLayout/SidebarResizeDrag.swift",
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "SidebarResizeDrag handles snap distance, velocity and hold; edge view dispatches resize and double-click reset."
+    },
+    {
+      "id": "A004",
+      "section": "Sidebar and tabs",
+      "feature": "Show and hide sidebar",
+      "arc_evidence": "row 91; anatomy-m 1.8 `SidebarMode`",
+      "description": "Cmd+S hides the sidebar; the card fills the window",
+      "historical_status": "done",
+      "status": "verified",
+      "acceptance": "Cmd+S hides the sidebar, retains the content inset and radius, then restores the sidebar on the next press.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "LayoutSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 5. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Authenticated Arc visual parity is a separate unresolved project gate, not claimed by this functional verification."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkLayout/WindowLayout.swift"
+      ],
+      "current_behavior": "Shortcut, reducer, layout and native CEF scenario all cover hide and restore."
+    },
+    {
+      "id": "A005",
+      "section": "Sidebar and tabs",
+      "feature": "Floating sidebar on hover",
+      "arc_evidence": "anatomy-m 1.8 `SidebarPresentation.floating`; anatomy-v 3 \"Hide sidebar\"",
+      "description": "With the sidebar hidden, pointing at the left edge slides it in over the page",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Hovering the left edge of a hidden sidebar reveals a floating sidebar over an unchanged content card; leaving closes it safely.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "WindowRootViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios R2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Verify pointer tracking with CEF content, menus and window edges; compare real reference reveal timing."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkContent/WindowRootView.swift",
+        "Sources/BrkLayout/WindowLayout.swift"
+      ],
+      "current_behavior": "RevealStripView sends peek; SidebarView slides the same column above content and watches pointer exit, except during edits or drag."
+    },
+    {
+      "id": "A006",
+      "section": "Sidebar and tabs",
+      "feature": "Toolbar mode",
+      "arc_evidence": "row 92; anatomy-m 4.4 `topBarURLEnabled`; Advanced \"Show full URL when Toolbar is enabled\"",
+      "description": "Optional address bar above the page instead of in the sidebar",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Toggle an address toolbar above the content and route editing and full-URL preference through that toolbar.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Implement toolbar state, geometry, controls and keyboard or page focus interactions."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkLayout/WindowLayout.swift"
+      ],
+      "current_behavior": "Show/Hide Toolbar is later(toolbar); no toolbar layout or native view exists."
+    },
+    {
+      "id": "A007",
+      "section": "Sidebar and tabs",
+      "feature": "Space header",
+      "arc_evidence": "anatomy-v 3 \"Show Space Header\" and \"Hide Space Header\"; `showSpaceHeaderOnSingleUnnamedSpaces`",
+      "description": "The space's name and icon above its tab list, can be hidden",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Show the space name and icon above its list and let the user hide or reveal the header.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add header visibility preference and layout behavior, including a single unnamed space."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkLayout/SidebarLayout.swift",
+        "Sources/BrkDomain/Model.swift"
+      ],
+      "current_behavior": "SpaceHeaderView always occupies the header frame and opens the space context menu."
+    },
+    {
+      "id": "A008",
+      "section": "Sidebar and tabs",
+      "feature": "Today section and New Tab row",
+      "arc_evidence": "anatomy-m 1.9; `NewTabCellView`",
+      "description": "Unpinned tabs, newest at top; the \"+ New Tab\" row opens the command bar",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Show Today tabs newest first and open the new-tab command bar from the New Tab row.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add a native New Tab row click check and verify overflow and empty states against the reference."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Shared.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkLayout/SidebarLayout.swift"
+      ],
+      "current_behavior": "openTab inserts at index zero; NewTabRowView opens newTab and the list renders Today order."
+    },
+    {
+      "id": "A009",
+      "section": "Sidebar and tabs",
+      "feature": "Closing a tab archives it",
+      "arc_evidence": "row 32; anatomy-v 3 \"Archive this tab\"",
+      "description": "Cmd+W or the hover x moves a Today tab to the Archive",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Cmd+W and a row close button archive a Today tab and close its page; private tabs leave no archive record.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Native scenario 8 proves Cmd+W closure; add row-button and shared-tab window behavior checks."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Shared.swift",
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkSidebar/TablistView.swift"
+      ],
+      "current_behavior": "closeTab archives Today, unloads pages and repairs every affected selection; row and shortcut dispatch it."
+    },
+    {
+      "id": "A010",
+      "section": "Sidebar and tabs",
+      "feature": "Pinned tabs",
+      "arc_evidence": "row 136, 155; anatomy-m 1.6; anatomy-v 3 \"Pinned\"",
+      "description": "Cmd+D pins; pinned tabs keep their URL, \"Close and Keep Pinned\", \"Back to Pinned URL\"",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Pin or unpin with Cmd+D; retain the pinned URL, unload while keeping the row, and reset a drifted URL.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "CEF scenario 3 covers pin or unpin only; verify close-and-keep and reset navigation through actual menus."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkDomain/SidebarTree.swift"
+      ],
+      "current_behavior": "togglePin, closeTab and reset preserve separate current and pinned URLs; explicit archive remains available."
+    },
+    {
+      "id": "A011",
+      "section": "Sidebar and tabs",
+      "feature": "Reset all pinned tabs in a space",
+      "arc_evidence": "row 154",
+      "description": "Returns every pinned tab of the space to its pinned URL",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Reset every pinned tab in the current space to its saved URL, including nested folders and split panes.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement the aggregate command and URL or page handling without affecting other spaces or profiles."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift"
+      ],
+      "current_behavior": "resetSpace is later(resetSpace); only a single-tab reset exists."
+    },
+    {
+      "id": "A012",
+      "section": "Sidebar and tabs",
+      "feature": "Collapse pinned section",
+      "arc_evidence": "rows 93, 94; anatomy-m 1.6 `PinnedSectionExpansionState` (expanded, collapsed, peeked)",
+      "description": "Folds the pinned list; \"peeked\" keeps the current pinned tab visible",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Support expanded, collapsed and peeked Pinned states, keeping the selected pinned item available in peeked mode.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add the peeked state, its selected-row layout and interactions; test collapse with nested current tabs."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkLayout/SidebarLayout.swift"
+      ],
+      "current_behavior": "One space-wide pinnedCollapsed Boolean removes all pinned rows from layout."
+    },
+    {
+      "id": "A013",
+      "section": "Sidebar and tabs",
+      "feature": "Favorites grid",
+      "arc_evidence": "`ARC_AppTray`; anatomy-v 3 \"Drag to add Favorites\"",
+      "description": "Tiles shared by every space of a profile; drag in, reorder, empty state",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Share Favorites between spaces of one profile; support empty state, dropping in and grid reorder.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Domain and geometry tests are not a native drag demonstration; verify same-grid and cross-space pointer drops and profile switching."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/FavoritesView.swift",
+        "Sources/BrkSidebar/DragController.swift",
+        "Sources/BrkLayout/SidebarLayout.swift",
+        "Sources/BrkDomain/Rules/Profiles.swift"
+      ],
+      "current_behavior": "Per-profile roots feed FavoritesView; detached-index drag math handles 4, 2 and 1 columns."
+    },
+    {
+      "id": "A014",
+      "section": "Sidebar and tabs",
+      "feature": "Favorite badges and subtitles",
+      "arc_evidence": "`ARC_AppTray` badge colors; anatomy-m 1.6 `TopApp` (11 sites), `topAppsBadgingDisabledHosts`",
+      "description": "Unread counts on Gmail and WhatsApp tiles, next event under Calendar",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Render site-derived unread badges and calendar subtitles on supported Favorites with clear update behavior.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Define supported site adapters, data refresh and privacy boundaries; implement badge and subtitle presentation."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Snapshot.swift",
+        "Sources/BrkSidebar/FavoritesView.swift"
+      ],
+      "current_behavior": "TabRow and FavoritesView have no unread-count or next-event data path."
+    },
+    {
+      "id": "A015",
+      "section": "Sidebar and tabs",
+      "feature": "Join meeting",
+      "arc_evidence": "row 134",
+      "description": "Ctrl+Cmd+J opens the next calendar meeting",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Ctrl+Cmd+J opens the next available calendar meeting and handles missing or expired meetings.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement the calendar data source, next-meeting selection and native empty or failure feedback."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "joinLiveMeeting is later(joinMeeting)."
+    },
+    {
+      "id": "A016",
+      "section": "Sidebar and tabs",
+      "feature": "Next and previous tab",
+      "arc_evidence": "rows 143, 144",
+      "description": "Opt+Cmd+Down and Up walk the sidebar",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Opt+Cmd+Up and Down traverse sidebar units in order, skip collapsed children and treat a split as one stop.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add native shortcut checks, especially same-tab selection in two standard windows."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Queries.swift",
+        "Sources/BrkDomain/Actions.swift"
+      ],
+      "current_behavior": "tab.step uses units(skipCollapsed:true), stops at the ends and focuses the selected unit."
+    },
+    {
+      "id": "A017",
+      "section": "Sidebar and tabs",
+      "feature": "Recent-tab switcher",
+      "arc_evidence": "rows 145, 146; `ModalItemSwitcher`",
+      "description": "Ctrl+Tab walks recent tabs with an on-screen switcher panel",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Ctrl+Tab and reverse cycling show a recent-tab panel, maintain a stable order during the hold and commit on Control release.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "Wave1ReviewRegressionTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios R5a,R6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Project switcher state and implement the native panel, cancel behavior and visual feedback."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkContent/WindowRootView.swift"
+      ],
+      "current_behavior": "RecentCycle freezes order and the timestamp baseline; actual selection changes without an on-screen switcher panel."
+    },
+    {
+      "id": "A018",
+      "section": "Sidebar and tabs",
+      "feature": "Linear tab cycling",
+      "arc_evidence": "rows 147, 148; `linearTabSwitcherState`",
+      "description": "Ctrl+Cmd+Right and Left cycle tabs",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Ctrl+Cmd+Left and Right cycle tabs in the defined linear order, including boundary behavior.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement and test the linear cycle contract separately from recent-tab cycling."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift"
+      ],
+      "current_behavior": "Both cycleTab actions are later(linearTabCycling)."
+    },
+    {
+      "id": "A019",
+      "section": "Sidebar and tabs",
+      "feature": "Jump to item 1 to 9 and to space N",
+      "arc_evidence": "anatomy-m 2.5",
+      "description": "Number shortcuts jump to a sidebar item or a space",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Number shortcuts jump to items 1...9 and numbered spaces using documented Favorites and final-item rules.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add commands, bindings, settings for ordering and out-of-range behavior, with native routing tests."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift"
+      ],
+      "current_behavior": "The action table contains no nth-item or nth-space command family."
+    },
+    {
+      "id": "A020",
+      "section": "Sidebar and tabs",
+      "feature": "Rename an item",
+      "arc_evidence": "row 140; anatomy-v 3 \"Double-click to rename\"",
+      "description": "Row becomes a text field",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Rename a tab, Favorite or folder inline; Return commits, Escape cancels and collapsed ancestors reveal the editor.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "Wave1ReviewAppRegressionTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Extend native checks to double-click entry, folder rename and cancel or focus-loss commit; split rename is not supported."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkSidebar/Controls.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkSidebar/FavoritesView.swift"
+      ],
+      "current_behavior": "beginRename expands ancestors; RenameField receives focus and writes customTitle or folder title."
+    },
+    {
+      "id": "A021",
+      "section": "Sidebar and tabs",
+      "feature": "Custom icons",
+      "arc_evidence": "anatomy-m 1.4 `SidebarCustomIcon`, 61 `SidebarIconType`; `ARC_CustomInfoPicker`, `ARC_Emojis`",
+      "description": "Pick an icon or emoji for a tab, folder, split or space",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Choose or clear a custom icon or emoji for tabs, folders, splits and spaces, and retain it after restart.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Build item icon pickers, complete the intended icon repertoire and confirm keyboard, cancel and reset behavior."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkSidebar/Glyphs.swift",
+        "Sources/BrkOverlays/SpaceDialogHost.swift"
+      ],
+      "current_behavior": "setIcon persists item icons and views draw them; only the space dialog exposes an emoji field and 16 named choices."
+    },
+    {
+      "id": "A022",
+      "section": "Sidebar and tabs",
+      "feature": "Drag and drop in the sidebar",
+      "arc_evidence": "anatomy-m 1.4 `SidebarMutation.move`",
+      "description": "Reorder rows, drop into folders, onto Favorites, onto a dock space",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Drag to reorder rows, nest items in folders, add or reorder Favorites and move items to a dock space without cycles or lost tabs.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "TreeTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios R5b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/DragController.swift",
+        "Sources/BrkLayout/SidebarLayout.swift",
+        "Sources/BrkDomain/SidebarTree.swift"
+      ],
+      "current_behavior": "DragController uses local pointer events and dispatches one move; layout and tree share placement rules."
+    },
+    {
+      "id": "A023",
+      "section": "Sidebar and tabs",
+      "feature": "Multi-select and bulk actions",
+      "arc_evidence": "anatomy-m 1.8 `multiSelectedItems`; anatomy-v 3 \"Archive Other Tabs\", \"Archive Tabs Below\", \"New Folder from Selection…\"",
+      "description": "Select several rows and act on them at once",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Select multiple rows and perform contextual bulk archive, move and new-folder actions, including Other and Below scopes.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add range selection, typed command targets, bulk menus and atomic semantics; verify mixed pinned and Today behavior."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "Cmd-click toggles a view-local tab selection; clicking a selected row's close button sequentially closes that selection."
+    },
+    {
+      "id": "A024",
+      "section": "Sidebar and tabs",
+      "feature": "Duplicate",
+      "arc_evidence": "row 139",
+      "description": "Duplicates the selected tabs",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Duplicate the selected tab or tabs with explicit destination, ordering and fresh identity.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement single and multi-selection duplication and native entry points."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "Duplicate is later(duplicate); no duplication command exists."
+    },
+    {
+      "id": "A025",
+      "section": "Sidebar and tabs",
+      "feature": "Reveal tab and keyboard focus in the sidebar",
+      "arc_evidence": "rows 95, 149",
+      "description": "Ctrl+Space moves focus to the sidebar on the current tab",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Ctrl+Space reveals and scrolls to the current item, focuses the sidebar and supports keyboard navigation.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Wire reveal commands, ancestor expansion, scrolling and keyboard selection into window-local focus."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkContent/WindowRootView.swift"
+      ],
+      "current_behavior": "FocusTarget.sidebar and focusList exist, but projection never selects that target; reveal actions are later(sidebarKeyboardFocus)."
+    },
+    {
+      "id": "A026",
+      "section": "Sidebar and tabs",
+      "feature": "Clear Today",
+      "arc_evidence": "row 153; anatomy-v 3 \"Clear Today tabs\"",
+      "description": "Archives every unpinned tab not on screen",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Clear Today archives each current-space Today unit that has no pane on screen in any window.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Verify the Clear button and shortcut with two real windows, including a shared tab and split."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/Rules/Queries.swift",
+        "Sources/BrkSidebar/TablistView.swift"
+      ],
+      "current_behavior": "clearToday excludes the union of onScreenTabs and archives remaining top-level units."
+    },
+    {
+      "id": "A027",
+      "section": "Sidebar and tabs",
+      "feature": "Restore last closed tab",
+      "arc_evidence": "row 21",
+      "description": "Shift+Cmd+T reopens the newest closed tab",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Shift+Cmd+T restores the latest manually closed or cleared tab, with a defined auto-archive fallback and valid destination.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add native keyboard, source-space deletion and restarted-session restore checks."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkDomain/Actions.swift"
+      ],
+      "current_behavior": "restoreLast prefers manual or clearToday entries; restoreEntry uses saved location or current-space Today fallback."
+    },
+    {
+      "id": "A028",
+      "section": "Sidebar and tabs",
+      "feature": "Sidebar context menus",
+      "arc_evidence": "`ARC_ContextMenus` (`SidebarMenu`, `SpaceMenu`, `SplitScreenMenu`, `DownloadMenu`)",
+      "description": "Right-click menus on tabs, folders, splits and spaces",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Provide working context menus for tabs, Favorites, folders, splits and spaces, including their completed workflow actions.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add icon, duplicate, bulk and split-tool actions; confirm destructive actions and run native menu selection checks."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkSidebar/DockView.swift"
+      ],
+      "current_behavior": "menuModel offers pin, rename, reset, move, close, archive, folder toggle or delete, and space edit or delete."
+    },
+    {
+      "id": "A029",
+      "section": "Sidebar and tabs",
+      "feature": "Audio indicator and mute",
+      "arc_evidence": "anatomy-m 1.6 `savedMuteStatus`, `TabCellState.isAudible`; command `muteAllTabs`",
+      "description": "Speaker icon on playing tabs, click to mute",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Indicate tab audio and allow mute or unmute, retaining the intended saved mute state.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Coordinate engine audio events and mute commands with native indicators and persistence."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Page.swift",
+        "Sources/BrkDomain/Snapshot.swift",
+        "Sources/BrkSidebar/TablistView.swift"
+      ],
+      "current_behavior": "No audible or muted field, page event or action reaches the sidebar."
+    },
+    {
+      "id": "A030",
+      "section": "Sidebar and tabs",
+      "feature": "Page loading glow",
+      "arc_evidence": "`ARC_GlowProgressLoadingIndicator` (Metal shaders)",
+      "description": "A glow shows page load progress",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Show the intended loading glow during page loads and clear it on completion, failure or cancellation.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement or validate the full glow behavior and compare its placement and timing with the reference."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkSidebar/Glyphs.swift",
+        "Sources/BrkDomain/Rules/Tabs.swift"
+      ],
+      "current_behavior": "Loading events drive a URL-pill gradient shimmer and icon spinners; no Arc glow renderer exists."
+    },
+    {
+      "id": "A031",
+      "section": "Sidebar and tabs",
+      "feature": "Hover cards and link previews",
+      "arc_evidence": "`HoverCards` module (anatomy-m 3.4); General \"Show Arc Previews\"",
+      "description": "Preview cards for Gmail, Calendar, folders and recent pages on hover",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Hover supported Favorites, folders and recent pages or links to show dismissible preview cards controlled by settings.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Define preview data sources and lifetime, implement hover interactions and settings, and preserve private context."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/Controls.swift",
+        "Sources/BrkSidebar/FavoritesView.swift",
+        "Sources/BrkDomain/Snapshot.swift"
+      ],
+      "current_behavior": "There is no hover-card model or native presentation; tooltips and favicon loading are not previews."
+    },
+    {
+      "id": "A032",
+      "section": "Sidebar and tabs",
+      "feature": "Crashed page",
+      "arc_evidence": "`ARC_SadTab`",
+      "description": "Sad-tab image, recovery",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Show a recoverable crashed-page state with the intended illustration and usable retry behavior.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios R7b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Complete the sad-tab presentation and failed-recovery path; R7b proves automatic recovery only."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkContent/ContentAreaView.swift",
+        "Sources/BrkCEF/CEFEngine.swift"
+      ],
+      "current_behavior": "rendererGone projects crashed and automatically requests recover; CardView shows text saying Reloading."
+    },
+    {
+      "id": "A033",
+      "section": "Sidebar and tabs",
+      "feature": "Tidy titles rule list",
+      "arc_evidence": "`ARC_WebContentBehaviorConfigurationClient` `tidyTitles`; `TidyTabTitles` module",
+      "description": "Shortens known site titles without AI",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Apply explicit non-AI title-shortening rules for known sites while preserving user titles.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add the rule set, precedence and fixtures for matching and nonmatching titles."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Tabs.swift",
+        "Sources/BrkDomain/SidebarTree.swift"
+      ],
+      "current_behavior": "Page titles pass through unchanged; AI pin renaming is a separate opt-in path."
+    },
+    {
+      "id": "A034",
+      "section": "Sidebar and tabs",
+      "feature": "Toasts",
+      "arc_evidence": "`Toasts` module (64 types); anatomy-v 3 \"Pinned Tab to “%@”\", \"Auto archived %d tabs\"",
+      "description": "Short confirmations at the bottom of the window",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Show short dismissible confirmations at the bottom of the correct window and expire them predictably.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement toast events, queue or replacement policy and native timing tests."
+      ],
+      "implementation": [
+        "Sources/BrkBase/Metrics.swift",
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkContent/WindowRootView.swift"
+      ],
+      "current_behavior": "A toastDuration metric exists but there is no toast state, projection or view."
+    },
+    {
+      "id": "A035",
+      "section": "Sidebar and tabs",
+      "feature": "Tab groups",
+      "arc_evidence": "anatomy-m 1.4 `SidebarTabGroup`; `TabGroupHeaderCellView`",
+      "description": "A titled group of tabs",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Create, title, display and operate on tab groups with defined persistence and close behavior.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Define group placement and ownership, then implement group operations, restore and native controls."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "ItemBody has tab, folder, split and section only; no tabGroup payload or commands."
+    },
+    {
+      "id": "A056",
+      "section": "Spaces and themes",
+      "feature": "Create a space",
+      "arc_evidence": "row 124; `ARC_SpaceCreation`; anatomy-v 3 \"Spaces\"",
+      "description": "Animated flow with name, icon, theme card and profile card",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Create a space through an animated flow with name, icon, theme preview and profile selection.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add the profile card and creation stages, then verify the complete native flow and cancellation."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/SpaceDialogHost.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "A SwiftUI form edits name, emoji or named icon, presets and basic theme controls; create always uses the default profile."
+    },
+    {
+      "id": "A057",
+      "section": "Spaces and themes",
+      "feature": "Switch spaces",
+      "arc_evidence": "rows 128, 129",
+      "description": "Dock click, Opt+Cmd+arrows; background crossfades",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Dock clicks and Opt+Cmd+arrows switch spaces, restore each window's selection and crossfade the background.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ThemeRendererTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 4,R9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Check rapid keyboard switches and shared-tab attachment; reference motion remains unverified."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/DockView.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkTheme/ThemeBackgroundView.swift"
+      ],
+      "current_behavior": "Dock dispatches focus; step uses dock order without wrapping; rows push and Metal themes crossfade."
+    },
+    {
+      "id": "A058",
+      "section": "Spaces and themes",
+      "feature": "Swipe between spaces",
+      "arc_evidence": "`space_swiping.mp4`; `SidebarPagingContainerViewController`",
+      "description": "Two-finger swipe pages the sidebar from space to space",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Two-finger horizontal swipes page the sidebar between spaces with appropriate gesture ownership and cancellation.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement gesture recognition and interactive progress without stealing page scrolling."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "Space-change animation exists but no swipe or horizontal scroll recognizer invokes it."
+    },
+    {
+      "id": "A059",
+      "section": "Spaces and themes",
+      "feature": "Rename, icon and theme of a space",
+      "arc_evidence": "rows 125, 126; anatomy-v 3 \"Rename Space\", \"Change Space Icon…\"",
+      "description": "Edit name, icon and theme",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Edit a space's name, icon and basic theme, save them, and cancel without changing the saved space.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Verify native edit and restart for all controls; the full theme editor is tracked separately in A063."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/SpaceDialogHost.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "SpaceDialogHost drafts locally; update patches the space and projection refreshes dock, header and background."
+    },
+    {
+      "id": "A060",
+      "section": "Spaces and themes",
+      "feature": "Delete and reorder spaces",
+      "arc_evidence": "anatomy-v 3 \"Delete your “%@” Space?\", \"Drag to Reorder Space\"",
+      "description": "Delete with confirmation; drag to reorder",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Delete a space after confirmation, protect the last space, and drag to reorder dock spaces persistently.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add deletion confirmation and space drag interactions with cancellation and multiwindow checks."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkSidebar/DockView.swift"
+      ],
+      "current_behavior": "Delete archives its contents and repairs windows; space.move reorders in the reducer. The context menu deletes directly and dock cells have no reorder drag."
+    },
+    {
+      "id": "A061",
+      "section": "Spaces and themes",
+      "feature": "Space manager",
+      "arc_evidence": "row 130; `SpaceManagementView`",
+      "description": "Grid of all spaces, search, reorder, \"Export into Folder\"",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Provide a searchable space grid, reorder controls and Export into Folder using local files.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Build the manager and define local export format or folder semantics without online sharing."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "Manage Spaces is later(spaceManager); the Library Spaces page is a LaterPageView placeholder."
+    },
+    {
+      "id": "A062",
+      "section": "Spaces and themes",
+      "feature": "Theme background",
+      "arc_evidence": "`ARC_WindowThemeUI`; anatomy-m 1.13, 4.5",
+      "description": "Metal gradient with grain, sand, denim or tweed texture",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Render a Metal gradient with selectable grain, sand, denim or tweed texture and stable crossfades.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ThemeRendererTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 4. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Compare gradient positions, texture appearance and low-power fallback with an authenticated reference; procedural images are approximations."
+      ],
+      "implementation": [
+        "Sources/BrkTheme/ThemeRenderer.swift",
+        "Sources/BrkTheme/TexturePixels.swift",
+        "Sources/BrkTheme/ThemeBackgroundView.swift",
+        "Sources/BrkDomain/Theme/SpaceTheme.swift"
+      ],
+      "current_behavior": "ThemeRenderer and procedural TexturePixels render the selected texture, contrast, intensity and wash."
+    },
+    {
+      "id": "A063",
+      "section": "Spaces and themes",
+      "feature": "Theme editor",
+      "arc_evidence": "`ARC_SpaceStyleEditor`; anatomy-m 1.13 `SpaceStyleEditor.State`",
+      "description": "Color pad, number of colors, saturation, noise, intensity, preset pages, dark mode bias, undo",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Edit color-pad positions and color count, saturation, noise, intensity, preset pages, dark bias and undo with live preview.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add the color pad, add or remove colors, saturation and lightness, dark bias, paged presets and undo; verify every control changes output."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/SpaceDialogHost.swift",
+        "Sources/BrkDomain/Theme/SpaceTheme.swift"
+      ],
+      "current_behavior": "The form offers fixed primary-color swatches, wheel, texture, noise, intensity and appearance; it lacks the full editor state."
+    },
+    {
+      "id": "A064",
+      "section": "Spaces and themes",
+      "feature": "Light and dark theme values",
+      "arc_evidence": "anatomy-m 1.13 `AppearanceBasedConfiguration`",
+      "description": "A theme can hold separate light and dark values",
+      "historical_status": "partial",
+      "status": "missing",
+      "acceptance": "Persist and render independently editable light and dark theme values and select the appropriate set.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add paired values and migration; test switching appearance without overwriting either set."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Theme/SpaceTheme.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "SpaceTheme stores one color set plus a forced or luminance-derived scheme; SidebarTokens have fixed light and dark palettes."
+    },
+    {
+      "id": "A065",
+      "section": "Spaces and themes",
+      "feature": "Theme colors for websites",
+      "arc_evidence": "Advanced \"Allow websites to get your theme data\"",
+      "description": "Pages can read the space's colors as CSS",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Expose the current space theme to eligible webpages as CSS only when enabled and update it on theme or space change.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Define CSS names, document lifetime, opt-out cleanup and private-context behavior with platform ownership."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkCEF/CEFEngine.swift"
+      ],
+      "current_behavior": "themeToCSS is stored and displayed; no CSS injection or page-consumer path exists."
+    },
+    {
+      "id": "A066",
+      "section": "Command bar",
+      "feature": "New-tab bar and address bar",
+      "arc_evidence": "rows 16, 22; anatomy-m 1.11 `CommandBarDestinationType`",
+      "description": "Cmd+T centered bar makes a tab; Cmd+L edits the current tab",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Cmd+T opens a centered bar that creates a tab; Cmd+L edits the current tab, preserving exact destinations.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 2,N2,W2-10a. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add a complete native Cmd+L navigate and restart check, including same-tab multiwindow selection; current N2 proves focus transfer."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/CommandBar.swift",
+        "Sources/BrkOverlays/CommandBarView.swift",
+        "Sources/BrkApp/WindowController.swift"
+      ],
+      "current_behavior": "CommandBarTarget distinguishes newTab, navigate and fillPane; native focus returns to the page after dismissal."
+    },
+    {
+      "id": "A067",
+      "section": "Command bar",
+      "feature": "Suggestions",
+      "arc_evidence": "anatomy-v 3 suggestion sources (13 kinds)",
+      "description": "Open tabs, history, search suggestions, top domains, calculator, bookmarks",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Rank and execute open-tab, history, search-engine, top-domain, calculator and bookmark suggestions with exact URL precedence.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SuggestSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-10,W2-10a. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add calculator and a defined bookmark source or index; verify private-profile candidate and network boundaries."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/Suggest.swift",
+        "Sources/BrkOverlays/TopDomains.swift",
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkApp/SuggestionFetcher.swift"
+      ],
+      "current_behavior": "Suggest ranks open tabs, history, network suggestions and top domains; exact URL precedence is covered."
+    },
+    {
+      "id": "A068",
+      "section": "Command bar",
+      "feature": "Actions in the bar (\"Type Travel\")",
+      "arc_evidence": "anatomy-m 1.11; 114 menu items with `arcTypeTravelID`; 35 `TypeTravelCandidate` cases",
+      "description": "Every menu command, space, folder move and extension is searchable",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Search all applicable completed menu actions, spaces, folder destinations and extensions from the command bar.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Implement the remaining actions, folder destinations and extensions; W2-8 tests Preferences, not every advertised workflow."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/Suggest.swift",
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Project.swift"
+      ],
+      "current_behavior": "Type travel lists enabled non-later actions, settings panes, focus-space and move-space results."
+    },
+    {
+      "id": "A069",
+      "section": "Command bar",
+      "feature": "Site search",
+      "arc_evidence": "anatomy-v 3 \"Change Site Search\", Tab and Space hints",
+      "description": "Type a site name, press Tab, search that site",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Type a site's name, enter its search mode with Tab, and submit an encoded query for that site.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "CommandBarWave2SpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-10. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add configurable or discovered site-specific search beyond built-in engines and verify entry, exit and query submission."
+      ],
+      "implementation": [
+        "Sources/BrkOverlays/Suggest.swift",
+        "Sources/BrkOverlays/CommandBarView.swift",
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/CommandBar.swift"
+      ],
+      "current_behavior": "Tab or Space enters search for one of the built-in search engines other than the default."
+    },
+    {
+      "id": "A070",
+      "section": "Command bar",
+      "feature": "Search engine choice",
+      "arc_evidence": "Profiles \"Default Search Engine\", `SearchEngine` records",
+      "description": "Per-profile default engine and suggestions switch",
+      "historical_status": "partial",
+      "status": "implemented",
+      "acceptance": "Choose the default search engine and suggestion opt-in per profile; both control actual command-bar behavior and persist.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-10. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add native checks switching profiles with different engines and suggestion preferences; validate outgoing requests as well as UI state."
+      ],
+      "implementation": [
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkDomain/Rules/CommandBar.swift",
+        "Sources/BrkApp/SuggestionFetcher.swift"
+      ],
+      "current_behavior": "ProfileSettingsForm changes values; resolveTypedInput and queryChanged read them; SuggestionFetcher performs the request."
+    },
+    {
+      "id": "A071",
+      "section": "Split view",
+      "feature": "Add and close panes",
+      "arc_evidence": "rows 101, 102; anatomy-v 3 \"Split view\"",
+      "description": "Up to four panes, gap 10",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Add or close panes up to four with a 10 pt gap; preserve pin semantics and dissolve one-pane splits.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "CEF scenario 6 covers two panes; verify three or four panes, pointer focus, close and restart natively."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkContent/ContentAreaView.swift"
+      ],
+      "current_behavior": "Split rules and SidebarTree enforce the cap; a new pane opens the bar, and closing archives Today or unloads a pinned pane."
+    },
+    {
+      "id": "A072",
+      "section": "Split view",
+      "feature": "Resize panes",
+      "arc_evidence": "`SplitViewDraggerHandleView`",
+      "description": "Drag the divider",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Dragging a split divider changes adjacent pane fractions within bounds and retains them after restart.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add native drag and restart checks in both orientations and after window resizing."
+      ],
+      "implementation": [
+        "Sources/BrkContent/ContentAreaView.swift",
+        "Sources/BrkLayout/WindowLayout.swift",
+        "Sources/BrkDomain/Rules/Split.swift"
+      ],
+      "current_behavior": "DividerView calls ContentLayout.fractions and split.resize; fractions are normalized and stored on the split."
+    },
+    {
+      "id": "A073",
+      "section": "Split view",
+      "feature": "Split as one sidebar row",
+      "arc_evidence": "`SplitViewCellView`",
+      "description": "A split is one row showing its panes",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Represent each split as one sidebar row with individually selectable pane segments.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Verify segment pointer targeting, loading, overflow and same-split selection in two windows."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkSidebar/TablistView.swift",
+        "Sources/BrkDomain/SidebarTree.swift"
+      ],
+      "current_behavior": "Project emits SplitRow and ContentSnapshot; TablistView draws segments and dispatches focus for the hit pane."
+    },
+    {
+      "id": "A074",
+      "section": "Split view",
+      "feature": "Horizontal and vertical",
+      "arc_evidence": "anatomy-v 3 \"Convert to Horizontal Split View\"",
+      "description": "Side by side or stacked",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Let users switch a split between side-by-side and stacked layouts and persist the choice.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add an orientation UI and native divider or focus checks for stacked panes."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkLayout/WindowLayout.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "setOrientation, codec and vertical geometry work, but no native control or menu issues the command."
+    },
+    {
+      "id": "A075",
+      "section": "Split view",
+      "feature": "Separate, expand, separate all",
+      "arc_evidence": "rows 103, 104; anatomy-v 3 \"Separate All Tabs\"",
+      "description": "Take a pane out, or maximize the current pane",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Separate one pane, expand the current pane and separate all panes without losing their identities or URLs.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Implement reachable separate, expand, restore and separate-all commands with explicit pin, order and window rules."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkDomain/SidebarTree.swift"
+      ],
+      "current_behavior": "Generic item.move can separate a pane and dissolve the remaining split; dedicated menu actions are later(splitTools)."
+    },
+    {
+      "id": "A076",
+      "section": "Split view",
+      "feature": "Drag a tab into the page to split",
+      "arc_evidence": "anatomy-v 3 \"Drag a tab from your sidebar into the middle of the screen…\"",
+      "description": "Dropping a row on the content makes a split",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Dropping a tab onto a content edge previews and creates or extends a split with a defined orientation.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement content hit zones, drop feedback, cancellation and split-cap or profile restrictions."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/DragController.swift",
+        "Sources/BrkContent/ContentAreaView.swift",
+        "Sources/BrkDomain/Rules/Split.swift"
+      ],
+      "current_behavior": "DragController accepts Favorites, list and dock destinations only; content cards have no drop target."
+    },
+    {
+      "id": "A077",
+      "section": "Split view",
+      "feature": "Jump between panes",
+      "arc_evidence": "anatomy-m 2.5 `switchToNextWindowPane`",
+      "description": "Keys for first to fourth, next and previous pane",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Keyboard shortcuts select panes one through four and next or previous pane with defined boundaries.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add pane-specific commands and bindings without confusing tab cycling; test native focus and editing."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkDomain/Rules/Split.swift"
+      ],
+      "current_behavior": "Pane selection works by clicking or page focus; no pane-jump action family exists."
+    },
+    {
+      "id": "A078",
+      "section": "Archive and Library",
+      "feature": "Auto-archive",
+      "arc_evidence": "anatomy-m 4.3; anatomy-v 3 \"Auto-archive options\"",
+      "description": "Idle Today tabs go to the Archive after 1 h to 30 days, or never",
+      "historical_status": "done",
+      "status": "verified",
+      "acceptance": "Auto-archive idle Today units using each profile's chosen 1 h through 30 day threshold or Never, excluding every on-screen pane and pinned or Favorite item.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 7,R5a,R5b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Same-tab host arbitration remains a separate window-ownership gap; authenticated visual parity is not claimed."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkDomain/Reduce.swift",
+        "Sources/BrkDomain/Rules/Queries.swift"
+      ],
+      "current_behavior": "Clock ticks sweep by lastActiveAt; recent-cycle commits stamp outgoing tabs and dock moves refresh activity."
+    },
+    {
+      "id": "A079",
+      "section": "Archive and Library",
+      "feature": "Archive page",
+      "arc_evidence": "rows 162, 163; anatomy-v 3 \"Archive page\"",
+      "description": "Grouped list, filter, restore, clear, threshold picker",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Show archive entries in date groups, filter them, restore an entry, confirm clearing and edit the profile threshold.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ArchivePageViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios 7. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Native scenario 7 covers sweep and restore; add full filter, clear-confirmation and threshold UI checks, including restart."
+      ],
+      "implementation": [
+        "Sources/BrkLibrary/ArchivePageView.swift",
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkDomain/Rules/Archive.swift"
+      ],
+      "current_behavior": "ArchivePageView implements those controls and projection groups entries; restore selects the resulting tab."
+    },
+    {
+      "id": "A080",
+      "section": "Archive and Library",
+      "feature": "Archive whole folders and splits",
+      "arc_evidence": "anatomy-m 1.9 `ArchivedItem` keeps the full sidebar item",
+      "description": "A folder or split comes back as one unit",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Archive and restore an entire folder or split as one structural unit, preserving title, icon, children and layout.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Add structural archive records and migration; restore nested order, pinned URLs, split orientation and fractions as a unit."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Rules/Archive.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "Archiving containers removes them but flattens descendants into independent ArchivedTab entries."
+    },
+    {
+      "id": "A081",
+      "section": "Archive and Library",
+      "feature": "Library",
+      "arc_evidence": "row 170; `ARC_HomeButton`; anatomy-m 1.9 `HomePageID`",
+      "description": "One place for Downloads, Archive, Easels and Notes, Media, Boosts, Spaces",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "LibraryViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-12. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency."
+      ],
+      "implementation": [
+        "Sources/BrkLibrary/LibraryView.swift",
+        "Sources/BrkLibrary/LibraryPages.swift",
+        "Sources/BrkDomain/Rules/Library.swift"
+      ],
+      "current_behavior": "Library navigation and Archive, Downloads or History pages exist; four requested pages render placeholders."
+    },
+    {
+      "id": "A082",
+      "section": "Archive and Library",
+      "feature": "Auto-archive education banner",
+      "arc_evidence": "`ARC_SidebarBanner` `AutoArchiveEducationView`",
+      "description": "A card at the bottom of the sidebar explaining auto-archive",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Show a dismissible auto-archive education card in the sidebar with accurate threshold copy and saved dismissal.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement display eligibility, text, dismissal persistence and layout behavior."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "There is no education-banner state or sidebar view."
+    },
+    {
+      "id": "A089",
+      "section": "Folders and Live Folders",
+      "feature": "Folders",
+      "arc_evidence": "row 138; anatomy-m 1.6 `SidebarList`",
+      "description": "Nested folders in Pinned; delete archives the tabs inside",
+      "historical_status": "done",
+      "status": "implemented",
+      "acceptance": "Create and nest folders in Pinned, expand them, rename them and archive their descendants when deleted.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        }
+      ],
+      "remaining": [
+        "Verify native nested dragging, deletion and restart; container-unit restore and per-window openness remain separate incomplete rows."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
+        "Sources/BrkSidebar/TablistView.swift"
+      ],
+      "current_behavior": "SidebarTree enforces placement; folder rows toggle or rename and deleteFolder archives descendants."
+    },
+    {
+      "id": "A090",
+      "section": "Folders and Live Folders",
+      "feature": "Collapse and expand all folders",
+      "arc_evidence": "rows 141, 142",
+      "description": "One command for all folders",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Collapse or expand all folders in the intended space and window without changing hierarchy.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add aggregate commands after settling per-window folder openness; test nested folders and active-item reveal."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift"
+      ],
+      "current_behavior": "Both menu actions are later(folderTools)."
+    },
+    {
+      "id": "A091",
+      "section": "Folders and Live Folders",
+      "feature": "Folder open state per window",
+      "arc_evidence": "anatomy-m 1.6 `WindowState.expandedItems`",
+      "description": "Each window remembers which folders are open",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Each standard window maintains independent folder expansion state and restores it according to the window persistence contract.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/run-probes.py",
+          "artifact": "verify/completion/native-grounding/probe-output.txt",
+          "scope": "Reproduces the documented limitation with unchanged production code; this pass is a successful reproduction, not feature acceptance."
+        }
+      ],
+      "remaining": [
+        "Move or represent expansion ownership per window and migrate old saved state; do not patch it in this grounding pass."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkDomain/Model.swift",
+        "Sources/BrkDomain/Project.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "Folder.collapsed is saved on the shared global tree; the probe shows toggling in one window changes both."
+    },
+    {
+      "id": "A092",
+      "section": "Folders and Live Folders",
+      "feature": "Live Folders",
+      "arc_evidence": "anatomy-m 1.6 `AutomaticLiveFolderData` (GitHub); `LiveFoldersFeature`",
+      "description": "A folder filled from GitHub pull requests",
+      "historical_status": "planned",
+      "status": "missing",
+      "acceptance": "Maintain a GitHub pull-request Live Folder with refresh, opening items and useful loading, empty and error states.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Define explicit user-authorized GitHub access, refresh and reconciliation; implement without introducing Brk membership or account requirements."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkDomain/Command.swift",
+        "Sources/BrkSidebar/TablistView.swift"
+      ],
+      "current_behavior": "Folder has only a future live-source comment; no fetch event, adapter or UI exists."
+    },
+    {
+      "id": "A113",
+      "section": "Settings panes",
+      "feature": "Settings window",
+      "arc_evidence": "row 3; anatomy-m 4.1 (nine panes)",
+      "description": "Account, General, Max, Profiles, Shortcuts, Links, Advanced, App Icon",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Provide General, Max, Profiles, Shortcuts, Links, Advanced and App Icon panes in a native settings window; omit excluded Account features.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-1,W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features."
+      ],
+      "implementation": [
+        "Sources/BrkApp/SettingsWindowController.swift",
+        "Sources/BrkSettings/SettingsHost.swift",
+        "Sources/BrkDomain/SettingsModel.swift"
+      ],
+      "current_behavior": "A single settings window mounts six SwiftUI panes, sizes them and handles close keys; App Icon is absent."
+    },
+    {
+      "id": "A114",
+      "section": "Settings panes",
+      "feature": "General pane",
+      "arc_evidence": "anatomy-m 4.2",
+      "description": "Warn before quitting, auto update, previews, ad blocker, translation",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "General settings must actually warn before quit and control previews, ad blocking and translation; updater remains deferred.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers."
+      ],
+      "implementation": [
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkSettings/QuitWarning.swift",
+        "Sources/BrkApp/Lifecycle.swift",
+        "Sources/BrkDomain/SettingsModel.swift"
+      ],
+      "current_behavior": "Default-browser notice is wired. QuitWarning helper exists but Lifecycle never calls it; appearance is also stored without a page consumer."
+    },
+    {
+      "id": "A115",
+      "section": "Settings panes",
+      "feature": "Profiles pane",
+      "arc_evidence": "anatomy-m 4.2",
+      "description": "Search engine, document app, download location, archive after",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Profile settings control search, default document app, download location and archive threshold for that profile.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-10,W2-11. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Add default document app behavior and native per-profile checks for each setting."
+      ],
+      "implementation": [
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkApp/KeyRouter.swift",
+        "Sources/BrkDomain/Rules/CommandBar.swift",
+        "Sources/BrkDomain/Rules/Archive.swift"
+      ],
+      "current_behavior": "Search, suggestions, downloads directory or prompt, and threshold are consumed; default document app has no model or control."
+    },
+    {
+      "id": "A116",
+      "section": "Settings panes",
+      "feature": "Shortcuts pane and remapping",
+      "arc_evidence": "anatomy-m 1.14, 2.2; `StorableKeyBindings.json`",
+      "description": "Change any shortcut, per-shortcut priority, conflicts shown",
+      "historical_status": "planned",
+      "status": "partial",
+      "acceptance": "Remap all intended shortcuts, assign priority, display conflicts and use the same bindings in menus and native or CEF routing.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios N1,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings."
+      ],
+      "implementation": [
+        "Sources/BrkSettings/Panes/ShortcutsPane.swift",
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/KeyRouting.swift",
+        "Sources/BrkApp/MainMenu.swift"
+      ],
+      "current_behavior": "The recorder and KeyBindings cover 122 action IDs with primary-chord overrides; fixed alternates and AppKit-standard items are outside that editor."
+    },
+    {
+      "id": "A117",
+      "section": "Settings panes",
+      "feature": "Advanced pane",
+      "arc_evidence": "anatomy-m 4.2",
+      "description": "Restore windows, sounds, haptics, toolbar URL, window dragging, auto PiP, theme CSS, Boosts, shared quotes, update channel",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Each Advanced switch must change the named runtime behavior; updates and update-channel selection may remain deferred.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/run-probes.py",
+          "artifact": "verify/completion/native-grounding/probe-output.txt",
+          "scope": "Reproduces the documented limitation with unchanged production code; this pass is a successful reproduction, not feature acceptance."
+        }
+      ],
+      "remaining": [
+        "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkDomain/Rules/Settings.swift",
+        "Sources/BrkSettings/SettingsPanes.swift",
+        "Sources/BrkApp/Lifecycle.swift",
+        "Sources/BrkDomain/Codec.swift"
+      ],
+      "current_behavior": "All nine switches persist and render. None has a runtime consumer; restore-off still restores two windows in the probe."
+    },
+    {
+      "id": "A118",
+      "section": "Settings panes",
+      "feature": "App Icon pane",
+      "arc_evidence": "anatomy-m 4.2; `ARCClients_BaseAssets` (10 icons)",
+      "description": "Pick one of the app icons",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Pick an available Brk app icon, apply it to the application and retain the choice without account or referral gates.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/SettingsModel.swift",
+        "Sources/BrkSettings/SettingsHost.swift",
+        "Sources/BrkApp/Lifecycle.swift"
+      ],
+      "current_behavior": "SettingsPane has no App Icon case and no runtime icon-choice state or consumer."
+    },
+    {
+      "id": "A127",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "Software updates",
+      "arc_evidence": "row 7; `ARC_SoftwareUpdaterClient` (Sparkle); update channels",
+      "description": "Checks for and installs updates",
+      "historical_status": "not started",
+      "status": "deferred",
+      "acceptance": "When the user resumes updater scope, check and install a valid update with explicit failure and restart behavior.",
+      "owner": "native-grounding",
+      "required_checks": [],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Explicitly deferred by the user; keep the action disabled and do not imply updates work."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "checkForUpdates is later(updater); there is no update service.",
+      "decision": "User decision: automatic updates are deferred. A128 is the readiness banner of that deferred updater, not a waiver for unrelated native polish."
+    },
+    {
+      "id": "A128",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "Update banner",
+      "arc_evidence": "`ARC_SidebarBanner` `SoftwareUpdateBannerUpdateAvailableView`",
+      "description": "Card in the sidebar when an update is ready",
+      "historical_status": "not started",
+      "status": "deferred",
+      "acceptance": "When updater scope resumes, show a ready-update card and a working update action in the sidebar.",
+      "owner": "native-grounding",
+      "required_checks": [],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Deferred together with the user-authorized updater deferral; this is not an implemented banner."
+      ],
+      "implementation": [
+        "Sources/BrkSidebar/SidebarView.swift",
+        "Sources/BrkDomain/Model.swift"
+      ],
+      "current_behavior": "No update banner exists and no updater readiness event is produced.",
+      "decision": "User decision: automatic updates are deferred. A128 is the readiness banner of that deferred updater, not a waiver for unrelated native polish."
+    },
+    {
+      "id": "A129",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "About window",
+      "arc_evidence": "row 2; `ARC_AboutWindow`",
+      "description": "About panel with credits",
+      "historical_status": "not started",
+      "status": "partial",
+      "acceptance": "Open an About Brk panel with correct application identity, version and credits.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add or verify Brk credits and packaged version or icon metadata, then capture the actual About panel."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkBase/Product.swift"
+      ],
+      "current_behavior": "About dispatches showAbout to the standard AppKit About panel; no custom credits resource was found."
+    },
+    {
+      "id": "A130",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "Menu bar coverage",
+      "arc_evidence": "anatomy-m 2.3 (10 menus, 189 items)",
+      "description": "Arc, File, Edit, View, Spaces, Tabs, Archive, Extensions, Window, Help",
+      "historical_status": "partial",
+      "status": "partial",
+      "acceptance": "Account for all 189 reference menu rows and make every in-scope action work or carry the explicit updater deferral.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
+          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "scope": "Existing parent CEF scenarios W2-8,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        }
+      ],
+      "remaining": [
+        "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior."
+      ],
+      "implementation": [
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkApp/MainMenu.swift",
+        "Sources/BrkDomain/Reduce.swift",
+        "Sources/BrkDomain/Project.swift"
+      ],
+      "current_behavior": "Accounting covers 189 rows: 122 action IDs, 65 non-later and 57 later. Menus include native standard items and authorized dropped rows."
+    },
+    {
+      "id": "A131",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "Dock tile",
+      "arc_evidence": "anatomy-m 4.1 (Dock tile plugin plists)",
+      "description": "Custom Dock icon behavior",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Implement the intended custom Dock tile behavior for Brk and verify it across active and inactive application states.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual",
+        "manual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features."
+      ],
+      "implementation": [
+        "Sources/BrkApp/Lifecycle.swift",
+        "Sources/BrkBase/Product.swift"
+      ],
+      "current_behavior": "No NSDockTile or custom Dock delegate behavior is implemented."
+    },
+    {
+      "id": "A132",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "Menu bar status item",
+      "arc_evidence": "anatomy-m 1.10 entry point `statusItem`",
+      "description": "Menu bar icon that opens Little Arc",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Expose a menu-bar status item that opens Little Arc and behaves predictably across app or window states.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual",
+        "manual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Add status-item lifecycle, menu and activation behavior, then verify using native system UI."
+      ],
+      "implementation": [
+        "Sources/BrkApp/Lifecycle.swift",
+        "Sources/BrkDomain/Rules/Windows.swift"
+      ],
+      "current_behavior": "Little Arc can open through menu commands, but no NSStatusItem exists."
+    },
+    {
+      "id": "A133",
+      "section": "Updates, menu bar and dock tile",
+      "feature": "AppleScript",
+      "arc_evidence": "anatomy-m 1.1 (4 classes, 10 commands)",
+      "description": "Scripting windows, tabs and spaces",
+      "historical_status": "not started",
+      "status": "missing",
+      "acceptance": "Script windows, tabs and spaces through a documented AppleScript dictionary with correct object identity and context.",
+      "owner": "native-grounding",
+      "required_checks": [
+        "unit",
+        "native",
+        "manual"
+      ],
+      "verification": [
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/native-grounding/validate.py",
+          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        }
+      ],
+      "remaining": [
+        "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions."
+      ],
+      "implementation": [
+        "Sources/BrkApp/ExternalLinks.swift",
+        "Sources/BrkApp/Lifecycle.swift",
+        "Sources/BrkDomain/Command.swift"
+      ],
+      "current_behavior": "GetURL Apple Events open external links; there is no scripting dictionary or object-command implementation."
+    }
+  ]
+}
