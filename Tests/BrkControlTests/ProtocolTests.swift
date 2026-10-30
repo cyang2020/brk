@@ -5,26 +5,122 @@ import CoreGraphics
 import XCTest
 @testable import BrkControl
 
-let pendingW6 = "W6: not implemented yet"
-
-/// The wire format is Codable on both sides; these run now and pin that every request the runner builds decodes on
-/// the server side unchanged.
+/// The wire format is Codable on both sides; these pin that every request the runner builds decodes on the server
+/// side unchanged, and every reply the server builds decodes on the runner side.
 final class ProtocolTests: XCTestCase {
-    func testRequestsRoundTrip() throws {
-        let ops: [ControlOp] = [
-            .hello, .view(window: nil), .native(window: WindowID("w1")),
-            .dispatch(window: nil, command: .space(.focus(SpaceID("s2")))),
-            .load(window: nil, url: URL(string: "http://127.0.0.1:8000/page2.html")!), .press(chord: "cmd+t"), .hold(modifiers: "ctrl", chord: "tab", times: 2), .type(text: "http://127.0.0.1:8000/page2.html"),
-            .click(view: .dockSpace(SpaceID("s1")), point: nil, modifiers: nil, count: 1),
-            .click(view: nil, point: CGPoint(x: 400, y: 120), modifiers: "cmd", count: 1),
-            .pixel(window: nil, point: CGPoint(x: 4, y: 200)), .advanceClock(seconds: 46_800),
-            .crash(page: PageID(ItemID("t3")), process: .renderer), .pageLog, .settle(timeout: 5), .quit,
-        ]
-        for (i, op) in ops.enumerated() {
-            let line = try ControlWire.encode(ControlRequest(id: i, op: op))
-            XCTAssertEqual(line.last, 0x0A)
-            XCTAssertEqual(try ControlWire.decode(ControlRequest.self, line: line.dropLast()), ControlRequest(id: i, op: op))
+    /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
+    /// so a new op does not compile until it has a tag and a sample here.
+    enum Tag: String, CaseIterable {
+        case hello, view, native, dispatch, load, press, hold, type, click, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case setWindowFrame, pageLog, flush, settle, quit
+    }
+
+    static func tag(of op: ControlOp) -> Tag {
+        switch op {
+        case .hello: .hello
+        case .view: .view
+        case .native: .native
+        case .dispatch: .dispatch
+        case .load: .load
+        case .press: .press
+        case .hold: .hold
+        case .type: .type
+        case .click: .click
+        case .hover: .hover
+        case .screenshot: .screenshot
+        case .pixel: .pixel
+        case .advanceClock: .advanceClock
+        case .evaluate: .evaluate
+        case .crash: .crash
+        case .setWindowFrame: .setWindowFrame
+        case .pageLog: .pageLog
+        case .flush: .flush
+        case .settle: .settle
+        case .quit: .quit
         }
+    }
+
+    static func samples(_ tag: Tag) -> [ControlOp] {
+        let page = PageID(ItemID("t3"))
+        switch tag {
+        case .hello: return [.hello]
+        case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
+        case .native: return [.native(window: WindowID("w1"))]
+        case .dispatch:
+            return [.dispatch(window: nil, command: .space(.focus(SpaceID("s2")))),
+                    .dispatch(window: WindowID("w1"), command: .space(.create(title: "Work", icon: .none, theme: .default))),
+                    .dispatch(window: nil, command: .item(.move(ItemID("t1"), to: .into(parent: ItemID("r1"), index: 2))))]
+        case .load: return [.load(window: nil, url: URL(string: "http://127.0.0.1:8000/page2.html")!)]
+        case .press: return [.press(chord: "cmd+t"), .press(chord: "ctrl+shift+=")]
+        case .hold: return [.hold(modifiers: "ctrl", chord: "tab", times: 2)]
+        case .type: return [.type(text: "http://127.0.0.1:8000/page2.html"), .type(text: "x \"quoted\" ü")]
+        case .click:
+            return [.click(view: .dockSpace(SpaceID("s1")), point: nil, modifiers: nil, count: 1),
+                    .click(view: nil, point: CGPoint(x: 400, y: 120), modifiers: "cmd", count: 2)]
+        case .hover: return [.hover(point: CGPoint(x: 5, y: 388))]
+        case .screenshot: return [.screenshot(window: nil, path: "/tmp/shots/0-launch.png")]
+        case .pixel: return [.pixel(window: nil, point: CGPoint(x: 4, y: 200))]
+        case .advanceClock: return [.advanceClock(seconds: 46_800), .advanceClock(seconds: -1)]
+        case .evaluate: return [.evaluate(page: page, script: "document.title = 'x'")]
+        case .crash: return [.crash(page: page, process: .renderer), .crash(page: page, process: .gpu)]
+        case .setWindowFrame: return [.setWindowFrame(window: nil, frame: CGRect(x: 5000, y: 4000, width: 1000, height: 700))]
+        case .pageLog: return [.pageLog]
+        case .flush: return [.flush]
+        case .settle: return [.settle(timeout: 5)]
+        case .quit: return [.quit]
+        }
+    }
+
+    func testEveryOpRoundTripsThroughTheWire() throws {
+        for tag in Tag.allCases {
+            let ops = Self.samples(tag)
+            XCTAssertFalse(ops.isEmpty, "\(tag) has no sample")
+            for (i, op) in ops.enumerated() {
+                XCTAssertEqual(Self.tag(of: op), tag)
+                let line = try ControlWire.encode(ControlRequest(id: i, op: op))
+                XCTAssertEqual(line.last, 0x0A, "\(tag): one line")
+                XCTAssertFalse(line.dropLast().contains(0x0A), "\(tag): no newline inside the line")
+                // The op's wire name is its case name: what scripts/ctl.sh users type.
+                let object = try JSONSerialization.jsonObject(with: line.dropLast()) as? [String: Any]
+                XCTAssertEqual((object?["op"] as? [String: Any])?.keys.first, tag.rawValue)
+                XCTAssertEqual(try ControlWire.parseRequest(line.dropLast()).get(), ControlRequest(id: i, op: op))
+            }
+        }
+    }
+
+    func testRepliesRoundTrip() throws {
+        let results: [ControlResult] = [
+            .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
+            .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
+            .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),
+            .pageLog([PageLogEntry(page: PageID(ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
+            .failed("no window"),
+            .native(NativeFacts(window: WindowID("w1"), windowFrame: CGRect(x: 0, y: 0, width: 1280, height: 776),
+                                contentSize: CGSize(width: 1280, height: 776), backingScale: 2, isKey: true,
+                                computed: WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false,
+                                                       resizeHandle: nil, revealStrip: CGRect(x: -20, y: 0, width: 35, height: 776),
+                                                       contentArea: CGRect(x: 10, y: 10, width: 1260, height: 756), cards: [],
+                                                       dividers: [], commandBar: nil, archive: nil),
+                                actual: ["card-0": ActualView(frame: CGRect(x: 10, y: 10, width: 1260, height: 756), hidden: false, cornerRadius: 6)],
+                                pages: [PageID(ItemID("t1")): PageFacts(surfaceFrame: nil, embeddedViews: [], browserID: nil,
+                                                                        hostWindowNumber: nil, hasKeyboardFocus: false)],
+                                firstResponder: "NSTextView:command-bar-input", focusedPage: nil,
+                                appWindows: [AppWindowFact(number: 9, className: "BrkApp.BrowserWindow", isKey: true, isVisible: true)])),
+        ]
+        for (i, result) in results.enumerated() {
+            let line = try ControlWire.encode(ControlReply(id: i, result: result))
+            XCTAssertEqual(try ControlWire.decode(ControlReply.self, line: line.dropLast()), ControlReply(id: i, result: result))
+        }
+    }
+
+    func testLineBufferSplitsLinesAcrossReads() {
+        var buffer = ControlLineBuffer()
+        buffer.append(Data("{\"a\":1}\n\n{\"b\"".utf8))
+        XCTAssertEqual(buffer.nextLine(), Data("{\"a\":1}".utf8))
+        XCTAssertNil(buffer.nextLine())
+        buffer.append(Data(":2}\n".utf8))
+        XCTAssertEqual(buffer.nextLine(), Data("{\"b\":2}".utf8))
+        XCTAssertNil(buffer.nextLine())
     }
 
     func testViewIdentifiersAreStableStrings() {
