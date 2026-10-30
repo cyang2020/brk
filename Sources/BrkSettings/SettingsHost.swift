@@ -181,8 +181,8 @@ struct SettingsRootView: View {
                 switch pane {
                 case .general: GeneralPane(context: context)
                 case .max: MaxPane(context: context)
-                case .profiles: ProfilesPane(context: context)
-                case .shortcuts: ShortcutsPane(context: context)
+                case .profiles: ProfilesSettingsPane(context: context)
+                case .shortcuts: ShortcutsSettingsPane(context: context)
                 case .links: LinksPane(context: context)
                 case .advanced: AdvancedPane(context: context)
                 }

@@ -105,7 +105,7 @@ struct MaxPane: View {
 
 // MARK: - Profiles
 
-struct ProfilesPane: View {
+struct ProfilesSettingsPane: View {
     let context: PaneContext
     /// Which profile's settings the pane shows: navigation inside the pane, not a setting.
     @State private var picked: ProfileID = .default
@@ -229,7 +229,7 @@ struct LinksPane: View {
 
 // MARK: - Shortcuts
 
-struct ShortcutsPane: View {
+struct ShortcutsSettingsPane: View {
     let context: PaneContext
 
     var body: some View {
