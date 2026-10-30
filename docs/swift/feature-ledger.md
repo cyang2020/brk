@@ -2,13 +2,13 @@
 
 ## About this ledger
 
-This is the complete list of what Arc does, with the status of our native rebuild (Brk) against each item. It is meant for planning the next implementation waves.
+This is the Arc feature inventory and the archived wave-1 implementation snapshot. The table and counts below describe `c61735f`, not the current checkout. Read [Wave 2 status](wave2-status.md) for the settings, profiles, windows, command bar, and Library changes and their current verification.
 
 The Arc side comes from `docs/arc-anatomy/model-and-shortcuts.md` (sections 1 to 4, written "anatomy-m 2.3" and so on) and `docs/arc-anatomy/visual-and-copy.md` section 3 ("anatomy-v 3"). Bundle names such as `ARC_LittleBrowser` are the resource bundles in anatomy-m 3.1. The Brk side was read from `main` at `c61735f` (Swift wave 1 merged), on 2026-10-30.
 
 What was checked directly, and how:
 
-- `swift test --scratch-path /tmp/brk-ledger-build` on `c61735f`: 302 tests executed, 0 failures. So every test named below passes today.
+- `swift test --scratch-path /tmp/brk-ledger-build` on `c61735f`: 302 tests executed, 0 failures. The test results below belong to that revision.
 - The e2e scenarios (ids 0 to 9, R2 to R10, N1 to N4, defined in `docs/design/swift/module-map.md`, "E2E scenarios") have not yet produced a result. The first integrated run against the real Chromium app crashed the runner before it wrote `verify/swift/REPORT.md` (audit row 2026-10-30T11:45:31Z; `/tmp/int-swift-e2e.log` ends with "Trace/BPT trap: 5"). That run left screenshots in `verify/swift/shots/`, failure captures for N1, R2 and R3, and no log at all for N2, N3 and N4. A scenario id in this ledger therefore means "this scenario covers it", not "it passed on the real app", unless the row says otherwise.
 - Screenshots `verify/swift/shots/2-command-bar.png` and `7-archive.png` were looked at: sidebar with title row, URL pill, the Favorites empty state, the New Tab row, a selected Today row, the dock, a white rounded card, the centered command bar, and the archive page inside the card.
 
@@ -254,18 +254,14 @@ Foundations first: each item lists what later items need from it.
 
 Picture in picture, captures, media controls, hover cards and the theme editor are each L and come right after these ten. Before any of it, the e2e runner has to finish a run and N1, R2 and R3 have to pass, because that is how every item above gets proven.
 
-## Open questions for the user
+## Decisions after this snapshot
 
-- AI stand-ins: OpenAI with your own key only, a local model (for example through Ollama), or both with a switch?
-- Product name: stay "Brk"? And what replaces "Arc" in copy such as "Quit Arc" and "Welcome to Arc"?
+The user chose Swift from scratch, the name Brk, local Claude or Codex command-line tools for AI, and file export instead of share links. Account, membership, and referral screens are dropped. The updater waits. Arc was installed for comparison, but no authenticated reference session has been captured. Integration defaults assign Shift+Cmd+N to Incognito and omit Send to Dia. These decisions replace the corresponding questions from the wave-1 snapshot.
+
+## Remaining product choices
+
 - First launch: reproduce Arc's 21 seed tabs (they point at The Browser Company's pages), use our own, or start with one tab as now?
 - Notes: Arc itself is retiring Notes ("We've phased out Arc Notes"). Build them anyway?
-- Account, sign in, membership card and referrals need Arc's servers: drop them, or keep the screens with local stand-ins (for example all app icons unlocked)?
-- Sharing by link (spaces, tabs, Easels) needs a server: drop it, or replace it with export to a file?
-- Updates: ship Sparkle with our own feed, or no updater for now?
-- "Send to Dia" and other Browser Company links: drop them?
-- Pixel identity needs captures of the real Arc to compare with. May we install Arc 1.170 on this Mac and capture its screens as the reference?
 - Translation: which free API (for example a self-hosted LibreTranslate)?
 - Local-folder sync: which folder (iCloud Drive, Dropbox, any folder), and what happens when two Macs change the same space?
-- Shift+Cmd+N is both New Incognito Window and New Folder in Arc's nib. Which should win?
 - Popups that need `window.opener` (sign-in windows) currently open as tabs and lose it. Is that acceptable until a later wave?

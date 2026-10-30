@@ -2,6 +2,8 @@
 
 Branch `feat/swift-wave2-contracts`, from `main` at `d751114` (wave 1 merged, 24 e2e scenarios PASS on the real engine). This document is what the five wave-2 workers (F1 to F5) write against. It extends `module-map.md` and `rationale.md`; where it changes a frozen contract, the change is listed here with every caller already updated.
 
+The contract baseline below is historical. The five implementations and four Codex continuations have since merged. [Wave 2 status](../../swift/wave2-status.md) records the integration checks and remaining limits. Integration adds `AppEffect.showSettings` so a request raises the existing Settings window even when the pane is unchanged. The CEF engine recreates a page when its `BrowsingContext` changes.
+
 Verified on this branch: `swift build` 0, `swift build --explicit-target-dependency-import-check error` 0, `swift test` 379 run (30 `XCTSkip` stubs naming their owner), `scripts/build.sh` 0, `SKIP_BUILD=1 scripts/e2e.sh` 24 PASS with W2-1 to W2-12 SKIPPED as pending.
 
 ## Contract changes (one line each)
@@ -90,12 +92,13 @@ On this Mac both tools are installed (`~/.local/bin/claude`, `~/.local/bin/codex
 
 User decision: share-by-link becomes file export. `AppCommand.export(ExportSubject)` (a space, the focused tab, chosen items) is the "Share…" row; the reducer builds an `ExportDocument` (title plus a tree of links and folders) from state and emits `Effect.export(document)`. `ExportCodec` (in `Codec.swift`, with the other file format) encodes it as JSON (our shape, sorted keys) or a Netscape bookmark HTML file every browser imports. `BrkApp/ShareExport.swift` shows the save panel (JSON or HTML by the chosen extension) and writes the bytes. Easel export joins when Easels do.
 
-## Open questions
+## Implementation decisions
 
-- Shift+Cmd+N is both New Incognito Window and New Folder in Arc's nib. The table keeps both; `KeyBindings` reports a conflict and routes the chord to no one until the user resolves it in the Shortcuts pane (where Arc shows "Remove Conflicting Shortcut"). Should Brk ship a default resolution instead, and which way?
-- Arc's Library replaces the sidebar with a 417 pt panel (layout-constants.md, high confidence) and shows the page in the content area; the brief and wave 1 put the Library inside the content card with a page strip. Pixel identity with Arc would mean the sidebar takeover. Which one?
-- Send to Dia: dropped from the table (a Browser Company product link). Confirm.
+- Shift+Cmd+N opens an Incognito window by default. The Shortcuts pane permits remapping.
+- Library replaces the sidebar with the 417 pt panel from `layout-constants.md` and puts its page in the content area.
+- Send to Dia is omitted.
 - Little Arc's other default sizes (800 x 600, 490 x 600, 490 x 329) belong to untraced branches; the window uses 1185 x 832 until F3 learns which branch is which.
 - Peek geometry (inset 40, radius 12, hint strip 28) and the Library strip height (44) are guesses; Arc's values were not recovered. F3 and F5 should measure them in the real Arc once the login wall is passed.
-- Per-profile Chromium data on disk is CefSwift's `<rootCachePath>/Profiles/<id>`; deleting a profile can only drop the directory at the next launch (Chromium holds it while running). Is a marker file at `<data dir>/profiles-to-delete` acceptable (F2)?
-- `CFBundleURLTypes` for http and https must be declared in the built bundle before `setDefaultApplication` works; the CEF plugin writes the Info.plist. F3 decides whether to patch the plugin's template or post-process `dist/Brk.app/Contents/Info.plist` in `scripts/build.sh`.
+- Per-profile Chromium data uses `<rootCachePath>/Profile-<id>`. The deeper original path was rejected by CEF and failed cookie isolation. Profile deletion is recorded and applied before CEF starts at the next launch.
+- `scripts/declare-url-types.sh` adds HTTP and HTTPS URL types after bundling. `scripts/build.sh` then signs and verifies the bundle again.
+- Cmd+Shift+J defaults to app priority. Chrome runtime sometimes consumes its own download accelerator before Brk receives `OnKeyEvent`. This host adaptation differs from Arc's extracted default. The original menu evidence is retained, and explicit user priority overrides still apply.

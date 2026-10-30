@@ -39,8 +39,8 @@ public struct PageSpec: Hashable, Sendable, Codable {
     public let id: PageID
     /// Nil for an empty split pane waiting for the command bar: the engine creates no browser for it.
     public let initialURL: URL?
-    /// The request context the page browses in. Read at creation: a tab that moves to a space of another profile
-    /// keeps its page until it is unloaded (Arc behaves the same).
+    /// The request context the page browses in. A changed context recreates the browser so the tab cannot retain
+    /// the previous profile's cookies and storage.
     public let context: BrowsingContext
 
     public init(id: PageID, initialURL: URL?, context: BrowsingContext) {

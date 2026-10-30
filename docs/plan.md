@@ -1,5 +1,7 @@
 # 复刻 Arc 浏览器：执行方案
 
+这份 Electron 方案已归档。用户后来要求改用 Swift 从零实现，Electron 代码保存在 `electron-v1` tag。当前原生架构见 [Swift 模块说明](design/swift/module-map.md)，最新实现与验证见 [第二波状态](swift/wave2-status.md)。下面的范围和命令不再作为当前交付标准。
+
 这份文档是整个工作的"剧本"。按 pstack 的 figure-it-out 流程写：先定完成标准，再定范围和严格程度，再列阶段。决策记录在 `.audit/arc-clone.tsv`，一行一个决定。
 
 ## 背景
