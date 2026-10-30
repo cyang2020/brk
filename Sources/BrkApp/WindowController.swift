@@ -10,15 +10,15 @@ import os
 /// One browser window: an NSWindow with a full-size, transparent title bar (traffic lights over the sidebar), its
 /// root view, and the glue that turns a `WindowSnapshot` into frames, views, page placement and focus.
 @MainActor
-public final class WindowController: NSObject, NSWindowDelegate {
+public class WindowController: NSObject, NSWindowDelegate {
     public let id: WindowID
-    /// Standard, incognito or Little Arc. TODO(F3): a `LittleWindowController` over an NSPanel for `.little`; today
-    /// the little window is a standard window at Little Arc's default size with no sidebar.
+    /// Standard, incognito or Little Arc. A `.little` window is hosted by `LittleWindowController` (an NSPanel with
+    /// Arc's hint strip and "Open in" control); the store picks the controller by kind.
     public let kind: WindowKind
-    public let window: BrowserWindow
+    public let window: any HostWindow
     let root: WindowRootView
     private let engine: any WebEngine
-    private let send: @MainActor (Input) -> Void
+    let send: @MainActor (Input) -> Void
     private(set) var lastSnapshot: WindowSnapshot?
     private(set) var lastFrames: WindowFrames?
     private var pendingFocus: FocusTarget?
@@ -27,21 +27,29 @@ public final class WindowController: NSObject, NSWindowDelegate {
     /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
     /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
     /// shortcuts work with a native view focused, where AppKit's menu would not fire for a hidden item.
-    init(id: WindowID, kind: WindowKind = .standard, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void,
-         routeKey: @escaping @MainActor (KeyInput) -> Bool = { _ in false }) {
-        self.id = id
-        self.kind = kind
-        self.engine = engine
-        self.send = send
-        window = BrowserWindow(
+    convenience init(id: WindowID, kind: WindowKind = .standard, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void,
+                     routeKey: @escaping @MainActor (KeyInput) -> Bool = { _ in false }) {
+        let window = BrowserWindow(
             contentRect: CGRect(origin: .zero, size: kind == .little ? Metrics.littleArc.defaultSize.value : Metrics.window.defaultSize.value),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
-        root = WindowRootView(dispatch: { command in send(.user(id, command)) })
-        super.init()
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        self.init(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey, window: window)
+    }
+
+    /// The host window is made by the caller (a `BrowserWindow`, or `LittleWindowController`'s panel); this installs
+    /// the root view, the delegate and the two routing hooks every host window shares.
+    init(id: WindowID, kind: WindowKind, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void,
+         routeKey: @escaping @MainActor (KeyInput) -> Bool, window: any HostWindow) {
+        self.id = id
+        self.kind = kind
+        self.engine = engine
+        self.send = send
+        self.window = window
+        root = WindowRootView(dispatch: { command in send(.user(id, command)) })
+        super.init()
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
@@ -57,14 +65,20 @@ public final class WindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Restores the saved frame once (`WindowPlacement.fit`), before the window is shown. The resulting
-    /// `windowDidResize` reports the fitted frame to the store, which queues it behind the current dispatch.
+    /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
+    /// reports the fitted frame to the store, which queues it behind the current dispatch.
     func place(_ snapshot: WindowSnapshot) {
         guard !placed else { return }
         placed = true
         let screens = NSScreen.screens.map(\.visibleFrame)
         let main = NSScreen.main?.visibleFrame ?? CGRect(origin: .zero, size: Metrics.window.defaultSize.value)
-        window.setFrame(WindowPlacement.fit(snapshot.bounds, screens: screens, main: main), display: false)
+        window.setFrame(initialFrame(for: snapshot, screens: screens, main: main), display: false)
+    }
+
+    /// Where the window first appears: the saved frame when it is on a screen, else centered (`WindowPlacement.fit`).
+    /// A subclass with another default size answers differently.
+    func initialFrame(for snapshot: WindowSnapshot, screens: [CGRect], main: CGRect) -> CGRect {
+        WindowPlacement.fit(snapshot.bounds, screens: screens, main: main)
     }
 
     /// Applies a snapshot: frames = `WindowLayout.compute(snapshot, contentSize)`; `root.render(...)` with
@@ -116,33 +130,62 @@ public final class WindowController: NSObject, NSWindowDelegate {
     }
 
     private func reportGeometry() {
-        let content = window.contentView?.bounds.size ?? .zero
+        let content = root.bounds.size
         send(.system(.window(id, .geometry(bounds: window.frame, contentSize: content))))
     }
 }
 
-/// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
+/// What a browser host window adds to NSWindow: the two routing hooks the controller installs. `BrowserWindow`
+/// (standard and incognito windows) and `BrowserPanel` (Little Arc) conform; the shared event handling is in the
+/// extension, so both classes' `sendEvent` and `performKeyEquivalent` overrides are one line each.
 @MainActor
-public final class BrowserWindow: NSWindow {
-    /// Called for every `flagsChanged`, so Control going up or down reaches the reducer whoever has focus.
-    var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+public protocol HostWindow: NSWindow {
+    /// Called for every `flagsChanged` (and every mouse-down, which carries the modifiers held at that moment), so
+    /// Control going up or down and a Shift held for a click reach the reducer whoever has focus.
+    var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)? { get set }
     /// A key equivalent the window's views did not take (a native view has focus, or none): the shortcut table
     /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
-    var onKeyEquivalent: ((NSEvent) -> Bool)?
-    private let keyLog = Logger(subsystem: "brk", category: "keys")
+    var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
+    /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
+    func placeTrafficLights(origin: CGPoint?)
+}
 
-    public override func sendEvent(_ event: NSEvent) {
-        if event.type == .flagsChanged { onFlagsChanged?(event.modifierFlags) }
+private let keyLog = Logger(subsystem: "brk", category: "keys")
+
+extension HostWindow {
+    /// The first step of `sendEvent`. Reports modifiers: every `flagsChanged`, and every mouse-down (the event
+    /// carries the modifiers held at that moment, so a Shift+click is known to the reducer even when the
+    /// `flagsChanged` went to another window or was never sent, as the control socket's injected clicks are).
+    /// Then, with a native view (or nothing) focused, the table decides a key-down first, the way Arc's key-binding
+    /// layer does before AppKit's menu: AppKit never fires a hidden menu item's key equivalent and only offers
+    /// Command chords to `performKeyEquivalent`, so Ctrl+Tab and Arc's hidden rows would otherwise die here. An
+    /// unbound key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium
+    /// gets the event and CEF's key handler routes it (before and after the page). Returns true when consumed.
+    func hostEvent(_ event: NSEvent) -> Bool {
+        switch event.type {
+        case .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown: onFlagsChanged?(event.modifierFlags)
+        default: break
+        }
         if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {
             keyLog.notice("window.sendEvent keyDown code=\(event.keyCode, privacy: .public) eventWindow=\(event.windowNumber, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
         }
-        // With a native view (or nothing) focused the table decides first, the way Arc's key-binding layer does
-        // before AppKit's menu: AppKit never fires a hidden menu item's key equivalent and only offers Command
-        // chords to `performKeyEquivalent`, so Ctrl+Tab and Arc's hidden rows would otherwise die here. An unbound
-        // key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium gets
-        // the event and CEF's key handler routes it (before and after the page).
-        if event.type == .keyDown, Self.surface(containing: firstResponder)?.routesKeysThroughWindow ?? true, routeKeyEquivalent(event) { return }
-        super.sendEvent(event)
+        return event.type == .keyDown && (Self.surface(containing: firstResponder)?.routesKeysThroughWindow ?? true) && routeKeyEquivalent(event)
+    }
+
+    /// `performKeyEquivalent`'s tail: the views' answer, logged, then the table's turn. With a page focused
+    /// Chromium's view already took the event, so the table only runs with a native view (or nothing) focused.
+    func hostKeyEquivalent(_ event: NSEvent, handledByViews handled: Bool) -> Bool {
+        keyLog.notice("window.performKeyEquivalent code=\(event.keyCode, privacy: .public) handledByViews=\(handled, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
+        return handled || routeKeyEquivalent(event)
+    }
+
+    /// The table's turn after the views. Also called by the control socket's injector, which delivers to the
+    /// content view and the menu by hand when the window is not key.
+    public func routeKeyEquivalent(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, let route = onKeyEquivalent else { return false }
+        let routed = route(event)
+        if routed { keyLog.notice("window.routeKeyEquivalent code=\(event.keyCode, privacy: .public) consumed by the table") }
+        return routed
     }
 
     /// The page surface the responder sits in (the engine's views), if any.
@@ -155,23 +198,6 @@ public final class BrowserWindow: NSWindow {
         return nil
     }
 
-    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let handled = super.performKeyEquivalent(with: event)
-        keyLog.notice("window.performKeyEquivalent code=\(event.keyCode, privacy: .public) handledByViews=\(handled, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
-        if handled { return true }
-        return routeKeyEquivalent(event)
-    }
-
-    /// The table's turn after the views: with a page focused Chromium's view already took the event, so this only
-    /// runs with a native view (or nothing) focused. Also called by the control socket's injector, which delivers
-    /// to the content view and the menu by hand when the window is not key.
-    func routeKeyEquivalent(_ event: NSEvent) -> Bool {
-        guard event.type == .keyDown, let route = onKeyEquivalent else { return false }
-        let routed = route(event)
-        if routed { keyLog.notice("window.routeKeyEquivalent code=\(event.keyCode, privacy: .public) consumed by the table") }
-        return routed
-    }
-
     static func describe(_ responder: NSResponder?) -> String {
         guard let responder else { return "nil" }
         return NSStringFromClass(type(of: responder))
@@ -179,7 +205,7 @@ public final class BrowserWindow: NSWindow {
 
     /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top. `origin` is in
     /// the window's top-left content space; nil hides them (sidebar hidden).
-    func placeTrafficLights(origin: CGPoint?) {
+    func placeArcTrafficLights(origin: CGPoint?) {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
         guard let origin, let container = buttons.first?.superview else {
             buttons.forEach { $0.isHidden = true }
@@ -195,4 +221,22 @@ public final class BrowserWindow: NSWindow {
             button.setFrameOrigin(CGPoint(x: x, y: y))
         }
     }
+}
+
+/// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
+@MainActor
+public final class BrowserWindow: NSWindow, HostWindow {
+    public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+    public var onKeyEquivalent: ((NSEvent) -> Bool)?
+
+    public override func sendEvent(_ event: NSEvent) {
+        if hostEvent(event) { return }
+        super.sendEvent(event)
+    }
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        hostKeyEquivalent(event, handledByViews: super.performKeyEquivalent(with: event))
+    }
+
+    public func placeTrafficLights(origin: CGPoint?) { placeArcTrafficLights(origin: origin) }
 }
