@@ -1,0 +1,6 @@
+(version 1)
+(deny default)
+(allow file-read* (subpath (param "ROOT")) (subpath "/System") (subpath "/usr/lib") (literal "/dev/urandom"))
+(allow file-write* (subpath (param "WRITE")))
+(allow process-exec (literal (string-append (param "ROOT") "/probe")))
+(allow sysctl-read)

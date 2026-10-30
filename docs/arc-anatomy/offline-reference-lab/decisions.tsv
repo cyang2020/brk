@@ -1,0 +1,8 @@
+ts	phase	decision	why	evidence	result
+2026-10-30T18:11:21.957434+00:00	start	Record this single-agent investigation and its bounded scope	User prohibited subagents and production edits	REPORT.md	start 6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d
+2026-10-30T18:11:21.957619+00:00	identity	Reuse matching cached disassembly and recheck installed bytes	Avoid repeat full import and stale-target claims	evidence/identity.json	arm64 equal; seven branch checks pass
+2026-10-30T18:11:21.957621+00:00	containment	Stop before copying or launching Arc	Strict owned probe returned SIGABRT without marker or service results	evidence/containment-probe.json	NOT_ESTABLISHED; owned root removed
+2026-10-30T18:11:21.957623+00:00	capture	Replace incomplete AppKit enumeration with signed process and kernel identity	WindowServer and ps identified an Arc window absent from AppKit enumeration	evidence/cloud-windows.json	original Arc PID 45596; window 16
+2026-10-30T18:11:21.957625+00:00	capture	Accept an empty ScreenCaptureKit bundle label only with independently verified Arc signature and matching PID	Cloud ScreenCaptureKit omitted the label; do not fabricate it or lose identity validation	evidence/cloud-existing-window/metadata.json	real window captured; raw empty label retained
+2026-10-30T18:11:21.957627+00:00	validation	Inspect genuine PNG and verify helper failure paths	Capture must contain actual pixels and preserve unrelated files	evidence/helper-checks.json	welcome screen captured; authenticated chrome still required
+2026-10-30T18:11:21.957629+00:00	review	Review source and evidence in this agent	Explicit task forbids subagents, overriding the cross-model trail review step	REPORT.md	known limits retained; no Arc launch
