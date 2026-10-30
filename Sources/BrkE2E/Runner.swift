@@ -84,7 +84,17 @@ final class Runner {
             outcome = .fail
             message = "\(error)"
             died = error is AppDied
-            if app.isRunning { _ = try? app.screenshot("failure") }
+            if app.isRunning {
+                _ = try? app.screenshot("failure")
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                if let native = try? app.native(), let json = try? encoder.encode(native) {
+                    try? json.write(to: logs.appendingPathComponent("\(scenario.id)-native.json"))
+                }
+                if let view = try? app.view(), let json = try? encoder.encode(view) {
+                    try? json.write(to: logs.appendingPathComponent("\(scenario.id)-view.json"))
+                }
+            }
         }
         if outcome == .fail, !app.checkpoints.isEmpty, let failure = message {
             message = "\(failure) (passed before it: \(app.checkpoints.joined(separator: "; ")))"
