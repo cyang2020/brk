@@ -109,13 +109,8 @@ public final class SidebarView: NSView {
         urlPill.render(snapshot.urlPill, palette: palette)
         favorites.frame = local(f.favoritesTray)
         favorites.render(snapshot.favorites, frames: f, palette: palette)
-        if let rect = f.spaceHeaderFrame {
-            spaceHeader.isHidden = false
-            spaceHeader.frame = local(rect)
-            spaceHeader.render(snapshot.space, palette: palette)
-        } else {
-            spaceHeader.isHidden = true
-        }
+        spaceHeader.frame = local(f.spaceHeader)
+        spaceHeader.render(snapshot.space, palette: palette)
         tablist.frame = local(f.tablistViewport)
         tablist.render(snapshot.space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette)
         dock.frame = local(f.dock)
@@ -179,13 +174,6 @@ public final class SidebarView: NSView {
         floatingWatch?.cancel()
         floatingWatch = nil
     }
-}
-
-extension SidebarFrames {
-    /// The space header row above the tab list (Arc: `pinnedTabsHeader`, 36 pt, cra L745: y 99-135 between the
-    /// favorites and the scroll area). `SidebarFrames` has no field for it yet (Deviation D1); until W1 adds
-    /// `spaceHeader`, the header is not shown rather than placed by a position the layout did not compute.
-    var spaceHeaderFrame: CGRect? { nil }
 }
 
 /// The title row: sidebar toggle after the traffic lights, then back, forward and reload (stop while loading)

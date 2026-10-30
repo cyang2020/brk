@@ -9,7 +9,8 @@ final class Runner {
 
     init(_ arguments: RunnerArguments) { self.arguments = arguments }
 
-    func runAll() throws -> (results: [E2EResult], machine: E2EMachine, seconds: Double) {
+    /// Runs the scenarios and writes `<out>/REPORT.md` after each one (see main.swift); returns the results.
+    func runAll() throws -> [E2EResult] {
         signal(SIGPIPE, SIG_IGN)
         let fm = FileManager.default
         let out = arguments.outputDirectory
@@ -30,14 +31,28 @@ final class Runner {
         let started = uptime()
         let selected = Scenarios.all.filter { arguments.only?.contains($0.id) ?? true }
         var results: [E2EResult] = []
+        /// The report so far; while `running` is set, that scenario is listed as FAIL (a runner that dies in it never
+        /// gets to replace the line).
+        func writeReport(running: Scenario?) throws {
+            var listed = results
+            if let running {
+                listed.append(E2EResult(id: running.id, title: running.title, outcome: .fail, seconds: 0,
+                                        message: Trap.unfinishedMessage, log: "logs/\(running.id).log"))
+            }
+            let report = E2EReport.markdown(listed, machine: machine(), totalSeconds: uptime() - started)
+            try report.write(to: out.appendingPathComponent("REPORT.md"), atomically: true, encoding: .utf8)
+        }
         for (index, scenario) in selected.enumerated() {
+            Trap.entering(scenario.id)
+            try writeReport(running: scenario)
             let result = run(scenario, index: index, server: server, scratch: scratch, shots: shots, logs: logs)
             print("[e2e] \(result.outcome.rawValue) \(result.id) (\(String(format: "%.1f", result.seconds)) s)\(result.message.map { ": \($0)" } ?? "")")
             results.append(result)
+            try writeReport(running: nil)
         }
-        let seconds = uptime() - started
+        Trap.entering(nil)
         if !results.contains(where: { $0.outcome == .fail }) { try? fm.removeItem(at: scratch) }
-        return (results, machine(), seconds)
+        return results
     }
 
     private func run(_ scenario: Scenario, index: Int, server: FixtureServer, scratch: URL, shots: URL, logs: URL) -> E2EResult {
@@ -120,5 +135,35 @@ final class Runner {
         let text = String(decoding: data, as: UTF8.self)
         guard let range = text.range(of: "<key>CGSSessionScreenIsLocked</key>") else { return false }
         return text[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<true/>")
+    }
+}
+
+/// A fatal signal in the runner (a Swift runtime trap is SIGTRAP, and a release build prints nothing for it) writes
+/// one line naming the scenario it happened in, then takes the default action, so the shell still reports the
+/// signal. The line is prepared outside the handler: a signal handler may only call async-signal-safe functions.
+enum Trap {
+    static let unfinishedMessage = "the runner stopped inside this scenario (a trap or a kill; its stderr names the signal)"
+    private static let capacity = 256
+    nonisolated(unsafe) private static let line = UnsafeMutablePointer<CChar>.allocate(capacity: capacity)
+    /// The app under test, killed with the runner so it does not outlive it holding the display (0: none).
+    nonisolated(unsafe) static var appPID: pid_t = 0
+
+    static func install() {
+        line.initialize(repeating: 0, count: capacity)
+        for sig in [SIGTRAP, SIGILL, SIGABRT, SIGSEGV, SIGBUS, SIGFPE] {
+            signal(sig) { sig in
+                _ = write(STDERR_FILENO, Trap.line, strlen(Trap.line))
+                if Trap.appPID > 0 { kill(Trap.appPID, SIGKILL) }
+                signal(sig, SIG_DFL)
+                raise(sig)
+            }
+        }
+    }
+
+    /// The scenario now running, or nil between scenarios.
+    static func entering(_ id: String?) {
+        let text = id.map { "brk-e2e: fatal signal inside scenario \($0); REPORT.md lists it as FAIL\n" }
+            ?? "brk-e2e: fatal signal between scenarios; REPORT.md is complete\n"
+        _ = strlcpy(line, text, capacity)
     }
 }

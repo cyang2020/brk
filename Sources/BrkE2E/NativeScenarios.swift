@@ -9,8 +9,9 @@ import Foundation
 /// pages, pixel layout from one function, the ordered quit).
 enum NativeScenarios {
     /// The title keys.html sets for a key it saw: "key:<chord in KeyChord order>:seen" (":swallowed" with ?swallow=1).
+    /// `KeyChord` knows only the shortcut keys; a plain typed character ("y") is its own name.
     static func keyTitle(_ chord: String, swallowed: Bool = false) -> String {
-        "key:\(KeyChord(parsing: chord)!.description):\(swallowed ? "swallowed" : "seen")"
+        "key:\(KeyChord(parsing: chord)?.description ?? chord.lowercased()):\(swallowed ? "swallowed" : "seen")"
     }
 
     /// N1 (CEF): app-priority Cmd+T never reaches keys.html; page-priority Cmd+Shift+K reaches it first and then

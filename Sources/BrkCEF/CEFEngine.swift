@@ -42,6 +42,10 @@ public final class CEFEngine: WebEngine {
     private var windowWaiter: CheckedContinuation<Void, Never>?
     /// A `focus(page)` for a page whose input view has not arrived yet; applied by `pageReadyForFocus`.
     private var pendingFocus: PageID?
+    /// The page the app last gave keyboard focus to (nil once a native view took it). Chromium replaces the page's
+    /// input view when a navigation commits in a new renderer, and AppKit then makes the window first responder;
+    /// the page's next event (commit, loading, title) re-applies the focus to the new view.
+    private var focusedPage: PageID?
     private let log = Logger(subsystem: "brk", category: "cef")
 
     enum ShutdownPhase: Equatable {
@@ -134,9 +138,11 @@ public final class CEFEngine: WebEngine {
         guard phase == .running else { return }
         guard let page, let target = live[page] else {
             pendingFocus = nil
+            focusedPage = nil
             for live in live.values where live.surface.containsFirstResponder { live.dropFocus() }
             return
         }
+        focusedPage = page
         if target.surface.isReadyForFocus {
             pendingFocus = nil
             target.takeFocus()
@@ -229,6 +235,17 @@ public final class CEFEngine: WebEngine {
 
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
         guard phase == .running, live[page.id] === page else { return }  // events from a retired incarnation are dropped
+        switch event {
+        case .committed, .loadingChanged, .titleChanged:
+            let holds = page.surface.containsFirstResponder, ready = page.surface.isReadyForFocus
+            log.debug("page \(page.id.description, privacy: .public): \(String(describing: event).prefix(40), privacy: .public) focused=\(self.focusedPage == page.id, privacy: .public) holdsFirstResponder=\(holds, privacy: .public) ready=\(ready, privacy: .public)")
+            if focusedPage == page.id, !holds, ready {
+                log.notice("page \(page.id.description, privacy: .public): input view replaced; focus re-applied")
+                page.takeFocus()
+            }
+        default:
+            break
+        }
         delegate?.engine(self, page: page.id, didEmit: event)
     }
 
@@ -256,6 +273,7 @@ public final class CEFEngine: WebEngine {
         case .liveClosedByPage:
             if live[page.id] === page { live[page.id] = nil }
             if pendingFocus == page.id { pendingFocus = nil }
+            if focusedPage == page.id { focusedPage = nil }
             page.surface.returnViews()
             destroying[page.incarnation] = page
             if phase == .running {

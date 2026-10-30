@@ -7,14 +7,17 @@
 // over the control socket, screenshots into <out>/shots/, then the after-scenario checks (no CEF host window was key,
 // a clean quit with exit status 0, no new crash report in ~/Library/Logs/DiagnosticReports). Writes <out>/REPORT.md
 // and <out>/logs/<scenario>.log (the app's stdout and stderr). Exit status 1 when any scenario failed.
+//
+// The report is rewritten before and after every scenario, with the running one marked FAIL until it finishes, so a
+// runner that traps or is killed mid-scenario leaves a report that says which scenario it died in, never no report.
 import BrkControl
 import Foundation
 
+setlinebuf(stdout)   // every "[e2e] PASS/FAIL" line reaches a log file before a later trap could lose it
+Trap.install()
 do {
     let arguments = try RunnerArguments(CommandLine.arguments)
-    let (results, machine, seconds) = try Runner(arguments).runAll()
-    let report = E2EReport.markdown(results, machine: machine, totalSeconds: seconds)
-    try report.write(to: arguments.outputDirectory.appendingPathComponent("REPORT.md"), atomically: true, encoding: .utf8)
+    let results = try Runner(arguments).runAll()
     print("[e2e] wrote \(arguments.outputDirectory.appendingPathComponent("REPORT.md").path)")
     exit(results.contains { $0.outcome == .fail } ? 1 : 0)
 } catch {

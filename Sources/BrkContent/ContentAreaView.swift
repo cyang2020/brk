@@ -25,6 +25,13 @@ public final class ContentAreaView: NSView {
 
     public override var isFlipped: Bool { true }
 
+    /// This view spans the window (cards are in window coordinates), so only its cards and dividers take clicks;
+    /// anywhere else the views below it (the sidebar, the dock) do.
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit === self ? nil : hit
+    }
+
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
     /// i hosts the surface for pane i (`.page`), a white card (`.blank`) or the sad-tab placeholder (`.crashed`).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.

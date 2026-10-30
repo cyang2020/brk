@@ -67,10 +67,15 @@ final class ChromePage: CefBrowserDelegate {
     /// Keyboard focus into the page: our window (never the host) becomes key and Chromium's input view inside the
     /// surface becomes first responder; Chromium is told it has focus (the spike's focus sequence, u2-bar).
     func takeFocus() {
-        guard let window = surface.window else { return }
+        guard let window = surface.window else {
+            log.notice("page \(self.id.description, privacy: .public): takeFocus with no window")
+            return
+        }
         if !window.isKeyWindow { window.makeKey() }
-        window.makeFirstResponder(surface.keyboardTarget)
+        let target = surface.keyboardTarget
+        let accepted = window.makeFirstResponder(target)
         chrome.browser.setFocus(true)
+        log.notice("page \(self.id.description, privacy: .public): takeFocus -> \(NSStringFromClass(type(of: target)), privacy: .public) accepted=\(accepted, privacy: .public) firstResponder=\(window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil", privacy: .public)")
     }
 
     func dropFocus() { chrome.browser.setFocus(false) }
@@ -116,6 +121,16 @@ final class ChromePage: CefBrowserDelegate {
             engine.pageDidEmit(self, .openRequested(url, disposition))
         }
         return .handled
+    }
+
+    /// A link opened with a modifier (Cmd+click) arrives here (CEF's OnOpenURLFromTab), not as a popup. Handled the
+    /// same way: a tab the domain creates; unhandled, CEF would make a Chrome-runtime browser without a client that
+    /// nothing closes and that crashes cef_shutdown. The wrapper does not forward the disposition on this path, so
+    /// every such open is a background tab (Cmd+click's); Cmd+Shift+click is not told apart.
+    func browser(_ b: CefBrowser, didRequestNewTab url: URL?) -> Bool {
+        guard let url else { return false }
+        engine.pageDidEmit(self, .openRequested(url, .backgroundTab))
+        return true
     }
 
     func browserDidClose(_ b: CefBrowser) { engine.pageDidClose(self) }

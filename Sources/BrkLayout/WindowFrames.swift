@@ -62,6 +62,9 @@ public struct SidebarFrames: Sendable, Equatable, Codable {
     public var urlPill: CGRect
     public var favoritesTray: CGRect
     public var favoriteTiles: [ItemID: CGRect]
+    /// The space title strip (Arc: `pinnedTabsHeader`, Metrics.tablist.spaceHeaderHeight) between the favorites
+    /// tray and the tab list; W3 draws the space's icon and name there and a click collapses Pinned.
+    public var spaceHeader: CGRect
     /// The scrolling tab list's visible rect; rows are in its document coordinates.
     public var tablistViewport: CGRect
     public var rows: [RowFrame]

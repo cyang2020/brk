@@ -165,3 +165,22 @@ public enum Quit {
     /// without terminating the test process.
     public static var perform: @MainActor () -> Void = { RunLoop.main.perform { NSApp.terminate(nil) } }
 }
+
+/// A fatal signal in the browser process writes a backtrace to stderr before the default action, so an e2e log
+/// (the runner keeps each scenario's stderr) or a terminal shows where a crash came from even when no crash report
+/// is written. `backtrace_symbols_fd` writes straight to the descriptor; the handler allocates nothing else.
+public enum CrashBacktrace {
+    public static func install() {
+        for sig in [SIGSEGV, SIGBUS, SIGILL, SIGTRAP, SIGABRT, SIGFPE] {
+            signal(sig) { sig in
+                let frames = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: 128)
+                let count = backtrace(frames, 128)
+                let header = "\(Product.name): fatal signal \(sig), backtrace:\n"
+                _ = header.withCString { write(STDERR_FILENO, $0, strlen($0)) }
+                backtrace_symbols_fd(frames, count, STDERR_FILENO)
+                signal(sig, SIG_DFL)
+                raise(sig)
+            }
+        }
+    }
+}

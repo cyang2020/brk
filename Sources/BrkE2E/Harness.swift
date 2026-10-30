@@ -181,6 +181,7 @@ final class AppUnderTest {
         let process = AppProcess(executable: executable, environment: environment, log: log)
         self.process = process
         try process.start()
+        Trap.appPID = process.process.processIdentifier
 
         let deadline = uptime() + 10
         while true {
@@ -224,6 +225,7 @@ final class AppUnderTest {
            let incomplete = try? String(contentsOf: dataDirectory.appendingPathComponent("shutdown-incomplete.log"), encoding: .utf8) {
             exit += "; shutdown-incomplete.log: \(incomplete.split(whereSeparator: \.isNewline).joined(separator: ", "))"
         }
+        Trap.appPID = 0
         let pageLogFile = dataDirectory.appendingPathComponent("control-pagelog.json")
         let finalLog = (try? Data(contentsOf: pageLogFile)).flatMap { try? ControlWire.decode([PageLogEntry].self, line: $0.dropLast()) }
         try? FileManager.default.removeItem(at: pageLogFile)

@@ -231,6 +231,8 @@ public struct ThemeMetrics: MetricGroup {
     /// Wheel rules for the companion colors derived from the primary (Arc: `wheel` analogous | complimentary).
     public let analogousHueOffset = Metric(30.0, .guess("analogous companions at +-30 degrees; Arc's exact offset was not recovered"))
     public let complementaryHueOffset = Metric(180.0, .anatomy("model-and-shortcuts.md 1.13: wheel `complimentary` is the opposite hue"))
+    /// Lightness moved by each wheel companion: the first lighter, the second darker.
+    public let companionLightnessStep = Metric(0.06, .guess("electron-v1 theme.ts themeFromPrimary: companions 6% lighter and 6% darker; Arc's lightnessRange was not recovered"))
 }
 
 public struct LittleArcMetrics: MetricGroup {

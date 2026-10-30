@@ -8,9 +8,8 @@ import Foundation
 // is a `Metrics` value (layout-constants.md, cra measurements where the code was not traced).
 
 /// The sidebar column, top to bottom: title row (4 below the top, 40 tall), URL pill (2 below it, 36 tall, 8 in from
-/// each side), favorites tray (insets 8), the space header strip (36), the tab list viewport, and the dock (50) at
-/// the bottom. The space title strip has no frame of its own in `SidebarFrames`: it is the band from
-/// `favoritesTray.maxY` to `tablistViewport.minY`, full width.
+/// each side), favorites tray (insets 8), the space header strip (36, full width), the tab list viewport, and the
+/// dock (50) at the bottom.
 public enum SidebarLayout {
     public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem]) -> SidebarFrames {
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
@@ -26,10 +25,10 @@ public enum SidebarLayout {
         let cells = DockLayout.cells(count: dock.count, in: dockRect)
         var dockSpaces: [SpaceID: CGRect] = [:]
         for (item, rect) in zip(dock, cells.spaces) { dockSpaces[item.id] = rect }
-        let listTop = tray.maxY + Metrics.tablist.spaceHeaderHeight.value
-        let viewport = CGRect(x: frame.minX, y: listTop, width: frame.width, height: max(0, dockRect.minY - listTop))
+        let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: Metrics.tablist.spaceHeaderHeight.value)
+        let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, dockRect.minY - header.maxY))
         return SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
-                             favoriteTiles: tiles, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width),
+                             favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width),
                              dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus)
     }
 }

@@ -71,8 +71,10 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(f.urlPill, CGRect(x: 8, y: 46, width: 212, height: 36))
         XCTAssertEqual(f.favoritesTray, CGRect(x: 0, y: 82, width: 228, height: 63))
         XCTAssertEqual(f.favoriteTiles, [:])
-        // The space title strip (36) sits between the tray and the list: 145...181.
+        // The space header strip (36) sits between the tray and the list: 145...181.
+        XCTAssertEqual(f.spaceHeader, CGRect(x: 0, y: 145, width: 228, height: 36))
         XCTAssertEqual(f.tablistViewport, CGRect(x: 0, y: 181, width: 228, height: 545))
+        XCTAssertEqual(f.tablistViewport.minY, f.spaceHeader.maxY)
         XCTAssertEqual(f.dock, CGRect(x: 0, y: 726, width: 228, height: 50))
         XCTAssertEqual(f.libraryButton, CGRect(x: 8, y: 735, width: 32, height: 32))
         XCTAssertEqual(f.plusButton, CGRect(x: 188, y: 735, width: 32, height: 32))

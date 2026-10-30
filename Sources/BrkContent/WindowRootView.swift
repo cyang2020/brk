@@ -67,8 +67,7 @@ public final class WindowRootView: NSView {
             if sidebarFloats { addSubview(sidebar, positioned: .above, relativeTo: archive) }
             else { addSubview(sidebar, positioned: .above, relativeTo: background) }
         }
-        sidebar.isHidden = frames.sidebar == nil
-        if frames.sidebar != nil { sidebar.render(snapshot, frames: frames, palette: palette) }
+        sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
         content.render(snapshot.content, frames: frames, palette: palette, surface: surface)
         var archiveSnapshot: ArchiveSnapshot?, barSnapshot: CommandBarSnapshot?
         switch snapshot.overlay {

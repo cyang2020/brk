@@ -35,8 +35,6 @@ public final class AppStore {
     private let calendar = Calendar.autoupdatingCurrent
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
-    /// TEMPORARY (W2): stands in for the reducer rules W1 has not written yet; nil unless BRK_W1_SHIM=1.
-    private let shim = DomainShim.fromEnvironment()
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -44,7 +42,6 @@ public final class AppStore {
         self.engine = engine
         self.stateFile = stateFile
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
-        if let shim { snapshot = shim.patch(snapshot) }
     }
 
     /// The first render after launch: windows and pages from the restored snapshot, no transition. Runs as a
@@ -113,10 +110,6 @@ public final class AppStore {
     }
 
     private func apply(_ input: Input) -> Bool {
-        if let shim, let handled = shim.intercept(input, snapshot: snapshot) {
-            publish(docChanged: false)
-            return handled
-        }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         if t.changed {
             state = t.state
@@ -126,7 +119,7 @@ public final class AppStore {
         return t.keyHandled
     }
 
-    /// Project, patch (shim only), save, reconcile pages, then windows: closed ones go, new ones are placed and
+    /// Project, save, reconcile pages, then windows: closed ones go, new ones are placed and
     /// shown, every one renders. A new window is key and on screen before its first render, because keyboard focus
     /// into a Chromium view only sticks in a key window.
     private func publish(docChanged: Bool) {
@@ -147,8 +140,7 @@ public final class AppStore {
     }
 
     private func projected() -> AppSnapshot {
-        let snapshot = project(state, ProjectionContext(now: clock.now(), calendar: calendar))
-        return shim?.patch(snapshot) ?? snapshot
+        project(state, ProjectionContext(now: clock.now(), calendar: calendar))
     }
 
     private func renderWindows() {
