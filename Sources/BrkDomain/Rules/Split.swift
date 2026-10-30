@@ -26,7 +26,8 @@ extension Work {
                 state.withTree(scope) { tree in
                     added = (try? tree.addPane(to: shown, newPane: pane, empty, after: s.focused, createdAt: ctx.now)) != nil
                     if added, !s.widths.isEmpty {
-                        tree.updateSplit(shown) { $0.widths[pane] = weights.reduce(0, +) / Double(weights.count) }
+                        // The mean, divided before adding so huge saved widths cannot overflow to infinity.
+                        tree.updateSplit(shown) { $0.widths[pane] = weights.reduce(0) { $0 + $1 / Double(weights.count) } }
                     }
                 }
             case .folder?, .section?, nil:
@@ -65,11 +66,13 @@ extension Work {
     }
 }
 
-/// Relative positive weights -> fractions summing to 1, none below Metrics.content.minPaneFraction (or 1/n when
-/// that is smaller). `.split(.resize)` stores these and the projection reads widths through it, so reading never
-/// disagrees with writing.
-func clampFractions(_ weights: [Double]) -> [Double] {
-    guard !weights.isEmpty else { return [] }
+/// Relative positive finite weights -> fractions summing to 1, none below Metrics.content.minPaneFraction (or 1/n
+/// when that is smaller). `.split(.resize)` stores these and the projection reads widths through it, so reading never
+/// disagrees with writing. Only ratios matter: the weights are divided by the largest first, so no sum below can
+/// overflow (two weights of 1e308 are two equal panes).
+func clampFractions(_ raw: [Double]) -> [Double] {
+    guard let largest = raw.max() else { return [] }
+    let weights = raw.map { $0 / largest }
     let minimum = min(Metrics.content.minPaneFraction.value, 1 / Double(weights.count))
     var fixed: Set<Int> = []
     while true {
