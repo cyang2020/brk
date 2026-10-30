@@ -2,7 +2,6 @@
 """Run an owned sentinel probe. Never copies, launches, or modifies Arc."""
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,7 +15,6 @@ def main():
     allowed, outside = root / "allowed", root / "outside"
     allowed.mkdir()
     outside.mkdir()
-    (allowed / "tmp").mkdir()
     sentinel = outside / "sentinel"
     sentinel.write_bytes(b"owned sentinel, must stay unchanged\n")
     original = hashlib.sha256(sentinel.read_bytes()).hexdigest()
@@ -31,8 +29,7 @@ def main():
             command = ["/usr/bin/sandbox-exec", "-D", f"ROOT={root}", "-D", f"WRITE={allowed}",
                        "-f", str(HERE / "probe.sb"), str(root / "probe"),
                        str(allowed / "marker"), str(sentinel)]
-            env = {"PATH": "/usr/bin:/bin", "HOME": str(allowed),
-                   "CFFIXED_USER_HOME": str(allowed), "TMPDIR": str(allowed / "tmp")}
+            env = {"PATH": "/usr/bin:/bin"}
             run = subprocess.run(command, env=env, cwd=root, close_fds=True,
                                  capture_output=True, text=True, timeout=15)
             result["probe"] = {"argv": command, "environment": env, "exit": run.returncode,

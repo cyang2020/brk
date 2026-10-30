@@ -33,6 +33,8 @@ The sidecar binds the PNG SHA-256 to the selected PID, process launch time, CGWi
 
 The capture uses `SCContentFilter(desktopIndependentWindow:)`, excludes the cursor and window shadow, and uses the filter's pixel scale. It fails if ownership or bounds change, the process exits or restarts, the executable changes, the API returns no image, or the pixels are transparent or uniform. A nonuniform image can still contain an OS privacy placeholder or partially missing content, so inspect the PNG before using it as a reference. The helper does not claim to detect login state or prove production-equivalent UI.
 
+The screenshot-service phase has a 30-second deadline. If it does not finish, the helper exits with status 124 before creating the output directory. This ends only the capture helper, not Arc. No synthetic image or alternate capture backend is substituted.
+
 Compilation and negative checks on the cloud Mac do not establish that a logged-in browser window can be captured on your Mac. The report records the validation actually performed here.
 
 ## Implementation choice

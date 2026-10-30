@@ -49,4 +49,6 @@ The second command is expected to fail until the agreed feature scope is complet
 - The parent has reviewed the remaining 26 productivity/integration rows in `grounding/integrations.md`.
 - A separate reference experiment investigates the verified Arc fake-auth candidate only in a demonstrably isolated target. It also prepares a standalone local reference-capture helper if the cloud experiment is unavailable. This does not delay platform/source grounding.
 
+The reference experiment returned without an Arc-copy launch because its containment probe aborted. The capture helper is delivered at `artifacts/arc-reference-capture.zip`; the parent validated its checks and a genuine cloud welcome-screen capture. Authenticated local browser references and fake-auth runtime behavior remain unresolved. The reference row remains blocked and is not counted as visual parity.
+
 The two grounding reports are inputs to the `how` explainer, then to the next `architect`/`arena` design pair. Implementation begins after those interfaces and acceptance checks are coherent.

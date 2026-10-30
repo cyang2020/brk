@@ -1,0 +1,165 @@
+{
+  "kind": "ordinary-shell-observation",
+  "sourceSHA256": "58407c56a5e51d59a6b1d24de33cc21bffed545f636755008cb9119ed4034f2e",
+  "records": [
+    {
+      "name": "help",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--help"
+      ],
+      "exit": 0,
+      "stdout": "capture-arc-reference --list\ncapture-arc-reference --pid PID --window-id ID --output NEW_DIRECTORY [--label TEXT]\n",
+      "stderr": ""
+    },
+    {
+      "name": "missing_arguments",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Specify --pid, --window-id, and --output. Use --list to find actual Arc windows.\n"
+    },
+    {
+      "name": "duplicate_option",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--pid",
+        "1",
+        "--pid",
+        "2"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Unknown or duplicate option: --pid\n"
+    },
+    {
+      "name": "unknown_option",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--other",
+        "x"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Unknown or duplicate option: --other\n"
+    },
+    {
+      "name": "non_arc_pid",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--pid",
+        "68684",
+        "--window-id",
+        "1",
+        "--output",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/must-not-exist"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Running process does not satisfy the original Arc signature requirement.\n"
+    },
+    {
+      "name": "existing_output",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--pid",
+        "68684",
+        "--window-id",
+        "1",
+        "--output",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/existing"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Output already exists. Select a new capture directory.\n"
+    },
+    {
+      "name": "list",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--list"
+      ],
+      "exit": 0,
+      "stdout": "{\n  \"applications\" : [\n    {\n      \"build\" : \"89123\",\n      \"bundleIdentifier\" : \"company.thebrowser.Browser\",\n      \"bundlePath\" : \"/Applications/Arc.app\",\n      \"executablePath\" : \"/Applications/Arc.app/Contents/MacOS/Arc\",\n      \"executableSHA256\" : \"25af5f4eaaae5aca25021f2737e90cc4d41fdf195c4a5c4012ea31a1bba4b86a\",\n      \"pid\" : 45596,\n      \"processLaunchTime\" : \"2026-10-30T14:08:51Z\",\n      \"processStartMicroseconds\" : 520988,\n      \"processStartUnixSeconds\" : 1793369331,\n      \"verifiedCodeRequirement\" : \"anchor apple generic and identifier \\\"company.thebrowser.Browser\\\" and certificate leaf[subject.OU] = \\\"S6N382Y83G\\\"\",\n      \"version\" : \"1.170.0\",\n      \"windows\" : [\n        {\n          \"boundsPoints\" : {\n            \"height\" : 800,\n            \"width\" : 1280,\n            \"x\" : 320,\n            \"y\" : 70\n          },\n          \"layer\" : 0,\n          \"ownerPID\" : 45596,\n          \"windowID\" : 16\n        }\n      ]\n    }\n  ],\n  \"schemaVersion\" : 1,\n  \"screenCaptureAccess\" : true\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "unavailable_window",
+      "argv": [
+        "/private/tmp/brk-reference-parent/capture-arc-reference",
+        "--pid",
+        "45596",
+        "--window-id",
+        "4294967295",
+        "--output",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/must-not-exist"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "capture-arc-reference: Window 4294967295 is not an on-screen window owned by Arc PID 45596.\n"
+    },
+    {
+      "name": "compile_pixel_check",
+      "argv": [
+        "/usr/bin/xcrun",
+        "swiftc",
+        "-parse-as-library",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check.swift",
+        "-o",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "pixel_check",
+      "argv": [
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check"
+      ],
+      "exit": 0,
+      "stdout": "transparent: rejected\nuniform: rejected\nvaried: accepted\n",
+      "stderr": ""
+    },
+    {
+      "name": "compile_deadline_check",
+      "argv": [
+        "/usr/bin/xcrun",
+        "swiftc",
+        "-parse-as-library",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check.swift",
+        "-o",
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "deadline_expires",
+      "argv": [
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check"
+      ],
+      "exit": 124,
+      "stdout": "",
+      "stderr": "capture-arc-reference: screenshot service did not finish before the deadline; no reference was saved.\n"
+    },
+    {
+      "name": "deadline_cancelled",
+      "argv": [
+        "/private/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/arc-capture-checks.4zw3vfii/pixel-check",
+        "cancel"
+      ],
+      "exit": 0,
+      "stdout": "deadline did not fire\n",
+      "stderr": ""
+    }
+  ],
+  "non_arc_output_absent": true,
+  "existing_sentinel_unchanged": true,
+  "pixel_fixtures": "In-memory color data only; no reference image or UI was synthesized.",
+  "deadline_fixtures": "Owned helper-process lifetime checks only; Arc is not launched or signaled.",
+  "owned_test_root_removed": true
+}

@@ -1,0 +1,2 @@
+Rejected late collision: Error Domain=NSCocoaErrorDomain Code=516 "The file “collision-confirmed” couldn’t be saved in the folder “brk-reference-parent” because a file with the same name already exists." UserInfo={NSFilePath=/tmp/brk-reference-parent/collision-confirmed, NSURL=file:///tmp/brk-reference-parent/collision-confirmed, NSUnderlyingError=0x1009a5e10 {Error Domain=NSPOSIXErrorDomain Code=17 "File exists"}}
+PASS: late collision preserved the existing capture

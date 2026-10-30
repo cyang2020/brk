@@ -2173,11 +2173,20 @@
       "status": "blocked",
       "acceptance": "Compare all agreed screen states and interactions against version-labelled real Arc references; resolve measured differences.",
       "owner": "parent-integrations-audit",
-      "required_checks": [],
+      "required_checks": [
+        "visual",
+        "native"
+      ],
       "verification": [],
       "remaining": [
-        "Cloud Arc is at Sign In. The local fake-auth test path is statically established but not runtime/isolation verified.",
-        "User has authenticated Arc on their own Mac; reference capture is pending."
+        "Fake-auth entry is statically established, but the isolation probe failed before validating containment and no copied Arc was launched.",
+        "Genuine cloud welcome pixels were captured; authenticated browser reference states from the user's local Arc are still needed.",
+        "Complete per-screen and interaction comparison before marking pixel identity verified."
+      ],
+      "reference_tools": [
+        "scripts/capture-arc-reference.swift",
+        "docs/arc-anatomy/offline-reference-lab/CAPTURE.md",
+        "artifacts/arc-reference-capture.zip"
       ]
     }
   ]

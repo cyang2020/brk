@@ -194,6 +194,33 @@ private func validatePixels(_ image: CGImage) throws {
                 "Captured pixels are transparent or uniform. No reference was saved.")
 }
 
+private final class CaptureDeadline: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private let timer: DispatchSourceTimer
+
+    init(seconds: TimeInterval = 30) {
+        timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + seconds)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.lock.withLock {
+                guard !self.finished else { return }
+                FileHandle.standardError.write(Data("capture-arc-reference: screenshot service did not finish before the deadline; no reference was saved.\n".utf8))
+                _exit(124)
+            }
+        }
+        timer.resume()
+    }
+
+    func cancel() {
+        lock.withLock { finished = true }
+        timer.cancel()
+    }
+
+    deinit { timer.cancel() }
+}
+
 @available(macOS 14.0, *) @MainActor
 private func capture(pid: pid_t, id: CGWindowID, output: URL, label: String) async throws {
     let fm = FileManager.default
@@ -202,6 +229,8 @@ private func capture(pid: pid_t, id: CGWindowID, output: URL, label: String) asy
     let before = try selectedWindow(pid: pid, id: id)
     try require(CGPreflightScreenCaptureAccess(), "Screen capture access is unavailable. No permission was requested and no capture was written.")
     let started = Date()
+    let deadline = CaptureDeadline()
+    defer { deadline.cancel() }
     let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
     guard let target = content.windows.first(where: {
         $0.windowID == id && $0.owningApplication?.processID == pid
@@ -250,6 +279,7 @@ private func capture(pid: pid_t, id: CGWindowID, output: URL, label: String) asy
                         "A window may change contents without changing its ID or bounds."]
     ]
     let sidecar = try json(metadata)
+    deadline.cancel()
     try fm.createDirectory(at: output, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
     var complete = false
     defer { if !complete { try? fm.removeItem(at: output) } }

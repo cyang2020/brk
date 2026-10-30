@@ -47,6 +47,8 @@ The [profile](probe.sb) denies operations by default. It permits writes only ben
 
 The child receives only `PATH`, `HOME`, `CFFIXED_USER_HOME`, and `TMPDIR`. The home and temporary paths point into `allowed`. These environment variables are redirects, not the containment guarantee. The runner closes other inherited file descriptors, captures standard streams, sets a 15-second timeout on its own child, and removes only its fresh root.
 
+Parent correction after this recorded run: the current probe runner passes only `PATH` and no longer redirects home or temporary-directory environment variables. The original observation above and its JSON record are retained unchanged. This correction does not establish containment, and the parent did not rerun the sandbox or launch Arc.
+
 The intended checks were an allowed marker write, a denied write to the owned outside sentinel, lookup of named preference/security/CloudKit/LaunchServices/WindowServer endpoints, and socket creation without a connection attempt. The run returned `-6`, meaning SIGABRT in Python's subprocess result. It returned no check results and created no marker. The sentinel SHA-256 stayed `bd0e4d0e5dd14d7e196462835bb7d05e6f0565b20c59f9f747fd71636df6baf4`. Cleanup completed. The abort's precise cause was not established. No restriction was relaxed and no Arc launch followed.
 
 Reproduce this bounded probe from the repository root:
@@ -102,6 +104,14 @@ The remaining local work is to run the helper against the user's already-authent
 
 ## Scope and handoff
 
-Only this lab directory and the standalone capture script are delivered. Brk production code, the canonical feature inventory, audits, and the prior auth report were not changed. No installed Arc bundle or existing browser data was edited. Temporary probe and validation directories were removed; the helper's temporary compiled binary and inspection source are removed after validation. No Arc process was launched, signaled, or closed.
+### Parent integration checks
+
+The parent compiled the helper and independently ran its CLI, identity, output-refusal, and pixel checks. A concurrent real-capture probe did not finish one request within its 60-second caller limit and produced no reference directory. Its other process outcome was not collected; it is inconclusive about concurrency. A later exact-path check found no owned helper still running. Arc was not signaled.
+
+The parent added a 30-second capture deadline that ends only the observer before output creation. The deadline's expiration and cancellation paths pass executable checks, alongside the original helper checks. A separate late-output collision probe preserved the first file and returned the expected existing-file error; its suspected overwrite issue was rejected and the file-writing logic was left unchanged.
+
+The bounded helper then made a successful single capture of the existing Arc window. The parent inspected the actual PNG: it is the welcome screen, not authenticated browser chrome. [Parent checks and capture](evidence/parent/), including the updated helper source digest, preserve these results. The [standalone capture package](../../../artifacts/arc-reference-capture.zip) contains the same current Swift source plus instructions. Neither this validation nor the package establishes fake-auth startup or pixel parity.
+
+The original worker delivered only this lab directory and the standalone capture script. It left Brk production code, the canonical feature inventory, audits, and the prior auth report unchanged and removed its temporary probe/validation files. The parent integration additionally updates the reference status, packages the helper, and records its own checks. No installed Arc bundle or existing browser data was edited by either pass. No Arc process was launched, signaled, or closed.
 
 The report and helper were reviewed in this single agent, as requested. The decision trail follows the show-me-your-work format; its cross-model review step was omitted under the explicit no-subagent constraint. The material limitations are the failed containment gate and the absence of authenticated chrome captures.

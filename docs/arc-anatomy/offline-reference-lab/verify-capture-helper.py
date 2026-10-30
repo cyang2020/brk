@@ -35,6 +35,18 @@ PIXEL_CHECK = r'''
 }
 '''
 
+DEADLINE_CHECK = r'''
+@main private struct DeadlineChecks {
+    static func main() {
+        let cancelled = CommandLine.arguments.dropFirst().first == "cancel"
+        let deadline = CaptureDeadline(seconds: cancelled ? 1 : 0.05)
+        if cancelled { deadline.cancel() }
+        withExtendedLifetime(deadline) { Thread.sleep(forTimeInterval: cancelled ? 1.2 : 2) }
+        print("deadline did not fire")
+    }
+}
+'''
+
 
 def main():
     executable = str(Path(sys.argv[1]).resolve())
@@ -74,9 +86,14 @@ def main():
         binary = root / "pixel-check"
         run("compile_pixel_check", ["/usr/bin/xcrun", "swiftc", "-parse-as-library", str(fixture), "-o", str(binary)], 0)
         run("pixel_check", [str(binary)], 0)
+        fixture.write_text(source.split("@main private struct Main {")[0] + DEADLINE_CHECK)
+        run("compile_deadline_check", ["/usr/bin/xcrun", "swiftc", "-parse-as-library", str(fixture), "-o", str(binary)], 0)
+        run("deadline_expires", [str(binary)], 124)
+        run("deadline_cancelled", [str(binary), "cancel"], 0)
         result = {"kind": "ordinary-shell-observation", "sourceSHA256": hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
                   "records": records, "non_arc_output_absent": not output.exists(), "existing_sentinel_unchanged": True,
-                  "pixel_fixtures": "In-memory color data only; no reference image or UI was synthesized."}
+                  "pixel_fixtures": "In-memory color data only; no reference image or UI was synthesized.",
+                  "deadline_fixtures": "Owned helper-process lifetime checks only; Arc is not launched or signaled."}
     finally:
         shutil.rmtree(root)
     result["owned_test_root_removed"] = not root.exists()

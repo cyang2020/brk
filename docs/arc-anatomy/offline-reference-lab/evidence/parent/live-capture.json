@@ -1,0 +1,21 @@
+{
+  "kind": "parent live capture validation",
+  "arc_launched": false,
+  "arc_signaled": false,
+  "argv": [
+    "/tmp/brk-reference-parent/capture-arc-reference",
+    "--pid",
+    "45596",
+    "--window-id",
+    "16",
+    "--output",
+    "/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/brk-capture-parent-s9z2jx4k/capture",
+    "--label",
+    "Parent capture helper validation; existing cloud window"
+  ],
+  "exit": 0,
+  "stdout": "/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/brk-capture-parent-s9z2jx4k/capture\n",
+  "stderr": "",
+  "output_exists": true,
+  "owned_root": "/var/folders/rq/52g0sdfs2jd13_4v6bx6t59m0000gn/T/brk-capture-parent-s9z2jx4k"
+}
