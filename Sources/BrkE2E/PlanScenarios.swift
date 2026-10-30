@@ -222,8 +222,8 @@ enum PlanScenarios {
         try app.screenshot("split")
     }
 
-    /// 7: with B open, A goes idle; 13 h later A is archived (reason auto, in today's group) and B is not; the archive
-    /// page fills the content area; restoring A brings it back to Today.
+    /// 7: with B open, A goes idle; 13 h later A is archived (reason auto, in today's group) and B is not; the Library
+    /// opens on the archive page, which fills the Library's page area; restoring A brings it back to Today.
     @Sendable static func autoArchive(_ app: AppUnderTest) throws {
         guard let a = tabRows(try app.view().space.today.rows).first(where: { $0.status == .current }) else {
             throw Check(description: "no current Today tab at launch")
@@ -234,16 +234,20 @@ enum PlanScenarios {
         try expect(todayIDs(try app.view()).contains(b.id), "B (on screen) was archived too")
         try app.click(.dockLibrary)
         try app.waitUntil("the archive page to open") { isArchive(try app.view().overlay) }
-        guard case .archive(let archive)? = try app.view().overlay else { throw Check(description: "the overlay is not the archive") }
+        guard case .library(let library)? = try app.view().overlay, let archive = library.archive else {
+            throw Check(description: "the overlay is not the Library's archive page")
+        }
         guard let entry = archive.groups.flatMap({ g in g.entries.map { (g.bucket, $0) } }).first(where: { $0.1.url == a.url }) else {
             throw Check(description: "no archive entry for A's URL \(a.url?.absoluteString ?? "nil")")
         }
         try expect(entry.1.reason == .auto, "A's entry has reason \(entry.1.reason), expected auto")
         try expect(entry.0 == .today, "A's entry is in group \(entry.0), expected today")
-        try app.waitUntil("the archive page at computed.contentArea with A in archive-group-today") {
+        try app.waitUntil("the archive page at computed.library.page with A in archive-group-today") {
             let n = try app.native()
             let page = try visible(n, .archive)
-            try expect(near(page.frame, n.computed.contentArea), "archive at \(page.frame), content area \(n.computed.contentArea)")
+            guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
+            try expect(near(library.frame, n.computed.contentArea), "library at \(library.frame), content area \(n.computed.contentArea)")
+            try expect(near(page.frame, library.page), "archive at \(page.frame), library page area \(library.page)")
             let group = try visible(n, .archiveGroup(.today)), row = try visible(n, .archiveEntry(entry.1.id))
             try expect(contains(group, row), "archive-entry \(row.frame) is outside archive-group-today \(group.frame)")
             return true

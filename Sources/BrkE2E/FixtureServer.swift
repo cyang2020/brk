@@ -2,6 +2,8 @@ import Foundation
 
 /// Serves Tests/E2ESite/ on 127.0.0.1 at an ephemeral port: GET of a file under the site directory, `/` is
 /// index.html, and `/fail` closes the connection without a response (a load failure for the restore scenario).
+/// Wave 2: `/suggest?q=...` answers OpenSearch JSON `["q", ["<q>ft", "<q>m"]]` (W2-10) and `/download` serves a text
+/// attachment `fixture.txt` (W2-11).
 /// Pages: index.html "Fixture Home" (a link to page2 at a fixed position for Cmd+click), page2.html "Fixture Page 2",
 /// red.html "Red", close.html "Closer" (window.close() after 300 ms), keys.html (records keys in its title).
 final class FixtureServer: @unchecked Sendable {
@@ -72,9 +74,19 @@ final class FixtureServer: @unchecked Sendable {
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         if path == "/fail" { return }   // drop the connection: no status line, no body
         if path == "/" { path = "/index.html" }
-        let file = root.appendingPathComponent(String(path.dropFirst())).standardizedFileURL
         let response: Data
-        if file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
+        if path.hasPrefix("/suggest") {
+            let query = path.split(separator: "?").dropFirst().joined().split(separator: "&").compactMap { pair -> String? in
+                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                return kv.count == 2 && kv[0] == "q" ? kv[1].removingPercentEncoding : nil
+            }.first ?? ""
+            let body = Data("[\"\(query)\", [\"\(query)ft\", \"\(query)m\"]]".utf8)
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/download" {
+            let body = Data("fixture download\n".utf8)
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if case let file = root.appendingPathComponent(String(path.split(separator: "?")[0].dropFirst())).standardizedFileURL,
+                  file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
             let type = ["html": "text/html; charset=utf-8", "css": "text/css", "js": "text/javascript", "png": "image/png"][file.pathExtension]
                 ?? "application/octet-stream"
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

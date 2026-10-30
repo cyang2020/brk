@@ -12,7 +12,7 @@ enum RegressionScenarios {
     @Sendable static func peekKeepsArchive(_ app: AppUnderTest) throws {
         try app.press("cmd+s")
         try app.waitUntil("Cmd+S to hide the sidebar") { try !app.view().sidebar.visible }
-        try app.dispatch(.archive(.open))
+        try app.dispatch(.library(.open(.archive)))
         try app.waitUntil("the archive page to open") { isArchive(try app.view().overlay) }
         let v = try app.view(), n = try app.native()
         // Points where the floating sidebar (Metrics.sidebar.floatingInset from the window, the sidebar's width) will

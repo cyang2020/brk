@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>cookie:</title></head>
+<body>
+<p>Cookie fixture (W2-2): sets a cookie when the hash is #set, and reports document.cookie in the title.</p>
+<script>
+  if (location.hash === "#set") { document.cookie = "brk=1; path=/"; }
+  document.title = "cookie:" + document.cookie;
+</script>
+</body>
+</html>
