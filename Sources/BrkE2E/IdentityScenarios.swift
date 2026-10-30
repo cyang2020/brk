@@ -54,8 +54,11 @@ enum IdentityScenarios {
         }
         let panes = try app.view(first.window).content.panes
         let middle = panes[1].tab, last = panes[2].tab
+        // Newly added panes are independently blank in the other window until explicitly navigated there.
+        try dispatch(app, window: second.window, .tab(.focus(middle)))
+        try navigate(app, PageID(window: second.window, item: middle), middleURL)
         try dispatch(app, window: second.window, .tab(.focus(last)))
-        _ = try ready(app, PageID(window: second.window, item: last))
+        try navigate(app, PageID(window: second.window, item: last), lastURL)
         try dispatch(app, window: first.window, .split(.closePane))
         for window in [first.window, second.window] {
             try expect(try app.view(window).content.panes.first(where: \.focused)?.tab == middle, "removed third pane did not focus its left neighbour")
