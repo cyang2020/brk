@@ -15,6 +15,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let host: SettingsHost
     private let send: @MainActor (Command) -> Void
     private var shown = false
+    private var pane: SettingsPane?
+    private weak var previousKeyWindow: NSWindow?
 
     static var frameAutosaveName: String { "\(Bundle.main.bundleIdentifier ?? Product.name).Settings.FrameAutosaveName" }
 
@@ -33,14 +35,19 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     /// Renders the values, then shows the window when a pane opens and hides it when the pane goes.
     func render(_ settings: SettingsSnapshot) {
+        let changingPane = settings.pane != pane
+        pane = settings.pane
         host.render(settings)
         if settings.pane != nil {
-            guard !shown else { return }
+            guard !shown || changingPane else { return }
+            if let key = NSApp.keyWindow, key !== window { previousKeyWindow = key }
             shown = true
             window.makeKeyAndOrderFront(nil)
         } else if shown {
             shown = false
+            let returnFocus = window.isKeyWindow
             window.orderOut(nil)
+            if returnFocus, let previousKeyWindow, previousKeyWindow.isVisible { previousKeyWindow.makeKeyAndOrderFront(nil) }
         }
     }
 

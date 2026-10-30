@@ -260,6 +260,7 @@ struct SettingsButton: NSViewRepresentable {
 
     func updateNSView(_ button: NSButton, context: NSViewRepresentableContext<Self>) {
         context.coordinator.action = action
+        button.isEnabled = context.environment.isEnabled
         button.identify(.settingsField(field))
         if button.title != title { button.title = title }
         button.toolTip = symbol == nil ? nil : title
@@ -281,6 +282,8 @@ struct SettingsTextField: NSViewRepresentable {
     let field: String
     let text: String
     let placeholder: String
+    var edit: (@MainActor (String) -> Void)? = nil
+    var submit: (@MainActor (String) -> Void)? = nil
     let commit: @MainActor (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -299,6 +302,8 @@ struct SettingsTextField: NSViewRepresentable {
 
     func updateNSView(_ textField: NSTextField, context: NSViewRepresentableContext<Self>) {
         context.coordinator.commit = commit
+        context.coordinator.edit = edit
+        context.coordinator.submit = submit
         context.coordinator.last = text
         textField.identify(.settingsField(field))
         textField.placeholderString = placeholder
@@ -311,9 +316,19 @@ struct SettingsTextField: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var commit: (@MainActor (String) -> Void)?
+        var edit: (@MainActor (String) -> Void)?
+        var submit: (@MainActor (String) -> Void)?
         var last = ""
 
-        @objc func committed(_ sender: NSTextField) { send(sender.stringValue) }
+        @objc func committed(_ sender: NSTextField) {
+            send(sender.stringValue)
+            submit?(sender.stringValue)
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            edit?(field.stringValue)
+        }
 
         func controlTextDidEndEditing(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
