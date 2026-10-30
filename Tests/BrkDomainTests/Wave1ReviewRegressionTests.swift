@@ -33,4 +33,33 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(first.since(last), .zero - span)
         XCTAssertEqual(T0.since(T0), .zero)
     }
+
+    // MARK: Finding 2: a filled pinned split pane keeps its saved URL
+
+    /// The first URL of an empty pane in Pinned becomes its saved URL, so Reset Tab returns to it after navigating.
+    func testAFilledPinnedSplitPaneSavesItsFirstURLForReset() throws {
+        let d = Driver()
+        d.user(.tab(.togglePin(.focused)))
+        d.user(.split(.addPane))
+        let pane = try XCTUnwrap(d.paneIDs.last)
+        let original = url("https://example.com/original")
+        d.user(.commandBar(.submit(original.absoluteString)))
+        XCTAssertEqual(d.state.tab(pane)?.pinnedURL, original)
+        d.page(pane, .committed(url("https://example.com/away")))
+        XCTAssertEqual(d.row(pane)?.canReset, true)
+        let reset = d.user(.tab(.reset(.focused)))
+        XCTAssertEqual(d.state.tab(pane)?.url, original)
+        XCTAssertEqual(reset.effects.count, 1)
+    }
+
+    /// A pinned tab that already has a saved URL keeps it when the command bar navigates it elsewhere.
+    func testNavigatingAPinnedTabFromTheBarKeepsItsSavedURL() throws {
+        let d = Driver()
+        let tab = try XCTUnwrap(d.current?.id)
+        d.user(.tab(.togglePin(.focused)))
+        d.user(.commandBar(.open(.editCurrent)))
+        d.user(.commandBar(.submit("https://example.com/elsewhere")))
+        XCTAssertEqual(d.state.tab(tab)?.url, url("https://example.com/elsewhere"))
+        XCTAssertEqual(d.state.tab(tab)?.pinnedURL, start)
+    }
 }
