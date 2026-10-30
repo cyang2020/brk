@@ -67,13 +67,23 @@ final class KeyRouter: WebEngineDelegate {
     /// key-down) it is a `.menu`-stage key input with the id minted from that event, so the duplicate guard can see
     /// it; a mouse choice has no press and dispatches the action's command directly (a click is never a duplicate).
     func menuAction(_ action: ActionID, in window: WindowID, event: NSEvent?) {
-        if let event, event.type == .keyDown, let key = Key.byCode(event.keyCode) {
-            let chord = KeyChord(Modifiers(rawValue: event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
-                                                        & (Modifiers.shift.rawValue | Modifiers.control.rawValue | Modifiers.option.rawValue | Modifiers.command.rawValue)), key)
-            let press = KeyPress(chord: chord, phase: .down, isRepeat: event.isARepeat, editableFieldFocused: false)
-            _ = store.dispatchKey(window, KeyInput(press: press, stage: .menu, pressID: PressID(eventTimestamp: event.timestamp)))
+        if let event, let input = KeyInput(menuEvent: event) {
+            _ = store.dispatchKey(window, input)
         } else {
             store.dispatch(.user(window, action.spec.command))
         }
+    }
+}
+
+extension KeyInput {
+    /// A `.menu`-stage key input from an AppKit key-down (a menu key equivalent, or a key equivalent the window's
+    /// views did not take): the physical key, the four shortcut modifiers, the id minted from the event. Nil for a
+    /// key the table does not know.
+    init?(menuEvent event: NSEvent) {
+        guard event.type == .keyDown, let key = Key.byCode(event.keyCode) else { return nil }
+        let mask = Modifiers.shift.rawValue | Modifiers.control.rawValue | Modifiers.option.rawValue | Modifiers.command.rawValue
+        let chord = KeyChord(Modifiers(rawValue: event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue & mask), key)
+        self.init(press: KeyPress(chord: chord, phase: .down, isRepeat: event.isARepeat, editableFieldFocused: false), stage: .menu,
+                  pressID: PressID(eventTimestamp: event.timestamp))
     }
 }

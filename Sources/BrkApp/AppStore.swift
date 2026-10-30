@@ -135,7 +135,8 @@ public final class AppStore {
         }
         for id in snapshot.windows.keys.sorted() where windows[id] == nil {
             // TODO(F3): a `LittleWindowController` (NSPanel at Metrics.littleArc.defaultSize) for `.little`.
-            let controller = WindowController(id: id, kind: snapshot.windows[id]!.kind, engine: engine, send: { [weak self] in self?.dispatch($0) })
+            let controller = WindowController(id: id, kind: snapshot.windows[id]!.kind, engine: engine, send: { [weak self] in self?.dispatch($0) },
+                                              routeKey: { [weak self] input in self?.dispatchKey(id, input) ?? false })
             windows[id] = controller
             controller.place(snapshot.windows[id]!)
             controller.window.makeKeyAndOrderFront(nil)

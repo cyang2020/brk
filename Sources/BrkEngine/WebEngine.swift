@@ -102,4 +102,10 @@ open class PageSurfaceView: NSView {
     public required init?(coder: NSCoder) { fatalError("not used") }
 
     open override var isFlipped: Bool { true }
+
+    /// Whether the window may run a key-down through the shortcut table before AppKit's own key handling while this
+    /// surface has focus. False (the default) for a real engine: Chromium's view gets the key and CEF's handler
+    /// routes it before and after the page. True for a surface that consumes no keys (the stub), so app shortcuts
+    /// work on it the way they do with a native view focused.
+    open var routesKeysThroughWindow: Bool { false }
 }

@@ -72,6 +72,23 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertEqual(settings?.isVisible, false)
     }
 
+    /// a key equivalent the window's views do not take is routed through the table before AppKit's menu, so Arc's
+    /// hidden rows (Ctrl+Tab) and remapped chords work with a native view focused
+    func test_windowRoutesUnhandledKeyEquivalentsThroughTheTable() {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        let controller = h.store.windowController(h.window)!
+        let before = h.store.snapshot.rev
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .control, timestamp: 5, windowNumber: controller.window.windowNumber,
+                                     context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: Key.tab.code)!
+        XCTAssertTrue(controller.window.routeKeyEquivalent(event), "Ctrl+Tab (a hidden menu row) was not routed")
+        XCTAssertGreaterThan(h.store.snapshot.rev, before, "the cycle did not start")
+        let unbound = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 6, windowNumber: controller.window.windowNumber,
+                                       context: nil, characters: "y", charactersIgnoringModifiers: "y", isARepeat: false, keyCode: Key.y.code)!
+        XCTAssertFalse(controller.window.routeKeyEquivalent(unbound))
+    }
+
     /// the GetURL handler installs without a running event loop (the Apple Event path is proven by W2-7)
     func test_getURLHandlerInstalls() {
         let handler = GetURLHandler(send: { _ in })
