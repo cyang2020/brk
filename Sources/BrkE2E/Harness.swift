@@ -5,75 +5,426 @@ import BrkLayout
 import CoreGraphics
 import Foundation
 
-struct RunnerArguments {
-    var app: URL
-    var site: URL
-    var outputDirectory: URL
-    var only: Set<String>?
+/// An assertion failed: the scenario stops and the report shows the message.
+struct Check: Error, CustomStringConvertible { let description: String }
 
-    init(_ argv: [String]) {
-        // TODO(W6): parse --app, --site, --out, --only.
-        fatalError("not implemented")
-    }
+/// The scenario cannot be judged on this engine (or machine); the report shows SKIPPED with the reason.
+struct Skipped: Error, CustomStringConvertible { let description: String }
+
+/// The app process went away mid-scenario. `fatal` is the Swift fatal-error line from its stderr, if any.
+struct AppDied: Error, CustomStringConvertible {
+    let during: String
+    let exit: String
+    let fatal: String?
+    var description: String { "the app exited during \(during): \(exit)" + (fatal.map { "; \($0)" } ?? "") }
 }
-
-/// Serves Tests/E2ESite/ on 127.0.0.1 (python3 -m http.server, started by the runner) plus `/fail`, which drops the
-/// connection (a load failure). Pages: index.html "Fixture Home" (a link to page2 at a fixed position for Cmd+click),
-/// page2.html "Fixture Page 2", red.html "Red" (full red background), close.html "Closer" (calls window.close()),
-/// keys.html (logs keydowns into document.title, optionally preventDefault).
-struct FixtureSite {
-    let baseURL: URL
-    func url(_ path: String) -> URL { baseURL.appendingPathComponent(path) }
-}
-
-/// One launched app instance and its control connection. Every helper goes through the control socket; nothing
-/// reads the app's files or windows directly except `crashReportsSince`.
-final class AppUnderTest {
-    let dataDirectory: URL
-    let client: ControlClient
-    let site: FixtureSite
-    private(set) var process: Process?
-
-    init(app: URL, dataDirectory: URL, site: FixtureSite) {
-        self.dataDirectory = dataDirectory
-        self.site = site
-        client = ControlClient(path: dataDirectory.appendingPathComponent("control.sock").path)
-        // TODO(W6): keep `app` for launch().
-        _ = app
-    }
-
-    func launch() throws { fatalError("not implemented") }
-    /// Quit over the socket, wait for exit (10 s), return the exit status and new crash reports.
-    func quit() throws -> (status: Int32, crashReports: [URL]) { fatalError("not implemented") }
-    /// quit() then launch() with the same data directory.
-    func restart() throws { fatalError("not implemented") }
-
-    func view() throws -> WindowSnapshot { fatalError("not implemented") }
-    func native() throws -> NativeFacts { fatalError("not implemented") }
-    @discardableResult func dispatch(_ command: Command) throws -> Int { fatalError("not implemented") }
-    func press(_ chord: String) throws { fatalError("not implemented") }
-    func type(_ text: String) throws { fatalError("not implemented") }
-    func click(_ view: ViewID, modifiers: String? = nil) throws { fatalError("not implemented") }
-    func click(at point: CGPoint, modifiers: String? = nil) throws { fatalError("not implemented") }
-    func pixel(_ point: CGPoint) throws -> [Int] { fatalError("not implemented") }
-    @discardableResult func screenshot(_ name: String) throws -> URL { fatalError("not implemented") }
-    func advanceClock(hours: Double) throws { fatalError("not implemented") }
-    func pageLog() throws -> [PageLogEntry] { fatalError("not implemented") }
-
-    /// Polls `condition` every 100 ms until true or `timeout`; throws with `message` and the last view on timeout.
-    func waitUntil(_ message: String, timeout: TimeInterval = 8, _ condition: () throws -> Bool) throws {
-        fatalError("not implemented")
-    }
-}
-
-/// Assertions record a message and stop the scenario.
-struct Check: Error { let message: String }
 
 func expect(_ condition: Bool, _ message: @autoclosure () -> String) throws {
-    if !condition { throw Check(message: message()) }
+    if !condition { throw Check(description: message()) }
 }
 
 /// Max channel distance between two RGBA samples (pixel checks tolerate compositing and color-space rounding).
 func distance(_ a: [Int], _ b: [Int]) -> Int {
     zip(a.prefix(3), b.prefix(3)).map { abs($0 - $1) }.max() ?? 0
+}
+
+func near(_ a: CGRect, _ b: CGRect, tolerance: Double = 0.5) -> Bool {
+    abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance && abs(a.width - b.width) <= tolerance
+        && abs(a.height - b.height) <= tolerance
+}
+
+func uptime() -> Double { ProcessInfo.processInfo.systemUptime }
+
+// MARK: - The process
+
+/// The launched app binary. The runner owns it (launched directly, not through `open`), so it sees the exit status.
+final class AppProcess {
+    let process = Process()
+    let log: URL
+
+    init(executable: URL, environment: [String: String], log: URL) {
+        self.log = log
+        process.executableURL = executable
+        process.environment = environment
+    }
+
+    func start() throws {
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: log)
+        process.standardOutput = handle
+        process.standardError = handle
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
+    }
+
+    var isRunning: Bool { process.isRunning }
+
+    /// Waits up to `timeout` seconds; true when the process has exited.
+    @discardableResult
+    func waitForExit(timeout: Double) -> Bool {
+        let deadline = uptime() + timeout
+        while process.isRunning, uptime() < deadline { usleep(50_000) }
+        return !process.isRunning
+    }
+
+    func kill() {
+        guard process.isRunning else { return }
+        process.terminate()
+        if !waitForExit(timeout: 3) { Foundation.kill(process.processIdentifier, SIGKILL) }
+        waitForExit(timeout: 3)
+    }
+
+    /// "status 0", "status 3", "signal 5 (SIGTRAP)".
+    var exitDescription: String {
+        guard !process.isRunning else { return "still running" }
+        switch process.terminationReason {
+        case .exit: return "status \(process.terminationStatus)"
+        case .uncaughtSignal:
+            let names: [Int32: String] = [SIGILL: "SIGILL", SIGTRAP: "SIGTRAP", SIGABRT: "SIGABRT", SIGKILL: "SIGKILL", SIGBUS: "SIGBUS",
+                                          SIGSEGV: "SIGSEGV", SIGTERM: "SIGTERM"]
+            return "signal \(process.terminationStatus) (\(names[process.terminationStatus] ?? String(cString: strsignal(process.terminationStatus))))"
+        @unknown default: return "status \(process.terminationStatus)"
+        }
+    }
+
+    var exitedCleanly: Bool { !process.isRunning && process.terminationReason == .exit && process.terminationStatus == 0 }
+
+    /// The last "Fatal error" line the Swift runtime wrote to stderr: "BrkDomain/CommandBar.swift:15: Fatal error: ...".
+    var fatalLine: String? {
+        guard let text = try? String(contentsOf: log, encoding: .utf8) else { return nil }
+        return text.split(whereSeparator: \.isNewline).last { $0.contains("Fatal error") }.map(String.init)
+    }
+
+    /// "W1: BrkDomain/CommandBar.swift:15", from `fatalLine`.
+    var fatalOwner: String? {
+        guard let line = fatalLine, let fileID = line.split(separator: ":").first.map(String.init), fileID.hasSuffix(".swift") else { return nil }
+        let location = line.split(separator: ":").prefix(2).joined(separator: ":")
+        return "\(E2EReport.owner(ofFileID: fileID)): \(location)"
+    }
+}
+
+/// ~/Library/Logs/DiagnosticReports entries for the product (the app and its helpers share the name prefix).
+enum CrashReports {
+    static var directory: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
+    }
+
+    static func names(prefix: String) -> Set<String> {
+        let all = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return Set(all.filter { $0.hasPrefix(prefix) && ($0.hasSuffix(".ips") || $0.hasSuffix(".crash")) })
+    }
+}
+
+// MARK: - The app under test
+
+/// One scenario's app: launches, relaunches on the same data directory, and drives it only through the control
+/// socket. Nothing here reads the app's windows; the app's files are read only for the final page log, the crash
+/// reports and the stderr log.
+final class AppUnderTest {
+    enum Engine: String { case cef, stub }
+
+    let executable: URL
+    let dataDirectory: URL
+    let site: FixtureServer
+    let engine: Engine
+    let scenarioID: String
+    let shotsDirectory: URL
+    private(set) var client: ControlClient
+    private(set) var process: AppProcess?
+    private(set) var hello: Hello?
+    private(set) var launches = 0
+    private(set) var logs: [URL] = []
+    private(set) var screenshots: [URL] = []
+    private(set) var notes: [String] = []
+    /// Host windows seen key in any `native()` reply during the scenario.
+    private(set) var hostKeyViolations: [String] = []
+    private var crashBaseline: Set<String> = []
+    private var quitOutcome: QuitOutcome?
+
+    struct QuitOutcome {
+        let exit: String
+        let clean: Bool
+        let crashReports: [String]
+        let finalPageLog: [PageLogEntry]?
+    }
+
+    init(executable: URL, dataDirectory: URL, site: FixtureServer, engine: Engine, scenarioID: String, shotsDirectory: URL) {
+        self.executable = executable
+        self.dataDirectory = dataDirectory
+        self.site = site
+        self.engine = engine
+        self.scenarioID = scenarioID
+        self.shotsDirectory = shotsDirectory
+        client = ControlClient(path: dataDirectory.appendingPathComponent("control.sock").path)
+    }
+
+    var window: WindowID? { hello?.windows.first }
+    var productPrefix: String { executable.lastPathComponent }
+    var isRunning: Bool { process?.isRunning ?? false }
+
+    // MARK: Launch and quit
+
+    /// Launches the binary with the e2e environment and waits for `hello` (10 s) and the first rendered snapshot.
+    func launch() throws {
+        if launches == 0 { crashBaseline = CrashReports.names(prefix: productPrefix) }
+        launches += 1
+        quitOutcome = nil
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        var environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("BRK_") }
+        environment["BRK_CONTROL_SOCKET"] = client.path
+        environment["BRK_DATA_DIR"] = dataDirectory.path
+        environment["BRK_TEST_CLOCK"] = "1"
+        environment["BRK_START_URL"] = site.url("index.html").absoluteString
+        if engine == .stub { environment["BRK_ENGINE"] = "stub" }
+        let log = dataDirectory.appendingPathComponent("app-\(launches).log")
+        logs.append(log)
+        let process = AppProcess(executable: executable, environment: environment, log: log)
+        self.process = process
+        try process.start()
+
+        let deadline = uptime() + 10
+        while true {
+            do {
+                try client.connect(timeout: 0.3)
+                break
+            } catch {
+                if !process.isRunning { throw died(during: "launch") }
+                if uptime() >= deadline { throw Check(description: "no control socket within 10 s of launch (\(error))") }
+            }
+        }
+        guard case .hello(let h) = try send(.hello, timeout: 10) else { throw Check(description: "hello did not answer with hello") }
+        hello = h
+        try expect(h.engine == engine.rawValue, "hello says engine \(h.engine), the runner launched \(engine.rawValue)")
+        try waitUntil("the first window render", timeout: 10) { (try? self.view()) != nil }
+    }
+
+    /// `quit` over the socket, then waits up to 10 s for the exit. A process that does not exit is killed and the
+    /// outcome says so. Idempotent: a second call returns the first outcome.
+    @discardableResult
+    func quit() throws -> QuitOutcome {
+        if let quitOutcome { return quitOutcome }
+        guard let process else { throw Check(description: "quit before launch") }
+        var exit: String
+        if process.isRunning {
+            let reply = try? client.send(.quit, timeout: 5)
+            client.close()
+            if reply != .ok { notes.append("quit did not reply ok (\(reply.map { "\($0)" } ?? "no reply"))") }
+            if process.waitForExit(timeout: 10) {
+                exit = process.exitDescription
+            } else {
+                process.kill()
+                exit = "did not exit within 10 s of quit (killed)"
+            }
+        } else {
+            client.close()
+            exit = process.exitDescription
+        }
+        if !process.exitedCleanly, let fatal = process.fatalLine { exit += "; \(fatal)" }
+        if process.process.terminationReason == .exit, process.process.terminationStatus == 3,
+           let incomplete = try? String(contentsOf: dataDirectory.appendingPathComponent("shutdown-incomplete.log"), encoding: .utf8) {
+            exit += "; shutdown-incomplete.log: \(incomplete.split(whereSeparator: \.isNewline).joined(separator: ", "))"
+        }
+        let pageLogFile = dataDirectory.appendingPathComponent("control-pagelog.json")
+        let finalLog = (try? Data(contentsOf: pageLogFile)).flatMap { try? ControlWire.decode([PageLogEntry].self, line: $0.dropLast()) }
+        try? FileManager.default.removeItem(at: pageLogFile)
+        let outcome = QuitOutcome(exit: exit, clean: process.exitedCleanly, crashReports: newCrashReports(waitIfCrashed: !process.exitedCleanly),
+                                  finalPageLog: finalLog)
+        quitOutcome = outcome
+        return outcome
+    }
+
+    /// quit() (which must be clean) then launch() with the same data directory.
+    func restart() throws {
+        let outcome = try quit()
+        try expect(outcome.clean, "quit before restart: \(outcome.exit)")
+        try expect(outcome.crashReports.isEmpty, "quit before restart left crash reports: \(outcome.crashReports.joined(separator: ", "))")
+        try launch()
+    }
+
+    /// After every scenario: one more `native()` for the host-window rule, then a quit; problems are what fails a
+    /// scenario that otherwise passed: a host window seen key, a non-zero exit, a new crash report.
+    func finish(exitAlreadyReported: Bool = false) -> (problems: [String], needs: [String]) {
+        var problems: [String] = []
+        if isRunning, quitOutcome == nil, client.isConnected { _ = try? native() }
+        if !hostKeyViolations.isEmpty { problems.append("a CEF host window was key: \(hostKeyViolations.joined(separator: "; "))") }
+        if process != nil {
+            if let outcome = try? quit() {
+                if !outcome.clean, !exitAlreadyReported { problems.append("exit \(outcome.exit)") }
+                if !outcome.crashReports.isEmpty { problems.append("new crash reports: \(outcome.crashReports.joined(separator: ", "))") }
+            }
+        }
+        return (problems, process?.fatalOwner.map { [$0] } ?? [])
+    }
+
+    private func newCrashReports(waitIfCrashed: Bool) -> [String] {
+        let deadline = uptime() + (waitIfCrashed ? 3 : 0.5)
+        repeat {
+            let fresh = CrashReports.names(prefix: productPrefix).subtracting(crashBaseline)
+            if !fresh.isEmpty { return fresh.sorted() }
+            usleep(250_000)
+        } while uptime() < deadline
+        return []
+    }
+
+    private func died(during: String) -> AppDied {
+        process?.waitForExit(timeout: 3)
+        return AppDied(during: during, exit: process?.exitDescription ?? "never launched", fatal: process?.fatalLine)
+    }
+
+    // MARK: Ops
+
+    /// One request. A closed connection or a dead process becomes `AppDied` naming the op.
+    @discardableResult
+    func send(_ op: ControlOp, timeout: Double = 30) throws -> ControlResult {
+        guard let process else { throw Check(description: "\(Self.describe(op)) before launch") }
+        do {
+            return try client.send(op, timeout: timeout)
+        } catch let error as ControlClientError {
+            if case .closed = error { throw died(during: Self.describe(op)) }
+            if !process.isRunning { throw died(during: Self.describe(op)) }
+            throw Check(description: "control socket: \(error) during \(Self.describe(op))")
+        }
+    }
+
+    /// An op that answers `ok`.
+    func perform(_ op: ControlOp, timeout: Double = 30) throws {
+        let result = try send(op, timeout: timeout)
+        guard result == .ok else { throw Check(description: "\(Self.describe(op)) answered \(Self.describe(result))") }
+    }
+
+    func view() throws -> WindowSnapshot {
+        let result = try send(.view(window: window))
+        guard case .view(let snapshot) = result else { throw Check(description: "view answered \(Self.describe(result))") }
+        return snapshot
+    }
+
+    func native() throws -> NativeFacts {
+        let result = try send(.native(window: window))
+        guard case .native(let facts) = result else { throw Check(description: "native answered \(Self.describe(result))") }
+        let hostNumbers = Set(facts.pages.values.compactMap(\.hostWindowNumber))
+        for w in facts.appWindows where w.isKey && (hostNumbers.contains(w.number) || w.className.contains("NativeWidget")) {
+            let entry = "window \(w.number) (\(w.className))"
+            if !hostKeyViolations.contains(entry) { hostKeyViolations.append(entry) }
+        }
+        return facts
+    }
+
+    @discardableResult
+    func dispatch(_ command: Command) throws -> Int {
+        let result = try send(.dispatch(window: window, command: command))
+        guard case .dispatched(let rev) = result else { throw Check(description: "dispatch answered \(Self.describe(result))") }
+        return rev
+    }
+
+    /// Opens `url` as a new Today tab through the command-bar commands (scenario setup, not a key path).
+    func load(_ url: URL) throws -> ItemID {
+        let result = try send(.load(window: window, url: url))
+        guard case .loaded(let tab) = result else { throw Check(description: "load answered \(Self.describe(result))") }
+        return tab
+    }
+
+    func press(_ chord: String) throws { try perform(.press(chord: chord)) }
+    func hold(_ modifiers: String, _ chord: String, times: Int = 1) throws { try perform(.hold(modifiers: modifiers, chord: chord, times: times)) }
+    func type(_ text: String) throws { try perform(.type(text: text)) }
+    func click(_ view: ViewID, modifiers: String? = nil, count: Int = 1) throws {
+        try perform(.click(view: view, point: nil, modifiers: modifiers, count: count))
+    }
+    func click(at point: CGPoint, modifiers: String? = nil, count: Int = 1) throws {
+        try perform(.click(view: nil, point: point, modifiers: modifiers, count: count))
+    }
+    func hover(_ point: CGPoint) throws { try perform(.hover(point: point)) }
+    func flush() throws { try perform(.flush) }
+    func settle(timeout: Double = 10) throws { try perform(.settle(timeout: timeout), timeout: timeout + 5) }
+    func evaluate(_ page: PageID, _ script: String) throws { try perform(.evaluate(page: page, script: script)) }
+    func crash(_ page: PageID, _ target: CrashTarget) throws { try perform(.crash(page: page, process: target)) }
+    func setWindowFrame(_ frame: CGRect) throws { try perform(.setWindowFrame(window: window, frame: frame)) }
+
+    /// [r, g, b, a] of a fresh capture at a window point (top-left, points).
+    func pixel(_ point: CGPoint) throws -> [Int] {
+        let result = try send(.pixel(window: window, point: point))
+        guard case .pixel(let r, let g, let b, let a) = result else { throw Check(description: "pixel(\(point)) answered \(Self.describe(result))") }
+        return [r, g, b, a]
+    }
+
+    /// `<out>/shots/<scenario>-<name>.png`; returns its path and pixel size.
+    @discardableResult
+    func screenshot(_ name: String) throws -> (url: URL, width: Int, height: Int) {
+        let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
+        let result = try send(.screenshot(window: window, path: url.path))
+        guard case .screenshot(_, let w, let h) = result else { throw Check(description: "screenshot answered \(Self.describe(result))") }
+        if !screenshots.contains(url) { screenshots.append(url) }
+        return (url, w, h)
+    }
+
+    @discardableResult
+    func advanceClock(seconds: Double) throws -> Instant {
+        let result = try send(.advanceClock(seconds: seconds))
+        guard case .clock(let now) = result else { throw Check(description: "advanceClock(\(seconds)) answered \(Self.describe(result))") }
+        return now
+    }
+
+    func pageLog() throws -> [PageLogEntry] {
+        let result = try send(.pageLog)
+        guard case .pageLog(let entries) = result else { throw Check(description: "pageLog answered \(Self.describe(result))") }
+        return entries
+    }
+
+    // MARK: Polling, notes, engine
+
+    /// Polls `condition` every 100 ms until it returns true or `timeout` passes. A `Check` thrown by the condition
+    /// counts as "not yet" and its message is kept for the timeout report; `AppDied` ends the wait at once.
+    func waitUntil(_ message: String, timeout: Double = 8, _ condition: () throws -> Bool) throws {
+        let deadline = uptime() + timeout
+        var last: String?
+        while true {
+            do {
+                if try condition() { return }
+                last = nil
+            } catch let error as AppDied {
+                throw error
+            } catch {
+                last = "\(error)"
+            }
+            if uptime() >= deadline {
+                throw Check(description: "timed out after \(timeout) s waiting for \(message)" + (last.map { " (last: \($0))" } ?? ""))
+            }
+            usleep(100_000)
+        }
+    }
+
+    func sleep(_ seconds: Double) { usleep(useconds_t(seconds * 1_000_000)) }
+
+    /// A caveat shown next to a PASS.
+    func note(_ text: String) { if !notes.contains(text) { notes.append(text) } }
+
+    /// The rest of the scenario needs Chromium: on the stub engine it ends here as SKIPPED.
+    func requireCEF(_ what: String) throws {
+        if engine == .stub { throw Skipped(description: "needs CEF engine (\(what)); the stub-capable checks before it passed") }
+    }
+
+    /// Runs `body` only on the CEF engine; on the stub records `what` as not checked.
+    func onCEF(_ what: String, _ body: () throws -> Void) throws {
+        if engine == .cef { try body() } else { note("\(what) not checked on the stub engine") }
+    }
+
+    static func describe(_ op: ControlOp) -> String {
+        let text: String
+        switch op {
+        case .press(let chord): text = "press(\"\(chord)\")"
+        case .hold(let m, let c, let n): text = "hold(\"\(m)\", \"\(c)\", \(n))"
+        case .type(let t): text = "type(\"\(t)\")"
+        case .click(let v, let p, let m, _): text = "click(\(v.map(\.identifier) ?? p.map { "\($0)" } ?? "?")\(m.map { ", \($0)" } ?? ""))"
+        case .load(_, let url): text = "load(\(url.absoluteString))"
+        case .dispatch(_, let command): text = "dispatch(\(command))"
+        case .view: text = "view"
+        case .native: text = "native"
+        default: text = "\(op)"
+        }
+        return text.count > 160 ? String(text.prefix(157)) + "..." : text
+    }
+
+    static func describe(_ result: ControlResult) -> String {
+        let text = "\(result)"
+        return text.count > 200 ? String(text.prefix(197)) + "..." : text
+    }
 }
