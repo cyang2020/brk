@@ -6,7 +6,7 @@ import type { Draft } from 'immer'
 import type { Instant, ItemId, SpaceId, WindowId } from '../../shared/base'
 import type { ItemRef } from '../../shared/commands'
 import { isAllowedUrl, resolveTypedInput } from '../../shared/url'
-import type { LiveTab, StateImpl, TabItem } from '../model'
+import { own, type LiveTab, type StateImpl, type TabItem } from '../model'
 import type { Ctx, HandlerCtx, Handlers } from '../reduce'
 import { activeItemId, focusedTabId, lastActiveOf, mostRecentLoaded, shownTabIds, unitsOfSpace, visibleTabIds } from '../select'
 import { getItem, insertItem, locate, moveItem, sidebarOrder, type Slot } from '../tree'
@@ -45,7 +45,7 @@ export function stamp(draft: Draft<StateImpl>, itemId: ItemId, now: Instant): vo
 export function showSpace(draft: Draft<StateImpl>, windowId: WindowId, spaceId: SpaceId, ctx: Ctx): void {
   const win = draft.doc.windows[windowId]
   const ws = draft.session.windows[windowId]
-  if (!win || !ws || !draft.doc.spaces[spaceId]) return
+  if (!win || !ws || !own(draft.doc.spaces, spaceId)) return
   if (ws.peek) ws.peek = false
   if (win.spaceId === spaceId) return
   changeScreen(draft, windowId, ctx, () => {

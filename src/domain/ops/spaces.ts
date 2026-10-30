@@ -3,7 +3,7 @@ import { castDraft } from 'immer'
 import type { ItemId, SpaceId } from '../../shared/base'
 import { COPY } from '../../shared/copy'
 import type { SpaceIcon, SpaceTheme } from '../../shared/theme'
-import type { SectionItem } from '../model'
+import { own, type SectionItem } from '../model'
 import type { Handlers } from '../reduce'
 import { removeSubtree } from '../tree'
 import { archiveItems } from './archive'
@@ -46,7 +46,7 @@ export const spaceHandlers = {
   },
   // Patch title (blank keeps the old one), icon, theme; closes the dialog.
   'space/update': (draft, command, ctx) => {
-    const space = draft.doc.spaces[command.spaceId]
+    const space = own(draft.doc.spaces, command.spaceId)
     if (!space) return
     const title = command.title?.trim()
     if (title !== undefined && title !== '' && space.title !== title) space.title = title
@@ -60,7 +60,7 @@ export const spaceHandlers = {
   // previous one).
   'space/delete': (draft, command, ctx) => {
     const doc = draft.doc
-    const space = doc.spaces[command.spaceId]
+    const space = own(doc.spaces, command.spaceId)
     const index = doc.spaceOrder.indexOf(command.spaceId)
     if (!space || index < 0 || doc.spaceOrder.length <= 1) return
     const neighbour = doc.spaceOrder[index + 1] ?? doc.spaceOrder[index - 1]!
@@ -103,7 +103,7 @@ export const spaceHandlers = {
   'space/toggle-pinned': (draft, command, ctx) => {
     const win = ctx.windowId ? draft.doc.windows[ctx.windowId] : undefined
     const spaceId = command.spaceId === 'current' ? win?.spaceId : command.spaceId
-    const space = spaceId ? draft.doc.spaces[spaceId] : undefined
+    const space = spaceId ? own(draft.doc.spaces, spaceId) : undefined
     if (space) space.pinnedCollapsed = !space.pinnedCollapsed
   },
 } satisfies Partial<Handlers>

@@ -9,7 +9,7 @@ import { LAYOUT } from '../shared/constants'
 import { COPY } from '../shared/copy'
 import { resolveTheme } from '../shared/theme'
 import type { MenuEntry } from './effects'
-import { open, type AppState, type Doc, type SplitItem, type StateImpl } from './model'
+import { open, own, type AppState, type Doc, type SplitItem, type StateImpl } from './model'
 import { getItem, locate, tabsUnder, unitsUnder } from './tree'
 
 export interface PaneSelection {
@@ -71,7 +71,7 @@ export function selectWindow(state: AppState, windowId: WindowId): WindowSelecti
       : ws.renamingId !== null || ws.dialog !== null || focused === null
         ? { kind: 'surface', surface: 'sidebar' }
         : { kind: 'pane', tabId: focused }
-  const space = s.doc.spaces[win.spaceId]
+  const space = own(s.doc.spaces, win.spaceId)
   return {
     windowId,
     bounds: win.bounds,
@@ -141,7 +141,7 @@ export function lastActiveOf(doc: Doc, itemId: ItemId): Instant {
 
 /** Everything a window may show in a space, in sidebar order: Favorites tabs, then the space's Pinned and Today units. */
 export function unitsOfSpace(doc: Doc, spaceId: SpaceId): readonly ItemId[] {
-  const space = doc.spaces[spaceId]
+  const space = own(doc.spaces, spaceId)
   if (!space) return []
   return [...unitsUnder(doc, doc.favoritesId, false), ...unitsUnder(doc, space.pinnedId, false), ...unitsUnder(doc, space.todayId, false)]
 }
@@ -207,7 +207,7 @@ export function menuFor(state: StateImpl, windowId: WindowId, menu: PopupMenu): 
         entry(COPY.plusMenu.newSpace, { type: 'sidebar/dialog', dialog: { kind: 'new-space' } }),
       ]
     case 'space': {
-      if (!doc.spaces[menu.spaceId]) return []
+      if (!own(doc.spaces, menu.spaceId)) return []
       const edit: UiCommand = { type: 'sidebar/dialog', dialog: { kind: 'edit-space', spaceId: menu.spaceId } }
       return [
         entry(COPY.space.rename, edit),
@@ -232,9 +232,9 @@ export function menuFor(state: StateImpl, windowId: WindowId, menu: PopupMenu): 
       const unitWhere = locate(doc, unit) ?? where
       const homeSpace = unitWhere.spaceId ?? doc.windows[windowId]?.spaceId ?? null
       const moves = doc.spaceOrder
-        .filter((spaceId) => spaceId !== homeSpace && doc.spaces[spaceId])
+        .filter((spaceId) => spaceId !== homeSpace && own(doc.spaces, spaceId))
         .map((spaceId) =>
-          entry(`${unitWhere.section === 'pinned' ? MOVE_TO.pinned : MOVE_TO.today}${doc.spaces[spaceId]!.title}`, {
+          entry(`${unitWhere.section === 'pinned' ? MOVE_TO.pinned : MOVE_TO.today}${own(doc.spaces, spaceId)!.title}`, {
             type: 'item/move',
             itemId: unit,
             to: { kind: 'space', spaceId },

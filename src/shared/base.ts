@@ -34,7 +34,15 @@ export interface Size {
 }
 export interface Rect extends Point, Size {}
 
-const isId = (value: unknown): boolean => typeof value === 'string' && value.length > 0 && value.length <= 64
+/**
+ * A valid id is a non-empty string of at most 64 chars that does not name an `Object.prototype` member. Ids reach
+ * plain-object record keys (`doc.spaces[id]`, `doc.items[id]`); a name like "__proto__", "constructor" or "toString"
+ * would read an inherited member as if it were an entry (truthy) or, on write, pollute `Object.prototype`. Rejecting
+ * them here is the boundary fix; `own` (src/domain/model.ts) is the in-domain backstop. Real ids are random UUIDs, so
+ * nothing legitimate is rejected. `!(value in {})` catches every inherited prototype member name.
+ */
+const isId = (value: unknown): boolean =>
+  typeof value === 'string' && value.length > 0 && value.length <= 64 && value !== 'prototype' && !(value in {})
 
 export const ItemIdSchema = z.custom<ItemId>(isId, 'expected an item id')
 export const SpaceIdSchema = z.custom<SpaceId>(isId, 'expected a space id')

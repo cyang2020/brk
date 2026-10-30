@@ -228,3 +228,13 @@ export interface AppState {
 /** Domain-internal casts between the handle and the data. */
 export const open = (state: AppState): StateImpl => state as unknown as StateImpl
 export const seal = (state: StateImpl): AppState => state as unknown as AppState
+
+/**
+ * Own-property record lookup. Plain objects index their records (`doc.spaces`, `doc.items`, `doc.windows`), so a key
+ * that names an inherited `Object.prototype` member ("__proto__", "constructor", "toString", …) would otherwise read
+ * that member as if it were an entry. Every by-id read of a record goes through this, so a missing (or forbidden) id
+ * is `undefined` everywhere, not a truthy prototype object. The command schema already rejects such ids at the
+ * boundary (src/shared/base.ts); this is the in-domain backstop for ids that arrive through other paths.
+ */
+export const own = <T>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.prototype.hasOwnProperty.call(record, key) ? (record as Record<string, T>)[key] : undefined

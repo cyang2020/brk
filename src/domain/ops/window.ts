@@ -2,7 +2,7 @@
 import { castDraft, type Draft } from 'immer'
 import type { WindowId } from '../../shared/base'
 import { LAYOUT } from '../../shared/constants'
-import type { CommandBarTarget, Overlay, StateImpl } from '../model'
+import { own, type CommandBarTarget, type Overlay, type StateImpl } from '../model'
 
 /** An overlay to open, without its identity (`Omit` distributed over the union, so each kind keeps its fields). */
 export type OverlayRequest = Overlay extends infer O ? (O extends Overlay ? Omit<O, 'openId'> : never) : never
@@ -98,7 +98,7 @@ export const windowHandlers = {
       if (ws.dialog?.kind !== 'new-space') ws.dialog = { kind: 'new-space' }
     } else {
       const spaceId = request.spaceId === 'current' ? win.spaceId : request.spaceId
-      if (!draft.doc.spaces[spaceId]) return
+      if (!own(draft.doc.spaces, spaceId)) return
       if (ws.dialog?.kind !== 'edit-space' || ws.dialog.spaceId !== spaceId) ws.dialog = { kind: 'edit-space', spaceId }
     }
     peekIfHidden(draft, w)

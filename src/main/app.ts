@@ -152,10 +152,20 @@ export function startApp(deps: AppDeps): App {
   const sweep = setInterval(tick, TIMING.autoArchiveSweepMs)
   powerMonitor.on('resume', tick)
 
-  // First pass: create the hosts and show the restored state, then whatever the hosts queued (window/bounds).
+  // First pass: create the hosts and show the restored state, then whatever the hosts queued (window/bounds). If the
+  // restored state cannot be shown this throws; tear down what was wired so the caller can quarantine and restart
+  // fresh (src/main/index.ts) without a leaked sweep timer, IPC handler or host dispatching into a dead instance.
   running = true
   try {
     settle([])
+  } catch (error) {
+    stopped = true
+    clearInterval(sweep)
+    powerMonitor.off('resume', tick)
+    uninstallIpc()
+    for (const host of hosts.values()) host.destroy()
+    hosts.clear()
+    throw error
   } finally {
     running = false
   }

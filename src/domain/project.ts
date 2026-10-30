@@ -17,7 +17,7 @@ import type {
   LayoutView,
 } from '../shared/view'
 import type { SectionKind } from '../shared/placement'
-import { open, type AppState, type TabItem } from './model'
+import { open, own, type AppState, type TabItem } from './model'
 import { activeItemId, focusedTabId, selectWindow, visibleTabIds } from './select'
 import { getItem, locate, tabsUnder } from './tree'
 
@@ -47,7 +47,7 @@ export function projectWindow(state: AppState, windowId: WindowId, layout: Layou
   const { doc, session } = s
   const win = doc.windows[windowId]
   const ws = session.windows[windowId]
-  const space = win ? doc.spaces[win.spaceId] : undefined
+  const space = win ? own(doc.spaces, win.spaceId) : undefined
   if (!win || !ws || !space) throw new Error(`projectWindow: unknown window ${windowId}`)
   const selection = selectWindow(state, windowId)
   const focused = focusedTabId(s, windowId)

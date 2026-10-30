@@ -11,7 +11,7 @@
 import { castDraft, type Draft } from 'immer'
 import type { ItemId, SpaceId, WindowId } from '../shared/base'
 import { CAPS, DEFAULT_WINDOW_SIZE, LAYOUT } from '../shared/constants'
-import type { Item, StateImpl, WindowSession } from './model'
+import { own, type Item, type StateImpl, type WindowSession } from './model'
 import type { Ctx } from './reduce'
 import { mostRecentLoaded, shownTabIds } from './select'
 import { dissolveSplit, locate, pinnedUrlFor } from './tree'
@@ -99,12 +99,12 @@ export function normalize(draft: Draft<StateImpl>, _ctx: Ctx): readonly string[]
     if (!session.windows[windowId]) session.windows[windowId] = castDraft(freshWindowSession(DEFAULT_WINDOW_SIZE))
   for (const windowId of Object.keys(session.windows) as WindowId[]) if (!doc.windows[windowId]) delete session.windows[windowId]
   for (const win of Object.values(doc.windows)) {
-    if (!doc.spaces[win.spaceId] && doc.spaceOrder[0] !== undefined) {
+    if (!own(doc.spaces, win.spaceId) && doc.spaceOrder[0] !== undefined) {
       out.push(`window ${win.id} was on a missing space`)
       win.spaceId = doc.spaceOrder[0]
     }
     for (const [key, itemId] of Object.entries(win.activeBySpace) as [SpaceId, ItemId][]) {
-      if (!doc.spaces[key]) {
+      if (!own(doc.spaces, key)) {
         delete win.activeBySpace[key]
         continue
       }
@@ -125,7 +125,7 @@ export function normalize(draft: Draft<StateImpl>, _ctx: Ctx): readonly string[]
   for (const ws of Object.values(session.windows)) {
     if (ws.overlay?.kind === 'command-bar' && ws.overlay.target.kind === 'navigate' && doc.items[ws.overlay.target.tabId]?.kind !== 'tab') ws.overlay = null
     if (ws.renamingId !== null && !doc.items[ws.renamingId]) ws.renamingId = null
-    if (ws.dialog?.kind === 'edit-space' && !doc.spaces[ws.dialog.spaceId]) ws.dialog = null
+    if (ws.dialog?.kind === 'edit-space' && !own(doc.spaces, ws.dialog.spaceId)) ws.dialog = null
     if (ws.recentCycle && !ws.recentCycle.order.every((id) => doc.items[id])) ws.recentCycle = null
   }
 
