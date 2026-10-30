@@ -72,6 +72,9 @@ final class EventInjector {
     private func event(code: UInt16, down: Bool, flags: Modifiers, text: String? = nil, type: CGEventType? = nil) throws -> NSEvent {
         guard let cg = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { throw InjectionError("CGEvent for key \(code)") }
         cg.flags = CGEventFlags(rawValue: UInt64(flags.rawValue))
+        // A CGEvent from a private source has timestamp 0; the press id is minted from the timestamp, so every press
+        // would look like the same press to the duplicate guard. Real events carry uptime in nanoseconds.
+        cg.timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         if let type { cg.type = type }
         if let text {
             let units = Array(text.utf16)
@@ -82,16 +85,21 @@ final class EventInjector {
     }
 
     /// Posts the event at the head of the app's queue and dequeues it, as the run loop does, so `NSApp.currentEvent`
-    /// is this event while it is handled (the menu target reads it to mint the press id), then dispatches it.
+    /// is this event while it is handled (the menu target reads it to mint the press id), then dispatches it. Without
+    /// a key window it takes `NSApp.sendEvent`'s order itself: a key-down is offered as a key equivalent to the
+    /// window's views (a focused Chromium view claims app shortcuts there, spike unknown 3), then to the menu, then
+    /// goes to the window and its first responder.
     private func deliver(_ event: NSEvent, to window: NSWindow) throws {
         let current = Self.dequeue(event)
         if NSApp.keyWindow === window {
             NSApp.sendEvent(current)
-        } else if current.type == .keyDown, NSApp.mainMenu?.performKeyEquivalent(with: current) == true {
             return
-        } else {
-            window.sendEvent(current)
         }
+        if current.type == .keyDown {
+            if (window.contentView?.superview ?? window.contentView)?.performKeyEquivalent(with: current) == true { return }
+            if NSApp.mainMenu?.performKeyEquivalent(with: current) == true { return }
+        }
+        window.sendEvent(current)
     }
 
     private static func dequeue(_ event: NSEvent) -> NSEvent {
@@ -103,22 +111,36 @@ final class EventInjector {
 
     // MARK: Mouse
 
-    /// Left click at a window point (AppKit window coordinates). The key-up is queued before the key-down is sent,
-    /// so a control that runs its own tracking loop inside `mouseDown` (NSButton) finds it; if nothing consumed it,
-    /// it is dequeued and sent here, so the click is complete when this returns.
+    /// Left click at a window point (AppKit window coordinates). The mouse-up is queued before the mouse-down is
+    /// handled, so a control that runs its own tracking loop inside `mouseDown` (NSButton) finds it; if nothing
+    /// consumed it, it is dequeued and handled here, so the click is complete when this returns.
+    ///
+    /// In a key window the events go through `NSApp.sendEvent`. A window that is not key (inactive app, locked
+    /// display) would take the press as a first click that only activates it, so the events go to the view AppKit's
+    /// hit test picks, the way a key window delivers them: a control through `NSWindow.sendEvent` (controls accept
+    /// the first click and run their tracking there; called directly, NSButton does not track), any other view by a
+    /// direct `mouseDown`/`mouseUp` (AppKit forwards what the view does not handle to the view below, as it does for
+    /// a real click).
     func click(at point: CGPoint, modifiers: Modifiers, count: Int, in window: NSWindow) throws {
         if !window.isKeyWindow {
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
         }
+        let key = window.isKeyWindow
+        guard let target = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point) else {
+            throw InjectionError("nothing under \(point) in window \(window.windowNumber)")
+        }
+        func handle(_ event: NSEvent) {
+            if key { NSApp.sendEvent(event) }
+            else if target is NSControl { window.sendEvent(event) }
+            else if event.type == .leftMouseDown { target.mouseDown(with: event) }
+            else { target.mouseUp(with: event) }
+        }
         for n in 1...count {
-            let down = try mouse(.leftMouseDown, at: point, modifiers: modifiers, clickCount: n, in: window)
-            let up = try mouse(.leftMouseUp, at: point, modifiers: modifiers, clickCount: n, in: window)
-            NSApp.postEvent(up, atStart: false)
-            NSApp.sendEvent(Self.dequeue(down))
-            if let pending = NSApp.nextEvent(matching: .leftMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) {
-                NSApp.sendEvent(pending)
-            }
+            let down = Self.dequeue(try mouse(.leftMouseDown, at: point, modifiers: modifiers, clickCount: n, in: window))
+            NSApp.postEvent(try mouse(.leftMouseUp, at: point, modifiers: modifiers, clickCount: n, in: window), atStart: false)
+            handle(down)
+            if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) { handle(up) }
         }
     }
 
