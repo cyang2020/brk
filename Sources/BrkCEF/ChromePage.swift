@@ -147,11 +147,11 @@ final class ChromePage: CefBrowserDelegate {
         let pressID: PressID
         if isBeforePage {
             pressID = PressID(eventTimestamp: NSApp.currentEvent?.timestamp ?? uptime)
-            if press.phase == .down { presses.beforePage(press.chord, id: pressID, at: now) }
         } else {
-            pressID = presses.afterPage(press.chord, at: now) ?? PressID(eventTimestamp: uptime)
+            pressID = presses.afterPage(press, at: now) ?? PressID(eventTimestamp: uptime)
         }
         let handled = engine.pageKey(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
+        if isBeforePage { presses.beforePage(press, id: pressID, handled: handled, at: now) }
         if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
         }
