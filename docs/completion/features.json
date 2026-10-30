@@ -2261,7 +2261,7 @@
       "historical_status": "done",
       "status": "partial",
       "acceptance": "Restart restores standard windows/spaces/tabs/geometry lazily when enabled, honors the restore-windows setting when disabled, and never restores private or Little Brk session data.",
-      "owner": "platform-grounding",
+      "owner": "parent-core-integration",
       "required_checks": [
         "unit",
         "native"
@@ -2286,6 +2286,20 @@
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
           "log": "verify/swift/focus-parent/native/logs/W2-3.log",
           "scenario": "W2-3"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/completion/identity-parent/build-fixed.log",
+          "scope": "484 tests, 3 inherited skips, zero failures; v1/v2/v3 restore, composite identities, per-window state and reviewed regressions."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_DATA_ROOT=/tmp/brk-identity-parent-data SKIP_BUILD=1 scripts/e2e.sh --out verify/completion/identity-parent/native-fixed",
+          "artifact": "verify/completion/identity-parent/native-fixed/REPORT.md",
+          "scope": "52 scenarios; I1-I6 cover same-logical-tab surfaces/input, independent restart, local/shared close, split focus, no attachment replay, replacement navigation and private dock/public archive behavior. No Arc pixel-parity claim."
         }
       ],
       "remaining": [
@@ -2298,11 +2312,15 @@
         "Sources/BrkDomain/SettingsModel.swift",
         "Sources/BrkApp/WindowController.swift"
       ],
-      "current_behavior": "Codec persists standard windows and global tree; loaded pages are reconstructed lazily. restoreWindowsOnLaunch is stored but never consumed.",
+      "current_behavior": "Codec v3 restores standard-window committed slot URLs and split focus, migrates v1/v2, preserves explicit empty selections and omits private/scratch state. Restore-windows-off still has no runtime consumer.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "eda1243",
+          "artifact": "verify/completion/identity-parent/REPORT.md"
+        }
       }
     },
     {
@@ -2312,9 +2330,9 @@
       "arc_evidence": "rows 17, 31; anatomy-m 1.8",
       "description": "New Window, Close Window, all sharing one sidebar",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Several standard windows share one sidebar and support independent active pages, close behavior and native focus; selecting the same logical tab in two windows has a defined and tested result.",
-      "owner": "platform-grounding",
+      "owner": "parent-core-integration",
       "required_checks": [
         "unit",
         "native"
@@ -2329,12 +2347,23 @@
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
           "log": "verify/swift/focus-parent/native/logs/W2-4.log",
           "scenario": "W2-4"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/completion/identity-parent/build-fixed.log",
+          "scope": "484 tests, 3 inherited skips, zero failures; v1/v2/v3 restore, composite identities, per-window state and reviewed regressions."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_DATA_ROOT=/tmp/brk-identity-parent-data SKIP_BUILD=1 scripts/e2e.sh --out verify/completion/identity-parent/native-fixed",
+          "artifact": "verify/completion/identity-parent/native-fixed/REPORT.md",
+          "scope": "52 scenarios; I1-I6 cover same-logical-tab surfaces/input, independent restart, local/shared close, split focus, no attachment replay, replacement navigation and private dock/public archive behavior. No Arc pixel-parity claim."
         }
       ],
-      "remaining": [
-        "Resolve and verify simultaneous selection of one PageID across windows; do not infer duplicate-page presentation from per-window focus requests.",
-        "Verify native close/last-window restart and cross-window page movement with native editors."
-      ],
+      "remaining": [],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -2342,11 +2371,15 @@
         "Sources/BrkApp/WindowController.swift",
         "Sources/BrkCEF/CEFEngine.swift"
       ],
-      "current_behavior": "New/close commands and shared sidebar work; engine keeps one NSView per PageID and selection is per-window.",
+      "current_behavior": "Shared sidebar rows have distinct window/tab page IDs and native browsers. Navigation, input, live metadata and persisted committed addresses are window-specific. Explicit shared close/archive and local page-close semantics are tested; root review corrections preserve adjacent focus and public archives.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "eda1243",
+          "artifact": "verify/completion/identity-parent/REPORT.md"
+        }
       }
     },
     {
@@ -5829,7 +5862,7 @@
       "historical_status": "done",
       "status": "verified",
       "acceptance": "Restore and repair versioned saved state; preserve supported data across restart and reject unsafe/corrupt records.",
-      "owner": "parent-integrations-audit",
+      "owner": "parent-core-integration",
       "required_checks": [
         "unit",
         "native"
@@ -5848,9 +5881,30 @@
           "result": "pass",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "source_commit": "95c46b5220538935a1ed4b48c3517a4ca7fabfd2"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/completion/identity-parent/build-fixed.log",
+          "scope": "484 tests, 3 inherited skips, zero failures; v1/v2/v3 restore, composite identities, per-window state and reviewed regressions."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_DATA_ROOT=/tmp/brk-identity-parent-data SKIP_BUILD=1 scripts/e2e.sh --out verify/completion/identity-parent/native-fixed",
+          "artifact": "verify/completion/identity-parent/native-fixed/REPORT.md",
+          "scope": "52 scenarios; I1-I6 cover same-logical-tab surfaces/input, independent restart, local/shared close, split focus, no attachment replay, replacement navigation and private dock/public archive behavior. No Arc pixel-parity claim."
         }
       ],
-      "remaining": []
+      "remaining": [],
+      "assessment": {
+        "parent_update": {
+          "commit": "eda1243",
+          "artifact": "verify/completion/identity-parent/REPORT.md"
+        }
+      },
+      "current_behavior": "Codec v3 with v1/v2 migration, validation/repair, explicit blank state and window-specific committed addresses; StateFile remains atomic/debounced bytes-only persistence. Browser/document tokens and private state are not saved."
     },
     {
       "id": "A146",
