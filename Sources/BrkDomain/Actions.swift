@@ -388,7 +388,9 @@ extension ActionID {
         case .minimize: entry(168, "Minimize Window", .window, 0, [key(cmd, .m, .app)], .app(.minimize), bar: listing("arrow.down.right.and.arrow.up.left"))
         case .viewLibrary: entry(170, "View Library", .window, 1, [key([shift, cmd], .l, .page)], .library(.open(nil)), bar: listing("archivebox", "Library"))
         case .viewDownloads:
-            entry(171, "View Downloads", .window, 1, [key([shift, cmd], .j, .page)], .library(.open(.downloads)), bar: listing("arrow.down.circle", "Downloads"))
+            // Chrome runtime can consume this accelerator before OnKeyEvent. Brk's Library owns the default;
+            // users can still choose page priority in Settings.
+            entry(171, "View Downloads", .window, 1, [key([shift, cmd], .j, .app)], .library(.open(.downloads)), bar: listing("arrow.down.circle", "Downloads"))
         case .viewEaselsAndNotes:
             entry(172, "View Easels & Notes", .window, 1, [], .library(.open(.easelsAndNotes)), bar: listing("scribble.variable", "Easels", "Notes"))
         case .viewMedia:

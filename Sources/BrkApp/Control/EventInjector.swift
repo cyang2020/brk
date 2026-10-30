@@ -100,9 +100,26 @@ final class EventInjector {
         if current.type == .keyDown, ViewTree.page(containing: window.firstResponder) == nil {
             if (window.contentView?.superview ?? window.contentView)?.performKeyEquivalent(with: current) == true { return }
             if (window as? any HostWindow)?.routeKeyEquivalent(current) == true { return }
+            if performResponderKeyEquivalent(current, in: window, menu: NSApp.mainMenu) { return }
             if NSApp.mainMenu?.performKeyEquivalent(with: current) == true { return }
         }
         window.sendEvent(current)
+    }
+
+    /// AppKit resolves nil-target menu actions through the key window. In an inactive app, use the window the
+    /// control operation actually targets so Select All, Copy, and other editing actions reach its editor.
+    private func performResponderKeyEquivalent(_ event: NSEvent, in window: NSWindow, menu: NSMenu?) -> Bool {
+        guard let menu, let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        for item in menu.items {
+            if performResponderKeyEquivalent(event, in: window, menu: item.submenu) { return true }
+            guard item.target == nil, let action = item.action, !item.keyEquivalent.isEmpty,
+                  item.keyEquivalent.lowercased() == characters else { continue }
+            var required = item.keyEquivalentModifierMask.intersection([.command, .control, .option, .shift])
+            if item.keyEquivalent != item.keyEquivalent.lowercased() { required.insert(.shift) }
+            if required == modifiers, window.firstResponder?.tryToPerform(action, with: item) == true { return true }
+        }
+        return false
     }
 
     private static func dequeue(_ event: NSEvent) -> NSEvent {

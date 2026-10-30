@@ -9,6 +9,18 @@ final class KeyRoutingSpecTests: XCTestCase {
     let cmdT = KeyChord(.command, .t), cmdR = KeyChord(.command, .r), cmdS = KeyChord(.command, .s)
     let ctrlTab = KeyChord(.control, .tab), cmdW = KeyChord(.command, .w)
 
+    func testDownloadsOpenBeforeChromiumCanConsumeItsOwnDownloadShortcut() {
+        let d = Driver()
+        let chord = KeyChord([.command, .shift], .j)
+        XCTAssertTrue(d.key(chord, stage: .beforePage, pressID: 1).keyHandled)
+        guard case .library(let library)? = d.view.overlay else { return XCTFail("Downloads did not open") }
+        XCTAssertEqual(library.page, .downloads)
+
+        d.user(.library(.close))
+        d.user(.settings(.shortcuts(.setPriority(.viewDownloads, .page))))
+        XCTAssertFalse(d.key(chord, stage: .beforePage, pressID: 2).keyHandled, "an explicit page-priority override is still honored")
+    }
+
     /// Cmd+T before the page: consumed (keyHandled), the command bar opens; the page never sees it.
     func testAppPriorityIsTakenBeforeThePage() throws {
         let d = Driver()
