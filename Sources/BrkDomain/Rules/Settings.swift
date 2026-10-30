@@ -25,7 +25,12 @@ extension Work {
                 case .searchEngine(let engine): if SearchEngine.builtIn(engine) != nil { s.searchEngine = engine }
                 case .searchSuggestions(let on): s.searchSuggestions = on
                 case .autoArchive(let threshold): s.autoArchive = threshold
-                case .downloadsDirectory(let path): s.downloadsDirectory = path.flatMap { $0.isEmpty ? nil : $0 }
+                case .downloadsDirectory(let path):
+                    // An absolute folder path, standardized ("/a/b/../c/" is "/a/c"); empty is the system Downloads
+                    // folder; a relative or "~" path is refused (the reducer does not know the home directory).
+                    let trimmed = path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if trimmed.isEmpty { s.downloadsDirectory = nil }
+                    else if trimmed.hasPrefix("/") { s.downloadsDirectory = URL(fileURLWithPath: trimmed, isDirectory: true).standardized.path }
                 case .promptForDownloadLocation(let on): s.promptForDownloadLocation = on
                 }
             }
@@ -38,7 +43,8 @@ extension Work {
             case .littleArcAutoArchive(let threshold): state.doc.settings.links.littleArcAutoArchive = threshold
             case .defaultRoute(let destination):
                 if case .space(let id)? = destination, state.doc.spaces[id] == nil { return }
-                state.doc.settings.links.defaultRoute = destination
+                // nil and `.mostRecentSpace` say the same; the saved value has one spelling.
+                state.doc.settings.links.defaultRoute = destination == .mostRecentSpace ? nil : destination
             case .addRoute(let route):
                 // TODO(F3): validate the pattern (a host glob) and refuse a destination naming a missing space.
                 guard !state.doc.linkRoutes.contains(where: { $0.id == route.id }) else { return }
@@ -89,7 +95,8 @@ extension Work {
             case .sharedQuotes(let on): state.doc.settings.advanced.sharedQuotes = on
             }
         case .openPane(let pane):
-            // One settings window, app-wide; opening another pane switches it. TODO(F1): the host window.
+            // One settings window, app-wide (BrkApp's SettingsWindowController follows this pane); opening another
+            // pane switches it. Session state: the window is closed after a restart.
             if state.session.settingsPane != pane { state.session.settingsPane = pane }
         case .closeWindow:
             if state.session.settingsPane != nil { state.session.settingsPane = nil }

@@ -109,22 +109,95 @@ final class SettingsSpecTests: XCTestCase {
         XCTAssertEqual(ActionID.revealArcData.spec.command, .app(.revealDataDirectory))
     }
 
-    // MARK: F1 stubs
+    /// the settings snapshot carries what every pane shows: profiles default first then by name with their spaces,
+    /// the engines, the spaces a route can name, routes with their destination's title, and what Max resolves to
+    func test_theSnapshotCarriesWhatEveryPaneShows() {
+        let d = Driver()
+        let first = d.view.space.id
+        d.user(.space(.update(first, title: "Personal", icon: nil, theme: nil)))
+        let work = d.newSpace("Work")
+        d.user(.profile(.create(name: "Zeta", icon: nil)))
+        d.user(.profile(.create(name: "Alpha", icon: nil)))
+        let alpha = d.snapshot.settings.profiles.first { $0.profile.name == "Alpha" }!.profile.id
+        d.user(.profile(.assign(.space(work), to: alpha)))
+        d.user(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("r1"), pattern: "open.spotify.com", destination: .space(work))))))
+        d.user(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("r2"), pattern: "*.github.com", destination: .littleArc)))))
+        d.user(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("r3"), pattern: "meet.google.com", destination: .mostRecentSpace)))))
 
-    func test_theSettingsWindowRendersEveryPaneWithArcsLabels() throws {
-        throw XCTSkip("F1: SettingsHost shows General, Max, Profiles, Shortcuts, Links, Advanced with Arc's labels (visual-and-copy.md)")
+        let s = d.snapshot.settings
+        XCTAssertNil(s.pane)
+        XCTAssertEqual(s.profiles.map(\.profile.name), ["Default", "Alpha", "Zeta"])
+        XCTAssertEqual(s.profiles.map(\.profile.isDefault), [true, false, false])
+        XCTAssertEqual(s.profiles.map(\.profile.spaceTitles), [["Personal"], ["Work"], []])
+        XCTAssertEqual(s.profiles.map(\.settings), [.default, .default, .default])
+        XCTAssertEqual(s.engines.map(\.name), ["Google", "DuckDuckGo", "Bing", "Ecosia", "Kagi"])
+        XCTAssertEqual(s.spaces.map(\.title), ["Personal", "Work"])
+        XCTAssertEqual(s.routes.map(\.route.pattern), ["open.spotify.com", "*.github.com", "meet.google.com"])
+        XCTAssertEqual(s.routes.map(\.destinationTitle), ["Work", "Little Arc", "Most Recent Space"])
+
+        d.system(.aiProvidersDetected([.codex]))
+        let resolved = AIProviderChoice.allCases.map { choice -> AIProviderKind? in
+            d.user(.settings(.max(.provider(choice))))
+            return d.snapshot.settings.max.active
+        }
+        XCTAssertEqual(AIProviderChoice.allCases, [.off, .auto, .claude, .codex])
+        XCTAssertEqual(resolved, [nil, .codex, nil, .codex], "auto takes what is on PATH; an explicit tool that is missing answers nothing")
+        XCTAssertEqual(d.snapshot.settings.max.detected, [.codex])
     }
 
-    func test_warnBeforeQuittingAsksBeforeTheOrderedQuit() throws {
+    /// "Warn before quitting" is saved; the quit stays the ordered effect, because the question is asked by the
+    /// app's terminate handler (`QuitWarning`, as Arc asks in `applicationShouldTerminate`), which every way of
+    /// quitting reaches
+    func test_warnBeforeQuittingIsSavedAndTheQuitStaysOrdered() {
         let d = Driver()
-        d.user(.settings(.general(.warnBeforeQuitting(true))))
-        throw XCTSkip("F1: Cmd+Q with 'Warn before quitting' on shows Arc's confirmation before AppEffect.quit")
+        let t = d.user(.settings(.general(.warnBeforeQuitting(true))))
+        XCTAssertTrue(t.docChanged)
+        assertUnchanged(d.state, d.user(.settings(.general(.warnBeforeQuitting(true)))))
+        XCTAssertEqual(d.user(.app(.quit)).effects, [.app(.quit)])
+        XCTAssertEqual(d.key(KeyChord(.command, .q), stage: .menu, pressID: 7).effects, [.app(.quit)])
+        let r = Driver(file: d.savedFile)
+        XCTAssertTrue(r.snapshot.settings.general.warnBeforeQuitting)
     }
 
-    func test_theDefaultBrowserNoticeShowsUntilDismissedOrRegistered() throws {
+    /// dismissing the "is not your default web browser" notice is saved and idempotent; Set as Default Browser asks
+    /// macOS (an effect) and changes nothing, because whether the app is the default is the system's answer
+    func test_theDefaultBrowserNoticeDismissalIsSavedAndRegisteringIsAnEffect() {
         let d = Driver()
-        d.user(.settings(.general(.dismissDefaultBrowserPrompt)))
-        XCTAssertTrue(d.snapshot.settings.general.defaultBrowserPromptDismissed)
-        throw XCTSkip("F1: the General pane's 'is not your default web browser' notice reads the real handler (F3's DefaultBrowser)")
+        XCTAssertFalse(d.snapshot.settings.general.defaultBrowserPromptDismissed)
+        let set = d.user(.app(.setAsDefaultBrowser))
+        XCTAssertEqual(set.effects, [.app(.registerAsDefaultBrowser)])
+        XCTAssertFalse(set.changed)
+        XCTAssertTrue(d.user(.settings(.general(.dismissDefaultBrowserPrompt))).docChanged)
+        assertUnchanged(d.state, d.user(.settings(.general(.dismissDefaultBrowserPrompt))))
+        XCTAssertTrue(Driver(file: d.savedFile).snapshot.settings.general.defaultBrowserPromptDismissed)
+    }
+
+    /// values are checked where they enter: a download folder must be an absolute path (standardized), empty means
+    /// the system Downloads folder; "Most Recent Space" is saved as no default route; repeating a value changes nothing
+    func test_valuesAreValidatedAtTheBoundary() {
+        let d = Driver()
+        func folder() -> String? { d.snapshot.settings.profiles.first?.settings.downloadsDirectory }
+        d.user(.settings(.profile(.default, .downloadsDirectory(" /Users/me/Inbox/../Downloads/ "))))
+        XCTAssertEqual(folder(), "/Users/me/Downloads")
+        assertUnchanged(d.state, d.user(.settings(.profile(.default, .downloadsDirectory("/Users/me/Downloads")))))
+        assertUnchanged(d.state, d.user(.settings(.profile(.default, .downloadsDirectory("Downloads")))))
+        assertUnchanged(d.state, d.user(.settings(.profile(.default, .downloadsDirectory("~/Desktop")))))
+        d.user(.settings(.profile(.default, .downloadsDirectory(""))))
+        XCTAssertNil(folder())
+        d.user(.settings(.profile(.default, .downloadsDirectory("/tmp/dl"))))
+        d.user(.settings(.profile(.default, .downloadsDirectory(nil))))
+        XCTAssertNil(folder())
+
+        assertUnchanged(d.state, d.user(.settings(.links(.defaultRoute(.mostRecentSpace)))))
+        d.user(.settings(.links(.defaultRoute(.littleArc))))
+        XCTAssertEqual(d.snapshot.settings.links.defaultRoute, .littleArc)
+        d.user(.settings(.links(.defaultRoute(.mostRecentSpace))))
+        XCTAssertNil(d.snapshot.settings.links.defaultRoute)
+
+        assertUnchanged(d.state, d.user(.settings(.links(.shiftClickPeek(true)))))
+        assertUnchanged(d.state, d.user(.settings(.advanced(.soundEffects(true)))))
+        assertUnchanged(d.state, d.user(.settings(.max(.provider(.auto)))))
+        assertUnchanged(d.state, d.user(.settings(.profile(.default, .autoArchive(.twelveHours)))))
+        assertUnchanged(d.state, d.user(.settings(.closeWindow)))
     }
 }
