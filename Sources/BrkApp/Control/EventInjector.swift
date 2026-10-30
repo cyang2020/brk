@@ -99,7 +99,7 @@ final class EventInjector {
         }
         if current.type == .keyDown, ViewTree.page(containing: window.firstResponder) == nil {
             if (window.contentView?.superview ?? window.contentView)?.performKeyEquivalent(with: current) == true { return }
-            if (window as? BrowserWindow)?.routeKeyEquivalent(current) == true { return }
+            if (window as? any HostWindow)?.routeKeyEquivalent(current) == true { return }
             if NSApp.mainMenu?.performKeyEquivalent(with: current) == true { return }
         }
         window.sendEvent(current)
@@ -136,7 +136,11 @@ final class EventInjector {
         func handle(_ event: NSEvent) {
             if key { NSApp.sendEvent(event) }
             else if target is NSControl { window.sendEvent(event) }
-            else if event.type == .leftMouseDown { target.mouseDown(with: event) }
+            else if event.type == .leftMouseDown {
+                // What a key window's sendEvent does first: report the click's modifiers (a Shift+click opens a Peek).
+                _ = (window as? any HostWindow)?.hostEvent(event)
+                target.mouseDown(with: event)
+            }
             else { target.mouseUp(with: event) }
         }
         for n in 1...count {

@@ -93,9 +93,13 @@ public final class AppStore {
         }
     }
 
-    /// The window whose current snapshot shows `page` in one of its panes.
+    /// The window whose current snapshot shows `page`: in one of its panes, or in its Peek card (F3), so a key from
+    /// the peeked page (Esc, Cmd+W) routes to that window instead of being passed to the page.
     public func window(showing page: PageID) -> WindowID? {
-        snapshot.windows.first { $0.value.content.panes.contains { $0.content == .page(page) } }?.key
+        snapshot.windows.first { window in
+            window.value.content.panes.contains { $0.content == .page(page) }
+                || { if case .peek(let peek)? = window.value.overlay { peek.page == page } else { false } }()
+        }?.key
     }
 
     public func windowController(_ id: WindowID?) -> WindowController? {
@@ -134,9 +138,13 @@ public final class AppStore {
             windows[id] = nil
         }
         for id in snapshot.windows.keys.sorted() where windows[id] == nil {
-            // TODO(F3): a `LittleWindowController` (NSPanel at Metrics.littleArc.defaultSize) for `.little`.
-            let controller = WindowController(id: id, kind: snapshot.windows[id]!.kind, engine: engine, send: { [weak self] in self?.dispatch($0) },
-                                              routeKey: { [weak self] input in self?.dispatchKey(id, input) ?? false })
+            // A Little Arc is an NSPanel with Arc's hint strip and "Open in" control (F3); the other kinds a window.
+            let kind = snapshot.windows[id]!.kind
+            let send: @MainActor (Input) -> Void = { [weak self] in self?.dispatch($0) }
+            let routeKey: @MainActor (KeyInput) -> Bool = { [weak self] input in self?.dispatchKey(id, input) ?? false }
+            let controller = kind == .little
+                ? LittleWindowController(id: id, engine: engine, send: send, routeKey: routeKey)
+                : WindowController(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey)
             windows[id] = controller
             controller.place(snapshot.windows[id]!)
             controller.window.makeKeyAndOrderFront(nil)

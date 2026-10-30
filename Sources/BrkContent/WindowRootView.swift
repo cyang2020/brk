@@ -93,15 +93,21 @@ public final class WindowRootView: NSView {
     }
 }
 
-/// Owner: F3 (first pass by W2's root). The Peek card: the peeked page's surface in a rounded card over the content
-/// area (`WindowFrames.peek`), a close button, and Arc's hint strip under it ("Click “Open in” to move this page in a
-/// full window, or ⌘W to close"). TODO(F3): Arc's modal chrome, the "Open in" menu button, the slide animation.
+/// Owner: F3. The Peek card (Arc: `modalV2`; visual-and-copy.md "Peek"): the peeked page's surface in a rounded,
+/// shadowed card over the content area (`WindowFrames.peek`, the content area inset Metrics.peek.inset), with a
+/// strip under it carrying the hint ("Click “Open in” to move this page in a full window, or ⌘W to close"), "Open
+/// in tab" (promotes the page to the current space's Today, `.window(.openIn(.current))`) and "Close"
+/// (`.peek(.close)`, what Esc does). The view's frame is exactly the peek rect, so the control socket reads it; the
+/// radius, shadow and strip height are the labeled guesses in Metrics.peek until Arc's are measured. No backdrop
+/// dims the content (that would need a sibling view in W2's root).
 @MainActor
 public final class PeekCardView: NSView {
     private let dispatch: Dispatch
     private let card = CardView(frame: .zero)
-    private let close = NSButton(title: "Close", target: nil, action: nil)
-    private let openIn = NSButton(title: "Open in…", target: nil, action: nil)
+    private let strip = NSView(frame: .zero)
+    private let hint = NSTextField(labelWithString: PeekCopy.hint)
+    private let close = NSButton(title: PeekCopy.close, target: nil, action: nil)
+    private let openIn = NSButton(title: PeekCopy.openInTab, target: nil, action: nil)
     private var last: PeekSnapshot?
 
     public init(dispatch: @escaping Dispatch) {
@@ -109,18 +115,29 @@ public final class PeekCardView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         identify(.peek)
+        layer?.masksToBounds = false
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.35
+        layer?.shadowRadius = Metrics.peek.shadowRadius.value
+        layer?.shadowOffset = CGSize(width: 0, height: -Metrics.peek.shadowRadius.value / 3)
         card.layer?.cornerRadius = Metrics.peek.cornerRadius.value
         addSubview(card)
-        close.bezelStyle = .inline
-        close.target = self
-        close.action = #selector(closeClicked)
-        close.identify(.peekClose)
-        openIn.bezelStyle = .inline
-        openIn.target = self
-        openIn.action = #selector(openInClicked)
-        openIn.identify(.peekOpenIn)
-        addSubview(close)
-        addSubview(openIn)
+        strip.wantsLayer = true
+        addSubview(strip)
+        hint.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        hint.textColor = .secondaryLabelColor
+        hint.lineBreakMode = .byTruncatingTail
+        strip.addSubview(hint)
+        for (button, id, action) in [(close, ViewID.peekClose, #selector(closeClicked)), (openIn, ViewID.peekOpenIn, #selector(openInClicked))] {
+            button.bezelStyle = .rounded
+            button.controlSize = .small
+            button.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+            button.target = self
+            button.action = action
+            button.identify(id)
+            strip.addSubview(button)
+        }
+        close.keyEquivalent = "\u{1b}"   // the card's Close is Esc's "Exit", also reachable by mouse
         isHidden = true
     }
 
@@ -138,14 +155,26 @@ public final class PeekCardView: NSView {
         }
         isHidden = false
         frame = rect
-        let hint = Metrics.peek.hintHeight.value
-        card.frame = CGRect(x: 0, y: 0, width: rect.width, height: max(0, rect.height - hint))
+        let hintHeight = Metrics.peek.hintHeight.value
+        card.frame = CGRect(x: 0, y: 0, width: rect.width, height: max(0, rect.height - hintHeight))
+        layer?.shadowPath = CGPath(roundedRect: card.frame, cornerWidth: Metrics.peek.cornerRadius.value, cornerHeight: Metrics.peek.cornerRadius.value, transform: nil)
         card.host(peek.page.flatMap(surface), placeholder: peek.page == nil ? peek.tab.title : nil)
-        close.frame = CGRect(x: rect.width - 70, y: card.frame.maxY + 2, width: 64, height: hint - 4)
-        openIn.frame = CGRect(x: rect.width - 150, y: card.frame.maxY + 2, width: 76, height: hint - 4)
+        strip.frame = CGRect(x: 0, y: card.frame.maxY, width: rect.width, height: hintHeight)
+        let buttonHeight = min(22, hintHeight - 4), y = (hintHeight - buttonHeight) / 2
+        close.frame = CGRect(x: rect.width - 72, y: y, width: 64, height: buttonHeight)
+        openIn.frame = CGRect(x: close.frame.minX - 8 - 104, y: y, width: 104, height: buttonHeight)
+        hint.frame = CGRect(x: 8, y: 0, width: max(0, openIn.frame.minX - 16), height: hintHeight)
         last = peek
     }
 
     @objc private func closeClicked() { dispatch(.peek(.close)) }
     @objc private func openInClicked() { dispatch(.window(.openIn(.current))) }
+}
+
+/// Arc's Peek and Little Arc copy shared by the card and the Little Arc panel (visual-and-copy.md "Little Arc").
+public enum PeekCopy {
+    /// `bin:0x103a05b60`, Arc's Little Arc hint; the Peek strip reads the same, since both close with ⌘W and move with "Open in".
+    public static let hint = "Click “Open in” to move this page in a full window, or ⌘W to close"
+    public static let openInTab = "Open in tab"
+    public static let close = "Close"
 }

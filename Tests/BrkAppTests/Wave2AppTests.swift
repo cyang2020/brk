@@ -102,8 +102,65 @@ final class Wave2AppTests: XCTestCase {
         throw XCTSkip("wave 2 contract, F1 or F5 to verify on the display: ShareExport's save panel writes JSON or HTML by extension (no headless save panel)")
     }
 
+    /// a .little window is hosted by LittleWindowController: an NSPanel whose page area is Metrics.littleArc.defaultSize
+    /// with the hint strip under it, titled "Little <app> — <page>", with an "Open in" pull-down listing every space;
+    /// a second Little Arc cascades by Metrics.littleArc.cascade; the standard window stays a BrowserWindow
     func test_littleWindowControllerIsAPanel() throws {
-        throw XCTSkip("F3: LittleWindowController hosts .little windows in an NSPanel at Metrics.littleArc.defaultSize")
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        XCTAssertTrue(h.store.windowController(h.window)?.window is BrowserWindow)
+        h.store.dispatch(.user(h.window, .window(.newLittle(URL(string: "https://example.com/little")!))))
+        let little = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .little })
+        defer { h.store.windowController(little.id)?.window.orderOut(nil) }
+        let controller = try XCTUnwrap(h.store.windowController(little.id) as? LittleWindowController)
+        XCTAssertTrue(controller.window is NSPanel)
+        XCTAssertEqual(controller.root.bounds.size, Metrics.littleArc.defaultSize.value, "the page area is Arc's default size")
+        XCTAssertEqual(controller.window.contentView?.bounds.height, Metrics.littleArc.defaultSize.value.height + Metrics.peek.hintHeight.value)
+        XCTAssertEqual(controller.window.title, "Little \(Product.name) — example.com/little", "the page has no title yet, so its display URL")
+        XCTAssertFalse(controller.hint.isHiddenOrHasHiddenAncestor)
+        XCTAssertEqual(controller.hint.accessibilityIdentifier(), "little-hint")
+        XCTAssertEqual(controller.hint.stringValue, LittleArcCopy.hint)
+        let dock = h.store.snapshot.windows[little.id]!.dock
+        XCTAssertEqual(controller.openIn.menu?.items.first?.title, "Open in \(dock[0].title)")
+        XCTAssertEqual(controller.openIn.menu?.items.dropFirst().filter { !$0.isSeparatorItem }.map(\.title), dock.map(\.title) + [OpenInMenu.currentSpaceTitle])
+        XCTAssertTrue(controller.openIn.isEnabled)
+        XCTAssertTrue(controller.window.isVisible)
+        // The engine was asked to focus the Little Arc's page (its surface sits in the panel's root).
+        let page = PageID(try XCTUnwrap(little.scratch?.rows.first?.id))
+        XCTAssertEqual(h.engine.focused.last, page)
+        XCTAssertTrue(try XCTUnwrap(h.engine.surface(for: page)).isDescendant(of: controller.root))
+        // The reducer reports the first panel's frame; the next Little Arc cascades from it.
+        let first = controller.window.frame
+        h.store.dispatch(.user(h.window, .window(.newLittle(URL(string: "https://example.com/second")!))))
+        let second = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .little && $0.id != little.id })
+        defer { h.store.windowController(second.id)?.window.orderOut(nil) }
+        let step = Metrics.littleArc.cascade.value
+        XCTAssertEqual(h.store.windowController(second.id)?.window.frame, first.offsetBy(dx: step, dy: -step))
+        // Choosing a menu entry moves the tab out and the panel goes.
+        let item = try XCTUnwrap(controller.openIn.menu?.items.last)
+        _ = (item.target as AnyObject).perform(item.action!, with: item)
+        XCTAssertNil(h.store.snapshot.windows[little.id], "Open in current Space closed the Little Arc")
+        XCTAssertNil(h.store.windowController(little.id))
+        XCTAssertEqual(h.store.snapshot.windows[h.window]?.space.today.rows.count, 2, "the tab is in the standard window's Today")
+    }
+
+    /// a key CEF delivers from the peeked page routes to the window whose Peek shows it (the page is in the overlay,
+    /// not a pane): Esc closes the Peek and the key is consumed
+    func test_keysFromThePeekedPageRouteToItsWindow() throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .peek(.open(URL(string: "https://example.com/peeked")!))))
+        guard case .peek(let peek)? = h.store.snapshot.windows[h.window]?.overlay, let page = peek.page else { return XCTFail("no peek with a page") }
+        XCTAssertEqual(h.store.window(showing: page), h.window)
+        XCTAssertEqual(h.engine.focused.last, page, "the peeked page got keyboard focus")
+        // Esc is a page-first key (`pageThenApp`): CEF asks before the page (declined) and again after it (consumed).
+        let press = h.key("escape", stage: .beforePage, id: 11).press
+        XCTAssertFalse(h.router.engine(h.engine, page: page, key: press, stage: .beforePage, pressID: PressID(raw: 11)), "Esc is the page's first")
+        XCTAssertTrue(h.router.engine(h.engine, page: page, key: press, stage: .afterPage, pressID: PressID(raw: 11)), "Esc from the peeked page was passed to the page")
+        XCTAssertNil(h.store.snapshot.windows[h.window]?.overlay, "the Peek did not close")
+        XCTAssertNil(h.store.snapshot.pages.first { $0.id == page }, "the peeked page is still demanded")
     }
 
     func test_downloadDecisionReadsTheProfilesSettings() throws {
