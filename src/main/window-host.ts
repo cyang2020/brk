@@ -17,7 +17,7 @@
  * Geometry comes from `win.contentView.getBounds()` and its 'bounds-changed' event, not from the window: on Linux
  * the frame insets arrive after creation and only the root view reports them (phase 3 scaffold).
  */
-import { BaseWindow, WebContentsView, type View } from 'electron'
+import { BaseWindow, screen, WebContentsView, type View } from 'electron'
 import type { Instant, Platform, Rect, WindowId } from '../shared/base'
 import type { SurfaceKind } from '../shared/bridge'
 import { DEFAULT_WINDOW_SIZE, LAYOUT } from '../shared/constants'
@@ -81,6 +81,28 @@ const SURFACE_KINDS: readonly SurfaceKind[] = ['sidebar', 'floating-sidebar', 'o
 
 const sameRect = (a: Rect, b: Rect): boolean => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 
+const overlaps = (b: Rect, area: Rect): boolean => b.x < area.x + area.width && b.x + b.width > area.x && b.y < area.y + area.height && b.y + b.height > area.y
+
+/**
+ * Where to open the window. No saved bounds: the default content size (the OS centers it). Saved bounds that still
+ * overlap a display: clamped to that display's work area (a monitor that went away, or a window dragged mostly off
+ * screen, cannot restore off screen). Saved bounds that overlap nothing: the default size centered on the nearest
+ * display's work area.
+ */
+function windowPlacement(bounds: Rect | null): { x?: number; y?: number; width: number; height: number; useContentSize?: boolean } {
+  if (!bounds) return { width: DEFAULT_WINDOW_SIZE.width, height: DEFAULT_WINDOW_SIZE.height, useContentSize: true }
+  const area = screen.getDisplayMatching(bounds).workArea
+  const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
+  if (!screen.getAllDisplays().some((d) => overlaps(bounds, d.workArea))) {
+    const width = Math.min(DEFAULT_WINDOW_SIZE.width, area.width)
+    const height = Math.min(DEFAULT_WINDOW_SIZE.height, area.height)
+    return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height }
+  }
+  const width = clamp(bounds.width, 480, area.width)
+  const height = clamp(bounds.height, 320, area.height)
+  return { x: clamp(bounds.x, area.x, area.x + area.width - width), y: clamp(bounds.y, area.y, area.y + area.height - height), width, height }
+}
+
 /**
  * capturePage() fails (UnknownVizError) when the view has no compositor frame yet, which is the normal state right
  * after a view was attached or resized. A capture asked for at that moment is legitimate, so wait for the frame:
@@ -110,9 +132,7 @@ async function captureWhenPainted(wc: Electron.WebContents): Promise<Electron.Na
 export function createWindowHost(windowId: WindowId, initial: WindowSelection, deps: WindowHostDeps): WindowHost {
   const { tabs, keys, dispatch, surfaces, platform } = deps
   const win = new BaseWindow({
-    ...(initial.bounds
-      ? { x: initial.bounds.x, y: initial.bounds.y, width: Math.max(480, initial.bounds.width), height: Math.max(320, initial.bounds.height) }
-      : { width: DEFAULT_WINDOW_SIZE.width, height: DEFAULT_WINDOW_SIZE.height, useContentSize: true }),
+    ...windowPlacement(initial.bounds),
     minWidth: 480,
     minHeight: 320,
     backgroundColor: initial.windowColor,
