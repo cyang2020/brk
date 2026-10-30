@@ -162,7 +162,7 @@ enum NativeScenarios {
         _ = try app.load(app.site.url("red.html"))
         try app.press("ctrl+shift+=")
         try app.waitUntil("the split's command bar") { isCommandBar(try app.view().overlay) }
-        try app.type(app.site.url("index.html").absoluteString)
+        try app.type(app.site.url("index.html?pane").absoluteString)   // not an open tab's URL
         try app.press("return")
         try app.waitUntil("two cards") { isShown(try app.native(), .card(1)) }
         try app.settle()

@@ -276,7 +276,7 @@ enum PlanScenarios {
     /// same, and only the current tab has a page (lazy restore).
     @Sendable static func restart(_ app: AppUnderTest) throws {
         try createSpace(app, title: "Work")
-        let home = try openTab(app, app.site.url("index.html"))
+        let home = try openTab(app, app.site.url("index.html?home"))   // not the launch tab's URL
         let page2 = try openTab(app, app.site.url("page2.html"))
         try app.dispatch(.tab(.focus(home.id)))
         try app.waitUntil("home to be current") { try currentTab(app.view())?.id == home.id }

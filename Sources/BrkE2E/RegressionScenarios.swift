@@ -90,7 +90,7 @@ enum RegressionScenarios {
         try app.waitUntil("B pinned") { try app.view().space.pinned.rows.count == 1 }
         try app.press("cmd+d")
         try app.waitUntil("B unpinned") { try app.view().space.pinned.rows.isEmpty }
-        let c = try openTab(app, app.site.url("index.html"))
+        let c = try openTab(app, app.site.url("index.html?c"))   // not the launch tab's URL: Return would switch to it
         try app.hold("ctrl", "tab", times: 1)
         try app.waitUntil("the first hold to show B") { try currentTab(app.view())?.id == b.id }
         try app.hold("ctrl", "tab", times: 1)
