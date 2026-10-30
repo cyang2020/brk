@@ -86,16 +86,18 @@ final class EventInjector {
 
     /// Posts the event at the head of the app's queue and dequeues it, as the run loop does, so `NSApp.currentEvent`
     /// is this event while it is handled (the menu target reads it to mint the press id), then dispatches it. Without
-    /// a key window it takes `NSApp.sendEvent`'s order itself: a key-down is offered as a key equivalent to the
-    /// window's views (a focused Chromium view claims app shortcuts there, spike unknown 3), then to the menu, then
-    /// goes to the window and its first responder.
+    /// a key window (inactive app, locked display) it takes `NSApp.sendEvent`'s order itself. With a page focused, a
+    /// key window hands every Cmd chord to Chromium's view, which claims it before the menu (spike unknown 3) but
+    /// only while its window is key; the view's `keyDown` takes the same path (CEF's key handler before and after the
+    /// page), so the event goes straight to the window and the menu never sees it. With a native view focused, a
+    /// key-down is offered as a key equivalent to the window's views, then to the menu, then to the first responder.
     private func deliver(_ event: NSEvent, to window: NSWindow) throws {
         let current = Self.dequeue(event)
         if NSApp.keyWindow === window {
             NSApp.sendEvent(current)
             return
         }
-        if current.type == .keyDown {
+        if current.type == .keyDown, ViewTree.page(containing: window.firstResponder) == nil {
             if (window.contentView?.superview ?? window.contentView)?.performKeyEquivalent(with: current) == true { return }
             if NSApp.mainMenu?.performKeyEquivalent(with: current) == true { return }
         }
