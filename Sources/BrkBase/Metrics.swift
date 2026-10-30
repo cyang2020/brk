@@ -117,6 +117,8 @@ public struct URLPillMetrics: MetricGroup {
     public let accessorySize = Metric(28.0, .arc("URL pill accessory buttons", .medium, note: "28 x 28"))
     public let accessoryRadius = Metric(9.0, .arc("URL pill accessory buttons", .medium, note: "corner radius 9"))
     public let textMinHeight = Metric(20.0, .arc("URL pill text area minimum height", .low))
+    /// Space between the title row and the pill.
+    public let topGap = Metric(2.0, .guess("not in the constants table; cra L1217 measures the pill at y 46 below a title row that ends at 44"))
 }
 
 public struct FavoritesMetrics: MetricGroup {
@@ -137,6 +139,10 @@ public struct TablistMetrics: MetricGroup {
     public let dividerRowTallHeight = Metric(24.0, .arc("Pinned/Today divider row", .medium, note: "24 in one state"))
     public let topSpacerHeight = Metric(2.0, .arc("Spacer row at the top of the list", .medium))
     public let headerRowHeight = Metric(36.0, .arc("Another row type (probably folder or split header)", .low))
+    /// The space title strip between the favorites tray and the tab list (outside the scrolling list: cra L1515
+    /// sees the header stay put while the list scrolls; cra L141 puts its centre 18 below the tray).
+    public let spaceHeaderHeight = Metric(36.0, .arc("Another row type (probably folder or split header)", .low,
+                                                     note: "read as the space header strip; its role is not confirmed in code"))
     public let selectionHeight = Metric(36.0, .arc("Row selection background", .medium, note: "36 tall"))
     public let selectionInset = Metric(8.0, .arc("Row selection background", .medium, note: "inset 8"))
     public let selectionRadius = Metric(12.0, .arc("Row selection background", .medium, note: "corner radius 12"))
