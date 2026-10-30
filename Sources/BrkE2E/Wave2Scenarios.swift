@@ -19,10 +19,11 @@ enum Wave2Scenarios {
         Scenario("W2-6", "Shift+click opens a Peek over the content; Esc closes it and its page", cefOnly: "a click on a link in a page",
                  pending: "F3", peek),
         Scenario("W2-7", "a link from another app follows Air Traffic Control, else opens a Little Arc", pending: "F3", externalLinks),
-        Scenario("W2-8", "every menu action is a command bar result: typing 'preferences' and Enter opens the settings", pending: "F4", typeTravel),
+        Scenario("W2-8", "every menu action is a command bar result: typing 'preferences' and Enter opens the settings", typeTravel),
         Scenario("W2-9", "a remapped shortcut routes and the old chord reaches the page; the Shortcuts pane shows the state",
-                 cefOnly: "page titles written by keys.html's key listener", pending: "F4", remap),
-        Scenario("W2-10", "typing in the command bar fetches the engine's suggestions and shows them", pending: "F4", suggestions),
+                 cefOnly: "page titles written by keys.html's key listener", remap),
+        Scenario("W2-10", "typing in the command bar fetches the engine's suggestions and shows them; Tab on an engine's name enters site search",
+                 suggestions),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", pending: "F5", downloads),
         Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", pending: "F5", history),
     ]
@@ -258,7 +259,8 @@ enum Wave2Scenarios {
     }
 
     /// W2-10 (F4): typing "swi" in the bar asks the fixture suggest endpoint (BRK_SUGGEST_URL) and the bar shows
-    /// "swift" and "swim" under the typed row; turning suggestions off stops the fetch.
+    /// "swift" and "swim" under the typed row; turning suggestions off stops the fetch. Then site search: "bing"
+    /// and Tab put Bing's pill before the input (the input moves right), Esc gives the plain input back.
     @Sendable static func suggestions(_ app: AppUnderTest) throws {
         try app.press("cmd+t")
         try app.waitUntil("the command bar") { isCommandBar(try app.view().overlay) }
@@ -279,6 +281,22 @@ enum Wave2Scenarios {
         app.sleep(0.6)
         guard case .commandBar(let bar)? = try app.view().overlay else { throw Check(description: "the bar closed") }
         try expect(bar.suggestions.isEmpty, "suggestions arrived with the setting off")
+
+        try app.press("escape")
+        try app.press("cmd+t")
+        try app.waitUntil("the command bar") { isCommandBar(try app.view().overlay) }
+        let plain = try visible(try app.native(), .commandBarInput).frame
+        try app.type("bing")
+        try app.waitUntil("the site-search row") { isShown(try app.native(), .commandBarResult(1)) }
+        try app.press("tab")
+        try app.waitUntil("Bing's pill before the input") { try visible(try app.native(), .commandBarInput).frame.minX > plain.minX + 20 }
+        try app.type("swift")
+        try app.screenshot("site-search")
+        try app.press("escape")
+        try app.waitUntil("site search left, the bar still open") {
+            let open = isCommandBar(try app.view().overlay)
+            return try open && abs(visible(try app.native(), .commandBarInput).frame.minX - plain.minX) < 0.5
+        }
     }
 
     /// W2-11 (F5): with the profile's download location set to the data directory, loading `/download` saves
