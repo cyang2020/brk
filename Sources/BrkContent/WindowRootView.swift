@@ -8,10 +8,10 @@ import BrkSidebar
 import BrkTheme
 import BrkUIKit
 
-/// Owner: W2. A window's content view. Bottom to top: themed background, anchored sidebar, content cards (page
-/// surfaces inside), the Library host with the archive page inside it (both inside the content area), the Peek
-/// card, floating sidebar (only while peeking a hidden sidebar), command bar, space dialog (SwiftUI in an
-/// NSHostingView). TODO(F2): the profile dialog host; TODO(F3): Arc's Peek card chrome.
+/// Owner: W2 (the Library slot: F5). A window's content view. Bottom to top: themed background, anchored sidebar,
+/// content cards (page surfaces inside), the Library (its panel in place of the sidebar, its page over the content
+/// area; the archive is one of its pages), the Peek card, floating sidebar (only while peeking a hidden sidebar),
+/// command bar, space dialog (SwiftUI in an NSHostingView). TODO(F2): the profile dialog host; TODO(F3): Arc's Peek card chrome.
 /// Native views above Chromium's moved views draw and take focus normally (spike unknown 2, embed mode).
 @MainActor
 public final class WindowRootView: NSView {
@@ -19,7 +19,6 @@ public final class WindowRootView: NSView {
     public let sidebar: SidebarView
     public let content: ContentAreaView
     public let library: LibraryView
-    public let archive: ArchivePageView
     public let peek: PeekCardView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
@@ -30,13 +29,12 @@ public final class WindowRootView: NSView {
         sidebar = SidebarView(dispatch: dispatch)
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
-        archive = ArchivePageView(dispatch: dispatch)
         peek = PeekCardView(dispatch: dispatch)
         commandBar = CommandBarView(dispatch: dispatch)
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, library, archive, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, library, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
     }
 
@@ -63,7 +61,7 @@ public final class WindowRootView: NSView {
     ///
     /// Order: background (crossfade when the theme changed and this is not the first render), sidebar (anchored or
     /// floating: same view, re-parented above `content` while floating), content cards (each card hosts the
-    /// surface for its pane; a surface that moved to another card is simply re-added there), archive, command bar.
+    /// surface for its pane; a surface that moved to another card is simply re-added there), Library, command bar.
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, surface: (PageID) -> NSView?) {
         background.frame = bounds
         background.show(snapshot.theme, animated: lastTheme != nil && lastTheme != snapshot.theme)
@@ -83,8 +81,7 @@ public final class WindowRootView: NSView {
         case .commandBar(let b)?: barSnapshot = b
         case nil: break
         }
-        library.render(librarySnapshot, frames: frames, palette: palette)
-        archive.render(librarySnapshot?.archive, frames: frames, palette: palette)
+        library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
         peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)

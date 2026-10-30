@@ -7,33 +7,37 @@ import Foundation
 
 /// R2 to R10: electron-v1:e2e/regression.spec.ts (the interrogate findings) on the control socket.
 enum RegressionScenarios {
-    /// R2: sidebar hidden, archive open, the pointer at the reveal strip: the sidebar peeks, the archive stays, and the
-    /// floating sidebar draws above the archive.
+    /// R2: sidebar hidden, the Library opened on the archive: its panel takes the sidebar's place (Arc's Library
+    /// replaces the sidebar, shown or hidden) and the archive fills the content area beside it. The pointer at the
+    /// window's left edge, where the reveal strip was, keeps the Library open and peeks nothing over it; Esc closes
+    /// the Library and the sidebar is still hidden, its reveal strip back.
     @Sendable static func peekKeepsArchive(_ app: AppUnderTest) throws {
         try app.press("cmd+s")
         try app.waitUntil("Cmd+S to hide the sidebar") { try !app.view().sidebar.visible }
         try app.dispatch(.library(.open(.archive)))
         try app.waitUntil("the archive page to open") { isArchive(try app.view().overlay) }
-        let v = try app.view(), n = try app.native()
-        // Points where the floating sidebar (Metrics.sidebar.floatingInset from the window, the sidebar's width) will
-        // overlap the archive page; sampled now, with only the archive there.
-        let floatingX = Metrics.sidebar.floatingInset.value + v.sidebar.width / 2
-        let probes = [60.0, n.contentSize.height / 2, n.contentSize.height - 30].map { CGPoint(x: floatingX, y: $0) }
-        let archiveOnly = try probes.map { try app.pixel($0) }
-        guard let strip = n.computed.revealStrip else { throw Check(description: "computed.revealStrip is nil with the sidebar hidden") }
-        try app.hover(CGPoint(x: max(strip.minX, 0) + 2, y: n.contentSize.height / 2))
-        try app.waitUntil("the hover to peek the sidebar") { try app.view().sidebar.peek }
-        try expect(isArchive(try app.view().overlay), "peeking closed the archive")
-        try app.waitUntil("floating-sidebar on screen above the archive") {
+        try app.waitUntil("the Library panel in the sidebar's place and the archive beside it") {
             let n = try app.native()
-            _ = try visible(n, .floatingSidebar)
-            _ = try visible(n, .archive)
-            let now = try probes.map { try app.pixel($0) }
-            let changed = zip(archiveOnly, now).contains { distance($0, $1) > 24 }
-            try expect(changed, "pixels at \(probes) are still the archive's (\(now)): the floating sidebar is not above it")
+            guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
+            try expect(n.computed.revealStrip == nil, "a reveal strip under the Library panel")
+            try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
+            try expect(near(library.page, n.computed.contentArea), "library page area \(library.page), content area \(n.computed.contentArea)")
+            let page = try visible(n, .archive), cell = try visible(n, .libraryPage(.archive))
+            try expect(near(page.frame, library.page), "archive at \(page.frame), library page area \(library.page)")
+            try expect(near(cell.frame, library.pageCells[.archive] ?? .zero), "archive row at \(cell.frame)")
+            try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "the sidebar shows with the Library open")
             return true
         }
-        try app.screenshot("peek")
+        try app.screenshot("library")
+        try app.hover(CGPoint(x: 2, y: try app.native().contentSize.height / 2))
+        try app.settle()
+        let v = try app.view(), n = try app.native()
+        try expect(isArchive(v.overlay), "the pointer at the left edge closed the Library")
+        try expect(!v.sidebar.peek && !isShown(n, .floatingSidebar), "the hidden sidebar peeked over the Library panel")
+        try app.press("escape")
+        try app.waitUntil("Esc to close the Library") { try app.view().overlay == nil }
+        try expect(try !app.view().sidebar.visible, "closing the Library showed the hidden sidebar")
+        try app.waitUntil("the hidden sidebar's reveal strip back") { try app.native().computed.revealStrip != nil }
     }
 
     /// R3 (CEF): Cmd+click on fixture home's link opens a background Today tab that loads page 2; focus stays home.

@@ -259,12 +259,14 @@ public struct PeekMetrics: MetricGroup {
     public let hintHeight = Metric(28.0, .guess("height of the Peek and Little Arc hint strip; not traced"))
 }
 
-/// The Library host inside the content card (downloads, history, archive, media, easels and notes, boosts, spaces).
-/// Arc's Library replaces the sidebar with a panel (Metrics.sidebar.libraryMinWidth); ours draws a page strip
-/// inside the card, so the strip height is ours.
+/// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). Like Arc's, its panel replaces
+/// the sidebar (width: Metrics.sidebar.libraryMinWidth and .libraryWindowMargin) and the open page fills the content
+/// area. The panel lists the pages under the title row, one sidebar-sized row each (Metrics.tablist.selectionInset
+/// and .rowSpacing); its exit button is where the dock's Library button is (Metrics.dock).
 public struct LibraryMetrics: MetricGroup {
-    public let stripHeight = Metric(44.0, .guess("height of the Library page strip above the page; Arc has a side panel instead"))
-    public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "download and history rows reuse the sidebar row height"))
+    public let listTop = Metric(44.0, .derived(rule: "header top inset 4 + title row height 40: the page list starts under the traffic lights",
+                                               from: ["Sidebar header top inset", "Title row (window buttons and navigation buttons) height"]))
+    public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "a page row in the Library panel is a sidebar row"))
 }
 
 /// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar). Arc builds its

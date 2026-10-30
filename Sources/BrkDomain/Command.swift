@@ -314,10 +314,12 @@ public enum AdvancedSetting: Hashable, Sendable, Codable {
     case sharedQuotes(Bool)
 }
 
-/// The Library inside the content card. Searching within a page is view-local (like the archive's filter).
+/// The Library: its panel replaces the sidebar and the open page fills the content area. Searching within a page
+/// is view-local (like the archive's filter).
 public enum LibraryCommand: Hashable, Sendable, Codable {
-    /// Shift+Cmd+L, the dock's Library button, View Archive, View Downloads, Cmd+Y. Nil reopens the window's last
-    /// page, else the archive. The same page already open is a no-op that keeps its `openID`.
+    /// Shift+Cmd+L, the dock's Library button, View Archive, View Downloads, Cmd+Y. Nil toggles (Arc's
+    /// `toggleLibrary:`): it closes an open Library, else reopens the window's last page, else the archive. An
+    /// explicit page already open is a no-op that keeps its `openID`.
     case open(LibraryPage?)
     case close
     case cancelDownload(DownloadID)

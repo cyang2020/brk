@@ -18,6 +18,8 @@ final class ChromePage: CefBrowserDelegate {
     private unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    /// Where each running download of this page is written, by CEF download id.
+    private var destinations: [UInt32: URL] = [:]
     /// CEF destroyed the host window (after OnBeforeClose); nothing of this page is left on screen.
     private(set) var windowDestroyed = false
     private let log = Logger(subsystem: "brk", category: "page")
@@ -147,9 +149,51 @@ final class ChromePage: CefBrowserDelegate {
         return engine.pageShouldNavigate(self, to: url, userGesture: userGesture) ? .allow : .cancel
     }
 
-    // TODO(F5): downloads. `browser(_:decidePolicyForDownload:suggestedName:)` asks the engine's delegate
-    // (`decideDownload`) and answers `.allow(destination:)` or `.deny`; `browser(_:downloadDidProgress:)` emits
-    // `PageEvent.download(id, .progress/.finished/.cancelled)` with `DownloadID("\(browser.id)-\(download.id)")`.
+    // MARK: Downloads (F5)
+
+    /// OnBeforeDownload: the app decides from the page's profile settings (`WebEngineDelegate.decideDownload`).
+    /// `.save` writes into the directory (created if missing) under the suggested name, a clash getting a numbered
+    /// suffix ("name (1).ext"); `.ask` shows a save panel starting there; `.deny`, a cancelled panel or no delegate
+    /// cancel it. An allowed download is reported `.started` with its path, then by `downloadDidProgress`.
+    func browser(_ b: CefBrowser, decidePolicyForDownload download: CefDownload, suggestedName: String) -> CefDownloadDecision {
+        guard let url = download.url, let delegate = engine.delegate else { return .deny }
+        let name = DownloadFiles.safeName(suggestedName, url: url)
+        let destination: URL? = switch delegate.engine(engine, page: id, decideDownload: name, from: url) {
+        case .save(let directory): DownloadFiles.unused(name, in: directory)
+        case .ask(let directory): DownloadFiles.ask(name, in: directory)
+        case .deny: nil
+        }
+        guard let destination else { return .deny }
+        DownloadFiles.reserved.insert(destination.path)
+        destinations[download.id] = destination
+        log.notice("page \(self.id.description, privacy: .public): download \(download.id, privacy: .public) to \(destination.path, privacy: .public)")
+        engine.pageDidEmit(self, .download(downloadID(download), .started(url: url, filename: destination.lastPathComponent, path: destination.path)))
+        return .allow(destination: destination)
+    }
+
+    /// OnDownloadUpdated (also before OnBeforeDownload, which the ledger ignores): progress until it completes or
+    /// stops. The app cannot cancel a download (CefKit drops CEF's callback), so a stop is Chromium's: `.failed`.
+    func browser(_ b: CefBrowser, downloadDidProgress download: CefDownload) {
+        guard let destination = destinations[download.id] else { return }
+        let event: DownloadEvent
+        if download.isComplete {
+            event = .finished(path: download.fullPath?.path ?? destination.path)
+        } else if download.isCanceled {
+            event = .failed
+        } else {
+            event = .progress(received: download.receivedBytes, total: download.totalBytes > 0 ? download.totalBytes : nil)
+        }
+        if download.isComplete || download.isCanceled {
+            destinations[download.id] = nil
+            DownloadFiles.reserved.remove(destination.path)
+        }
+        engine.pageDidEmit(self, .download(downloadID(download), event))
+    }
+
+    /// Unique across launches (the ledger is saved; CEF numbers browsers and downloads from 1 in every process).
+    private func downloadID(_ download: CefDownload) -> DownloadID {
+        DownloadID("\(DownloadFiles.launch)-\(chrome.browser.id)-\(download.id)")
+    }
 
     /// CEF's two key callbacks. Before the page (`OnPreKeyEvent`) the id is minted from the event being dispatched;
     /// after the page (`OnKeyEvent`, only when the page did not consume it) the id is the partner's, paired by
@@ -172,5 +216,47 @@ final class ChromePage: CefBrowserDelegate {
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
         }
         return handled
+    }
+}
+
+/// Where downloads go on disk (F5). Main actor: CEF calls the download handler on its UI thread.
+@MainActor
+enum DownloadFiles {
+    /// Paths given to downloads still running, so two downloads of one name never share a file.
+    static var reserved: Set<String> = []
+    /// This launch's token in download ids.
+    static let launch = String(UUID().uuidString.prefix(8)).lowercased()
+
+    /// The suggested name without any directory part (a hostile name cannot leave the directory), else the URL's
+    /// last path component, else "download".
+    static func safeName(_ suggested: String, url: URL) -> String {
+        for candidate in [suggested, url.lastPathComponent] {
+            let name = (candidate as NSString).lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty, name != "/", name != ".", name != ".." { return name }
+        }
+        return "download"
+    }
+
+    /// `name` in `directory`, or "name (1).ext", "name (2).ext"... when that file exists or a running download has it.
+    /// Nil when the directory cannot be created.
+    static func unused(_ name: String, in directory: String) -> URL? {
+        let folder = URL(fileURLWithPath: (directory as NSString).expandingTildeInPath, isDirectory: true)
+        do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch { return nil }
+        let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
+        for n in 0... {
+            let candidate = n == 0 ? name : "\(base) (\(n))" + (ext.isEmpty ? "" : ".\(ext)")
+            let url = folder.appendingPathComponent(candidate)
+            if !FileManager.default.fileExists(atPath: url.path), !reserved.contains(url.path) { return url }
+        }
+        return nil
+    }
+
+    /// "Ask where to save": a save panel starting in `directory` with the suggested name; nil when cancelled.
+    static func ask(_ name: String, in directory: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.directoryURL = URL(fileURLWithPath: (directory as NSString).expandingTildeInPath, isDirectory: true)
+        panel.nameFieldStringValue = name
+        panel.canCreateDirectories = true
+        return panel.runModal() == .OK ? panel.url : nil
     }
 }

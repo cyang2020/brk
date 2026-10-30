@@ -220,15 +220,16 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             suggestedFor: session.suggestions?.query
         ))
     case .library(let openID, let page)?:
-        let profile = space.profile
+        // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
+        let listed: ProfileID? = if case .profile(let p) = state.libraryContext(in: id) { p } else { nil }
         overlay = .library(LibrarySnapshot(
             openID: openID, page: page,
-            archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(profile).autoArchive) : nil,
-            downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == profile }.map {
+            archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(space.profile).autoArchive) : nil,
+            downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == listed }.map {
                 DownloadRow(id: $0.id, filename: $0.filename, url: $0.url, path: $0.path, received: $0.received, total: $0.total,
                             state: $0.state, startedAt: $0.startedAt)
             } : [],
-            history: page == .history ? state.doc.history.filter { $0.profile == profile }.map {
+            history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
                 HistoryRow(url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
             } : []
         ))

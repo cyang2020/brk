@@ -92,7 +92,8 @@ final class LayoutSpecTests: XCTestCase {
     }
 
     /// overlay command-bar: overlay rect is the full window; overlay archive: overlay rect equals content
-    /// (Swift: the command bar frame is the bar's box, centred in the content area; the archive is the content area.)
+    /// (Swift: the command bar frame is the bar's box, centred in the content area; the archive is the content area,
+    /// beside the Library panel that replaces the sidebar.)
     func test_overlayCommandBarOverlayRectIsTheFullWindowOverlayArchiveOverlayRectEquals() throws {
         let d = LayoutDriver()
         d.user(.commandBar(.open(.newTab)))
@@ -101,23 +102,41 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertNil(bar.library)
         d.user(.library(.open(.archive)))
         let archive = d.frames()
-        // The Library host is the content area; its page strip (Metrics.library.stripHeight) sits on top and the
-        // archive page fills the rest.
-        let strip = Metrics.library.stripHeight.value
-        XCTAssertEqual(archive.library?.frame, archive.contentArea)
-        XCTAssertEqual(archive.library?.strip, CGRect(x: 238, y: 10, width: 1032, height: strip))
-        XCTAssertEqual(archive.library?.page, CGRect(x: 238, y: 10 + strip, width: 1032, height: 756 - strip))
-        XCTAssertEqual(archive.library?.pageCells.count, LibraryPage.allCases.count)
+        // The Library's panel replaces the sidebar (Arc: max(417, min(window - 56, sidebar width)) wide, here 417 for a
+        // 228 sidebar); the archive page fills the content area beside it, where the page was.
+        let panel = CGRect(x: 0, y: 0, width: 417, height: 776)
+        XCTAssertEqual(archive.library?.frame, CGRect(x: 0, y: 0, width: 1280, height: 776))
+        XCTAssertEqual(archive.library?.strip, panel)
+        XCTAssertEqual(archive.contentArea, CGRect(x: 427, y: 10, width: 843, height: 756))
+        XCTAssertEqual(archive.library?.page, archive.contentArea)
+        XCTAssertEqual(archive.cards.map(\.rect), [archive.contentArea])
+        XCTAssertNil(archive.sidebar)
+        XCTAssertNil(archive.resizeHandle)
+        XCTAssertNil(archive.revealStrip)
+        // One sidebar row per page from under the title row, in page order; the exit button is the dock's Library button.
+        XCTAssertEqual(LibraryPage.allCases.map { archive.library?.pageCells[$0] },
+                       (0..<7).map { CGRect(x: 8, y: 44 + 41 * Double($0), width: 401, height: 40) })
+        XCTAssertEqual(LibraryLayout.closeButton(in: panel), CGRect(x: 8, y: 735, width: 32, height: 32))
+        XCTAssertEqual(LibraryLayout.trafficLightsOrigin(in: panel), bar.sidebar?.trafficLightsOrigin, "the window buttons stay put")
         XCTAssertNil(archive.commandBar)
-        XCTAssertEqual(archive.frame(of: .library), archive.contentArea)
+        XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
         XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)
+        // A wider sidebar keeps its width up to the window minus 56, never below 417; a hidden one is replaced all the same.
+        var wide = d.view
+        wide.sidebar.width = 450
+        XCTAssertEqual(d.frames(wide).library?.strip.width, 450)
+        XCTAssertEqual(d.frames(wide, size: CGSize(width: 480, height: 776)).library?.strip.width, 424)
+        XCTAssertEqual(d.frames(wide, size: CGSize(width: 440, height: 776)).library?.strip.width, 417)
         d.user(.sidebar(.toggle))
         d.user(.library(.open(.archive)))
         let hidden = d.frames()
-        XCTAssertEqual(hidden.library?.frame, CGRect(x: 10, y: 10, width: 1260, height: 756))
+        XCTAssertEqual(hidden.library?.strip, panel)
+        XCTAssertEqual(hidden.library?.page, CGRect(x: 427, y: 10, width: 843, height: 756))
+        XCTAssertNil(hidden.revealStrip)
         d.user(.commandBar(.dismiss))
         XCTAssertNil(d.frames().library)
         XCTAssertNil(d.frames().commandBar)
+        XCTAssertNotNil(d.frames().revealStrip, "the hidden sidebar is back to its reveal strip")
     }
 }
 

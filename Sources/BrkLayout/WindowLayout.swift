@@ -14,8 +14,9 @@ import Foundation
 ///   the left, top and bottom over the content (which does not move); otherwise the reveal strip runs from 2 x 10
 ///   outside the left edge to 1.5 x 10 inside it;
 /// - cards: one per pane (`ContentLayout.cards`), radius 6; an empty card fills the area when nothing is shown;
-/// - command bar: `CommandBarLayout.frame`; Library: the content area with a page strip along the top
-///   (`LibraryLayout.frames`); Peek: the content area inset by Metrics.peek.inset.
+/// - command bar: `CommandBarLayout.frame`; Peek: the content area inset by Metrics.peek.inset;
+/// - Library open: its panel replaces the sidebar, shown or hidden (no sidebar, handle or reveal strip), and the
+///   content area starts 10 right of the panel (`LibraryLayout`).
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         let inset = Metrics.content.inset.value
@@ -26,7 +27,10 @@ public enum WindowLayout {
         var reveal: CGRect?
         var anchoredWidth = 0.0
 
-        if snapshot.sidebar.visible {
+        let libraryOpen: Bool = if case .library? = snapshot.overlay { true } else { false }
+        if libraryOpen {
+            anchoredWidth = LibraryLayout.panelWidth(windowWidth: contentSize.width, sidebarWidth: snapshot.sidebar.width)
+        } else if snapshot.sidebar.visible {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
             sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: snapshot.space, dock: snapshot.dock)
@@ -59,7 +63,9 @@ public enum WindowLayout {
         var peek: CGRect?
         switch snapshot.overlay {
         case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: sidebar?.urlPill)
-        case .library?: library = LibraryLayout.frames(in: contentArea)
+        case .library?:
+            library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height), page: contentArea,
+                                           contentSize: contentSize)
         case .peek?: peek = contentArea.insetBy(dx: Metrics.peek.inset.value, dy: Metrics.peek.inset.value)
         case nil: break
         }
@@ -69,19 +75,44 @@ public enum WindowLayout {
     }
 }
 
-/// The Library host inside the content area. Owner: F5 (first pass: equal-width strip cells, the page below).
+/// The Library (Arc: `HomeButton`). Owner: F5. While it is open its panel replaces the sidebar at the window's left
+/// edge, full height, and the open page fills the content area beside it, where the web page was: Arc's panel is
+/// max(417, min(window width - 56, stored width)) wide (layout-constants.md "Library (\"home\") panel width"; cra
+/// L1548 sees a 347 pt sidebar widen to 417). The panel lists the pages from under the title row, one sidebar row
+/// per page in `LibraryPage.allCases` order; its exit button is where the dock's Library button is, so the same
+/// spot opens and closes it. `LibraryFrames.frame` is the whole window (the Library takes it over), `strip` the
+/// panel, `page` the content area.
 public enum LibraryLayout {
-    public static func frames(in area: CGRect) -> LibraryFrames {
-        let stripHeight = Metrics.library.stripHeight.value
-        let strip = CGRect(x: area.minX, y: area.minY, width: area.width, height: min(stripHeight, area.height))
-        let pages = LibraryPage.allCases
-        let cellWidth = (strip.width / Double(pages.count)).rounded(.down)
+    /// The panel's width in a window `windowWidth` wide whose sidebar is `sidebarWidth` wide (its stored width,
+    /// also while hidden).
+    public static func panelWidth(windowWidth: Double, sidebarWidth: Double) -> Double {
+        let s = Metrics.sidebar
+        return max(s.libraryMinWidth.value, min(windowWidth - s.libraryWindowMargin.value, sidebarWidth))
+    }
+
+    /// `panel` at the window's left edge and `page` the content area right of it (WindowLayout.compute).
+    public static func frames(panel: CGRect, page: CGRect, contentSize: CGSize) -> LibraryFrames {
+        let m = Metrics.library, inset = Metrics.tablist.selectionInset.value
+        let pitch = m.rowHeight.value + Metrics.tablist.rowSpacing.value
         var cells: [LibraryPage: CGRect] = [:]
-        for (i, page) in pages.enumerated() {
-            cells[page] = CGRect(x: strip.minX + Double(i) * cellWidth, y: strip.minY, width: cellWidth, height: strip.height)
+        for (i, libraryPage) in LibraryPage.allCases.enumerated() {
+            cells[libraryPage] = CGRect(x: panel.minX + inset, y: panel.minY + m.listTop.value + Double(i) * pitch,
+                                        width: max(0, panel.width - 2 * inset), height: m.rowHeight.value)
         }
-        let page = CGRect(x: area.minX, y: strip.maxY, width: area.width, height: max(0, area.height - strip.height))
-        return LibraryFrames(frame: area, strip: strip, pageCells: cells, page: page)
+        return LibraryFrames(frame: CGRect(origin: .zero, size: contentSize), strip: panel, pageCells: cells, page: page)
+    }
+
+    /// The traffic lights over the panel: where the sidebar puts them (`SidebarLayout`), so they do not move when the
+    /// Library opens.
+    public static func trafficLightsOrigin(in panel: CGRect) -> CGPoint {
+        let w = Metrics.window
+        return CGPoint(x: panel.minX + w.trafficLightLeft.value, y: panel.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
+    }
+
+    /// The exit button at the bottom left of the panel: the dock's Library button frame (`SidebarLayout`).
+    public static func closeButton(in panel: CGRect) -> CGRect {
+        let d = Metrics.dock, size = d.buttonSize.value
+        return CGRect(x: panel.minX + d.buttonInset.value, y: panel.maxY - d.libraryBottom.value - size, width: size, height: size)
     }
 }
 
