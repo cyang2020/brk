@@ -45,4 +45,25 @@ final class Wave1ReviewAppRegressionTests: XCTestCase {
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
         XCTAssertNil(h.store.snapshot.windows[h.window]?.renaming, "Return ends the rename", file: file, line: line)
     }
+
+    // MARK: Finding 4: a clock advance the clock cannot represent
+
+    /// A finite advance whose milliseconds do not fit Int64 (1e308 s), or that would carry the clock past
+    /// `Instant.supported` (9e15 s fits Int64 milliseconds but not the clock), is answered `.failed` and moves nothing;
+    /// the app and the clock keep working.
+    func testAnOutOfRangeClockAdvanceFailsAndLeavesTheClock() async throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        let clock = OffsetClock()
+        let executor = ControlExecutor(store: h.store, engine: h.engine, clock: clock)
+        for seconds in [1e308, 9e15, Double(Int64.max)] {
+            let result = await executor.run(.advanceClock(seconds: seconds))
+            guard case .failed = result else { return XCTFail("advanceClock(\(seconds)) answered \(result)") }
+        }
+        let before = clock.now()
+        guard case .clock(let now) = await executor.run(.advanceClock(seconds: 60)) else { return XCTFail("a normal advance failed") }
+        XCTAssertGreaterThanOrEqual(now.since(before), .seconds(60))
+        XCTAssertLessThan(now.since(before), .seconds(61), "the refused advances moved nothing")
+    }
 }
