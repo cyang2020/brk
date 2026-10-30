@@ -9,11 +9,78 @@ enum IdentityScenarios {
         Scenario("I2", "blank split panes, per-window focus, Peek, local close and shared archive", cefOnly: "native page ownership", splitAndClose),
         Scenario("I3", "profile reassignment and restart do not replay an attachment request", cefOnly: "CEF attachment callbacks and server counts", noDownloadReplay),
         Scenario("I4", "document tokens follow cross-document loads, same-document updates and failures", cefOnly: "main-frame CEF lifecycle", documents),
+        Scenario("I5", "replacement navigation becomes ready and restores after overlapping slow loads", cefOnly: "real navigation cancellation", overlappingNavigation),
+        Scenario("I6", "shared split removal keeps adjacent focus and private dock deletion archives public pages", cefOnly: "native shared and private windows", sharedMutations),
     ]
 
     private static func observations(_ app: AppUnderTest) throws -> [PageID: PageObservation] {
         guard case .pageObservations(let values) = try app.send(.pageObservations) else { throw Check(description: "missing page observations") }
         return values
+    }
+
+    @Sendable static func overlappingNavigation(_ app: AppUnderTest) throws {
+        let item = try app.load(app.site.url("identity.html"))
+        let page = PageID(window: app.window!, item: item)
+        _ = try ready(app, page)
+        var last = app.site.url("identity.html")
+        for attempt in 0..<3 {
+            let previous = try ready(app, page)
+            try app.dispatch(.commandBar(.open(.editCurrent)))
+            try app.dispatch(.commandBar(.submit(app.site.url("slow-document?attempt=\(attempt)").absoluteString)))
+            try app.waitUntil("slow main frame is still loading") {
+                guard case .loading(let token)? = try observations(app)[page]?.document else { return false }
+                return token.sequence > previous.sequence
+            }
+            last = app.site.url("page2.html?replacement=\(attempt)")
+            try navigate(app, page, last)
+            try expect(try ready(app, page).sequence > previous.sequence, "replacement did not advance its document")
+        }
+        try record(app, "replacement-ready")
+        try app.flush(); try app.restart()
+        _ = try ready(app, page)
+        try expect(try observations(app)[page]?.committedURL == last, "restart lost the replacement address")
+        app.note("Three slow main-frame loads were replaced; \(app.site.requestCount("slow-document-interrupted")) server streams observed disconnects. Replacement readiness and restart URL passed; exact callback ordering is covered separately by the adapter tests.")
+    }
+
+    @Sendable static func sharedMutations(_ app: AppUnderTest) throws {
+        let (first, second) = try pair(app)
+        let originalSpace = try app.view(first.window).space.id
+        let middleURL = app.site.url("page2.html?adjacent"), lastURL = app.site.url("red.html?last")
+        for url in [middleURL, lastURL] {
+            try dispatch(app, window: first.window, .split(.addPane))
+            try dispatch(app, window: first.window, .commandBar(.submit(url.absoluteString)))
+            let pane = try app.view(first.window).content.panes.last!.tab
+            _ = try ready(app, PageID(window: first.window, item: pane))
+        }
+        let panes = try app.view(first.window).content.panes
+        let middle = panes[1].tab, last = panes[2].tab
+        try dispatch(app, window: second.window, .tab(.focus(last)))
+        _ = try ready(app, PageID(window: second.window, item: last))
+        try dispatch(app, window: first.window, .split(.closePane))
+        for window in [first.window, second.window] {
+            try expect(try app.view(window).content.panes.first(where: \.focused)?.tab == middle, "removed third pane did not focus its left neighbour")
+        }
+        try record(app, "adjacent-focus")
+        _ = try createSpace(app, title: "Remaining")
+        try app.dispatch(.window(.newIncognito))
+        guard case .hello(let hello) = try app.send(.hello),
+              let privateWindow = hello.windows.first(where: { (try? app.view($0).kind) == .incognito }) else {
+            throw Check(description: "private window missing")
+        }
+        let privateURL = app.site.url("identity.html?private-space-delete")
+        _ = try app.send(.load(window: privateWindow, url: privateURL))
+        let privateTab = try app.view(privateWindow).content.panes.first!.tab
+        _ = try ready(app, PageID(window: privateWindow, item: privateTab))
+        try dispatch(app, window: privateWindow, .space(.delete(originalSpace)))
+        try app.dispatch(.library(.open(.archive)))
+        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "archive missing") }
+        let archived = library.archive?.groups.flatMap(\.entries).map(\.url) ?? []
+        try expect(archived.contains(app.site.url("identity.html")) && archived.contains(middleURL), "private dock deletion lost public archive records")
+        try expect(!archived.contains(privateURL), "private content entered the archive")
+        try app.flush()
+        let saved = try String(contentsOf: app.dataDirectory.appendingPathComponent("state.json"), encoding: .utf8)
+        try expect(!saved.contains("private-space-delete"), "private URL persisted")
+        try record(app, "public-archive-private-dock")
     }
     private static func ready(_ app: AppUnderTest, _ page: PageID) throws -> DocumentToken {
         var token: DocumentToken?

@@ -133,7 +133,7 @@ public final class CEFEngine: WebEngine {
         case .goBack: live.prepareNavigation(); browser.goBack()
         case .goForward: live.prepareNavigation(); browser.goForward()
         case .reload(let ignoringCache): live.prepareNavigation(); browser.reload(ignoreCache: ignoringCache)
-        case .stop: browser.stopLoading()
+        case .stop: live.prepareStop(); browser.stopLoading()
         case .zoom(let step):
             // TODO(W2): Chrome's zoom presets instead of fixed 0.5 steps.
             switch step {

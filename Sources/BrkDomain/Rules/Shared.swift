@@ -62,6 +62,8 @@ extension Work {
     @discardableResult
     mutating func moveItem(_ id: ItemID, to position: TreePosition) -> Bool {
         guard let scope = state.locate(id) else { return false }
+        let previousSplit = state.tree(scope)?.splitContaining(id)
+        let previousPanes = previousSplit.map { state.panes(of: $0) } ?? []
         var moved = false
         var dissolved: Dissolved?
         state.withTree(scope) { tree in
@@ -70,15 +72,21 @@ extension Work {
                 moved = true
             } catch {}
         }
-        if moved { redirect(dissolved) }
+        if moved {
+            repairPaneFocus(previousSplit, previous: previousPanes)
+            redirect(dissolved)
+        }
         return moved
     }
 
     /// `SidebarTree.removeSubtree` with the same reference upkeep. The removed tabs, in sidebar order.
     mutating func removeItem(_ id: ItemID) -> [(ItemID, Tab)] {
         guard let scope = state.locate(id) else { return [] }
+        let previousSplit = state.tree(scope)?.splitContaining(id)
+        let previousPanes = previousSplit.map { state.panes(of: $0) } ?? []
         var removal = Removal(tabs: [], dissolved: nil)
         state.withTree(scope) { removal = $0.removeSubtree(id) }
+        repairPaneFocus(previousSplit, previous: previousPanes)
         redirect(removal.dissolved)
         return removal.tabs
     }

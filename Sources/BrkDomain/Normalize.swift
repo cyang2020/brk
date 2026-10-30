@@ -167,6 +167,10 @@ private func repairLoaded(_ state: inout AppState) {
         }
         state.session.loaded.remove(page)
     }
+    for id in state.doc.windows.keys {
+        state.doc.windows[id]!.emptySelections = state.doc.windows[id]!.emptySelections.filter { state.doc.spaces[$0] != nil }
+        for space in state.doc.windows[id]!.emptySelections { state.doc.windows[id]!.activeBySpace[space] = nil }
+    }
     for page in state.onScreenPages() { state.demand(page) }
     state.session.live = state.session.live.filter { state.session.loaded.contains($0.key) }
     for page in state.session.loaded {
@@ -177,8 +181,6 @@ private func repairLoaded(_ state: inout AppState) {
     }
     for id in state.doc.windows.keys {
         state.doc.windows[id]!.slots = state.doc.windows[id]!.slots.filter { state.owns(PageID(window: id, item: $0.key)) }
-        state.doc.windows[id]!.emptySelections = state.doc.windows[id]!.emptySelections.filter { state.doc.spaces[$0] != nil }
-        for space in state.doc.windows[id]!.emptySelections { state.doc.windows[id]!.activeBySpace[space] = nil }
         state.doc.windows[id]!.splitFocus = state.doc.windows[id]!.splitFocus.filter { split, pane in
             state.tree(of: id)?[split]?.kind == .split && state.panes(of: split).contains(pane)
         }

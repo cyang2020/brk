@@ -75,8 +75,17 @@ extension Work {
 
     private func archiveTab(_ id: ItemID, in window: WindowID?) -> Tab {
         var tab = state.tab(id)!
-        tab.url = state.address(of: id, in: window, for: .savedDocument)
-        if let window { tab.title = state.displayedTab(id, in: window, for: .savedDocument)?.title ?? tab.title }
+        if let window, state.owns(PageID(window: window, item: id)) {
+            return state.displayedTab(id, in: window, for: .savedDocument) ?? tab
+        }
+        // A shared dock action can originate in a private window, but its public rows use the global fallback.
+        guard state.locate(id) == .global else { tab.url = nil; return tab }
+        tab.url = state.address(of: id, in: nil, for: .savedDocument)
+        if let source = state.doc.windows.keys.sorted().first(where: {
+            state.doc.windows[$0]?.kind == .standard && state.doc.windows[$0]?.slots[id]?.committedURL == tab.url
+        }) {
+            return state.displayedTab(id, in: source, for: .savedDocument) ?? tab
+        }
         return tab
     }
 

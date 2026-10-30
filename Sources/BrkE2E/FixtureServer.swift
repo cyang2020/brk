@@ -78,6 +78,24 @@ final class FixtureServer: @unchecked Sendable {
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         countLock.withLock { counts[path, default: 0] += 1 }
         if path == "/fail" { return }   // drop the connection: no status line, no body
+        if path == "/slow-document" {
+            let prefix = Data("<html><title>Slow document</title><body>pending".utf8)
+            let padding = Data(repeating: 32, count: 4096)
+            let suffix = Data("</body></html>".utf8)
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(prefix.count + 40 * padding.count + suffix.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+            for chunk in [header, prefix] {
+                if chunk.withUnsafeBytes({ write(fd, $0.baseAddress!, $0.count) }) != chunk.count { return }
+            }
+            for _ in 0..<40 {
+                Thread.sleep(forTimeInterval: 0.05)
+                if padding.withUnsafeBytes({ write(fd, $0.baseAddress!, $0.count) }) != padding.count {
+                    countLock.withLock { counts["slow-document-interrupted", default: 0] += 1 }
+                    return
+                }
+            }
+            _ = suffix.withUnsafeBytes { write(fd, $0.baseAddress!, $0.count) }
+            return
+        }
         if path == "/" { path = "/index.html" }
         let response: Data
         if path.hasPrefix("/suggest") {

@@ -659,7 +659,7 @@ struct SidebarTree: Sendable, Equatable {
         case .section(var s): s.children.removeAll { $0 == id }; items[parent]!.body = .section(s)
         case .split(var sp):
             if let panes = sp.panes.removing(id) {
-                // The pane that loses focus hands it to its left neighbour, else its right one (Electron rule).
+                // Work repairs each window's focus from the old pane order after this tree mutation.
                 sp.panes = panes
                 sp.widths[id] = nil
                 items[parent]!.body = .split(sp)

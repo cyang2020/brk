@@ -32,7 +32,8 @@ extension AppState {
         guard var tab = tab(item) else { return nil }
         let page = PageID(window: window, item: item)
         tab.url = address(of: item, in: window, for: use)
-        tab.title = session.live[page]?.observedTitle ?? doc.windows[window]?.slots[item]?.observedTitle ?? tab.title
+        let liveTitle = use == .visible ? session.live[page]?.observedTitle : nil
+        tab.title = liveTitle ?? doc.windows[window]?.slots[item]?.observedTitle ?? tab.title
         if let saved = doc.windows[window]?.slots[item] { tab.favicon = saved.favicon }
         return tab
     }
@@ -61,6 +62,19 @@ extension AppState {
 }
 
 extension Work {
+    /// Keep each window's previous adjacent-pane policy when a shared tree mutation removes its focused pane.
+    mutating func repairPaneFocus(_ split: ItemID?, previous: [ItemID]) {
+        guard let split, let scope = state.locate(split), state.tree(scope)?[split]?.kind == .split else { return }
+        let remaining = Set(state.panes(of: split))
+        for window in state.doc.windows.keys where state.tree(of: window)?[split] != nil {
+            guard let focused = state.doc.windows[window]?.splitFocus[split] ?? previous.first,
+                  !remaining.contains(focused), let index = previous.firstIndex(of: focused) else { continue }
+            let next = previous[..<index].reversed().first(where: remaining.contains)
+                ?? previous.dropFirst(index + 1).first(where: remaining.contains)
+            state.doc.windows[window]?.splitFocus[split] = next
+        }
+    }
+
     mutating func setPinnedAddresses(under item: ItemID, in window: WindowID) {
         guard let scope = state.locate(item), let tree = state.tree(scope) else { return }
         for tab in tree.tabs(under: item) {
