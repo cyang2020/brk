@@ -76,6 +76,13 @@ test('1. launch: sidebar view and one tab view are attached; content card is ins
   const page = await arc.compositePixel(shot, mid.x, mid.y);
   expect(page).toEqual([255, 255, 255, 255]); // the fixture page has no background of its own: white
   expect(maxChannelDistance(page, await arc.layerPixel('chrome', mid.x, mid.y))).toBeGreaterThan(24); // and it is not the gradient
+  // The real X screen, not only the harness composite: the corner is actually cut to the gradient (a radius that is
+  // recorded but never applied to the view would show the square white page here).
+  await new Promise((r) => setTimeout(r, 500));
+  const realCorner = await arc.screenPixel(corner.x, corner.y);
+  expect(maxChannelDistance(realCorner, await arc.layerPixel('chrome', corner.x, corner.y))).toBeLessThanOrEqual(8);
+  const realMid = await arc.screenPixel(pane.bounds.x + Math.floor(pane.bounds.width / 2), pane.bounds.y + 40);
+  expect(realMid).toEqual([255, 255, 255, 255]); // the card interior is the white page
 });
 
 test('2. Cmd+T opens the command bar; Enter on a URL adds a Today tab that really loads it', async ({ arc, siteUrl }) => {

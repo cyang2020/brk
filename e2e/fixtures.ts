@@ -58,6 +58,15 @@ export interface Arc {
   layerPixel(role: NativeLayer['role'], x: number, y: number): Promise<Rgba>;
   /** [r, g, b, a] at window point (x, y) of a composite written by `compositeScreenshot` (its width is contentSize.width × scale). */
   compositePixel(path: string, x: number, y: number): Promise<Rgba>;
+  /**
+   * [r, g, b, a] of the REAL X screen at a point in the window's content, captured with desktopCapturer (no permission
+   * under Xvfb). Unlike `layerPixel`/`compositePixel` (which read a layer's own capture, or a harness composite) this
+   * is what is actually on screen, so it catches a square corner that bookkeeping claims is rounded, or a detached
+   * pane that is still drawn.
+   */
+  screenPixel(x: number, y: number): Promise<Rgba>;
+  /** How many views are really attached to the window (win.contentView.children.length). */
+  attachedViewCount(): Promise<number>;
   /** flush() state.json, close the app, relaunch on the same profile directory. */
   restart(): Promise<void>;
 }
@@ -214,6 +223,15 @@ export const test = base.extend<{ arc: Arc }, { siteUrl: string }>({
       compositeScreenshot,
       layerPixel,
       compositePixel,
+      screenPixel: (x, y) =>
+        app.evaluate(async ({ desktopCapturer, BaseWindow, screen }, { x, y }) => {
+          const win = BaseWindow.getAllWindows()[0]!;
+          const content = win.getContentBounds();
+          const [source] = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: screen.getPrimaryDisplay().size });
+          const b = source!.thumbnail.crop({ x: content.x + x, y: content.y + y, width: 1, height: 1 }).toBitmap();
+          return [b[2] ?? 0, b[1] ?? 0, b[0] ?? 0, b[3] ?? 0] as const; // BGRA -> RGBA
+        }, { x, y }),
+      attachedViewCount: () => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows()[0]!.contentView.children.length),
       restart: async () => {
         await app.evaluate(() => globalThis.__arc!.flush());
         await app.close();

@@ -158,8 +158,10 @@ export function createWindowHost(windowId: WindowId, initial: WindowSelection, d
   }
   const surface = (kind: SurfaceKind): WebContentsView => surfaceViews.get(kind)!
 
-  /** Role and tab of every view `render` last placed, for facts(). */
-  let placed = new Map<View, { readonly role: Role; readonly tabId: NativeLayer['tabId'] }>()
+  /** The tab a pane view shows, as of the last render; facts() reads it for a view's tabId. A view that is attached but
+   *  not in this map (a stale pane the reconcile failed to remove) is still reported as a pane with a null tabId, so the
+   *  test API cannot hide it. */
+  let paneTabs = new Map<View, NativeLayer['tabId']>()
   const radii = new Map<View, number>()
   let lastFocusKey: string | null = null
   let lastFocused: Electron.WebContents = surface('sidebar').webContents
@@ -225,12 +227,20 @@ export function createWindowHost(windowId: WindowId, initial: WindowSelection, d
     wc.focus()
   }
 
+  const roleOf = (view: View): Role => {
+    for (const [kind, v] of surfaceViews) if (v === view) return SURFACE_ROLE[kind]
+    return 'pane'
+  }
+
+  /**
+   * The real native stack, read from `win.contentView.children` (not from bookkeeping the host keeps in step with its
+   * own intentions): role, webContents id, tab, bounds and radius of every attached view, bottom to top. Reading the
+   * truth is what lets e2e catch a view that is attached but should not be (a stale pane) or sized wrong.
+   */
   const attachedLayers = (): NativeLayer[] =>
-    win.contentView.children.flatMap((view): NativeLayer[] => {
-      const info = placed.get(view)
-      if (!info || !(view instanceof WebContentsView)) return []
-      return [{ role: info.role, webContentsId: view.webContents.id, tabId: info.tabId, bounds: view.getBounds(), radius: radii.get(view) ?? 0 }]
-    })
+    win.contentView.children.flatMap((view): NativeLayer[] =>
+      view instanceof WebContentsView ? [{ role: roleOf(view), webContentsId: view.webContents.id, tabId: roleOf(view) === 'pane' ? (paneTabs.get(view) ?? null) : null, bounds: view.getBounds(), radius: radii.get(view) ?? 0 }] : [],
+    )
 
   return {
     windowId,
@@ -277,12 +287,9 @@ export function createWindowHost(windowId: WindowId, initial: WindowSelection, d
         }
       }
 
-      const next = new Map<View, { role: Role; tabId: NativeLayer['tabId'] }>()
-      next.set(sidebar, { role: 'chrome', tabId: null })
-      sel.panes.forEach((p, i) => next.set(panes[i]!, { role: 'pane', tabId: p.tabId }))
-      next.set(overlay, { role: 'overlay', tabId: null })
-      next.set(floating, { role: 'floating-sidebar', tabId: null })
-      placed = next
+      const nextPaneTabs = new Map<View, NativeLayer['tabId']>()
+      sel.panes.forEach((p, i) => nextPaneTabs.set(panes[i]!, p.tabId))
+      paneTabs = nextPaneTabs
 
       lastView = projectWindow(state, windowId, layout, now, platform)
       push()
