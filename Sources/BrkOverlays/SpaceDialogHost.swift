@@ -91,9 +91,6 @@ public final class SpaceDialogHost: NSView {
 
     private func hide() {
         guard !isHidden else { return }
-        if let responder = window?.firstResponder as? NSView, let hosting, responder.isDescendant(of: hosting) {
-            window?.makeFirstResponder(nil)
-        }
         isHidden = true
         hosting?.removeFromSuperview()
         form = nil

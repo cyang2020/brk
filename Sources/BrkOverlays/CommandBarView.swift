@@ -95,8 +95,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func hide() {
         guard !isHidden else { return }
-        if let editor = input.currentEditor(), window?.firstResponder === editor { window?.makeFirstResponder(nil) }
-        isHidden = true
+        isHidden = true   // AppKit hands first responder to the window when the focused input's ancestor hides
         bar = nil
         removeClickMonitor()
     }
