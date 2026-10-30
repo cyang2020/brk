@@ -154,6 +154,7 @@ enum RegressionScenarios {
             return true
         }
         try app.flush()
+        app.passed("off-screen bounds saved")
         try app.restart()
         let frame = try app.native().windowFrame
         let screens = Displays.appKitFrames()

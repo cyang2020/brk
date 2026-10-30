@@ -65,6 +65,9 @@ final class Runner {
             died = error is AppDied
             if app.isRunning { _ = try? app.screenshot("failure") }
         }
+        if outcome == .fail, !app.checkpoints.isEmpty, let failure = message {
+            message = "\(failure) (passed before it: \(app.checkpoints.joined(separator: "; ")))"
+        }
         let (problems, needs) = app.finish(exitAlreadyReported: died)
         if !problems.isEmpty {
             let after = "after the scenario: " + problems.joined(separator: "; ")

@@ -106,6 +106,7 @@ enum NativeScenarios {
         let dock = try visible(n, .dock)
         try expect(dock.frame.height == Metrics.dock.height.value, "dock height \(dock.frame.height), expected \(Metrics.dock.height.value)")
         try computedEqualsActual(n)
+        app.passed("traffic lights, URL pill, dock and every computed frame at launch")
 
         // Rows and favorites need more than a fresh profile has: two more Today tabs, then two of them as favorites.
         let more = [try app.load(app.site.url("page2.html")), try app.load(app.site.url("red.html"))]
@@ -119,6 +120,7 @@ enum NativeScenarios {
                        "row pitch \(b.minY - a.minY), expected \(t.rowHeight.value + t.rowSpacing.value)")
         }
         try computedEqualsActual(n)
+        app.passed("rows 40 on a 41 pitch")
 
         let favorites = try app.view().favorites.root
         for (i, id) in more.enumerated() { try app.dispatch(.item(.move(id, to: .into(parent: favorites, index: i)))) }
@@ -168,6 +170,7 @@ enum NativeScenarios {
         try app.settle()
         let created = Set(try app.pageLog().filter { $0.kind == .created }.map { "\($0.page)#\($0.generation)" })
         try expect(created.count >= 4, "pageLog has \(created.count) created pages, expected at least 4")
+        app.passed("three tabs and a split")
         let started = uptime()
         let outcome = try app.quit()
         try expect(outcome.clean, "quit: \(outcome.exit)")

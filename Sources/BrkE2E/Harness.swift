@@ -397,6 +397,11 @@ final class AppUnderTest {
     /// A caveat shown next to a PASS.
     func note(_ text: String) { if !notes.contains(text) { notes.append(text) } }
 
+    /// Checks that passed so far; a FAIL lists them, so a scenario stopped by someone else's unfinished code still
+    /// shows what it proved before.
+    private(set) var checkpoints: [String] = []
+    func passed(_ what: String) { checkpoints.append(what) }
+
     /// The rest of the scenario needs Chromium: on the stub engine it ends here as SKIPPED.
     func requireCEF(_ what: String) throws {
         if engine == .stub { throw Skipped(description: "needs CEF engine (\(what)); the stub-capable checks before it passed") }
@@ -415,7 +420,8 @@ final class AppUnderTest {
         case .type(let t): text = "type(\"\(t)\")"
         case .click(let v, let p, let m, _): text = "click(\(v.map(\.identifier) ?? p.map { "\($0)" } ?? "?")\(m.map { ", \($0)" } ?? ""))"
         case .load(_, let url): text = "load(\(url.absoluteString))"
-        case .dispatch(_, let command): text = "dispatch(\(command))"
+        case .dispatch(_, let command):
+            text = "dispatch(\(command))".replacingOccurrences(of: "BrkDomain.", with: "").replacingOccurrences(of: "BrkBase.", with: "")
         case .view: text = "view"
         case .native: text = "native"
         default: text = "\(op)"

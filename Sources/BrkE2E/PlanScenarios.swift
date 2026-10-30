@@ -50,6 +50,7 @@ enum PlanScenarios {
                    "pixel 1 pt inside the card corner is \(corner), the background just outside is \(outside): the corner is not cut")
         let mid = try app.pixel(cardProbe(card.frame))
         try expect(distance(mid, white) <= 3, "the card's page area is \(mid), expected white")
+        app.passed("card frame, radius, cut corner and white page")
         try app.screenshot("one-card")
 
         try app.requireCEF("PageFacts.embeddedViews lists Chromium's two views")
@@ -296,6 +297,7 @@ enum PlanScenarios {
         try expect(before.today.contains { $0.id == fail.id.rawValue }, "Today \(before.today) lacks the /fail tab")
         try expect(before.current == page2.id.rawValue, "current \(before.current ?? "nil"), expected page2")
         try app.flush()
+        app.passed("two spaces, a pinned tab, a failed load, page2 current, width 300")
         try app.restart()
 
         try app.waitUntil("the restored window to equal the one before restart") {
