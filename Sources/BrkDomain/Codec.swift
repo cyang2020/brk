@@ -215,6 +215,7 @@ struct StoredDocV3: Codable {
     var windows: [WindowID: StoredWindow]
     var settings: StoredSettings
     var profiles: [ProfileID: StoredProfile]
+    var deletingProfiles: [ProfileID: ProfileDeletion]?
     var downloads: [StoredDownload]
     var linkRoutes: [LinkRoute]
     var keyOverrides: [ActionID: KeyOverride]
@@ -232,6 +233,7 @@ struct StoredDocV3: Codable {
     struct StoredDownload: Codable {
         var id: DownloadID, url: URL, filename: String, path: String?, received: Int64, total: Int64?
         var state: DownloadState, startedAt: Instant, profile: ProfileID
+        var end: DownloadEnd?
     }
 
     /// v1 -> v2: the one setting becomes the default profile's threshold; history is the default profile's; there
@@ -338,10 +340,11 @@ struct StoredDocV3: Codable {
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
+        deletingProfiles = doc.deletingProfiles
         profiles = doc.profiles.mapValues { StoredProfile(name: $0.name, icon: $0.icon) }
         downloads = doc.downloads.map {
             StoredDownload(id: $0.id, url: $0.url, filename: $0.filename, path: $0.path, received: $0.received, total: $0.total,
-                           state: $0.state, startedAt: $0.startedAt, profile: $0.profile)
+                           state: $0.state, startedAt: $0.startedAt, profile: $0.profile, end: $0.end)
         }
         linkRoutes = doc.linkRoutes
         keyOverrides = doc.keyOverrides
@@ -506,8 +509,10 @@ struct StoredDocV3: Codable {
             }),
             downloads: downloads.map {
                 Download(id: $0.id, url: $0.url, filename: $0.filename, path: $0.path, received: $0.received, total: $0.total,
-                         state: $0.state == .inProgress ? .failed : $0.state, startedAt: $0.startedAt, profile: $0.profile)
+                         state: $0.state.isActive ? .failed : $0.state, startedAt: $0.startedAt, profile: $0.profile,
+                         end: $0.state.isActive ? .failed(reason: "Application ended before transfer completion", .unknown) : $0.end)
             },
+            deletingProfiles: (deletingProfiles ?? [:]).mapValues { var value = $0; value.failure = "Disposal interrupted; retry deletion"; return value },
             linkRoutes: linkRoutes,
             keyOverrides: keyOverrides
         )

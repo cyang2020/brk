@@ -24,19 +24,19 @@ extension Work {
         case .close:
             if case .library? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
         case .cancelDownload(let id):
-            // The ledger only: the engine has no way to stop a download yet (CefKit drops CEF's download callback), so
-            // the bytes may still land; `downloadEvent` then records the finished file.
-            guard let index = state.doc.downloads.firstIndex(where: { $0.id == id }), state.doc.downloads[index].state == .inProgress else { return }
-            state.doc.downloads[index].state = .cancelled
+            guard let index = state.doc.downloads.firstIndex(where: { $0.id == id }),
+                  state.doc.downloads[index].state == .inProgress || state.doc.downloads[index].state == .choosingDestination else { return }
+            state.doc.downloads[index].state = .cancelling
+            effects.append(.cancelDownload(id))
         case .revealDownload(let id):
             guard let path = state.doc.downloads.first(where: { $0.id == id })?.path else { return }
             effects.append(.revealFile(path))
         case .removeDownload(let id):
-            state.doc.downloads.removeAll { $0.id == id }
+            state.doc.downloads.removeAll { $0.id == id && !$0.state.isActive }
         case .clearDownloads:
             // This profile's finished, failed and cancelled entries go; running ones stay (Arc keeps them).
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
-            state.doc.downloads.removeAll { $0.profile == profile && $0.state != .inProgress }
+            state.doc.downloads.removeAll { $0.profile == profile && $0.state.isActive == false }
         case .removeHistory(let url):
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile && $0.url == url }
@@ -47,48 +47,60 @@ extension Work {
         }
     }
 
-    /// `PageEvent.download`: the ledger. `started` adds an entry (newest first) for the page's profile; an incognito
-    /// page's download lands on disk but is not listed (the ledger is saved). Each entry runs inProgress -> finished,
-    /// failed or cancelled; a cancelled one still becomes finished when the file lands anyway. An event for an
-    /// unknown download, or one that changes nothing, is ignored.
-    mutating func downloadEvent(_ id: DownloadID, _ event: DownloadEvent, from page: PageID) {
-        guard case .profile(let profile) = state.browsingContext(of: page.item) else { return }
-        if case .started(let url, let filename, let path) = event {
-            guard !state.doc.downloads.contains(where: { $0.id == id }) else { return }
-            state.doc.downloads.insert(Download(id: id, url: url, filename: filename, path: path, received: 0, total: nil,
-                                                state: .inProgress, startedAt: ctx.now, profile: profile), at: 0)
-            return
+    mutating func downloadEvent(_ update: DownloadUpdate) {
+        // Provenance is the original browser, independent of current presentation or profile assignment.
+        guard case .profile(let profile) = update.owner.context.context,
+              state.doc.profiles[profile] != nil, !state.session.terminalDownloads.contains(update.id),
+              update.revision > (state.session.downloadRevisions[update.id] ?? 0) else { return }
+        let page = update.owner.browser.page
+        if state.session.live[page]?.browser == update.owner.browser { state.session.live[page]?.requestedURL = nil }
+        let index: Int
+        if let existing = state.doc.downloads.firstIndex(where: { $0.id == update.id }) {
+            guard state.doc.downloads[existing].profile == profile, state.doc.downloads[existing].state.isActive else { return }
+            index = existing
+        } else {
+            state.doc.downloads.insert(Download(id: update.id, url: update.details.url, filename: update.details.suggestedName,
+                                                path: nil, received: 0, total: nil, state: .choosingDestination,
+                                                startedAt: ctx.now, profile: profile), at: 0)
+            index = 0
         }
-        guard let index = state.doc.downloads.firstIndex(where: { $0.id == id && $0.profile == profile }) else { return }
-        var download = state.doc.downloads[index]
-        switch event {
-        case .started:
-            return
-        case .progress(let received, let total):
-            guard download.state == .inProgress else { return }
-            download.received = received
-            download.total = total
-        case .finished(let path):
-            guard download.state == .inProgress || download.state == .cancelled else { return }
-            download.path = path
-            download.state = .finished
-            if let total = download.total { download.received = total }
-        case .failed:
-            guard download.state == .inProgress else { return }
-            download.state = .failed
-        case .cancelled:
-            guard download.state == .inProgress else { return }
-            download.state = .cancelled
+        state.session.downloadRevisions[update.id] = update.revision
+        switch update.stage {
+        case .choosingDestination: break
+        case .receiving(let progress), .cancelling(let progress):
+            state.doc.downloads[index].received = progress.received
+            state.doc.downloads[index].total = progress.total
+            if case .cancelling = update.stage { state.doc.downloads[index].state = .cancelling }
+            else if state.doc.downloads[index].state != .cancelling { state.doc.downloads[index].state = .inProgress }
+        case .terminal(let end):
+            state.session.terminalDownloads.insert(update.id)
+            state.doc.downloads[index].end = end
+            switch end {
+            case .cancelled(.retained(let url, _)), .failed(_, .retained(let url, _)), .interrupted(_, .retained(let url, _)):
+                state.doc.downloads[index].path = url.path
+            default: break
+            }
+            switch end {
+            case .completed(let receipt):
+                state.doc.downloads[index].state = .finished
+                state.doc.downloads[index].path = receipt.url.path
+                state.doc.downloads[index].filename = receipt.url.lastPathComponent
+                state.doc.downloads[index].received = receipt.bytes
+                state.doc.downloads[index].total = receipt.bytes
+            case .cancelled: state.doc.downloads[index].state = .cancelled
+            case .interrupted: state.doc.downloads[index].state = .interrupted
+            case .failed: state.doc.downloads[index].state = .failed
+            }
         }
-        if download != state.doc.downloads[index] { state.doc.downloads[index] = download }
     }
+
 }
 
 extension AppState {
     /// Whose downloads and history a window's Library shows and clears: its space's profile, or nothing for an
     /// incognito window (`.incognito`).
     func libraryContext(in window: WindowID) -> BrowsingContext {
-        guard let windowDoc = doc.windows[window], windowDoc.kind != .incognito else { return .incognito }
+        guard let windowDoc = doc.windows[window], windowDoc.kind != .incognito else { return .incognito(session.privateSession ?? PrivateSessionID("inactive")) }
         return .profile(doc.spaces[windowDoc.space]?.profile ?? .default)
     }
 
@@ -101,7 +113,7 @@ extension AppState {
         case .pinned(let s)?, .today(let s)?: return .profile(doc.spaces[s]?.profile ?? .default)
         case .scratch(let w)?:
             guard let window = doc.windows[w] else { return .profile(.default) }
-            return window.kind == .incognito ? .incognito : .profile(doc.spaces[window.space]?.profile ?? .default)
+            return window.kind == .incognito ? .incognito(session.privateSession!) : .profile(doc.spaces[window.space]?.profile ?? .default)
         case nil: return .profile(.default)
         }
     }

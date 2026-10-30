@@ -360,7 +360,7 @@ public enum PeekCommand: Hashable, Sendable, Codable {
 public enum ProfileCommand: Hashable, Sendable, Codable {
     case create(name: String, icon: CustomIcon?)
     case rename(ProfileID, name: String)
-    /// Refused for the default profile and for a profile with spaces. `Effect.forgetBrowsingData` follows.
+    /// Refused for the default profile and for a profile with spaces. `Effect.disposeContext` revokes and drains the profile.
     case delete(ProfileID)
     /// "Change Profile" for a space: its Favorites, settings and new pages follow the profile.
     case assign(SpaceRef, to: ProfileID)
@@ -377,6 +377,8 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 
 public enum SystemEvent: Sendable, Equatable {
     case page(BrowserToken, PageEvent)
+    case download(DownloadUpdate)
+    case contextDisposed(ContextDisposalResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
     case window(WindowID, WindowEvent)

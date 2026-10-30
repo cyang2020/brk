@@ -228,8 +228,12 @@ enum IdentityScenarios {
         try app.dispatch(.commandBar(.open(.editCurrent)))
         try app.dispatch(.commandBar(.submit(app.site.url("download-active").absoluteString)))
         try app.waitUntil("one attachment request and actual file bytes") {
-            let files = (try? FileManager.default.contentsOfDirectory(at: app.dataDirectory.appendingPathComponent("downloads"), includingPropertiesForKeys: [.fileSizeKey])) ?? []
-            return app.site.requestCount(path) == before + 1 && files.contains { ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }
+            let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
+            let files = FileManager.default.enumerator(at: app.dataDirectory.appendingPathComponent("downloads"), includingPropertiesForKeys: Array(keys))?.allObjects as? [URL] ?? []
+            return app.site.requestCount(path) == before + 1 && files.contains {
+                let values = try? $0.resourceValues(forKeys: keys)
+                return values?.isRegularFile == true && (values?.fileSize ?? 0) > 0
+            }
         }
         try expect(try observations(app)[page]?.committedURL == safe, "attachment replaced committed seed")
         try app.dispatch(.profile(.create(name: "Replay check", icon: nil)))
@@ -251,7 +255,7 @@ enum IdentityScenarios {
         try expect(app.site.requestCount(path) == before + 2, "blank attachment slot replayed after restart")
         try expect(try app.view(page.window).content.panes.first?.content == .blank, "attachment-only restored pane is not blank")
         try record(app, "no-replay")
-        app.note("Attachment request counts stayed at \(before + 1) after reassignment/restart and \(before + 2) after an explicit second request. Existing transfer lifetime remains unchanged.")
+        app.note("Attachment request counts stayed at \(before + 1) after reassignment/restart and \(before + 2) after an explicit second request. Original-request survival and transport cancellation are covered separately by T1-T11.")
     }
 
     @Sendable static func documents(_ app: AppUnderTest) throws {

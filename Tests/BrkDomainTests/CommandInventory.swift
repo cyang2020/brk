@@ -49,7 +49,9 @@ enum CommandInventory {
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadFailed(code: -1, description: "x", url: "x")), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .rendererGone),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closedByPage), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .gainedFocus),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .openRequested(URL(string: "https://example.com/")!, .foregroundTab)),
-        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .download(download, .started(url: example, filename: "x.zip", path: nil))), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closed),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closed),
+        .download(DownloadUpdate(id: download, owner: DownloadOwner(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), context: ContextEpoch(context: .profile(profile), generation: 1), policy: .default), details: DownloadDetails(url: example, suggestedName: "x.zip"), revision: 1, stage: .choosingDestination)),
+        .contextDisposed(.completed(DisposalID("ghost"), .profile(profile), .deletionScheduledForNextLaunch)),
         .clockTick,
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
@@ -212,9 +214,10 @@ enum CommandInventory {
             case .closedByPage: "page.closedByPage"
             case .gainedFocus: "page.gainedFocus"
             case .openRequested: "page.openRequested"
-            case .download: "page.download"
             case .closed: "page.closed"
             }
+        case .download: "download"
+        case .contextDisposed: "contextDisposed"
         case .clockTick: "clockTick"
         case .window(_, let e):
             switch e {
@@ -237,7 +240,7 @@ enum CommandInventory {
         switch name {
         case "page.closed": return #"page\([^\n]*\.closed\)"#
         case "window.closed": return #"\.window\([^\n]*\.closed\)"#
-        case "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
+        case "download", "contextDisposed", "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
         default:
             if parts.count == 1 { return #"\."# + parts[0] + #"\b"# }
             if name.hasPrefix("later.") { return #"\.later\(\s*\."# + parts[1] + #"\b"# }

@@ -47,8 +47,13 @@ func projectPages(_ state: AppState) -> [PageSpec] {
         guard state.owns(page) else { return nil }
         let live = state.session.live[page]
         let context = state.browsingContext(of: page.item)
+        if case .profile(let profile) = context, state.doc.profiles[profile] == nil { return nil }
+        let profile: ProfileID = if case .profile(let p) = context { p } else { .default }
+        let settings = state.profileSettings(profile)
+        let directory = settings.downloadsDirectory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? DownloadPolicy.defaultDirectory
+        let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
-        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context)
+        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy)
     }
 }
 
@@ -86,6 +91,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
     return SettingsSnapshot(
         pane: state.session.settingsPane, general: doc.settings.general,
         profiles: profiles.map { ProfileSettingsRow(profile: row($0), settings: state.profileSettings($0.id)) },
+        deletingProfiles: doc.deletingProfiles.keys.sorted().map { ProfileDeletionRow(profile: $0, name: doc.deletingProfiles[$0]!.name, failure: doc.deletingProfiles[$0]!.failure) },
         links: doc.settings.links,
         routes: doc.linkRoutes.map { LinkRouteRow(route: $0, destinationTitle: destinationTitle($0.destination)) },
         spaces: doc.spaceOrder.compactMap { id in
@@ -237,7 +243,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(space.profile).autoArchive) : nil,
             downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == listed }.map {
                 DownloadRow(id: $0.id, filename: $0.filename, url: $0.url, path: $0.path, received: $0.received, total: $0.total,
-                            state: $0.state, startedAt: $0.startedAt)
+                            end: $0.end, state: $0.state, startedAt: $0.startedAt)
             } : [],
             history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
                 HistoryRow(url: $0.url, title: $0.title, visitedAt: $0.visitedAt)

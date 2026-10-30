@@ -45,6 +45,14 @@ struct ProfilesPane: View {
                     HStack { ProfilePaneGlyph(icon: row.profile.icon); Text(row.profile.name) }
                 }
             }
+            ForEach(settings.deletingProfiles, id: \.profile) { pending in
+                Section(pending.name) {
+                    if let failure = pending.failure {
+                        Text("Profile deletion could not finish: " + failure)
+                        Button("Retry deletion") { dispatch(.profile(.delete(pending.profile))) }
+                    } else { Text("Stopping this profile's browsers and downloads…") }
+                }
+            }
             Section {
                 SettingsButton(title: ProfileCopy.deleteUnusedTitle, field: "deleteUnusedProfiles") { deletingUnused = true }
                     .disabled(unused.isEmpty)

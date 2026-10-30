@@ -60,16 +60,16 @@ public enum DocumentAvailability: Hashable, Sendable, Codable {
 
 /// Which Chromium request context (cookies, cache, storage, extensions) a page browses in. Arc: a space's
 /// `Profile`, or incognito. The engine maps `.profile(p)` to one persistent context per profile (the default
-/// profile is the runtime's own cache) and `.incognito` to one shared in-memory context that is forgotten when the
-/// last incognito window closes (`WebEngine.forget`). A profile is a `ProfileID`, never a path: where its data lives
+/// profile is the runtime's own cache) and `.incognito(epoch)` to the current private session
+/// shared by its windows. Closing the last window synchronously revokes that epoch. A profile is a `ProfileID`, never a path: where its data lives
 /// is the engine's business.
 public enum BrowsingContext: Hashable, Sendable, Codable {
     case profile(ProfileID)
-    case incognito
+    case incognito(PrivateSessionID)
 }
 
-/// A page that should be live. The engine creates it on first sight and closes it when it disappears from the
-/// list (`WebEngine.reconcile`). `initialURL` is read only at creation; later navigation is a `PageAction`.
+/// A page that should be live. The engine creates it on first sight and removes presentation when it disappears from the
+/// list (`WebEngine.reconcile`). Accepted operations may retain the original browser. `initialURL` is read only at creation; later navigation is a `PageAction`.
 public struct PageSpec: Hashable, Sendable, Codable {
     public let id: PageID
     /// Nil for an empty split pane waiting for the command bar: the engine creates no browser for it.
@@ -78,10 +78,13 @@ public struct PageSpec: Hashable, Sendable, Codable {
     /// the previous profile's cookies and storage.
     public let context: BrowsingContext
 
-    public init(id: PageID, initialURL: URL?, context: BrowsingContext) {
+    public let downloadPolicy: DownloadPolicy
+
+    public init(id: PageID, initialURL: URL?, context: BrowsingContext, downloadPolicy: DownloadPolicy = .default) {
         self.id = id
         self.initialURL = initialURL
         self.context = context
+        self.downloadPolicy = downloadPolicy
     }
 }
 
@@ -130,31 +133,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     /// The page took keyboard focus (the user clicked into it, e.g. into another split pane).
     case gainedFocus
     case openRequested(URL, OpenDisposition)
-    /// A file download this page started (CEF: OnBeforeDownload, OnDownloadUpdated). `Doc.downloads` is the ledger.
-    case download(DownloadID, DownloadEvent)
     /// The browser finished closing (`OnBeforeClose`). The id may be reused by a new page right after.
     case closed
-}
-
-/// One download's lifecycle, as the engine reports it. `started` carries where the engine decided to write it
-/// (the delegate's `DownloadDecision`); `progress` repeats until `finished`, `failed` or `cancelled`.
-public enum DownloadEvent: Hashable, Sendable, Codable {
-    case started(url: URL, filename: String, path: String?)
-    /// `total` is nil when the server did not say.
-    case progress(received: Int64, total: Int64?)
-    case finished(path: String)
-    case failed
-    case cancelled
-}
-
-/// What the app tells the engine to do with a download that is about to begin (CEF's OnBeforeDownload answers
-/// synchronously). Decided from the page's profile settings ("Download location", "Ask where to save").
-public enum DownloadDecision: Hashable, Sendable {
-    /// Write to this directory under the suggested name (a clash gets a numbered suffix).
-    case save(directory: String)
-    /// Show a save panel (BrkApp) starting in `directory`; the panel's answer becomes the destination.
-    case ask(directory: String)
-    case deny
 }
 
 /// One line of the engine's page-lifecycle log (`WebEngine.pageLog`), read by the control socket's `pageLog` op.

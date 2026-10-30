@@ -21,6 +21,7 @@ public final class StubEngine: WebEngine {
 
     public func reconcile(_ specs: [PageSpec]) {
         guard shutdownOutcome == nil else { return }
+        let specs = specs.filter { !revoked.contains($0.context) }
         let wanted = Dictionary(specs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for (id, surface) in pages where wanted[id]?.context != surface.context {
             pages[id] = nil
@@ -68,7 +69,16 @@ public final class StubEngine: WebEngine {
     }
 
     /// The stub has no request contexts; nothing to forget.
-    public func forget(_ context: BrowsingContext) {}
+    private var revoked: Set<BrowsingContext> = []
+    private var disposed: Set<DisposalID> = []
+    public func cancelDownload(_ id: DownloadID) {}
+    public func disposeContext(_ request: ContextDisposal) {
+        revoked.insert(request.context)
+        guard disposed.insert(request.id).inserted else { return }
+        Task { @MainActor in
+            self.delegate?.engine(self, contextDisposed: .completed(request.id, request.context, .memoryReleased))
+        }
+    }
 
     public func facts(for page: PageID) -> PageFacts? {
         guard let surface = pages[page] else { return nil }

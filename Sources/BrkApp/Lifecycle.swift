@@ -143,6 +143,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
         store?.flush()
         let outcome = await engine.shutdown()
+        store?.flush()
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
         let pageLog = engine.pageLog.map {
             String(format: "%.3f %@ page=%@ generation=%llu browser=%@", $0.uptime, $0.kind.rawValue, $0.page.description, $0.generation,

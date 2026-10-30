@@ -18,7 +18,7 @@ final class ControlInputRegressionTests: XCTestCase {
         let result = await executor.run(.load(window: privateWindow, url: URL(string: "https://example.com/private")!))
         guard case .loaded(let tab) = result else { return XCTFail("load did not return the private tab: \(result)") }
         XCTAssertTrue(h.store.snapshot.windows[privateWindow]?.scratch?.rows.contains { $0.id == tab } == true)
-        XCTAssertEqual(h.store.snapshot.pages.first { $0.id == PageID(window: privateWindow, item: tab) }?.context, .incognito)
+        guard case .incognito? = h.store.snapshot.pages.first(where: { $0.id == PageID(window: privateWindow, item: tab) })?.context else { return XCTFail("missing private epoch") }
     }
 
     func testWindowlessControlOperationsFollowTheLastExplicitBrowserTarget() async throws {

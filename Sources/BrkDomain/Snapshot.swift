@@ -246,6 +246,7 @@ public struct DownloadRow: Sendable, Equatable, Codable {
     public var path: String?
     public var received: Int64
     public var total: Int64?
+    public var end: DownloadEnd? = nil
     public var state: DownloadState
     public var startedAt: Instant
 }
@@ -373,6 +374,7 @@ public struct SettingsSnapshot: Sendable, Equatable, Codable {
     public var general: GeneralSettings
     /// In `Doc.profiles` order: default first, then by name.
     public var profiles: [ProfileSettingsRow]
+    public var deletingProfiles: [ProfileDeletionRow] = []
     public var links: LinkSettings
     /// Routes with their destination's display title, in priority order.
     public var routes: [LinkRouteRow]
@@ -411,4 +413,10 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var detected: [AIProviderKind]
     /// What `.auto` or the explicit choice resolves to right now, nil when nothing can answer.
     public var active: AIProviderKind?
+}
+
+public struct ProfileDeletionRow: Sendable, Equatable, Codable {
+    public let profile: ProfileID
+    public let name: String
+    public let failure: String?
 }

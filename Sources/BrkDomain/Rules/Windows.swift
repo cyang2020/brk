@@ -29,6 +29,7 @@ extension Work {
             // Shift+Cmd+N: a session-only window; its tabs live in its scratch tree and its pages browse in
             // `BrowsingContext.incognito` (F2 owns the context and badge; the projection gives it dark chrome).
             guard let doc = state.doc.windows[window] else { return }
+            if state.session.privateSession == nil { state.session.privateSession = PrivateSessionID(ctx.newID()) }
             let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newLittle(let url):
@@ -56,7 +57,10 @@ extension Work {
             case .incognito:
                 for tab in state.session.scratch[window]?.allTabs() ?? [] { unload(tab) }
                 removeWindow(window)
-                if !state.doc.windows.values.contains(where: { $0.kind == .incognito }) { effects.append(.forgetBrowsingData(.incognito)) }
+                if !state.doc.windows.values.contains(where: { $0.kind == .incognito }), let epoch = state.session.privateSession {
+                    state.session.privateSession = nil
+                    effects.append(.disposeContext(ContextDisposal(id: DisposalID(ctx.newID()), context: .incognito(epoch))))
+                }
             case .standard:
                 let others = state.doc.windows.values.filter { $0.kind == .standard && $0.id != window }
                 if others.isEmpty { effects.append(.window(window, .close)) } else { removeWindow(window) }

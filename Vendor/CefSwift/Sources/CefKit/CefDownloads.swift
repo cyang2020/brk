@@ -15,7 +15,11 @@ public struct CefDownload: Sendable, Equatable {
     public var totalBytes: Int64
     /// Whether the download finished successfully.
     public var isComplete: Bool
-    /// Whether the download was canceled or interrupted.
+    /// Native terminal flags are separate; interruption must not be reported as cancellation.
+    public var isInterrupted: Bool
+    public var isInProgress: Bool
+    public var interruptionReason: Int
+    public var suggestedName: String
     public var isCanceled: Bool
     /// Where the file is being written, once a destination is known.
     public var fullPath: URL?
@@ -27,8 +31,13 @@ public struct CefDownload: Sendable, Equatable {
         totalBytes: Int64,
         isComplete: Bool,
         isCanceled: Bool,
-        fullPath: URL?
+        fullPath: URL?,
+        isInterrupted: Bool = false, isInProgress: Bool = true, interruptionReason: Int = 0, suggestedName: String = ""
     ) {
+        self.isInterrupted = isInterrupted
+        self.isInProgress = isInProgress
+        self.interruptionReason = interruptionReason
+        self.suggestedName = suggestedName
         self.id = id
         self.url = url
         self.receivedBytes = receivedBytes
@@ -77,9 +86,43 @@ extension CefDownload {
             receivedBytes: item.pointee.get_received_bytes?(item) ?? 0,
             totalBytes: item.pointee.get_total_bytes?(item) ?? 0,
             isComplete: (item.pointee.is_complete?(item) ?? 0) != 0,
-            isCanceled: (item.pointee.is_canceled?(item) ?? 0) != 0
-                || (item.pointee.is_interrupted?(item) ?? 0) != 0,
-            fullPath: path.isEmpty ? nil : URL(fileURLWithPath: path)
+            isCanceled: (item.pointee.is_canceled?(item) ?? 0) != 0,
+            fullPath: path.isEmpty ? nil : URL(fileURLWithPath: path),
+            isInterrupted: (item.pointee.is_interrupted?(item) ?? 0) != 0,
+            isInProgress: (item.pointee.is_in_progress?(item) ?? 0) != 0,
+            interruptionReason: Int(item.pointee.get_interrupt_reason?(item).rawValue ?? 0),
+            suggestedName: CefStringUtil.takingUserFree(item.pointee.get_suggested_file_name?(item)) ?? ""
+
         )
+    }
+}
+
+/// Owns the incoming CEF +1. All calls, including explicit release, are on the UI thread.
+@MainActor public final class CefDownloadDecisionCallback {
+    nonisolated(unsafe) private var raw: UnsafeMutablePointer<cef_before_download_callback_t>?
+    init(taking raw: UnsafeMutablePointer<cef_before_download_callback_t>) { self.raw = raw }
+    public func resolve(_ destination: URL?) {
+        guard let raw else { return }
+        self.raw = nil
+        if let destination {
+            CefStringUtil.withCefString(destination.path) { raw.pointee.cont?(raw, $0, 0) }
+        }
+        cefRelease(UnsafeMutableRawPointer(raw))
+    }
+    deinit {
+        if let raw { precondition(Thread.isMainThread); cefRelease(UnsafeMutableRawPointer(raw)) }
+    }
+}
+
+@MainActor public final class CefDownloadControl {
+    nonisolated(unsafe) private var raw: UnsafeMutablePointer<cef_download_item_callback_t>?
+    init(taking raw: UnsafeMutablePointer<cef_download_item_callback_t>) { self.raw = raw }
+    public func cancel() { if let raw { raw.pointee.cancel?(raw) } }
+    public func release() {
+        guard let raw else { return }; self.raw = nil
+        cefRelease(UnsafeMutableRawPointer(raw))
+    }
+    deinit {
+        if let raw { precondition(Thread.isMainThread); cefRelease(UnsafeMutableRawPointer(raw)) }
     }
 }

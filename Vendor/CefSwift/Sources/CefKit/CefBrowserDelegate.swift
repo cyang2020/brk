@@ -77,6 +77,8 @@ public protocol CefBrowserDelegate: AnyObject {
     /// A download's progress/state changed (fires repeatedly, including the
     /// final update where `isComplete` or `isCanceled` is set).
     func browser(_ b: CefBrowser, downloadDidProgress download: CefDownload)
+    func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback)
+    func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?)
 
     // MARK: JavaScript dialogs
 
@@ -193,6 +195,13 @@ extension CefBrowserDelegate {
         .allow(destination: nil)
     }
     public func browser(_ b: CefBrowser, downloadDidProgress download: CefDownload) {}
+    public func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback) {
+        decision.resolve(CefDownloadDestination.resolve(decision: browser(b, decidePolicyForDownload: download, suggestedName: suggestedName), suggestedName: suggestedName))
+    }
+    public func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?) {
+        browser(b, downloadDidProgress: download)
+        control?.release()
+    }
 
     public func browser(_ b: CefBrowser, runJSDialog dialog: CefJSDialog, callback: CefJSDialogCallback) -> Bool { false }
     public func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool { false }

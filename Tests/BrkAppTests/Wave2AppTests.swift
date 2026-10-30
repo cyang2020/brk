@@ -169,21 +169,24 @@ final class Wave2AppTests: XCTestCase {
         let h = Harness()
         defer { h.cleanUp() }
         let file = URL(string: "http://127.0.0.1:9/download")!
-        func decide() -> DownloadDecision { h.router.engine(h.engine, page: h.page, decideDownload: "fixture.txt", from: file) }
+        func decide() -> DownloadPolicy { h.store.snapshot.pages.first { $0.id == h.page }!.downloadPolicy }
         let system = try XCTUnwrap(FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path)
-        XCTAssertEqual(decide(), .save(directory: system))
+        XCTAssertEqual(decide(), .directory(URL(fileURLWithPath: system)))
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("/tmp/brk-downloads")))))
-        XCTAssertEqual(decide(), .save(directory: "/tmp/brk-downloads"))
+        XCTAssertEqual(decide(), .directory(URL(fileURLWithPath: "/tmp/brk-downloads", isDirectory: true)))
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory("~/Desktop")))))
-        XCTAssertEqual(decide(), .save(directory: "/tmp/brk-downloads"), "the settings boundary refuses relative and tilde paths")
+        XCTAssertEqual(decide(), .directory(URL(fileURLWithPath: "/tmp/brk-downloads", isDirectory: true)), "the settings boundary refuses relative and tilde paths")
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .downloadsDirectory(NSHomeDirectory() + "/Desktop")))))
-        XCTAssertEqual(decide(), .save(directory: NSHomeDirectory() + "/Desktop"))
+        XCTAssertEqual(decide(), .directory(URL(fileURLWithPath: NSHomeDirectory() + "/Desktop")))
         h.store.dispatch(.user(h.window, .settings(.profile(.default, .promptForDownloadLocation(true)))))
-        XCTAssertEqual(decide(), .ask(directory: NSHomeDirectory() + "/Desktop"))
+        XCTAssertEqual(decide(), .ask(startingAt: URL(fileURLWithPath: NSHomeDirectory() + "/Desktop")))
 
         let id = DownloadID("x-1-1")
-        h.router.engine(h.engine, page: h.engine.token(h.page), didEmit: .download(id, .started(url: file, filename: "fixture.txt", path: "/tmp/brk-downloads/fixture.txt")))
-        h.router.engine(h.engine, page: h.engine.token(h.page), didEmit: .download(id, .finished(path: "/tmp/brk-downloads/fixture.txt")))
+        let owner = DownloadOwner(browser: h.engine.token(h.page), context: ContextEpoch(context: .profile(.default), generation: 1), policy: decide())
+        let details = DownloadDetails(url: file, suggestedName: "fixture.txt")
+        h.router.engine(h.engine, download: DownloadUpdate(id: id, owner: owner, details: details, revision: 1, stage: .receiving(TransferProgress(received: 0, total: nil))))
+        h.router.engine(h.engine, download: DownloadUpdate(id: id, owner: owner, details: details, revision: 2,
+            stage: .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/brk-downloads/fixture.txt"), bytes: 17)))))
         h.store.dispatch(.user(h.window, .library(.open(.downloads))))
         guard case .library(let library)? = h.store.snapshot.windows[h.window]?.overlay else { return XCTFail("no Library") }
         XCTAssertEqual(library.downloads.map(\.path), ["/tmp/brk-downloads/fixture.txt"])
