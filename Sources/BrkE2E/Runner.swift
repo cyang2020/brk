@@ -23,7 +23,9 @@ final class Runner {
         let server = FixtureServer(root: arguments.site)
         try server.start()
         defer { server.stop() }
-        let scratch = URL(fileURLWithPath: "/tmp/brk-e2e-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        let scratchRoot = ProcessInfo.processInfo.environment["BRK_E2E_DATA_ROOT"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.temporaryDirectory
+        let scratch = scratchRoot.appendingPathComponent("brk-e2e-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
         try? fm.removeItem(at: scratch)
         try fm.createDirectory(at: scratch, withIntermediateDirectories: true)
         print("[e2e] fixture site \(server.baseURL.absoluteString), app \(arguments.executable.path), engine \(arguments.engine.rawValue)")

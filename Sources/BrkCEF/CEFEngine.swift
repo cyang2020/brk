@@ -243,7 +243,8 @@ public final class CEFEngine: WebEngine {
     /// 2. closingBrowsers: `close(force: true)` for every live page (closing ones are already on their way); await
     ///    each `browserDidClose` (OnBeforeClose), bounded by Metrics.persistence.shutdownTimeout. Then give CEF a
     ///    moment to destroy the emptied host windows (every `onWindowDestroyed`, or 1 s).
-    /// 3. On time: shuttingDownRuntime, `CefRuntime.shared.shutdown()`, `.clean`. Timed out: log each unclosed page,
+    /// 3. Close Chromium's auxiliary native widgets before their observers and runtime disappear.
+    /// 4. On time: shuttingDownRuntime, `CefRuntime.shared.shutdown()`, `.clean`. Timed out: log each unclosed page,
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
@@ -267,6 +268,7 @@ public final class CEFEngine: WebEngine {
             return .timedOut(unclosed: unclosed)
         }
         await waitForHostWindows(timeout: 1.0)
+        HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
         log.notice("shutdown: every browser closed (\(self.destroying.count, privacy: .public) host windows still alive); cef_shutdown")
         CefRuntime.shared.shutdown()

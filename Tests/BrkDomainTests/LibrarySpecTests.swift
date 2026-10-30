@@ -5,6 +5,55 @@ import XCTest
 
 /// Owner: F5. The Library host, its pages, the download ledger and the history page.
 final class LibrarySpecTests: XCTestCase {
+    func test_incognitoDownloadAndHistoryEventsNeverChangeSavedRecords() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        let shared = url("https://example.com/shared")
+        d.page(home, .committed(shared))
+        d.page(home, .titleChanged("Public title"))
+        let publicDownload = DownloadID("public")
+        d.page(home, .download(publicDownload, .started(url: shared, filename: "public.txt", path: "/public.txt")))
+        d.user(.window(.newIncognito))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        d.user(.commandBar(.submit(shared.absoluteString)), in: window)
+        let tab = try XCTUnwrap(d.view(of: window).scratch?.rows.first?.id)
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id == PageID(tab) && $0.context == .incognito })
+        let history = d.state.doc.history
+        let downloads = d.state.doc.downloads
+        d.page(tab, .committed(shared))
+        d.page(tab, .titleChanged("Private title"))
+        d.page(tab, .download(DownloadID("private"), .started(url: shared, filename: "secret.txt", path: "/secret.txt")))
+        d.page(tab, .download(DownloadID("private"), .finished(path: "/secret.txt")))
+        d.page(tab, .download(publicDownload, .progress(received: 123, total: 456)))
+        d.page(tab, .download(publicDownload, .finished(path: "/secret.txt")))
+        XCTAssertEqual(d.state.doc.history, history)
+        XCTAssertEqual(d.state.doc.downloads, downloads)
+        let restored = Driver(file: d.savedFile)
+        XCTAssertEqual(restored.state.doc.history, history)
+        XCTAssertEqual(restored.state.doc.downloads.map(\.path), downloads.map(\.path))
+        XCTAssertEqual(restored.state.doc.downloads.map(\.state), [.failed], "unfinished downloads fail on restore")
+        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("secret.txt"))
+        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("Private title"))
+    }
+
+    func test_titleUpdatesStayInTheirProfileAndFindTheMatchingVisit() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        let shared = url("https://example.com/shared")
+        d.page(home, .committed(shared))
+        d.page(home, .titleChanged("Home"))
+        d.newSpace("Work")
+        d.user(.profile(.create(name: "Work", icon: nil)))
+        let profile = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
+        d.user(.profile(.assign(.current, to: profile)))
+        let tab = d.open(shared.absoluteString)
+        d.page(tab, .committed(shared))
+        d.page(tab, .titleChanged("Work"))
+        d.page(home, .titleChanged("Home updated"))
+        XCTAssertEqual(d.state.doc.history.first { $0.profile == .default }?.title, "Home updated")
+        XCTAssertEqual(d.state.doc.history.first { $0.profile == profile }?.title, "Work")
+    }
+
     /// .library(.open(nil)) opens the archive first and the window's last page after; the same page is a no-op
     func test_openRemembersTheLastPage() {
         let d = Driver()

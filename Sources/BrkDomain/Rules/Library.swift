@@ -53,13 +53,14 @@ extension Work {
     /// failed or cancelled; a cancelled one still becomes finished when the file lands anyway. An event for an
     /// unknown download, or one that changes nothing, is ignored.
     mutating func downloadEvent(_ id: DownloadID, _ event: DownloadEvent, from page: PageID) {
+        guard case .profile(let profile) = state.browsingContext(of: page.item) else { return }
         if case .started(let url, let filename, let path) = event {
-            guard !state.doc.downloads.contains(where: { $0.id == id }), case .profile(let profile) = state.browsingContext(of: page.item) else { return }
+            guard !state.doc.downloads.contains(where: { $0.id == id }) else { return }
             state.doc.downloads.insert(Download(id: id, url: url, filename: filename, path: path, received: 0, total: nil,
                                                 state: .inProgress, startedAt: ctx.now, profile: profile), at: 0)
             return
         }
-        guard let index = state.doc.downloads.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = state.doc.downloads.firstIndex(where: { $0.id == id && $0.profile == profile }) else { return }
         var download = state.doc.downloads[index]
         switch event {
         case .started:

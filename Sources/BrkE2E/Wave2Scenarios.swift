@@ -26,6 +26,9 @@ enum Wave2Scenarios {
                  suggestions),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
         Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", history),
+        Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
+        Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
+        Scenario("W2-11P", "incognito downloads keep their files and leave no saved download or history records", cefOnly: "private downloads", LibraryScenarios.privacy),
     ]
 
     /// W2-1 (F1): `openSettings(.links)` shows the settings window; `settings` reports the pane; a click on the
@@ -375,7 +378,7 @@ enum Wave2Scenarios {
             return isShown(try app.native(), .downloadEntry(row.id))
         }
         try app.screenshot("downloads")
-        try app.load(app.site.url("download"))
+        try app.load(app.site.url("download?copy=2"))
         try app.press("cmd+shift+j")
         try app.waitUntil("a second download of the same name, numbered", timeout: 15) {
             guard case .library(let library)? = try app.view().overlay, library.page == .downloads else { return false }
@@ -399,6 +402,9 @@ enum Wave2Scenarios {
         try app.waitUntil("the rows inside the Library's page area") {
             let n = try app.native()
             guard let area = n.computed.library?.page else { throw Check(description: "computed frames have no library") }
+            try expect(n.computed.library?.strip.width == 417, "the Library panel is not 417 pt wide")
+            try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "Library did not replace the sidebar")
+            try expect(near(area, n.computed.contentArea), "Library page does not fill the content area")
             let host = try visible(n, .library), row = try visible(n, .historyEntry(0))
             try expect(contains(host, row), "history row \(row.frame) outside the library \(host.frame)")
             try expect(area.insetBy(dx: -0.5, dy: -0.5).contains(row.frame), "history row \(row.frame) outside the page area \(area)")
