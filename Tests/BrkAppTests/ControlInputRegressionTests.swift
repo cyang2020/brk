@@ -7,6 +7,20 @@ import XCTest
 
 @MainActor
 final class ControlInputRegressionTests: XCTestCase {
+    func testLoadingInAnIncognitoWindowReturnsItsPrivateTab() async throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .window(.newIncognito)))
+        let privateWindow = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        defer { h.store.windowController(privateWindow)?.window.orderOut(nil) }
+        let executor = ControlExecutor(store: h.store, engine: h.engine, clock: nil)
+        let result = await executor.run(.load(window: privateWindow, url: URL(string: "https://example.com/private")!))
+        guard case .loaded(let tab) = result else { return XCTFail("load did not return the private tab: \(result)") }
+        XCTAssertTrue(h.store.snapshot.windows[privateWindow]?.scratch?.rows.contains { $0.id == tab } == true)
+        XCTAssertEqual(h.store.snapshot.pages.first { $0.id == PageID(tab) }?.context, .incognito)
+    }
+
     func testWindowlessControlOperationsFollowTheLastExplicitBrowserTarget() async throws {
         let h = Harness()
         defer { h.cleanUp() }

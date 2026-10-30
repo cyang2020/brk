@@ -244,6 +244,7 @@ final class ControlExecutor {
             }
         }
         return snapshot.favorites.tiles.map(\.id) + ids(snapshot.space.pinned.rows) + ids(snapshot.space.today.rows)
+            + ids(snapshot.scratch?.rows ?? [])
     }
 
     private func nativeFacts(_ c: WindowController) throws -> NativeFacts {

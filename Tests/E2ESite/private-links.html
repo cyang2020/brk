@@ -12,5 +12,5 @@ const arm = document.querySelector('#arm');
 arm.style.display = popup ? 'flex' : 'none';
 link.style.display = popup ? 'none' : 'flex';
 arm.onclick = () => { document.title = 'Popup armed'; };
-window.firePrivatePopup = () => { window.open(link.href, '_blank'); document.title = 'Popup requested'; };
+window.firePrivatePopup = () => { window.open(link.href, '_blank', 'popup,width=400,height=300'); document.title = 'Popup requested'; };
 </script></body></html>
