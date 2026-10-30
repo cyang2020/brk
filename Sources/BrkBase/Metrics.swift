@@ -267,9 +267,41 @@ public struct LibraryMetrics: MetricGroup {
     public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "download and history rows reuse the sidebar row height"))
 }
 
-/// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar).
+/// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar). Arc builds its
+/// panes with the sindresorhus/Settings package (the binary has `Settings.SettingsWindowController`,
+/// `ToolbarItemStyleViewController`, `Settings.Container(contentWidth:minimumLabelWidth:)` and `Settings.Section`):
+/// a right-aligned label column, the controls beside it, a divider between sections, and a window that fits each
+/// pane's height. Arc's own numbers were not recovered, so every value here is ours.
 public struct SettingsMetrics: MetricGroup {
-    public let windowSize = Metric(CGSize(width: 760, height: 560), .guess("settings window content size; Arc's pane window was not measured"))
+    /// The content size the window opens at, before the first pane is measured and the window fits it.
+    public let windowSize = Metric(CGSize(width: 660, height: 460), .guess("settings window content size before the pane fits it; contentWidth plus both horizontal paddings wide"))
+    /// Every pane is this wide (Settings.Container's `contentWidth`).
+    public let contentWidth = Metric(600.0, .guess("pane content width; Arc's Settings.Container(contentWidth:) value was not recovered; fits a label column and the longest Links checkbox"))
+    public let horizontalPadding = Metric(30.0, .guess("Settings.Container's horizontal padding in the sindresorhus/Settings package source"))
+    public let verticalPadding = Metric(20.0, .guess("Settings.Container's vertical padding in the sindresorhus/Settings package source"))
+    /// The right-aligned label column (Settings.Container's `minimumLabelWidth`).
+    public let labelWidth = Metric(170.0, .guess("label column width; fits 'Archive Little Arcs after:' and 'Air Traffic Control:' at the system font"))
+    public let columnSpacing = Metric(8.0, .guess("space between the label column and the controls (SwiftUI's default HStack spacing)"))
+    public let rowSpacing = Metric(8.0, .guess("vertical space between the controls of one section"))
+    /// The divider row between sections (the package's Divider frame height).
+    public let sectionSpacing = Metric(20.0, .guess("height of the divider row between sections in the sindresorhus/Settings package source"))
+    /// A checkbox's description lines up with its title, past the box.
+    public let checkboxTextInset = Metric(20.0, .guess("AppKit checkbox box width plus its title gap at the regular control size"))
+    public let popUpWidth = Metric(180.0, .guess("width of the pop-up buttons, so the pickers of a pane line up"))
+    /// Folder icons in the Download Location menu.
+    public let menuIconSize = Metric(16.0, .guess("AppKit's small icon size for menu item images"))
+    /// The "is not your default web browser" box at the top of General (Arc: MakeDefaultViewBackgroundColor).
+    public let noticePadding = Metric(12.0, .guess("inner padding of the default-browser notice box"))
+    public let noticeCornerRadius = Metric(8.0, .guess("corner radius of the default-browser notice box"))
+    /// The profile picker above the profile's settings (Arc: ProfilePicker and ProfilePickerText colors).
+    public let profilePillSpacing = Metric(6.0, .guess("space between the profile picker's pills"))
+    public let profilePillPadding = Metric(CGSize(width: 10, height: 4), .guess("inner padding of a profile picker pill"))
+    public let profilePillCornerRadius = Metric(6.0, .guess("corner radius of a profile picker pill"))
+    /// Air Traffic Control (Arc: LinkRoutingDialog): the pattern field and how tall the route list grows.
+    public let routePatternWidth = Metric(220.0, .guess("width of a route's host pattern field"))
+    public let routeListMaxHeight = Metric(180.0, .guess("the route list scrolls past this height so the Links pane stays on screen"))
+    /// The Shortcuts pane's list scrolls inside a fixed height (the table has more than a hundred actions).
+    public let shortcutsListHeight = Metric(360.0, .guess("height of the Shortcuts pane's scrolling list"))
 }
 
 public struct PersistenceMetrics: MetricGroup {

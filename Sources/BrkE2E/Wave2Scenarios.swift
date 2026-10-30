@@ -10,7 +10,7 @@ import Foundation
 /// and the literal assertions the worker's feature must satisfy on the real engine. Constants are from `Metrics`.
 enum Wave2Scenarios {
     static let all: [Scenario] = [
-        Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", pending: "F1", settingsWindow),
+        Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", settingsWindow),
         Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", cefOnly: "cookies in a page",
                  pending: "F2", profileContexts),
         Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", pending: "F2", incognito),
@@ -31,7 +31,7 @@ enum Wave2Scenarios {
     /// Shift+click toggle flips `links.shiftClickPeek`; after `flush` and a restart the value holds and the window
     /// is closed (the pane is session state).
     @Sendable static func settingsWindow(_ app: AppUnderTest) throws {
-        try app.perform(.openSettings(pane: .links))
+        guard case .dispatched = try app.send(.openSettings(pane: .links)) else { throw Check(description: "openSettings did not dispatch") }
         try app.waitUntil("the settings window on the Links pane") {
             guard case .settings(let s) = try app.send(.settings) else { return false }
             return s.pane == .links
