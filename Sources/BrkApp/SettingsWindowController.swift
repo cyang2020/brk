@@ -3,9 +3,12 @@ import BrkBase
 import BrkDomain
 import BrkSettings
 
-/// Owner: F1. The one settings window (Arc: `SettingsWindowController`). Reconciled from `AppSnapshot.settings`
-/// by the store: shown and brought front while `pane` is set, hidden when it is nil; closing it with the title bar
-/// button dispatches `.settings(.closeWindow)` so the state follows the window, not the other way round.
+/// Owner: F1. The one settings window (Arc: the Settings package's `SettingsWindowController`). Reconciled from
+/// `AppSnapshot.settings` by the store: shown and brought front when a pane opens, hidden when `pane` becomes nil.
+/// Closing it with the title bar button dispatches `.settings(.closeWindow)`, so the state follows the window
+/// (Cmd+W and Esc dispatch the same from the host). The host installs the pane toolbar, titles the window with the
+/// pane and fits its height; the frame's position is remembered across launches, like Arc's
+/// `company.browser.Settings.FrameAutosaveName`.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     let window: NSWindow
@@ -13,27 +16,28 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let send: @MainActor (Command) -> Void
     private var shown = false
 
+    static var frameAutosaveName: String { "\(Bundle.main.bundleIdentifier ?? Product.name).Settings.FrameAutosaveName" }
+
     init(send: @escaping @MainActor (Command) -> Void) {
         self.send = send
         host = SettingsHost(dispatch: send)
         window = NSWindow(contentRect: CGRect(origin: .zero, size: Metrics.settings.windowSize.value),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
-        window.title = "Settings"
         window.isReleasedWhenClosed = false
         window.contentView = host
         window.delegate = self
-        window.center()
+        if !window.setFrameUsingName(Self.frameAutosaveName) { window.center() }
+        window.setFrameAutosaveName(Self.frameAutosaveName)
     }
 
-    /// Shows or hides the window for the pane, and renders the values.
+    /// Renders the values, then shows the window when a pane opens and hides it when the pane goes.
     func render(_ settings: SettingsSnapshot) {
         host.render(settings)
         if settings.pane != nil {
-            if !shown {
-                shown = true
-                window.makeKeyAndOrderFront(nil)
-            }
+            guard !shown else { return }
+            shown = true
+            window.makeKeyAndOrderFront(nil)
         } else if shown {
             shown = false
             window.orderOut(nil)
@@ -41,9 +45,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        if shown {
-            shown = false
-            send(.settings(.closeWindow))
-        }
+        guard shown else { return }
+        shown = false
+        send(.settings(.closeWindow))
     }
 }
