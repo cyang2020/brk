@@ -64,6 +64,28 @@ export function createKeyRouter(dispatch: Dispatch, platform: Platform, now: () 
   const records = new Map<string, { readonly time: number; readonly path: Path }>()
   const key = (windowId: WindowId, actionId: ActionId): string => `${windowId}\u0000${actionId}`
 
+  // Backstop for a lost Control keyUp (rule 5): after a Ctrl+Tab step, arm a timer that commits the cycle if neither
+  // another step nor a keyUp arrives within TIMING.cycleCommitMs, so the next Ctrl+Tab starts a fresh walk.
+  const cycleTimers = new Map<WindowId, ReturnType<typeof setTimeout>>()
+  const commitCycle = (windowId: WindowId): void => dispatch({ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId } })
+  const cancelCycleTimer = (windowId: WindowId): void => {
+    const timer = cycleTimers.get(windowId)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      cycleTimers.delete(windowId)
+    }
+  }
+  const armCycleTimer = (windowId: WindowId): void => {
+    cancelCycleTimer(windowId)
+    cycleTimers.set(
+      windowId,
+      setTimeout(() => {
+        cycleTimers.delete(windowId)
+        commitCycle(windowId)
+      }, TIMING.cycleCommitMs),
+    )
+  }
+
   /** True when the other path already dispatched this press; that record is consumed. */
   const consumeCounterpart = (windowId: WindowId, actionId: ActionId, counterpart: Path): boolean => {
     const k = key(windowId, actionId)
@@ -77,13 +99,18 @@ export function createKeyRouter(dispatch: Dispatch, platform: Platform, now: () 
   }
   const fire = (windowId: WindowId, actionId: ActionId): void => {
     dispatch({ origin: 'ui', windowId, command: ACTIONS[actionId].command })
+    if (ACTIONS[actionId].command.type === 'tab/cycle-recent') armCycleTimer(windowId)
   }
 
   return {
     attach(webContents, owner): void {
       webContents.on('before-input-event', (event, input) => {
         if (input.type === 'keyUp') {
-          if (input.key === 'Control') dispatch({ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: owner.windowId } })
+          // Control released on any of the window's webContents commits a pending Ctrl+Tab cycle (rule 5).
+          if (input.key === 'Control') {
+            cancelCycleTimer(owner.windowId)
+            commitCycle(owner.windowId)
+          }
           return
         }
         if (input.isAutoRepeat) return

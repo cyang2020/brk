@@ -143,6 +143,40 @@ describe('createKeyRouter', () => {
     expect(h.dispatched).toEqual([{ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: W1 } }])
   })
 
+  it('a Control keyUp on any of the window webContents commits the cycle', () => {
+    const h = harness()
+    h.sidebar.keyUp('Control') // the keyUp landed on the sidebar surface, not the tab view
+    expect(h.dispatched).toEqual([{ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: W1 } }])
+  })
+
+  it('a lost Control keyUp is backstopped: the cycle commits after TIMING.cycleCommitMs', () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness()
+      h.tab.press('Ctrl+Tab', 'linux')
+      expect(h.dispatched).toEqual([{ origin: 'ui', windowId: W1, command: ACTIONS.cycleRecentForward.command }])
+      vi.advanceTimersByTime(TIMING.cycleCommitMs)
+      expect(h.dispatched.at(-1)).toEqual({ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: W1 } })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a Control keyUp cancels the backstop timer, so the cycle commits exactly once', () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness()
+      h.tab.press('Ctrl+Tab', 'linux')
+      h.tab.keyUp('Control')
+      const commits = (): number => h.dispatched.filter((d) => d.origin === 'system' && d.command.type === 'tab/cycle-recent-commit').length
+      expect(commits()).toBe(1)
+      vi.advanceTimersByTime(TIMING.cycleCommitMs * 2)
+      expect(commits()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('Ctrl+Shift+= reaches split/add on a tab view even though the page sees "+"', () => {
     const h = harness()
     expect(h.tab.press('Ctrl+Shift+=', 'linux', { key: '+' })).toBe(true)

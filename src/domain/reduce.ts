@@ -82,6 +82,9 @@ export function reduce(state: AppState, input: Input, ctx: Ctx): Transition {
     const command = input.command
     const windowId: WindowId | null = input.origin === 'ui' ? input.windowId : 'windowId' in command ? command.windowId : null
     if (input.origin === 'ui' && !draft.doc.windows[input.windowId]) return // stale window: drop
+    // Any UI command other than another Ctrl+Tab step commits a pending cycle first: the chosen tab becomes final even
+    // if the Control keyUp was lost. The cycle's net on-screen change is stamped here, against its baseline.
+    if (input.origin === 'ui' && command.type !== 'tab/cycle-recent') commitPendingCycle(draft, windowId, ctx.now)
     if (input.origin === 'ui' && !keepsOverlay(input.command.type, draft.session.windows[input.windowId]?.overlay?.kind ?? null)) closeOverlay(draft, input.windowId)
     const before = onScreenTabIds(draft)
     const cycleWas = windowId !== null && draft.session.windows[windowId]?.recentCycle != null
@@ -124,4 +127,16 @@ function stampScreenChange(draft: Draft<StateImpl>, before: ReadonlySet<ItemId>,
 function stampLastActive(draft: Draft<StateImpl>, id: ItemId, now: Instant): void {
   const item = draft.doc.items[id]
   if (item?.kind === 'tab' && item.lastActiveAt !== now) item.lastActiveAt = now
+}
+
+/** Ends a window's pending Ctrl+Tab cycle and stamps the net on-screen change against its baseline (the finalized walk). */
+function commitPendingCycle(draft: Draft<StateImpl>, windowId: WindowId | null, now: Instant): void {
+  const ws = windowId !== null ? draft.session.windows[windowId] : undefined
+  if (!ws || ws.recentCycle == null) return
+  const baseline = ws.cycleBaseline != null ? new Set(ws.cycleBaseline) : onScreenTabIds(draft)
+  ws.recentCycle = null
+  ws.cycleBaseline = null
+  const after = onScreenTabIds(draft)
+  for (const id of baseline) if (!after.has(id)) stampLastActive(draft, id, now)
+  for (const id of after) if (!baseline.has(id)) stampLastActive(draft, id, now)
 }

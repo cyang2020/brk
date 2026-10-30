@@ -452,6 +452,20 @@ describe('reduce: tabs', () => {
     unchanged(d.state, d.ui({ type: 'tab/cycle-recent', delta: 1 }))
   })
 
+  it('any UI command other than tab/cycle-recent commits a pending cycle (robust against a lost Control keyUp)', () => {
+    const d = new Driver()
+    const [a] = d.todayIds()
+    d.advance(HOUR)
+    const b = d.open('127.0.0.1:9/b')
+    d.advance(HOUR)
+    d.ui({ type: 'tab/cycle-recent', delta: 1 }) // provisional walk to a
+    expect(paneIds(d)).toEqual([a])
+    d.ui({ type: 'sidebar/toggle' }) // an unrelated command commits the cycle
+    unchanged(d.state, d.sys({ type: 'tab/cycle-recent-commit', windowId: d.w })) // nothing left to commit
+    d.ui({ type: 'tab/cycle-recent', delta: 1 }) // a fresh walk from the now-shown tab
+    expect(paneIds(d)).toEqual([b])
+  })
+
   it('page/updated for an archived or unknown tab is ignored: same state object', () => {
     const d = new Driver()
     const b = d.open('example.com')

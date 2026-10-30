@@ -58,6 +58,12 @@ export const TIMING = {
    * rule is in src/main/input.ts. Bounds one physical press, not two separate presses.
    */
   keyDedupeMs: 100,
+  /**
+   * GUESS. A Ctrl+Tab cycle commits when Control is released, but the release keyUp can miss `before-input-event` if
+   * focus moved to a view that was just recreated. As a backstop the main process commits the cycle after this much
+   * idle time with no further Ctrl+Tab and no keyUp, so the next Ctrl+Tab starts a fresh walk.
+   */
+  cycleCommitMs: 2500,
 } as const
 
 export const CAPS = {
