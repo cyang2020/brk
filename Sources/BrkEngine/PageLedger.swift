@@ -9,14 +9,7 @@ import BrkBase
 /// engine may do: report closure for the id only when no newer incarnation is live, treat a close of a still-live
 /// incarnation as page-initiated, and ignore an incarnation it does not know.
 public struct PageLedger: Sendable, Equatable {
-    public struct Incarnation: Hashable, Sendable {
-        public let page: PageID
-        public let generation: UInt64
-        public init(page: PageID, generation: UInt64) {
-            self.page = page
-            self.generation = generation
-        }
-    }
+    public typealias Incarnation = BrowserToken
 
     public enum CloseEffect: Hashable, Sendable {
         /// A retired incarnation finished closing. `idLiveAgain` is true when a newer incarnation of the id is live:

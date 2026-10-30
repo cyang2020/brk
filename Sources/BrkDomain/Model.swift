@@ -137,9 +137,12 @@ struct WindowDoc: Sendable, Equatable {
     var bounds: CGRect?
     var space: SpaceID
     /// What each space shows in this window: a tab (any section) or a split (Arc: `lastActiveTabsPerSpace`).
-    /// An absent entry means an empty content card; normalize repairs entries and never adds one.
+    /// Absence means never selected; `emptySelections` records an explicit selection of nothing.
     var activeBySpace: [SpaceID: ItemID]
     /// Arc: `SidebarViewPreferences` (`sidebarMode` anchored | noChrome, `sidebarWidth`).
+    var emptySelections: Set<SpaceID> = []
+    var slots: [ItemID: SavedSlot] = [:]
+    var splitFocus: [ItemID: ItemID] = [:]
     var sidebarVisible: Bool
     var sidebarWidth: Double
 
@@ -222,11 +225,12 @@ struct Session: Sendable, Equatable {
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
     var rev: Int
     var windows: [WindowID: WindowSession]
-    /// Tabs that should have a live page. Invariant (normalize): every visible tab is loaded. A tab leaves the set
+    /// Window/tab slots that demand a page. Every visible slot is loaded. A tab leaves the set
     /// when archived, removed, or closed-and-kept (Cmd+W on Pinned or Favorites); only focusing it puts it back.
-    var loaded: Set<ItemID>
+    var loaded: Set<PageID>
     /// What loaded pages report.
-    var live: [ItemID: LivePage]
+    var live: [PageID: LivePage]
+    var generations: [PageID: UInt64] = [:]
     /// Ephemeral containers by window (`ContainerScope.window`): Little Arc, Peek and incognito trees. Never
     /// saved. Normalize gives every window one with a `SectionRole.scratch(window)` root.
     var scratch: [WindowID: SidebarTree]
@@ -308,12 +312,25 @@ struct RecentCycle: Sendable, Equatable {
     var baseline: Set<ItemID>
 }
 
+struct SavedSlot: Sendable, Equatable, Codable {
+    var committedURL: URL?
+    var observedTitle: String?
+    var favicon: URL? = nil
+}
+
 struct LivePage: Sendable, Equatable {
-    var loading: Bool
-    var canGoBack: Bool
-    var canGoForward: Bool
-    var failure: LoadFailure?
-    var crashed: Bool
+    var requestedURL: URL? = nil
+    var requestContext: BrowsingContext? = nil
+    var browser: BrowserToken? = nil
+    var document: DocumentAvailability = .unavailable
+    var documentSequence: UInt64 = 0
+    var observedTitle: String? = nil
+
+    var loading: Bool = false
+    var canGoBack: Bool = false
+    var canGoForward: Bool = false
+    var failure: LoadFailure? = nil
+    var crashed: Bool = false
 }
 
 public struct LoadFailure: Hashable, Sendable, Codable {

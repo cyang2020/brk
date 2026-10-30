@@ -159,11 +159,30 @@ private func closeEmptyLittleWindows(_ state: inout AppState) {
 }
 
 private func repairLoaded(_ state: inout AppState) {
-    var loaded = state.session.loaded.filter { state.tab($0) != nil }
-    loaded.formUnion(state.onScreenTabs().filter { state.tab($0) != nil })
-    if loaded != state.session.loaded { state.session.loaded = loaded }
-    let live = state.session.live.filter { loaded.contains($0.key) }
-    if live.count != state.session.live.count { state.session.live = live }
+    let removed = state.session.loaded.filter { !state.owns($0) }
+    for page in removed.sorted() {
+        if let saved = state.doc.windows[page.window]?.slots[page.item], let scope = state.locate(page.item),
+           !state.session.loaded.subtracting(removed).contains(where: { $0.item == page.item }) {
+            state.withTree(scope) { $0.updateTab(page.item) { $0.url = saved.committedURL } }
+        }
+        state.session.loaded.remove(page)
+    }
+    for page in state.onScreenPages() { state.demand(page) }
+    state.session.live = state.session.live.filter { state.session.loaded.contains($0.key) }
+    for page in state.session.loaded {
+        if state.session.live[page]?.requestContext != nil,
+           state.session.live[page]?.requestContext != state.browsingContext(of: page.item) {
+            state.session.live[page] = LivePage()
+        }
+    }
+    for id in state.doc.windows.keys {
+        state.doc.windows[id]!.slots = state.doc.windows[id]!.slots.filter { state.owns(PageID(window: id, item: $0.key)) }
+        state.doc.windows[id]!.emptySelections = state.doc.windows[id]!.emptySelections.filter { state.doc.spaces[$0] != nil }
+        for space in state.doc.windows[id]!.emptySelections { state.doc.windows[id]!.activeBySpace[space] = nil }
+        state.doc.windows[id]!.splitFocus = state.doc.windows[id]!.splitFocus.filter { split, pane in
+            state.tree(of: id)?[split]?.kind == .split && state.panes(of: split).contains(pane)
+        }
+    }
 }
 
 private func applyCaps(_ state: inout AppState, _ repairs: inout [String]) {

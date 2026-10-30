@@ -42,7 +42,6 @@ final class TreeTests: XCTestCase {
         XCTAssertEqual(tree[ItemID("sp")]?.children, [ItemID("a"), ItemID("b")])
         XCTAssertEqual(tree[ItemID("a")]?.parent, ItemID("sp"))
         guard case .split(let split)? = tree[ItemID("sp")]?.body else { return XCTFail("no split") }
-        XCTAssertEqual(split.focused, ItemID("b"))
         XCTAssertEqual(split.orientation, .horizontal)
 
         try tree.addPane(to: ItemID("sp"), newPane: ItemID("c"), tab("c"), after: ItemID("a"), createdAt: t0)
@@ -75,17 +74,6 @@ final class TreeTests: XCTestCase {
         XCTAssertEqual(tree[today]?.children, [ItemID("x"), ItemID("a")])
         XCTAssertEqual(tree[pinned]?.children, [ItemID("c")])
         for (id, item) in tree.items { XCTAssertEqual(item.id, id) }
-    }
-
-    func testFocusPaneRequiresMembership() throws {
-        var tree = makeTree()
-        try tree.insert(ItemID("a"), .tab(tab("a")), at: .into(parent: today, index: 0), createdAt: t0)
-        try tree.insert(ItemID("z"), .tab(tab("z")), at: .into(parent: today, index: 1), createdAt: t0)
-        try tree.splitInPlace(ItemID("a"), splitID: ItemID("sp"), newPane: ItemID("b"), tab("b"), createdAt: t0)
-        XCTAssertTrue(tree.focusPane(ItemID("a")))
-        XCTAssertFalse(tree.focusPane(ItemID("z")), "not a pane")
-        guard case .split(let split)? = tree[ItemID("sp")]?.body else { return XCTFail("no split") }
-        XCTAssertEqual(split.focused, ItemID("a"))
     }
 
     // MARK: Kinds, roots, placement

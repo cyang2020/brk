@@ -119,6 +119,7 @@ public final class CEFEngine: WebEngine {
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
             live[spec.id] = page
             record(.created, page)
+            delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
         }
     }
 
@@ -128,10 +129,10 @@ public final class CEFEngine: WebEngine {
         guard phase == .running, let live = live[page] else { return }
         let browser = live.browser
         switch action {
-        case .navigate(let url): browser.load(url)
-        case .goBack: browser.goBack()
-        case .goForward: browser.goForward()
-        case .reload(let ignoringCache): browser.reload(ignoreCache: ignoringCache)
+        case .navigate(let url): live.prepareNavigation(); browser.load(url)
+        case .goBack: live.prepareNavigation(); browser.goBack()
+        case .goForward: live.prepareNavigation(); browser.goForward()
+        case .reload(let ignoringCache): live.prepareNavigation(); browser.reload(ignoreCache: ignoringCache)
         case .stop: browser.stopLoading()
         case .zoom(let step):
             // TODO(W2): Chrome's zoom presets instead of fixed 0.5 steps.
@@ -141,7 +142,7 @@ public final class CEFEngine: WebEngine {
             case .reset: browser.zoomLevel = 0
             }
         case .toggleDevTools: browser.toggleDevTools()
-        case .recover: browser.reload()
+        case .recover: live.prepareNavigation(); browser.reload()
         }
     }
 
@@ -309,9 +310,16 @@ public final class CEFEngine: WebEngine {
 
     // MARK: Called by ChromePage
 
+    func isLive(_ page: ChromePage) -> Bool {
+        phase == .running && ledger.isLive(page.incarnation) && live[page.id] === page
+    }
+
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
-        guard phase == .running, live[page.id] === page else { return }  // events from a retired incarnation are dropped
-        delegate?.engine(self, page: page.id, didEmit: event)
+        guard isLive(page) else { return }
+        if case .gainedFocus = event {
+            guard page.surface.window?.isVisible == true, !page.surface.isHiddenOrHasHiddenAncestor else { return }
+        }
+        delegate?.engine(self, page: page.incarnation, didEmit: event)
         switch event {
         case .committed, .loadingChanged, .titleChanged:
             restoreFocus(page)
@@ -321,7 +329,9 @@ public final class CEFEngine: WebEngine {
     }
 
     func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
-        guard phase == .running, live[page.id] === page else { return false }
+        guard phase == .running, ledger.isLive(page.incarnation), live[page.id] === page,
+              let window = page.surface.window, window.isVisible,
+              !page.surface.isHiddenOrHasHiddenAncestor else { return false }
         return delegate?.engine(self, page: page.id, key: press, stage: stage, pressID: pressID) ?? false
     }
 
@@ -344,15 +354,15 @@ public final class CEFEngine: WebEngine {
         switch ledger.closed(page.incarnation) {
         case .retiredClosed(let idLiveAgain):
             closing[page.incarnation] = nil
-            if !idLiveAgain, phase == .running { delegate?.engine(self, page: page.id, didEmit: .closed) }
+            if !idLiveAgain, phase == .running { delegate?.engine(self, page: page.incarnation, didEmit: .closed) }
         case .liveClosedByPage:
             if live[page.id] === page { live[page.id] = nil }
             focusRequests = focusRequests.filter { $0.value.page != page.id }
             page.surface.returnViews()
             destroying[page.incarnation] = page
             if phase == .running {
-                delegate?.engine(self, page: page.id, didEmit: .closedByPage)
-                delegate?.engine(self, page: page.id, didEmit: .closed)
+                delegate?.engine(self, page: page.incarnation, didEmit: .closedByPage)
+                delegate?.engine(self, page: page.incarnation, didEmit: .closed)
             }
         case .stale:
             log.error("OnBeforeClose for unknown incarnation \(page.id.description, privacy: .public)#\(page.incarnation.generation, privacy: .public)")

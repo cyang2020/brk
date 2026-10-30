@@ -22,7 +22,7 @@ public final class StubEngine: WebEngine {
     public func reconcile(_ specs: [PageSpec]) {
         guard shutdownOutcome == nil else { return }
         let wanted = Dictionary(specs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        for (id, surface) in pages where wanted[id] == nil {
+        for (id, surface) in pages where wanted[id]?.context != surface.context {
             pages[id] = nil
             if let incarnation = ledger.retire(id) {
                 log(.closeRequested, incarnation)
@@ -32,9 +32,10 @@ public final class StubEngine: WebEngine {
         for spec in specs where pages[spec.id] == nil {
             guard let url = spec.initialURL else { continue }
             let incarnation = ledger.create(spec.id)
-            let surface = StubSurface(page: spec.id, incarnation: incarnation)
+            let surface = StubSurface(page: spec.id, incarnation: incarnation, context: spec.context)
             pages[spec.id] = surface
             log(.created, incarnation)
+            delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
             load(url, in: surface)
         }
     }
@@ -92,10 +93,14 @@ public final class StubEngine: WebEngine {
 
     private func load(_ url: URL, in surface: StubSurface) {
         surface.show(url)
-        let id = surface.page
+        let id = surface.incarnation
+        surface.sequence += 1
+        let document = DocumentToken(browser: id, sequence: surface.sequence)
+        delegate?.engine(self, page: id, didEmit: .documentChanged(.loading(document)))
         delegate?.engine(self, page: id, didEmit: .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false))
         delegate?.engine(self, page: id, didEmit: .committed(url))
         delegate?.engine(self, page: id, didEmit: .titleChanged(url.host ?? url.absoluteString))
+        delegate?.engine(self, page: id, didEmit: .documentChanged(.ready(document)))
         delegate?.engine(self, page: id, didEmit: .loadingChanged(isLoading: false, canGoBack: false, canGoForward: false))
     }
 
@@ -105,7 +110,7 @@ public final class StubEngine: WebEngine {
         switch ledger.closed(incarnation) {
         case .retiredClosed(let idLiveAgain):
             log(.closed, incarnation)
-            if !idLiveAgain { delegate?.engine(self, page: incarnation.page, didEmit: .closed) }
+            if !idLiveAgain { delegate?.engine(self, page: incarnation, didEmit: .closed) }
         case .liveClosedByPage, .stale:
             break
         }
@@ -120,12 +125,15 @@ public final class StubEngine: WebEngine {
 @MainActor
 final class StubSurface: PageSurfaceView {
     let incarnation: PageLedger.Incarnation
+    let context: BrowsingContext
+    var sequence: UInt64 = 0
     private(set) var url: URL?
     var evaluated: [String] = []
     private let label = NSTextField(labelWithString: "")
 
-    init(page: PageID, incarnation: PageLedger.Incarnation) {
+    init(page: PageID, incarnation: PageLedger.Incarnation, context: BrowsingContext) {
         self.incarnation = incarnation
+        self.context = context
         super.init(page: page)
         layer?.backgroundColor = NSColor.white.cgColor
         label.alignment = .center

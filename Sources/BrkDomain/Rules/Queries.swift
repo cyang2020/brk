@@ -41,7 +41,7 @@ extension AppState {
     func focusedPane(in window: WindowID) -> ItemID? {
         guard let shown = shownItem(in: window), let scope = locate(shown), let node = tree(scope)?[shown] else { return nil }
         switch node.body {
-        case .split(let s): return s.focused
+        case .split: return focusedPane(of: shown, in: window)
         case .tab: return shown
         case .folder, .section: return nil
         }
@@ -55,7 +55,7 @@ extension AppState {
         case .focused: id = peekedTab(in: window) ?? focusedPane(in: window)
         case .item(let item): id = item
         }
-        guard let id, let scope = locate(id), case .tab? = tree(scope)?[id]?.body else { return nil }
+        guard let id, owns(PageID(window: window, item: id)), let scope = locate(id), case .tab? = tree(scope)?[id]?.body else { return nil }
         return id
     }
 
@@ -128,7 +128,7 @@ extension AppState {
     func mostRecentLoaded(in space: SpaceID, window: WindowID, excluding exclude: ItemID?) -> ItemID? {
         var best: (ItemID, Instant)?
         for unit in units(in: window, space: space) where unit != exclude {
-            guard panes(of: unit).contains(where: { $0 != exclude && session.loaded.contains($0) }) else { continue }
+            guard panes(of: unit).contains(where: { $0 != exclude && session.loaded.contains(PageID(window: window, item: $0)) }) else { continue }
             let at = lastActiveOf(unit)
             if best == nil || at > best!.1 { best = (unit, at) }
         }

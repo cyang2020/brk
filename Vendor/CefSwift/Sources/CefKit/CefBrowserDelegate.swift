@@ -24,6 +24,9 @@ public protocol CefBrowserDelegate: AnyObject {
     /// The page title changed.
     func browser(_ b: CefBrowser, didChangeTitle title: String)
     /// The main-frame URL changed.
+    /// Main-frame cross-document commit and completion. Same-document changes use didChangeURL.
+    func browser(_ b: CefBrowser, didStartMainDocument url: URL?)
+    func browser(_ b: CefBrowser, didFinishMainDocument url: URL?)
     func browser(_ b: CefBrowser, didChangeURL url: URL?)
     /// Loading started/stopped, or history availability changed.
     func browser(_ b: CefBrowser, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool)
@@ -168,6 +171,8 @@ public protocol CefBrowserDelegate: AnyObject {
 // Default no-op implementations.
 extension CefBrowserDelegate {
     public func browser(_ b: CefBrowser, didChangeTitle title: String) {}
+    public func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {}
+    public func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {}
     public func browser(_ b: CefBrowser, didChangeURL url: URL?) {}
     public func browser(_ b: CefBrowser, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {}
     public func browser(_ b: CefBrowser, didChangeProgress progress: Double) {}

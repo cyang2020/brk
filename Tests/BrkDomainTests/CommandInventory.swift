@@ -44,12 +44,12 @@ enum CommandInventory {
     ]
 
     static let events: [SystemEvent] = [
-        .page(PageID(item), .committed(URL(string: "https://example.com/")!)), .page(PageID(item), .titleChanged("x")),
-        .page(PageID(item), .faviconChanged(nil)), .page(PageID(item), .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)),
-        .page(PageID(item), .loadFailed(code: -1, description: "x", url: "x")), .page(PageID(item), .rendererGone),
-        .page(PageID(item), .closedByPage), .page(PageID(item), .gainedFocus),
-        .page(PageID(item), .openRequested(URL(string: "https://example.com/")!, .foregroundTab)),
-        .page(PageID(item), .download(download, .started(url: example, filename: "x.zip", path: nil))), .page(PageID(item), .closed),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .faviconChanged(nil)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadFailed(code: -1, description: "x", url: "x")), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .rendererGone),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closedByPage), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .gainedFocus),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .openRequested(URL(string: "https://example.com/")!, .foregroundTab)),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .download(download, .started(url: example, filename: "x.zip", path: nil))), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closed),
         .clockTick,
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
@@ -200,6 +200,9 @@ enum CommandInventory {
         switch event {
         case .page(_, let e):
             switch e {
+            case .browserCreated: "page.browserCreated"
+            case .documentChanged: "page.documentChanged"
+            case .navigationRequested: "page.navigationRequested"
             case .committed: "page.committed"
             case .titleChanged: "page.titleChanged"
             case .faviconChanged: "page.faviconChanged"

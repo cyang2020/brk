@@ -89,7 +89,7 @@ public class WindowController: NSObject, NSWindowDelegate {
     func render(_ snapshot: WindowSnapshot) {
         place(snapshot)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
-        root.render(snapshot, frames: frames, surface: { [engine] page in engine.surface(for: page) })
+        root.render(snapshot, frames: frames, surface: { [engine, id] page in page.window == id ? engine.surface(for: page) : nil })
         window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)

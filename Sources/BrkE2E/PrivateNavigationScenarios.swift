@@ -35,6 +35,7 @@ enum PrivateNavigationScenarios {
         try app.waitUntil("private opener loaded") {
             try tabRows(app.view(privateWindow).scratch?.rows ?? []).contains { $0.id == opener && $0.title == "Private opener" }
         }
+        try app.waitForPageInput(PageID(window: privateWindow, item: opener), at: openerURL)
         if popup {
             // A real click grants popup activation. The request itself comes from the same loaded page after it
             // becomes hidden, so CEF supplies the opener identity without a synthetic domain event.
@@ -48,7 +49,7 @@ enum PrivateNavigationScenarios {
                 return !view.content.panes.contains { $0.tab == opener }
                     && tabRows(view.scratch?.rows ?? []).contains { $0.id != opener && $0.title == "Fixture Page 2" }
             }
-            try app.evaluate(PageID(opener), "window.firePrivatePopup()")
+            try app.evaluate(PageID(window: privateWindow, item: opener), "window.firePrivatePopup()")
         } else {
             try app.click(.card(0), modifiers: "opt+cmd")
         }
@@ -70,7 +71,7 @@ enum PrivateNavigationScenarios {
 
         let download = app.site.url("download?\(marker)")
         let quotedURL = String(decoding: try JSONEncoder().encode(download.absoluteString), as: UTF8.self)
-        try app.evaluate(PageID(privateTab), "location.href = \(quotedURL)")
+        try app.evaluate(PageID(window: privateWindow, item: privateTab), "location.href = \(quotedURL)")
         try app.waitUntil("private download bytes on disk") {
             (try? Data(contentsOf: downloads.appendingPathComponent("fixture.txt"))) == Data("fixture download\n".utf8)
         }

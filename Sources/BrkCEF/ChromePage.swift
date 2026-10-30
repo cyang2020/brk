@@ -18,6 +18,15 @@ final class ChromePage: CefBrowserDelegate {
     private unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    private var sequence: UInt64 = 0
+    private var document: DocumentAvailability = .unavailable
+    private var navigationFailed = false
+    private var pendingAddress: URL?
+
+    private func documentChanged(_ value: DocumentAvailability) {
+        document = value
+        engine.pageDidEmit(self, .documentChanged(value))
+    }
     /// Where each running download of this page is written, by CEF download id.
     private var destinations: [UInt32: URL] = [:]
     /// CEF destroyed the host window (after OnBeforeClose); nothing of this page is left on screen.
@@ -86,10 +95,41 @@ final class ChromePage: CefBrowserDelegate {
 
     func dropFocus() { chrome.browser.setFocus(false) }
 
+    /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
+    func prepareNavigation() {
+        navigationFailed = false
+        pendingAddress = nil
+    }
+
     // MARK: CefBrowserDelegate -> PageEvent
 
     func browser(_ b: CefBrowser, didChangeURL url: URL?) {
+        // AddressChange also runs for provisional/error URLs. A ready, nonloading document is a same-document update.
+        pendingAddress = url
+        if let url { engine.pageDidEmit(self, .navigationRequested(url)) }
+        reportSameDocumentAddress(loading: b.isLoading)
+    }
+
+    func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
+        sequence += 1
+        pendingAddress = nil
+        guard !navigationFailed else { documentChanged(.unavailable); return }
+        documentChanged(.loading(DocumentToken(browser: incarnation, sequence: sequence)))
+        // A failed load after commit must not replace the automatic recreation seed.
+        // Publish the safe document address only when the main frame completes successfully.
+    }
+
+    func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {
+        guard !navigationFailed, case .loading(let token) = document else { return }
+        pendingAddress = nil
         if let url { engine.pageDidEmit(self, .committed(url)) }
+        documentChanged(.ready(token))
+    }
+
+    private func reportSameDocumentAddress(loading: Bool) {
+        guard !loading, !navigationFailed, case .ready = document, let address = pendingAddress else { return }
+        pendingAddress = nil
+        engine.pageDidEmit(self, .committed(address))
     }
 
     func browser(_ b: CefBrowser, didChangeTitle title: String) {
@@ -101,15 +141,19 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
+        reportSameDocumentAddress(loading: isLoading)
     }
 
     func browser(_ b: CefBrowser, didFailLoad code: Int, errorText: String, failedURL: String) {
-        // ERR_ABORTED (-3) is a navigation replaced by another one, not a failure.
+        navigationFailed = true
+        pendingAddress = nil
+        documentChanged(.unavailable)
         guard code != -3 else { return }
         engine.pageDidEmit(self, .loadFailed(code: code, description: errorText, url: failedURL))
     }
 
     func browser(_ b: CefBrowser, renderProcessDidTerminate reason: CefTerminationReason, errorCode: Int) {
+        documentChanged(.unavailable)
         engine.pageDidEmit(self, .rendererGone)
     }
 
@@ -144,8 +188,11 @@ final class ChromePage: CefBrowserDelegate {
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
     func browser(_ b: CefBrowser, decidePolicyForNavigation url: URL?, isRedirect: Bool, userGesture: Bool) -> CefNavigationDecision {
-        guard let url, !isRedirect else { return .allow }
-        return engine.pageShouldNavigate(self, to: url, userGesture: userGesture) ? .allow : .cancel
+        guard let url else { return .allow }
+        guard isRedirect || engine.pageShouldNavigate(self, to: url, userGesture: userGesture) else { return .cancel }
+        navigationFailed = false
+        engine.pageDidEmit(self, .navigationRequested(url))
+        return .allow
     }
 
     // MARK: Downloads (F5)
@@ -155,14 +202,14 @@ final class ChromePage: CefBrowserDelegate {
     /// suffix ("name (1).ext"); `.ask` shows a save panel starting there; `.deny`, a cancelled panel or no delegate
     /// cancel it. An allowed download is reported `.started` with its path, then by `downloadDidProgress`.
     func browser(_ b: CefBrowser, decidePolicyForDownload download: CefDownload, suggestedName: String) -> CefDownloadDecision {
-        guard let url = download.url, let delegate = engine.delegate else { return .deny }
+        guard engine.isLive(self), let url = download.url, let delegate = engine.delegate else { return .deny }
         let name = DownloadFiles.safeName(suggestedName, url: url)
         let destination: URL? = switch delegate.engine(engine, page: id, decideDownload: name, from: url) {
         case .save(let directory): DownloadFiles.unused(name, in: directory)
         case .ask(let directory): DownloadFiles.ask(name, in: directory)
         case .deny: nil
         }
-        guard let destination else { return .deny }
+        guard engine.isLive(self), let destination else { return .deny }
         DownloadFiles.reserved.insert(destination.path)
         destinations[download.id] = destination
         log.notice("page \(self.id.description, privacy: .public): download \(download.id, privacy: .public) to \(destination.path, privacy: .public)")

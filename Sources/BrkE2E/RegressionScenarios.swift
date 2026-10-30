@@ -101,18 +101,23 @@ enum RegressionScenarios {
         try app.waitUntil("the second hold to return to C") { try currentTab(app.view())?.id == c.id }
     }
 
-    /// R7a (CEF): close.html closes itself: closed without closeRequested (page-initiated), the row goes, and every
+    /// R7a (CEF): close.html closes itself: closed without closeRequested (page-initiated), the row stays unloaded, and every
     /// card has a surface or is the placeholder `view()` predicts.
     @Sendable static func pageCloses(_ app: AppUnderTest) throws {
         let t = try openTab(app, app.site.url("close.html"))
-        let page = PageID(t.id)
+        let page = PageID(window: app.window!, item: t.id)
         try app.waitUntil("close.html to close itself", timeout: 8) {
             let entries = try app.pageLog().filter { $0.page == page }
             try expect(entries.contains { $0.kind == .closed }, "no closed entry yet: \(entries.map(\.kind))")
             try expect(!entries.contains { $0.kind == .closeRequested }, "the engine requested the close: \(entries.map(\.kind))")
             return true
         }
-        try app.waitUntil("the row to leave Today", timeout: 8) { try !todayIDs(app.view()).contains(t.id) }
+        try app.waitUntil("the row to remain unloaded with another selection", timeout: 8) {
+            let view = try app.view()
+            let row = tab(t.id, in: view)
+            return row?.loaded == false && currentTab(view)?.id != t.id
+        }
+        try expect(try app.pageLog().filter { $0.page == page && $0.kind == .created }.count == 1, "local close immediately recreated the page")
         try app.waitUntil("every card to show what view() predicts", timeout: 8) {
             let v = try app.view(), n = try app.native()
             for (i, pane) in v.content.panes.enumerated() {
@@ -131,7 +136,7 @@ enum RegressionScenarios {
         try app.settle()
         guard let home = currentTab(try app.view()) else { throw Check(description: "no current tab") }
         try waitForTitle(app, home.id, "Fixture Home")
-        let page = PageID(home.id)
+        let page = PageID(window: app.window!, item: home.id)
         let card = try visible(try app.native(), .card(0)).frame
         try app.crash(page, .renderer)
         try app.waitUntil("the renderer crash to show", timeout: 5) {
@@ -183,7 +188,7 @@ enum RegressionScenarios {
         let shown = Set(v.content.panes.compactMap { pane -> PageID? in if case .page(let p) = pane.content { p } else { nil } })
         try expect(Set(n.pages.keys) == shown,
                    "attached surfaces \(n.pages.keys.map(\.description).sorted()) differ from the panes view() shows \(shown.map(\.description).sorted())")
-        try expect(n.pages[PageID(red.id)] == nil, "red.html's surface is still in the window")
+        try expect(n.pages[PageID(window: app.window!, item: red.id)] == nil, "red.html's surface is still in the window")
         let mid = try app.pixel(cardProbe(try visible(n, .card(0)).frame))
         try expect(distance(mid, white) <= 3, "card pixel \(mid), expected white (red would mean a detached page is drawn)")
         if app.engine == .stub { app.note("every stub page is white, so the white-not-red pixel cannot fail on the stub") }
@@ -200,7 +205,7 @@ enum RegressionScenarios {
         guard let home = currentTab(try app.view()) else { throw Check(description: "no current tab") }
         try waitForTitle(app, home.id, "Fixture Home")
         let card = try visible(try app.native(), .card(0)).frame
-        try app.crash(PageID(home.id), .gpu)
+        try app.crash(PageID(window: app.window!, item: home.id), .gpu)
         app.sleep(1)
         try app.waitUntil("the page to repaint white", timeout: 8) {
             let mid = try app.pixel(cardProbe(card))

@@ -381,6 +381,17 @@ final class AppUnderTest {
         return tab
     }
 
+    /// Fixture setup must finish before synthetic page input. A load command or title alone is not a ready document.
+    func waitForPageInput(_ page: PageID, at url: URL) throws {
+        _ = try send(.activate(window: page.window))
+        try waitUntil("ready document and native focus for \(page)") {
+            guard case .pageObservations(let values) = try send(.pageObservations),
+                  let state = values[page], case .ready = state.document, state.committedURL == url else { return false }
+            let facts = try native(page.window)
+            return facts.focusedPage == page && facts.pages[page]?.hasKeyboardFocus == true
+        }
+    }
+
     func press(_ chord: String) throws { try perform(.press(chord: chord)) }
     func hold(_ modifiers: String, _ chord: String, times: Int = 1) throws { try perform(.hold(modifiers: modifiers, chord: chord, times: times)) }
     func type(_ text: String) throws { try perform(.type(text: text)) }

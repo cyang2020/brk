@@ -63,6 +63,12 @@ final class ControlExecutor {
             guard let snapshot = c.lastSnapshot else { throw Failure(message: "window \(c.id) has not rendered yet") }
             return .view(snapshot)
 
+        case .activate(let window):
+            let c = try controller(window)
+            store.inputWindow = c.window
+            c.window.makeKeyAndOrderFront(nil)
+            return .ok
+
         case .native(let window):
             return .native(try nativeFacts(try controller(window)))
 
@@ -194,6 +200,9 @@ final class ControlExecutor {
             }
             return .ok
 
+        case .pageObservations:
+            return .pageObservations(store.snapshot.observations)
+
         case .pageLog:
             return .pageLog(engine.pageLog)
 
@@ -261,10 +270,12 @@ final class ControlExecutor {
         let windows = NSApp.windows.map {
             AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible)
         }
-        return NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
+        var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,
                            actual: ViewTree.identified(in: window, relativeTo: c.root), pages: pages,
                            firstResponder: ViewTree.describe(responder), focusedPage: focusedPage, appWindows: windows)
+        facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
+        return facts
     }
 
     /// `CGWindowListCreateImage` of one window by id: works for the app's own window without the screen-recording

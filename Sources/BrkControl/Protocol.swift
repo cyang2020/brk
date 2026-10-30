@@ -25,6 +25,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case hello
     /// The window's `WindowSnapshot`, exactly what its views rendered last.
     case view(window: WindowID?)
+    /// Activate a specific native window before physical input.
+    case activate(window: WindowID)
     /// Computed frames, actual AppKit frames by view identifier, page facts, focus. See `NativeFacts`.
     case native(window: WindowID?)
     /// Runs a command through the normal dispatch path, as if a view sent it.
@@ -60,6 +62,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case setWindowFrame(window: WindowID?, frame: CGRect)
     /// `WebEngine.pageLog`: created, close requested and closed (OnBeforeClose) pages with generations, in order.
     case pageLog
+    /// Reducer-accepted browser and document observations, including hidden demanded slots.
+    case pageObservations
     /// Writes state.json now (skips the debounce).
     case flush
     /// Waits until no page is loading and the main queue is idle, or `timeout` seconds pass.
@@ -98,6 +102,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case screenshot(path: String, pixelWidth: Int, pixelHeight: Int)
     case clock(now: Instant)
     case pageLog([PageLogEntry])
+    case pageObservations([PageID: PageObservation])
     case settings(SettingsSnapshot)
     case failed(String)
 }
@@ -132,6 +137,7 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var pages: [PageID: PageFacts]
     /// Class name of the first responder, and the page that has keyboard focus, if any.
     public var firstResponder: String
+    public var editorText: String? = nil
     public var focusedPage: PageID?
     /// Window numbers of every window the app owns, including CEF host windows; none of the host windows may be key.
     public var appWindows: [AppWindowFact]

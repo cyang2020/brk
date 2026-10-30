@@ -43,7 +43,11 @@ extension Work {
         case .move(let id, .into(let parent, let index)):
             // Refused (no-op) for roots, cycles and what Placement forbids. A window whose shown item left its space
             // is repaired by normalize; a split the move dissolved is replaced by its pane.
-            moveItem(id, to: .into(parent: parent, index: index))
+            let wasPinned = state.role(of: id)?.kind == .pinned || state.role(of: id)?.kind == .favorites
+            if moveItem(id, to: .into(parent: parent, index: index)), !wasPinned,
+               state.role(of: id)?.kind == .pinned || state.role(of: id)?.kind == .favorites {
+                setPinnedAddresses(under: id, in: window)
+            }
         case .move(let id, .space(let target)):
             // Dropped on a dock space: a Pinned item goes to the end of that space's Pinned, anything else to the top
             // of its Today. The moved tabs count as used now (regression finding 5: a dragged tab is not swept
@@ -68,7 +72,7 @@ extension Work {
         case .deleteFolder(let id):
             // "Deleting this folder will archive the tabs inside it."
             guard let scope = state.locate(id), case .folder? = state.tree(scope)?[id]?.body else { return }
-            archiveTabs([id], reason: .containerDeleted)
+            archiveTabs([id], reason: .containerDeleted, in: window)
         case .setIcon(let id, let icon):
             guard let scope = state.locate(id) else { return }
             state.withTree(scope) { tree in
@@ -108,7 +112,7 @@ extension Work {
             let neighbour = index + 1 < order.count ? order[index + 1] : order[index - 1]
             for (wid, w) in state.doc.windows where w.space == id { showSpace(neighbour, in: wid) }
             let contents = [space.pinnedRoot, space.todayRoot].flatMap { state.doc.tree[$0]?.children ?? [] }
-            archiveTabs(contents, reason: .containerDeleted)
+            archiveTabs(contents, reason: .containerDeleted, in: window)
             for root in [space.pinnedRoot, space.todayRoot] {
                 for (tab, _) in state.doc.tree.removeRoot(root) ?? [] { unload(tab) }
             }
@@ -235,7 +239,7 @@ extension Work {
                     return MenuModel(entries: moves.isEmpty ? entries : entries + [.separator] + moves)
                 }
                 entries.append(entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))))
-                if let pinned = tab.pinnedURL, pinned != tab.url { entries.append(entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))))) }
+                if let pinned = tab.pinnedURL, pinned != state.address(of: id, in: window, for: .visible) { entries.append(entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))))) }
                 if !moves.isEmpty { entries += [.separator] + moves }
                 entries.append(.separator)
                 switch role.kind {
@@ -320,7 +324,7 @@ extension Work {
             (tree[parent]?.children ?? []).flatMap { child -> [ExportEntry] in
                 guard let item = tree[child] else { return [] }
                 switch item.body {
-                case .tab(let t): return t.url.map { [.link(title: t.displayTitle, url: $0)] } ?? []
+                case .tab: return state.displayedTab(child, in: window, for: .savedDocument).flatMap { t in t.url.map { [.link(title: t.displayTitle, url: $0)] } } ?? []
                 case .folder(let f): return [.folder(title: f.title, children: entries(under: child))]
                 case .split: return entries(under: child)
                 case .section: return []
@@ -336,13 +340,13 @@ extension Work {
             guard let id, let space = state.doc.spaces[id] else { return nil }
             return ExportDocument(title: state.displayTitle(of: id), entries: entries(under: space.pinnedRoot) + entries(under: space.todayRoot))
         case .focusedTab:
-            guard let tab = state.resolveTab(.focused, in: window), let t = state.tab(tab), let url = t.url else { return nil }
+            guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window, for: .savedDocument), let url = t.url else { return nil }
             return ExportDocument(title: t.displayTitle, entries: [.link(title: t.displayTitle, url: url)])
         case .items(let ids):
             let list = ids.flatMap { id -> [ExportEntry] in
                 guard let item = tree[id] else { return [] }
                 switch item.body {
-                case .tab(let t): return t.url.map { [.link(title: t.displayTitle, url: $0)] } ?? []
+                case .tab: return state.displayedTab(id, in: window, for: .savedDocument).flatMap { t in t.url.map { [.link(title: t.displayTitle, url: $0)] } } ?? []
                 case .folder(let f): return [.folder(title: f.title, children: entries(under: id))]
                 case .split: return entries(under: id)
                 case .section: return []

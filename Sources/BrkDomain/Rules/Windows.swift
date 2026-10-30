@@ -50,7 +50,7 @@ extension Work {
             switch doc.kind {
             case .little:
                 if let tree = state.session.scratch[window], let root = tree.root(for: .scratch(window)) {
-                    archiveTabs(tree[root]?.children ?? [], reason: .manual)
+                    archiveTabs(tree[root]?.children ?? [], reason: .manual, in: window)
                 }
                 removeWindow(window)
             case .incognito:
@@ -71,15 +71,17 @@ extension Work {
             case .space(let id): id
             }
             guard let target, let today = state.doc.spaces[target]?.todayRoot else { return }
+            let source = state.displayedTab(held, in: window, for: .savedDocument)
+            let address = state.address(of: held, in: window, for: .visible)
             let removed = removeItem(held)
-            guard let (_, tab) = removed.first else { return }
+            guard !removed.isEmpty, let tab = source else { return }
             let id = ItemID(ctx.newID())
             do { try state.doc.tree.insert(id, .tab(tab), at: .into(parent: today, index: 0), createdAt: ctx.now) } catch { return }
-            state.session.loaded.insert(id)
             let standard = mostRecentStandardWindow() ?? newWindow(kind: .standard, space: target, sidebar: (true, doc.sidebarWidth))
             if case .peek? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
             if doc.kind == .little { removeWindow(window) }
             focus(id, in: standard)
+            if let address, address != tab.url { request(address, for: PageID(window: standard, item: id)) }
         }
     }
 
@@ -134,7 +136,7 @@ extension Work {
 
     /// Drops a window and everything only it held (session, scratch tree, loaded pages of its scratch tabs).
     mutating func removeWindow(_ id: WindowID) {
-        for tab in state.session.scratch[id]?.allTabs() ?? [] { unload(tab) }
+        for page in state.session.loaded.filter({ $0.window == id }).sorted() { unload(page) }
         state.doc.windows[id] = nil
         state.session.windows[id] = nil
         state.session.scratch[id] = nil
@@ -163,12 +165,12 @@ extension Work {
         var inserted = false
         state.withTree(.window(window)) { tree in
             do {
-                try tree.insert(id, .tab(Tab(url: url, title: "", lastActiveAt: ctx.now)), at: .into(parent: root, index: 0), createdAt: ctx.now)
+                try tree.insert(id, .tab(Tab(url: nil, title: "", lastActiveAt: ctx.now)), at: .into(parent: root, index: 0), createdAt: ctx.now)
                 inserted = true
             } catch {}
         }
         guard inserted else { return nil }
-        state.session.loaded.insert(id)
+        request(url, for: PageID(window: window, item: id))
         if focusIt { focus(id, in: window) }
         return id
     }

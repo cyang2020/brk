@@ -17,6 +17,14 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
     public var pages: [PageSpec]
     /// The settings values and the settings window's pane (nil while closed). App-wide, like the window. F1.
     public var settings: SettingsSnapshot
+    public var observations: [PageID: PageObservation] = [:]
+}
+
+public struct PageObservation: Sendable, Equatable, Codable {
+    public let browser: BrowserToken?
+    public let document: DocumentAvailability
+    public let requestedURL: URL?
+    public let committedURL: URL?
 }
 
 public struct WindowSnapshot: Sendable, Equatable, Codable {

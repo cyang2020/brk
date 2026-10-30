@@ -67,7 +67,7 @@ final class SettingsSpecTests: XCTestCase {
     }
 
     /// a v1 file migrates: its one setting becomes the default profile's threshold, its history the default profile's
-    func test_aV1FileMigratesToV2() throws {
+    func test_aV1FileMigratesToV3() throws {
         let d = Driver()
         let a = d.todayIDs[0]
         d.page(a, .committed(start))
@@ -81,10 +81,10 @@ final class SettingsSpecTests: XCTestCase {
         file["doc"] = doc
         file["version"] = 1
         let r = Driver(file: jsonData(file))
-        XCTAssertEqual(r.outcome, .restored(repairs: []))
+        XCTAssertEqual(r.outcome, .restored(repairs: ["migrated window page addresses and split focus to v3"]))
         XCTAssertEqual(r.snapshot.settings.profiles.map(\.profile.id), [.default])
         XCTAssertEqual(r.snapshot.settings.profiles.first?.settings.autoArchive, .sevenDays)
-        XCTAssertEqual(r.saved["version"] as? Int, 2)
+        XCTAssertEqual(r.saved["version"] as? Int, 3)
         r.user(.library(.open(.history)))
         guard case .library(let library)? = r.view.overlay else { return XCTFail("no library") }
         XCTAssertEqual(library.history.map(\.url), [start])

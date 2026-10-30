@@ -5,22 +5,57 @@ import Foundation
 // (`PageSpec`), asks for imperative page actions (`PageAction`) and receives what pages report (`PageEvent`).
 // The engine knows nothing about tabs, spaces or sidebars, and the domain knows nothing about Chromium.
 
-/// One live web page. Equal to the tab's item id (a page is the live form of one tab), but typed separately so
-/// engine code cannot reach into the sidebar.
+/// A logical tab realized in one window. The wire form is two canonical base64 UTF-8 components, separated by a colon.
+/// Both components are opaque strings, including empty strings and delimiter characters.
 public struct PageID: Hashable, Comparable, Sendable, Codable, CodingKeyRepresentable, CustomStringConvertible {
+    public let window: WindowID
     public let item: ItemID
-    public init(_ item: ItemID) { self.item = item }
+    public init(window: WindowID, item: ItemID) { self.window = window; self.item = item }
 
-    public var description: String { item.rawValue }
-    public static func < (a: PageID, b: PageID) -> Bool { a.item < b.item }
-
-    public init(from decoder: any Decoder) throws { item = try ItemID(from: decoder) }
-    public func encode(to encoder: any Encoder) throws { try item.encode(to: encoder) }
-    public var codingKey: any CodingKey { item.codingKey }
-    public init?<T: CodingKey>(codingKey: T) {
-        guard let item = ItemID(codingKey: codingKey) else { return nil }
-        self.item = item
+    public var description: String { "page:" + Data(window.rawValue.utf8).base64EncodedString() + ":" + Data(item.rawValue.utf8).base64EncodedString() }
+    public init?(rawValue: String) {
+        let parts = rawValue.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "page",
+              let w = Data(base64Encoded: String(parts[1])), let i = Data(base64Encoded: String(parts[2])),
+              let window = String(data: w, encoding: .utf8), let item = String(data: i, encoding: .utf8) else { return nil }
+        self.init(window: WindowID(window), item: ItemID(item))
+        guard description == rawValue else { return nil }
     }
+    public static func < (a: PageID, b: PageID) -> Bool { (a.window, a.item) < (b.window, b.item) }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        let raw = try c.decode(String.self)
+        guard let id = PageID(rawValue: raw) else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Expected a composite page ID") }
+        self = id
+    }
+    public func encode(to encoder: any Encoder) throws { var c = encoder.singleValueContainer(); try c.encode(description) }
+    public var codingKey: any CodingKey { Key(stringValue: description) }
+    public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+}
+
+/// Allocated only by PageLedger. Every observation is fenced by this browser incarnation.
+public struct BrowserToken: Hashable, Sendable, Codable {
+    public let page: PageID
+    public let generation: UInt64
+    public init(page: PageID, generation: UInt64) { self.page = page; self.generation = generation }
+}
+
+public struct DocumentToken: Hashable, Sendable, Codable {
+    public let browser: BrowserToken
+    public let sequence: UInt64
+    public init(browser: BrowserToken, sequence: UInt64) { self.browser = browser; self.sequence = sequence }
+}
+
+public enum DocumentAvailability: Hashable, Sendable, Codable {
+    case loading(DocumentToken)
+    case ready(DocumentToken)
+    case unavailable
 }
 
 /// Which Chromium request context (cookies, cache, storage, extensions) a page browses in. Arc: a space's
@@ -74,10 +109,15 @@ public enum OpenDisposition: String, Hashable, Sendable, Codable {
     case popup
 }
 
-/// What a live page reports. Delivered as `SystemEvent.page(id, event)`; never written to the page's tab by
+/// What a live page reports. Delivered as `SystemEvent.page(browser, event)`; never written to the page's tab by
 /// anything but the reducer.
 public enum PageEvent: Hashable, Sendable, Codable {
-    /// Main-frame navigation committed. Never sent for a failed load.
+    /// First event for an incarnation, before any native observations.
+    case browserCreated(BrowsingContext, DocumentAvailability)
+    case documentChanged(DocumentAvailability)
+    /// Transient intent, never a restoration seed.
+    case navigationRequested(URL)
+    /// A committed main-frame document confirmed usable, or a same-document address update. Never a failed load.
     case committed(URL)
     case titleChanged(String)
     case faviconChanged(URL?)

@@ -9,6 +9,9 @@ import Foundation
 final class FixtureServer: @unchecked Sendable {
     let root: URL
     private(set) var port: UInt16 = 0
+    private let countLock = NSLock()
+    private var counts: [String: Int] = [:]
+    func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
     private var listener: Int32 = -1
 
     init(root: URL) { self.root = root.standardizedFileURL }
@@ -73,6 +76,7 @@ final class FixtureServer: @unchecked Sendable {
         let target = String(parts[1])
         var path = target
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
+        countLock.withLock { counts[path, default: 0] += 1 }
         if path == "/fail" { return }   // drop the connection: no status line, no body
         if path == "/" { path = "/index.html" }
         let response: Data

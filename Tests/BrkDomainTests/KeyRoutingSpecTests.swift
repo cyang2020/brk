@@ -41,7 +41,7 @@ final class KeyRoutingSpecTests: XCTestCase {
         XCTAssertEqual(first.effects, [])
         let after = d.key(cmdR, stage: .afterPage, pressID: 1)
         XCTAssertTrue(after.keyHandled)
-        XCTAssertEqual(after.effects, [.page(PageID(a), .reload(ignoringCache: false))])
+        XCTAssertEqual(after.effects, [.page(PageID(window: d.window, item: a), .reload(ignoringCache: false))])
     }
 
     /// Cmd+S consumed by the page (no afterPage), pressed again within the window: the app toggles the sidebar.
@@ -111,7 +111,7 @@ final class KeyRoutingSpecTests: XCTestCase {
         let a = d.todayIDs[0]
         let reload = d.key(cmdR, stage: .menu, pressID: 1)
         XCTAssertTrue(reload.keyHandled)
-        XCTAssertEqual(reload.effects, [.page(PageID(a), .reload(ignoringCache: false))])
+        XCTAssertEqual(reload.effects, [.page(PageID(window: d.window, item: a), .reload(ignoringCache: false))])
         XCTAssertTrue(d.key(cmdS, stage: .menu, pressID: 2).keyHandled)
         XCTAssertFalse(d.view.sidebar.visible)
         XCTAssertTrue(d.key(KeyChord(.command, .q), stage: .menu, pressID: 3).effects == [.app(.quit)])

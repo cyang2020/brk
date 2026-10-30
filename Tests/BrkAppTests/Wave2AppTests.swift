@@ -127,7 +127,7 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertTrue(controller.openIn.isEnabled)
         XCTAssertTrue(controller.window.isVisible)
         // The engine was asked to focus the Little Arc's page (its surface sits in the panel's root).
-        let page = PageID(try XCTUnwrap(little.scratch?.rows.first?.id))
+        let page = PageID(window: little.id, item: try XCTUnwrap(little.scratch?.rows.first?.id))
         XCTAssertEqual(h.engine.focused.last, page)
         XCTAssertTrue(try XCTUnwrap(h.engine.surface(for: page)).isDescendant(of: controller.root))
         // The reducer reports the first panel's frame; the next Little Arc cascades from it.
@@ -182,8 +182,8 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertEqual(decide(), .ask(directory: NSHomeDirectory() + "/Desktop"))
 
         let id = DownloadID("x-1-1")
-        h.router.engine(h.engine, page: h.page, didEmit: .download(id, .started(url: file, filename: "fixture.txt", path: "/tmp/brk-downloads/fixture.txt")))
-        h.router.engine(h.engine, page: h.page, didEmit: .download(id, .finished(path: "/tmp/brk-downloads/fixture.txt")))
+        h.router.engine(h.engine, page: h.engine.token(h.page), didEmit: .download(id, .started(url: file, filename: "fixture.txt", path: "/tmp/brk-downloads/fixture.txt")))
+        h.router.engine(h.engine, page: h.engine.token(h.page), didEmit: .download(id, .finished(path: "/tmp/brk-downloads/fixture.txt")))
         h.store.dispatch(.user(h.window, .library(.open(.downloads))))
         guard case .library(let library)? = h.store.snapshot.windows[h.window]?.overlay else { return XCTFail("no Library") }
         XCTAssertEqual(library.downloads.map(\.path), ["/tmp/brk-downloads/fixture.txt"])
