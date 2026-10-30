@@ -141,11 +141,42 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 }
 
 /// Pure: stored theme -> paint values. Light or dark comes from the primary color's luminance unless forced.
+/// First pass by the integrator; W5 owns the gradient derivation (companions by `wheel`, lightness nudges) and
+/// the ported theme cases pin the scheme choice.
 public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
-    // TODO(W5): scheme = appearance forced, else luminance(colors[0]) > 0.5 ? .light : .dark (WCAG relative
-    // luminance); gradient stops = the base colors plus companions by `wheel`: analogous rotates the primary's hue
-    // by +-Metrics.theme.analogousHueOffset, complementary by Metrics.theme.complementaryHueOffset, keeping
-    // saturation and nudging lightness; textureOpacity = intensity * Metrics.theme.<texture>Opacity;
-    // textureContrast = noise; wash per Metrics.theme.wash*; tokens = scheme == .light ? .light : .dark.
-    fatalError("not implemented")
+    let colors = theme.colors.isEmpty ? [ThemePresets.brand[7]] : Array(theme.colors.prefix(3))
+    let primary = colors[0]
+    let scheme: Scheme
+    switch theme.appearance {
+    case .light: scheme = .light
+    case .dark: scheme = .dark
+    case .auto: scheme = relativeLuminance(primary) > 0.5 ? .light : .dark   // TODO(W5): the ported mid-tone case
+    }
+    // TODO(W5): companions by wheel (Metrics.theme.analogousHueOffset / complementaryHueOffset) with the lightness
+    // range; v1 pass: the base colors plus a lightened/darkened variant of the primary.
+    var gradient = colors
+    gradient.append(scheme == .light ? mix(primary, RGBA(1, 1, 1), 0.25) : mix(primary, RGBA(0, 0, 0), 0.25))
+    let multiplier: Double = switch theme.texture {
+    case .grain: Metrics.theme.grainOpacity.value
+    case .sand: Metrics.theme.sandOpacity.value
+    case .denim: Metrics.theme.denimOpacity.value
+    case .tweed: Metrics.theme.tweedOpacity.value
+    }
+    let intensity = min(max(theme.intensity, 0), 1)
+    let washAlpha = min(Metrics.theme.washBase.value + Metrics.theme.washSlope.value * intensity, Metrics.theme.washCap.value)
+    let wash = scheme == .light ? RGBA(1, 1, 1, washAlpha) : RGBA(0, 0, 0, Metrics.theme.darkWashAlpha.value * washAlpha)
+    return ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: intensity * multiplier,
+                         textureContrast: min(max(theme.noise, 0), 1), wash: wash,
+                         tokens: scheme == .light ? .light : .dark, windowColor: mix(primary, wash, wash.alpha))
+}
+
+/// WCAG relative luminance of an sRGB color.
+public func relativeLuminance(_ c: RGBA) -> Double {
+    func lin(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * lin(c.red) + 0.7152 * lin(c.green) + 0.0722 * lin(c.blue)
+}
+
+/// Linear blend of two colors; alpha of the result is `a`'s.
+func mix(_ a: RGBA, _ b: RGBA, _ t: Double) -> RGBA {
+    RGBA(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t, a.alpha)
 }

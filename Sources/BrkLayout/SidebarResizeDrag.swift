@@ -19,10 +19,16 @@ public struct SidebarResizeDrag: Sendable, Equatable {
 
     /// `translation` is the pointer's x movement since the drag began; `velocity` in pt/s; `time` monotonic seconds.
     public mutating func update(translation: Double, velocity: Double, time: TimeInterval) -> Double {
-        // TODO(W3): raw = startWidth + translation; raw < hideBelow -> 0; snapped and (time - snappedAt < snapHold)
-        // and |velocity| < unsnapSpeed -> snapTarget; |raw - snapTarget| <= snapDistance -> snap (record time, haptic
-        // by the caller); else clamp(raw, minWidth, maxWidth).
-        fatalError("not implemented")
+        let m = Metrics.sidebar
+        let raw = startWidth + translation
+        if raw < m.hideBelow.value { snappedAt = nil; return 0 }
+        if let at = snappedAt, time - at < m.snapHold.value, abs(velocity) < m.unsnapSpeed.value { return m.snapTarget.value }
+        if abs(raw - m.snapTarget.value) <= m.snapDistance.value {
+            if snappedAt == nil { snappedAt = time }   // the caller plays the haptic on this transition
+            return m.snapTarget.value
+        }
+        snappedAt = nil
+        return min(max(raw, m.minWidth.value), m.maxWidth.value)
     }
 
     /// Double-click on the edge.

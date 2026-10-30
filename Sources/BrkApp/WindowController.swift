@@ -1,8 +1,8 @@
 import AppKit
 import BrkBase
+import BrkContent
 import BrkDomain
 import BrkEngine
-import BrkContent
 import BrkLayout
 import BrkUIKit
 
@@ -18,6 +18,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
     private(set) var lastSnapshot: WindowSnapshot?
     private(set) var lastFrames: WindowFrames?
     private var pendingFocus: FocusTarget?
+    private var placed = false
 
     init(id: WindowID, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void) {
         self.id = id
@@ -35,17 +36,36 @@ public final class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        window.onFlagsChanged = { [weak self] flags in
+            guard let self else { return }
+            let held = Modifiers(rawValue: flags.intersection(.deviceIndependentFlagsMask).rawValue
+                & (Modifiers.shift.rawValue | Modifiers.control.rawValue | Modifiers.option.rawValue | Modifiers.command.rawValue))
+            self.send(.system(.window(self.id, .modifiersChanged(held: held))))
+        }
     }
 
-    /// Applies a snapshot. Steps: restore the saved frame once (`WindowPlacement.fit`); frames =
-    /// `WindowLayout.compute(snapshot, contentSize)`; `root.render(...)` with `engine.surface(for:)`; traffic lights to
-    /// `frames.sidebar?.trafficLightsOrigin` (hidden while the sidebar is hidden, Arc shows them on hover);
-    /// keyboard focus only when `snapshot.focus` differs from the last one:
-    /// `.page(id)` -> `engine.focus(id)`; `.commandBarInput` -> `engine.focus(nil)`, first responder = bar input;
-    /// `.renameField`, `.spaceDialog`, `.sidebar` likewise; `.none` -> `engine.focus(nil)`.
+    /// Applies a snapshot: restore the saved frame once (`WindowPlacement.fit`); frames = `WindowLayout.compute
+    /// (snapshot, contentSize)`; `root.render(...)` with `engine.surface(for:)`; traffic lights to
+    /// `frames.sidebar?.trafficLightsOrigin` (hidden while the sidebar is hidden; Arc shows them on hover); keyboard
+    /// focus only when `snapshot.focus` differs from the last one. Never calls `send` (render must not produce input).
     func render(_ snapshot: WindowSnapshot) {
-        // TODO(W2): the steps above. Never call send() from here (render must not produce input).
-        fatalError("not implemented")
+        if !placed {
+            placed = true
+            let screens = NSScreen.screens.map(\.visibleFrame)
+            let main = NSScreen.main?.visibleFrame ?? CGRect(origin: .zero, size: Metrics.window.defaultSize.value)
+            window.setFrame(WindowPlacement.fit(snapshot.bounds, screens: screens, main: main), display: false)
+        }
+        let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
+        root.render(snapshot, frames: frames, surface: { [engine] page in engine.surface(for: page) })
+        window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
+        window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
+                                         blue: snapshot.theme.windowColor.blue, alpha: 1)
+        if snapshot.focus != lastSnapshot?.focus || pendingFocus != nil {
+            pendingFocus = nil
+            applyFocus(snapshot.focus)
+        }
+        lastSnapshot = snapshot
+        lastFrames = frames
     }
 
     /// Keyboard focus follows the snapshot: a page gets it through the engine, a native view through the root's
@@ -59,7 +79,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
         case .commandBarInput, .renameField, .spaceDialog, .sidebar:
             engine.focus(nil)
             if !root.focus(target) {
-                // The view is not on screen yet (same render that opened it): W2 re-applies after layout.
+                // The view is not on screen yet (same render that opened it): re-applied by the next render.
                 pendingFocus = target
             }
         }
@@ -88,10 +108,22 @@ public final class BrowserWindow: NSWindow {
         super.sendEvent(event)
     }
 
-    /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top.
+    /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top. `origin` is in
+    /// the window's top-left content space; nil hides them (sidebar hidden).
     func placeTrafficLights(origin: CGPoint?) {
-        // TODO(W2): for close/miniaturize/zoom: setFrameOrigin in the titlebar view's coordinates from `origin`
-        // (window top-left space), spacing Metrics.window.trafficLightSize + trafficLightSpacing; nil hides them.
-        fatalError("not implemented")
+        let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
+        guard let origin, let container = buttons.first?.superview else {
+            buttons.forEach { $0.isHidden = true }
+            return
+        }
+        let pitch = Metrics.window.trafficLightSize.value + Metrics.window.trafficLightSpacing.value
+        for (i, button) in buttons.enumerated() {
+            button.isHidden = false
+            let size = button.frame.size
+            let x = origin.x + Double(i) * pitch
+            // The titlebar container is not flipped: convert the top-left origin to AppKit's bottom-left.
+            let y = container.bounds.height - origin.y - size.height
+            button.setFrameOrigin(CGPoint(x: x, y: y))
+        }
     }
 }

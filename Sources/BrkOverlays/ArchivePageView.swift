@@ -25,9 +25,20 @@ public final class ArchivePageView: NSView {
     public override var isFlipped: Bool { true }
 
     public func render(_ archive: ArchiveSnapshot?, frames: WindowFrames, palette: Palette) {
-        // TODO(W4): nil -> hide. Else frame = frames.archive, rounded like a card; a scroll view of groups
-        // identify(.archiveGroup(bucket)), entries identify(.archiveEntry(id)), buttons identify(.archiveRestore(id)),
-        // identify(.archiveClear), identify(.archiveThreshold). Empty state: Copy.archiveEmpty.
-        fatalError("not implemented")
+        guard let archive, let frame = frames.archive else {
+            isHidden = true
+            return
+        }
+        self.frame = frame
+        isHidden = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Metrics.content.cornerRadius.value
+        _ = archive
+        // TODO(W4): a scroll view of groups identify(.archiveGroup(bucket)), entries identify(.archiveEntry(id)),
+        // restore buttons identify(.archiveRestore(id)) dispatching .archive(.restore(id)), identify(.archiveClear)
+        // with Copy.clearArchiveConfirm, identify(.archiveThreshold) dispatching .settings(.autoArchive(t)).
+        // Empty state: Copy.archiveEmpty.
     }
 }

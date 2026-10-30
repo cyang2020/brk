@@ -14,6 +14,8 @@ public struct Context: Sendable {
 
 public struct Transition: Sendable {
     public let state: AppState
+    /// May be non-empty while `changed` is false: back, reload, copying a URL and quitting change nothing in state.
+    /// The store runs effects whether or not state changed.
     public let effects: [Effect]
     /// The saved part changed: schedule a write.
     public let docChanged: Bool
@@ -87,24 +89,38 @@ struct Work {
         }
     }
 
+    /// Any command other than `.tab(.cycleRecent)` commits a pending Ctrl+Tab cycle first.
     mutating func commitPendingCycle(unless command: Command, in window: WindowID) {
-        // TODO(W1): if session.windows[window].recentCycle != nil and command is not .tab(.cycleRecent), commit it:
-        // stamp lastActiveAt for tabs that entered or left the screen relative to the cycle's baseline, clear it.
-        fatalError("not implemented")
+        if case .tab(.cycleRecent) = command { return }
+        commitCycle(in: window)
     }
 
+    /// Ends a Ctrl+Tab cycle: tabs that entered or left the screen relative to the cycle's baseline are stamped once.
+    mutating func commitCycle(in window: WindowID) {
+        guard let cycle = state.session.windows[window]?.recentCycle else { return }
+        let now = state.onScreenTabs()
+        for tab in now.symmetricDifference(cycle.baseline) {
+            state.doc.tree.updateTab(tab) { $0.lastActiveAt = ctx.now }
+        }
+        state.session.windows[window]!.recentCycle = nil
+    }
+
+    /// An open command bar closes unless the command keeps it; an open archive closes unless the command keeps it or
+    /// keeps the command bar (opening the bar over the archive leaves the archive underneath).
     mutating func applyOverlayRule(for command: Command, in window: WindowID) {
-        // TODO(W1): an open .commandBar closes unless command.keepsCommandBar; an open .archive closes unless
-        // command.keepsArchive or keepsCommandBar.
-        fatalError("not implemented")
+        guard let overlay = state.session.windows[window]?.overlay else { return }
+        switch overlay {
+        case .commandBar: if !command.keepsCommandBar { state.session.windows[window]!.overlay = nil }
+        case .archive: if !(command.keepsArchive || command.keepsCommandBar) { state.session.windows[window]!.overlay = nil }
+        }
     }
 
     mutating func finish(from input: AppState) -> Transition {
-        // TODO(W1): normalize(&state); changed = state != input; if changed { state.session.rev += 1 };
-        // docChanged = state.doc != input.doc.
-        // Fast path: every key a page receives while the user types arrives as `.key` and usually decides
-        // `.passToPage` with no memory change; when no rule touched state (track a `touched` flag set by every
-        // mutating helper), return the input as is without normalize or the O(items) comparison.
-        fatalError("not implemented")
+        normalize(&state)
+        let changed = state != input
+        if changed { state.session.rev += 1 }
+        // TODO(W1): fast path for keys that pass to the page with no memory change: skip normalize and the O(items)
+        // comparison when no rule touched state (a `touched` flag set by every mutating helper).
+        return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyHandled: keyHandled)
     }
 }

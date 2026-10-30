@@ -146,7 +146,32 @@ extension WindowFrames {
     /// The computed frame of a view, in window coordinates, when layout owns it (rows are converted out of the
     /// tab list's document space using its current scroll offset of zero; scrolled rows are reported by `actual`).
     public func frame(of view: ViewID) -> CGRect? {
-        // TODO(W2): switch over the cases layout owns; nil for view-owned frames (command bar results, archive rows).
-        fatalError("not implemented")
+        switch view {
+        case .sidebar: return sidebarFloats ? nil : sidebar?.frame
+        case .floatingSidebar: return sidebarFloats ? sidebar?.frame : nil
+        case .titleRow: return sidebar?.titleRow
+        case .urlPill: return sidebar?.urlPill
+        case .favoritesTray: return sidebar?.favoritesTray
+        case .favorite(let id): return sidebar?.favoriteTiles[id]
+        case .row(let id):
+            guard let s = sidebar, let row = s.rows.first(where: { $0.kind == .item(id) }) else { return nil }
+            return row.rect.offsetBy(dx: s.tablistViewport.minX, dy: s.tablistViewport.minY)
+        case .todayNewTab:
+            guard let s = sidebar, let row = s.rows.first(where: { $0.kind == .newTab }) else { return nil }
+            return row.rect.offsetBy(dx: s.tablistViewport.minX, dy: s.tablistViewport.minY)
+        case .dock: return sidebar?.dock
+        case .dockSpace(let id): return sidebar?.dockSpaces[id]
+        case .dockLibrary: return sidebar?.libraryButton
+        case .dockPlus: return sidebar?.plusButton
+        case .resizeHandle: return resizeHandle
+        case .revealStrip: return revealStrip
+        case .card(let i): return i < cards.count ? cards[i].rect : nil
+        case .divider(let i): return i < dividers.count ? dividers[i] : nil
+        case .commandBar: return commandBar
+        case .archive: return archive
+        case .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+             .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground:
+            return nil   // view-owned: reported by `actual` only
+        }
     }
 }

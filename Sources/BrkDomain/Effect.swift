@@ -18,6 +18,9 @@ public enum Effect: Hashable, Sendable {
 
 public enum WindowEffect: Hashable, Sendable {
     case toggleFullScreen
+    /// Esc with nothing to close: leave full screen if the window is in it, else nothing (the reducer does not
+    /// track full-screen state; the window does).
+    case leaveFullScreen
     case miniaturize
 }
 

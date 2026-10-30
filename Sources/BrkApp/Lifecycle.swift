@@ -8,12 +8,12 @@ import os
 /// Launch and quit order. The app delegate.
 ///
 /// Launch (main.swift has already created the engine, which for CEF installed CEFApplication as NSApp):
-/// 1. data directory; `StateFile.read()`; `StateCodec.restore` (quarantine on `.rejected`).
+/// 1. data directory; `StateFile.read()`; `StateCodec.restore` (quarantine on `.rejected` or an unreadable file).
 /// 2. `AppStore`, `KeyRouter` as the engine's delegate, `MainMenu`.
-/// 3. first dispatch-free render: windows from the restored snapshot, `engine.reconcile(snapshot.pages)` (only
-///    visible tabs are loaded: lazy restore).
+/// 3. `store.start()`: windows from the restored snapshot, `engine.reconcile(snapshot.pages)` (only visible tabs are
+///    loaded: lazy restore).
 /// 4. sweep timer (Metrics.persistence.sweepInterval) dispatching `.system(.clockTick)`.
-/// 5. control server, when LaunchOptions.controlSocket is set.
+/// 5. control server, when LaunchOptions.controlSocket is set; SIGTERM -> the same ordered quit as Cmd+Q.
 ///
 /// Quit (Cmd+Q through the reducer as `AppEffect.quit`, the Dock menu, logout, SIGTERM - every path reaches
 /// `applicationShouldTerminate`, because CEFEngine removed CefSwift's terminate handler):
@@ -35,7 +35,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var router: KeyRouter?
     private var control: ControlServer?
     private var sweep: Timer?
+    private var termination: DispatchSourceSignal?
+    private let menuTarget = MenuTarget()
     private var quitting = false
+    private let log = Logger(subsystem: "brk", category: "lifecycle")
 
     public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
         self.options = options
@@ -44,8 +47,64 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // TODO(W2): launch steps 1 to 5.
-        fatalError("not implemented")
+        let directory = Product.dataDirectory()
+        let stateFile = StateFile(directory: directory)
+        let clock: any Clock = options.testClock ? OffsetClock() : SystemClock()
+        let ctx = Context(now: clock.now(), newID: { UUID().uuidString })
+        let seed = RestoreSeed(startURL: options.startURL, contentSize: Metrics.window.defaultSize.value)
+
+        var data: Data?
+        switch stateFile.read() {
+        case .absent: break
+        case .data(let d): data = d
+        case .unreadable(let why):
+            log.error("state.json unreadable (\(why)); quarantining and starting fresh")
+            try? stateFile.quarantine(now: ctx.now)
+        }
+        let restored = StateCodec.restore(data, seed: seed, ctx: ctx)
+        switch restored.outcome {
+        case .fresh: log.notice("fresh profile in \(directory.path)")
+        case .restored(let repairs): if !repairs.isEmpty { log.notice("restored with repairs: \(repairs.joined(separator: "; "))") }
+        case .rejected(let reason):
+            log.error("state.json rejected (\(String(describing: reason))); quarantined")
+            try? stateFile.quarantine(now: ctx.now)
+        }
+
+        let store = AppStore(restored: restored, clock: clock, engine: engine, stateFile: stateFile)
+        let router = KeyRouter(store: store)
+        engine.delegate = router
+        self.store = store
+        self.router = router
+
+        menuTarget.perform = { [weak self] action, event in
+            guard let self, let window = self.store?.windowController(nil)?.id else { return }
+            self.router?.menuAction(action, in: window, event: event)
+        }
+        menuTarget.isEnabled = { [weak self] action in
+            guard let self, let window = self.store?.windowController(nil)?.id,
+                  let snapshot = self.store?.snapshot.windows[window] else { return true }
+            return snapshot.enabledActions.contains(action)
+        }
+        NSApp.mainMenu = MainMenu.build(target: menuTarget)
+
+        store.start()
+
+        sweep = Timer.scheduledTimer(withTimeInterval: Metrics.persistence.sweepInterval.value, repeats: true) { _ in
+            MainActor.assumeIsolated { store.dispatch(.system(.clockTick)) }
+        }
+
+        if let path = options.controlSocket {
+            let server = ControlServer(path: path, executor: ControlExecutor(store: store, engine: engine, clock: clock as? OffsetClock))
+            do { try server.start(); control = server } catch { log.error("control server failed to start: \(error)") }
+        }
+
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { MainActor.assumeIsolated { Quit.request() } }
+        source.resume()
+        termination = source
+
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -59,7 +118,6 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             case .clean:
                 NSApp.reply(toApplicationShouldTerminate: true)
             case .timedOut(let unclosed):
-                let log = Logger(subsystem: "brk", category: "lifecycle")
                 log.fault("shutdown timed out: \(unclosed.count) browsers never reported OnBeforeClose: \(unclosed.map(\.description).joined(separator: ", "))")
                 let marker = Product.dataDirectory().appendingPathComponent("shutdown-incomplete.log")
                 try? "\(unclosed.map(\.description).joined(separator: "\n"))\n".write(to: marker, atomically: true, encoding: .utf8)
@@ -71,6 +129,18 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 
     /// Exit status of a quit whose browsers did not close in time. Distinct from a crash (signal) and from 0.
     public static let shutdownTimedOutStatus: Int32 = 3
+}
+
+/// The one way code asks the app to quit. `NSApp.terminate` must not be called from inside a main-dispatch-queue
+/// callout (a `Task` on the main actor, a signal source, a control-socket op): `applicationShouldTerminate` answers
+/// `.terminateLater` and AppKit spins a nested event loop inside `terminate` until `reply(toApplicationShouldTerminate:)`,
+/// which arrives as another main-queue job that cannot run while the first callout is still on the stack. Sampled
+/// deadlock, first stub run. A run-loop block runs outside the dispatch drain, so the nested loop can service the queue.
+@MainActor
+public enum Quit {
+    public static func request() {
+        RunLoop.main.perform { NSApp.terminate(nil) }
+    }
 
     /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

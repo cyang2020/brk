@@ -34,9 +34,23 @@ public final class SpaceDialogHost: NSView {
     }
 
     public func render(_ dialog: SpaceDialogSnapshot?, frames: WindowFrames, palette: Palette) {
-        // TODO(W4): nil -> hide and drop the hosting view. Else create (or keep, if the same dialog) an NSHostingView
-        // of SpaceDialogForm(dialog, dispatch) centered over the content area; a new dialog resets the form.
-        fatalError("not implemented")
+        guard let dialog else {
+            isHidden = true
+            hosting?.removeFromSuperview()
+            hosting = nil
+            return
+        }
+        isHidden = false
+        if hosting == nil {
+            let view = NSHostingView(rootView: SpaceDialogForm(dialog: dialog, dispatch: dispatch))
+            addSubview(view)
+            hosting = view
+        } else {
+            hosting?.rootView = SpaceDialogForm(dialog: dialog, dispatch: dispatch)   // TODO(W4): keep form state for the same dialog
+        }
+        let size = CGSize(width: Metrics.commandBar.attachedMaxWidth.value / 2, height: Metrics.commandBar.boxHeight.value)
+        frame = CGRect(x: frames.contentArea.midX - size.width / 2, y: frames.contentArea.midY - size.height / 2, width: size.width, height: size.height)
+        hosting?.frame = bounds
     }
 }
 
