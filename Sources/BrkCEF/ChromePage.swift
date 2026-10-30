@@ -10,6 +10,8 @@ import os
 @MainActor
 final class ChromePage: CefBrowserDelegate {
     let id: PageID
+    /// The request context it was created in; fixed for the page's life (a changed spec replaces the page).
+    let context: BrowsingContext
     let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
     private let chrome: CefChromeBrowser
@@ -26,6 +28,7 @@ final class ChromePage: CefBrowserDelegate {
 
     init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation) {
         id = spec.id
+        context = spec.context
         self.incarnation = incarnation
         self.engine = engine
         surface = EmbeddedSurface(page: spec.id)
@@ -34,7 +37,8 @@ final class ChromePage: CefBrowserDelegate {
         options.showsChromeToolbar = false
         options.backgroundColor = .white
         options.initialBounds = Self.offscreenBounds
-        // The page's request context: a profile's persistent context or the shared incognito one (F2 proves it).
+        // The page's request context: nil (the runtime's cache) for the default profile, a profile's persistent
+        // context, or the shared incognito one (W2-2 and W2-3 prove the isolation on the real engine).
         options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         chrome.browser.delegate = self
