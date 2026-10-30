@@ -263,9 +263,13 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var initialQuery: String
     public var tabs: [SwitchCandidate]
     public var history: [HistoryCandidate]
-    /// Actions listed in the bar, in table order: every action with a `CommandBarListing` whose command is not
-    /// `.later`. F4's type-travel index ranks them by title and triggers.
+    /// Actions listed in the bar, in table order: every action with a `CommandBarListing` that does something in
+    /// this window now (`WindowSnapshot.enabledActions`, so never a `.later` row; Arc indexes the menu with each
+    /// item's enabled state). F4's type-travel index ranks them by title and triggers.
     public var actions: [ActionID]
+    /// Each listed action's shortcut as routing resolves it (the user's overrides applied), for the row's key hint;
+    /// absent when the shortcut is unset or in conflict. F4 (deviation: added in wave 2).
+    public var keys: [ActionID: KeyChord]
     /// Spaces, for "focus space" and "move to space" results (Arc: `TypeTravelCandidate.focusSpace/moveToSpace`). F4.
     public var spaces: [SpaceCandidate]
     /// The profile's default engine (the "Search" row) and the engines site search knows (Tab or Space). F4.

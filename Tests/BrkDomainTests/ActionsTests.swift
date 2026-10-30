@@ -6,27 +6,41 @@ import XCTest
 /// routing, command bar) rely on.
 final class ActionsTests: XCTestCase {
     /// Arc's nib has exactly one collision (anatomy-m 2.4): Shift+Cmd+N on New Incognito Window and New Folder. The
-    /// table keeps both, `KeyBindings.resolve` reports both as a conflict, and `KeyMap` routes the chord to no one.
-    func testTheOnlyDefaultConflictIsArcsShiftCmdN() {
+    /// table keeps both of Arc's keys; by the wave 2 decision the chord opens an incognito window and New Folder
+    /// starts unset. Moving Incognito elsewhere gives New Folder its key back; putting New Folder on the chord
+    /// yourself is an ordinary conflict that routes to no one.
+    func testArcsOneCollisionDefaultsToIncognito() {
         var seen: [KeyChord: [ActionID]] = [:]
         for action in ActionID.allCases {
             for binding in action.spec.bindings { seen[binding.chord, default: []].append(action) }
         }
         let conflicts = seen.filter { $0.value.count > 1 }
+        let chord = KeyChord([.shift, .command], .n)
         XCTAssertEqual(conflicts.keys.map(\.description), ["shift+cmd+n"])
-        XCTAssertEqual(Set(conflicts[KeyChord([.shift, .command], .n)] ?? []), [.newIncognitoWindow, .newFolder])
+        XCTAssertEqual(Set(conflicts[chord] ?? []), [.newIncognitoWindow, .newFolder])
+
         let resolved = KeyBindings.resolve(overrides: [:])
-        guard case .conflict(_, let with)? = resolved[.newFolder]?.state else { return XCTFail("\(String(describing: resolved[.newFolder]))") }
-        XCTAssertEqual(with, [.newIncognitoWindow])
-        XCTAssertNil(KeyMap().lookup(KeyChord([.shift, .command], .n)))
+        XCTAssertEqual(resolved[.newIncognitoWindow]?.state, .valid(chord))
+        XCTAssertEqual(resolved[.newFolder]?.state, .unset)
+        XCTAssertEqual(resolved[.newFolder]?.source, .default)
+        XCTAssertEqual(KeyMap().lookup(chord)?.action, .newIncognitoWindow)
+        XCTAssertEqual(KeyMap().lookup(chord)?.priority, .app)
+
+        let moved = [ActionID.newIncognitoWindow: KeyOverride(chord: KeyChord([.option, .shift, .command], .n), priority: nil)]
+        XCTAssertEqual(KeyBindings.resolve(overrides: moved)[.newFolder]?.state, .valid(chord))
+        XCTAssertEqual(KeyMap(overrides: moved).lookup(chord)?.action, .newFolder)
+
+        let claimed = [ActionID.newFolder: KeyOverride(chord: chord, priority: nil)]
+        XCTAssertEqual(KeyBindings.resolve(overrides: claimed)[.newFolder]?.state, .conflict(chord, with: [.newIncognitoWindow]))
+        XCTAssertEqual(KeyBindings.resolve(overrides: claimed)[.newIncognitoWindow]?.state, .conflict(chord, with: [.newFolder]))
+        XCTAssertNil(KeyMap(overrides: claimed).lookup(chord))
     }
 
-    /// Every binding outside that conflict routes to its action with its own priority.
+    /// Every binding routes to its action with its own priority (New Folder's Shift+Cmd+N belongs to Incognito).
     func testKeyMapFindsEveryBinding() {
         let map = KeyMap()
-        let conflict = KeyChord([.shift, .command], .n)
-        for action in ActionID.allCases {
-            for binding in action.spec.bindings where binding.chord != conflict {
+        for action in ActionID.allCases where action != .newFolder {
+            for binding in action.spec.bindings {
                 XCTAssertEqual(map.lookup(binding.chord)?.action, action, "\(binding.chord)")
                 XCTAssertEqual(map.lookup(binding.chord)?.priority, binding.priority, "\(binding.chord)")
             }
@@ -67,16 +81,86 @@ final class ActionsTests: XCTestCase {
         XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 65)
     }
 
-    /// Greyed-out rows of later waves carry Arc's key and placement but no command bar listing.
-    func testLaterRowsHaveNoCommandBarListing() {
-        for action in ActionID.allCases where action.spec.later != nil {
-            XCTAssertNil(action.spec.commandBar, "\(action)")
-        }
+    /// Every action the bar can run has a listing, except the two that open the bar itself (New Tab…, Open Command
+    /// Bar) and the Tab Switcher, which commits on a Control release a bar choice never has.
+    func testEveryRealActionIsATypeTravelResultButTheBarsOwn() {
+        let unlisted = ActionID.allCases.filter { $0.spec.later == nil && $0.spec.commandBar == nil }
+        XCTAssertEqual(unlisted, [.newTab, .addressBar, .cycleNextTab, .cyclePreviousTab])
+        XCTAssertEqual(ActionID.appearanceDark.barTitle(appName: "Brk"), "Switch to Dark Mode")
+        XCTAssertEqual(ActionID.newWindow.barTitle(appName: "Brk"), "New Window")
+        XCTAssertEqual(ActionID.hideArc.barTriggers(appName: "Brk"), ["Hide Brk"])
         XCTAssertEqual(ActionID.printPage.spec.bindings.first?.chord, KeyChord(.command, .p))
         XCTAssertEqual(ActionID.printPage.spec.bindings.first?.priority, .pageThenApp)
         XCTAssertEqual(ActionID.find.spec.submenu, .find)
         XCTAssertTrue(ActionID.cycleNextTab.spec.hidden)
         XCTAssertTrue(ActionID.forceReloadPage.spec.alternate)
+    }
+
+    /// The table is Arc's menu table (anatomy-m 2.3), parsed from the document: every row is accounted for, and each
+    /// action row has Arc's binding id (as the raw value), title, menu and submenu, shortcut, priority and flags;
+    /// each alternate-key row is a further binding of the action it repeats. A row missing from the table, a typo in
+    /// a title or a wrong key fails here.
+    func testEveryRowOfArcsMenuTableIsInTheActionTable() throws {
+        let rows = try ArcTable.rows()
+        XCTAssertEqual(rows.map(\.number), Array(1...189))
+        let byRow = Dictionary(uniqueKeysWithValues: ActionID.allCases.map { ($0.spec.row, $0) })
+        XCTAssertEqual(byRow.count, ActionID.allCases.count, "two actions claim one row")
+        for row in rows {
+            let n = row.number
+            if ActionID.menuTitleRows.contains(n) || ActionID.placeholderRows.contains(n) || ActionID.droppedRows.contains(n)
+                || ActionID.standardItemRows.contains(n) {
+                XCTAssertNil(byRow[n], "row \(n) \(row.item) is not an action")
+                continue
+            }
+            if ActionID.alternateKeyRows.contains(n) {
+                let base = row.bindingID.isEmpty ? ActionID.allCases.first { $0.title(appName: "Arc") == row.item }
+                                                 : ActionID(rawValue: String(row.bindingID.dropLast("_Alternate".count)))
+                let binding = try XCTUnwrap(base?.spec.bindings.first { $0.chord == row.chord }, "row \(n) \(row.item) \(row.shortcut)")
+                if !row.bindingID.isEmpty { XCTAssertEqual(binding.priority, row.priority, "row \(n)") }
+                continue
+            }
+            let action = try XCTUnwrap(byRow[n], "row \(n) \(row.path) > \(row.item) has no action")
+            let spec = action.spec
+            if !row.bindingID.isEmpty { XCTAssertEqual(action.rawValue, row.bindingID, "row \(n)") }
+            XCTAssertEqual(action.title(appName: "Arc"), row.item, "row \(n)")
+            XCTAssertEqual(spec.menu, row.menu, "row \(n)")
+            XCTAssertEqual(spec.submenu, row.submenu, "row \(n)")
+            XCTAssertEqual(spec.bindings.first?.chord, row.chord, "row \(n) \(row.item)")
+            if row.chord != nil { XCTAssertEqual(spec.bindings.first?.priority, row.priority, "row \(n) \(row.item)") }
+            XCTAssertEqual(spec.hidden, row.flags.contains("hidden"), "row \(n) \(row.item) hidden")
+            XCTAssertEqual(spec.alternate, row.flags.contains("alternate"), "row \(n) \(row.item) alternate")
+        }
+    }
+
+    /// The listings are Arc's type-travel attributes (`arcTypeTravelIcon`, `arcTypeTravelTriggers`,
+    /// `arcTypeTravelTitle` in the nib's runtime attributes, `.audit/arc-evidence/a/mainmenu-items.tsv`): for every
+    /// action row where Arc has an icon, the same SF Symbol, Arc's trigger words first and in order, and Arc's title.
+    /// Brk adds a word only where its command differs (Share… exports, so "Export"); it drops Arc's "Share URL" title.
+    func testListingsAreArcsTypeTravelAttributes() throws {
+        let attributes = try ArcTable.typeTravel()
+        var checked = 0
+        for action in ActionID.allCases {
+            guard let arc = attributes[action.spec.row], let icon = arc.icon else { continue }
+            let listing = try XCTUnwrap(action.spec.commandBar, "\(action) has Arc's icon \(icon) but no listing")
+            XCTAssertEqual(listing.symbol, icon, "\(action)")
+            let ours = action.barTriggers(appName: "Arc").map { $0.lowercased() }
+            XCTAssertEqual(Array(ours.prefix(arc.triggers.count)), arc.triggers.map { $0.lowercased() }, "\(action)")
+            if action != .share { XCTAssertEqual(listing.title, arc.title, "\(action)") }
+            checked += 1
+        }
+        XCTAssertEqual(checked, 103, "114 Arc rows have an icon; 11 are dropped rows or AppKit items")
+    }
+
+    /// Chords read as macOS menus write them; Shift+Cmd+= is Arc's "⌘+"; macOS's own chords are flagged.
+    func testChordGlyphsAndSystemShortcuts() {
+        XCTAssertEqual(KeyChord([.control, .shift], .equals).glyphs, "⌃⇧=")
+        XCTAssertEqual(KeyChord([.shift, .command], .equals).glyphs, "⌘+")
+        XCTAssertEqual(KeyChord([.option, .shift, .command], .c).glyphs, "⌥⇧⌘C")
+        XCTAssertEqual(KeyChord([.option, .command], .downArrow).glyphs, "⌥⌘↓")
+        XCTAssertEqual(KeyChord([], .f12).glyphs, "F12")
+        XCTAssertTrue(KeyBindings.isSystemShortcut(KeyChord(.command, .tab)))
+        XCTAssertTrue(KeyBindings.isSystemShortcut(KeyChord(.command, .space)))
+        XCTAssertFalse(KeyBindings.isSystemShortcut(KeyChord(.command, .q)), "Cmd+Q is the app's own")
     }
 
     /// Arc's menu nib (anatomy 2.3): the keys every e2e scenario presses.

@@ -4,10 +4,17 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// Owner: W4. The command bar: input row, then up to 5 results (switch to tab, open what you typed, history,
-/// actions). The typed query and the highlighted row are view state; the snapshot's `openID` resets them.
-/// Return dispatches the highlighted result's command (`Suggestion.command`), Esc `.commandBar(.dismiss)`, and so
-/// does a click anywhere outside the card. Opening plays Arc's bounce (scale 0.95 -> 1, no fade).
+/// Owner: W4 / F4. The command bar: input row, then up to 5 results (`Suggest.rank`: the top hit, switch to tab,
+/// open what you typed, site search, top domains, the engine's suggestions, history, type travel). The typed query,
+/// the highlighted row and site-search mode are view state; the snapshot's `openID` resets them. Every edit
+/// dispatches `.commandBar(.queryChanged(text))` so the reducer can ask for suggestions. Return dispatches the
+/// highlighted result's command (`Suggestion.command`), Esc `.commandBar(.dismiss)`, and so does a click anywhere
+/// outside the card. Opening plays Arc's bounce (scale 0.95 -> 1, no fade).
+///
+/// Site search (Arc): on a row that offers it, Tab (or choosing the row) enters site search for that engine; so
+/// does Space right after an engine's whole name or keyword. The engine's name sits in a pill before the input,
+/// the placeholder reads "Search Bing…", and Return searches there (`.commandBar(.submitSearch)`). Backspace in the
+/// empty input or Esc leaves the mode and gives back the engine's name as typed.
 ///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
@@ -18,8 +25,13 @@ import BrkUIKit
 public final class CommandBarView: NSView, NSTextFieldDelegate {
     let dispatch: Dispatch
     let input = NSTextField()
-    /// Typed text -> URL: the domain's one URL policy.
-    var resolve: (String) -> URL? = { resolveTypedInput($0) }
+    /// Typed text -> URL: the domain's one URL policy with the bar's engine unless a test sets it.
+    var resolve: ((String) -> URL?)?
+    /// Site-search mode: the engine the query goes to, and the text that named it (given back on leaving).
+    private(set) var siteSearch: SearchEngineCandidate?
+    private var namedBy = ""
+    private let sitePill = NSView()
+    private let siteLabel = NSTextField(labelWithString: "")
     private(set) var results: [Suggestion] = []
     private(set) var highlighted = 0
     private let card = FlippedView()
@@ -49,6 +61,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         card.layer?.cornerCurve = .continuous
         card.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
         hairline.wantsLayer = true
+        sitePill.wantsLayer = true
+        sitePill.layer?.cornerCurve = .continuous
+        sitePill.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
+        sitePill.isHidden = true
+        siteLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
+        sitePill.addSubview(siteLabel)
+        card.addSubview(sitePill)
         card.addSubview(input)
         card.addSubview(hairline)
         addSubview(card)
@@ -85,8 +104,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         self.bar = bar
         if reopened {
             openID = bar.openID
+            siteSearch = nil
             input.stringValue = bar.initialQuery
             input.currentEditor()?.selectAll(nil)
+            applySiteSearchLook()
         }
         rerank(keepHighlight: !reopened)
         installClickMonitor()
@@ -111,7 +132,14 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             if !(event?.type == .keyDown && event?.isARepeat == true) { choose(highlighted) }
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            dispatch(.commandBar(.dismiss))
+            if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
+            return true
+        case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
+            // Tab never leaves the bar; on a site-search row (the highlighted one first) it enters site search.
+            if siteSearch == nil, let engine = siteSearchOffer() { enterSiteSearch(engine) }
+            return true
+        case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
+            leaveSiteSearch()
             return true
         case #selector(NSResponder.moveUp(_:)):
             step(-1)
@@ -125,7 +153,47 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     }
 
     public func controlTextDidChange(_ notification: Notification) {
+        let text = input.stringValue
+        if siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
+           !text.dropLast().contains(where: \.isWhitespace) {
+            return enterSiteSearch(engine)
+        }
+        dispatch(.commandBar(.queryChanged(text)))
         rerank(keepHighlight: false)
+    }
+
+    /// The engine Tab would search: the highlighted row's when it is a site-search row, else the first such row.
+    private func siteSearchOffer() -> SearchEngineCandidate? {
+        func engine(_ s: Suggestion) -> SearchEngineCandidate? { if case .siteSearch(let e) = s.kind { e } else { nil } }
+        if results.indices.contains(highlighted), let e = engine(results[highlighted]) { return e }
+        return results.lazy.compactMap(engine).first
+    }
+
+    private func enterSiteSearch(_ engine: SearchEngineCandidate) {
+        namedBy = input.stringValue.trimmingCharacters(in: .whitespaces)
+        siteSearch = engine
+        input.stringValue = ""
+        applySiteSearchLook()
+        dispatch(.commandBar(.queryChanged("")))
+        rerank(keepHighlight: false)
+    }
+
+    private func leaveSiteSearch() {
+        siteSearch = nil
+        input.stringValue = namedBy
+        applySiteSearchLook()
+        dispatch(.commandBar(.queryChanged(namedBy)))
+        rerank(keepHighlight: false)
+    }
+
+    private func applySiteSearchLook() {
+        sitePill.isHidden = siteSearch == nil
+        siteLabel.stringValue = siteSearch?.name ?? ""
+        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? Copy.urlPlaceholder
+        input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
+            .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.inputFontSize.value),
+        ])
+        layoutCard()
     }
 
     private func step(_ delta: Int) {
@@ -135,6 +203,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func choose(_ index: Int) {
         guard results.indices.contains(index) else { return }
+        if case .siteSearch(let engine) = results[index].kind { return enterSiteSearch(engine) }
         dispatch(results[index].command)
     }
 
@@ -148,7 +217,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: input.stringValue, bar: bar, appName: Product.name, resolve: resolve)
+        results = Suggest.rank(query: input.stringValue, bar: bar, appName: Product.name, siteSearch: siteSearch, resolve: resolve)
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
         while rows.count < results.count {
             let index = rows.count
@@ -173,7 +242,16 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         card.frame = CGRect(x: 0, y: 0, width: bounds.width, height: min(bounds.height, m.inputRowHeight.value + listHeight))
         let inset = m.contentInset.value
         let fieldHeight = input.intrinsicContentSize.height
-        input.frame = CGRect(x: inset, y: ((m.inputRowHeight.value - fieldHeight) / 2).rounded(), width: card.bounds.width - 2 * inset, height: fieldHeight)
+        var fieldX = inset
+        if !sitePill.isHidden {
+            let o = OverlayMetrics.commandBar
+            let labelSize = siteLabel.intrinsicContentSize
+            let pill = CGSize(width: ceil(labelSize.width) + 2 * o.hintPadding.value, height: max(o.hintHeight.value, ceil(labelSize.height) + 4))
+            sitePill.frame = CGRect(x: inset, y: ((m.inputRowHeight.value - pill.height) / 2).rounded(), width: pill.width, height: pill.height)
+            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width), height: labelSize.height)
+            fieldX = sitePill.frame.maxX + m.stackSpacing.value
+        }
+        input.frame = CGRect(x: fieldX, y: ((m.inputRowHeight.value - fieldHeight) / 2).rounded(), width: card.bounds.width - fieldX - inset, height: fieldHeight)
         let scale = window?.backingScaleFactor ?? 2
         hairline.isHidden = results.isEmpty
         hairline.frame = CGRect(x: 0, y: m.inputRowHeight.value, width: card.bounds.width, height: 1 / scale)
@@ -190,10 +268,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         card.layer?.backgroundColor = colors.popover.cgColor
         card.shadow = .popover(colors)
         hairline.layer?.backgroundColor = colors.hairline.cgColor
+        sitePill.layer?.backgroundColor = colors.accessoryBackground.cgColor
+        siteLabel.textColor = colors.accessoryForeground
         input.textColor = colors.textPrimary
-        input.placeholderAttributedString = NSAttributedString(string: Copy.urlPlaceholder, attributes: [
-            .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.inputFontSize.value),
-        ])
+        applySiteSearchLook()
     }
 
     /// Arc's `arc_commandBarBounce`: the card springs from Metrics.commandBar.openBounceFrom to full size about its

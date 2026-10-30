@@ -18,6 +18,8 @@ extension Work {
             }
             if case .commandBar(_, let open)? = state.session.windows[window]?.overlay, open == target { return }
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)
+            // A new opening starts with an empty query, so the last opening's suggestions answer nothing.
+            if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
         case .submit(let text):
             // Searches use the current space's profile's engine (Profiles pane, "Default Search Engine").
             guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
@@ -29,16 +31,16 @@ extension Work {
             apply(url, in: window)
         case .queryChanged(let query):
             // Ask the profile's engine for suggestions when the profile allows them; the answer arrives as
-            // `SystemEvent.suggestions`. A blank query clears what is shown. TODO(F4): top domains and the host dedup
-            // list are view-local (Suggest.swift); only the network fetch goes through here.
+            // `SystemEvent.suggestions`. A blank query, or a profile that does not allow them (any more), clears
+            // what is shown. Top domains and the host dedup list are view-local (Suggest.swift); only the network
+            // fetch goes through here.
             guard case .commandBar? = state.session.windows[window]?.overlay else { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
+            let settings = state.profileSettings(in: window)
+            guard !trimmed.isEmpty, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
             }
-            let settings = state.profileSettings(in: window)
-            guard settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else { return }
             effects.append(.fetchSuggestions(window, query: trimmed, url: url))
         case .dismiss:
             // Esc in the bar, or the archive's close: an empty pane the bar was filling stays (Ctrl+Shift+- closes it).

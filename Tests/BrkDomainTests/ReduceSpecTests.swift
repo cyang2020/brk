@@ -140,7 +140,8 @@ final class ReduceSpecTests: XCTestCase {
             SwitchCandidate(tab: b, title: "Bee", url: url("http://127.0.0.1:9/b"), favicon: nil, spaceTitle: "Space 1", inCurrentSpace: true, isFocused: false),
         ])
         XCTAssertEqual(bar.history, [HistoryCandidate(url: url("http://127.0.0.1:9/b"), title: "Bee", visitedAt: T0.advanced(by: minute))])
-        XCTAssertEqual(bar.actions, ActionID.allCases.filter { $0.spec.commandBar != nil })
+        // What the menu would enable now, with a listing; of the two Pinned rows the one that applies (F4).
+        XCTAssertEqual(bar.actions, ActionID.allCases.filter { $0.spec.commandBar != nil && d.view.enabledActions.contains($0) && $0 != .expandPinnedSection })
         XCTAssertTrue(bar.actions.contains(.addSplitView))
     }
 

@@ -49,14 +49,71 @@ final class CommandBarWave2SpecTests: XCTestCase {
         assertUnchanged(d.state, d.system(.suggestions(d.window, query: "x", ["xy"])))
     }
 
-    /// every real menu action with a listing is a command bar result; rows of later waves are not
-    func test_theTypeTravelIndexListsEveryRealAction() {
+    /// type travel lists the real actions that do something in this window now (Arc indexes its menu with each
+    /// item's enabled state): never a later-wave row, Go Back only with history, the one Pinned row that applies;
+    /// each with its shortcut as routing resolves it
+    func test_theTypeTravelIndexListsWhatTheWindowCanDo() {
         let d = Driver()
         d.user(.commandBar(.open(.newTab)))
         let actions = Set(d.bar?.actions ?? [])
-        XCTAssertTrue(actions.isSuperset(of: [.newWindow, .showLittleArc, .viewPreferences, .viewLibrary, .viewDownloads, .viewHistory, .changeProfile]))
+        XCTAssertTrue(actions.isSuperset(of: [.newWindow, .showLittleArc, .viewPreferences, .viewLibrary, .viewDownloads, .viewHistory, .changeProfile,
+                                              .appearanceDark, .quitArc, .exit]))
         XCTAssertFalse(actions.contains(where: { $0.spec.later != nil }))
+        XCTAssertFalse(actions.contains(.goBack), "the start page has no history to go back to")
+        XCTAssertFalse(actions.contains(.reopenLastClosedTab), "nothing has been closed")
+        XCTAssertTrue(actions.contains(.collapsePinnedSection))
+        XCTAssertFalse(actions.contains(.expandPinnedSection), "Pinned is already expanded")
+        XCTAssertFalse(actions.contains(.newTab), "the bar's own opener is not a result")
         XCTAssertEqual(d.bar?.spaces.map(\.isCurrent), [true])
+        XCTAssertEqual(d.bar?.keys[.newWindow], KeyChord(.command, .n))
+        XCTAssertNil(d.bar?.keys[.viewArchive], "no shortcut, no hint")
+
+        d.user(.commandBar(.dismiss))
+        d.user(.tab(.close(.focused)))
+        d.user(.space(.togglePinnedSection(.current)))
+        d.user(.settings(.shortcuts(.setChord(.newWindow, KeyChord([.option, .command], .w)))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertTrue(d.bar?.actions.contains(.reopenLastClosedTab) ?? false)
+        XCTAssertTrue(d.bar?.actions.contains(.expandPinnedSection) ?? false)
+        XCTAssertFalse(d.bar?.actions.contains(.collapsePinnedSection) ?? true)
+        XCTAssertEqual(d.bar?.keys[.newWindow], KeyChord([.option, .command], .w), "the hint follows the user's shortcut")
+    }
+
+    /// a new opening starts without the last opening's suggestions, and switching suggestions off drops the ones
+    /// shown at the next keystroke (W2-10's second half)
+    func test_staleSuggestionsAreDropped() throws {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.queryChanged("swi")))
+        d.system(.suggestions(d.window, query: "swi", ["swift", "swim"]))
+        XCTAssertEqual(d.bar?.suggestions, ["swift", "swim"])
+        d.user(.commandBar(.dismiss))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(d.bar?.suggestions, [])
+        XCTAssertNil(d.bar?.suggestedFor)
+
+        // A second window's bar stays open while the setting changes from the first (a settings command closes only
+        // the dispatching window's bar); its next keystroke drops what it was showing and asks for nothing.
+        d.user(.window(.new))
+        let other = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window })
+        d.user(.commandBar(.open(.newTab)), in: other)
+        d.user(.commandBar(.queryChanged("swi")), in: other)
+        d.system(.suggestions(other, query: "swi", ["swift", "swim"]))
+        d.user(.settings(.profile(.default, .searchSuggestions(false))))
+        XCTAssertEqual(d.user(.commandBar(.queryChanged("swim")), in: other).effects, [])
+        guard case .commandBar(let bar)? = d.view(of: other).overlay else { return XCTFail("the other bar closed") }
+        XCTAssertEqual(bar.suggestions, [])
+    }
+
+    /// what the bar needs to rank site search: the profile's engine and every other built-in engine with its
+    /// keyword; switching the default moves Google into the site-search list
+    func test_theBarCarriesTheEnginesForSiteSearch() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(d.bar?.engine.keyword, "google")
+        XCTAssertEqual(d.bar?.siteSearch.map(\.name), ["DuckDuckGo", "Bing", "Ecosia", "Kagi"])
+        d.user(.commandBar(.submitSearch(engine: SearchEngine.kagi.id, query: "arc browser")))
+        XCTAssertEqual(d.current?.url, url("https://kagi.com/search?q=arc%20browser"))
     }
 
     /// a user override moves a shortcut: the new chord routes, the old one passes to the page
@@ -79,38 +136,50 @@ final class CommandBarWave2SpecTests: XCTestCase {
         XCTAssertEqual(Driver(file: d.savedFile).outcome, .restored(repairs: []))
     }
 
-    /// Arc's one default conflict shows as a state on both actions and routes to neither
-    func test_theDefaultConflictIsAState() {
+    /// Shift+Cmd+N opens an incognito window by default (wave 2 decision; Arc's nib also puts it on New Folder, which
+    /// starts unset); the Shortcuts rows say so, and the chord works with a native view focused (the menu stage)
+    func test_shiftCmdNOpensIncognitoByDefault() throws {
         let d = Driver()
         let rows = d.snapshot.settings.shortcuts
-        guard case .conflict(_, let with)? = rows.first { $0.action == .newIncognitoWindow }?.state else { return XCTFail("no conflict") }
-        XCTAssertEqual(with, [.newFolder])
-        XCTAssertFalse(d.key(KeyChord([.shift, .command], .n), stage: .menu, pressID: 1).keyHandled, "a conflicting chord routes to no one, even with a native view focused")
-        d.user(.settings(.shortcuts(.setChord(.newIncognitoWindow, nil))))
-        XCTAssertEqual(d.snapshot.settings.shortcuts.first { $0.action == .newIncognitoWindow }?.state, .unset)
-        XCTAssertTrue(d.key(KeyChord([.shift, .command], .n), stage: .menu, pressID: 2).keyHandled, "unsetting one side frees the chord (New Folder has page priority, so the menu stage)")
-        XCTAssertEqual(d.view.renaming, d.pinnedIDs.first, "New Folder ran")
+        XCTAssertEqual(rows.first { $0.action == .newIncognitoWindow }?.state, .valid(KeyChord([.shift, .command], .n)))
+        XCTAssertEqual(rows.first { $0.action == .newFolder }?.state, .unset)
+        XCTAssertEqual(rows.first { $0.action == .newFolder }?.source, .default)
+        XCTAssertTrue(d.key(KeyChord([.shift, .command], .n), stage: .menu, pressID: 1).keyHandled)
+        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .incognito }.count, 1)
     }
 
-    // MARK: F4 stubs
+    /// the Shortcuts pane's remedies, as commands: a chord the user puts on a taken key is a conflict on both rows
+    /// naming each other and routes to no one; "Remove Conflicting Shortcut" unsets the other action, so the chord
+    /// works; "Reset Shortcut to Default" and "Reset All Shortcuts" put the table back; a priority is per shortcut
+    func test_shortcutRowsShowConflictsAndTheirRemedies() {
+        let d = Driver()
+        let cmdT = KeyChord(.command, .t)
+        d.user(.settings(.shortcuts(.setChord(.reloadPage, cmdT))))
+        func row(_ action: ActionID) -> ShortcutRow? { d.snapshot.settings.shortcuts.first { $0.action == action } }
+        XCTAssertEqual(row(.reloadPage)?.state, .conflict(cmdT, with: [.newTab]))
+        XCTAssertEqual(row(.newTab)?.state, .conflict(cmdT, with: [.reloadPage]))
+        XCTAssertEqual(row(.newTab)?.source, .default)
+        XCTAssertFalse(d.key(cmdT, stage: .beforePage, pressID: 1).keyHandled, "a conflicting chord routes to no one")
+        XCTAssertNil(d.bar)
 
-    func test_suggestRanksTopDomainsAndEngineSuggestionsLikeArc() throws {
-        throw XCTSkip("F4: Suggest.rank adds TopDomains.json rows, the engine's suggestions under the typed row, site-search hints (Tab or Space) and Arc's host dedup list")
-    }
+        d.user(.settings(.shortcuts(.setChord(.newTab, nil))))   // Remove Conflicting Shortcut, on Reload's row
+        XCTAssertEqual(row(.reloadPage)?.state, .valid(cmdT))
+        XCTAssertEqual(row(.newTab)?.state, .unset)
+        XCTAssertEqual(row(.newTab)?.source, .userDefined)
+        XCTAssertFalse(d.key(cmdT, stage: .beforePage, pressID: 2).keyHandled, "Reload keeps its page priority: the page goes first")
+        XCTAssertTrue(d.key(cmdT, stage: .afterPage, pressID: 2).keyHandled, "and Reload runs when the page passes")
 
-    func test_everyMenuActionIsReachableByTitleAndTriggers() throws {
-        throw XCTSkip("F4: the type-travel index ranks all 65 real actions by title and Arc's trigger words, plus focus/move to space and open preference pane")
-    }
+        d.user(.settings(.shortcuts(.setPriority(.reloadPage, .app))))
+        XCTAssertEqual(row(.reloadPage)?.priority, .app)
+        XCTAssertTrue(d.key(cmdT, stage: .beforePage, pressID: 3).keyHandled)
 
-    func test_theShortcutsPaneRecordsChordsAndShowsConflicts() throws {
-        throw XCTSkip("F4: the Shortcuts pane records a chord, shows Arc's three priorities, 'Reset Shortcut to Default', 'Remove Conflicting Shortcut' (W2-9)")
-    }
-
-    func test_theMenuRebuildsWhenOverridesChange() throws {
-        throw XCTSkip("F4: MainMenu.build(overrides:) runs again when Doc.keyOverrides changes so key equivalents follow the user")
-    }
-
-    func test_theFullEditMenuHasArcsStandardSubmenus() throws {
-        throw XCTSkip("F4: Edit > Spelling and Grammar, Substitutions, Transformations, Speech, Format > Font; app Services and Show All; Window Zoom and Bring All to Front")
+        d.user(.settings(.shortcuts(.reset(.newTab))))            // Reset Shortcut to Default
+        XCTAssertEqual(row(.newTab)?.source, .default)
+        XCTAssertEqual(row(.newTab)?.state, .conflict(cmdT, with: [.reloadPage]))
+        d.user(.settings(.shortcuts(.resetAll)))                  // Reset All Shortcuts
+        XCTAssertEqual(row(.newTab)?.state, .valid(cmdT))
+        XCTAssertEqual(row(.reloadPage)?.state, .valid(KeyChord(.command, .r)))
+        XCTAssertEqual(row(.reloadPage)?.priority, .page)
+        XCTAssertTrue(d.snapshot.settings.shortcuts.allSatisfy { $0.source == .default })
     }
 }

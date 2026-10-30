@@ -251,7 +251,7 @@ final class MenuTests: XCTestCase {
         let file = main.items[1].submenu!
         XCTAssertEqual(file.items.filter { !$0.isHidden }.map { $0.isSeparatorItem ? "-" : $0.title }.prefix(9).map { $0 },
                        ["New Tab…", "New Window", "Blank Window", "New Incognito Window", "New Little \(Product.name) Window",
-                        "Restore Last Closed Tab", "Open Command Bar", "-", "-"])   // the Boost rows between the separators are hidden
+                        "Restore Last Closed Tab", "-", "Open Command Bar", "-"])   // Arc's separators; the Boost rows after the second are hidden
         XCTAssertEqual(file.items.filter { $0.isHidden }.map(\.title), ["New Boost", "Edit Boost", "New Legacy Boost (Advanced)", "Boost Gallery", "New Note (in Split)"])
         let edit = main.items[2].submenu!
         XCTAssertEqual(edit.items.first?.title, "Undo")
@@ -262,9 +262,9 @@ final class MenuTests: XCTestCase {
         let view = main.items[3].submenu!
         XCTAssertEqual(view.items.first?.submenu?.items.map(\.title), ["Automatic", "Light", "Dark"])
         XCTAssertTrue(view.items.first(where: { $0.title == "Force Refresh the Page" })!.isAlternate)
-        // Arc's nib conflict (Shift+Cmd+N) shows on neither item until the user resolves it.
+        // Arc's nib collision (Shift+Cmd+N) goes to New Incognito Window by default (wave 2 decision).
         XCTAssertEqual(main.items[5].submenu!.items.first(where: { $0.title == "New Folder…" })?.keyEquivalent, "")
-        XCTAssertEqual(file.items.first(where: { $0.title == "New Incognito Window" })?.keyEquivalent, "")
+        XCTAssertEqual(file.items.first(where: { $0.title == "New Incognito Window" })?.keyEquivalent, "n")
     }
 
     /// a table item carries its first binding as key equivalent and mask
