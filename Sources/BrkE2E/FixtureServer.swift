@@ -1,0 +1,96 @@
+import Foundation
+
+/// Serves Tests/E2ESite/ on 127.0.0.1 at an ephemeral port: GET of a file under the site directory, `/` is
+/// index.html, and `/fail` closes the connection without a response (a load failure for the restore scenario).
+/// Pages: index.html "Fixture Home" (a link to page2 at a fixed position for Cmd+click), page2.html "Fixture Page 2",
+/// red.html "Red", close.html "Closer" (window.close() after 300 ms), keys.html (records keys in its title).
+final class FixtureServer: @unchecked Sendable {
+    let root: URL
+    private(set) var port: UInt16 = 0
+    private var listener: Int32 = -1
+
+    init(root: URL) { self.root = root.standardizedFileURL }
+
+    var baseURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
+    func url(_ path: String) -> URL { URL(string: path, relativeTo: baseURL)!.absoluteURL }
+
+    func start() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw ServerError("socket: \(String(cString: strerror(errno)))") }
+        var on: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let size = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let bound = withUnsafePointer(to: &address) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, size) } }
+        guard bound == 0, listen(fd, 32) == 0 else {
+            close(fd)
+            throw ServerError("bind/listen on 127.0.0.1: \(String(cString: strerror(errno)))")
+        }
+        var length = size
+        _ = withUnsafeMutablePointer(to: &address) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) } }
+        port = UInt16(bigEndian: address.sin_port)
+        listener = fd
+        let thread = Thread { [self] in acceptLoop(fd) }
+        thread.name = "brk-e2e.fixture-server"
+        thread.start()
+    }
+
+    func stop() {
+        if listener >= 0 { close(listener) }
+        listener = -1
+    }
+
+    private func acceptLoop(_ fd: Int32) {
+        while true {
+            let client = accept(fd, nil, nil)
+            if client < 0 {
+                if errno == EINTR || errno == ECONNABORTED { continue }
+                return
+            }
+            var on: Int32 = 1
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+            DispatchQueue.global().async { [self] in serve(client) }
+        }
+    }
+
+    private func serve(_ fd: Int32) {
+        defer { close(fd) }
+        var request = Data()
+        var chunk = [UInt8](repeating: 0, count: 8192)
+        while request.range(of: Data("\r\n\r\n".utf8)) == nil, request.count < 65_536 {
+            let n = read(fd, &chunk, chunk.count)
+            guard n > 0 else { return }
+            request.append(contentsOf: chunk[0..<n])
+        }
+        let firstLine = String(decoding: request.prefix(while: { $0 != 0x0D && $0 != 0x0A }), as: UTF8.self)
+        let parts = firstLine.split(separator: " ")
+        guard parts.count >= 2 else { return }
+        var path = String(parts[1])
+        if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
+        if path == "/fail" { return }   // drop the connection: no status line, no body
+        if path == "/" { path = "/index.html" }
+        let file = root.appendingPathComponent(String(path.dropFirst())).standardizedFileURL
+        let response: Data
+        if file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
+            let type = ["html": "text/html; charset=utf-8", "css": "text/css", "js": "text/javascript", "png": "image/png"][file.pathExtension]
+                ?? "application/octet-stream"
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
+        } else {
+            response = Data("HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found".utf8)
+        }
+        var offset = 0
+        while offset < response.count {
+            let n = response.withUnsafeBytes { write(fd, $0.baseAddress! + offset, $0.count - offset) }
+            guard n > 0 else { return }
+            offset += n
+        }
+    }
+
+    struct ServerError: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
+}

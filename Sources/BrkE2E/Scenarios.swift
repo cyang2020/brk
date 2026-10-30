@@ -7,43 +7,167 @@ import Foundation
 
 /// The scenario list: the Electron plan's done predicate (1 to 9, plus the launch smoke 0), the regression scenarios
 /// of electron-v1:e2e/regression.spec.ts (R2 to R10) translated to the socket, and native-only checks (N1 to N4).
-/// Each body follows the steps and assertions listed for its id in docs/design/swift/module-map.md.
+/// Each body follows the steps and assertions listed for its id in docs/design/swift/module-map.md, with expected
+/// values from `Metrics`.
+///
+/// Engines: `cefOnly` scenarios have nothing the stub can judge and are SKIPPED on it without a launch. Others run on
+/// the stub; checks only Chromium can make either end the scenario as SKIPPED (`requireCEF`) or are noted next to a
+/// PASS (`onCEF`), as the module map's honesty rule says.
 struct Scenario: Sendable {
     let id: String
     let title: String
+    let cefOnly: String?
     let run: @Sendable (AppUnderTest) throws -> Void
+
+    init(_ id: String, _ title: String, cefOnly: String? = nil, _ run: @escaping @Sendable (AppUnderTest) throws -> Void) {
+        self.id = id
+        self.title = title
+        self.cefOnly = cefOnly
+        self.run = run
+    }
 }
 
 enum Scenarios {
     static let all: [Scenario] = [
-        Scenario(id: "0", title: "launch smoke: socket answers, one window, sidebar and one card", run: todo),
-        Scenario(id: "1", title: "launch: one page in one card, inset 10 and radius 6; corner shows the background", run: todo),
-        Scenario(id: "2", title: "Cmd+T opens the centered command bar; Enter on a URL adds a Today tab that loads it", run: todo),
-        Scenario(id: "3", title: "Cmd+D moves the tab from Today to Pinned, and again back", run: todo),
-        Scenario(id: "4", title: "clicking a dock space switches space: its rows show and the background changes", run: todo),
-        Scenario(id: "5", title: "Cmd+S hides the sidebar: the card fills the window with inset and radius; again restores", run: todo),
-        Scenario(id: "6", title: "Ctrl+Shift+= makes a split: two cards side by side, gap 10, both pages live", run: todo),
-        Scenario(id: "7", title: "past the threshold an idle Today tab is archived, shown in the archive, restorable", run: todo),
-        Scenario(id: "8", title: "Cmd+W closes the page: OnBeforeClose logged and no surface left", run: todo),
-        Scenario(id: "9", title: "restart restores spaces, Pinned, Today, current tab, sidebar width; only it loads", run: todo),
-        Scenario(id: "R2", title: "sidebar hidden: peeking the left edge keeps the archive open", run: todo),
-        Scenario(id: "R3", title: "a Cmd+click link opens a background Today tab that loads", run: todo),
-        Scenario(id: "R5a", title: "a tab left with Ctrl+Tab after 11h is not archived an hour later", run: todo),
-        Scenario(id: "R5b", title: "a tab dropped on another space after 13h is not archived by the next sweep", run: todo),
-        Scenario(id: "R6", title: "Ctrl+Tab, then Ctrl+Tab again, returns to the starting tab", run: todo),
-        Scenario(id: "R7a", title: "a page that calls window.close() leaves no blank card behind a current row", run: todo),
-        Scenario(id: "R7b", title: "a crashed renderer is recovered without any other input", run: todo),
-        Scenario(id: "R8", title: "a window saved off every display reopens on screen", run: todo),
-        Scenario(id: "R9", title: "after a space switch only the current space's surface is in the window; screen shows it", run: todo),
-        Scenario(id: "R10", title: "a GPU process crash leaves the native sidebar working and pages repaint", run: todo),
-        Scenario(id: "N1", title: "app-priority keys never reach the page; page-priority keys do; press twice takes Cmd+S", run: todo),
-        Scenario(id: "N2", title: "focus goes to the command bar and back to the page; no CEF host window is ever key", run: todo),
-        Scenario(id: "N3", title: "pixel layout: title row, URL pill, favorites, rows, dock frames equal the constants", run: todo),
-        Scenario(id: "N4", title: "quit with three pages and a split exits 0 with no crash report", run: todo),
+        Scenario("0", "launch smoke: socket answers, one window, sidebar and one card", PlanScenarios.launchSmoke),
+        Scenario("1", "launch: one page in one card, inset 10 and radius 6; corner shows the background", PlanScenarios.oneCard),
+        Scenario("2", "Cmd+T opens the centered command bar; Enter on a URL adds a Today tab that loads it", PlanScenarios.newTab),
+        Scenario("3", "Cmd+D moves the tab from Today to Pinned, and again back", PlanScenarios.pinToggle),
+        Scenario("4", "clicking a dock space switches space: its rows show and the background changes", PlanScenarios.dockSwitch),
+        Scenario("5", "Cmd+S hides the sidebar: the card fills the window with inset and radius; again restores", PlanScenarios.sidebarToggle),
+        Scenario("6", "Ctrl+Shift+= makes a split: two cards side by side, gap 10, both pages live", PlanScenarios.split),
+        Scenario("7", "past the threshold an idle Today tab is archived, shown in the archive, restorable", PlanScenarios.autoArchive),
+        Scenario("8", "Cmd+W closes the page: OnBeforeClose logged and no surface left", PlanScenarios.closeTab),
+        Scenario("9", "restart restores spaces, Pinned, Today, current tab, sidebar width; only it loads", PlanScenarios.restart),
+        Scenario("R2", "sidebar hidden: peeking the left edge keeps the archive open", RegressionScenarios.peekKeepsArchive),
+        Scenario("R3", "a Cmd+click link opens a background Today tab that loads", cefOnly: "a click on a link in a page",
+                 RegressionScenarios.cmdClickLink),
+        Scenario("R5a", "a tab left with Ctrl+Tab after 11h is not archived an hour later", RegressionScenarios.ctrlTabStamps),
+        Scenario("R5b", "a tab dropped on another space after 13h is not archived by the next sweep", RegressionScenarios.moveStamps),
+        Scenario("R6", "Ctrl+Tab, then Ctrl+Tab again, returns to the starting tab", RegressionScenarios.ctrlTabTwice),
+        Scenario("R7a", "a page that calls window.close() leaves no blank card behind a current row", cefOnly: "window.close() in a page",
+                 RegressionScenarios.pageCloses),
+        Scenario("R7b", "a crashed renderer is recovered without any other input", cefOnly: "a renderer process to crash",
+                 RegressionScenarios.rendererCrash),
+        Scenario("R8", "a window saved off every display reopens on screen", RegressionScenarios.offscreenWindow),
+        Scenario("R9", "after a space switch only the current space's surface is in the window; screen shows it", RegressionScenarios.onlyCurrentSurface),
+        Scenario("R10", "a GPU process crash leaves the native sidebar working and pages repaint", cefOnly: "a GPU process to crash",
+                 RegressionScenarios.gpuCrash),
+        Scenario("N1", "app-priority keys never reach the page; page-priority keys do; press twice takes Cmd+S",
+                 cefOnly: "page titles written by keys.html's key listener", NativeScenarios.keyPriorities),
+        Scenario("N2", "focus goes to the command bar and back to the page; no CEF host window is ever key", NativeScenarios.focusRoundTrip),
+        Scenario("N3", "pixel layout: title row, URL pill, favorites, rows, dock frames equal the constants", NativeScenarios.pixelLayout),
+        Scenario("N4", "quit with three pages and a split exits 0 with no crash report", NativeScenarios.cleanQuit),
     ]
-
-    /// Marks a scenario not yet written; the report lists it as SKIPPED.
-    static func todo(_ app: AppUnderTest) throws { throw Skipped() }
 }
 
-struct Skipped: Error {}
+// MARK: - Shared reading helpers
+
+let white = [255, 255, 255, 255]
+let hour = 3_600.0
+
+/// Top-level tab rows of a section (folders and splits are not tabs).
+func tabRows(_ rows: [Row]) -> [TabRow] {
+    rows.compactMap { if case .tab(let t) = $0 { t } else { nil } }
+}
+
+/// Every tab the window lists: favorites, then Pinned and Today with folder children and split panes.
+func allTabs(_ v: WindowSnapshot) -> [TabRow] {
+    func tabs(_ rows: [Row]) -> [TabRow] {
+        rows.flatMap { row -> [TabRow] in
+            switch row {
+            case .tab(let t): [t]
+            case .folder(let f): tabs(f.children)
+            case .split(let s): s.panes
+            }
+        }
+    }
+    return v.favorites.tiles + tabs(v.space.pinned.rows) + tabs(v.space.today.rows)
+}
+
+func currentTab(_ v: WindowSnapshot) -> TabRow? { allTabs(v).first { $0.status == .current } }
+func todayIDs(_ v: WindowSnapshot) -> [ItemID] { v.space.today.rows.map(\.id) }
+func pinnedIDs(_ v: WindowSnapshot) -> [ItemID] { v.space.pinned.rows.map(\.id) }
+func tab(_ id: ItemID, in v: WindowSnapshot) -> TabRow? { allTabs(v).first { $0.id == id } }
+
+func isCommandBar(_ overlay: OverlaySnapshot?) -> Bool { if case .commandBar? = overlay { true } else { false } }
+func isArchive(_ overlay: OverlaySnapshot?) -> Bool { if case .archive? = overlay { true } else { false } }
+
+/// The visible actual view for `id`, or a Check naming what is there instead.
+func visible(_ n: NativeFacts, _ id: ViewID) throws -> ActualView {
+    guard let view = n.actual[id.identifier] else { throw Check(description: "native().actual has no \(id.identifier)") }
+    try expect(!view.hidden, "\(id.identifier) is hidden")
+    return view
+}
+
+func isShown(_ n: NativeFacts, _ id: ViewID) -> Bool { n.actual[id.identifier].map { !$0.hidden } ?? false }
+
+func contains(_ outer: ActualView, _ inner: ActualView) -> Bool {
+    outer.frame.insetBy(dx: -0.5, dy: -0.5).contains(inner.frame)
+}
+
+/// The point 40 pt below the top of a card, horizontally centred: inside the page and clear of the stub engine's
+/// centred URL label and of index.html's link at (40, 40).
+func cardProbe(_ card: CGRect) -> CGPoint { CGPoint(x: card.midX.rounded(.down), y: card.minY + 40) }
+
+/// A theme that differs clearly from the default (Arc's Drab preset 9).
+let drabTheme = SpaceTheme(colors: [ThemePresets.drab[8]], texture: .grain, intensity: 0.25, appearance: .auto)
+
+/// Creates a space through the reducer (the dialog's Save) and waits until the window shows it.
+@discardableResult
+func createSpace(_ app: AppUnderTest, title: String) throws -> SpaceID {
+    try app.dispatch(.space(.create(title: title, icon: .none, theme: drabTheme)))
+    var id: SpaceID?
+    try app.waitUntil("the window to switch to the new space \"\(title)\"") {
+        let v = try app.view()
+        id = v.space.id
+        return v.space.title == title
+    }
+    return id!
+}
+
+/// Cmd+T, type the URL, Return: the way a user opens a tab. Returns the new Today row once it is current.
+@discardableResult
+func openTab(_ app: AppUnderTest, _ url: URL) throws -> TabRow {
+    let before = todayIDs(try app.view())
+    try app.press("cmd+t")
+    try app.waitUntil("Cmd+T to open the command bar") { isCommandBar(try app.view().overlay) }
+    try app.waitUntil("the command bar input to take focus") {
+        let n = try app.native()
+        try expect(n.firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier), "first responder is \(n.firstResponder)")
+        return true
+    }
+    try app.type(url.absoluteString)
+    try app.press("return")
+    var row: TabRow?
+    try app.waitUntil("a new Today row for \(url.absoluteString)") {
+        let v = try app.view()
+        row = tabRows(v.space.today.rows).first { !before.contains($0.id) }
+        try expect(row != nil, "Today is \(todayIDs(v).count) rows, was \(before.count)")
+        return true
+    }
+    try expect(row!.status == .current, "the new row \(row!.id) has status \(row!.status), expected current")
+    return row!
+}
+
+/// Waits until the tab's title is `title` (page-reported titles exist only on the CEF engine).
+func waitForTitle(_ app: AppUnderTest, _ id: ItemID, _ title: String, timeout: Double = 8) throws {
+    try app.waitUntil("tab \(id) to be titled \"\(title)\"", timeout: timeout) {
+        let current = tab(id, in: try app.view())?.title
+        try expect(current == title, "title is \(current.map { "\"\($0)\"" } ?? "absent")")
+        return true
+    }
+}
+
+/// Samples a pixel until two samples 150 ms apart agree within 2 (a crossfade has finished).
+func settledPixel(_ app: AppUnderTest, _ point: CGPoint, timeout: Double = 5) throws -> [Int] {
+    var last = try app.pixel(point)
+    let deadline = uptime() + timeout
+    while uptime() < deadline {
+        app.sleep(0.15)
+        let next = try app.pixel(point)
+        if distance(last, next) <= 2 { return next }
+        last = next
+    }
+    throw Check(description: "the pixel at \(point) kept changing for \(timeout) s")
+}
