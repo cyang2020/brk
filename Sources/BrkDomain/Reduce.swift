@@ -102,6 +102,11 @@ struct Work {
         case .sidebar(let c): sidebar(c, in: window)
         case .app(let c): app(c, in: window)
         case .settings(let c): settings(c, in: window)
+        case .library(let c): library(c, in: window)
+        case .window(let c): windows(c, in: window)
+        case .peek(let c): peek(c, in: window)
+        case .profile(let c): profiles(c, in: window)
+        case .later: break   // a greyed-out row of a later wave: nothing happens yet
         }
     }
 
@@ -110,13 +115,17 @@ struct Work {
             for window in state.doc.windows.keys.sorted() { commitCycle(in: window) }
         }
         switch event {
-        case .window(let window, _): begin(window: window)
-        case .page, .clockTick: begin(window: nil)
+        case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
+        case .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
         case .clockTick: sweepAutoArchive()
         case .window(let window, let e): windowEvent(e, in: window)
+        case .externalURL(let url): externalURL(url)
+        case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
+        case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
+        case .aiResult(let id, let outcome): aiResult(id, outcome)
         }
     }
 
@@ -140,16 +149,18 @@ struct Work {
         stamp(state.onScreenTabs().symmetricDifference(cycle.baseline))
     }
 
-    /// An open command bar closes unless the command keeps it; an open archive closes unless the command keeps it or
-    /// is a command bar command (`.commandBar(.open)` then replaces it, `.dismiss` closes it).
+    /// An open command bar closes unless the command keeps it; an open Library page or Peek closes unless the
+    /// command keeps it or is a command bar command (`.commandBar(.open)` then replaces it, `.dismiss` closes it).
+    /// A Peek that closes drops its scratch tab too.
     mutating func applyOverlayRule(for command: Command, in window: WindowID) {
         guard let overlay = state.session.windows[window]?.overlay else { return }
         let keeps = switch overlay {
         case .commandBar: command.keepsCommandBar
-        case .archive: command.keepsArchive || command.keepsCommandBar
+        case .library: command.keepsLibrary || command.keepsCommandBar
+        case .peek: command.keepsPeek || command.keepsCommandBar
         }
         if !keeps {
-            state.session.windows[window]!.overlay = nil
+            if case .peek = overlay { closePeek(in: window) } else { state.session.windows[window]!.overlay = nil }
             closedOverlay = true
         }
     }

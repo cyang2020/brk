@@ -12,6 +12,9 @@ import os
 @MainActor
 public final class WindowController: NSObject, NSWindowDelegate {
     public let id: WindowID
+    /// Standard, incognito or Little Arc. TODO(F3): a `LittleWindowController` over an NSPanel for `.little`; today
+    /// the little window is a standard window at Little Arc's default size with no sidebar.
+    public let kind: WindowKind
     public let window: BrowserWindow
     let root: WindowRootView
     private let engine: any WebEngine
@@ -21,12 +24,13 @@ public final class WindowController: NSObject, NSWindowDelegate {
     private var pendingFocus: FocusTarget?
     private var placed = false
 
-    init(id: WindowID, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void) {
+    init(id: WindowID, kind: WindowKind = .standard, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void) {
         self.id = id
+        self.kind = kind
         self.engine = engine
         self.send = send
         window = BrowserWindow(
-            contentRect: CGRect(origin: .zero, size: Metrics.window.defaultSize.value),
+            contentRect: CGRect(origin: .zero, size: kind == .little ? Metrics.littleArc.defaultSize.value : Metrics.window.defaultSize.value),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
@@ -82,7 +86,7 @@ public final class WindowController: NSObject, NSWindowDelegate {
             engine.focus(page)
         case .none:
             engine.focus(nil)
-        case .commandBarInput, .renameField, .spaceDialog, .sidebar:
+        case .commandBarInput, .renameField, .spaceDialog, .profileDialog, .sidebar:
             engine.focus(nil)
             if !root.focus(target) {
                 // The view is not on screen yet (same render that opened it): re-applied by the next render.

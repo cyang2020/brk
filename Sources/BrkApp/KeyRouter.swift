@@ -27,6 +27,42 @@ final class KeyRouter: WebEngineDelegate {
         return store.dispatchKey(window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
+    /// A download is about to start: the page's profile settings decide where it goes ("Download location", "Ask
+    /// where to save"). TODO(F5): the save panel for `.ask`; today it saves to the directory without asking.
+    func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision {
+        let context = store.snapshot.pages.first { $0.id == page }?.context ?? .profile(.default)
+        let profile: ProfileID = switch context {
+        case .profile(let p): p
+        case .incognito: .default
+        }
+        let settings = store.snapshot.settings.profiles.first { $0.profile.id == profile }?.settings ?? .default
+        let directory = settings.downloadsDirectory ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path ?? NSHomeDirectory()
+        return settings.promptForDownloadLocation ? .ask(directory: directory) : .save(directory: directory)
+    }
+
+    /// Arc's Links setting "Open a Peek window when clicking on links to other sites" ("This only affects Favorites
+    /// and Pinned tabs"): a user-made navigation of a Pinned or Favorites tab to another host opens a Peek in the
+    /// window showing it and the navigation is cancelled. Everything else goes through. TODO(F3): Arc's exact
+    /// "other site" rule (registrable domain, not host).
+    func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool {
+        guard userGesture, store.snapshot.settings.links.peekFromPinnedAndFavorites, let window = store.window(showing: page),
+              let view = store.snapshot.windows[window] else { return true }
+        let tab = view.favorites.tiles.first { $0.id == page.item } ?? pinnedTabs(view.space.pinned.rows).first { $0.id == page.item }
+        guard let tab, let from = tab.url?.host?.lowercased(), let to = url.host?.lowercased(), from != to else { return true }
+        store.dispatch(.user(window, .peek(.open(url))))
+        return false
+    }
+
+    private func pinnedTabs(_ rows: [Row]) -> [TabRow] {
+        rows.flatMap { row -> [TabRow] in
+            switch row {
+            case .tab(let t): [t]
+            case .folder(let f): pinnedTabs(f.children)
+            case .split(let s): s.panes
+            }
+        }
+    }
+
     /// A menu item fired (only happens while a native view has focus). From a key equivalent (`event` is the
     /// key-down) it is a `.menu`-stage key input with the id minted from that event, so the duplicate guard can see
     /// it; a mouse choice has no press and dispatches the action's command directly (a click is never a duplicate).

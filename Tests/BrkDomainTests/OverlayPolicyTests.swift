@@ -9,23 +9,23 @@ final class OverlayPolicyTests: XCTestCase {
     func testSidebarPeekAndResizeKeepBothOverlays() {
         for command: Command in [.sidebar(.peek(true)), .sidebar(.peek(false)), .sidebar(.resize(width: 300))] {
             XCTAssertTrue(command.keepsCommandBar, "\(command)")
-            XCTAssertTrue(command.keepsArchive, "\(command)")
+            XCTAssertTrue(command.keepsLibrary, "\(command)")
         }
     }
 
     func testOnlyCommandBarCommandsOtherwiseKeepTheBar() {
         XCTAssertTrue(Command.commandBar(.open(.newTab)).keepsCommandBar)
         XCTAssertTrue(Command.commandBar(.submit("x")).keepsCommandBar)
-        for command: Command in [.sidebar(.toggle), .archive(.open), .tab(.togglePin(.focused)), .settings(.autoArchive(.oneHour)), .app(.exit)] {
+        for command: Command in [.sidebar(.toggle), .library(.open(.archive)), .tab(.togglePin(.focused)), .settings(.autoArchive(.oneHour)), .app(.exit)] {
             XCTAssertFalse(command.keepsCommandBar, "\(command)")
         }
     }
 
     func testArchiveAndSettingsKeepTheArchivePageAndTheRestClosesIt() {
-        XCTAssertTrue(Command.archive(.restore(ArchiveID("a"))).keepsArchive)
-        XCTAssertTrue(Command.settings(.autoArchive(.sevenDays)).keepsArchive)
+        XCTAssertTrue(Command.archive(.restore(ArchiveID("a"))).keepsLibrary)
+        XCTAssertTrue(Command.settings(.autoArchive(.sevenDays)).keepsLibrary)
         for command: Command in [.sidebar(.toggle), .tab(.focus(ItemID("t"))), .commandBar(.open(.newTab)), .space(.focus(SpaceID("s")))] {
-            XCTAssertFalse(command.keepsArchive, "\(command)")
+            XCTAssertFalse(command.keepsLibrary, "\(command)")
         }
     }
 }

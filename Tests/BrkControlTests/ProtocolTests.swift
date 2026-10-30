@@ -12,7 +12,7 @@ final class ProtocolTests: XCTestCase {
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
         case hello, view, native, dispatch, load, press, hold, type, click, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case setWindowFrame, pageLog, flush, settle, quit
+        case setWindowFrame, pageLog, flush, settle, quit, settings, openSettings, externalURL
     }
 
     static func tag(of op: ControlOp) -> Tag {
@@ -37,6 +37,9 @@ final class ProtocolTests: XCTestCase {
         case .flush: .flush
         case .settle: .settle
         case .quit: .quit
+        case .settings: .settings
+        case .openSettings: .openSettings
+        case .externalURL: .externalURL
         }
     }
 
@@ -68,6 +71,9 @@ final class ProtocolTests: XCTestCase {
         case .flush: return [.flush]
         case .settle: return [.settle(timeout: 5)]
         case .quit: return [.quit]
+        case .settings: return [.settings]
+        case .openSettings: return [.openSettings(pane: .links)]
+        case .externalURL: return [.externalURL(url: URL(string: "https://example.com/from-another-app")!)]
         }
     }
 
@@ -100,7 +106,7 @@ final class ProtocolTests: XCTestCase {
                                 computed: WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false,
                                                        resizeHandle: nil, revealStrip: CGRect(x: -20, y: 0, width: 35, height: 776),
                                                        contentArea: CGRect(x: 10, y: 10, width: 1260, height: 756), cards: [],
-                                                       dividers: [], commandBar: nil, archive: nil),
+                                                       dividers: [], commandBar: nil, library: nil, peek: nil),
                                 actual: ["card-0": ActualView(frame: CGRect(x: 10, y: 10, width: 1260, height: 756), hidden: false, cornerRadius: 6)],
                                 pages: [PageID(ItemID("t1")): PageFacts(surfaceFrame: nil, embeddedViews: [], browserID: nil,
                                                                         hostWindowNumber: nil, hasKeyboardFocus: false)],

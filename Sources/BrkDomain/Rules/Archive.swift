@@ -6,10 +6,6 @@ import Foundation
 extension Work {
     mutating func archive(_ command: ArchiveCommand, in window: WindowID) {
         switch command {
-        case .open:
-            // In the content card; idempotent (the same openID while it is already open).
-            if case .archive? = state.session.windows[window]?.overlay { return }
-            openOverlay({ .archive(openID: $0) }, in: window)
         case .restore(let id):
             if let tab = restoreEntry(id, in: window) { focus(tab, in: window) }
         case .restoreLast:
@@ -21,28 +17,25 @@ extension Work {
         }
     }
 
-    mutating func settings(_ command: SettingsCommand, in window: WindowID) {
-        switch command {
-        case .autoArchive(let threshold): state.doc.settings.autoArchive = threshold
-        }
-    }
-
     /// `SystemEvent.clockTick`. Archives (reason .auto) every Today item, a tab or a split as one unit, that is not
     /// on screen in any window and whose `lastActiveAt` (a split: its most recent pane) is at least the threshold
     /// old. Never Pinned or Favorites. Empty panes inside a swept split are removed without an archive entry
     /// (`archiveTabs`). Pending Ctrl+Tab cycles were committed first by `observe`, so a tab just left is stamped
     /// (regression finding 5). Idempotent: a second tick at the same `now` is a no-op.
     mutating func sweepAutoArchive() {
-        guard let threshold = state.doc.settings.autoArchive.interval else { return }
         let onScreen = state.onScreenTabs()
         var victims: [ItemID] = []
         for space in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
+            // The threshold is the space's profile's ("Archive tabs after", per profile: anatomy-m 4.3).
+            guard let threshold = state.profileSettings(space.profile).autoArchive.interval else { continue }
             for unit in state.doc.tree[space.todayRoot]?.children ?? [] {
                 guard !state.panes(of: unit).contains(where: onScreen.contains) else { continue }
                 if ctx.now.since(state.lastActiveOf(unit)) >= threshold { victims.append(unit) }
             }
         }
         archiveTabs(victims, reason: .auto)
+        // TODO(F3): Little Arc windows idle past `LinkSettings.littleArcAutoArchive` close with their tab archived
+        // (Arc: `AutoArchiveType.littleArc`).
     }
 
     /// The single archiving primitive. Tabs, splits and folders in `ids` are flattened to their tabs, which are

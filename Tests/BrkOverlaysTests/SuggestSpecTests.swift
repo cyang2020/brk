@@ -32,11 +32,13 @@ func visit(_ title: String, _ url: String, _ at: Int64) -> HistoryCandidate {
 }
 
 /// What the projection lists: actions with a command bar listing, in table order.
-let listedActions = ActionID.allCases.filter { $0.spec.commandBar != nil }
+let listedActions = ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil }
 
 func commandBar(_ tabs: [SwitchCandidate], _ history: [HistoryCandidate], actions: [ActionID] = listedActions,
                 openID: Int = 1, initialQuery: String = "") -> CommandBarSnapshot {
-    CommandBarSnapshot(openID: openID, placement: .centered, initialQuery: initialQuery, tabs: tabs, history: history, actions: actions)
+    CommandBarSnapshot(openID: openID, placement: .centered, initialQuery: initialQuery, tabs: tabs, history: history, actions: actions,
+                       spaces: [], engine: SearchEngineCandidate(id: SearchEngine.google.id, name: "Google", keyword: "google"), siteSearch: [],
+                       suggestions: [], suggestedFor: nil)
 }
 
 let fixtureBar = commandBar(
@@ -198,6 +200,6 @@ final class SuggestSpecTests: XCTestCase {
         func action(_ query: String) -> Command? { suggest(query).first { $0.kind == .action }?.command }
         XCTAssertEqual(action("split"), .split(.addPane))
         XCTAssertEqual(action("pin"), .tab(.togglePin(.focused)))
-        XCTAssertEqual(action("view archive"), .archive(.open))
+        XCTAssertEqual(action("view archive"), .library(.open(.archive)))
     }
 }

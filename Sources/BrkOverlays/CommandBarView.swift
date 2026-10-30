@@ -19,7 +19,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     let dispatch: Dispatch
     let input = NSTextField()
     /// Typed text -> URL: the domain's one URL policy.
-    var resolve: (String) -> URL? = resolveTypedInput
+    var resolve: (String) -> URL? = { resolveTypedInput($0) }
     private(set) var results: [Suggestion] = []
     private(set) var highlighted = 0
     private let card = FlippedView()

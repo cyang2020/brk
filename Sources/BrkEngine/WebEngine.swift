@@ -48,6 +48,11 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    /// Drops a request context's data: `.incognito` when its last window closed (the in-memory context is
+    /// released), `.profile(p)` when the profile was deleted (its on-disk storage goes, at once or at the next
+    /// launch if Chromium still holds it). A no-op for the default profile and for a context never used. F2.
+    func forget(_ context: BrowsingContext)
+
     /// Ordered teardown, idempotent: after it returns no browser is alive and every borrowed view is back where it
     /// came from. `.clean` means the runtime is shut down too and the process may exit; `.timedOut` means some
     /// browsers never answered and the runtime was left running (never `cef_shutdown` with browsers alive): the
@@ -64,6 +69,21 @@ public protocol WebEngineDelegate: AnyObject {
     /// synchronously: CEF blocks on the return value. `pressID` follows the rule on `PressID`: minted from the
     /// current event before the page, paired by `PressCorrelator` after it.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool
+
+    /// A page is about to download a file (CEF's OnBeforeDownload, synchronous). The app answers from the page's
+    /// profile settings ("Download location", "Ask where to save"); the engine then reports
+    /// `PageEvent.download(id, .started(...))` and the rest. F5.
+    func engine(_ engine: any WebEngine, page: PageID, decideDownload suggestedName: String, from url: URL) -> DownloadDecision
+
+    /// A page's main frame is about to navigate (CEF's OnBeforeBrowse, synchronous). False cancels it; the app
+    /// uses this for Arc's "Open a Peek window when clicking on links to other sites" on Pinned and Favorites tabs
+    /// (the Peek opens instead). Redirects are never asked about. F3.
+    func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool
+}
+
+extension WebEngineDelegate {
+    /// Allow by default: a delegate that does not route links (tests, tools) lets every navigation through.
+    public func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool { true }
 }
 
 /// A page's view. Engines subclass it; callers treat it as a plain NSView placed inside a card.

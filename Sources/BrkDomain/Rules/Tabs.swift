@@ -63,7 +63,12 @@ extension Work {
             let unit = tree.splitContaining(tab) ?? tab
             guard let role = tree.role(of: unit), let space = state.doc.spaces[role.space ?? state.doc.windows[window]!.space] else { return }
             switch role.kind {
-            case .today: moveItem(unit, to: .into(parent: space.pinnedRoot, index: Int.max))
+            case .today:
+                guard moveItem(unit, to: .into(parent: space.pinnedRoot, index: Int.max)) else { return }
+                // Max "renamed pinned tabs": a tidier title from the local AI tool (AIProvider seam).
+                if state.doc.settings.max.renamePinnedTabs, let t = state.tab(tab), let url = t.url, t.customTitle == nil {
+                    requestAI(.renameTab(tab, title: t.displayTitle, url: url))
+                }
             case .pinned, .favorites: moveItem(unit, to: .into(parent: space.todayRoot, index: 0))
             case .scratch: break
             }
@@ -95,10 +100,14 @@ extension Work {
         case .stop(let ref): emit(ref, .stop)
         case .zoom(let step): emit(.focused, .zoom(step))
         case .toggleDevTools: emit(.focused, .toggleDevTools)
-        case .copyURL:
-            if let tab = state.resolveTab(.focused, in: window), let url = state.tab(tab)?.url {
-                effects.append(.copyToPasteboard(url.absoluteString))
+        case .copyURL(let format):
+            guard let tab = state.resolveTab(.focused, in: window), let t = state.tab(tab), let url = t.url else { return }
+            let text: String = switch format {
+            case .plain: url.absoluteString
+            case .markdown: "[\(t.displayTitle)](\(url.absoluteString))"
+            case .quote: "> \(t.displayTitle)\n\(url.absoluteString)"
             }
+            effects.append(.copyToPasteboard(text))
         }
     }
 
@@ -112,7 +121,7 @@ extension Work {
         switch event {
         case .committed(let url):
             if current.url != url { state.withTree(scope) { $0.updateTab(tab) { $0.url = url } } }
-            recordVisit(url, title: current.title)
+            if case .profile(let profile) = state.browsingContext(of: tab) { recordVisit(url, title: current.title, profile: profile) }
             live.failure = nil
             live.crashed = false
             state.session.live[tab] = live
@@ -145,6 +154,8 @@ extension Work {
             closeTab(tab)
         case .openRequested(let url, let disposition):
             openRequested(url, disposition, from: tab, current)
+        case .download(let id, let event):
+            downloadEvent(id, event, from: page)
         case .closed:
             // Bookkeeping only: the engine never sends this for an id that is live again with a newer incarnation.
             state.session.live[tab] = nil
@@ -164,6 +175,23 @@ extension Work {
             ?? windows.first(where: { state.doc.windows[$0]?.space == space })
             ?? windows.first,
             let target = space ?? state.doc.windows[window]?.space else { return }
+        // Shift+click, Opt+Cmd+click and Pinned/Favorites links to other sites open as a Peek or a Little Arc per the
+        // Links settings (Rules/Peek.swift). TODO(F3): Arc's `LittleBrowserEntryPoint.internalLink`.
+        switch specialOpen(for: url, from: opener, in: window) {
+        case .peek?:
+            peek(.open(url), in: window)
+            return
+        case .littleArc?:
+            self.windows(.newLittle(url), in: window)
+            return
+        case nil:
+            break
+        }
+        // A link opened from an ephemeral window's tab stays in that window's own container.
+        if state.doc.windows[window]?.kind != .standard, state.locate(opener) == .window(window) {
+            openScratchTab(url, in: window, focus: disposition != .backgroundTab)
+            return
+        }
         switch disposition {
         case .foregroundTab, .popup:
             commitCycle(in: window)
@@ -175,14 +203,15 @@ extension Work {
 
     /// Newest first, one entry per URL (capped by normalize). about:blank and URLs a page may not open are not
     /// history. Committing the newest entry's URL again refreshes it in place.
-    private mutating func recordVisit(_ url: URL, title: String) {
+    private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID) {
         guard url.absoluteString != "about:blank", isAllowedURL(url) else { return }
         if let first = state.doc.history.first, first.url == url {
             if first.visitedAt != ctx.now { state.doc.history[0].visitedAt = ctx.now }
             if first.title != title { state.doc.history[0].title = title }
+            if first.profile != profile { state.doc.history[0].profile = profile }
             return
         }
         state.doc.history.removeAll { $0.url == url }
-        state.doc.history.insert(HistoryEntry(url: url, title: title, visitedAt: ctx.now), at: 0)
+        state.doc.history.insert(HistoryEntry(url: url, title: title, visitedAt: ctx.now, profile: profile), at: 0)
     }
 }

@@ -19,7 +19,7 @@ final class DockView: NSView {
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
-        library.action = { _ in dispatch(.archive(.open)) }
+        library.action = { _ in dispatch(.library(.open(nil))) }
         plus.action = { [weak self] _ in self?.plusMenu() }
         library.toolTip = SidebarCopy.archive
         library.identify(.dockLibrary)

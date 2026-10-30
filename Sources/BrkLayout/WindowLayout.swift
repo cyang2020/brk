@@ -14,7 +14,8 @@ import Foundation
 ///   the left, top and bottom over the content (which does not move); otherwise the reveal strip runs from 2 x 10
 ///   outside the left edge to 1.5 x 10 inside it;
 /// - cards: one per pane (`ContentLayout.cards`), radius 6; an empty card fills the area when nothing is shown;
-/// - command bar: `CommandBarLayout.frame`; archive: exactly the content area.
+/// - command bar: `CommandBarLayout.frame`; Library: the content area with a page strip along the top
+///   (`LibraryLayout.frames`); Peek: the content area inset by Metrics.peek.inset.
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         let inset = Metrics.content.inset.value
@@ -54,15 +55,33 @@ public enum WindowLayout {
             }
 
         var commandBar: CGRect?
-        var archive: CGRect?
+        var library: LibraryFrames?
+        var peek: CGRect?
         switch snapshot.overlay {
         case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: sidebar?.urlPill)
-        case .archive?: archive = contentArea
+        case .library?: library = LibraryLayout.frames(in: contentArea)
+        case .peek?: peek = contentArea.insetBy(dx: Metrics.peek.inset.value, dy: Metrics.peek.inset.value)
         case nil: break
         }
 
         return WindowFrames(contentSize: contentSize, sidebar: sidebar, sidebarFloats: floats, resizeHandle: handle, revealStrip: reveal,
-                            contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, archive: archive)
+                            contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, library: library, peek: peek)
+    }
+}
+
+/// The Library host inside the content area. Owner: F5 (first pass: equal-width strip cells, the page below).
+public enum LibraryLayout {
+    public static func frames(in area: CGRect) -> LibraryFrames {
+        let stripHeight = Metrics.library.stripHeight.value
+        let strip = CGRect(x: area.minX, y: area.minY, width: area.width, height: min(stripHeight, area.height))
+        let pages = LibraryPage.allCases
+        let cellWidth = (strip.width / Double(pages.count)).rounded(.down)
+        var cells: [LibraryPage: CGRect] = [:]
+        for (i, page) in pages.enumerated() {
+            cells[page] = CGRect(x: strip.minX + Double(i) * cellWidth, y: strip.minY, width: cellWidth, height: strip.height)
+        }
+        let page = CGRect(x: area.minX, y: strip.maxY, width: area.width, height: max(0, area.height - strip.height))
+        return LibraryFrames(frame: area, strip: strip, pageCells: cells, page: page)
     }
 }
 

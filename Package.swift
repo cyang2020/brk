@@ -47,12 +47,16 @@ let package = Package(
         .target(name: "BrkUIKit", dependencies: ["BrkBase", "BrkDomain", "BrkLayout"], swiftSettings: strict),
         // W3: the sidebar column (title row, URL pill, favorites, tab list, dock, resize handle).
         .target(name: "BrkSidebar", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
-        // W4: the command bar and its ranking, the archive page, the space dialog.
+        // W4 / F4: the command bar and its ranking, the archive page (moving to BrkLibrary in F5), the space dialog.
         .target(name: "BrkOverlays", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
+        // F5: the Library host inside the content card (downloads, history, archive, media, easels and notes, boosts, spaces).
+        .target(name: "BrkLibrary", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
+        // F1: the settings window's panes (SwiftUI in an NSHostingView), hosted by BrkApp in its own window.
+        .target(name: "BrkSettings", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
         // W2: the window root that composes background, sidebar, cards and overlays; the content cards.
         .target(
             name: "BrkContent",
-            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays"],
+            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary"],
             swiftSettings: strict
         ),
         // The control-socket protocol, shared by the app's server and the e2e runner.
@@ -60,7 +64,7 @@ let package = Package(
         // The running app: the state owner, windows, key routing, menu, persistence, clock, control server.
         .target(
             name: "BrkApp",
-            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl"],
+            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings"],
             swiftSettings: strict
         ),
         // Composition root: picks the engine, starts CEF before NSApp exists, runs the app.
@@ -80,6 +84,8 @@ let package = Package(
         .testTarget(name: "BrkDomainTests", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict),
         .testTarget(name: "BrkLayoutTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout"], swiftSettings: strict),
         .testTarget(name: "BrkOverlaysTests", dependencies: ["BrkBase", "BrkDomain", "BrkOverlays"], swiftSettings: strict),
+        .testTarget(name: "BrkLibraryTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkLibrary"], swiftSettings: strict),
+        .testTarget(name: "BrkSettingsTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkSettings"], swiftSettings: strict),
         .testTarget(name: "BrkContentTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkContent"], swiftSettings: strict),
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),

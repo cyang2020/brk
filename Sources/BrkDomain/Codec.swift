@@ -9,8 +9,13 @@ import Foundation
 // never the shape.
 //
 // Versioning: `StoredFile` reads the version alone, so any file whose version we know can be routed to its decoder
-// and migrated forward (`migrate`), and one we do not know is `rejected` without guessing. v1 is the only version;
-// a v2 adds `StoredDocV2`, a `StoredFileV2`, and a `StoredDocV1 -> StoredDocV2` step in `migrate`.
+// and migrated forward (`migrate`), and one we do not know is `rejected` without guessing. v2 is current: wave 2
+// added the settings model, profiles, downloads, Air Traffic Control routes, shortcut overrides and per-profile
+// history. A v1 file (`StoredDocV1`, frozen) becomes a v2 doc through `StoredDocV2.init(v1:)`: its one setting,
+// `autoArchive`, is the default profile's threshold; its history belongs to the default profile.
+//
+// `ExportCodec` (bottom) is the "Share…" file format (JSON, Netscape bookmark HTML): a domain format, so it lives
+// with the other one; BrkApp/ShareExport.swift only writes the bytes.
 
 /// What a fresh profile needs that the file cannot provide.
 public struct RestoreSeed: Sendable {
@@ -51,20 +56,25 @@ private struct StoredFile: Codable {
     var version: Int
 }
 
-private struct StoredFileV1: Codable {
+private struct StoredFileV1: Decodable {
     var version: Int
     var doc: StoredDocV1
 }
 
+private struct StoredFileV2: Codable {
+    var version: Int
+    var doc: StoredDocV2
+}
+
 public enum StateCodec {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     /// Doc only, deterministic key order (sorted keys) so identical state writes identical bytes.
     public static func encode(_ state: AppState) -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
         // Encoding our own Codable DTOs cannot fail; a failure here is a programming error.
-        return try! encoder.encode(StoredFileV1(version: currentVersion, doc: StoredDocV1(state.doc)))
+        return try! encoder.encode(StoredFileV2(version: currentVersion, doc: StoredDocV2(state.doc)))
     }
 
     /// Parse, migrate, validate, repair, normalize. Never throws: an unusable file is `.rejected` with a fresh state.
@@ -93,11 +103,13 @@ public enum StateCodec {
         do { return try JSONDecoder().decode(StoredFile.self, from: data) } catch { throw .unreadable("\(error)") }
     }
 
-    /// Decodes a file of a known version and brings it to the current stored shape. v1 is current.
-    static func migrate(_ data: Data, from version: Int) throws(CodecError) -> StoredDocV1 {
+    /// Decodes a file of a known version and brings it to the current stored shape (v2).
+    static func migrate(_ data: Data, from version: Int) throws(CodecError) -> StoredDocV2 {
         switch version {
         case 1:
-            do { return try JSONDecoder().decode(StoredFileV1.self, from: data).doc } catch { throw .unreadable("\(error)") }
+            do { return StoredDocV2(v1: try JSONDecoder().decode(StoredFileV1.self, from: data).doc) } catch { throw .unreadable("\(error)") }
+        case 2:
+            do { return try JSONDecoder().decode(StoredFileV2.self, from: data).doc } catch { throw .unreadable("\(error)") }
         default:
             throw .unknownVersion(version)
         }
@@ -131,7 +143,7 @@ public enum StateCodec {
             archive: [], history: [],
             windows: [window: WindowDoc(id: window, kind: .standard, bounds: nil, space: space, activeBySpace: activeBySpace,
                                         sidebarVisible: true, sidebarWidth: Metrics.sidebar.defaultWidth.value)],
-            settings: Settings(autoArchive: .default)
+            settings: .default, profiles: [.default: .default], downloads: [], linkRoutes: [], keyOverrides: [:]
         )
         var session = Session.fresh(for: doc, contentSize: seed.contentSize)
         session.loaded = loaded
@@ -151,18 +163,29 @@ extension Session {
     static func fresh(for doc: Doc, contentSize: CGSize) -> Session {
         Session(
             rev: 0,
-            windows: doc.windows.mapValues { _ in
-                WindowSession(contentSize: contentSize, overlay: nil, overlayOpens: 0, peek: false, renaming: nil, dialog: nil,
-                              recentCycle: nil, heldModifiers: [], keyRouting: .empty)
-            },
-            loaded: [], live: [:], scratch: [:]
+            windows: doc.windows.mapValues { _ in WindowSession.fresh(contentSize: contentSize) },
+            loaded: [], live: [:], scratch: [:], settingsPane: nil, detectedAI: [], pendingAI: [:]
         )
     }
 }
 
-/// The v1 stored shape. Every field of `Doc` appears here, and `init(_ doc:)` / `validated(ctx:)` construct fields
+/// The v1 stored shape, frozen: decoded from old files only and converted by `StoredDocV2.init(v1:)`.
+struct StoredDocV1: Decodable {
+    var items: [ItemID: StoredDocV2.StoredItem]
+    var spaces: [SpaceID: StoredDocV2.StoredSpace]
+    var spaceOrder: [SpaceID]
+    var favorites: [ProfileID: ItemID]
+    var archive: [StoredDocV2.StoredArchived]
+    var history: [StoredHistory]
+    var windows: [WindowID: StoredDocV2.StoredWindow]
+    var autoArchive: AutoArchiveThreshold
+
+    struct StoredHistory: Decodable { var url: URL, title: String, visitedAt: Instant }
+}
+
+/// The v2 stored shape. Every field of `Doc` appears here, and `init(_ doc:)` / `validated(ctx:)` construct fields
 /// explicitly, so a field added to `Doc` but not here is a compile error in one of the two.
-struct StoredDocV1: Codable {
+struct StoredDocV2: Codable {
     var items: [ItemID: StoredItem]
     var spaces: [SpaceID: StoredSpace]
     var spaceOrder: [SpaceID]
@@ -170,7 +193,45 @@ struct StoredDocV1: Codable {
     var archive: [StoredArchived]
     var history: [StoredHistory]
     var windows: [WindowID: StoredWindow]
-    var autoArchive: AutoArchiveThreshold
+    var settings: StoredSettings
+    var profiles: [ProfileID: StoredProfile]
+    var downloads: [StoredDownload]
+    var linkRoutes: [LinkRoute]
+    var keyOverrides: [ActionID: KeyOverride]
+
+    /// The settings panes, as saved. The public setting structs are Codable themselves; this wrapper names the
+    /// per-profile map so a v3 can change one pane without touching the others.
+    struct StoredSettings: Codable {
+        var general: GeneralSettings
+        var profiles: [ProfileID: ProfileSettings]
+        var links: LinkSettings
+        var max: MaxSettings
+        var advanced: AdvancedSettings
+    }
+    struct StoredProfile: Codable { var name: String, icon: CustomIcon? }
+    struct StoredDownload: Codable {
+        var id: DownloadID, url: URL, filename: String, path: String?, received: Int64, total: Int64?
+        var state: DownloadState, startedAt: Instant, profile: ProfileID
+    }
+
+    /// v1 -> v2: the one setting becomes the default profile's threshold; history is the default profile's; there
+    /// is one profile, no downloads, no routes, no overrides.
+    init(v1: StoredDocV1) {
+        items = v1.items
+        spaces = v1.spaces
+        spaceOrder = v1.spaceOrder
+        favorites = v1.favorites
+        archive = v1.archive
+        history = v1.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: .default) }
+        windows = v1.windows
+        var profileSettings = ProfileSettings.default
+        profileSettings.autoArchive = v1.autoArchive
+        settings = StoredSettings(general: .default, profiles: [.default: profileSettings], links: .default, max: .default, advanced: .default)
+        profiles = [.default: StoredProfile(name: Profile.default.name, icon: nil)]
+        downloads = []
+        linkRoutes = []
+        keyOverrides = [:]
+    }
 
     struct StoredItem: Codable {
         var kind: ItemKind
@@ -207,7 +268,7 @@ struct StoredDocV1: Codable {
         var id: ArchiveID, tabID: ItemID, tab: StoredTab, archivedAt: Instant, reason: ArchiveReason
         var fromSpace: SpaceID?, fromSection: SectionKind
     }
-    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant }
+    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID }
     struct StoredWindow: Codable {
         var bounds: CGRect?
         var space: SpaceID
@@ -216,7 +277,8 @@ struct StoredDocV1: Codable {
         var sidebarWidth: Double
     }
 
-    /// Doc -> stored, field by field. Only the global tree is stored; `WindowKind` is `.standard` for every saved window.
+    /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
+    /// window's items live in `Session.scratch`, so saving its `WindowDoc` would restore an empty window.
     init(_ doc: Doc) {
         items = doc.tree.items.mapValues { item in
             var stored = StoredItem(kind: item.kind, parent: item.parent, children: item.children, createdAt: item.createdAt,
@@ -246,11 +308,19 @@ struct StoredDocV1: Codable {
             StoredArchived(id: $0.id, tabID: $0.tabID, tab: StoredTab($0.tab), archivedAt: $0.archivedAt, reason: $0.reason,
                            fromSpace: $0.fromSpace, fromSection: $0.fromSection)
         }
-        history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) }
-        windows = doc.windows.mapValues {
+        history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) }
+        windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth)
         }
-        autoArchive = doc.settings.autoArchive
+        settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
+                                  max: doc.settings.max, advanced: doc.settings.advanced)
+        profiles = doc.profiles.mapValues { StoredProfile(name: $0.name, icon: $0.icon) }
+        downloads = doc.downloads.map {
+            StoredDownload(id: $0.id, url: $0.url, filename: $0.filename, path: $0.path, received: $0.received, total: $0.total,
+                           state: $0.state, startedAt: $0.startedAt, profile: $0.profile)
+        }
+        linkRoutes = doc.linkRoutes
+        keyOverrides = doc.keyOverrides
     }
 
     /// Stored -> Doc, with repairs, one line each. In order:
@@ -321,7 +391,9 @@ struct StoredDocV1: Codable {
             roots.append(fresh)
             return fresh
         }
+        // Every stored profile and every profile a space names (the default one always) gets a Favorites root.
         var profiles: [ProfileID] = [.default]
+        for id in self.profiles.keys.sorted() where !profiles.contains(id) { profiles.append(id) }
         for id in order where !profiles.contains(spaces[id]!.profile) { profiles.append(spaces[id]!.profile) }
         var favoriteRoots: [ProfileID: ItemID] = [:]
         for profile in profiles { favoriteRoots[profile] = claim(favorites[profile], as: .favorites(profile), slot: "favorites \(profile)") }
@@ -370,15 +442,25 @@ struct StoredDocV1: Codable {
                 ArchivedTab(id: $0.id, tabID: $0.tabID, tab: Tab($0.tab), archivedAt: $0.archivedAt, reason: $0.reason,
                             fromSpace: $0.fromSpace, fromSection: $0.fromSection)
             },
-            history: history.map { HistoryEntry(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            history: history.map { HistoryEntry(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) },
             windows: docWindows,
-            settings: Settings(autoArchive: autoArchive)
+            settings: Settings(general: settings.general, profiles: settings.profiles, links: settings.links, max: settings.max,
+                               advanced: settings.advanced),
+            profiles: Dictionary(uniqueKeysWithValues: profiles.map { id in
+                (id, Profile(id: id, name: self.profiles[id]?.name ?? (id == .default ? Profile.default.name : id.rawValue), icon: self.profiles[id]?.icon))
+            }),
+            downloads: downloads.map {
+                Download(id: $0.id, url: $0.url, filename: $0.filename, path: $0.path, received: $0.received, total: $0.total,
+                         state: $0.state == .inProgress ? .failed : $0.state, startedAt: $0.startedAt, profile: $0.profile)
+            },
+            linkRoutes: linkRoutes,
+            keyOverrides: keyOverrides
         )
         return (doc, repairs)
     }
 }
 
-extension StoredDocV1.StoredTab {
+extension StoredDocV2.StoredTab {
     init(_ tab: Tab) {
         self.init(url: tab.url, title: tab.title, customTitle: tab.customTitle, favicon: tab.favicon, pinnedURL: tab.pinnedURL,
                   lastActiveAt: tab.lastActiveAt, icon: tab.icon)
@@ -386,8 +468,54 @@ extension StoredDocV1.StoredTab {
 }
 
 extension Tab {
-    init(_ stored: StoredDocV1.StoredTab) {
+    init(_ stored: StoredDocV2.StoredTab) {
         self.init(url: stored.url, title: stored.title, customTitle: stored.customTitle, favicon: stored.favicon,
                   pinnedURL: stored.pinnedURL, lastActiveAt: stored.lastActiveAt, icon: stored.icon)
     }
 }
+
+// MARK: - Export ("Share…" as a file)
+
+/// Owner: wave 2 contract (BrkApp/ShareExport.swift writes the bytes). JSON is our own shape (`ExportDocument`
+/// encoded with sorted keys); HTML is the Netscape bookmark file every browser imports.
+public enum ExportCodec {
+    public static func encode(_ document: ExportDocument, as format: ExportFormat) -> Data {
+        switch format {
+        case .json:
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
+            return try! encoder.encode(document)
+        case .html:
+            return Data(html(document).utf8)
+        }
+    }
+
+    /// The suggested file name: the title made safe for a file system, with the format's extension.
+    public static func filename(_ document: ExportDocument, as format: ExportFormat) -> String {
+        let unsafe = CharacterSet(charactersIn: "/:\\?%*|\"<>").union(.newlines)
+        let base = document.title.components(separatedBy: unsafe).joined(separator: "-").trimmingCharacters(in: .whitespaces)
+        return (base.isEmpty ? "Export" : base) + "." + format.rawValue
+    }
+
+    static func html(_ document: ExportDocument) -> String {
+        func escape(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+        }
+        func list(_ entries: [ExportEntry], indent: String) -> String {
+            var out = "\(indent)<DL><p>\n"
+            for entry in entries {
+                switch entry {
+                case .link(let title, let url):
+                    out += "\(indent)    <DT><A HREF=\"\(escape(url.absoluteString))\">\(escape(title))</A>\n"
+                case .folder(let title, let children):
+                    out += "\(indent)    <DT><H3>\(escape(title))</H3>\n" + list(children, indent: indent + "    ")
+                }
+            }
+            return out + "\(indent)</DL><p>\n"
+        }
+        return "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n"
+            + "<TITLE>\(escape(document.title))</TITLE>\n<H1>\(escape(document.title))</H1>\n" + list(document.entries, indent: "")
+    }
+}
+

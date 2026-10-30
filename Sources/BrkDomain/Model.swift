@@ -28,7 +28,7 @@ public enum ContainerScope: Hashable, Sendable, Codable {
     /// by every standard window.
     case global
     /// A window's own container (Little Arc's one tab, Peek's held tab, an incognito window's tabs). Its one root
-    /// is `SectionRole.scratch(window)`. v1 creates none.
+    /// is `SectionRole.scratch(window)`. Normalize gives every window one (a standard window's holds its Peek tab).
     case window(WindowID)
 }
 
@@ -65,10 +65,20 @@ struct Doc: Sendable, Equatable {
     var favorites: [ProfileID: ItemID]
     /// Newest first, capped at Metrics.persistence.archiveCap.
     var archive: [ArchivedTab]
-    /// Newest first, deduplicated by URL, capped at Metrics.persistence.historyCap.
+    /// Newest first, deduplicated by URL, capped at Metrics.persistence.historyCap. Per profile through
+    /// `HistoryEntry.profile` (the History page lists the current space's profile).
     var history: [HistoryEntry]
+    /// Every window, ephemeral ones included (`WindowKind`); the codec writes only `.standard` windows.
     var windows: [WindowID: WindowDoc]
     var settings: Settings
+    /// Arc: `ADKModels.Profile`. The default profile is always present (normalize). F2 owns the rules.
+    var profiles: [ProfileID: Profile]
+    /// Newest first (Arc: `StorableDownloadMetadata`). Fed by `PageEvent.download`; F5 owns the rules.
+    var downloads: [Download]
+    /// Air Traffic Control, in priority order: the first route whose pattern matches wins. F3 owns the rules.
+    var linkRoutes: [LinkRoute]
+    /// Arc: `StorableKeyBindings.userOverrides`. `KeyBindings.resolve` combines them with the table. F4 owns the rules.
+    var keyOverrides: [ActionID: KeyOverride]
 }
 
 /// Arc: `SpaceModel` + `CustomInfo`.
@@ -118,7 +128,8 @@ public enum SpaceIcon: Hashable, Sendable, Codable {
     }
 }
 
-/// Arc: `PersistedWindowState`, reduced to v1. `kind` is where Little Arc and incognito windows plug in.
+/// Arc: `PersistedWindowState`. `kind` says which container the window shows and how it is hosted; only
+/// `.standard` windows are saved (Little Arc and incognito windows die with the process, like their items).
 struct WindowDoc: Sendable, Equatable {
     let id: WindowID
     var kind: WindowKind
@@ -137,19 +148,25 @@ struct WindowDoc: Sendable, Equatable {
     var container: ContainerScope {
         switch kind {
         case .standard: .global
+        case .incognito, .little: .window(id)
         }
     }
+
+    /// Saved across launches. Ephemeral windows are dropped by the codec with their scratch trees.
+    var isPersistent: Bool { kind == .standard }
 }
 
-/// Arc: `WindowStyle` standard | little. v1 builds only `.standard`. A later kind adds a case here, answers
-/// `WindowDoc.container` (`.window(id)` for Little Arc and incognito), and gets its `SidebarTree` in
-/// `Session.scratch` with one `SectionRole.scratch(id)` root.
-enum WindowKind: Sendable, Equatable {
+/// Arc: `WindowStyle` standard | little, and `BrowserWindow.isIncognito`. The kind decides the container
+/// (`WindowDoc.container`), the browsing context of its pages (`projectPages`), the host (`WindowController` for
+/// standard and incognito, `LittleWindowController` for little: an `NSPanel` at Metrics.littleArc.defaultSize) and
+/// whether it is saved. A `.little` window holds one tab in its scratch tree; "Open in <space>" moves it out
+/// (`WindowCommand.openIn`) and closes the window. F3 owns the rules.
+public enum WindowKind: String, Hashable, Sendable, Codable, CaseIterable {
     case standard
-}
-
-struct Settings: Sendable, Equatable {
-    var autoArchive: AutoArchiveThreshold
+    /// Session-only window whose pages browse in `BrowsingContext.incognito`; its tabs live in its scratch tree.
+    case incognito
+    /// Little Arc (Arc: `LittleBrowser`): one tab, no sidebar, a small floating panel.
+    case little
 }
 
 /// Arc: `AutoArchiveInactiveThreshold` (anatomy 4.3; seconds from the threshold function, layout-constants.md
@@ -195,6 +212,8 @@ struct HistoryEntry: Sendable, Equatable {
     let url: URL
     var title: String
     var visitedAt: Instant
+    /// The profile the visit happened in (incognito pages record nothing). v1 files are migrated as `.default`.
+    var profile: ProfileID
 }
 
 // MARK: - Session
@@ -209,8 +228,16 @@ struct Session: Sendable, Equatable {
     /// What loaded pages report.
     var live: [ItemID: LivePage]
     /// Ephemeral containers by window (`ContainerScope.window`): Little Arc, Peek and incognito trees. Never
-    /// saved. Empty in v1.
+    /// saved. Normalize gives every window one with a `SectionRole.scratch(window)` root.
     var scratch: [WindowID: SidebarTree]
+    /// The settings window: the pane it shows, or nil while closed. App-wide (one settings window), like Arc's.
+    var settingsPane: SettingsPane?
+    /// Local AI command-line tools found on PATH at launch (`SystemEvent.aiProvidersDetected`); the Max pane
+    /// shows them and `.auto` picks from them.
+    var detectedAI: [AIProviderKind]
+    /// AI requests in flight (`Effect.ai` sent, `SystemEvent.aiResult` not yet received), so a result can be
+    /// applied to the item its task names.
+    var pendingAI: [AIRequestID: AITask]
 }
 
 struct WindowSession: Sendable, Equatable {
@@ -221,6 +248,13 @@ struct WindowSession: Sendable, Equatable {
     var peek: Bool
     var renaming: ItemID?
     var dialog: SpaceDialog?
+    /// Arc: `ProfilesUI` dialogs (create, change the space's profile, delete). F2 owns the rules.
+    var profileDialog: ProfileDialog?
+    /// The Library page this window last showed, for `.library(.open(nil))` (Arc reopens the last page).
+    var lastLibraryPage: LibraryPage?
+    /// Search-engine suggestions for the command bar's last query (`SystemEvent.suggestions`); shown only while
+    /// the bar is open and the query still matches.
+    var suggestions: Suggestions?
     var recentCycle: RecentCycle?
     /// Last `WindowEvent.modifiersChanged`, to see Control go down and up.
     var heldModifiers: Modifiers
@@ -229,11 +263,26 @@ struct WindowSession: Sendable, Equatable {
     var keyRouting: KeyRoutingMemory
 }
 
+/// What draws over the content card, at most one per window. The archive is one page of the Library; Peek holds a
+/// tab of the window's scratch tree whose page draws in a card above the content (Arc: `modalV2`).
 enum Overlay: Sendable, Equatable {
     case commandBar(openID: Int, target: CommandBarTarget)
-    case archive(openID: Int)
-    // Later: case peek(PeekState)        -- a page in a panel over the content card (OpenDisposition.peek).
-    // Later: case library(LibraryPage)   -- Arc's Library pages; the archive moves under it.
+    case library(openID: Int, page: LibraryPage)
+    /// `tab` lives in `Session.scratch[window]` and is removed with the peek unless "Open in" moved it to a space.
+    case peek(openID: Int, tab: ItemID)
+}
+
+/// Arc: `CreateProfileDialog`, `ChangeProfileDialog`, `DeleteProfileDialog`.
+enum ProfileDialog: Sendable, Equatable {
+    case create
+    case change(SpaceID)
+    case delete(ProfileID)
+}
+
+/// The default engine's suggestions for one typed query.
+struct Suggestions: Sendable, Equatable {
+    var query: String
+    var results: [String]
 }
 
 /// Arc: `CommandBarDestinationType` createNewTab | overrideCurrentTab.

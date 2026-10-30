@@ -34,6 +34,9 @@ public final class CEFEngine: WebEngine {
     /// Pages whose browser was asked to close and whose host window CEF has not destroyed yet.
     private var destroying: [PageLedger.Incarnation: ChromePage] = [:]
     private var ledger = PageLedger()
+    /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
+    /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profiles/<id>`; incognito is in memory.
+    private var profiles: [BrowsingContext: CefProfile] = [:]
     private var phase: ShutdownPhase = .running
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Resumed with true when the last closing browser reports OnBeforeClose, with false by the timeout.
@@ -158,6 +161,30 @@ public final class CEFEngine: WebEngine {
 
     public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
 
+    /// Releases the context so Chromium drops its in-memory state (incognito: everything). A persistent profile's
+    /// directory is Chromium's while the runtime runs; TODO(F2): mark it for deletion at the next launch.
+    public func forget(_ context: BrowsingContext) {
+        guard phase == .running, context != .profile(.default) else { return }
+        profiles[context] = nil
+    }
+
+    /// The request context for a page's browsing context (BrkEngine/WebEngine.swift `BrowsingContext`).
+    func profile(for context: BrowsingContext) -> CefProfile? {
+        switch context {
+        case .profile(.default): return nil   // CefSwift's default: the runtime cache
+        case .profile(let id):
+            if let existing = profiles[context] { return existing }
+            let profile = CefProfile.persistent(name: id.rawValue)
+            profiles[context] = profile
+            return profile
+        case .incognito:
+            if let existing = profiles[context] { return existing }
+            let profile = CefProfile.incognito()
+            profiles[context] = profile
+            return profile
+        }
+    }
+
     public func shutdown() async -> ShutdownOutcome {
         if let shutdownTask { return await shutdownTask.value }
         let task = Task { @MainActor in await self.runShutdown() }
@@ -252,6 +279,12 @@ public final class CEFEngine: WebEngine {
     func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
         guard phase == .running, live[page.id] === page else { return false }
         return delegate?.engine(self, page: page.id, key: press, stage: stage, pressID: pressID) ?? false
+    }
+
+    /// OnBeforeBrowse for a live page: the delegate decides (Peek from Pinned and Favorites, F3).
+    func pageShouldNavigate(_ page: ChromePage, to url: URL, userGesture: Bool) -> Bool {
+        guard phase == .running, live[page.id] === page else { return true }
+        return delegate?.engine(self, page: page.id, shouldNavigateTo: url, userGesture: userGesture) ?? true
     }
 
     /// The page's input view arrived in its surface: apply the focus that was waiting for it.

@@ -36,6 +36,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var control: ControlServer?
     private var sweep: Timer?
     private var termination: DispatchSourceSignal?
+    private var getURL: GetURLHandler?
     private let menuTarget = MenuTarget()
     private var quitting = false
     private let log = Logger(subsystem: "brk", category: "lifecycle")
@@ -88,6 +89,12 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
         store.start()
+
+        // Links from other apps (F3) and the local AI tools on PATH (the Max pane, `.auto`).
+        let handler = GetURLHandler(send: { [weak store] in store?.dispatch($0) })
+        handler.install()
+        getURL = handler
+        store.dispatch(.system(.aiProvidersDetected(AIProviderSeam.detect())))
 
         sweep = Timer.scheduledTimer(withTimeInterval: Metrics.persistence.sweepInterval.value, repeats: true) { _ in
             MainActor.assumeIsolated { store.dispatch(.system(.clockTick)) }

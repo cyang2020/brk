@@ -38,6 +38,10 @@ public enum SpaceTag {}
 public enum WindowTag {}
 public enum ArchiveTag {}
 public enum ProfileTag {}
+public enum DownloadTag {}
+public enum LinkRouteTag {}
+public enum SearchEngineTag {}
+public enum AIRequestTag {}
 
 /// A sidebar item: tab, folder, split, or section root (Arc: `Identifier<SidebarItem>`).
 public typealias ItemID = ID<ItemTag>
@@ -47,8 +51,16 @@ public typealias SpaceID = ID<SpaceTag>
 public typealias WindowID = ID<WindowTag>
 /// One archive entry. Distinct from the archived tab's own ItemID, which restore reuses.
 public typealias ArchiveID = ID<ArchiveTag>
-/// Arc: `ADKModels.Profile`. v1 has only `ProfileID.default`; spaces, favorites and pages already carry one.
+/// Arc: `ADKModels.Profile`. Spaces, favorites roots, settings and pages carry one; `Doc.profiles` lists them.
 public typealias ProfileID = ID<ProfileTag>
+/// One file download (Arc: `StorableDownloadMetadata`). Minted by the engine as "<browser id>-<CEF download id>".
+public typealias DownloadID = ID<DownloadTag>
+/// One Air Traffic Control route (Arc: `StorableLinkRouting`).
+public typealias LinkRouteID = ID<LinkRouteTag>
+/// A search engine record (Arc: `SearchEngine.keyword`); built-ins use their keyword ("google", "duckduckgo").
+public typealias SearchEngineID = ID<SearchEngineTag>
+/// One request to the local AI provider (`Effect.ai` -> `SystemEvent.aiResult`).
+public typealias AIRequestID = ID<AIRequestTag>
 
 extension ID where Tag == ProfileTag {
     /// Arc stores its initial profile as "default".

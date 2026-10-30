@@ -47,6 +47,11 @@ final class FakeEngine: WebEngine {
 
     func evaluate(_ script: String, in page: PageID) { calls.append("evaluate") }
     func facts(for page: PageID) -> PageFacts? { nil }
+    private(set) var forgotten: [BrowsingContext] = []
+    func forget(_ context: BrowsingContext) {
+        calls.append("forget")
+        forgotten.append(context)
+    }
 
     func shutdown() async -> ShutdownOutcome {
         calls.append("shutdown")

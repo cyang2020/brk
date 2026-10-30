@@ -63,6 +63,9 @@ public final class StubEngine: WebEngine {
         pages[page]?.evaluated.append(script)
     }
 
+    /// The stub has no request contexts; nothing to forget.
+    public func forget(_ context: BrowsingContext) {}
+
     public func facts(for page: PageID) -> PageFacts? {
         guard let surface = pages[page] else { return nil }
         return PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: [], browserID: nil, hostWindowNumber: nil,

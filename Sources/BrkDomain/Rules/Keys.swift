@@ -11,7 +11,9 @@ extension Work {
     /// change), so `reduce` can hand back the input state without normalizing or comparing.
     mutating func routeKey(_ key: KeyInput, in window: WindowID) -> Bool {
         guard var memory = state.session.windows[window]?.keyRouting else { return false }
-        let decision = KeyRouting.decide(key, memory: &memory, now: ctx.now)
+        // The map is the table plus the user's overrides (F4); a conflicting chord routes to no one.
+        let map = state.doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: state.doc.keyOverrides)
+        let decision = KeyRouting.decide(key, map: map, memory: &memory, now: ctx.now)
         let remembered = memory != state.session.windows[window]!.keyRouting
         if remembered { state.session.windows[window]!.keyRouting = memory }
         guard case .dispatch(let action) = decision else { return remembered }
