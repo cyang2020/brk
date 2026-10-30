@@ -159,3 +159,22 @@ test('finding 9: native() lists every attached view and the screen shows the cur
   const mid = { x: home.bounds.x + Math.floor(home.bounds.width / 2), y: home.bounds.y + 40 };
   expect(await arc.screenPixel(mid.x, mid.y)).toEqual([255, 255, 255, 255]);
 });
+
+test('finding 10: the sidebar surface recovers from a renderer crash', async ({ arc }) => {
+  const chrome = (await arc.native()).layers.find((l) => l.role === 'chrome')!;
+  await (await arc.surface('sidebar')).getByTestId(TID.sidebar).waitFor();
+  await arc.electronApp.evaluate(({ webContents }, id) => webContents.fromId(id)!.forcefullyCrashRenderer(), chrome.webContentsId);
+  // The surface reloads itself: without any further interaction its webContents is alive and no longer crashed, and it
+  // is still the chrome layer. (Unfixed, nothing reloads it and it stays crashed.)
+  await expect
+    .poll(
+      () =>
+        arc.electronApp.evaluate(({ webContents }, id) => {
+          const wc = webContents.fromId(id);
+          return wc !== undefined && !wc.isDestroyed() && !wc.isCrashed() && !wc.isLoading();
+        }, chrome.webContentsId),
+      { timeout: 8000 },
+    )
+    .toBe(true);
+  expect((await arc.native()).layers.some((l) => l.role === 'chrome' && l.webContentsId === chrome.webContentsId)).toBe(true);
+});
