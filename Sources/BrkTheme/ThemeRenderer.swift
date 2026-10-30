@@ -59,16 +59,3 @@ final class TextureCache {
         fatalError("not implemented")
     }
 }
-
-/// The pixel generators, pure and deterministic (seeded), so tests can pin a checksum per kind.
-public enum TexturePixels {
-    /// 8-bit luminance + alpha, `size x size`, wrapping at the edges (tileable).
-    /// - grain: per-pixel noise, alpha varying (Arc's grain is ARGB with transparency).
-    /// - sand: low-frequency value noise blurred, opaque grayscale.
-    /// - denim: diagonal twill: (x + 2y) mod period stripes modulated by noise, opaque.
-    /// - tweed: two crossed coarse noises at +-45 degrees, opaque.
-    public static func generate(_ kind: Texture, size: Int, seed: UInt64) -> [UInt8] {
-        // TODO(W5): SplitMix64 seeded generator; wrap-around sampling so tiles have no seams.
-        fatalError("not implemented")
-    }
-}
