@@ -53,7 +53,7 @@ public final class WindowRootView: NSView {
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
         case .spaceDialog: spaceDialog.focusForm()
-        case .profileDialog: false   // TODO(F2): the profile dialog host
+        case .profileDialog: ProfileDialogHost.focus(over: spaceDialog)
         case .sidebar: sidebar.focusList()
         case .page, .none: false
         }
@@ -88,6 +88,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
+        ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
         lastTheme = snapshot.theme
     }
 }

@@ -240,9 +240,12 @@ final class TitleRowView: NSView {
 
 /// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…", a shimmer
 /// while the page loads, and on hover a copy-link accessory. A click opens the command bar to edit the current tab.
+/// The profile badge (F2) sits at the trailing end while the space's profile is not the default, or the window is
+/// incognito; an incognito pill has Arc's CommandBarPlaceholderIncognitoBackground.
 @MainActor
 final class URLPillView: HoverView {
     private let label = NSTextField(labelWithString: "")
+    private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
     private let shimmer = CAGradientLayer()
     private var pill: URLPillSnapshot?
@@ -263,6 +266,7 @@ final class URLPillView: HoverView {
         shimmer.isHidden = true
         layer?.addSublayer(shimmer)
         addSubview(label)
+        addSubview(badge)
         copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
@@ -283,6 +287,7 @@ final class URLPillView: HoverView {
         shimmer.isHidden = !pill.loading
         if pill.loading, !wasLoading { startShimmer() }
         if !pill.loading { shimmer.removeAllAnimations() }
+        badge.render(pill.profile, palette: palette)
         stateChanged()
         needsLayout = true
     }
@@ -292,7 +297,14 @@ final class URLPillView: HoverView {
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
         copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
         let leading = Draw.pillTextLeading.value
-        let trailing = copyLink.alphaValue > 0 ? copyLink.frame.minX : bounds.width - leading
+        var trailing = copyLink.alphaValue > 0 ? copyLink.frame.minX : bounds.width - inset
+        if !badge.isHidden {
+            let width = min(badge.fittingWidth, max(0, (trailing - leading) / 2))
+            badge.frame = CGRect(x: trailing - width, y: (bounds.height - BadgeDraw.height.value) / 2, width: width, height: BadgeDraw.height.value)
+            trailing = badge.frame.minX - BadgeDraw.gap.value
+        } else if copyLink.alphaValue == 0 {
+            trailing = bounds.width - leading
+        }
         let height = max(label.intrinsicContentSize.height, Metrics.urlPill.textMinHeight.value)
         label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
         shimmer.frame = CGRect(x: 0, y: 0, width: bounds.width / 2, height: bounds.height)
@@ -312,7 +324,8 @@ final class URLPillView: HoverView {
     override func stateChanged() {
         guard let palette else { return }
         let fill = isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : palette.tokens.itemBackground
-        layer?.backgroundColor = palette.color(fill).cgColor
+        layer?.backgroundColor = pill?.profile?.incognito == true && !isPressed && !isHovered
+            ? ProfileBadgeView.incognitoPillBackground.cgColor : palette.color(fill).cgColor
         copyLink.alphaValue = isHovered && pill?.text != nil ? 1 : 0
         needsLayout = true
     }
@@ -323,6 +336,112 @@ final class URLPillView: HoverView {
         isPressed = false
         if bounds.contains(local(event)) { dispatch(.commandBar(.open(.editCurrent))) }
     }
+}
+
+/// Arc's `ProfileIndicatorView` in the URL pill: the profile's icon (Arc's person glyph when it has none) and name, or
+/// "Incognito", on ProfileIndicatorBackgroundColor (#181B1F @ 0.07 light, #FFFFFF @ 0.12 dark; visual-and-copy.md,
+/// ARC_AdBlocking). Hidden for the default profile. Owner: F2.
+@MainActor
+final class ProfileBadgeView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let glyph = NSImageView()
+    private var badge: ProfileBadge?
+    private var palette: Palette?
+
+    /// CommandBarPlaceholderIncognitoBackground #FFFFFF @ 0.15 (P3; visual-and-copy.md, ARC_URLInputter).
+    static let incognitoPillBackground = NSColor(displayP3Red: 1, green: 1, blue: 1, alpha: 0.15)
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = BadgeDraw.height.value / 2
+        label.font = .systemFont(ofSize: BadgeDraw.font.value, weight: .medium)
+        label.lineBreakMode = .byTruncatingTail
+        label.isSelectable = false
+        addSubview(glyph)
+        addSubview(label)
+        isHidden = true
+        identify(.profileBadge)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Shown only with a badge; the same badge and palette change nothing.
+    func render(_ badge: ProfileBadge?, palette: Palette) {
+        guard badge != self.badge || palette != self.palette else { return }
+        self.badge = badge
+        self.palette = palette
+        isHidden = badge == nil
+        guard let badge else { return }
+        label.stringValue = badge.name
+        label.textColor = palette.ink.secondary
+        glyph.image = symbolImage(Self.symbol(badge), size: BadgeDraw.glyph.value)
+        glyph.contentTintColor = palette.ink.secondary
+        if case .emoji(let emoji)? = badge.icon {
+            glyph.image = nil
+            label.stringValue = "\(emoji) \(badge.name)"
+        }
+        layer?.backgroundColor = (palette.scheme == .light ? NSColor(srgbRed: 0x18 / 255, green: 0x1B / 255, blue: 0x1F / 255, alpha: 0.07)
+                                                             : NSColor(white: 1, alpha: 0.12)).cgColor
+        toolTip = badge.name
+        setAccessibilityLabel(badge.name)
+        needsLayout = true
+    }
+
+    /// The SF Symbol for the badge's icon: the named icon or symbol, Arc's person glyph without one, glasses for
+    /// incognito (Arc's incognito glyph was not recovered).
+    static func symbol(_ badge: ProfileBadge) -> String {
+        if badge.incognito { return "eyeglasses" }
+        switch badge.icon {
+        case .named(let name)?: return name.symbol
+        case .symbol(let symbol)?: return symbol
+        case .emoji?, nil: return "person.crop.circle"
+        }
+    }
+
+    /// Padding, glyph, gap and the name at its natural width (the label cell's own size, which includes its
+    /// inset, rounded up so the name is not truncated by a fraction of a point).
+    var fittingWidth: CGFloat {
+        let p = BadgeDraw.padding.value
+        let glyphWidth = glyph.image == nil ? 0 : BadgeDraw.glyph.value + BadgeDraw.gap.value
+        let text = ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width) + 1
+        return min(BadgeDraw.maxWidth.value, p + glyphWidth + text + p)
+    }
+
+    /// The pill sizes the badge in its own layout; the name follows every size change.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let p = BadgeDraw.padding.value, side = BadgeDraw.glyph.value
+        var x = p
+        if glyph.image != nil {
+            glyph.frame = CGRect(x: x, y: (bounds.height - side) / 2, width: side, height: side)
+            x = glyph.frame.maxX + BadgeDraw.gap.value
+        } else {
+            glyph.frame = .zero
+        }
+        let height = label.intrinsicContentSize.height
+        label.frame = CGRect(x: x, y: (bounds.height - height) / 2, width: max(0, bounds.width - x - p), height: height)
+    }
+}
+
+/// The badge's drawing numbers. Arc's `ProfileIndicatorView` was not measured, so all are guesses sized to sit inside
+/// the 36 pt pill next to its 28 pt accessory (layout-constants.md "URL pill").
+let BadgeDraw = ProfileBadgeMetrics()
+
+struct ProfileBadgeMetrics: MetricGroup {
+    let height = Metric(20.0, .guess("badge height: the pill's text area minimum height (URL pill text area minimum height 20)"))
+    let padding = Metric(7.0, .guess("horizontal padding inside the badge"))
+    let gap = Metric(4.0, .guess("between the glyph and the name, and between the badge and the URL"))
+    let font = Metric(11.0, .guess("badge name size, Arc's secondary line size (cra L115: 11 pt)"))
+    let glyph = Metric(11.0, .guess("badge glyph size, the same as its text"))
+    let maxWidth = Metric(110.0, .guess("a long profile name truncates so the URL keeps most of the pill"))
 }
 
 /// The floating sidebar's own background (Arc: `FloatingSidebarBackgroundView`): the space's gradient and wash over
