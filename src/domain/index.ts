@@ -6,10 +6,10 @@
 export type { AppState } from './model'
 export type { Effect, MenuEntry, WebEffect } from './effects'
 export type { Ctx, Transition } from './reduce'
-export type { FocusTarget, PaneSelection, WindowSelection } from './select'
+export type { FocusTarget, LoadedTabView, PaneSelection, WindowSelection } from './select'
 export type { RestoreDefaults, RestoreOutcome } from './codec'
 
 export { reduce } from './reduce'
-export { loadedTabIds, selectWindow, windowIds } from './select'
+export { loadedTabIds, loadedTabViews, selectWindow, windowIds } from './select'
 export { projectWindow } from './project'
 export { restoreState, serializeState } from './codec'

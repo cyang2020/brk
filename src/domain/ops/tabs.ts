@@ -329,9 +329,13 @@ export const tabHandlers = {
       windows.find((id) => where.spaceId !== null && draft.doc.windows[id]?.spaceId === where.spaceId) ??
       windows[0]
     const spaceId = where.spaceId ?? (w ? draft.doc.windows[w]?.spaceId : undefined)
-    const space = spaceId ? draft.doc.spaces[spaceId] : undefined
+    const space = spaceId ? own(draft.doc.spaces, spaceId) : undefined
     if (!w || !space) return
-    openTab(draft, w, command.url, ctx, { at: { parentId: space.todayId, index: 0 }, focus: !command.background })
+    const id = openTab(draft, w, command.url, ctx, { at: { parentId: space.todayId, index: 0 }, focus: !command.background })
+    // A background tab (Ctrl/Cmd+click, middle click) loads in the background like Arc and Chromium: focus stays on
+    // the opener, but the tab is marked loaded so the main process creates its (detached) view and the page loads.
+    // normalize keeps a loaded entry for an existing tab, so this is not undone.
+    if (command.background && draft.doc.items[id]?.kind === 'tab') draft.session.loaded[id] = true
   },
   // input = resolveTypedInput(text); refuse (nothing changes, the bar stays open) if null or !isAllowedUrl. Target
   // from the open overlay:

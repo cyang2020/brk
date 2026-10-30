@@ -20,7 +20,7 @@ import type { Instant, ItemId, Platform, WindowId } from '../shared/base'
 import type { Input } from '../shared/commands'
 import { TIMING } from '../shared/constants'
 import type { WindowView } from '../shared/view'
-import { loadedTabIds, projectWindow, reduce, selectWindow, serializeState, windowIds, type AppState, type Effect } from '../domain'
+import { loadedTabIds, loadedTabViews, projectWindow, reduce, selectWindow, serializeState, windowIds, type AppState, type Effect } from '../domain'
 import type { Clock } from './clock'
 import { createKeyRouter, installAppMenu, popupMenu } from './input'
 import { installIpc } from './ipc'
@@ -87,6 +87,10 @@ export function startApp(deps: AppDeps): App {
     const now = deps.clock.now()
     reconcileHosts()
     for (const host of hosts.values()) host.render(state, now)
+    // Create a view for every loaded tab, not only the shown panes the hosts attached: a background-opened tab
+    // (Ctrl/Cmd+click) and a restored visible tab must load even before they are shown. The host attached the shown
+    // ones; these extra views stay detached until the tab is shown. collect then closes views that are not loaded.
+    for (const t of loadedTabViews(state)) tabs.viewFor(t.tabId, t.url, t.windowId)
     tabs.collect(loadedTabIds(state))
     for (const effect of effects) runEffect(effect)
   }

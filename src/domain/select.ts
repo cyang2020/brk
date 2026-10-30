@@ -89,6 +89,37 @@ export function loadedTabIds(state: AppState): ReadonlySet<ItemId> {
   return new Set(Object.keys(open(state).session.loaded) as ItemId[])
 }
 
+/** One loaded tab and where main should create its view. */
+export interface LoadedTabView {
+  readonly tabId: ItemId
+  readonly url: string | null
+  /** The window that owns the view (its key hook and generation): the window showing it, else the first on its space, else the first window. */
+  readonly windowId: WindowId
+}
+
+/**
+ * Every loaded tab with its url and owning window. Main creates a (detached) view for each, not only for shown panes,
+ * so a background-opened tab (Ctrl/Cmd+click) loads in the background and a restored visible tab loads at launch;
+ * tabs that are not loaded stay lazy. The shown panes are a subset: those views the window host also attaches.
+ */
+export function loadedTabViews(state: AppState): readonly LoadedTabView[] {
+  const s = open(state)
+  const windowIdsList = Object.keys(s.doc.windows) as WindowId[]
+  const first = windowIdsList[0]
+  const out: LoadedTabView[] = []
+  for (const tabId of Object.keys(s.session.loaded) as ItemId[]) {
+    const tab = getItem(s.doc, tabId, 'tab')
+    if (!tab) continue
+    const spaceId = locate(s.doc, tabId)?.spaceId ?? null
+    const owner =
+      windowIdsList.find((w) => visibleTabIds(s, w).includes(tabId)) ??
+      (spaceId !== null ? windowIdsList.find((w) => s.doc.windows[w]?.spaceId === spaceId) : undefined) ??
+      first
+    if (owner !== undefined) out.push({ tabId, url: tab.url, windowId: owner })
+  }
+  return out
+}
+
 // --- domain-internal ---------------------------------------------------------------------------------------------
 
 /** What the window's current space shows: a tab or a split, or null for an empty content card. */
