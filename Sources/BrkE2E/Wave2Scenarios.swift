@@ -24,6 +24,8 @@ enum Wave2Scenarios {
                  cefOnly: "page titles written by keys.html's key listener", remap),
         Scenario("W2-10", "typing in the command bar fetches the engine's suggestions and shows them; Tab on an engine's name enters site search",
                  suggestions),
+        Scenario("W2-10a", "a typed URL opens its exact destination; an exact open-tab URL still switches across spaces",
+                 cefOnly: "cookie fixture titles from real pages", CommandBarScenarios.exactURL),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
         Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", history),
         Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
@@ -314,7 +316,9 @@ enum Wave2Scenarios {
         let row = s.shortcuts.first { $0.action == .newTab }
         try expect(row?.state == .valid(KeyChord(.command, .e)), "Shortcuts pane state \(String(describing: row?.state))")
         try expect(row?.source == .userDefined, "Shortcuts pane source \(String(describing: row?.source))")
-        try app.perform(.openSettings(pane: .shortcuts))
+        guard case .dispatched = try app.send(.openSettings(pane: .shortcuts)) else {
+            throw Check(description: "openSettings did not dispatch")
+        }
         try app.waitUntil("the Shortcuts pane") { try app.send(.settings).isSettingsPane(.shortcuts) }
         try app.screenshot("shortcuts-pane")
     }
@@ -358,6 +362,15 @@ enum Wave2Scenarios {
             let open = isCommandBar(try app.view().overlay)
             return try open && abs(visible(try app.native(), .commandBarInput).frame.minX - plain.minX) < 0.5
         }
+        try app.press("tab")
+        try app.waitUntil("site search entered again") { try visible(try app.native(), .commandBarInput).frame.minX > plain.minX + 20 }
+        try app.type("swift")
+        try app.press("return")
+        try app.waitUntil("Return to submit the query to Bing") {
+            let view = try app.view()
+            return view.overlay == nil && currentTab(view)?.url == SearchEngine.bing.searchURL("swift")
+        }
+        app.note("Site-search Return submitted Bing's URL; the remote results page is not asserted.")
     }
 
     /// W2-11 (F5): with the profile's download location set to the data directory, loading `/download` saves

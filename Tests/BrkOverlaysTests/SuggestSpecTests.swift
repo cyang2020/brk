@@ -133,7 +133,8 @@ final class SuggestSpecTests: XCTestCase {
 
     /// matching is case-insensitive and also looks at URLs
     func test_matchingIsCaseInsensitiveAndAlsoLooksAtURLs() {
-        XCTAssertEqual(rows(suggest("WEATHER.example")), ["switch:t3", "open:Open WEATHER.example"])
+        XCTAssertEqual(rows(suggest("WEATHER.example")), ["open:Open WEATHER.example", "switch:t3"],
+                       "a different address keeps the partial URL match as a secondary choice")
         XCTAssertEqual(rows(suggest("gITHUB")), ["switch:t1", "open:Search gITHUB"])
         // Diacritic-insensitive too (and Arc's top domains have weather.com).
         XCTAssertEqual(rows(suggest("wéather")), ["switch:t3", "open:Search wéather", "domain:weather.com"])
@@ -147,6 +148,32 @@ final class SuggestSpecTests: XCTestCase {
     /// a typed URL that is in history shows once, as the open row
     func test_aTypedURLThatIsInHistoryShowsOnceAsTheOpenRow() {
         XCTAssertEqual(rows(suggest("https://news.ycombinator.com/")), ["open:Open news.ycombinator.com"])
+    }
+
+    func test_aTypedAddressPrecedesTabsWithDifferentDestinations() {
+        for suffix in ["#set", "?set=1", "/child"] {
+            let url = "http://127.0.0.1:4000/cookie.html"
+            let bar = commandBar([candidate("setter", "Cookie", url + suffix)], [])
+            let list = Suggest.rank(query: url, bar: bar, appName: "Brk")
+            XCTAssertEqual(list.map(\.command), [.commandBar(.submit(url)), .tab(.focus(ItemID("setter")))], suffix)
+        }
+        let bar = commandBar([candidate("upper", "Cookie", "https://example.com/Cookie.html")], [])
+        XCTAssertEqual(Suggest.rank(query: "https://example.com/cookie.html", bar: bar, appName: "Brk").first?.kind, .openTyped,
+                       "URL paths are case sensitive even though tab search is not")
+    }
+
+    func test_anExactURLMatchStillSwitchesBeforeTheTypedAddress() {
+        let url = "http://127.0.0.1:4000/cookie.html"
+        let partials = (0..<4).map { candidate("partial\($0)", "Cookie", url + "#\($0)") }
+        let bar = commandBar(partials + [candidate("exact", "Cookie", url, space: "Work")], [])
+        let list = Suggest.rank(query: url, bar: bar, appName: "Brk")
+        XCTAssertEqual(list.first?.command, .tab(.focus(ItemID("exact"))), "the exact match survives the tab-source cap")
+        XCTAssertEqual(list.first?.hint, "Switch to Tab")
+        XCTAssertTrue(list.contains { $0.command == .commandBar(.submit(url)) }, "opening another copy is still offered")
+        XCTAssertEqual(Suggest.rank(query: "cookie", bar: bar, appName: "Brk").first?.kind, .switchToTab,
+                       "a text query still prefers matching open tabs")
+        XCTAssertEqual(Suggest.rank(query: "127.0.0.1:4000/cookie.html", bar: bar, appName: "Brk").first?.command,
+                       .tab(.focus(ItemID("exact"))), "scheme inference uses the domain URL policy")
     }
 
     /// listed actions match by label and Arc's trigger words and carry their shortcut, or none; one that the query

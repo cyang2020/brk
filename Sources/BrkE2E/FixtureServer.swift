@@ -70,17 +70,15 @@ final class FixtureServer: @unchecked Sendable {
         let firstLine = String(decoding: request.prefix(while: { $0 != 0x0D && $0 != 0x0A }), as: UTF8.self)
         let parts = firstLine.split(separator: " ")
         guard parts.count >= 2 else { return }
-        var path = String(parts[1])
+        let target = String(parts[1])
+        var path = target
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         if path == "/fail" { return }   // drop the connection: no status line, no body
         if path == "/" { path = "/index.html" }
         let response: Data
         if path.hasPrefix("/suggest") {
-            let query = path.split(separator: "?").dropFirst().joined().split(separator: "&").compactMap { pair -> String? in
-                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
-                return kv.count == 2 && kv[0] == "q" ? kv[1].removingPercentEncoding : nil
-            }.first ?? ""
-            let body = Data("[\"\(query)\", [\"\(query)ft\", \"\(query)m\"]]".utf8)
+            let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
+            guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/download-active" {
             // Keep a response open until the browser cancels it. The shutdown scenario waits for received bytes,

@@ -59,6 +59,29 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertFalse(view.isRecording)
     }
 
+    func test_theRecorderTakesCommandEventsAndStopsWhenFocusLeaves() {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 80),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        let view = ChordRecorderView(frame: CGRect(x: 0, y: 0, width: 132, height: 24))
+        window.contentView = view
+        window.orderFront(nil)
+        defer { view.stop(); window.orderOut(nil) }
+        var recorded: [KeyChord?] = []
+        view.record = { recorded.append($0) }
+        view.start()
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 1,
+                                    windowNumber: window.windowNumber, context: nil, characters: "e",
+                                    charactersIgnoringModifiers: "e", isARepeat: false, keyCode: Key.e.code)!
+        NSApp.sendEvent(event)
+        XCTAssertEqual(recorded, [KeyChord(.command, .e)])
+        XCTAssertFalse(view.isRecording)
+        view.start()
+        XCTAssertTrue(view.isRecording)
+        window.makeFirstResponder(nil)
+        XCTAssertFalse(view.isRecording, "a recorder that loses focus must release the event monitor")
+    }
+
     /// the row notes: Arc's conflict sentence with the other action's name, and the system-shortcut note
     func test_rowNotesNameTheConflictAndSystemChords() {
         let clash = rows([.reloadPage: KeyOverride(chord: KeyChord(.command, .t), priority: nil)])
