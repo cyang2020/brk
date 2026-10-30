@@ -53,6 +53,7 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        if kind == .incognito { window.appearance = NSAppearance(named: .darkAqua) }
         window.onKeyEquivalent = { event in
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
@@ -164,10 +165,10 @@ extension HostWindow {
     func hostEvent(_ event: NSEvent) -> Bool {
         switch event.type {
         case .flagsChanged: onFlagsChanged?(event.modifierFlags)
-        case .leftMouseDown, .rightMouseDown, .otherMouseDown where !event.modifierFlags.contains(.control):
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             // Control stays the keyboard's report alone: a click while Control is held mid Ctrl+Tab walk would otherwise
             // read as a repeated report, which the reducer takes for a missed release and commits the walk.
-            onFlagsChanged?(event.modifierFlags)
+            if !event.modifierFlags.contains(.control) { onFlagsChanged?(event.modifierFlags) }
         default: break
         }
         if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {

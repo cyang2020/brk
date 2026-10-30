@@ -90,7 +90,8 @@ final class TablistView: NSScrollView {
             }
         }
         index(space.pinned.rows, .pinned)
-        index(space.today.rows, .today)
+        index(space.today.rows, space.today.kind)
+        todaySection.identify(.section(space.today.kind))
 
         // Section containers enclose their rows (Today: the divider, New Tab and its rows).
         let width = f.tablistViewport.width
@@ -121,7 +122,7 @@ final class TablistView: NSScrollView {
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
-                divider.render(canClear: !space.today.rows.isEmpty, palette: palette)
+                divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette)

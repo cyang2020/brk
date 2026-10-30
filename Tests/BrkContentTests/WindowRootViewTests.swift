@@ -74,6 +74,48 @@ final class WindowRootViewTests: XCTestCase {
         XCTAssertFalse(view.isHiddenOrHasHiddenAncestor, "the reveal strip is hidden")
         XCTAssertEqual(view.frame, strip)
     }
+
+    func testIncognitoScratchRowsRenderUpdateAndCloseInTheirOwnSection() throws {
+        let ctx = Context(now: now, newID: ids.next)
+        let projection = ProjectionContext(now: now, calendar: Calendar(identifier: .gregorian))
+        var state = StateCodec.restore(nil, seed: RestoreSeed(startURL: URL(string: "https://example.com/regular"), contentSize: Self.size), ctx: ctx).state
+        let standard = try XCTUnwrap(project(state, projection).windows.keys.first)
+        let originalTheme = project(state, projection).windows[standard]!.theme
+        state = reduce(state, .user(standard, .window(.newIncognito)), ctx).state
+        let incognito = try XCTUnwrap(project(state, projection).windows.values.first { $0.kind == .incognito }?.id)
+        state = reduce(state, .user(incognito, .commandBar(.submit("https://example.com/private"))), ctx).state
+        let first = project(state, projection).windows[incognito]!
+        XCTAssertEqual(first.theme.scheme, .dark)
+        XCTAssertEqual(first.theme.tokens, .dark)
+        XCTAssertLessThan(relativeLuminance(first.theme.windowColor), 0.18)
+        XCTAssertEqual(project(state, projection).windows[standard]?.theme, originalTheme)
+        let (container, root, _) = render(first)
+        _ = container
+        func find(_ id: ViewID) -> NSView? {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == id.identifier { return view }
+                return view.subviews.lazy.compactMap(walk).first
+            }
+            return walk(root)
+        }
+        let tab = try XCTUnwrap(first.scratch?.rows.first?.id)
+        let section = try XCTUnwrap(find(.section(.scratch)))
+        let row = try XCTUnwrap(find(.row(tab)))
+        XCTAssertFalse(row.isHiddenOrHasHiddenAncestor)
+        XCTAssertTrue(row.isDescendant(of: section))
+        let frames = WindowLayout.compute(first, contentSize: Self.size)
+        XCTAssertTrue(frames.sidebar?.rows.contains { $0.kind == .item(tab) } == true)
+        state = reduce(state, .user(incognito, .commandBar(.submit("https://example.com/private-two"))), ctx).state
+        let second = project(state, projection).windows[incognito]!
+        let newTab = try XCTUnwrap(second.scratch?.rows.first?.id)
+        root.render(second, frames: WindowLayout.compute(second, contentSize: Self.size), surface: { _ in nil })
+        XCTAssertNotNil(find(.row(newTab)), "scratch changes must invalidate the sidebar render")
+        state = reduce(state, .user(incognito, .tab(.close(.item(newTab)))), ctx).state
+        let closed = project(state, projection).windows[incognito]!
+        root.render(closed, frames: WindowLayout.compute(closed, contentSize: Self.size), surface: { _ in nil })
+        XCTAssertNil(find(.row(newTab)))
+        XCTAssertNotNil(find(.row(tab)))
+    }
 }
 
 final class IDs: @unchecked Sendable {

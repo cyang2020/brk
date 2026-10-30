@@ -27,7 +27,7 @@ extension Work {
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newIncognito:
             // Shift+Cmd+N: a session-only window; its tabs live in its scratch tree and its pages browse in
-            // `BrowsingContext.incognito` (F2 owns the incognito theme and the badge).
+            // `BrowsingContext.incognito` (F2 owns the context and badge; the projection gives it dark chrome).
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)

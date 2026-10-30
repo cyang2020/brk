@@ -82,7 +82,8 @@ public final class SidebarView: NSView {
     }
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
-        let slice = Slice(sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: snapshot.space,
+        let space = SidebarLayout.space(in: snapshot)
+        let slice = Slice(sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
         guard slice != last else { return }
@@ -110,12 +111,12 @@ public final class SidebarView: NSView {
         favorites.frame = local(f.favoritesTray)
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.frame = local(f.spaceHeader)
-        spaceHeader.render(snapshot.space, palette: palette)
+        spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
-        tablist.render(snapshot.space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette)
+        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette)
         dock.frame = local(f.dock)
         dock.render(snapshot.dock, frames: f, palette: palette)
-        drag.context = DragController.Context(space: snapshot.space, favorites: snapshot.favorites, frames: f)
+        drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
 

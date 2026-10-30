@@ -158,9 +158,31 @@ enum Wave2Scenarios {
         try expect(try app.view(incognito!).urlPill.profile?.incognito == true, "no incognito badge")
         try app.waitUntil("the incognito badge on screen") {
             guard case .native(let n) = try app.send(.native(window: incognito)) else { return false }
-            return isShown(n, .profileBadge)
+            let v = try app.view(incognito!)
+            guard let row = v.scratch?.rows.first else { return false }
+            try expect(v.theme.scheme == .dark && relativeLuminance(v.theme.windowColor) < 0.18, "incognito chrome is not dark")
+            return try isShown(n, .profileBadge) && contains(visible(n, .section(.scratch)), visible(n, .row(row.id)))
         }
         try app.screenshot("incognito", window: incognito)
+        let privateTab = try app.view(incognito!).scratch!.rows[0].id
+        try dispatch(app, window: incognito, .commandBar(.submit(app.site.url("red.html").absoluteString)))
+        try app.waitUntil("a second private tab loaded") {
+            let v = try app.view(incognito!)
+            guard case .tab(let row)? = v.scratch?.rows.first else { return false }
+            return v.scratch?.rows.count == 2 && row.title == "Red"
+        }
+        try app.click(.row(privateTab))
+        try app.waitUntil("clicking the private sidebar row selects its page") {
+            guard case .native(let native) = try app.send(.native(window: incognito)) else { return false }
+            return try app.view(incognito!).content.panes.first?.tab == privateTab && native.focusedPage == PageID(privateTab)
+        }
+        // `press` has no window argument and falls back to an arbitrary window when the display is locked.
+        // Target this window explicitly; R6 covers the native Ctrl+Tab press/release path.
+        try dispatch(app, window: incognito, .tab(.close(.focused)))
+        try app.waitUntil("closing the private row selects the remaining private page") {
+            let v = try app.view(incognito!)
+            return v.scratch?.rows.count == 1 && v.urlPill.text == displayURL(app.site.url("red.html"))
+        }
         try app.flush()
         try app.restart()
         guard case .hello(let h) = try app.send(.hello) else { throw Check(description: "no hello after restart") }
@@ -169,6 +191,10 @@ enum Wave2Scenarios {
         try app.waitUntil("the History page") { isLibrary(try app.view().overlay, page: .history) }
         guard case .library(let library)? = try app.view().overlay else { throw Check(description: "no library") }
         try expect(!library.history.contains { $0.url == app.site.url("page2.html") }, "the incognito visit is in history")
+        try app.dispatch(.library(.open(.archive)))
+        guard case .library(let archived)? = try app.view().overlay else { throw Check(description: "no archive") }
+        let urls = archived.archive?.groups.flatMap(\.entries).map(\.url) ?? []
+        try expect(!urls.contains(app.site.url("page2.html")), "closing the incognito row saved it in the archive")
     }
 
     /// W2-4 (F3): Cmd+N opens a second standard window on the same space; a tab opened in one shows in both
@@ -188,6 +214,12 @@ enum Wave2Scenarios {
         try app.waitUntil("the tab in both sidebars") {
             let a = try app.view().space.today.rows.map(\.id), b = try app.view(second!).space.today.rows.map(\.id)
             return a.count == 2 && a == b
+        }
+        try app.waitUntil("the second window's page loaded and both native sidebars drawn") {
+            guard let row = currentTab(try app.view(second!)), row.title == "Fixture Page 2",
+                  case .native(let native) = try app.send(.native(window: second)) else { return false }
+            return try isShown(native, .row(row.id)) && isShown(app.native(), .row(row.id))
+                && native.focusedPage == PageID(row.id) && native.pages[PageID(row.id)] != nil
         }
         try app.screenshot("two-windows")
         try app.flush()
@@ -217,6 +249,12 @@ enum Wave2Scenarios {
                    "Little Arc content size \(facts.contentSize), expected \(size)")
         try dispatch(app, window: little, .commandBar(.submit(app.site.url("page2.html").absoluteString)))
         try app.waitUntil("the Little Arc's one tab") { try app.view(little!).scratch?.rows.count == 1 }
+        try app.waitUntil("the Little Arc page loaded with keyboard focus") {
+            guard case .tab(let row)? = try app.view(little!).scratch?.rows.first,
+                  case .native(let native) = try app.send(.native(window: little)) else { return false }
+            return row.title == "Fixture Page 2" && native.focusedPage == PageID(row.id)
+                && native.pages[PageID(row.id)] != nil && !isShown(native, .sidebar)
+        }
         try app.screenshot("little-arc", window: little)
         let before = todayIDs(try app.view())
         try dispatch(app, window: little, .window(.openIn(.current)))
@@ -226,6 +264,11 @@ enum Wave2Scenarios {
             return h.windows.count == 1 && today.count == before.count + 1 && !before.contains(today[0])
         }
         try expect(try currentTab(app.view())?.url == app.site.url("page2.html"), "the moved tab is not current")
+        try app.waitUntil("the promoted tab loaded in the standard window") {
+            guard let row = currentTab(try app.view()), row.title == "Fixture Page 2" else { return false }
+            let native = try app.native()
+            return native.focusedPage == PageID(row.id) && native.pages[PageID(row.id)] != nil && isShown(native, .row(row.id))
+        }
     }
 
     /// W2-6 (F3): Shift+click on fixture home's link opens a Peek on page2: `view().overlay` is `.peek`, the `peek`
@@ -250,12 +293,17 @@ enum Wave2Scenarios {
             try expect(near(rect, n.computed.contentArea.insetBy(dx: Metrics.peek.inset.value, dy: Metrics.peek.inset.value)), "peek inset is not \(Metrics.peek.inset.value)")
             try expect(n.pages[page!] != nil, "the peeked page has no surface")
             try expect(n.focusedPage == page, "focus is on \(n.focusedPage?.description ?? "nothing"), not the peek")
-            return true
+            guard case .peek(let p)? = try app.view().overlay else { return false }
+            return p.tab.title == "Fixture Page 2"
         }
         try app.screenshot("peek")
         try app.press("escape")
         try app.waitUntil("the peek to close") { try app.view().overlay == nil && app.native().pages[page!] == nil }
         try expect(todayIDs(try app.view()) == before, "the peek left a Today tab behind")
+        try app.waitUntil("keyboard focus returned to the original page") {
+            guard let row = currentTab(try app.view()) else { return false }
+            return try app.native().focusedPage == PageID(row.id)
+        }
     }
 
     /// W2-7 (F3): `externalURL` with default settings opens a Little Arc on the link; with "Links from other apps
@@ -268,7 +316,7 @@ enum Wave2Scenarios {
             little = h.windows.first { (try? app.view($0))?.kind == .little }
             guard let little else { return false }
             guard case .tab(let row)? = try app.view(little).scratch?.rows.first else { return false }   // its one tab is a scratch row
-            return row.url == app.site.url("page2.html")
+            return row.url == app.site.url("page2.html") && row.title == "Fixture Page 2"
         }
         try dispatch(app, window: little, .window(.close))
         let work = try createSpace(app, title: "Work")
@@ -280,6 +328,7 @@ enum Wave2Scenarios {
         try app.waitUntil("the routed link at the top of Work's Today") {
             let v = try app.view()
             return v.space.id == work && tabRows(v.space.today.rows).first?.url == app.site.url("red.html")
+                && currentTab(v)?.title == "Red"
         }
         try app.screenshot("routed-link")
     }

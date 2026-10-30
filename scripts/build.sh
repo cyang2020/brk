@@ -32,7 +32,7 @@ swift package --allow-writing-to-package-directory --allow-network-connections a
   cef bundle --product "$PRODUCT" --configuration "$CONFIG" --bundle-id "$BUNDLE_ID" --sign -
 
 APP="dist/$PRODUCT.app"
-# 6. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
+# 5. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
 #    because the plugin signed before the edit.
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 codesign --force --deep --sign - "$APP"

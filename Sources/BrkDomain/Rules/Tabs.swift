@@ -12,8 +12,7 @@ extension Work {
         case .step(let step):
             // Next or previous stop in the space's sidebar order, no wrap; a split is one stop. Nothing shown: Down
             // goes to the first stop, Up to the last.
-            guard let space = state.doc.windows[window]?.space else { return }
-            let stops = state.sidebarStops(space)
+            let stops = state.units(in: window, skipCollapsed: true)
             guard !stops.isEmpty else { return }
             let at = state.shownItem(in: window).flatMap { stops.firstIndex(of: $0) }
             let index: Int
@@ -28,13 +27,13 @@ extension Work {
             // First press freezes the order (the shown item, then the space's tabs and splits by recency, ties in
             // sidebar order) and the on-screen baseline; each press moves the cursor and shows that item. Nothing is
             // stamped until the walk commits (Control released, or any other input). Fewer than two items: no-op.
-            guard let doc = state.doc.windows[window], state.session.windows[window] != nil else { return }
+            guard state.doc.windows[window] != nil, state.session.windows[window] != nil else { return }
             var cycle: RecentCycle
             if let pending = state.session.windows[window]!.recentCycle {
                 cycle = pending
             } else {
                 let shown = state.shownItem(in: window)
-                let rest = state.unitsOfSpace(doc.space).filter { $0 != shown }.enumerated()
+                let rest = state.units(in: window).filter { $0 != shown }.enumerated()
                     .sorted { a, b in
                         let (x, y) = (state.lastActiveOf(a.element), state.lastActiveOf(b.element))
                         return x != y ? x > y : a.offset < b.offset

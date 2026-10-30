@@ -56,9 +56,12 @@ extension Work {
         var batch: [ArchivedTab] = []
         for id in ids {
             guard let role = state.role(of: id), state.locate(id).flatMap({ state.tree($0)?[id]?.kind }) != .section else { continue }
+            let incognito: Bool
+            if case .window(let window)? = state.locate(id) { incognito = state.doc.windows[window]?.kind == .incognito }
+            else { incognito = false }
             for (tabID, tab) in removeItem(id) {
                 unload(tabID)
-                guard tab.url != nil else { continue }
+                guard !incognito, tab.url != nil else { continue }
                 batch.append(ArchivedTab(id: ArchiveID(ctx.newID()), tabID: tabID, tab: tab, archivedAt: ctx.now, reason: reason,
                                          fromSpace: role.space, fromSection: role.kind))
             }

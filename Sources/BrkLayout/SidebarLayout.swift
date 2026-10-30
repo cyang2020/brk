@@ -11,6 +11,18 @@ import Foundation
 /// each side), favorites tray (insets 8), the space header strip (36, full width), the tab list viewport, and the
 /// dock (50) at the bottom.
 public enum SidebarLayout {
+    /// The list shown in the sidebar. Incognito uses its scratch section in the unpinned list's position;
+    /// the snapshot's saved space and the scratch section's identity remain unchanged.
+    public static func space(in snapshot: WindowSnapshot) -> SpaceSnapshot {
+        var space = snapshot.space
+        if snapshot.kind == .incognito, let scratch = snapshot.scratch {
+            space.title = ProfileCopy.incognito
+            space.icon = .none
+            space.today = scratch
+        }
+        return space
+    }
+
     public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem]) -> SidebarFrames {
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
@@ -129,7 +141,7 @@ public enum TablistLayout {
             }
         }
         index(space.pinned.rows, parent: space.pinned.root, section: .pinned, parentKind: .section)
-        index(space.today.rows, parent: space.today.root, section: .today, parentKind: .section)
+        index(space.today.rows, parent: space.today.root, section: space.today.kind, parentKind: .section)
 
         var target: (parent: ItemID, index: Int, section: SectionKind, parentKind: ItemKind)?
         let spacing = Metrics.tablist.rowSpacing.value
@@ -139,9 +151,9 @@ public enum TablistLayout {
             target = (space.pinned.root, 0, .pinned, .section)
         case .divider?:
             let upper = point.y < hit!.rect.midY
-            target = upper ? (space.pinned.root, space.pinned.rows.count, .pinned, .section) : (space.today.root, 0, .today, .section)
+            target = upper ? (space.pinned.root, space.pinned.rows.count, .pinned, .section) : (space.today.root, 0, space.today.kind, .section)
         case .newTab?:
-            target = (space.today.root, 0, .today, .section)
+            target = (space.today.root, 0, space.today.kind, .section)
         case .item(let id)?:
             guard let place = places[id] else { return nil }
             let f = (point.y - hit!.rect.minY) / max(hit!.rect.height, 1)
@@ -157,7 +169,7 @@ public enum TablistLayout {
             }
         case nil:
             if let first = rows.first, point.y < first.rect.minY { target = (space.pinned.root, 0, .pinned, .section) }
-            else { target = (space.today.root, space.today.rows.count, .today, .section) }
+            else { target = (space.today.root, space.today.rows.count, space.today.kind, .section) }
         }
         guard var t = target, Placement.canPlace(kind, inSection: t.section, parentKind: t.parentKind) else { return nil }
         if let item {

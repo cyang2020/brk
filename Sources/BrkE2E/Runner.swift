@@ -23,6 +23,7 @@ final class Runner {
         let server = FixtureServer(root: arguments.site)
         try server.start()
         defer { server.stop() }
+        // Keep the chosen root short enough for the control socket's Unix path limit.
         let scratchRoot = ProcessInfo.processInfo.environment["BRK_E2E_DATA_ROOT"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.temporaryDirectory
         let scratch = scratchRoot.appendingPathComponent("brk-e2e-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
