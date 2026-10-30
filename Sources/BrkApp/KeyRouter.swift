@@ -41,14 +41,16 @@ final class KeyRouter: WebEngineDelegate {
     }
 
     /// Arc's Links setting "Open a Peek window when clicking on links to other sites" ("This only affects Favorites
-    /// and Pinned tabs"): a user-made navigation of a Pinned or Favorites tab to another host opens a Peek in the
-    /// window showing it and the navigation is cancelled. Everything else goes through. TODO(F3): Arc's exact
-    /// "other site" rule (registrable domain, not host).
+    /// and Pinned tabs"): a user-made navigation of a Pinned or Favorites tab to another site opens a Peek in the
+    /// window showing it and the navigation is cancelled. "Another site" is another registrable domain (`sameSite`,
+    /// Rules/Peek.swift): a Pinned mail.google.com following a link to calendar.google.com stays; a link to
+    /// example.com peeks. Everything else goes through (redirects are never asked about; a URL without a host, a
+    /// tab without one, a Peek or Little Arc page, or the setting off).
     func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool {
         guard userGesture, store.snapshot.settings.links.peekFromPinnedAndFavorites, let window = store.window(showing: page),
               let view = store.snapshot.windows[window] else { return true }
         let tab = view.favorites.tiles.first { $0.id == page.item } ?? pinnedTabs(view.space.pinned.rows).first { $0.id == page.item }
-        guard let tab, let from = tab.url?.host?.lowercased(), let to = url.host?.lowercased(), from != to else { return true }
+        guard let tab, let from = tab.url?.host, let to = url.host, !sameSite(from, to) else { return true }
         store.dispatch(.user(window, .peek(.open(url))))
         return false
     }

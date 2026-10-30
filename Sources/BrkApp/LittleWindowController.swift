@@ -1,5 +1,6 @@
 import AppKit
 import BrkBase
+import BrkContent
 import BrkDomain
 import BrkEngine
 import BrkLayout
@@ -109,8 +110,8 @@ public enum LittleArcCopy {
         return "Little \(Product.name) — \(page)"
     }
 
-    /// `bin:0x103a05b60`.
-    public static let hint = "Click “Open in” to move this page in a full window, or ⌘W to close"
+    /// `bin:0x103a05b60`, shared with the Peek strip (BrkContent `PeekCopy`).
+    public static let hint = PeekCopy.hint
 }
 
 /// The Little Arc host window: an NSPanel that routes keys and modifiers like `BrowserWindow`, can be key (its page
