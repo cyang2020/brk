@@ -2,19 +2,19 @@
 
 The four interrupted workers continued with Codex. Their Settings, Windows, Command bar, and Library changes are merged with the completed Profiles implementation. The signed application is `dist/Brk.app`.
 
-Updated on 2026-10-31 after the independent privacy review. Both P1 findings are fixed and pass native privacy checks. The full integration gate remains open on two window-focus failures. Full Arc feature coverage and pixel parity remain unfinished.
+Updated on 2026-10-31 after parent integration of the privacy and native-focus fixes. All 45 current native scenarios now pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
 
 ## Verification
 
-- `scripts/build.sh` passes: 454 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [build log](../../verify/swift/wave2-privacy-fix/evidence/release-build.log).
-- The latest full CEF run has 43 passes and two failures across 45 scenarios. N1 loses page keyboard focus; W2-4 fails its second-window focus check. All four new private-navigation cases pass. See the [current report](../../verify/swift/wave2-privacy-fix/REPORT.md). The earlier [41/41 report](../../verify/swift/wave2-integration/native/REPORT.md) describes the pre-review snapshot.
+- `scripts/build.sh` passes: 459 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/swift/focus-parent/evidence/build.log).
+- The parent independently ran the merged CEF application through all 45 scenarios: 45 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/swift/focus-parent/native/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
 - The three skipped tests cover two later Max features and the native file-export save panel. They are not counted as verified behavior.
-- The [source hashes](../../verify/swift/wave2-privacy-fix/source-sha256.json) and [application hash](../../verify/swift/wave2-privacy-fix/app-sha256.txt) identify the current tested files.
+- The [source hashes](../../verify/swift/focus-parent/source-sha256.json) and [application hash](../../verify/swift/focus-parent/app-sha256.txt) identify the current tested files.
 
 The native run used this command after the successful build:
 
 ```sh
-BRK_E2E_DATA_ROOT=/tmp/brk-private-navigation/data SKIP_BUILD=1 scripts/e2e.sh --out /tmp/brk-private-navigation/full
+BRK_E2E_DATA_ROOT=/tmp/brk-complete/data SKIP_BUILD=1 scripts/e2e.sh --out /tmp/brk-complete/focus-native
 ```
 
 ## Implemented behavior
@@ -31,6 +31,8 @@ BRK_E2E_DATA_ROOT=/tmp/brk-private-navigation/data SKIP_BUILD=1 scripts/e2e.sh -
 
 `AppEffect.showSettings` raises Settings even when its pane state does not change. Control input remembers the last presented or clicked window when macOS supplies no key window. Standard editing actions then use that window's responder chain. Modifier matching preserves Fn, so typing `f` does not invoke Fn+F.
 
+Page focus now belongs to its native window. Late AppKit layout can repair a missing page responder without activating a background window or replacing a valid native editor. The [focus handoff](../../verify/swift/focus-integration/REPORT.md) records the traced W2-4 cause and the remaining uncertainty about N1's original invalidation trigger.
+
 Cmd+Shift+J defaults to app priority because Chromium can consume its download accelerator before Brk receives the post-page callback. Explicit user priority overrides still apply. This is a documented CEF adaptation to the extracted Arc default.
 
 Chromium auxiliary download windows close before CEF shutdown. This fixes the reproduced exit crash without a shutdown delay. Download updates and history title changes also stay within their browsing profile.
@@ -39,7 +41,6 @@ The parent preserved failing-before tests, native focus snapshots, and routing l
 
 ## Remaining work and limits
 
-- Resolve the N1 and W2-4 native focus failures before calling the current full integration run green.
 - Download Cancel updates the ledger but does not stop the network transfer. Downloads therefore remain partially implemented.
 - Media, Easels and Notes, Boosts, and Spaces have Library placeholders. Their underlying features, extension management, import, and other later-wave features remain in the [feature inventory](feature-ledger.md).
 - The native export save panel still needs a runtime check. AI integration uses local Claude or Codex command-line tools; the later Max tasks remain unfinished.

@@ -1,0 +1,51 @@
+{
+  "version": "1.170.0",
+  "build": "89123",
+  "installed_path": "/Applications/Arc.app/Contents/MacOS/Arc",
+  "arm64_sha256": "77be289e16a139056dd9d0bf145ad4707d4e217289bb279a333949dcfd39c52d",
+  "cached_matches_installed": true,
+  "checks": [
+    {
+      "address": "0x1018252a0",
+      "raw_bytes": "9b18cc97",
+      "decoded_bl_target": "0x100b2b50c",
+      "pass": true
+    },
+    {
+      "address": "0x101825368",
+      "raw_bytes": "d6ba7694",
+      "decoded_bl_target": "0x1035d3ec0",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e08",
+      "raw_bytes": "11a87497",
+      "decoded_bl_target": "0x100b2ae4c",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e18",
+      "raw_bytes": "75a87497",
+      "decoded_bl_target": "0x100b2afec",
+      "pass": true
+    },
+    {
+      "address": "0x102e00e7c",
+      "raw_bytes": "407b7897",
+      "decoded_bl_target": "0x100c1fb7c",
+      "pass": true
+    },
+    {
+      "address": "0x102e00eb0",
+      "raw_bytes": "86a2a797",
+      "decoded_bl_target": "0x1017e98c8",
+      "pass": true
+    },
+    {
+      "address": "0x102e448f0",
+      "raw_bytes": "57997397",
+      "decoded_bl_target": "0x100b2ae4c",
+      "pass": true
+    }
+  ]
+}
