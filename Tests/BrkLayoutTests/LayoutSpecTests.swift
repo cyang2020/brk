@@ -117,6 +117,7 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertEqual(LibraryPage.allCases.map { archive.library?.pageCells[$0] },
                        (0..<7).map { CGRect(x: 8, y: 44 + 41 * Double($0), width: 401, height: 40) })
         XCTAssertEqual(LibraryLayout.closeButton(in: panel), CGRect(x: 8, y: 735, width: 32, height: 32))
+        XCTAssertEqual(LibraryLayout.trafficLightsOrigin(in: panel), bar.sidebar?.trafficLightsOrigin, "the window buttons stay put")
         XCTAssertNil(archive.commandBar)
         XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
         XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)

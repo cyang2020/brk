@@ -90,6 +90,8 @@ final class ArchivePageView: NSView, NSSearchFieldDelegate {
     func show(_ archive: ArchiveSnapshot, in frame: CGRect, scheme: Scheme) {
         let reopened = archive.openID != self.archive?.openID
         guard reopened || isHidden || archive != self.archive || frame != self.frame || scheme != self.scheme else { return }
+        // A new frame alone (a window resize) lays the list out again without rebuilding it.
+        let rebuilds = reopened || isHidden || archive != self.archive || scheme != self.scheme
         if reopened {
             filterField.stringValue = ""
             confirming = false
@@ -101,7 +103,7 @@ final class ArchivePageView: NSView, NSSearchFieldDelegate {
         thresholdMenu.selectItem(at: AutoArchiveThreshold.allCases.firstIndex(of: archive.threshold) ?? 0)
         if archive.groups.isEmpty { confirming = false }
         clearButton.isEnabled = !archive.groups.isEmpty
-        rebuildList()
+        if rebuilds { rebuildList() }
         layoutPage()
     }
 

@@ -102,6 +102,13 @@ public enum LibraryLayout {
         return LibraryFrames(frame: CGRect(origin: .zero, size: contentSize), strip: panel, pageCells: cells, page: page)
     }
 
+    /// The traffic lights over the panel: where the sidebar puts them (`SidebarLayout`), so they do not move when the
+    /// Library opens.
+    public static func trafficLightsOrigin(in panel: CGRect) -> CGPoint {
+        let w = Metrics.window
+        return CGPoint(x: panel.minX + w.trafficLightLeft.value, y: panel.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
+    }
+
     /// The exit button at the bottom left of the panel: the dock's Library button frame (`SidebarLayout`).
     public static func closeButton(in panel: CGRect) -> CGRect {
         let d = Metrics.dock, size = d.buttonSize.value

@@ -95,12 +95,16 @@ class LibraryListPage: NSView, NSSearchFieldDelegate {
     }
 
     /// Shows the page in `frame` (the Library's page area, in the Library view's coordinates). A new opening
-    /// clears the search and any pending confirmation; the same opening keeps them and the scroll position.
-    func present(openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {
-        if openID != self.openID {
+    /// clears the search and any pending confirmation; the same opening keeps them and the scroll position. The rows
+    /// are rebuilt when the data, the opening, the scheme or the day changed; a new frame only lays them out again.
+    func present(openID: Int, in frame: CGRect, scheme: Scheme, now: Instant, dataChanged: Bool) {
+        let reopened = openID != self.openID
+        if reopened {
             searchField.stringValue = ""
             confirming = false
         }
+        let newDay = calendar.startOfDay(for: LibraryDays.date(now)) != calendar.startOfDay(for: LibraryDays.date(self.now))
+        let rebuilds = reopened || dataChanged || newDay || isHidden || scheme != self.scheme
         self.openID = openID
         self.now = now
         self.frame = frame
@@ -114,7 +118,7 @@ class LibraryListPage: NSView, NSSearchFieldDelegate {
             confirmText.textColor = colors.foregroundPrimary
         }
         if !hasRows { confirming = false }
-        rebuild()
+        if rebuilds { rebuild() } else { layoutPage() }
     }
 
     func controlTextDidChange(_ notification: Notification) { rebuild() }
@@ -320,20 +324,16 @@ final class LibraryRowView: NSView {
         self.detail.font = .systemFont(ofSize: m.detailFont.value)
         self.detail.textColor = colors.foregroundSecondary
         self.detail.lineBreakMode = .byTruncatingTail
-        progress.style = .bar
-        progress.controlSize = .small
-        progress.minValue = 0
-        progress.maxValue = 1
-        switch state {
-        case .none: progress.isHidden = true
-        case .fraction(let f):
-            progress.isIndeterminate = false
-            progress.doubleValue = f
-        case .indeterminate:
-            progress.isIndeterminate = true
-            progress.startAnimation(nil)
+        for view in [icon, self.title, self.detail] as [NSView] { addSubview(view) }
+        if state != .none {
+            progress.style = .bar
+            progress.controlSize = .small
+            progress.minValue = 0
+            progress.maxValue = 1
+            progress.isIndeterminate = state == .indeterminate
+            if case .fraction(let f) = state { progress.doubleValue = f } else { progress.startAnimation(nil) }
+            addSubview(progress)
         }
-        for view in [icon, self.title, self.detail, progress] as [NSView] { addSubview(view) }
         for accessory in accessories {
             let button = NSButton()
             button.image = NSImage(systemSymbolName: accessory.symbol, accessibilityDescription: accessory.tooltip)
@@ -360,7 +360,7 @@ final class LibraryRowView: NSView {
     var accessoryTooltips: [String] { buttons.compactMap(\.toolTip) }
     var texts: [String] { [title.stringValue, detail.stringValue] }
     var shownProgress: Progress {
-        if progress.isHidden { return .none }
+        if progress.superview == nil { return .none }
         return progress.isIndeterminate ? .indeterminate : .fraction(progress.doubleValue)
     }
 
@@ -412,7 +412,7 @@ final class LibraryRowView: NSView {
         let x = icon.frame.maxX + m.iconToTitle.value
         let width = max(0, right - inset - x)
         let titleHeight = title.fittingSize.height, detailHeight = detail.fittingSize.height
-        let barHeight = progress.isHidden ? 0 : m.progressHeight.value + inset / 2
+        let barHeight = progress.superview == nil ? 0 : m.progressHeight.value + inset / 2
         let top = ((bounds.height - titleHeight - detailHeight - barHeight) / 2).rounded()
         title.frame = CGRect(x: x, y: top, width: width, height: titleHeight)
         progress.frame = CGRect(x: x, y: title.frame.maxY + inset / 4, width: width, height: m.progressHeight.value)

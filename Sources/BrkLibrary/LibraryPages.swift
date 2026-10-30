@@ -21,8 +21,9 @@ final class DownloadsPageView: LibraryListPage {
     }
 
     func show(_ rows: [DownloadRow], openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {
+        let changed = rows != self.rows
         self.rows = rows
-        present(openID: openID, in: frame, scheme: scheme, now: now)
+        present(openID: openID, in: frame, scheme: scheme, now: now, dataChanged: changed)
     }
 
     override var hasRows: Bool { !rows.isEmpty }
@@ -103,8 +104,9 @@ final class HistoryPageView: LibraryListPage {
     }
 
     func show(_ rows: [HistoryRow], openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {
+        let changed = rows != self.rows
         self.rows = rows
-        present(openID: openID, in: frame, scheme: scheme, now: now)
+        present(openID: openID, in: frame, scheme: scheme, now: now, dataChanged: changed)
     }
 
     override var hasRows: Bool { !rows.isEmpty }
