@@ -11,6 +11,8 @@ final class ChromePage: CefBrowserDelegate {
     let surface: EmbeddedSurface
     private let chrome: CefChromeBrowser
     private unowned let engine: CEFEngine
+    /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
+    private var presses = PressCorrelator()
 
     init(spec: PageSpec, url: URL, engine: CEFEngine) {
         // TODO(W2): options: isFrameless = true, showsChromeToolbar = false, backgroundColor = .white,
@@ -68,11 +70,19 @@ final class ChromePage: CefBrowserDelegate {
     func browserDidClose(_ b: CefBrowser) { engine.pageDidClose(self) }
 
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool {
-        // TODO(W2): KeyTranslation.press(from: event) -> nil for chars and unknown keys (return false).
+        // TODO(W2): guard let press = KeyTranslation.press(from: event) else { return false }  (chars, unknown keys)
         // Modifier-only keys (Control up/down) -> return false; they reach BrkApp as WindowEvent.modifiersChanged
         // from the window's flagsChanged events (one source for both focus cases).
-        // pressID = UInt64((NSApp.currentEvent?.timestamp ?? 0) * 1e9)
-        // return engine.pageKey(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
+        // let now = Instant(milliseconds: Int64(ProcessInfo.processInfo.systemUptime * 1000))  // monotonic; only the
+        //     correlation timeout reads it, never app time (the app clock stays in BrkApp/Clock.swift)
+        // if isBeforePage {
+        //     let id = PressID(eventTimestamp: NSApp.currentEvent?.timestamp ?? ProcessInfo.processInfo.systemUptime)
+        //     if press.phase == .down { presses.beforePage(press.chord, id: id, at: now) }
+        //     return engine.pageKey(self, press, stage: .beforePage, pressID: id)
+        // } else {
+        //     let id = presses.afterPage(press.chord, at: now) ?? PressID(eventTimestamp: ProcessInfo.processInfo.systemUptime)
+        //     return engine.pageKey(self, press, stage: .afterPage, pressID: id)
+        // }
         fatalError("not implemented")
     }
 }

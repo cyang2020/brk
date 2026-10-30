@@ -72,6 +72,7 @@ let package = Package(
         .testTarget(name: "BrkUITests", dependencies: ["BrkBase", "BrkDomain", "BrkUI"], swiftSettings: strict),
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
+        .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
         .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp"], swiftSettings: strict),
         // Scans every `import` under Sources/ against the dependency rules in module-map.md.
         .testTarget(name: "ArchitectureTests", dependencies: ["BrkBase"], swiftSettings: strict),

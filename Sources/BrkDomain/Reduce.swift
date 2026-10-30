@@ -46,7 +46,8 @@ public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transit
 }
 
 /// One transition in progress. Rules are `extension Work` methods grouped by the knowledge they own, one file per
-/// area under Rules/. They mutate `state`, append to `effects`, and never read the clock except through `ctx`.
+/// area under Rules/ (`routeKey` is Rules/Keys.swift). They mutate `state`, append to `effects`, and never read the
+/// clock except through `ctx`.
 struct Work {
     var state: AppState
     let ctx: Context
@@ -76,16 +77,6 @@ struct Work {
         case .app(let c): app(c, in: window)
         case .settings(let c): settings(c, in: window)
         }
-    }
-
-    /// `Input.key`: decide with `KeyRouting.decide` over `state.session.keyRouting`; on `.dispatch(action)` run
-    /// `action.spec.command` for the window and set `keyHandled`.
-    mutating func routeKey(_ key: KeyInput, in window: WindowID) {
-        // TODO(W2): var memory = state.session.keyRouting
-        //           let decision = KeyRouting.decide(key, memory: &memory, now: ctx.now)
-        //           state.session.keyRouting = memory
-        //           if case .dispatch(let action) = decision { run(action.spec.command, in: window); keyHandled = true }
-        fatalError("not implemented")
     }
 
     mutating func observe(_ event: SystemEvent) {

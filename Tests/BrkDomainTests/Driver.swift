@@ -42,9 +42,10 @@ final class Driver {
     func system(_ event: SystemEvent) -> Transition { apply(reduce(state, .system(event), ctx)) }
 
     @discardableResult
-    func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64) -> Transition {
-        let press = KeyPress(chord: chord, phase: .down, isRepeat: false, editableFieldFocused: false)
-        return apply(reduce(state, .key(window, KeyInput(press: press, stage: stage, pressID: pressID)), ctx))
+    func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64, isRepeat: Bool = false, in window: WindowID? = nil) -> Transition {
+        let press = KeyPress(chord: chord, phase: .down, isRepeat: isRepeat, editableFieldFocused: false)
+        let input = KeyInput(press: press, stage: stage, pressID: PressID(raw: pressID))
+        return apply(reduce(state, .key(window ?? self.window, input), ctx))
     }
 
     func advance(_ duration: Duration) { now = now.advanced(by: duration) }

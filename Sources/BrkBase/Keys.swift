@@ -12,72 +12,81 @@ public struct Modifiers: OptionSet, Hashable, Sendable, Codable {
     public static let command = Modifiers(rawValue: 1 << 20)
 }
 
-/// A physical key, by macOS virtual key code (`kVK_*`, US layout positions).
+/// A physical key, by macOS virtual key code (`kVK_*`, US layout positions). The raw value is the code.
 ///
 /// Matching is by physical key, not by the character typed, because the same chord arrives from three places
 /// that disagree about characters: CEF's key event (`native_key_code` is this code), an injected `NSEvent`
 /// (`keyCode`), and the AppKit menu (which needs `menuKeyEquivalent`). Ctrl+Shift+= therefore matches although
 /// the character produced is "+". Tradeoff: on non-US layouts a chord follows the key position.
-public struct Key: Hashable, Sendable, Codable, CustomStringConvertible {
-    public let code: UInt16
+///
+/// `CaseIterable` is the inventory: lookups go through `allCases`, so a key added here is found by code and by
+/// name with no second list to keep in step (KeyTests pins the round trip for every case).
+public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomStringConvertible {
+    case a = 0, s = 1, d = 2, f = 3, h = 4, c = 8, q = 12, w = 13, r = 15, t = 17
+    case equals = 24, minus = 27, zero = 29, rightBracket = 30, leftBracket = 33
+    case i = 34, l = 37, k = 40, n = 45, m = 46, period = 47
+    case tab = 48, space = 49, escape = 53, returnKey = 36, f12 = 111
+    case leftArrow = 123, rightArrow = 124, downArrow = 125, upArrow = 126
+
+    public var code: UInt16 { rawValue }
+
     /// The string AppKit's `NSMenuItem.keyEquivalent` takes for this key (lowercase letters, or the
     /// `NSEvent` function-key characters for arrows and F-keys).
-    public let menuKeyEquivalent: String
-    /// The name used in chord strings ("cmd+shift+t", "ctrl+tab") on the control socket and in docs.
-    public let name: String
+    public var menuKeyEquivalent: String {
+        switch self {
+        case .a: "a"
+        case .s: "s"
+        case .d: "d"
+        case .f: "f"
+        case .h: "h"
+        case .c: "c"
+        case .q: "q"
+        case .w: "w"
+        case .r: "r"
+        case .t: "t"
+        case .equals: "="
+        case .minus: "-"
+        case .zero: "0"
+        case .rightBracket: "]"
+        case .leftBracket: "["
+        case .i: "i"
+        case .l: "l"
+        case .k: "k"
+        case .n: "n"
+        case .m: "m"
+        case .period: "."
+        case .tab: "\t"
+        case .space: " "
+        case .escape: "\u{1b}"
+        case .returnKey: "\r"
+        case .f12: "\u{F70F}"
+        case .leftArrow: "\u{F702}"
+        case .rightArrow: "\u{F703}"
+        case .downArrow: "\u{F701}"
+        case .upArrow: "\u{F700}"
+        }
+    }
 
-    public init(code: UInt16, menuKeyEquivalent: String, name: String) {
-        self.code = code
-        self.menuKeyEquivalent = menuKeyEquivalent
-        self.name = name
+    /// The name used in chord strings ("cmd+shift+t", "ctrl+tab") on the control socket and in docs.
+    public var name: String {
+        switch self {
+        case .tab: "tab"
+        case .space: "space"
+        case .escape: "escape"
+        case .returnKey: "return"
+        case .f12: "f12"
+        case .leftArrow: "left"
+        case .rightArrow: "right"
+        case .downArrow: "down"
+        case .upArrow: "up"
+        default: menuKeyEquivalent
+        }
     }
 
     public var description: String { name }
 
-    /// Identity is the physical key; the other fields are derived labels.
-    public static func == (a: Key, b: Key) -> Bool { a.code == b.code }
-    public func hash(into hasher: inout Hasher) { hasher.combine(code) }
-
-    public static let a = Key(code: 0, menuKeyEquivalent: "a", name: "a")
-    public static let s = Key(code: 1, menuKeyEquivalent: "s", name: "s")
-    public static let d = Key(code: 2, menuKeyEquivalent: "d", name: "d")
-    public static let f = Key(code: 3, menuKeyEquivalent: "f", name: "f")
-    public static let h = Key(code: 4, menuKeyEquivalent: "h", name: "h")
-    public static let c = Key(code: 8, menuKeyEquivalent: "c", name: "c")
-    public static let q = Key(code: 12, menuKeyEquivalent: "q", name: "q")
-    public static let w = Key(code: 13, menuKeyEquivalent: "w", name: "w")
-    public static let r = Key(code: 15, menuKeyEquivalent: "r", name: "r")
-    public static let t = Key(code: 17, menuKeyEquivalent: "t", name: "t")
-    public static let equals = Key(code: 24, menuKeyEquivalent: "=", name: "=")
-    public static let minus = Key(code: 27, menuKeyEquivalent: "-", name: "-")
-    public static let zero = Key(code: 29, menuKeyEquivalent: "0", name: "0")
-    public static let rightBracket = Key(code: 30, menuKeyEquivalent: "]", name: "]")
-    public static let leftBracket = Key(code: 33, menuKeyEquivalent: "[", name: "[")
-    public static let i = Key(code: 34, menuKeyEquivalent: "i", name: "i")
-    public static let l = Key(code: 37, menuKeyEquivalent: "l", name: "l")
-    public static let k = Key(code: 40, menuKeyEquivalent: "k", name: "k")
-    public static let n = Key(code: 45, menuKeyEquivalent: "n", name: "n")
-    public static let m = Key(code: 46, menuKeyEquivalent: "m", name: "m")
-    public static let period = Key(code: 47, menuKeyEquivalent: ".", name: ".")
-    public static let tab = Key(code: 48, menuKeyEquivalent: "\t", name: "tab")
-    public static let space = Key(code: 49, menuKeyEquivalent: " ", name: "space")
-    public static let escape = Key(code: 53, menuKeyEquivalent: "\u{1b}", name: "escape")
-    public static let returnKey = Key(code: 36, menuKeyEquivalent: "\r", name: "return")
-    public static let f12 = Key(code: 111, menuKeyEquivalent: "\u{F70F}", name: "f12")
-    public static let leftArrow = Key(code: 123, menuKeyEquivalent: "\u{F702}", name: "left")
-    public static let rightArrow = Key(code: 124, menuKeyEquivalent: "\u{F703}", name: "right")
-    public static let downArrow = Key(code: 125, menuKeyEquivalent: "\u{F701}", name: "down")
-    public static let upArrow = Key(code: 126, menuKeyEquivalent: "\u{F700}", name: "up")
-
-    /// Every key the shortcut table, the control socket and the CEF translator know. Lookups by code or name
-    /// go through this list only.
-    public static let known: [Key] = [
-        a, s, d, f, h, c, q, w, r, t, equals, minus, zero, rightBracket, leftBracket, i, l, k, n, m, period,
-        tab, space, escape, returnKey, f12, leftArrow, rightArrow, downArrow, upArrow,
-    ]
-
-    public static func byCode(_ code: UInt16) -> Key? { known.first { $0.code == code } }
-    public static func byName(_ name: String) -> Key? { known.first { $0.name == name } }
+    public static func byCode(_ code: UInt16) -> Key? { Key(rawValue: code) }
+    public static func byName(_ name: String) -> Key? { allCases.first { $0.name == name } }
 }
 
 /// A key plus modifiers, as written in Arc's menu table (anatomy 2.3).
@@ -101,12 +110,29 @@ public struct KeyChord: Hashable, Sendable, Codable, CustomStringConvertible {
         return parts.joined(separator: "+")
     }
 
-    /// Parses "cmd+shift+t", "ctrl+tab", "escape". Nil for an unknown key or modifier name. Used at the control
-    /// socket boundary; the shortcut table is written with typed constants instead.
+    /// Parses "cmd+shift+t", "ctrl+tab", "escape", case-insensitively. Nil for an unknown key or modifier name.
+    /// A trailing "+" (the plus key, "ctrl+shift++") is `Key.equals` with `.shift`. Used at the control socket
+    /// boundary; the shortcut table is written with typed constants instead.
     public init?(parsing text: String) {
-        // TODO(W6): split on "+", map cmd|command, shift, alt|option|opt, ctrl|control to Modifiers;
-        // the last part through Key.byName. A trailing "+" (the plus key) is Key.equals with .shift.
-        fatalError("not implemented")
+        var parts = text.lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+        var modifiers = Modifiers()
+        // "a++" splits into ["a", "", ""]: the key is "+".
+        if parts.count >= 2, parts[parts.count - 1].isEmpty, parts[parts.count - 2].isEmpty {
+            parts.removeLast(2)
+            parts.append("=")
+            modifiers.insert(.shift)
+        }
+        guard let last = parts.popLast(), let key = Key.byName(last) else { return nil }
+        for part in parts {
+            switch part {
+            case "cmd", "command": modifiers.insert(.command)
+            case "shift": modifiers.insert(.shift)
+            case "alt", "option", "opt": modifiers.insert(.option)
+            case "ctrl", "control": modifiers.insert(.control)
+            default: return nil
+            }
+        }
+        self.init(modifiers, key)
     }
 }
 
@@ -137,4 +163,26 @@ public enum KeyStage: Hashable, Sendable {
     case beforePage
     case afterPage
     case menu
+}
+
+/// The identity of one physical key press, the same whichever path delivered it. Routing's duplicate guard
+/// (KeyRouting.swift, rule 4) treats two inputs with equal ids in the same window as one press.
+///
+/// Correlation rule, in one place:
+/// - `beforePage` and `menu` deliveries run inside `NSApp.sendEvent` of the press itself (CEF's `OnPreKeyEvent` is
+///   synchronous; a menu key equivalent fires from `performKeyEquivalent`), so they mint the id from that event:
+///   `PressID(event:)` = the event's `timestamp` in nanoseconds. Two presses never share a timestamp.
+/// - `afterPage` (CEF's `OnKeyEvent`) runs after the renderer answers, when `NSApp.currentEvent` may be a later
+///   event. It reuses the id its `beforePage` partner minted, paired by `PressCorrelator` (BrkEngine): CEF
+///   delivers the two callbacks for one event in order per browser, so a FIFO per chord is exact. A partner older
+///   than Metrics.keys.correlationWindow, or none, means the press is treated as new.
+/// - A mouse choice in the menu has no press: it is dispatched as `.user`, never as `.key`.
+/// - Ids are window-free; routing memory is per window (`WindowSession.keyRouting`), so a press in one window can
+///   never satisfy or suppress one in another.
+public struct PressID: Hashable, Sendable, Codable, CustomStringConvertible {
+    public let raw: UInt64
+    public init(raw: UInt64) { self.raw = raw }
+    /// From an event's `timestamp` (seconds since boot, sub-millisecond resolution).
+    public init(eventTimestamp: TimeInterval) { raw = UInt64(max(0, eventTimestamp) * 1_000_000_000) }
+    public var description: String { "press#\(raw)" }
 }

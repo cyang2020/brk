@@ -26,4 +26,20 @@ final class KeyRoutingSpecTests: XCTestCase {
     /// Control released (WindowEvent.modifiersChanged) commits a Ctrl+Tab cycle; Control pressed again with a cycle
     /// still pending (lost release) commits it before the new walk starts.
     func testControlReleaseCommitsTheCycle() throws { throw XCTSkip(pendingW1) }
+
+    // MARK: Press identity (PressID rule) through reduce
+
+    /// Menu stage then beforePage with the same pressID (the unverified order): one dispatch, the second is ignored.
+    func testMenuThenCEFWithOnePressIDDispatchesOnce() throws { throw XCTSkip(pendingW1) }
+    /// beforePage then menu with the same pressID: one dispatch.
+    func testCEFThenMenuWithOnePressIDDispatchesOnce() throws { throw XCTSkip(pendingW1) }
+    /// Two genuine presses of Cmd+T with distinct pressIDs in quick succession dispatch twice.
+    func testRapidPressesWithDistinctIDsDispatchTwice() throws { throw XCTSkip(pendingW1) }
+    /// A repeat (isRepeat) of a non-repeating action with a new pressID passes to the page; Ctrl+Tab repeats dispatch.
+    func testRepeatsCarryTheirOwnIDsAndFollowTheTable() throws { throw XCTSkip(pendingW1) }
+    /// A press dispatched in window A does not suppress the same pressID in window B, and a pending pageThenApp
+    /// chord in A does not satisfy the second press in B (memory is per window).
+    func testRoutingMemoryIsPerWindow() throws { throw XCTSkip(pendingW1) }
+    /// A mouse menu choice arrives as .user, so it always runs even right after a key press of the same action.
+    func testMouseMenuChoiceIsNeverADuplicate() throws { throw XCTSkip(pendingW1) }
 }

@@ -48,8 +48,9 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, page: PageID, didEmit event: PageEvent)
 
     /// A key event reached a page (`.beforePage` or `.afterPage`). Return true to consume it. Must answer
-    /// synchronously: CEF blocks on the return value.
-    func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: UInt64) -> Bool
+    /// synchronously: CEF blocks on the return value. `pressID` follows the rule on `PressID`: minted from the
+    /// current event before the page, paired by `PressCorrelator` after it.
+    func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool
 }
 
 /// A page's view. Engines subclass it; callers treat it as a plain NSView placed inside a card.

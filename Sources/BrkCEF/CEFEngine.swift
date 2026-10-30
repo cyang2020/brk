@@ -124,7 +124,7 @@ public final class CEFEngine: WebEngine {
         delegate?.engine(self, page: page.id, didEmit: event)
     }
 
-    func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: UInt64) -> Bool {
+    func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
         guard phase == .running, live[page.id] === page else { return false }
         return delegate?.engine(self, page: page.id, key: press, stage: stage, pressID: pressID) ?? false
     }
