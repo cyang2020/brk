@@ -62,4 +62,37 @@ final class Wave1ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(d.state.tab(tab)?.url, url("https://example.com/elsewhere"))
         XCTAssertEqual(d.state.tab(tab)?.pinnedURL, start)
     }
+
+    // MARK: Finding 5: split weights at any scale
+
+    /// Equal relative weights give equal panes however large or small they are; unequal ones keep their ratio.
+    func testEqualSplitWeightsGiveEqualPanesAtAnyScale() {
+        XCTAssertEqual(clampFractions([1e308, 1e308]), [0.5, 0.5])
+        XCTAssertEqual(clampFractions([1e-308, 1e-308]), [0.5, 0.5])
+        XCTAssertEqual(clampFractions([Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude]),
+                       [0.25, 0.25, 0.25, 0.25])
+        let ratio = clampFractions([1e308, 1.5e308])
+        XCTAssertEqual(ratio[0], 0.4, accuracy: 1e-12)
+        XCTAssertEqual(ratio[1], 0.6, accuracy: 1e-12)
+    }
+
+    /// A new pane in a split whose saved widths are huge gets an equal, finite share (its width is the mean of the
+    /// others, which must not overflow).
+    func testANewPaneBesideHugeSavedWidthsGetsAnEqualFiniteShare() throws {
+        let d = Driver()
+        d.user(.split(.addPane))
+        d.user(.commandBar(.submit("https://example.com/second")))
+        let split = try XCTUnwrap(d.state.doc.windows[d.window].flatMap { $0.activeBySpace[$0.space] })
+        var stored = try JSONDecoder().decode(StoredDocV1.self, from: JSONSerialization.data(withJSONObject: d.savedDoc))
+        let panes = try XCTUnwrap(stored.items[split]?.children)
+        stored.items[split]?.split?.widths = Dictionary(uniqueKeysWithValues: panes.map { ($0, 1e308) })
+        let restored = Driver(file: jsonData(["version": 1, "doc": try JSONSerialization.jsonObject(with: JSONEncoder().encode(stored))]))
+        XCTAssertEqual(restored.view.content.panes.map(\.fraction), [0.5, 0.5])
+        restored.user(.split(.addPane))
+        guard case .split(let s)? = restored.state.doc.tree[split]?.body else { return XCTFail("no split") }
+        XCTAssertTrue(s.widths.values.allSatisfy(\.isFinite), "\(s.widths)")
+        let fractions = restored.view.content.panes.map(\.fraction)
+        XCTAssertEqual(fractions.count, 3)
+        for f in fractions { XCTAssertEqual(f, 1.0 / 3, accuracy: 1e-12) }
+    }
 }
