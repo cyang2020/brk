@@ -184,8 +184,9 @@ final class TablistView: NSScrollView {
     private func updateEdges() {
         let visible = contentView.documentVisibleRect
         let line = Draw.hairline.value
-        topEdge.frame = CGRect(x: 0, y: bounds.height - line, width: bounds.width, height: line)
-        bottomEdge.frame = CGRect(x: 0, y: 0, width: bounds.width, height: line)
+        let top = isFlipped ? 0 : bounds.height - line, bottom = isFlipped ? bounds.height - line : 0
+        topEdge.frame = CGRect(x: 0, y: top, width: bounds.width, height: line)
+        bottomEdge.frame = CGRect(x: 0, y: bottom, width: bounds.width, height: line)
         topEdge.isHidden = visible.minY <= 0
         bottomEdge.isHidden = visible.maxY >= contentBottom
     }
@@ -467,7 +468,7 @@ final class RowView: HoverView, NSTextFieldDelegate {
         case .folder: nil
         }
         let fill: RGBA?
-        if dropInto { fill = tokens.dragHint }
+        if dropInto { fill = tokens.itemHover }
         else if status == .current { fill = tokens.tabCurrent }
         else if status == .visible { fill = tokens.tabVisible }
         else if isPressed { fill = tokens.tabPressed }
@@ -475,6 +476,8 @@ final class RowView: HoverView, NSTextFieldDelegate {
         else { fill = nil }
         let layer = background.layer
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
+        layer?.borderColor = palette.color(tokens.dragHintStrong).cgColor
+        layer?.borderWidth = dropInto ? Draw.hairline.value : 0
         let shadow = status == .current && !dropInto
         layer?.shadowColor = palette.color(tokens.tabShadow).cgColor
         layer?.shadowOpacity = shadow ? 1 : 0
