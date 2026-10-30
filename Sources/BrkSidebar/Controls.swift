@@ -144,9 +144,79 @@ final class GlyphButton: HoverView {
     }
 }
 
-/// The in-place rename field of a row (identified `rename-field`).
+/// The in-place title editor of a tab row, a folder row or a favorite tile (identified `rename-field`). Return commits,
+/// Escape cancels, losing focus or a click outside the field commits: `onFinish` runs once, with the typed title or
+/// nil for a cancel. `retire` drops the field without either (the rename ended elsewhere).
 @MainActor
-final class RenameField: NSTextField {
-    /// Set once the rename has been committed or cancelled, so losing focus afterwards sends nothing.
-    var finished = false
+final class RenameField: NSTextField, NSTextFieldDelegate {
+    /// Set once the rename has been committed, cancelled or retired, so losing focus afterwards sends nothing.
+    private(set) var finished = false
+    private let onFinish: (String?) -> Void
+    /// Rows, tiles and buttons never take first responder, so a click on one would not end the edit on its own.
+    private var outsideClicks: Any?
+
+    init(text: String, font: NSFont?, color: NSColor, onFinish: @escaping (String?) -> Void) {
+        self.onFinish = onFinish
+        super.init(frame: .zero)
+        identify(.renameField)
+        self.font = font
+        textColor = color
+        isBordered = false
+        drawsBackground = false
+        focusRingType = .none
+        lineBreakMode = .byClipping
+        usesSingleLineMode = true
+        cell?.isScrollable = true
+        delegate = self
+        stringValue = text
+        outsideClicks = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated { self?.clicked(event) }
+            return event
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Keyboard focus with the title selected. An editor that already has focus keeps it as it is: making the field
+    /// first responder again would make its field editor resign, which ends (commits) the edit.
+    func focus(in window: NSWindow) -> Bool {
+        guard !finished else { return false }
+        if let editor = currentEditor(), window.firstResponder === editor { return true }
+        guard window.makeFirstResponder(self) else { return false }
+        currentEditor()?.selectAll(nil)
+        return true
+    }
+
+    func retire() {
+        finished = true
+        stopOutsideClicks()
+        delegate = nil
+        removeFromSuperview()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.insertNewline(_:)) { finish(commit: true); return true }
+        if selector == #selector(NSResponder.cancelOperation(_:)) { finish(commit: false); return true }
+        return false
+    }
+
+    func controlTextDidEndEditing(_ notification: Notification) { finish(commit: true) }
+
+    private func clicked(_ event: NSEvent) {
+        guard !finished, event.window === window else { return }
+        if !bounds.contains(convert(event.locationInWindow, from: nil)) { finish(commit: true) }
+    }
+
+    private func finish(commit: Bool) {
+        guard !finished else { return }
+        finished = true
+        stopOutsideClicks()
+        onFinish(commit ? stringValue : nil)
+    }
+
+    private func stopOutsideClicks() {
+        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
+        outsideClicks = nil
+    }
 }

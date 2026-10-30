@@ -312,7 +312,7 @@ struct RowGeometry {
 /// tab ("Close and Keep Pinned"). Folders: open or closed folder glyph; a click toggles. Splits: the panes side by
 /// side in one row, separated by a slash, each with its own × on hover. Double-click renames a tab or folder in place.
 @MainActor
-final class RowView: HoverView, NSTextFieldDelegate {
+final class RowView: HoverView {
     private let dispatch: Dispatch
     private let drag: DragController
     private(set) var row: Row?
@@ -326,9 +326,6 @@ final class RowView: HoverView, NSTextFieldDelegate {
     private var segments: [SplitSegmentView] = []
     private var slashes: [CAShapeLayer] = []
     private var renameField: RenameField?
-    /// While renaming: a click anywhere outside the field commits (rows and buttons never take first responder, so
-    /// the field would not lose focus on its own).
-    private var outsideClicks: Any?
     /// A split row with a custom icon starts its panes after the icon; without one they start in the icon slot.
     private var splitIcon = false
     var multiselected = false { didSet { if multiselected != oldValue { stateChanged() } } }
@@ -537,74 +534,32 @@ final class RowView: HoverView, NSTextFieldDelegate {
 
     private func showRenameField(palette: Palette) {
         guard renameField == nil, let row else { return }
-        let field = RenameField()
-        field.identify(.renameField)
-        field.font = title.font
-        field.textColor = palette.ink.text
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.lineBreakMode = .byClipping
-        field.usesSingleLineMode = true
-        field.cell?.isScrollable = true
-        field.delegate = self
-        field.stringValue = switch row {
+        let text = switch row {
         case .tab(let tab): tab.title
         case .folder(let folder): folder.title
         case .split: ""
+        }
+        let field = RenameField(text: text, font: title.font, color: palette.ink.text) { [weak self] title in
+            guard let self, let row = self.row else { return }
+            self.dispatch(.item(.rename(row.id, title: title)))
         }
         addSubview(field)
         renameField = field
         title.isHidden = true
         needsLayout = true
-        outsideClicks = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            MainActor.assumeIsolated { self?.clickWhileRenaming(event) }
-            return event
-        }
-    }
-
-    private func clickWhileRenaming(_ event: NSEvent) {
-        guard let field = renameField, !field.finished, event.window === window else { return }
-        if !field.bounds.contains(field.convert(event.locationInWindow, from: nil)) { finishRename(commit: true) }
-    }
-
-    private func stopOutsideClicks() {
-        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
-        outsideClicks = nil
     }
 
     func focusRenameField(in window: NSWindow) -> Bool {
-        guard let field = renameField, !field.finished else { return false }
         layoutSubtreeIfNeeded()
-        guard window.makeFirstResponder(field) else { return false }
-        field.currentEditor()?.selectAll(nil)
-        return true
+        return renameField?.focus(in: window) ?? false
     }
 
     /// Drops the field without committing (the rename ended elsewhere: Esc through the menu, or the row left).
     func retire() {
-        stopOutsideClicks()
         guard let field = renameField else { return }
-        field.finished = true
-        field.delegate = nil
-        field.removeFromSuperview()
+        field.retire()
         renameField = nil
         title.isHidden = !segments.isEmpty
-    }
-
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        if selector == #selector(NSResponder.insertNewline(_:)) { finishRename(commit: true); return true }
-        if selector == #selector(NSResponder.cancelOperation(_:)) { finishRename(commit: false); return true }
-        return false
-    }
-
-    func controlTextDidEndEditing(_ notification: Notification) { finishRename(commit: true) }
-
-    private func finishRename(commit: Bool) {
-        guard let field = renameField, !field.finished, let row else { return }
-        field.finished = true
-        stopOutsideClicks()
-        dispatch(.item(.rename(row.id, title: commit ? field.stringValue : nil)))
     }
 }
 
