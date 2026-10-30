@@ -1,28 +1,36 @@
 import BrkBase
 import CoreGraphics
 import Foundation
+import XCTest
 @testable import BrkDomain
 
 let pendingW1 = "W1: not implemented yet"
 let pendingW4 = "W4: not implemented yet"
 let pendingW5 = "W5: not implemented yet"
 
+let T0 = Instant(milliseconds: 1_790_000_000_000)
+let minute: Duration = .seconds(60)
+let hour: Duration = .seconds(3_600)
+let start = URL(string: "http://127.0.0.1:9/a")!
+
+func url(_ text: String) -> URL { URL(string: text)! }
+
 /// The app's state owner in miniature: one `AppState`, changed only through `reduce`, read only through `project`
 /// and `StateCodec`. Ported from the Electron spec's Driver. A fixed clock (`now`, moved by `advance`) and a counter
 /// for ids make every run deterministic.
 final class Driver {
     private(set) var state: AppState
-    private(set) var now = Instant(milliseconds: 1_790_000_000_000)
+    private(set) var now = T0
     let window: WindowID
     let outcome: RestoreOutcome
     private let ids = Counter()
-    private let calendar: Calendar = {
+    static let calendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!
         return c
     }()
 
-    static let startURL = URL(string: "http://127.0.0.1:9/a")!
+    static let startURL = start
     static let contentSize = CGSize(width: 1280, height: 776)
 
     init(file: Data? = nil, startURL: URL? = Driver.startURL) {
@@ -30,16 +38,19 @@ final class Driver {
                                           ctx: Context(now: now, newID: ids.next))
         state = restored.state
         outcome = restored.outcome
-        window = project(restored.state, ProjectionContext(now: now, calendar: calendar)).windows.keys.sorted()[0]
+        window = project(restored.state, ProjectionContext(now: now, calendar: Driver.calendar)).windows.keys.sorted()[0]
     }
 
     var ctx: Context { Context(now: now, newID: ids.next) }
 
     @discardableResult
-    func user(_ command: Command) -> Transition { apply(reduce(state, .user(window, command), ctx)) }
+    func user(_ command: Command, in window: WindowID? = nil) -> Transition { apply(reduce(state, .user(window ?? self.window, command), ctx)) }
 
     @discardableResult
     func system(_ event: SystemEvent) -> Transition { apply(reduce(state, .system(event), ctx)) }
+
+    @discardableResult
+    func page(_ tab: ItemID, _ event: PageEvent) -> Transition { system(.page(PageID(tab), event)) }
 
     @discardableResult
     func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64, isRepeat: Bool = false, in window: WindowID? = nil) -> Transition {
@@ -50,13 +61,55 @@ final class Driver {
 
     func advance(_ duration: Duration) { now = now.advanced(by: duration) }
 
-    var snapshot: AppSnapshot { project(state, ProjectionContext(now: now, calendar: calendar)) }
+    var snapshot: AppSnapshot { project(state, ProjectionContext(now: now, calendar: Driver.calendar)) }
     var view: WindowSnapshot { snapshot.windows[window]! }
+    func view(of window: WindowID) -> WindowSnapshot { snapshot.windows[window]! }
     var todayIDs: [ItemID] { view.space.today.rows.map(\.id) }
     var pinnedIDs: [ItemID] { view.space.pinned.rows.map(\.id) }
+    var favoriteIDs: [ItemID] { view.favorites.tiles.map(\.id) }
+    var paneIDs: [ItemID] { view.content.panes.map(\.tab) }
+    var loadedIDs: Set<ItemID> { Set(snapshot.pages.map(\.id.item)) }
     var savedFile: Data { StateCodec.encode(state) }
 
+    /// Every tab row the window shows: Favorites tiles, Pinned and Today rows, folders' children and split panes.
+    var allTabRows: [TabRow] {
+        func walk(_ rows: [Row]) -> [TabRow] {
+            rows.flatMap { row -> [TabRow] in
+                switch row {
+                case .tab(let r): [r]
+                case .split(let s): s.panes
+                case .folder(let f): walk(f.children)
+                }
+            }
+        }
+        return view.favorites.tiles + walk(view.space.pinned.rows) + walk(view.space.today.rows)
+    }
+
+    var current: TabRow? { allTabRows.first { $0.status == .current } }
+    func row(_ id: ItemID) -> TabRow? { allTabRows.first { $0.id == id } }
+
+    /// The archive list the archive page would show (groups flattened, newest first), read without changing state.
+    func archive() -> [ArchiveEntry] {
+        let opened = reduce(state, .user(window, .archive(.open)), ctx).state
+        guard case .archive(let page)? = project(opened, ProjectionContext(now: now, calendar: Driver.calendar)).windows[window]?.overlay else {
+            XCTFail("the archive did not open")
+            return []
+        }
+        return page.groups.flatMap(\.entries)
+    }
+
+    /// The command bar overlay, if open.
+    var bar: CommandBarSnapshot? {
+        if case .commandBar(let bar)? = view.overlay { return bar }
+        return nil
+    }
+
+    /// The saved file, parsed: what the next launch reads.
+    var saved: [String: Any] { (try? JSONSerialization.jsonObject(with: savedFile) as? [String: Any]) ?? [:] }
+    var savedDoc: [String: Any] { saved["doc"] as? [String: Any] ?? [:] }
+
     /// Cmd+T, type, Enter. Returns the new tab's id.
+    @discardableResult
     func open(_ input: String) -> ItemID {
         let before = Set(todayIDs)
         user(.commandBar(.open(.newTab)))
@@ -66,14 +119,57 @@ final class Driver {
         return added[0]
     }
 
+    /// A new space through the dialog's command; returns its id (the window switches to it).
+    @discardableResult
+    func newSpace(_ title: String, color: RGBA = ThemePresets.drab[8]) -> SpaceID {
+        user(.space(.create(title: title, icon: .none, theme: SpaceTheme(colors: [color], texture: .grain, intensity: 0.25, appearance: .auto))))
+        return view.space.id
+    }
+
     private func apply(_ t: Transition) -> Transition {
         state = t.state
         return t
     }
 }
 
+/// The transition changed nothing: the same state value, no rev bump, nothing to save.
+func assertUnchanged(_ before: AppState, _ t: Transition, file: StaticString = #filePath, line: UInt = #line) {
+    XCTAssertTrue(t.state == before, "state changed", file: file, line: line)
+    XCTAssertFalse(t.changed, "changed", file: file, line: line)
+    XCTAssertFalse(t.docChanged, "docChanged", file: file, line: line)
+}
+
+/// Fresh ids "d<driver>-<n>": a per-driver prefix, so a restored driver's new ids never collide with the ids in the
+/// file it restored (the app uses UUIDs).
 final class Counter: @unchecked Sendable {
+    private static let drivers = NSLock()
+    nonisolated(unsafe) private static var count = 0
     private let lock = NSLock()
+    private let prefix: String
     private var n = 0
-    func next() -> String { lock.withLock { n += 1; return "t\(n)" } }
+
+    init() {
+        prefix = Counter.drivers.withLock { Counter.count += 1; return "d\(Counter.count)" }
+    }
+
+    func next() -> String { lock.withLock { n += 1; return "\(prefix)-\(n)" } }
+}
+
+/// JSON helpers for the hand-edited state files of the restore cases.
+func jsonObject(_ data: Data) -> [String: Any] { (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:] }
+func jsonData(_ object: [String: Any]) -> Data { try! JSONSerialization.data(withJSONObject: object) }
+
+/// The popup menu a transition asked for, if any.
+func popup(_ t: Transition) -> MenuModel? {
+    for case .popupMenu(_, let menu, _) in t.effects { return menu }
+    return nil
+}
+
+func titles(_ menu: MenuModel) -> [String] {
+    menu.entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } }
+}
+
+func command(_ menu: MenuModel, _ title: String) -> Command? {
+    for case .action(let t, let command, _) in menu.entries where t == title { return command }
+    return nil
 }
