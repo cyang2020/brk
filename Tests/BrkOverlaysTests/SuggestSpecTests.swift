@@ -6,7 +6,9 @@ import BrkBase
 
 // Ported from electron-v1:src/renderer/overlay/suggest.test.ts. Arc shows at most 5 rows
 // (Metrics.commandBar.maxVisibleRows), not the Electron version's 8; the cases whose Electron order ran past 5 rows
-// keep the same order cut at 5, plus a smaller fixture where the cut would hide the rule under test.
+// keep the same order cut at 5, plus a smaller fixture where the cut would hide the rule under test. Wave 2 (F4)
+// adds Arc's sources: the type-travel top hit, top domains (Arc's TopDomains.json: "hub" offers hubspot.com),
+// the engine's suggestions and site search; the ported cases show those rows where Arc's data puts them.
 
 /// `resolveTypedInput` belongs to W1; this fake follows its doc comment, as the Electron spec's mock did: blank ->
 /// nil; a scheme passes through; whitespace or no "." / ":" searches; anything else gets https://.
@@ -31,14 +33,25 @@ func visit(_ title: String, _ url: String, _ at: Int64) -> HistoryCandidate {
     HistoryCandidate(url: URL(string: url)!, title: title, visitedAt: Instant(milliseconds: at))
 }
 
-/// What the projection lists: actions with a command bar listing, in table order.
+/// What the projection lists in a window where everything is enabled: actions with a command bar listing, in table
+/// order, with their default shortcuts.
 let listedActions = ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil }
 
+func defaultKeys(_ actions: [ActionID]) -> [ActionID: KeyChord] {
+    let resolved = KeyBindings.resolve(overrides: [:])
+    return Dictionary(uniqueKeysWithValues: actions.compactMap { a in if case .valid(let c)? = resolved[a]?.state { (a, c) } else { nil } })
+}
+
+let google = SearchEngineCandidate(id: SearchEngine.google.id, name: "Google", keyword: "google")
+let bing = SearchEngineCandidate(id: SearchEngine.bing.id, name: "Bing", keyword: "bing")
+let kagi = SearchEngineCandidate(id: SearchEngine.kagi.id, name: "Kagi", keyword: "kagi")
+
 func commandBar(_ tabs: [SwitchCandidate], _ history: [HistoryCandidate], actions: [ActionID] = listedActions,
-                openID: Int = 1, initialQuery: String = "") -> CommandBarSnapshot {
+                openID: Int = 1, initialQuery: String = "", spaces: [SpaceCandidate] = [], siteSearch: [SearchEngineCandidate] = [],
+                suggestions: [String] = [], suggestedFor: String? = nil) -> CommandBarSnapshot {
     CommandBarSnapshot(openID: openID, placement: .centered, initialQuery: initialQuery, tabs: tabs, history: history, actions: actions,
-                       spaces: [], engine: SearchEngineCandidate(id: SearchEngine.google.id, name: "Google", keyword: "google"), siteSearch: [],
-                       suggestions: [], suggestedFor: nil)
+                       keys: defaultKeys(actions), spaces: spaces, engine: google, siteSearch: siteSearch,
+                       suggestions: suggestions, suggestedFor: suggestedFor)
 }
 
 let fixtureBar = commandBar(
@@ -70,6 +83,9 @@ func rows(_ list: [Suggestion]) -> [String] {
         case (.openTyped, _): "open:\(s.title)"
         case (.history, .commandBar(.submit(let url))): "history:\(url)"
         case (.action, _): "action:\(s.title):\(s.hint ?? "-")"
+        case (.topDomain, .commandBar(.submit(let domain))): "domain:\(domain)"
+        case (.searchSuggestion, .commandBar(.submitSearch(let engine, let query))): "suggestion:\(engine):\(query)"
+        case (.siteSearch(let engine), _): "site:\(engine.name):\(s.hint ?? "-")"
         default: "unexpected:\(s.kind):\(s.command)"
         }
     }
@@ -110,6 +126,7 @@ final class SuggestSpecTests: XCTestCase {
             "switch:t2", // "Hub notes": word start
             "switch:t1", // "GitHub": mid-word, although it comes first in the view
             "open:Search hub",
+            "domain:hubspot.com", // Arc's top domains, under the typed row
             "history:https://status.example.com/hub",
         ])
     }
@@ -118,8 +135,8 @@ final class SuggestSpecTests: XCTestCase {
     func test_matchingIsCaseInsensitiveAndAlsoLooksAtURLs() {
         XCTAssertEqual(rows(suggest("WEATHER.example")), ["switch:t3", "open:Open WEATHER.example"])
         XCTAssertEqual(rows(suggest("gITHUB")), ["switch:t1", "open:Search gITHUB"])
-        // Diacritic-insensitive too.
-        XCTAssertEqual(rows(suggest("wéather")), ["switch:t3", "open:Search wéather"])
+        // Diacritic-insensitive too (and Arc's top domains have weather.com).
+        XCTAssertEqual(rows(suggest("wéather")), ["switch:t3", "open:Search wéather", "domain:weather.com"])
     }
 
     /// never offers to switch to the focused tab
@@ -132,24 +149,30 @@ final class SuggestSpecTests: XCTestCase {
         XCTAssertEqual(rows(suggest("https://news.ycombinator.com/")), ["open:Open news.ycombinator.com"])
     }
 
-    /// listed actions match by label and carry the formatted first key, or none
+    /// listed actions match by label and Arc's trigger words and carry their shortcut, or none; one that the query
+    /// begins is the top hit, above everything (an exact title or trigger first), the rest come last
     func test_listedActionsMatchByLabelAndCarryTheFormattedFirstKeyOrNone() {
-        XCTAssertEqual(rows(suggest("split")), ["open:Search split", "action:Add Split View:⌃⇧="])
+        // "Split" is one of Add Split View's triggers: the top hit. Close this Split Pane only has the word.
+        XCTAssertEqual(rows(suggest("split")), ["action:Add Split View:⌃⇧=", "open:Search split", "action:Close this Split Pane:⌃⇧-"])
+        // "Archive" is View Archive's trigger (exact beats Archive Tab's title start); archive.org is a top domain.
         XCTAssertEqual(rows(suggest("archive")), [
-            "open:Search archive",
-            "action:Archive Tab:⌘W",
             "action:View Archive:-",
+            "open:Search archive",
+            "domain:archive.org",
+            "action:Archive Tab:⌘W",
+            "action:Clear Archive:-",
         ])
-        // Arc's type-travel trigger words match as well as the title.
-        XCTAssertEqual(rows(suggest("inspect")), ["open:Search inspect", "action:Developer Tools:⌥⌘I"])
+        XCTAssertEqual(rows(suggest("devtools")), ["action:Developer Tools:⌥⌘I", "open:Search devtools"])
+        // Arc titles the bar's row differently from the menu's ("Dark" is "Switch to Dark Mode") and has "Night Mode".
+        XCTAssertEqual(rows(suggest("night")), ["action:Switch to Dark Mode:-", "open:Search night"])
     }
 
-    /// only lists actions with a command bar listing
+    /// the bar's own openers and actions without a listing are never results, whatever the projection hands over
     func test_onlyListsActionsWithACommandBarListing() {
-        // Handed every action, the bar still lists only those with a listing: "New Tab…" and "Zoom In" are menu-only.
         let everything = commandBar(fixtureBar.tabs, fixtureBar.history, actions: ActionID.allCases)
-        XCTAssertEqual(rows(suggest("zoom", everything)), ["open:Search zoom"])
-        XCTAssertEqual(rows(suggest("new tab", everything)), ["open:Search new tab"])
+        XCTAssertFalse(suggest("new tab", everything).contains { $0.title == "New Tab…" })
+        XCTAssertFalse(suggest("open command", everything).contains { $0.title == "Open Command Bar" })
+        XCTAssertFalse(suggest("tab switcher", everything).contains { $0.kind == .action })
     }
 
     /// shows at most Metrics.commandBar.maxVisibleRows (5) rows: tabs, the typed row, history entries, then actions
@@ -159,21 +182,22 @@ final class SuggestSpecTests: XCTestCase {
             ["a", "b", "c", "d"].map { candidate("t\($0)", "Page \($0)", "https://\($0).test/") },
             ["a", "b", "c", "d"].enumerated().map { i, n in visit("Page \(n)", "https://h\(n).test/", 100 - Int64(i)) }
         )
-        // "pa" also starts a word in the action "Refresh the Page"; the five rows are full before it.
-        XCTAssertEqual(rows(suggest("pa", many)), [
+        // "pag" also starts a word in the action "Refresh the Page"; the five rows are full before it. (Two letters
+        // would offer paypal.com from Arc's top domains; three match no domain.)
+        XCTAssertEqual(rows(suggest("pag", many)), [
             "switch:ta",
             "switch:tb",
             "switch:tc",
-            "open:Search pa",
+            "open:Search pag",
             "history:https://ha.test/",
         ])
         let few = commandBar(Array(many.tabs.prefix(1)), Array(many.history.prefix(1)))
         XCTAssertEqual(rows(suggest("pa", few)), [
             "switch:ta",
             "open:Search pa",
+            "domain:paypal.com",
             "history:https://ha.test/",
-            "action:Refresh the Page:⌘R", // word start
-            "action:New Space…:-", // mid-word in "Space", so after
+            "action:Refresh the Page:⌘R", // word start, after the sources above
         ])
     }
 
@@ -184,6 +208,7 @@ final class SuggestSpecTests: XCTestCase {
             .tab(.focus(ItemID("t2"))),
             .tab(.focus(ItemID("t1"))),
             .commandBar(.submit("hub")),
+            .commandBar(.submit("hubspot.com")),
             .commandBar(.submit("https://status.example.com/hub")),
         ])
     }
@@ -201,5 +226,111 @@ final class SuggestSpecTests: XCTestCase {
         XCTAssertEqual(action("split"), .split(.addPane))
         XCTAssertEqual(action("pin"), .tab(.togglePin(.focused)))
         XCTAssertEqual(action("view archive"), .library(.open(.archive)))
+    }
+}
+
+/// Wave 2 (F4): the sources Arc's command bar adds to tabs, typed text and history.
+final class SuggestWave2Tests: XCTestCase {
+    private let work = SpaceCandidate(id: SpaceID("work"), title: "Work", icon: .none, isCurrent: false)
+    private let home = SpaceCandidate(id: SpaceID("home"), title: "Home", icon: .none, isCurrent: true)
+
+    /// W2-8: "preferences" puts Preferences… first, so Return opens the settings on General; the panes Arc reaches
+    /// by name follow the other rows
+    func test_aQueryThatBeginsAnActionMakesItTheTopHit() {
+        let list = suggest("preferences")
+        XCTAssertEqual(list.first?.title, "Preferences…")
+        XCTAssertEqual(list.first?.command, .settings(.openPane(.general)))
+        XCTAssertEqual(list.first?.hint, "⌘,")
+        XCTAssertEqual(rows(list), ["action:Preferences…:⌘,", "open:Search preferences", "action:General Preferences:-",
+                                    "action:Max Preferences:-", "action:Profile Preferences:-"])
+        XCTAssertEqual(rows(suggest("quit")), ["action:Quit Brk:⌘Q", "open:Search quit"])
+        XCTAssertEqual(suggest("air traffic").first?.command, .settings(.openPane(.links)), "Arc's trigger phrase for the Links pane")
+    }
+
+    /// no top hit for two letters, a mid-word match or an address: the typed row stays first
+    func test_shortOrAddressQueriesKeepTheTypedRowFirst() {
+        XCTAssertEqual(suggest("qu").first?.kind, .openTyped)
+        XCTAssertEqual(rows(suggest("evtools")), ["open:Search evtools", "action:Developer Tools:⌥⌘I"], "mid-word in Devtools: last, not top")
+        XCTAssertEqual(rows(suggest("swi")).first, "open:Search swi", "the start of Switch, not a whole word: no top hit")
+        XCTAssertTrue(rows(suggest("swi")).contains("action:Switch to Automatic Appearance:-"))
+        let address = Suggest.rank(query: "quit", bar: fixtureBar, appName: "Brk", resolve: { URL(string: "https://\($0).example/") })
+        XCTAssertEqual(address.first?.kind, .openTyped, "an address being typed keeps its row first")
+    }
+
+    /// the other spaces are results: focus one, or move the focused tab there (Arc: focusSpace, moveToSpace)
+    func test_otherSpacesAreFocusAndMoveResults() {
+        let bar = commandBar(fixtureBar.tabs, [], spaces: [home, work])
+        XCTAssertEqual(suggest("work", bar).map(\.command), [
+            .commandBar(.submit("work")),
+            .space(.focus(SpaceID("work"))),
+            .item(.move(ItemID("t0"), to: .space(SpaceID("work")))),
+        ])
+        XCTAssertEqual(suggest("focus on", bar).first?.title, "Focus on Work")
+        XCTAssertFalse(suggest("home", bar).contains { $0.kind == .action }, "the current space is no result")
+        let unfocused = commandBar(fixtureBar.tabs.filter { !$0.isFocused }, [], spaces: [home, work])
+        XCTAssertFalse(suggest("move to", unfocused).contains { $0.title == "Move to Work" }, "nothing to move")
+    }
+
+    /// Arc's top domains: the most visited site whose domain or name the query begins, once, under the typed row;
+    /// not for one letter, a phrase, an open site or the address being typed
+    func test_topDomainsOfferTheSiteUnderTheTypedRow() {
+        let bar = commandBar([], [])
+        XCTAssertEqual(rows(suggest("you", bar)), ["open:Search you", "domain:youtube.com"])
+        XCTAssertEqual(suggest("you", bar)[1].title, "YouTube")
+        XCTAssertFalse(rows(suggest("y", bar)).contains { $0.hasPrefix("domain:") }, "one letter is not enough")
+        XCTAssertEqual(rows(suggest("you tube", bar)), ["open:Search you tube"])
+        XCTAssertEqual(rows(suggest("youtube.com", bar)), ["open:Open youtube.com"])
+        let open = commandBar([candidate("y", "YouTube", "https://www.youtube.com/watch?v=1")], [])
+        XCTAssertEqual(Array(rows(suggest("you", open)).prefix(2)), ["switch:y", "open:Search you"])
+        XCTAssertFalse(rows(suggest("you", open)).contains("domain:youtube.com"), "the open site is the switch row")
+    }
+
+    /// the engine's suggestions sit under the typed row while they answer the text: all for the asked query, those
+    /// that still fit as the user types on, none once the text no longer starts with it; each searches its words
+    func test_engineSuggestionsFollowTheTypedText() {
+        func bar(_ asked: String?) -> CommandBarSnapshot { commandBar([], [], suggestions: ["swift", "swim", "swiss"], suggestedFor: asked) }
+        func shown(_ query: String, _ asked: String?) -> [String] { Array(rows(suggest(query, bar(asked))).prefix { !$0.hasPrefix("action:") }) }
+        XCTAssertEqual(shown("swi", "swi"), ["open:Search swi", "suggestion:google:swift", "suggestion:google:swim", "suggestion:google:swiss"])
+        XCTAssertEqual(shown("SWIF", "swi"), ["open:Search SWIF", "suggestion:google:swift"])
+        XCTAssertEqual(shown("sw", "swi"), ["open:Search sw"], "stale: asked for more than is typed")
+        XCTAssertEqual(shown("swim", "swi"), ["open:Search swim"], "the typed text is the typed row")
+        XCTAssertEqual(shown("swi", nil), ["open:Search swi"])
+        let many = commandBar([], [], suggestions: ["a1", "a2", "a3", "a4", "a5"], suggestedFor: "a")
+        XCTAssertEqual(suggest("a", many).filter { $0.kind == .searchSuggestion }.count, 3, "three, so other sources keep rows")
+    }
+
+    /// site search: typing the start of another engine's name offers "Search Bing" with Arc's hint; in site-search
+    /// mode the query and the suggestions search that engine
+    func test_siteSearchRowsAndMode() {
+        let bar = commandBar([], [], siteSearch: [bing, kagi], suggestions: ["swift", "swim"], suggestedFor: "swi")
+        XCTAssertEqual(rows(suggest("bi", bar)), ["open:Search bi", "site:Bing:Space or Tab", "domain:bing.com"])
+        XCTAssertEqual(Array(rows(suggest("ka", bar)).prefix(2)), ["open:Search ka", "site:Kagi:Space or Tab"])
+        XCTAssertFalse(rows(suggest("b", bar)).contains { $0.hasPrefix("site:") }, "two letters at least")
+        XCTAssertEqual(Suggest.siteSearchEngine(named: "BING", bar), bing)
+        XCTAssertNil(Suggest.siteSearchEngine(named: "bin", bar), "Space needs the whole name")
+
+        let mode = Suggest.rank(query: "swi", bar: bar, appName: "Brk", siteSearch: bing, resolve: fakeResolve)
+        XCTAssertEqual(mode.map(\.command), [
+            .commandBar(.submitSearch(engine: bing.id, query: "swi")),
+            .commandBar(.submitSearch(engine: bing.id, query: "swift")),
+            .commandBar(.submitSearch(engine: bing.id, query: "swim")),
+        ])
+        XCTAssertEqual(Suggest.rank(query: "  ", bar: bar, appName: "Brk", siteSearch: bing, resolve: fakeResolve), [])
+    }
+
+    /// Arc's dedupByTitleAndHostList: on figma.com (and the others) one title is one result, whatever the URL
+    func test_dedupHostsShowOneRowPerTitle() {
+        let bar = commandBar([], [
+            visit("Roadmap", "https://www.figma.com/file/abc?node-id=1", 300),
+            visit("Roadmap", "https://www.figma.com/file/abc?node-id=2", 200),
+            visit("Roadmap", "https://other.example.com/a", 150),
+            visit("Roadmap", "https://other.example.com/b", 100),
+        ])
+        XCTAssertEqual(rows(suggest("roadmap", bar)), [
+            "open:Search roadmap",
+            "history:https://www.figma.com/file/abc?node-id=1",
+            "history:https://other.example.com/a",
+            "history:https://other.example.com/b",
+        ])
     }
 }

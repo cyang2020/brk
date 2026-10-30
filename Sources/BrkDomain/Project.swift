@@ -24,7 +24,7 @@ public struct ProjectionContext: Sendable {
 /// - `focus`: command bar input > rename field > space dialog > (archive open: none) > focused pane's page > none;
 /// - `enabledActions`: which table actions do something right now (menu validation greys out the others);
 /// - command bar candidates: every tab with a url, the focused one first, then by recency (ties in sidebar order);
-///   the whole history, newest first; the `ActionID`s with a listing, in table order;
+///   the whole history, newest first; the enabled `ActionID`s with a listing, in table order, with their resolved keys;
 /// - archive groups by bucket (`archiveBucket`), newest first in each; a deleted source space has no title.
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
@@ -198,11 +198,19 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }
         let engine = state.searchEngine(in: id)
         let profile = space.profile
+        // Type travel lists what the menu would enable now; of the two Pinned rows only the one that applies.
+        var enabled = enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
+        enabled.remove(space.pinnedCollapsed ? .collapsePinnedSection : .expandPinnedSection)
+        let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) }
+        let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
         overlay = .commandBar(CommandBarSnapshot(
             openID: openID, placement: placement, initialQuery: initialQuery,
             tabs: switchCandidates(state, tree: tree, space: space, focused: focusedPane),
             history: state.doc.history.filter { $0.profile == profile }.map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
-            actions: ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil },
+            actions: listed,
+            keys: Dictionary(uniqueKeysWithValues: listed.compactMap { action in
+                if case .valid(let chord)? = bindings[action]?.state { (action, chord) } else { nil }
+            }),
             spaces: state.doc.spaceOrder.compactMap { sid in
                 state.doc.spaces[sid].map { SpaceCandidate(id: sid, title: state.displayTitle(of: sid), icon: $0.icon, isCurrent: sid == space.id) }
             },

@@ -243,28 +243,28 @@ final class AppStoreTests: XCTestCase {
 
 @MainActor
 final class MenuTests: XCTestCase {
-    /// orders menus by MenuName order, keeps ActionID order within a menu, separates groups, puts Arc's submenus in
-    /// place, hides Arc's hidden rows, and adds the standard Edit items with AppKit selectors
-    func test_buildsMenusInTableOrderWithSeparatorsBetweenGroups() {
+    /// The menu bar is Arc's (anatomy-m 2.1, the nib tree in .audit/arc-evidence/a/mainmenu-tree.txt): every menu,
+    /// item, submenu, separator and key equivalent in Arc's order, hidden and repeated-key rows included, without the
+    /// four rows the user dropped. The one difference is the wave 2 decision: New Folder… leaves Shift+Cmd+N to New
+    /// Incognito Window.
+    func test_theMenuBarIsArcs() throws {
+        let built = ArcMenuTree.lines(of: MainMenu.build(target: MenuTarget()))
+        let arc = try ArcMenuTree.lines(productName: Product.name).map { $0 == "  New Folder… [Cmd+Shift+N]" ? "  New Folder…" : $0 }
+        XCTAssertEqual(arc.count, 211, "the nib's 189 rows and 30 separators, less 4 dropped rows, the Tabs placeholder's 3 items and the separator dropping Sign Out doubles")
+        let diff = arc.difference(from: built)
+        XCTAssertTrue(diff.isEmpty, "built vs Arc:\n" + diff.map { change -> String in
+            switch change {
+            case .insert(let offset, let line, _): "+ arc[\(offset)] \(line)"
+            case .remove(let offset, let line, _): "- brk[\(offset)] \(line)"
+            }
+        }.joined(separator: "\n"))
         let main = MainMenu.build(target: MenuTarget())
-        XCTAssertEqual(main.items.map { $0.submenu?.title }, MenuName.allCases.map { MainMenu.title(of: $0) })
         let file = main.items[1].submenu!
-        XCTAssertEqual(file.items.filter { !$0.isHidden }.map { $0.isSeparatorItem ? "-" : $0.title }.prefix(9).map { $0 },
-                       ["New Tab…", "New Window", "Blank Window", "New Incognito Window", "New Little \(Product.name) Window",
-                        "Restore Last Closed Tab", "Open Command Bar", "-", "-"])   // the Boost rows between the separators are hidden
         XCTAssertEqual(file.items.filter { $0.isHidden }.map(\.title), ["New Boost", "Edit Boost", "New Legacy Boost (Advanced)", "Boost Gallery", "New Note (in Split)"])
-        let edit = main.items[2].submenu!
-        XCTAssertEqual(edit.items.first?.title, "Undo")
-        XCTAssertEqual(edit.items.first(where: { $0.title == "Copy" })?.action, #selector(NSText.copy(_:)))
-        XCTAssertNotNil(edit.items.first(where: { $0.title == "Copy URL" }))
-        XCTAssertEqual(edit.items.last?.title, "Find")
-        XCTAssertEqual(edit.items.last?.submenu?.items.map(\.title), ["Find…", "Find and Replace", "Find Next", "Find Previous", "Use Selection to Find", "Jump to Selection"])
         let view = main.items[3].submenu!
-        XCTAssertEqual(view.items.first?.submenu?.items.map(\.title), ["Automatic", "Light", "Dark"])
         XCTAssertTrue(view.items.first(where: { $0.title == "Force Refresh the Page" })!.isAlternate)
-        // Arc's nib conflict (Shift+Cmd+N) shows on neither item until the user resolves it.
-        XCTAssertEqual(main.items[5].submenu!.items.first(where: { $0.title == "New Folder…" })?.keyEquivalent, "")
-        XCTAssertEqual(file.items.first(where: { $0.title == "New Incognito Window" })?.keyEquivalent, "")
+        XCTAssertEqual(view.items.filter { $0.title == "Zoom In" }.map(\.isHidden), [false, true, true])
+        XCTAssertEqual(main.items.first?.submenu?.items.first?.title, "About \(Product.name)")
     }
 
     /// a table item carries its first binding as key equivalent and mask
@@ -277,6 +277,75 @@ final class MenuTests: XCTestCase {
         let archive = main.items[1].submenu!.items.first { $0.title == "Archive Tab" }!
         XCTAssertEqual(archive.keyEquivalent, "w")
         XCTAssertEqual(archive.keyEquivalentModifierMask, [.command])
+    }
+
+    /// opening a menu shows the shortcuts as the user set them: a remap moves the key (on both New Tab… items), an
+    /// unset or conflicting shortcut shows none, and the alternates keep theirs
+    func test_theMenuFollowsTheShortcutsWhenItOpens() throws {
+        let target = MenuTarget()
+        let main = MainMenu.build(target: target)
+        let file = main.items[1].submenu!, tabs = main.items[5].submenu!, archive = main.items[6].submenu!
+        func key(_ menu: NSMenu, _ title: String) -> String? { menu.items.first { $0.title == title }.map(ArcMenuTree.describe) }
+        XCTAssertEqual(key(file, "New Tab…"), "Cmd+T")
+        func rows(_ overrides: [ActionID: KeyOverride]) -> [ActionID: KeyBindingState] { KeyBindings.resolve(overrides: overrides).mapValues(\.state) }
+        target.shortcuts = { rows([.newTab: KeyOverride(chord: KeyChord(.command, .e), priority: nil),
+                                   .goBack: KeyOverride(chord: nil, priority: nil),
+                                   .reloadPage: KeyOverride(chord: KeyChord(.command, .n), priority: nil)]) }
+        for menu in [file, tabs, archive, main.items[3].submenu!] { target.menuNeedsUpdate(menu) }
+        XCTAssertEqual(key(file, "New Tab…"), "Cmd+E")
+        XCTAssertEqual(key(tabs, "New Tab…"), "Cmd+E")
+        XCTAssertEqual(archive.items.filter { $0.title == "Go Back" }.map(ArcMenuTree.describe), ["", "Cmd+Left"], "unset; the arrow alternate stays")
+        XCTAssertEqual(key(file, "New Window"), "", "Cmd+N is in conflict with the remapped Refresh")
+        XCTAssertEqual(key(main.items[3].submenu!, "Refresh the Page"), "")
+        target.shortcuts = { rows([:]) }
+        target.menuNeedsUpdate(file)
+        XCTAssertEqual(key(file, "New Tab…"), "Cmd+T")
+        XCTAssertEqual(key(file, "New Window"), "Cmd+N")
+    }
+
+    /// Arc's AppKit items do AppKit's work: the Edit submenus' selectors, Format > Font through the font manager,
+    /// Services as the app's services menu, Window and Help as the app's, Zoom and Bring All to Front
+    func test_theStandardItemsAreAppKits() throws {
+        let main = MainMenu.build(target: MenuTarget())
+        let app = main.items[0].submenu!, edit = main.items[2].submenu!, window = main.items[8].submenu!
+        func item(_ menu: NSMenu, _ path: String...) -> NSMenuItem? {
+            var menu: NSMenu? = menu, found: NSMenuItem?
+            for title in path {
+                found = menu?.items.first { $0.title == title }
+                menu = found?.submenu
+            }
+            return found
+        }
+        XCTAssertEqual(item(edit, "Undo")?.action, Selector(("undo:")))
+        XCTAssertEqual(item(edit, "Copy")?.action, #selector(NSText.copy(_:)))
+        XCTAssertEqual(item(edit, "Spelling and Grammar", "Show Spelling and Grammar")?.action, #selector(NSText.showGuessPanel(_:)))
+        XCTAssertEqual(item(edit, "Substitutions", "Smart Quotes")?.action, #selector(NSTextView.toggleAutomaticQuoteSubstitution(_:)))
+        XCTAssertEqual(item(edit, "Transformations", "Capitalize")?.action, #selector(NSTextView.capitalizeWord(_:)))
+        XCTAssertEqual(item(edit, "Speech", "Start Speaking")?.action, #selector(NSTextView.startSpeaking(_:)))
+        let bold = try XCTUnwrap(item(edit, "Format", "Font", "Bold"))
+        XCTAssertEqual(bold.action, #selector(NSFontManager.addFontTrait(_:)))
+        XCTAssertTrue(bold.target === NSFontManager.shared)
+        XCTAssertEqual(bold.tag, Int(NSFontTraitMask.boldFontMask.rawValue))
+        XCTAssertTrue(NSApp.servicesMenu === item(app, "Services")?.submenu)
+        XCTAssertEqual(item(app, "Show All")?.action, #selector(NSApplication.unhideAllApplications(_:)))
+        XCTAssertEqual(item(window, "Zoom")?.action, #selector(NSWindow.performZoom(_:)))
+        XCTAssertEqual(item(window, "Bring All to Front")?.action, #selector(NSApplication.arrangeInFront(_:)))
+        XCTAssertTrue(NSApp.windowsMenu === window)
+        XCTAssertTrue(NSApp.helpMenu === main.items[9].submenu)
+        XCTAssertEqual(item(main.items[3].submenu!, "Appearance")?.submenu?.items.first?.isEnabled, false, "Arc's label row")
+    }
+
+    /// a later wave's row is greyed out even when no window answers; a real one asks the key window
+    func test_laterRowsAreDisabled() throws {
+        let target = MenuTarget()
+        target.isEnabled = { _ in true }
+        let main = MainMenu.build(target: target)
+        let print = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "Print" })
+        let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
+        XCTAssertFalse(target.validateMenuItem(print))
+        XCTAssertTrue(target.validateMenuItem(newWindow))
+        target.isEnabled = nil
+        XCTAssertFalse(target.validateMenuItem(print))
     }
 
     /// a menu key equivalent is a .menu-stage key input minted from the event (so a duplicate is refused); a mouse

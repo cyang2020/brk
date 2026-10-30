@@ -10,6 +10,10 @@ import BrkBase
 @MainActor
 final class CommandBarViewTests: XCTestCase {
     private var sent: [Command] = []
+    /// What the user chose: everything dispatched except the `queryChanged` each edit sends.
+    private var chosen: [Command] {
+        sent.filter { if case .commandBar(.queryChanged) = $0 { false } else { true } }
+    }
     private let box = CGRect(x: 300, y: 219, width: 766, height: 338)
 
     private func makeBar(_ bar: CommandBarSnapshot = fixtureBar) -> CommandBarView {
@@ -31,14 +35,14 @@ final class CommandBarViewTests: XCTestCase {
 
     func testReturnDispatchesTheHighlightedResultAndArrowsWrapAround() {
         let view = makeBar()
-        type("hub", into: view)   // t2, t1, "Search hub", history status.example.com/hub
+        type("hub", into: view)   // t2, t1, "Search hub", hubspot.com, history status.example.com/hub
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveUp(_:)), in: view)       // from the first row up to the last
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveDown(_:)), in: view)     // from the last row down to the first
         press(#selector(NSResponder.moveDown(_:)), in: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(sent, [
+        XCTAssertEqual(chosen, [
             .tab(.focus(ItemID("t2"))),
             .commandBar(.submit("https://status.example.com/hub")),
             .tab(.focus(ItemID("t1"))),
@@ -51,7 +55,68 @@ final class CommandBarViewTests: XCTestCase {
         press(#selector(NSResponder.moveDown(_:)), in: view)
         type("hub ", into: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(sent, [.tab(.focus(ItemID("t2")))])
+        XCTAssertEqual(chosen, [.tab(.focus(ItemID("t2")))])
+    }
+
+    /// every edit asks the reducer for suggestions with the text as typed; a reopened bar does not
+    func testEveryEditDispatchesTheQuery() {
+        let view = makeBar()
+        type("s", into: view)
+        type("sw", into: view)
+        type("", into: view)
+        XCTAssertEqual(sent, [.commandBar(.queryChanged("s")), .commandBar(.queryChanged("sw")), .commandBar(.queryChanged(""))])
+        view.show(commandBar(fixtureBar.tabs, fixtureBar.history, openID: 2), in: box, scheme: .light)
+        XCTAssertEqual(sent.count, 3)
+    }
+
+    /// suggestions that arrive while the user looks at the rows slot in under the typed row and keep the highlight
+    func testArrivingSuggestionsSlotInUnderTheTypedRow() {
+        let view = makeBar(commandBar([], []))
+        type("swi", into: view)
+        XCTAssertEqual(rows(view.results).first, "open:Search swi")
+        view.show(commandBar([], [], suggestions: ["swift", "swim"], suggestedFor: "swi"), in: box, scheme: .light)
+        XCTAssertEqual(Array(rows(view.results).prefix(3)), ["open:Search swi", "suggestion:google:swift", "suggestion:google:swim"])
+        press(#selector(NSResponder.moveDown(_:)), in: view)
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "swift"))])
+    }
+
+    /// Tab on a site-search row (or Space after an engine's whole name) enters site search: the engine's pill, an
+    /// empty input, Return searches there; Backspace in the empty input or Esc gives the typed name back, and only
+    /// a second Esc closes the bar
+    func testSiteSearchModeWithTabSpaceBackspaceAndEscape() {
+        let view = makeBar(commandBar([], [], siteSearch: [bing, kagi]))
+        type("bi", into: view)
+        XCTAssertTrue(rows(view.results).contains("site:Bing:Space or Tab"))
+        XCTAssertTrue(press(#selector(NSResponder.insertTab(_:)), in: view))
+        XCTAssertEqual(view.siteSearch, bing)
+        XCTAssertEqual(view.input.stringValue, "")
+        XCTAssertEqual(view.input.placeholderAttributedString?.string, "Search Bing…")
+        type("swift", into: view)
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: bing.id, query: "swift"))])
+
+        type("", into: view)
+        XCTAssertTrue(press(#selector(NSResponder.deleteBackward(_:)), in: view))
+        XCTAssertNil(view.siteSearch)
+        XCTAssertEqual(view.input.stringValue, "bi")
+
+        type("kagi ", into: view)
+        XCTAssertEqual(view.siteSearch, kagi, "Space after the whole name")
+        XCTAssertTrue(press(#selector(NSResponder.cancelOperation(_:)), in: view))
+        XCTAssertNil(view.siteSearch)
+        XCTAssertEqual(view.input.stringValue, "kagi")
+        XCTAssertEqual(chosen.count, 1, "the first Esc only leaves site search")
+        press(#selector(NSResponder.cancelOperation(_:)), in: view)
+        XCTAssertEqual(chosen.last, .commandBar(.dismiss))
+
+        // Tab with no site-search row stays in the bar and does nothing; "bing" followed by a space and more words
+        // is an ordinary search.
+        type("weather", into: view)
+        XCTAssertTrue(press(#selector(NSResponder.insertTab(_:)), in: view))
+        XCTAssertNil(view.siteSearch)
+        type("bing chilling ", into: view)
+        XCTAssertNil(view.siteSearch)
     }
 
     func testEscapeDismissesAndReturnWithNothingToChooseDispatchesNothing() {
@@ -70,12 +135,12 @@ final class CommandBarViewTests: XCTestCase {
         // A page event re-projects the same opening with one tab fewer: the query stays, the rows follow.
         view.show(commandBar(fixtureBar.tabs.filter { $0.tab != ItemID("t2") }, fixtureBar.history), in: box, scheme: .light)
         XCTAssertEqual(view.input.stringValue, "hub")
-        XCTAssertEqual(rows(view.results), ["switch:t1", "open:Search hub", "history:https://status.example.com/hub"])
+        XCTAssertEqual(rows(view.results), ["switch:t1", "open:Search hub", "domain:hubspot.com", "history:https://status.example.com/hub"])
         // Cmd+L opens a new bar: its query is the tab's URL and the first row is highlighted again.
         view.show(commandBar(fixtureBar.tabs, fixtureBar.history, openID: 2, initialQuery: "https://github.com/arc"), in: box, scheme: .light)
         XCTAssertEqual(view.input.stringValue, "https://github.com/arc")
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(sent, [.tab(.focus(ItemID("t1")))])
+        XCTAssertEqual(chosen, [.tab(.focus(ItemID("t1")))])
     }
 
     func testRowsCarryTheirIdentifiersAndOnlyTheCardTakesClicks() {
@@ -85,13 +150,13 @@ final class CommandBarViewTests: XCTestCase {
         type("hub", into: view)
         let shown = view.descendants.filter { !$0.isHiddenOrHasHiddenAncestor }.map { $0.accessibilityIdentifier() }
         XCTAssertEqual(shown.filter { $0.hasPrefix("command-bar-result-") },
-                       ["command-bar-result-0", "command-bar-result-1", "command-bar-result-2", "command-bar-result-3"])
-        // Card: the 50 pt input row, then 4 rows of 50 and the list's 10 pt padding (layout-constants.md).
+                       ["command-bar-result-0", "command-bar-result-1", "command-bar-result-2", "command-bar-result-3", "command-bar-result-4"])
+        // Card: the 50 pt input row, then 5 rows of 50 and the list's 10 pt padding (layout-constants.md).
         // Points are in the bar's superview, as AppKit passes them to `hitTest`.
         let rowCentre = CGPoint(x: box.midX, y: box.minY + 50 + 5 + 25)
         XCTAssertEqual(view.hitTest(rowCentre)?.enclosing(ResultRowView.self)?.accessibilityIdentifier(), "command-bar-result-0")
-        XCTAssertNotNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 259)))
-        XCTAssertNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 261)), "below the card the box lets clicks through")
+        XCTAssertNotNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 309)))
+        XCTAssertNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 311)), "below the card the box lets clicks through")
     }
 }
 
