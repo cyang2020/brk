@@ -9,25 +9,21 @@ import SwiftUI
 /// profile field, one section per profile (rename, the spaces using it, the per-profile settings the rules read:
 /// default search engine and suggestions, "Archive tabs after", the download location), delete with Arc's rules and
 /// its type-the-name confirmation, and "Delete unused Profiles". F1's `SettingsHost` mounts it in its Profiles slot:
-/// `ProfilesPane(settings: snapshot, dispatch: model.dispatch)`.
+/// `ProfilesPane(context:)`.
 ///
 /// Every control dispatches a command (`.profile(...)` or `.settings(.profile(...))`); the only local state is what
 /// is being typed and which confirmation is open. Copy and the delete and name rules are `ProfileCopy`'s, so the pane,
 /// the dialogs and the reducer agree.
 struct ProfilesPane: View {
-    let settings: SettingsSnapshot
-    let dispatch: Dispatch
+    let context: PaneContext
+    private var settings: SettingsSnapshot { context.settings }
+    private var dispatch: Dispatch { context.dispatch }
 
     @State private var newName = ""
     @State private var renames: [ProfileID: String] = [:]
     @State private var deleting: ProfileRow?
     @State private var typedName = ""
     @State private var deletingUnused = false
-
-    init(settings: SettingsSnapshot, dispatch: @escaping Dispatch) {
-        self.settings = settings
-        self.dispatch = dispatch
-    }
 
     private var names: [String] { settings.profiles.map(\.profile.name) }
     private var unused: [ProfileRow] { settings.profiles.map(\.profile).filter { ProfileCopy.deleteRefusal($0) == nil } }
@@ -37,12 +33,10 @@ struct ProfilesPane: View {
             Section {
                 Text(ProfileCopy.paneIntro).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    TextField(ProfileCopy.namePrompt, text: $newName, prompt: Text(ProfileCopy.namePlaceholder))
-                        .onSubmit(create)
-                        .accessibilityIdentifier(ViewID.settingsField("newProfileName").identifier)
-                    Button(ProfileCopy.createButton, action: create)
+                    SettingsTextField(field: "newProfileName", text: newName, placeholder: ProfileCopy.namePlaceholder,
+                                      edit: { newName = $0 }, submit: create) { newName = $0 }
+                    SettingsButton(title: ProfileCopy.createButton, field: "createProfile") { create(newName) }
                         .disabled(!ProfileCopy.acceptsName(newName, among: names))
-                        .accessibilityIdentifier(ViewID.settingsField("createProfile").identifier)
                 }
                 if ProfileCopy.isTaken(newName, among: names) { Text(ProfileCopy.nameTaken).foregroundStyle(.red) }
             }
@@ -52,9 +46,8 @@ struct ProfilesPane: View {
                 }
             }
             Section {
-                Button(ProfileCopy.deleteUnusedTitle) { deletingUnused = true }
+                SettingsButton(title: ProfileCopy.deleteUnusedTitle, field: "deleteUnusedProfiles") { deletingUnused = true }
                     .disabled(unused.isEmpty)
-                    .accessibilityIdentifier(ViewID.settingsField("deleteUnusedProfiles").identifier)
             }
         }
         .alert(ProfileCopy.deleteTitle, isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
@@ -80,81 +73,32 @@ struct ProfilesPane: View {
     @ViewBuilder
     private func profileSection(_ row: ProfileSettingsRow) -> some View {
         let id = row.profile.id, others = settings.profiles.filter { $0.profile.id != id }.map(\.profile.name)
-        let draft = renames[id] ?? row.profile.name
-        TextField(ProfileCopy.renameTitle, text: Binding(get: { draft }, set: { renames[id] = $0 }))
-            .onSubmit {
-                if ProfileCopy.acceptsName(draft, among: others) { dispatch(.profile(.rename(id, name: draft))) }
+        SettingsTextField(field: "profileName-\(id)", text: row.profile.name, placeholder: ProfileCopy.renameTitle,
+                          edit: { renames[id] = $0 }) { name in
+            if ProfileCopy.acceptsName(name, among: others) {
+                dispatch(.profile(.rename(id, name: name)))
                 renames[id] = nil
             }
+        }
             .help(ProfileCopy.renameNote)
-            .accessibilityIdentifier(ViewID.settingsField("profileName-\(id)").identifier)
-        if ProfileCopy.isTaken(draft, among: others) { Text(ProfileCopy.nameTaken).foregroundStyle(.red) }
+        if ProfileCopy.isTaken(renames[id] ?? row.profile.name, among: others) { Text(ProfileCopy.nameTaken).foregroundStyle(.red) }
         Text(ProfileCopy.spaceCount(row.profile.spaceTitles)).foregroundStyle(.secondary)
-        Picker(SettingsCopy.searchEngine, selection: Binding(get: { row.settings.searchEngine },
-                                                            set: { dispatch(.settings(.profile(id, .searchEngine($0)))) })) {
-            ForEach(settings.engines, id: \.id) { Text($0.name).tag($0.id) }
-        }
-        .accessibilityIdentifier(ViewID.settingsField("searchEngine-\(id)").identifier)
-        Toggle(SettingsCopy.searchSuggestions, isOn: Binding(get: { row.settings.searchSuggestions },
-                                                            set: { dispatch(.settings(.profile(id, .searchSuggestions($0)))) }))
-            .accessibilityIdentifier(ViewID.settingsField("searchSuggestions-\(id)").identifier)
-        Picker(SettingsCopy.autoArchive, selection: Binding(get: { row.settings.autoArchive },
-                                                           set: { dispatch(.settings(.profile(id, .autoArchive($0)))) })) {
-            ForEach(AutoArchiveThreshold.allCases, id: \.self) { Text(SettingsCopy.threshold($0)).tag($0) }
-        }
-        .accessibilityIdentifier(ViewID.settingsField("autoArchive-\(id)").identifier)
-        LabeledContent(ProfilesPaneCopy.downloadLocation) {
-            HStack {
-                Text(row.settings.downloadsDirectory.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? ProfilesPaneCopy.downloadsFolder)
-                    .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                Button(ProfilesPaneCopy.chooseFolder) { chooseDownloads(for: id) }
-                if row.settings.downloadsDirectory != nil {
-                    Button(ProfilesPaneCopy.useDownloads) { dispatch(.settings(.profile(id, .downloadsDirectory(nil)))) }
-                }
-            }
-        }
-        .accessibilityIdentifier(ViewID.settingsField("downloadsDirectory-\(id)").identifier)
-        Toggle(SettingsCopy.promptForDownloadLocation, isOn: Binding(get: { row.settings.promptForDownloadLocation },
-                                                                    set: { dispatch(.settings(.profile(id, .promptForDownloadLocation($0)))) }))
-            .accessibilityIdentifier(ViewID.settingsField("promptForDownloadLocation-\(id)").identifier)
+        ProfileSettingsForm(context: context, row: row)
         let refusal = ProfileCopy.deleteRefusal(row.profile)
-        Button(ProfileCopy.deleteTitle, role: .destructive) {
+        SettingsButton(title: ProfileCopy.deleteTitle, field: "deleteProfile-\(id)") {
             typedName = ""
             deleting = row.profile
         }
         .disabled(refusal != nil)
         .help(refusal ?? ProfileCopy.deleteWarning(row.profile.name))
-        .accessibilityIdentifier(ViewID.settingsField("deleteProfile-\(id)").identifier)
         if let refusal { Text(refusal).font(.caption).foregroundStyle(.secondary) }
     }
 
-    private func create() {
-        guard ProfileCopy.acceptsName(newName, among: names) else { return }
-        dispatch(.profile(.create(name: ProfileCopy.trimmed(newName), icon: nil)))
+    private func create(_ name: String) {
+        guard ProfileCopy.acceptsName(name, among: names) else { return }
+        dispatch(.profile(.create(name: ProfileCopy.trimmed(name), icon: nil)))
         newName = ""
     }
-
-    /// Arc's "Download Location" choices are the Downloads folder, a chosen folder ("Button to confirm selection of
-    /// directory for file downloads"), or asking each time (the toggle below).
-    private func chooseDownloads(for id: ProfileID) {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = ProfilesPaneCopy.chooseFolderPrompt
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        dispatch(.settings(.profile(id, .downloadsDirectory(url.path))))
-    }
-}
-
-/// The pane's labels that are not `ProfileCopy` or `SettingsCopy`: Arc's "Download Location" (observed) and the
-/// choices around it (ours: Arc's tags `arc.folder`, `arc.other` carry no visible text).
-enum ProfilesPaneCopy {
-    static let downloadLocation = "Download Location"
-    static let downloadsFolder = "Downloads"
-    static let chooseFolder = "Choose…"
-    static let chooseFolderPrompt = "Select"
-    static let useDownloads = "Use Downloads"
 }
 
 /// A profile's icon in a section header: its emoji, named icon or symbol; a person glyph without one.

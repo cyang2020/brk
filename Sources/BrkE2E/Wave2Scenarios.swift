@@ -11,6 +11,7 @@ import Foundation
 enum Wave2Scenarios {
     static let all: [Scenario] = [
         Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", settingsWindow),
+        Scenario("W2-1-edit", "all settings panes are mounted; native profile editing and close keys persist the edited values", SettingsEditingScenario.run),
         Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", cefOnly: "cookies in a page",
                  profileContexts),
         Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", incognito),
@@ -37,7 +38,12 @@ enum Wave2Scenarios {
     /// Shift+click toggle flips `links.shiftClickPeek`; after `flush` and a restart the value holds and the window
     /// is closed (the pane is session state).
     @Sendable static func settingsWindow(_ app: AppUnderTest) throws {
-        guard case .dispatched = try app.send(.openSettings(pane: .links)) else { throw Check(description: "openSettings did not dispatch") }
+        func open(_ pane: SettingsPane) throws {
+            guard case .dispatched = try app.send(.openSettings(pane: pane)) else { throw Check(description: "openSettings did not dispatch") }
+            // SwiftUI installs the pane's native controls on the next run-loop turns.
+            try app.settle()
+        }
+        try open(.links)
         try app.waitUntil("the settings window on the Links pane") {
             guard case .settings(let s) = try app.send(.settings) else { return false }
             return s.pane == .links

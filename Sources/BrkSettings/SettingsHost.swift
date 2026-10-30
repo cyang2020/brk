@@ -19,13 +19,12 @@ import SwiftUI
 ///
 /// Public surface (what BrkApp may call): `init(dispatch:)`, `render(_:)`.
 ///
-/// The slots other workers fill, each in its own file under `Slots/`: `ProfilesListSlot` (F2: the profile list,
-/// rename, delete), `LinksRoutesSlot` (F3: the Air Traffic Control route editor), `ShortcutsSlot` (F4: the
-/// shortcut recorder, priorities, conflicts).
+/// The feature editors are `ProfilesPane` (F2), `LinksRoutesEditor` (F3), and `ShortcutsPane` (F4).
 @MainActor
 public final class SettingsHost: NSView {
     let dispatch: Dispatch
     private let controller: NSHostingController<SettingsRootView>
+    private let scrollView = NSScrollView()
     private let toolbar: SettingsToolbar
     private(set) var settings: SettingsSnapshot?
     /// The pane on screen: the open pane, or the last one while the window is closed (so it does not go blank as it
@@ -46,9 +45,13 @@ public final class SettingsHost: NSView {
         super.init(frame: CGRect(origin: .zero, size: Metrics.settings.windowSize.value))
         controller.sizingOptions = []
         controller.safeAreaRegions = []
-        controller.view.frame = bounds
-        controller.view.autoresizingMask = [.width, .height]
-        addSubview(controller.view)
+        scrollView.frame = bounds
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.documentView = controller.view
+        addSubview(scrollView)
         identify(.settingsWindow)
     }
 
@@ -59,10 +62,13 @@ public final class SettingsHost: NSView {
     public func render(_ settings: SettingsSnapshot) {
         guard settings != self.settings else { return }
         let opening = settings.pane != nil && self.settings?.pane == nil
+        let changingPane = settings.pane != nil && settings.pane != self.settings?.pane
+        if changingPane || settings.pane == nil { window?.makeFirstResponder(nil) }
         self.settings = settings
         if let pane = settings.pane { shownPane = pane }
         if opening { isDefaultBrowser = defaultBrowserCheck() }
         update()
+        if changingPane { scrollToTop() }
     }
 
     // MARK: Window
@@ -121,6 +127,13 @@ public final class SettingsHost: NSView {
         fitWindow()
     }
 
+    private func scrollToTop() {
+        let document = controller.view
+        let y = document.isFlipped ? 0 : max(0, document.frame.height - scrollView.contentSize.height)
+        scrollView.contentView.scroll(to: CGPoint(x: 0, y: y))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
     /// Fits the window to the pane, keeping its top edge where it is (the Settings package resizes per pane).
     private func fitWindow() {
         guard let window, let content = window.contentView else { return }
@@ -129,13 +142,17 @@ public final class SettingsHost: NSView {
         // the screen's height instead of an infinite window.
         let chrome = window.frame.height - content.frame.height
         let tallest = (window.screen ?? NSScreen.main).map { $0.visibleFrame.height - chrome } ?? Metrics.settings.windowSize.value.height
-        let fitted = controller.sizeThatFits(in: CGSize(width: width, height: tallest))
+        let fitted = controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
         let size = CGSize(width: width, height: min(fitted.height, tallest).rounded(.up))
+        controller.view.setFrameSize(CGSize(width: width, height: max(size.height, fitted.height.rounded(.up))))
         guard size.height > 0, size != content.frame.size else { return }
         var frame = window.frame
         frame.size.width += size.width - content.frame.width
         frame.size.height += size.height - content.frame.height
         frame.origin.y = window.frame.maxY - frame.height
+        if let screen = window.screen ?? NSScreen.main {
+            frame.origin.y = max(screen.visibleFrame.minY, min(frame.origin.y, screen.visibleFrame.maxY - frame.height))
+        }
         if window.isVisible {
             NSAnimationContext.runAnimationGroup { _ in window.animator().setFrame(frame, display: true) }
         } else {
@@ -181,8 +198,8 @@ struct SettingsRootView: View {
                 switch pane {
                 case .general: GeneralPane(context: context)
                 case .max: MaxPane(context: context)
-                case .profiles: ProfilesSettingsPane(context: context)
-                case .shortcuts: ShortcutsSettingsPane(context: context)
+                case .profiles: ProfilesPane(context: context)
+                case .shortcuts: ShortcutsPane(rows: context.settings.shortcuts, dispatch: context.dispatch)
                 case .links: LinksPane(context: context)
                 case .advanced: AdvancedPane(context: context)
                 }

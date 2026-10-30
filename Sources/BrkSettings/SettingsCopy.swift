@@ -107,6 +107,7 @@ public enum SettingsCopy {
     public static let downloadLocation = "Download location:"
     /// The system folder a nil `downloadsDirectory` means.
     public static let downloadsFolder = "Downloads"
+    public static let useDownloadsFolder = "Use Downloads"
     public static let promptForDownloadLocation = "Ask where to save each download"
     public static let otherFolder = "Other…"
     /// The folder panel: its title is Arc's "Download Location" (observed), its button ours.

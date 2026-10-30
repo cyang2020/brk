@@ -15,16 +15,20 @@ final class SettingsHostTests: XCTestCase {
 
     private func snapshot(pane: SettingsPane?, general: GeneralSettings = .default, links: LinkSettings = .default,
                           routes: [LinkRouteRow] = [], max: MaxSnapshot = MaxSnapshot(settings: .default, detected: [], active: nil),
-                          advanced: AdvancedSettings = .default) -> SettingsSnapshot {
+                          advanced: AdvancedSettings = .default, profiles: [ProfileSettingsRow]? = nil) -> SettingsSnapshot {
         SettingsSnapshot(
             pane: pane, general: general,
-            profiles: [ProfileSettingsRow(profile: ProfileRow(id: .default, name: "Default", icon: nil, spaceTitles: ["Personal", "Work"], isDefault: true),
+            profiles: profiles ?? [ProfileSettingsRow(profile: ProfileRow(id: .default, name: "Default", icon: nil, spaceTitles: ["Personal", "Work"], isDefault: true),
                                           settings: .default)],
             links: links, routes: routes,
             spaces: [SpaceCandidate(id: personal, title: "Personal", icon: .none, isCurrent: false),
                      SpaceCandidate(id: work, title: "Work", icon: .none, isCurrent: false)],
             engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
-            shortcuts: [], max: max, advanced: advanced)
+            shortcuts: ActionID.allCases.map { action in
+                let binding = KeyBindings.resolve(overrides: [:])[action]!
+                return ShortcutRow(action: action, title: action.spec.title, menu: action.spec.menu,
+                                   state: binding.state, source: binding.source, priority: binding.priority)
+            }, max: max, advanced: advanced)
     }
 
     /// A host in a window, as BrkApp shows it, recording what it dispatches.
@@ -92,11 +96,12 @@ final class SettingsHostTests: XCTestCase {
         }
 
         /// Types into a text field and presses Return.
-        func type(_ field: String, _ text: String, file: StaticString = #filePath, line: UInt = #line) -> [Command] {
+        func type(_ field: String, _ text: String, submit: Bool = true, file: StaticString = #filePath, line: UInt = #line) -> [Command] {
             guard let textField: NSTextField = view(field) else { XCTFail("no field \(field)", file: file, line: line); return [] }
             sent = []
             textField.stringValue = text
-            textField.sendAction(textField.action, to: textField.target)
+            textField.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: textField))
+            if submit { textField.sendAction(textField.action, to: textField.target) }
             return sent
         }
     }
@@ -110,6 +115,41 @@ final class SettingsHostTests: XCTestCase {
         f.render(snapshot(pane: nil))
         XCTAssertNotNil(f.find("settings-pane-advanced"), "a closing window keeps its last pane instead of going blank")
         XCTAssertEqual(f.host.accessibilityIdentifier(), "settings")
+    }
+
+    func testMountedShortcutEditorIsScrollableAndRecordsChanges() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .shortcuts))
+        func descendants<T: NSView>(_ view: NSView, _ type: T.Type) -> [T] {
+            (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, type) }
+        }
+        let recorders = descendants(f.host, ChordRecorderView.self)
+        XCTAssertEqual(recorders.count, ActionID.allCases.count, "the real editor must be mounted")
+        let scroller = try XCTUnwrap(descendants(f.host, NSScrollView.self).first)
+        let document = try XCTUnwrap(scroller.documentView)
+        XCTAssertGreaterThan(document.frame.height, scroller.contentSize.height)
+        if let screen = f.window.screen {
+            XCTAssertGreaterThanOrEqual(f.window.frame.minY, screen.visibleFrame.minY)
+            XCTAssertLessThanOrEqual(f.window.frame.maxY, screen.visibleFrame.maxY)
+        }
+        let last = try XCTUnwrap(recorders.last)
+        last.scrollToVisible(last.bounds)
+        f.settle()
+        XCTAssertFalse(last.visibleRect.isEmpty, "the final shortcut must be reachable")
+        f.sent = []
+        last.start()
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 1,
+                                    windowNumber: f.window.windowNumber, context: nil, characters: "e",
+                                    charactersIgnoringModifiers: "e", isARepeat: false, keyCode: Key.e.code)!
+        XCTAssertTrue(last.handle(event))
+        XCTAssertEqual(f.sent.count, 1)
+        guard case .settings(.shortcuts(.setChord(_, KeyChord([.command, .option], .e))))? = f.sent.first else {
+            return XCTFail("the mounted recorder did not dispatch its chord: \(f.sent)")
+        }
+        last.start()
+        f.render(snapshot(pane: .general))
+        XCTAssertFalse(last.isRecording, "changing pane releases the recorder's keyboard monitor")
+        XCTAssertFalse(f.window.firstResponder === last)
     }
 
     func testCopyNamesEveryPaneAndChoice() {
@@ -206,44 +246,106 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.window.title, "Max")
     }
 
-    /// the route list edits Air Traffic Control: every route's destination offers Most Recent Space, Little Arc
-    /// and each space; routes move, change, are removed and added
-    func testTheLinksPaneEditsAirTrafficControlRoutes() {
+    /// Drives F3's mounted native text fields and pop-ups. SwiftUI identifiers belong to its accessibility
+    /// elements rather than these AppKit views, so the controls are selected by their displayed values.
+    func testTheLinksPaneEditsAirTrafficControlRoutes() throws {
         let f = Fixture()
-        let a = LinkRoute(id: spotify, pattern: "open.spotify.com", destination: .space(personal))
-        let b = LinkRoute(id: github, pattern: "*.github.com", destination: .littleArc)
-        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: a, destinationTitle: "Personal"), LinkRouteRow(route: b, destinationTitle: "Little Arc")]))
+        let route = LinkRoute(id: spotify, pattern: "open.spotify.com", destination: .space(personal))
+        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: route, destinationTitle: "Personal")]))
+        func descendants<T: NSView>(_ view: NSView, _ type: T.Type) -> [T] {
+            (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, type) }
+        }
+        let destinations = descendants(f.host, NSPopUpButton.self).filter { $0.itemTitles.contains("Most Recent Space") }
+        XCTAssertEqual(destinations.count, 2, "default and new route destinations; existing rows build their borderless menus on open")
 
-        let destination: NSPopUpButton? = f.view("route-r-spotify-destination")
-        XCTAssertEqual(destination?.itemTitles, ["Most Recent Space", "Little Arc", "", "Personal", "Work"])
-        XCTAssertEqual(destination?.titleOfSelectedItem, "Personal")
-        XCTAssertEqual(f.pick("route-r-spotify-destination", "Work"),
-                       [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "open.spotify.com", destination: .space(work)))))])
-        XCTAssertEqual(f.type("route-r-spotify-pattern", "spotify.com"),
-                       [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "spotify.com", destination: .space(personal)))))])
-        XCTAssertNil(f.view("route-r-spotify-up", NSButton.self), "the first route cannot move up")
-        XCTAssertNil(f.view("route-r-github-down", NSButton.self), "the last route cannot move down")
-        XCTAssertEqual(f.click("route-r-spotify-down"), [.settings(.links(.moveRoute(spotify, index: 1)))])
-        XCTAssertEqual(f.click("route-r-github-up"), [.settings(.links(.moveRoute(github, index: 0)))])
-        XCTAssertEqual(f.click("route-r-github-remove"), [.settings(.links(.removeRoute(github)))])
-
-        XCTAssertEqual(f.click("route-add"), [], "an empty pattern adds nothing")
-        XCTAssertEqual(f.type("route-new-pattern", " news.ycombinator.com "), [], "typing a new route sends nothing before Add")
+        let fields = descendants(f.host, NSTextField.self).filter { $0.isEditable }
+        let pattern = try XCTUnwrap(fields.first { $0.stringValue == "open.spotify.com" })
+        f.sent = []
+        pattern.stringValue = "spotify.com"
+        pattern.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: pattern))
         f.settle()
-        XCTAssertEqual(f.pick("route-new-destination", "Work"), [])
-        f.settle()
-        let added = f.click("route-add")
-        guard case .settings(.links(.addRoute(let route)))? = added.first, added.count == 1 else { return XCTFail("no route added: \(added)") }
-        XCTAssertEqual(route.pattern, "news.ycombinator.com")
-        XCTAssertEqual(route.destination, .space(work))
-        XCTAssertFalse(route.id.rawValue.isEmpty)
+        XCTAssertEqual(f.sent, [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "spotify.com", destination: .space(personal)))))])
 
-        XCTAssertEqual(f.pick("defaultRoute", "Little Arc"), [.settings(.links(.defaultRoute(.littleArc)))])
-        var links = LinkSettings.default
-        links.defaultRoute = .littleArc
-        f.render(snapshot(pane: .links, links: links))
-        XCTAssertEqual(f.view("defaultRoute", NSPopUpButton.self)?.titleOfSelectedItem, "Little Arc")
-        XCTAssertEqual(f.pick("defaultRoute", "Most Recent Space"), [.settings(.links(.defaultRoute(nil)))])
+        let draft = try XCTUnwrap(fields.first { $0.stringValue.isEmpty })
+        f.sent = []
+        draft.stringValue = "news.ycombinator.com"
+        draft.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: draft))
+        f.settle()
+        XCTAssertEqual(f.sent, [], "typing a draft must not create a route")
+        draft.sendAction(draft.action, to: draft.target)
+        f.settle()
+        guard case .settings(.links(.addRoute(let added)))? = f.sent.first else { return XCTFail("Return did not add the route: \(f.sent)") }
+        XCTAssertEqual(added.pattern, "news.ycombinator.com")
+        XCTAssertEqual(added.destination, .mostRecentSpace)
+        XCTAssertFalse(added.id.rawValue.isEmpty)
+
+        f.sent = []
+        let fallback = try XCTUnwrap(destinations.first)
+        fallback.selectItem(withTitle: "Little Arc")
+        fallback.menu?.performActionForItem(at: fallback.indexOfSelectedItem)
+        f.settle()
+        XCTAssertEqual(f.sent, [.settings(.links(.defaultRoute(.littleArc)))])
+    }
+
+    func testProfilesEditorCreatesRenamesAndProtectsDefaultProfile() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .profiles))
+        XCTAssertEqual(f.view("createProfile", NSButton.self)?.isEnabled, false)
+        XCTAssertEqual(f.view("deleteProfile-default", NSButton.self)?.isEnabled, false)
+        XCTAssertEqual(f.view("deleteUnusedProfiles", NSButton.self)?.isEnabled, false)
+        XCTAssertEqual(f.type("newProfileName", "Work", submit: false), [])
+        f.settle()
+        XCTAssertEqual(f.click("createProfile"), [.profile(.create(name: "Work", icon: nil))])
+        XCTAssertEqual(f.type("newProfileName", "Via Return"), [.profile(.create(name: "Via Return", icon: nil))])
+        XCTAssertEqual(f.type("profileName-default", "Personal"), [.profile(.rename(.default, name: "Personal"))])
+    }
+
+    func testProfileSettingsStayScopedAndDownloadsCanReturnToDefault() {
+        let f = Fixture()
+        let id = ProfileID("work")
+        var settings = ProfileSettings.default
+        settings.downloadsDirectory = "/Users/me/Inbox"
+        settings.promptForDownloadLocation = true
+        let row = ProfileSettingsRow(profile: ProfileRow(id: id, name: "Work", icon: nil, spaceTitles: [], isDefault: false), settings: settings)
+        f.render(snapshot(pane: .profiles, profiles: [snapshot(pane: nil).profiles[0], row]))
+        XCTAssertEqual(f.pick("autoArchive-work", "7 days"), [.settings(.profile(id, .autoArchive(.sevenDays)))])
+        XCTAssertEqual(f.pick("searchEngine-work", "Bing"), [.settings(.profile(id, .searchEngine(SearchEngineID("bing"))))])
+        XCTAssertEqual(f.pick("downloadLocation-work", "Use Downloads"),
+                       [.settings(.profile(id, .downloadsDirectory(nil))), .settings(.profile(id, .promptForDownloadLocation(false)))])
+        XCTAssertEqual(f.view("deleteProfile-work", NSButton.self)?.isEnabled, true)
+        XCTAssertEqual(f.view("deleteUnusedProfiles", NSButton.self)?.isEnabled, true)
+        XCTAssertEqual(f.click("deleteProfile-default"), [])
+    }
+
+    func testProfileNameCommitsFromTheNativeFieldEditor() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .profiles))
+        let field = try XCTUnwrap(f.view("profileName-default", NSTextField.self))
+        field.selectText(nil)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("Personal", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        f.settle()
+        XCTAssertEqual(f.sent, [.profile(.rename(.default, name: "Personal"))])
+    }
+
+    func testEscapeCancelsProfileDeletionWithoutClosingSettings() throws {
+        let f = Fixture()
+        let row = ProfileSettingsRow(profile: ProfileRow(id: ProfileID("unused"), name: "Unused", icon: nil,
+                                                         spaceTitles: [], isDefault: false), settings: .default)
+        f.render(snapshot(pane: .profiles, profiles: [snapshot(pane: nil).profiles[0], row]))
+        f.window.orderFront(nil)
+        defer { f.window.orderOut(nil) }
+        XCTAssertEqual(f.click("deleteProfile-unused"), [])
+        f.settle()
+        let sheet = try XCTUnwrap(f.window.attachedSheet, "the mounted editor presents its confirmation")
+        let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1,
+                                      windowNumber: sheet.windowNumber, context: nil, characters: "\u{1b}",
+                                      charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: Key.escape.code)!
+        _ = sheet.performKeyEquivalent(with: escape)
+        f.settle()
+        XCTAssertEqual(f.sent, [], "cancel must not delete a profile or close Settings")
+        XCTAssertNil(f.window.attachedSheet)
     }
 
     /// " is not your default web browser." shows until the app is the default browser or the notice is dismissed

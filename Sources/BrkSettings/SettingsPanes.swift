@@ -103,32 +103,6 @@ struct MaxPane: View {
     }
 }
 
-// MARK: - Profiles
-
-struct ProfilesSettingsPane: View {
-    let context: PaneContext
-    /// Which profile's settings the pane shows: navigation inside the pane, not a setting.
-    @State private var picked: ProfileID = .default
-
-    /// The picked profile while it exists, else the first (the default profile).
-    private var row: ProfileSettingsRow? {
-        context.settings.profiles.first { $0.profile.id == picked } ?? context.settings.profiles.first
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsSection {
-                SettingsNote(text: SettingsCopy.profilesIntro)
-                ProfilesListSlot(context: context, selection: Binding(get: { row?.profile.id ?? .default }, set: { picked = $0 }))
-            }
-            if let row {
-                SettingsDivider()
-                ProfileSettingsForm(context: context, row: row)
-            }
-        }
-    }
-}
-
 /// One profile's own settings (Arc: `ProfilePreferences.State`).
 struct ProfileSettingsForm: View {
     let context: PaneContext
@@ -170,7 +144,7 @@ struct ProfileSettingsForm: View {
         let title = folder.map { URL(fileURLWithPath: $0).lastPathComponent } ?? SettingsCopy.downloadsFolder
         let icon = folder.map { NSWorkspace.shared.icon(forFile: $0) } ?? NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         icon?.size = CGSize(width: S.menuIconSize.value, height: S.menuIconSize.value)
-        return [
+        var entries: [PopUpEntry<DownloadChoice>] = [
             .option(title, .folder, image: icon),
             .option(SettingsCopy.promptForDownloadLocation, .prompt),
             .separator,
@@ -180,6 +154,13 @@ struct ProfileSettingsForm: View {
                 if settings.promptForDownloadLocation { context.dispatch(.settings(.profile(id, .promptForDownloadLocation(false)))) }
             },
         ]
+        if folder != nil {
+            entries.append(.action(SettingsCopy.useDownloadsFolder) { [context, settings, id] in
+                context.dispatch(.settings(.profile(id, .downloadsDirectory(nil))))
+                if settings.promptForDownloadLocation { context.dispatch(.settings(.profile(id, .promptForDownloadLocation(false)))) }
+            })
+        }
+        return entries
     }
 }
 
@@ -195,10 +176,8 @@ struct LinksPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsSection(.text(SettingsCopy.airTrafficControl)) {
-                SettingsNote(text: SettingsCopy.linksIntro + " " + SettingsCopy.routesIntro)
-                LinksRoutesSlot(context: context)
-            }
+            LinksRoutesEditor(routes: context.settings.routes, spaces: context.settings.spaces,
+                              links: links, dispatch: context.dispatch)
             SettingsDivider()
             SettingsSection(.text(SettingsCopy.peekLabel)) {
                 SettingsNote(text: SettingsCopy.peekDescription)
@@ -223,20 +202,6 @@ struct LinksPane: View {
                         .frame(width: S.popUpWidth.value)
                 }
             }
-        }
-    }
-}
-
-// MARK: - Shortcuts
-
-struct ShortcutsSettingsPane: View {
-    let context: PaneContext
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: S.rowSpacing.value) {
-            Text(SettingsCopy.customShortcuts).font(.headline)
-            SettingsNote(text: SettingsCopy.shortcutsIntro)
-            ShortcutsSlot(context: context)
         }
     }
 }
