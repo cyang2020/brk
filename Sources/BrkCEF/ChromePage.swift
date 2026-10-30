@@ -71,14 +71,13 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    /// Keyboard focus into the page: our window (never the host) becomes key and Chromium's input view inside the
-    /// surface becomes first responder; Chromium is told it has focus (the spike's focus sequence, u2-bar).
+    /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
+    /// windows; making one key here would take focus from a different window's editor.
     func takeFocus() {
         guard let window = surface.window else {
             log.notice("page \(self.id.description, privacy: .public): takeFocus with no window")
             return
         }
-        if !window.isKeyWindow { window.makeKey() }
         let target = surface.keyboardTarget
         let accepted = window.makeFirstResponder(target)
         chrome.browser.setFocus(true)

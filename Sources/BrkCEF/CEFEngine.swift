@@ -48,12 +48,13 @@ public final class CEFEngine: WebEngine {
     private var closeWaiter: CheckedContinuation<Bool, Never>?
     /// Resumed when the last host window is destroyed (or by a short timeout: not a failure).
     private var windowWaiter: CheckedContinuation<Void, Never>?
-    /// A `focus(page)` for a page whose input view has not arrived yet; applied by `pageReadyForFocus`.
-    private var pendingFocus: PageID?
-    /// The page the app last gave keyboard focus to (nil once a native view took it). Chromium replaces the page's
-    /// input view when a navigation commits in a new renderer, and AppKit then makes the window first responder;
-    /// the page's next event (commit, loading, title) re-applies the focus to the new view.
-    private var focusedPage: PageID?
+    /// Each native window keeps its own page intent, including while a profile or input view is being created.
+    /// A native editor in another window must not cancel this request. Weak ownership permits window teardown.
+    private struct FocusRequest {
+        weak var window: NSWindow?
+        let page: PageID
+    }
+    private var focusRequests: [ObjectIdentifier: FocusRequest] = [:]
     private let log = Logger(subsystem: "brk", category: "cef")
 
     enum ShutdownPhase: Equatable {
@@ -106,11 +107,10 @@ public final class CEFEngine: WebEngine {
         self.wanted = pages
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
-        // page to its request context for life. The new incarnation inherits a pending focus; a held focus is
-        // re-applied by its first event (`focusedPage`).
+        // page to its request context for life. The new incarnation inherits its window's request.
+        focusRequests = focusRequests.filter { $0.value.window != nil && wanted[$0.value.page] != nil }
         for (id, page) in live where wanted[id]?.context != page.context {
             live[id] = nil
-            if pendingFocus == id, wanted[id] == nil { pendingFocus = nil }
             retire(page)
         }
         for spec in pages where live[spec.id] == nil {
@@ -145,29 +145,31 @@ public final class CEFEngine: WebEngine {
         }
     }
 
-    /// Nil takes keyboard focus away from every page (the caller then focuses a native view). A page whose input
-    /// view has not arrived yet (created in this same render) gets the focus when it does; a later call replaces it.
-    public func focus(_ page: PageID?) {
+    public func focus(_ page: PageID?, in window: NSWindow) {
         guard phase == .running else { return }
-        if let page, live[page] == nil, wanted.contains(where: { $0.id == page }) {
-            // Its profile is still loading: the page takes the focus when its input view arrives.
-            pendingFocus = page
-            focusedPage = page
+        let owner = ObjectIdentifier(window)
+        if let request = focusRequests[owner], request.window === window, request.page != page,
+           let previous = live[request.page], previous.surface.window == nil || previous.surface.window === window {
+            previous.dropFocus()
+        }
+        guard let page, wanted.contains(where: { $0.id == page }) else {
+            focusRequests[owner] = nil
+            for live in live.values where live.surface.window === window && live.surface.containsFirstResponder { live.dropFocus() }
             return
         }
-        guard let page, let target = live[page] else {
-            pendingFocus = nil
-            focusedPage = nil
-            for live in live.values where live.surface.containsFirstResponder { live.dropFocus() }
-            return
-        }
-        focusedPage = page
-        if target.surface.isReadyForFocus {
-            pendingFocus = nil
-            target.takeFocus()
-        } else {
-            pendingFocus = page
-        }
+        focusRequests[owner] = FocusRequest(window: window, page: page)
+        guard let target = live[page], target.surface.window === window, target.surface.isReadyForFocus else { return }
+        if !target.surface.containsFirstResponder { target.takeFocus() }
+    }
+
+    /// Readiness and page callbacks may complete a request after the store has rendered. They cannot take focus
+    /// from a native responder or follow a surface that moved to a different window.
+    private func restoreFocus(_ page: ChromePage) {
+        guard phase == .running, live[page.id] === page, let window = page.surface.window, window.isVisible,
+              let request = focusRequests[ObjectIdentifier(window)], request.window === window, request.page == page.id,
+              window.firstResponder == nil || window.firstResponder === window,
+              !page.surface.isHiddenOrHasHiddenAncestor, page.surface.isReadyForFocus else { return }
+        page.takeFocus()
     }
 
     public func evaluate(_ script: String, in page: PageID) {
@@ -250,7 +252,7 @@ public final class CEFEngine: WebEngine {
     private func runShutdown() async -> ShutdownOutcome {
         log.notice("shutdown: \(self.live.count, privacy: .public) live, \(self.closing.count, privacy: .public) closing")
         phase = .restoringViews
-        pendingFocus = nil
+        focusRequests.removeAll()
         for page in live.values { page.surface.returnViews() }
         for page in closing.values { page.surface.returnViews() }
         phase = .closingBrowsers
@@ -309,18 +311,13 @@ public final class CEFEngine: WebEngine {
 
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
         guard phase == .running, live[page.id] === page else { return }  // events from a retired incarnation are dropped
+        delegate?.engine(self, page: page.id, didEmit: event)
         switch event {
         case .committed, .loadingChanged, .titleChanged:
-            let holds = page.surface.containsFirstResponder, ready = page.surface.isReadyForFocus
-            log.debug("page \(page.id.description, privacy: .public): \(String(describing: event).prefix(40), privacy: .public) focused=\(self.focusedPage == page.id, privacy: .public) holdsFirstResponder=\(holds, privacy: .public) ready=\(ready, privacy: .public)")
-            if focusedPage == page.id, !holds, ready {
-                log.notice("page \(page.id.description, privacy: .public): input view replaced; focus re-applied")
-                page.takeFocus()
-            }
+            restoreFocus(page)
         default:
             break
         }
-        delegate?.engine(self, page: page.id, didEmit: event)
     }
 
     func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
@@ -336,9 +333,7 @@ public final class CEFEngine: WebEngine {
 
     /// The page's input view arrived in its surface: apply the focus that was waiting for it.
     func pageReadyForFocus(_ page: ChromePage) {
-        guard phase == .running, live[page.id] === page, pendingFocus == page.id else { return }
-        pendingFocus = nil
-        page.takeFocus()
+        restoreFocus(page)
     }
 
     /// OnBeforeClose for any incarnation. The ledger says what it may do: a retired incarnation's close never removes
@@ -352,8 +347,7 @@ public final class CEFEngine: WebEngine {
             if !idLiveAgain, phase == .running { delegate?.engine(self, page: page.id, didEmit: .closed) }
         case .liveClosedByPage:
             if live[page.id] === page { live[page.id] = nil }
-            if pendingFocus == page.id { pendingFocus = nil }
-            if focusedPage == page.id { focusedPage = nil }
+            focusRequests = focusRequests.filter { $0.value.page != page.id }
             page.surface.returnViews()
             destroying[page.incarnation] = page
             if phase == .running {

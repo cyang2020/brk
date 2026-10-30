@@ -85,6 +85,7 @@ final class Runner {
             message = "\(error)"
             died = error is AppDied
             if app.isRunning {
+                try? app.recordWindows("failure")
                 _ = try? app.screenshot("failure")
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
