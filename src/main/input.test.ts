@@ -17,7 +17,7 @@ vi.mock('electron', () => ({ Menu: { buildFromTemplate: vi.fn(), setApplicationM
 type Listener = (event: { preventDefault(): void }, input: Electron.Input) => void
 
 /** A webContents stand-in that records the before-input-event listener. */
-function fakeWebContents(): { readonly wc: WebContents; press(actionKey: string, platform: Platform, extra?: Partial<Electron.Input>): boolean; keyUp(key: string): void } {
+function fakeWebContents(): { readonly wc: WebContents; press(actionKey: string, platform: Platform, extra?: Partial<Electron.Input>): boolean; keyUp(key: string): void; keyDown(key: string): boolean } {
   let listener: Listener | null = null
   const wc = { on: (event: string, fn: Listener) => (event === 'before-input-event' ? (listener = fn) : null) } as unknown as WebContents
   const send = (input: Electron.Input): boolean => {
@@ -35,6 +35,9 @@ function fakeWebContents(): { readonly wc: WebContents; press(actionKey: string,
     },
     keyUp(key) {
       send({ type: 'keyUp', key, code: key, shift: false, control: false, alt: false, meta: false, isAutoRepeat: false, isComposing: false, location: 0, modifiers: [] })
+    },
+    keyDown(key) {
+      return send({ type: 'keyDown', key, code: key, shift: false, control: key === 'Control', alt: false, meta: false, isAutoRepeat: false, isComposing: false, location: 0, modifiers: [] })
     },
   }
 }
@@ -146,6 +149,12 @@ describe('createKeyRouter', () => {
   it('a Control keyUp on any of the window webContents commits the cycle', () => {
     const h = harness()
     h.sidebar.keyUp('Control') // the keyUp landed on the sidebar surface, not the tab view
+    expect(h.dispatched).toEqual([{ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: W1 } }])
+  })
+
+  it('a fresh Control keyDown commits a cycle left pending by a hold whose keyUp was lost', () => {
+    const h = harness()
+    expect(h.tab.keyDown('Control')).toBe(false) // Control alone is not an action, not prevented
     expect(h.dispatched).toEqual([{ origin: 'system', command: { type: 'tab/cycle-recent-commit', windowId: W1 } }])
   })
 

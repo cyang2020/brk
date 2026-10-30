@@ -114,6 +114,13 @@ export function createKeyRouter(dispatch: Dispatch, platform: Platform, now: () 
           return
         }
         if (input.isAutoRepeat) return
+        // A fresh Control hold (its keyDown) finalizes a cycle left pending by a previous hold whose keyUp never
+        // reached the hook; the new hold's Tab presses then start a fresh walk. Control alone matches no action.
+        if (input.key === 'Control') {
+          cancelCycleTimer(owner.windowId)
+          commitCycle(owner.windowId)
+          return
+        }
         const actionId = keymap(input)
         if (actionId === null) return
         if (owner.surface === 'tab' && ACTIONS[actionId].priority !== 'app') return
