@@ -39,13 +39,17 @@ import AppKit
         let word = index.map { String(enabled[$0].prefix(while:{ !$0.isWhitespace })) }
         let prefix = word.flatMap { word in enabled.filter { $0.lowercased().hasPrefix(word.lowercased()) }.count == 1 ? word : nil }
         let pid = getpid(), done = completion
-        let work = DispatchWorkItem { Self.drive(prefix:prefix,index:index,pid:pid,done:done) }
+        let work = Self.makeDriver(prefix:prefix,index:index,pid:pid,done:done)
         driver = work
         DispatchQueue.global(qos:.userInteractive).asyncAfter(deadline:.now()+0.2,execute:work)
     }
 
     @objc private func finished(_ note: Notification) {
         if let current = note.object as? NSMenu, current === menu { ended = true; completion.signal() }
+    }
+
+    nonisolated static func makeDriver(prefix: String?, index: Int?, pid: pid_t, done: DispatchSemaphore) -> DispatchWorkItem {
+        DispatchWorkItem { @Sendable in Self.drive(prefix:prefix,index:index,pid:pid,done:done) }
     }
 
     private nonisolated static func drive(prefix: String?, index: Int?, pid: pid_t, done: DispatchSemaphore) {
