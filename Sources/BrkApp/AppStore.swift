@@ -385,7 +385,8 @@ public final class AppStore {
                 popupTarget.clear()
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }
-                exports.present(document, owner: owner, in: window, reply: { [weak self] outcome in
+                let fixture = outputSheets.fixtureDestinations.removeValue(forKey: owner)
+                exports.present(document, owner: owner, in: window, fixtureDestination: fixture, reply: { [weak self] outcome in
                     self?.dispatch(.system(.exportFinished(owner, outcome)))
                 })
             case .sidebarData(let effect): runSidebarData(effect)

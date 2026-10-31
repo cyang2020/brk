@@ -14,7 +14,7 @@ final class ProtocolTests: XCTestCase {
         case chooseOutputFixture, cancelCurrentOutput, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls
+        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
     }
@@ -36,6 +36,7 @@ final class ProtocolTests: XCTestCase {
         case .setAppAppearance: .setAppAppearance
         case .siteControlsScreenshot: .siteControlsScreenshot
         case .siteControls: .siteControls
+        case .siteControlInput: .siteControlInput
         case .hello: .hello
         case .view: .view
         case .activate: .activate
@@ -88,6 +89,7 @@ final class ProtocolTests: XCTestCase {
         case .setAppAppearance: return [.setAppAppearance(.dark), .setAppAppearance(nil)]
         case .siteControlsScreenshot: return [.siteControlsScreenshot(window: WindowID("w"), path: "/tmp/panel.png")]
         case .siteControls: return [.siteControls]
+        case .siteControlInput: return [.siteControlInput(window: WindowID("w"), field: "extension-shortcut-fixture-run", action: .focus), .siteControlInput(window: WindowID("w"), field: "siteExportLink", action: .press)]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
         case .activate: return [.activate(window: WindowID("w"))]

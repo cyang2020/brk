@@ -89,6 +89,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case nativeDialogKey(number: Int, chord: String)
     case setAppAppearance(Scheme?)
     case siteControlsScreenshot(window: WindowID, path: String)
+    /// Native semantic input in this owner's visible site-controls panel; typing still uses normal key events.
+    case siteControlInput(window: WindowID, field: String, action: SiteControlAction)
     case siteControls
     case pageObservations
     /// Writes state.json now (skips the debounce).
@@ -109,6 +111,7 @@ public enum ControlOp: Codable, Sendable, Equatable {
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
 public enum PointerPhase: String, Codable, Sendable, Equatable { case down, dragged, up }
+public enum SiteControlAction: String, Codable, Sendable, Equatable { case focus, press }
 
 public struct ControlReply: Codable, Sendable, Equatable {
     public var id: Int

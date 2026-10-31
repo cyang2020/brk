@@ -58,6 +58,29 @@ final class ControlExecutor {
         case .sidebarPanel(let owner, let action):
             let window = try controller(owner).window
             return try await SidebarPanelControl.run(action, in: window)
+        case .siteControlInput(let owner, let field, let action):
+            guard let panel = store.sitePanels.window(for: owner), panel.isVisible,
+                  let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel) as? NSControl,
+                  !control.isHiddenOrHasHiddenAncestor, !control.visibleRect.intersection(control.bounds).isEmpty,
+                  control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+            store.inputWindow = panel
+            switch action {
+            case .focus:
+                guard let text = control as? NSTextField, text.isEditable, panel.makeFirstResponder(text) else {
+                    throw Failure(message: "The site control is not an editable text field")
+                }
+                text.selectText(nil)
+                guard let editor = text.currentEditor(), panel.firstResponder === editor else {
+                    throw Failure(message: "The native field editor did not accept focus")
+                }
+            case .press:
+                guard let button = control as? NSButton else { throw Failure(message: "The site control is not a button") }
+                button.performClick(nil)
+            }
+            print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
+            return .ok
         case .nativeDialogKey(let number, let text):
             guard let window = NSApp.windows.first(where: { $0.windowNumber == number && $0.isVisible && NSStringFromClass(type(of: $0)) == "NativeWidgetMacNSWindow" }) else {
                 throw Failure(message: "The requested native dialog does not belong to this app")
@@ -103,7 +126,10 @@ final class ControlExecutor {
             return .ok
         case .configureSavePanel(let window, let path):
             let owner = try controller(window).id
-            store.outputSheets.fixtureDestinations[owner] = URL(fileURLWithPath: path)
+            let selected = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            guard selected.path.hasPrefix(root) else { throw Failure(message: "Save destination is outside the owned fixture directory") }
+            store.outputSheets.fixtureDestinations[owner] = selected
             return .ok
         case .answerSavePanel(let window, let path):
             let owner = try controller(window).window
@@ -114,18 +140,11 @@ final class ControlExecutor {
                 guard selected.path.hasPrefix(root), FileManager.default.fileExists(atPath: selected.deletingLastPathComponent().path) else {
                     throw Failure(message: "Save destination is outside the owned fixture directory")
                 }
-                panel.directoryURL = selected.deletingLastPathComponent()
-                panel.nameFieldStringValue = selected.lastPathComponent
             }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             try await Task.sleep(for: .milliseconds(700))
             guard owner.attachedSheet === panel else { throw Failure(message: "Save panel disappeared before the key input") }
-            if let selected {
-                guard panel.url?.resolvingSymlinksInPath().standardizedFileURL == selected else {
-                    throw Failure(message: "Save panel did not accept the selected fixture destination")
-                }
-            }
             try events.press(KeyChord([], path == nil ? .escape : .returnKey), in: panel)
             return .ok
         case .cancelPrintPanel(let window):

@@ -19,6 +19,10 @@ enum ExtScenarios {
     static func catalogValue(_ app: AppUnderTest, _ id: String) throws -> BrowserExtension? {
         try SitePolicyScenarios.controls(app).extensions.first { $0.id == id }
     }
+    static func control(_ app: AppUnderTest, _ field: String, _ action: SiteControlAction) throws {
+        guard let owner = app.window else { throw Check(description: "site-controls owner missing") }
+        try app.perform(.siteControlInput(window: owner, field: field, action: action))
+    }
     @Sendable static func catalog(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
         defer {
@@ -27,12 +31,12 @@ enum ExtScenarios {
                 try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-catalog-controls.json"))
             }
         }
-        try app.click(.settingsField("extension-pin-" + fixture.id))
+        try control(app, "extension-pin-" + fixture.id, .press)
         try expect(try SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id), "public profile pin missing")
         try expect(fixture.canChangeIncognito == true, "fixture incognito permission is not editable")
         for allowed in [false, true, false] {
             if try catalogValue(app, fixture.id)?.incognitoAllowed != allowed {
-                try app.click(.settingsField("extension-incognito-" + fixture.id))
+                try control(app, "extension-incognito-" + fixture.id, .press)
             } else { try app.dispatch(.site(.extensionIncognito(fixture.id, allowed))) }
             try app.waitUntil("Chromium incognito readback \(allowed)") {
                 if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
@@ -80,19 +84,23 @@ enum ExtScenarios {
             }
         }
         // Drive the native text editor and its Save action, not the manager's mutation API directly.
-        try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
         try app.press("cmd+a"); try app.type("cmd+shift+u")
-        try app.click(.settingsField("extension-shortcut-save-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
         try app.waitUntil("edited Chromium shortcut readback") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
             return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
         }
-        try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
         try app.press("cmd+shift+u"); app.sleep(0.5)
         try expect(try tab(item, in: app.view())?.title == "Site policy fixture", "native editor leaked the extension command to the page")
-        try app.dispatch(.site(.extensionShortcut(fixture.id, "_execute_action", "cmd+shift+u")))
+        try control(app, "extension-shortcut-" + fixture.id + "-_execute_action", .focus)
+        try app.type("cmd+shift+u")
+        try control(app, "extension-shortcut-save-" + fixture.id + "-_execute_action", .press)
         try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("already assigned") == true, "duplicate shortcut did not report a conflict")
-        try app.dispatch(.site(.extensionShortcut(fixture.id, command, "cmd+t")))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
+        try app.type("cmd+t")
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
         try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("reserved") == true, "reserved shortcut did not report a conflict")
         _ = try app.screenshotSiteControls("shortcut-editor")
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
@@ -114,7 +122,7 @@ enum ExtScenarios {
         try SitePolicyScenarios.evaluate(app, item, "document.title='extension-count:'+document.documentElement.getAttribute('data-brk-extension-commands')")
         try waitForTitle(app, item, "extension-count:1")
         try app.dispatch(.settings(.shortcuts(.reset(.newTab))))
-        app.note("Native editing, duplicate/reserved errors, persisted command execution, and a later Brk app-priority remap were exercised. Native editor/page-first routing also has reducer tests using the one key table.")
+        app.note("Owned AppKit focus/press actions plus real key input edited the actual fields and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap. Synthetic physical utility-panel clicks remain a separate verification limitation.")
     }
 
     @Sendable static func loading(_ app: AppUnderTest) throws {
@@ -259,21 +267,22 @@ enum ExtScenarios {
         try app.dispatch(.site(.controls))
         try app.waitUntil("native policy and OS readback") { try SitePolicyScenarios.controls(app).applied?.osAuthorization?.count == 4 }
         try app.perform(.pasteboard("Ext-copy-pending"))
-        try app.click(.settingsField("siteCopyURL"))
+        try control(app, "siteCopyURL", .press)
         try app.waitUntil("actual copied page URL") {
             guard case .text(let copied) = try app.send(.readPasteboard) else { return false }
             return copied == app.site.url("site-policy.html").absoluteString
         }
-        try app.click(.settingsField("siteExportLink"))
+        try control(app, "siteExportLink", .press)
         try app.waitUntil("real link export save panel") { try app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
         try app.perform(.sheetButton(title: "Cancel"))
         try app.waitUntil("link export cancellation") {
             let facts = try app.native()
             return facts.sheetClass == nil && !facts.appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible }
         }
-        try app.click(.settingsField("siteExportLink"))
-        try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
         let destination = app.dataDirectory.appendingPathComponent("Ext-link-export.json")
+        try app.perform(.configureSavePanel(window: app.window, path: destination.path))
+        try control(app, "siteExportLink", .press)
+        try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
         try app.perform(.answerSavePanel(window: app.window, path: destination.path))
         try app.waitUntil("actual link export bytes") { FileManager.default.fileExists(atPath: destination.path) }
         let data = try Data(contentsOf: destination)

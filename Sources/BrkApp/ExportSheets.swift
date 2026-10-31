@@ -14,13 +14,13 @@ final class ExportSheets {
     private var pending: [WindowID: Pending] = [:]
     private var stopped = false
 
-    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
+    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, fixtureDestination: URL? = nil, reply: @escaping @MainActor (ExportOutcome) -> Void) {
         guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
             reply(.failed("Finish the open sheet first.")); return
         }
         let entry = Pending(window: window, reply: reply)
         pending[owner] = entry
-        let panel = ShareExport.run(document, in: window, isValid: { [weak self, weak entry] in
+        let panel = ShareExport.run(document, in: window, fixtureDestination: fixtureDestination, isValid: { [weak self, weak entry] in
             guard let self, let entry else { return false }
             return !self.stopped && self.pending[owner] === entry && entry.window?.isVisible == true
         }, completion: { [weak self, weak entry] result in
