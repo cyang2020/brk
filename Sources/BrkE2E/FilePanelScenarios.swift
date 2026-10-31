@@ -21,10 +21,19 @@ enum FilePanelScenarios {
         let panels = facts.appWindows.filter { $0.isVisible && ($0.className == "NSOpenPanel" || $0.className == "NSSavePanel") }
         guard panels.count == 1, panels[0].className == facts.sheetClass else { throw Check(description: "Expected one actual owned picker") }
         let panel = panels[0]
-        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], 0) as? [[String: Any]] ?? []
-        guard let window = windows.first(where: {
-            $0[kCGWindowNumber as String] as? Int == panel.number && $0[kCGWindowOwnerPID as String] as? Int32 == hello.pid
-        }), window[kCGWindowBounds as String] != nil else { throw Check(description: "Picker is absent from the on-screen owned window census") }
+        // The WindowServer lists a just-attached sheet a moment after AppKit does; poll the on-screen census for a
+        // bounded time instead of reading it once (parent repair after the Fable review of 3b48d60).
+        var window: [String: Any]?
+        let censusDeadline = Date().addingTimeInterval(5)
+        repeat {
+            let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], 0) as? [[String: Any]] ?? []
+            window = windows.first {
+                $0[kCGWindowNumber as String] as? Int == panel.number && $0[kCGWindowOwnerPID as String] as? Int32 == hello.pid
+                    && $0[kCGWindowBounds as String] != nil
+            }
+            if window == nil { Thread.sleep(forTimeInterval: 0.1) }
+        } while window == nil && Date() < censusDeadline
+        guard let window else { throw Check(description: "Picker is absent from the on-screen owned window census after 5 s") }
         guard case .menuItems(let controls) = try app.send(.sidebarPanel(window: nil, action: .inspect)) else { throw Check(description: "Picker inspection failed") }
         let stem = app.scenarioID + "-" + UUID().uuidString
         let screenshot = try app.panelScreenshot(stem + "-picker")
