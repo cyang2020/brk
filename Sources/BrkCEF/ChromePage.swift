@@ -79,6 +79,7 @@ final class ChromePage: CefBrowserDelegate {
         let list = spec.websitePolicy.preferences.blockingRules ?? .builtIn
         options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes, urlPrefixes: list.blockedURLPrefixes ?? [])
         options.showsChromeToolbar = false
+        options.prepareWindow = { HostWindows.adopt($0, parent: nil) }
         options.backgroundColor = .white
         options.initialBounds = Self.offscreenBounds
         // The page's request context: nil (the runtime's cache) for the default profile, a profile's persistent

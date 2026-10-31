@@ -73,7 +73,6 @@ enum ExtScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
-        _ = try app.screenshotSiteControls("shortcut-before-input")
         defer {
             _ = try? app.screenshotSiteControls("shortcut-final")
             if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
@@ -245,7 +244,7 @@ enum ExtScenarios {
         try matrix("muted-html-video", setup: "const canvas=document.createElement('canvas');window.extElement=document.createElement('video');extElement.muted=true;extElement.srcObject=canvas.captureStream(10);document.body.append(extElement);await extElement.play()", active: true)
         try matrix("paused-html-video", setup: "document.body.append(extElement);extElement.pause()", active: false)
         try matrix("running-silent-webaudio", setup: "await start(true);clearInterval(timer)", active: false)
-        app.note("Real audible WebAudio, muted playing HTML audio and muted playing HTML video protected hidden scheduling. Suspended WebAudio, paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
+        app.note("Audible WebAudio and playback intent for muted HTML audio/video protected hidden scheduling, including Chromium's automatic hidden-media pause. Suspended WebAudio, visibly paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
     }
 
     @Sendable static func controls(_ app: AppUnderTest) throws {

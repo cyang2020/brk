@@ -249,13 +249,21 @@ final class ControlExecutor {
                 // The browser window first, then any other app window (the settings window, wave 2).
                 let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
                     ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
-                guard let (view, window) = found else {
+                guard let (_, window) = found else {
                     throw Failure(message: "no visible view \(viewID.identifier) in any window")
+                }
+                // Physical input follows a committed native frame. The control socket can arrive before
+                // SwiftUI commits a newly assigned rootView; resolve the control again after that commit.
+                window.contentView?.layoutSubtreeIfNeeded()
+                window.displayIfNeeded()
+                guard let view = ViewTree.find(viewID.identifier, in: window), !view.isHiddenOrHasHiddenAncestor else {
+                    throw Failure(message: "view disappeared before input: \(viewID.identifier)")
                 }
                 target = window
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
                 let hit = (window.contentView?.superview ?? window.contentView)?.hitTest(at)
                 print("[control] click id=\(viewID.identifier) window=\(window.windowNumber) view=\(NSStringFromClass(type(of: view))) frame=\(view.frame) visible=\(view.visibleRect) point=\(at) hit=\(hit.map { NSStringFromClass(type(of: $0)) } ?? "nil") key=\(window.isKeyWindow) active=\(NSApp.isActive)")
+                if let control = view as? NSControl { print("[control] native enabled=\(control.isEnabled) target=\(control.target.map { NSStringFromClass(type(of: $0)) } ?? "nil") action=\(control.action.map(NSStringFromSelector) ?? "nil")") }
             } else if let point {
                 at = c.root.convert(point, to: nil)
             } else {

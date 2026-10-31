@@ -63,6 +63,7 @@ final class OSSiteAuthorization: NSObject, @preconcurrency CLLocationManagerDele
             case .notifications:
                 let center = UNUserNotificationCenter.current()
                 let status = await center.notificationSettings().authorizationStatus
+                guard isCurrent() else { return false }
                 if status == .notDetermined {
                     guard (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
                 } else if status != .authorized && status != .provisional { return false }

@@ -84,6 +84,7 @@ final class ChromeAudibility: CefBrowserDelegate {
         var options = CefChromeBrowserOptions()
         options.isFrameless = true
         options.showsChromeToolbar = false
+        options.prepareWindow = { HostWindows.adopt($0, parent: nil) }
         options.initialBounds = ChromePage.offscreenBounds
         options.profile = profile
         chrome = CefChromeBrowser.create(url: AudioExtension.url, options: options, delegate: nil)
