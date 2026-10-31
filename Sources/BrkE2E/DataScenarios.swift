@@ -1,6 +1,7 @@
 import BrkBase
 import BrkControl
 import BrkDomain
+import CoreGraphics
 import Foundation
 
 enum DataScenarios {
@@ -9,6 +10,7 @@ enum DataScenarios {
         Scenario("DataCacheRefreshRestart", "cache refresh: profile-wide HTTP eviction and other storage/profile survival after restart", cefOnly: "CEF storage", cacheRestart),
         Scenario("DataSiteStorageRestart", "explicit site-storage deletion and two origins/profiles after restart", cefOnly: "CEF storage", storageRestart),
         Scenario("DataProfileClearRestart", "profile clearing preserves records/settings/extensions and isolates two profiles", cefOnly: "CEF request contexts", profileClear),
+        Scenario("DataCustomProfileClearRestart", "custom profile cookies/cache/history clear across origins while Default survives restart", cefOnly: "CEF request contexts", customProfileClear),
         Scenario("DataExtensionProfiles", "extension catalog, pins and enable state remain profile-scoped across restart", cefOnly: "CEF extensions", extensionProfiles),
         Scenario("DataPrivateExpiry", "last private window resets every storage class, cancels transport and audits disk/logs", cefOnly: "off-record context", privateExpiry),
         Scenario("DataProtectedOperations", "downloads and pending output block clearing; Find survives; frozen targets resume", cefOnly: "CEF operation ownership", protectedOperations),
@@ -91,8 +93,8 @@ enum DataScenarios {
     static func assign(_ app: AppUnderTest, _ profile: ProfileID, item: ItemID) throws {
         try app.dispatch(.profile(.assign(.current, to: profile))); try focus(app, item)
     }
-    static func captureKeyWindow(_ app: AppUnderTest, _ name: String) throws {
-        guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.isKey })?.number else { throw Check(description: "settings key window missing") }
+    static func captureSettingsWindow(_ app: AppUnderTest, _ name: String) throws {
+        guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.className == "NSWindow" })?.number else { throw Check(description: "visible settings window missing") }
         let root = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("artifacts/" + app.scenarioID)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let command = Process(); command.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -177,7 +179,7 @@ enum DataScenarios {
             try expect(result.error == nil, result.error ?? "")
             return result.completed == [.cookies, .cache, .history]
         }
-        try captureKeyWindow(app, "profile-privacy-controls")
+        try captureSettingsWindow(app, "profile-privacy-controls")
         try app.dispatch(.settings(.closeWindow))
         try app.flush()
         let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json"))) as? [String: Any]
@@ -198,6 +200,27 @@ enum DataScenarios {
         try expect(settings.profiles.contains { $0.profile.id == unused } && settings.profiles.contains { $0.profile.id == other && !$0.settings.searchSuggestions }, "clear removed profiles or settings")
         try receipt(app, "post-restart", ["defaultA": av, "defaultB": bv, "otherC": c, "profileRecords": settings.profiles.map { $0.profile.name }])
         app.note("Profile cookies/cache/history clear uses CEF request-context callbacks with no live Default page. Unused profile clearing also completed; unsupported origin storage fails before mutation. Profile records, settings and origin storage survive restart. Site visits made by the readback may add new History entries.")
+    }
+
+    @Sendable static func customProfileClear(_ app: AppUnderTest) throws {
+        let a = try page(app); try seed(app, a, "DEFAULTA"); try http(app, a, "default-A-warm", requests: 1)
+        let b = try page(app, host: "other.localhost"); try seed(app, b, "DEFAULTB"); try http(app, b, "default-B-warm", requests: 1)
+        let custom = try profile(app, "Data Custom Clear")
+        try assign(app, custom, item: a); try seed(app, a, "CUSTOMA"); try http(app, a, "custom-A-warm", requests: 1)
+        try focus(app, b); try seed(app, b, "CUSTOMB"); try http(app, b, "custom-B-warm", requests: 1)
+        _ = try clearProfile(app, custom, [.cookies, .cache, .history])
+        try app.flush()
+        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json"))) as? [String: Any]
+        let history = (saved?["doc"] as? [String: Any])?["history"] as? [[String: Any]] ?? []
+        try expect(!history.contains { $0["profile"] as? String == custom.rawValue }, "custom history was not cleared")
+        try expect(history.contains { $0["profile"] as? String == ProfileID.default.rawValue }, "Default history was cleared with custom history")
+        try app.restart()
+        try focus(app, a); let ca = try read(app, a, "custom-A-restart"); try verify(ca, storage: "CUSTOMA", cookies: nil); try http(app, a, "custom-A-restart", requests: 1)
+        try focus(app, b); let cb = try read(app, b, "custom-B-restart"); try verify(cb, storage: "CUSTOMB", cookies: nil, domain: false); try http(app, b, "custom-B-restart", requests: 1)
+        try assign(app, .default, item: a); let da = try read(app, a, "default-A-restart"); try verify(da, storage: "DEFAULTA", cookies: "DEFAULTA"); try http(app, a, "default-A-restart", requests: 0)
+        try focus(app, b); let db = try read(app, b, "default-B-restart"); try verify(db, storage: "DEFAULTB", cookies: "DEFAULTB", domain: false); try http(app, b, "default-B-restart", requests: 0)
+        try receipt(app, "post-restart", ["customA": ca, "customB": cb, "defaultA": da, "defaultB": db])
+        app.note("Custom-profile clearing evicted cookies and HTTP cache at both origins. Default retained all storage classes, cookies and both HTTP cache entries after restart. Origin storage in the cleared custom profile is intentionally retained under the displayed unsupported profile-wide scope.")
     }
 
     @Sendable static func extensionProfiles(_ app: AppUnderTest) throws {
@@ -246,6 +269,14 @@ extension DataScenarios {
     static func startDownload(_ app: AppUnderTest, _ item: ItemID, _ path: String) throws {
         try SitePolicyScenarios.evaluate(app, item, "(()=>{const f=document.createElement('iframe');f.hidden=true;f.src='\(app.site.url(path).absoluteString)';document.body.append(f)})()")
     }
+    static func clickDownload(_ app: AppUnderTest, _ item: ItemID, _ path: String) throws {
+        let page = PageID(window: app.window!, item: item)
+        _ = try app.send(.activate(window: page.window))
+        try SitePolicyScenarios.evaluate(app, item, "(()=>{const a=document.createElement('a');a.href='\(app.site.url(path).absoluteString)';a.textContent='Download';a.style='position:fixed;left:20px;top:20px;width:180px;height:60px;z-index:99999;background:white';document.body.append(a);document.title='Data download ready'})()")
+        try waitTitle(app, item, "Data download ready")
+        guard let frame = try app.native().pages[page]?.surfaceFrame else { throw Check(description: "private download surface missing") }
+        try app.click(at: CGPoint(x: frame.minX + 35, y: frame.minY + 35))
+    }
     static func transferStopped(_ app: AppUnderTest, _ path: String) throws {
         try app.waitUntil("expired context stops its transport", timeout: 10) { app.site.requestCount(path + "-stopped") > 0 }
         let bytes = app.site.requestCount(path + "-bytes")
@@ -274,7 +305,7 @@ extension DataScenarios {
         let completed = folder.appendingPathComponent("fixture.txt")
         try app.waitUntil("explicit private file completed") { (try? Data(contentsOf: completed)) == Data("fixture download\n".utf8) }
         try SitePolicyScenarios.evaluate(app, item, "document.title='\(secret)'")
-        try startDownload(app, item, "transfer-DataPrivateActive?name=\(secret).bin")
+        try clickDownload(app, item, "transfer-DataPrivateActive?name=\(secret).bin")
         try app.waitUntil("private active download") { app.site.requestCount("/transfer-DataPrivateActive-bytes") >= 65536 }
         try app.dispatch(.window(.close)); app.window = publicWindow
         let second = try privateWindow(); app.window = second
@@ -284,7 +315,7 @@ extension DataScenarios {
         try verify(empty, storage: nil, cookies: nil)
         try http(app, fresh, "new-private-epoch", requests: 1)
         try startDownload(app, fresh, "download?private-new-epoch=1")
-        try app.waitUntil("new private epoch accepts a download") { FileManager.default.fileExists(atPath: folder.appendingPathComponent("fixture (1).txt").path) }
+        try app.waitUntil("new private epoch accepts a download") { (try? Data(contentsOf: folder.appendingPathComponent("fixture (1).txt"))) == Data("fixture download\n".utf8) }
         try app.dispatch(.window(.close)); app.window = publicWindow
         try focus(app, publicItem)
         try verify(try read(app, publicItem, "public-survives"), storage: "PUBLIC", cookies: "PUBLIC")
