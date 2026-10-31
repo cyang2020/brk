@@ -88,7 +88,9 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A657c0d6e-8918-4e51-852f-6532af1fc7a5",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A657c0d6e-8918-4e51-852f-6532af1fc7a5",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered ISSUES (A097 popup BLOCKED; others per proposal); parent reviews",
+      "delivered_commit": "3fb66d7401bd6107e0f05c738604e949b3b71bd6",
+      "branch": "t3/extensions-sites-completion"
     },
     {
       "slice": "sidebar-tabs",
