@@ -20,7 +20,8 @@ struct BoostFiles {
     }
     /// An unreadable file is moved beside itself (review: a save after a failed read used to overwrite it).
     private func quarantine(_ file: URL, _ reason: String) -> (BoostCatalog, String?) {
-        let target = file.deletingLastPathComponent().appendingPathComponent("boosts.rejected-\(Int(Date().timeIntervalSince1970 * 1000)).json")
+        // No wall clock here (the clock is injected elsewhere); a UUID keeps set-aside files distinct.
+        let target = file.deletingLastPathComponent().appendingPathComponent("boosts.rejected-\(UUID().uuidString).json")
         do { try FileManager.default.moveItem(at: file, to: target) }
         catch { return (BoostCatalog(), "Cannot read Boosts: \(reason) The file could not be set aside either; nothing will be saved until it is moved.") }
         return (BoostCatalog(), "Cannot read Boosts: \(reason) The file was set aside as \(target.lastPathComponent).")
