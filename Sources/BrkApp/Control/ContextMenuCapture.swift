@@ -11,6 +11,8 @@ import BrkEngine
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
         let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
+        center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
         center.addObserver(self, selector: #selector(began(_:)), name: PageSurfaceView.contextMenuWillOpen, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: PageSurfaceView.contextMenuDidClose, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
@@ -25,7 +27,10 @@ import BrkEngine
 
     @objc private func began(_ note: Notification) {
         precondition(Thread.isMainThread)
-        guard menu == nil, let current = note.object as? NSMenu else { return }
+        guard let current = note.object as? NSMenu else { return }
+        // Sidebar menus use AppKit's notification. The embedded web menu supplies its actual delegate callback;
+        // prefer that object if AppKit first reported the menu bar as the root of the tracking session.
+        guard menu == nil || (note.name == PageSurfaceView.contextMenuWillOpen && menu === NSApp.mainMenu) else { return }
         menu = current
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)

@@ -210,6 +210,7 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var auxiliaryWindows: [Int]? = nil
     public var popupRequests: [PageOpenMetadata]? = nil
     public var developerResult: String? = nil
+    public var castAvailable: Bool? = nil
     public var castSinkNotifications: Int? = nil
     public var castRouteNotifications: Int? = nil
     public var castSinks: [String]? = nil

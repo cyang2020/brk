@@ -9,7 +9,7 @@ enum BrowserOpsScenarios {
         Scenario("BO2", "real empty popup, document.write, opener, native identity and close", cefOnly: "CEF popup browsing contexts", popups),
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
-        Scenario("BO5", "real context-owned media-router enumeration and source rejection", cefOnly: "CEF media router", cast),
+        Scenario("BO5", "Default-profile Cast reports its shutdown limitation without starting the unsafe router", cefOnly: "CEF media router", cast),
         Scenario("BO5C", "custom-profile media-router enumeration and source-close drain", cefOnly: "CEF media router context lifetime", castCustomProfile),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
     ]
@@ -162,10 +162,25 @@ enum BrowserOpsScenarios {
         }
     }
     @Sendable static func fullscreen(_ app: AppUnderTest) throws {
+        let port = try BrowserBasicInspection.unusedPort()
+        app.remoteDebuggingPort = port
+        try app.restart()
+        let url = app.site.url("browser-basic.html?fullscreen")
         let page = try load(app, "browser-basic.html?fullscreen")
+        var phase = "document"
+        defer {
+            if let data = try? BrowserBasicInspection.evaluate(port: port, document: url,
+                expression: "({phase:window.boPhase,title:document.title,fullscreen:!!document.fullscreenElement,trace:window.boFullscreenTrace})") {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent(app.scenarioID + "-fullscreen-trace.json"))
+            }
+            try? record(app, "fullscreen-native", app.native())
+        }
+        try app.evaluate(page, "window.boFullscreenTrace=[];for(let name of ['fullscreenchange','fullscreenerror','focus','blur','visibilitychange','resize'])window.addEventListener(name,()=>boFullscreenTrace.push({event:name,t:performance.now(),fullscreen:!!document.fullscreenElement,visible:document.visibilityState,focused:document.hasFocus()}),true)")
         for video in [false, true] {
+            phase = video ? "video" : "document"
+            try app.evaluate(page, "window.boPhase='\(phase)'")
             try clickedScript(app, page, "{let el=document.documentElement;\(video ? "let canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;canvas.getContext('2d').fillRect(0,0,64,64);el=document.createElement('video');el.controls=true;el.muted=true;el.srcObject=canvas.captureStream(5);document.body.append(el);el.play();window.boVideo=el;" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
-            try app.waitUntil("DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
+            try app.waitUntil("\(phase) DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
             if video {
                 try app.evaluate(page, "boVideo.play().then(()=>document.title='video-playing:'+(!boVideo.paused&&boVideo.readyState>=2))")
                 try app.waitUntil("actual captured video playback") { try title(app, page) == "video-playing:true" }
@@ -189,6 +204,15 @@ enum BrowserOpsScenarios {
         let page = try load(app, "browser-basic.html?cast")
         defer { try? record(app, "media-router", facts(app, page)) }
         try app.perform(.menuAction("Cast"))
+        try app.waitUntil("Cast panel reports availability") { try facts(app, page).castAvailable != nil }
+        if try facts(app, page).castAvailable == false {
+            try expect(app.scenarioID == "BO5", "Owned profile unexpectedly lacks a router")
+            try expect(try facts(app, page).castError?.contains("cannot close") == true, "Missing Default-profile Cast explanation")
+            try expect(try facts(app, page).castSinkNotifications == nil, "Unsafe router was initialized")
+            try app.recordWindows("cast-unavailable")
+            app.note("Default-profile Cast explicitly unavailable before get_media_router; pinned CEF shutdown trap retained in prior runs. This is a partial feature, not receiver enumeration.")
+            return
+        }
         try app.waitUntil("real media-router enumeration", timeout: 15) {
             let f = try facts(app, page)
             return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castSourceSupported != nil

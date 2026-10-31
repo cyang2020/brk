@@ -168,13 +168,15 @@ final class ChromePage: CefBrowserDelegate {
         facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }
         facts.popupRequests = popupRequests
         facts.developerResult = developerResult
-        facts.castSinkNotifications = cast?.router.sinkNotifications
-        facts.castRouteNotifications = cast?.router.routeNotifications
-        facts.castSinks = cast?.router.sinks.map(\.name)
-        facts.castRoutes = cast?.router.routes
-        facts.castResult = cast?.router.lastResult
-        facts.castError = cast?.router.lastError
-        facts.castSourceSupported = cast?.router.sourceSupported
+        facts.castSinkNotifications = cast?.router?.sinkNotifications
+        facts.castRouteNotifications = cast?.router?.routeNotifications
+        facts.castSinks = cast?.router?.sinks.map(\.name)
+        facts.castRoutes = cast?.router?.routes
+        facts.castResult = cast?.router?.lastResult
+        facts.castAvailable = cast.map { $0.router != nil }
+        facts.castError = cast?.unavailableReason ?? cast?.router?.lastError
+        facts.castSourceSupported = cast?.router?.sourceSupported
+        if let number = cast?.visibleWindowNumber { facts.auxiliaryWindows?.append(number) }
         if let sourceWindow, sourceWindow.isVisible { facts.auxiliaryWindows?.append(sourceWindow.windowNumber) }
         return facts
     }
@@ -323,8 +325,8 @@ final class ChromePage: CefBrowserDelegate {
         popupRequests.append(openMetadata(request))
         if popupRequests.count > 16 { popupRequests.removeFirst() }
         let namedWindow = !request.frameName.isEmpty && !["_blank", "_self", "_parent", "_top"].contains(request.frameName.lowercased())
-        if !request.features.isPopup, !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
-           url.absoluteString != "about:blank", request.disposition == .newForegroundTab || request.disposition == .newBackgroundTab {
+        if !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
+           url.absoluteString != "about:blank", [.newForegroundTab, .newBackgroundTab, .newPopup].contains(request.disposition) {
             engine.pageDidEmit(self, .openRequested(url, request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,
                                                   metadata: openMetadata(request)))
             return .handled
