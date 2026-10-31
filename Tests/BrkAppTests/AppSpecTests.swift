@@ -248,7 +248,7 @@ final class MenuTests: XCTestCase {
     /// four rows the user dropped. The one difference is the wave 2 decision: New Folder… leaves Shift+Cmd+N to New
     /// Incognito Window.
     func test_theMenuBarIsArcs() throws {
-        let built = ArcMenuTree.lines(of: MainMenu.build(target: MenuTarget()))
+        let built = ArcMenuTree.lines(of: MainMenu.build(target: MenuTarget()), referenceOnly: true)
         let arc = try ArcMenuTree.lines(productName: Product.name).map { $0 == "  New Folder… [Cmd+Shift+N]" ? "  New Folder…" : $0 }
         XCTAssertEqual(arc.count, 211, "the nib's 189 rows and 30 separators, less 4 dropped rows, the Tabs placeholder's 3 items and the separator dropping Sign Out doubles")
         let diff = arc.difference(from: built)

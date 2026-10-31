@@ -7,6 +7,7 @@ extension Work {
     mutating func splits(_ command: SplitCommand, in window: WindowID) {
         switch command {
         case .addPane:
+            guard state.doc.windows[window]?.kind != .little else { return }
             // A shown tab becomes a split [tab, new empty pane] in its place; a shown split below the pane cap gets
             // an empty pane after its focused pane, with an equal share. The new pane is focused and the command bar
             // opens to fill it. Nothing shown, a Favorites tab (Favorites hold tabs only), or a full split: no-op.
@@ -35,25 +36,22 @@ extension Work {
                 return
             }
             guard added else { return }
+            state.session.windows[window]?.expandedSplit = nil
             focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)
         case .closePane:
             // The focused pane leaves: archived from Today; moved out to sit right after the split and unloaded
             // from Pinned; an empty pane (no URL) is removed either way without an archive entry. A split left with
             // one pane dissolves into it in place, and windows that showed the split show that pane.
-            guard let shown = state.shownItem(in: window), let scope = state.locate(shown), let tree = state.tree(scope),
-                  case .split(let s)? = tree[shown]?.body, let role = tree.role(of: shown) else { return }
-            let tab = state.focusedPane(of: shown, in: window) ?? s.panes.ids[0]
-            if role.kind == .pinned, state.address(of: tab, in: window, for: .savedDocument) != nil {
-                guard moveItem(tab, to: .after(shown)) else { return }
-                unload(tab)
-            } else {
-                archiveTabs([tab], reason: .manual, in: window)
-            }
+            guard let shown = state.shownItem(in: window), let tab = state.focusedPane(of: shown, in: window) else { return }
+            closeSplitPane(tab, in: window)
+        case .closePaneAt(let pane):
+            guard let tab = state.resolveTab(.item(pane), in: window) else { return }
+            closeSplitPane(tab, in: window)
         case .resize(let split, let fractions):
             // Fractions keyed by pane must name exactly the split's panes; they are normalized to sum 1 with each at
             // least Metrics.content.minPaneFraction, and stored as the split's widths.
-            guard let scope = state.locate(split), case .split(let s)? = state.tree(scope)?[split]?.body,
+            guard state.canUseSplit(split, in: window), let scope = state.locate(split), case .split(let s)? = state.tree(scope)?[split]?.body,
                   Set(fractions.keys) == Set(s.panes.ids), fractions.values.allSatisfy({ $0.isFinite && $0 > 0 }) else { return }
             let clamped = clampFractions(s.panes.ids.map { fractions[$0]! })
             state.withTree(scope) { tree in
@@ -62,10 +60,76 @@ extension Work {
                 }
             }
         case .setOrientation(let split, let orientation):
-            guard let scope = state.locate(split) else { return }
+            guard state.canUseSplit(split, in: window), let scope = state.locate(split) else { return }
             state.withTree(scope) { $0.updateSplit(split) { if $0.orientation != orientation { $0.orientation = orientation } } }
+        case .orientCurrent(let orientation):
+            if let split = state.shownItem(in: window) { splits(.setOrientation(split, orientation), in: window) }
+        case .focusPane(let number):
+            guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window) else { return }
+            let panes = state.panes(of: split)
+            guard number > 0, number <= panes.count else { return }
+            focus(panes[number - 1], in: window)
+        case .stepPane(let step):
+            guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window),
+                  let pane = state.focusedPane(in: window), let index = state.panes(of: split).firstIndex(of: pane) else { return }
+            splits(.focusPane(index + (step == .next ? 2 : 0)), in: window)
+        case .toggleExpanded:
+            guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window) else { return }
+            let wasExpanded = state.session.windows[window]?.expandedSplit == split
+            state.session.windows[window]?.expandedSplit = wasExpanded ? nil : split
+        case .restore:
+            state.session.windows[window]?.expandedSplit = nil
+        case .separatePane(let ref):
+            guard let pane = state.resolveTab(ref, in: window), let tree = state.tree(of: window),
+                  let split = tree.splitContaining(pane), state.canUseSplit(split, in: window) else { return }
+            let previous = splitSelections(split)
+            guard moveItem(pane, to: .after(split)) else { return }
+            restoreSplitSelections(previous, split: split)
+            focus(pane, in: window)
+        case .separateAll:
+            guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window) else { return }
+            let previous = splitSelections(split)
+            // Remove from the end. The last move dissolves the split into its first pane at the old position.
+            for pane in state.panes(of: split).dropFirst().reversed() {
+                guard moveItem(pane, to: .after(split)) else { return }
+            }
+            restoreSplitSelections(previous, split: split)
+        case .dropTab(let offer, let edge):
+            let source = offer.source, target = offer.target
+            guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[source] == offer,
+                  let scope = state.locate(target) else { return }
+            let before = state.doc.windows.mapValues { doc in
+                doc.activeBySpace.filter { $0.value == target || $0.value == source }.mapValues { shown in
+                    shown == source ? source : (state.focusedPane(of: target, in: doc.id) ?? target)
+                }
+            }
+            var grouped: ItemID?
+            state.withTree(scope) { tree in
+                grouped = try? tree.groupTab(source, with: target, splitID: ItemID(ctx.newID()), edge: edge, createdAt: ctx.now)
+            }
+            guard let split = grouped else { return }
+            for (owner, spaces) in before {
+                for (space, pane) in spaces {
+                    select(split, in: owner, space: space)
+                    state.doc.windows[owner]?.splitFocus[split] = pane
+                }
+            }
+            focus(source, in: window)
+            // `focus` resolves both original standalone tab selections to their new shared split.
+            assert(state.shownItem(in: window) == split)
         }
     }
+    private mutating func closeSplitPane(_ tab: ItemID, in window: WindowID) {
+        guard let scope = state.locate(tab), let tree = state.tree(scope), let split = tree.splitContaining(tab),
+              state.canUseSplit(split, in: window), let role = tree.role(of: split) else { return }
+        if role.kind == .pinned, state.address(of: tab, in: window, for: .savedDocument) != nil {
+            guard moveItem(tab, to: .after(split)) else { return }
+            unload(tab)
+        } else {
+            archiveTabs([tab], reason: .manual, in: window)
+        }
+    }
+
 }
 
 /// Relative positive finite weights -> fractions summing to 1, none below Metrics.content.minPaneFraction (or 1/n
@@ -84,4 +148,5 @@ func clampFractions(_ raw: [Double]) -> [Double] {
         guard let low = out.indices.first(where: { !fixed.contains($0) && out[$0] < minimum }) else { return out }
         fixed.insert(low)
     }
+
 }

@@ -1,5 +1,6 @@
 import AppKit
 import BrkBase
+import BrkDomain
 
 /// Arc's menu nib as `.audit/arc-evidence/a/mainmenu-tree.txt` dumps it (every item with its key, separators,
 /// submenus), turned into the lines Brk's menu must show: "Title [Cmd+Shift+N]" per item, "-" per separator, two
@@ -41,10 +42,11 @@ enum ArcMenuTree {
 
     /// The same lines for a built menu bar.
     @MainActor
-    static func lines(of main: NSMenu) -> [String] {
+    static func lines(of main: NSMenu, referenceOnly: Bool = false) -> [String] {
         func walk(_ menu: NSMenu, _ depth: Int) -> [String] {
             let pad = String(repeating: " ", count: depth * 2)
             return menu.items.flatMap { item -> [String] in
+                if referenceOnly, let raw = item.representedObject as? String, let action = ActionID(rawValue: raw), action.spec.row > 189 { return [] }
                 if item.isSeparatorItem { return [pad + "-"] }
                 let key = describe(item)
                 return [pad + item.title + (key.isEmpty ? "" : " [\(key)]")] + (item.submenu.map { walk($0, depth + 1) } ?? [])

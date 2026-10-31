@@ -180,7 +180,8 @@ final class SuggestSpecTests: XCTestCase {
     /// begins is the top hit, above everything (an exact title or trigger first), the rest come last
     func test_listedActionsMatchByLabelAndCarryTheFormattedFirstKeyOrNone() {
         // "Split" is one of Add Split View's triggers: the top hit. Close this Split Pane only has the word.
-        XCTAssertEqual(rows(suggest("split")), ["action:Add Split View:⌃⇧=", "open:Search split", "action:Close this Split Pane:⌃⇧-"])
+        XCTAssertEqual(rows(suggest("split")), ["action:Add Split View:⌃⇧=", "open:Search split", "action:Split Side by Side:-",
+                                                  "action:Split Top and Bottom:-", "action:Close this Split Pane:⌃⇧-"])
         // "Archive" is View Archive's trigger (exact beats Archive Tab's title start); archive.org is a top domain.
         XCTAssertEqual(rows(suggest("archive")), [
             "action:View Archive:-",

@@ -14,6 +14,16 @@ import BrkUIKit
 /// Everything else in BrkSidebar is internal to W3.
 @MainActor
 public final class SidebarView: NSView {
+    /// Content owns its hit zones. Sidebar supplies only the dragged tab and a root-coordinate pointer.
+    public var contentDrop: ((ItemID, CGPoint) -> Command?)?
+    public var beginContentDrop: ((ItemID) -> Void)?
+    public var endContentDrop: (() -> Void)?
+    @discardableResult
+    public func cancelDrag() -> Bool {
+        guard drag.isActive else { return false }
+        drag.cancel()
+        return true
+    }
     let dispatch: Dispatch
     let drag: DragController
     private let backdrop = FloatingBackdropView()
@@ -68,6 +78,11 @@ public final class SidebarView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     public override var isFlipped: Bool { true }
+
+    public override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { drag.cancel() }
+        super.viewWillMove(toWindow: newWindow)
+    }
 
     public override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()

@@ -18,6 +18,8 @@ final class EventInjector {
     private let source = CGEventSource(stateID: .privateState)
     /// Tracking areas the injected pointer is inside, so the next `hover` can send their exits.
     private var hovered: [ObjectIdentifier: NSTrackingArea] = [:]
+    private weak var pointerTarget: NSView?
+    private weak var pointerWindow: NSWindow?
 
     /// "cmd", "ctrl+shift", "alt", "" -> modifiers; nil for an unknown name.
     static func modifiers(_ text: String) -> Modifiers? {
@@ -130,6 +132,27 @@ final class EventInjector {
     private func flags(_ modifiers: Modifiers) -> NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers.rawValue) }
 
     // MARK: Mouse
+
+    func pointer(_ type: NSEvent.EventType, at point: CGPoint, in window: NSWindow) throws {
+        if type == .leftMouseDown {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            pointerWindow = window
+            pointerTarget = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point)
+        }
+        guard pointerWindow === window, let target = pointerTarget else { throw InjectionError("pointer sequence has no live down target") }
+        let event = Self.dequeue(try mouse(type, at: point, modifiers: [], clickCount: 1, in: window))
+        if window.isKeyWindow { NSApp.sendEvent(event) }
+        else {
+            switch type {
+            case .leftMouseDown: target.mouseDown(with: event)
+            case .leftMouseDragged: target.mouseDragged(with: event)
+            case .leftMouseUp: target.mouseUp(with: event)
+            default: break
+            }
+        }
+        if type == .leftMouseUp { pointerTarget = nil; pointerWindow = nil }
+    }
 
     /// Left click at a window point (AppKit window coordinates). The mouse-up is queued before the mouse-down is
     /// handled, so a control that runs its own tracking loop inside `mouseDown` (NSButton) finds it; if nothing

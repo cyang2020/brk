@@ -49,6 +49,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case captureContextMenu(window: WindowID?, point: CGPoint)
     /// Moves the pointer (hover: peek the hidden sidebar).
     case hover(point: CGPoint)
+    /// A native pointer sequence. The down target keeps receiving dragged/up events, as with a physical mouse.
+    case pointer(window: WindowID?, phase: PointerPhase, point: CGPoint)
     /// CGWindowListCreateImage of the window (works without screen recording permission, spike unknown 8), PNG.
     case screenshot(window: WindowID?, path: String)
     /// One pixel of a fresh window capture, at a window point (top-left origin, points), as sRGB 0...255.
@@ -83,6 +85,7 @@ public enum ControlOp: Codable, Sendable, Equatable {
 }
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
+public enum PointerPhase: String, Codable, Sendable, Equatable { case down, dragged, up }
 
 public struct ControlReply: Codable, Sendable, Equatable {
     public var id: Int

@@ -14,7 +14,7 @@ import Foundation
 // - a root has no parent and a `.section` body; every other item has a parent that lists it once;
 // - a split has 2 to Metrics.content.maxPanes distinct panes (`SplitPanes`), and a
 //   split that would drop to one pane is dissolved into that pane in the same mutation (`move`, `removeSubtree`);
-// - nothing is placed inside a split except through `splitInPlace`/`addPane`; `Placement.canPlace` gates the rest;
+// - only split rules create or group panes; `Placement.canPlace` gates other hierarchy edits;
 // - a tree holds only the roots of its `scope`: saved trees never contain a scratch root, and scratch trees
 //   (Little Arc, Peek, incognito) never contain a space's roots.
 //
@@ -202,7 +202,7 @@ public enum ItemKind: String, Hashable, Sendable, Codable { case tab, folder, sp
 /// feedback calls the same function with the row kinds from its snapshot instead of re-deriving the rules.
 public enum Placement {
     /// Favorites: tabs only, flat. Pinned: tabs, splits and nested folders. Today: tabs and splits, never folders.
-    /// Scratch: tabs only. Nothing goes inside a tab, and nothing goes inside a split except through split rules.
+    /// Scratch: tabs and private splits. Nothing goes inside a tab or split except through split rules.
     public static func canPlace(_ kind: ItemKind, inSection section: SectionKind, parentKind: ItemKind) -> Bool {
         guard kind != .section else { return false }
         switch parentKind {
@@ -211,7 +211,8 @@ public enum Placement {
         case .section: break
         }
         switch section {
-        case .favorites, .scratch: return kind == .tab
+        case .favorites: return kind == .tab
+        case .scratch: return kind == .tab || kind == .split
         case .pinned: return kind == .tab || kind == .folder || kind == .split
         case .today: return kind == .tab || kind == .split
         }
@@ -339,6 +340,44 @@ struct SidebarTree: Sendable, Equatable {
         items[splitID]!.body = .split(split)
         items[newPane] = Item(id: newPane, createdAt: createdAt, parent: splitID, body: .tab(pane))
         stampPinnedURLs(under: newPane)
+    }
+
+    /// Groups an existing standalone tab without replacing either tab or its live window slots.
+    /// All checks precede writes. The destination's section decides pinning through the existing policy.
+    mutating func groupTab(_ tab: ItemID, with target: ItemID, splitID: ItemID, edge: SplitEdge, createdAt: Instant) throws(TreeError) -> ItemID {
+        guard tab != target, let source = items[tab], source.kind == .tab, let oldParent = source.parent,
+              items[oldParent]?.kind != .split, let destination = items[target], let parent = destination.parent,
+              let sourceRole = role(of: tab), sourceRole == role(of: target), sourceRole.kind != .favorites else { throw .forbiddenPlacement }
+        var split: Split
+        let result: ItemID
+        switch destination.body {
+        case .tab:
+            guard splitContaining(target) == nil, items[splitID] == nil else { throw .invalidHierarchy }
+            try checkPlacement(.split, under: parent)
+            split = Split(panes: SplitPanes(edge.isLeading ? [tab, target] : [target, tab])!, widths: [:],
+                          orientation: edge.orientation, lastActiveAt: createdAt, icon: nil)
+            result = splitID
+        case .split(let current):
+            guard let panes = current.panes.inserting(tab, at: edge.isLeading ? 0 : current.panes.count) else { throw .splitFull }
+            split = current
+            split.panes = panes
+            split.orientation = edge.orientation
+            let weights = current.panes.ids.map { current.widths[$0] ?? 1 }
+            split.widths[tab] = weights.reduce(0) { $0 + $1 / Double(weights.count) }
+            result = target
+        case .folder, .section: throw .forbiddenPlacement
+        }
+        detach(tab, from: oldParent)
+        if result != target {
+            let index = items[parent]!.children.firstIndex(of: target)!
+            detach(target, from: parent)
+            items[result] = Item(id: result, createdAt: createdAt, parent: parent, body: .split(split))
+            attach(result, to: parent, at: index)
+            items[target]!.parent = result
+        } else { items[result]!.body = .split(split) }
+        items[tab]!.parent = result
+        stampPinnedURLs(under: tab)
+        return result
     }
 
     // MARK: Payload writes (kind-preserving; cannot reach children or panes)

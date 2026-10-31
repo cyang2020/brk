@@ -178,7 +178,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }
         return Pane(tab: p, content: content, fraction: fraction, focused: p == focusedPane)
     }
-    let content = ContentSnapshot(panes: contentPanes, split: splitID, orientation: orientation)
+    let content = ContentSnapshot(expanded: splitID != nil && session.expandedSplit == splitID,
+                                  drop: state.splitDrop(in: id), panes: contentPanes, split: splitID, orientation: orientation)
 
     // URL pill. The profile badge shows a non-default profile, or incognito (F2).
     var pill = URLPillSnapshot(text: nil, loading: false, canGoBack: false, canGoForward: false, profile: nil)
@@ -323,7 +324,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
-        enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
+        enabled.subtract([.newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection])
     }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
@@ -341,7 +342,20 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     case .split(let s)?: if s.panes.count >= Metrics.content.maxPanes.value { enabled.remove(.addSplitView) }
     case .folder?, .section?, nil: enabled.remove(.addSplitView)
     }
-    if case .split? = shown?.body {} else { enabled.remove(.removeSplitView) }
+    if case .split(let split)? = shown?.body {
+        let number = focused.flatMap { split.panes.ids.firstIndex(of: $0.0) } ?? 0
+        if number == 0 { enabled.remove(.previousSplitPane) }
+        if number == split.panes.count - 1 { enabled.remove(.nextSplitPane) }
+        for (index, action) in [ActionID.splitPane1, .splitPane2, .splitPane3, .splitPane4].enumerated() where index >= split.panes.count {
+            enabled.remove(action)
+        }
+        enabled.remove(split.orientation == .horizontal ? .splitHorizontal : .splitVertical)
+        if state.session.windows[window]?.expandedSplit != shown?.id { enabled.remove(.restoreSplit) }
+    } else {
+        enabled.subtract([.removeSplitView, .separateTabFromSplitView, .maximizeSplitPane, .splitHorizontal, .splitVertical,
+                          .restoreSplit, .separateAllSplit, .nextSplitPane, .previousSplitPane, .splitPane1, .splitPane2, .splitPane3, .splitPane4])
+    }
+    if state.doc.windows[window]?.kind == .little { enabled.remove(.addSplitView) }
     if state.doc.spaceOrder.last == space.id { enabled.remove(.focusNextSpace) }
     if state.doc.spaceOrder.first == space.id { enabled.remove(.focusPreviousSpace) }
     if state.doc.archive.isEmpty { enabled.subtract([.reopenLastClosedTab, .clearArchive]) }

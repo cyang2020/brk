@@ -235,6 +235,18 @@ extension Work {
                 let pinTarget: ItemID
                 if case .split(let s) = node.body { pinTarget = s.panes.ids[0] } else { pinTarget = id }
                 var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))))]
+                if case .split(let split)? = tree[unit]?.body {
+                    let current = state.shownItem(in: window) == unit
+                    let pane = node.kind == .tab ? id : (state.focusedPane(of: unit, in: window) ?? split.panes.ids[0])
+                    entries += [.separator,
+                        entry("Split Side by Side", .split(.setOrientation(unit, .horizontal))),
+                        entry("Split Top and Bottom", .split(.setOrientation(unit, .vertical))),
+                        entry("Separate Page from Split View", .split(.separatePane(.item(pane)))),
+                        entry("Separate All Split Panes", .split(.separateAll), enabled: current),
+                        entry(state.session.windows[window]?.expandedSplit == unit ? "Restore Split Panes" : "Expand Current Split",
+                              .split(.toggleExpanded), enabled: current),
+                    ]
+                }
                 guard case .tab(let tab) = node.body else {
                     return MenuModel(entries: moves.isEmpty ? entries : entries + [.separator] + moves)
                 }

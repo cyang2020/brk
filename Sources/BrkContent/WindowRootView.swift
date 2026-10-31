@@ -38,12 +38,16 @@ public final class WindowRootView: NSView {
         wantsLayer = true
         for view in [background, sidebar, content, library, peek, findBar, commandBar, spaceDialog] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
+        sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
+        sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
+        sidebar.endContentDrop = { [weak content] in content?.endDrop() }
     }
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("not used") }
 
     public override var isFlipped: Bool { true }
+    public func cancelDrag() -> Bool { sidebar.cancelDrag() }
 
     /// Gives keyboard focus to the native view a `FocusTarget` names. Returns false for `.page` and `.none` (the
     /// engine's business, handled by the window controller) and when the view is not on screen yet. This is the
@@ -76,6 +80,7 @@ public final class WindowRootView: NSView {
             else { addSubview(sidebar, positioned: .above, relativeTo: background) }
         }
         sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
+        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil
         content.render(snapshot.content, frames: frames, palette: palette, surface: surface)
         var librarySnapshot: LibrarySnapshot?, barSnapshot: CommandBarSnapshot?, peekSnapshot: PeekSnapshot?
         switch snapshot.overlay {

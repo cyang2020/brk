@@ -72,13 +72,16 @@ final class ActionsTests: XCTestCase {
     /// standard item, a menu or submenu title, a nib placeholder, or a row the user dropped; and no two actions
     /// claim one row.
     func testEveryArcMenuRowIsAccountedFor() {
-        let rows = ActionID.allCases.map(\.spec.row)
+        let referenceActions = ActionID.allCases.filter { $0.spec.row <= 189 }
+        let rows = referenceActions.map(\.spec.row)
         XCTAssertEqual(Set(rows).count, rows.count, "two actions share a row")
         let covered = Set(rows).union(ActionID.menuTitleRows).union(ActionID.standardItemRows).union(ActionID.alternateKeyRows)
             .union(ActionID.placeholderRows).union(ActionID.droppedRows)
         XCTAssertEqual(covered, Set(1...189), "missing rows: \(Set(1...189).subtracting(covered).sorted())")
-        XCTAssertEqual(ActionID.allCases.count, 122)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 71)
+        XCTAssertEqual(referenceActions.count, 122)
+        XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 73)
+        XCTAssertEqual(ActionID.allCases.count, 132)
+        XCTAssertEqual(Set(ActionID.allCases.map(\.spec.row)).count, ActionID.allCases.count)
     }
 
     /// Every action the bar can run has a listing, except the two that open the bar itself (New Tab…, Open Command

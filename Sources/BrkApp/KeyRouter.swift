@@ -29,6 +29,9 @@ final class KeyRouter: WebEngineDelegate {
         guard store.window(showing: page) == page.window,
               let controller = store.windowController(page.window), let surface = engine.surface(for: page),
               surface.window === controller.window, !surface.isHiddenOrHasHiddenAncestor else { return KeyHandling(handled: false, shortcut: false) }
+        if stage == .beforePage, key.phase == .down, key.chord.key == .escape, controller.cancelSplitDrag() {
+            return KeyHandling(handled: true, shortcut: true)
+        }
         return store.dispatchKeyHandling(page.window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 

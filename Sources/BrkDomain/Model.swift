@@ -251,6 +251,7 @@ struct Session: Sendable, Equatable {
 struct WindowSession: Sendable, Equatable {
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
+    var expandedSplit: ItemID? = nil
     var contentSize: CGSize
     var overlay: Overlay?
     /// Incremented every time an overlay opens or is replaced; becomes the new overlay's `openID`.

@@ -49,13 +49,14 @@ public enum WindowLayout {
         // The inset is kept when the sidebar is hidden (Arc keeps 10 pt).
         let contentArea = CGRect(x: anchoredWidth + inset, y: inset, width: max(0, contentSize.width - anchoredWidth - 2 * inset),
                                  height: max(0, contentSize.height - 2 * inset))
-        let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: snapshot.content.panes.map(\.fraction),
+        let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
+        let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
                                                     orientation: snapshot.content.orientation)
         let radius = Metrics.content.cornerRadius.value
         let cards: [CardFrame] = snapshot.content.panes.isEmpty
             ? [CardFrame(pane: 0, content: .blank, rect: contentArea, cornerRadius: radius)]
-            : zip(snapshot.content.panes, rects).enumerated().map { i, pair in
-                CardFrame(pane: i, content: pair.0.content, rect: pair.1, cornerRadius: radius)
+            : zip(visiblePanes, rects).map { pane, rect in
+                CardFrame(pane: pane.offset, content: pane.element.content, rect: rect, cornerRadius: radius)
             }
 
         var commandBar: CGRect?
@@ -156,11 +157,12 @@ public enum ContentLayout {
         let minimum = Metrics.content.minPaneFraction.value
         let total = current.reduce(0, +)
         var shares = current.map { total > 0 ? $0 / total : 1.0 / Double(current.count) }
-        let span = orientation == .horizontal ? area.width : area.height
+        let gap = Metrics.content.splitGap.value
+        let span = max(0, (orientation == .horizontal ? area.width : area.height) - gap * Double(current.count - 1))
         let origin = orientation == .horizontal ? area.minX : area.minY
         let before = shares[0..<divider].reduce(0, +)
         let pair = shares[divider] + shares[divider + 1]
-        let wanted = (position - origin) / max(span, 1) - before
+        let wanted = (position - origin - gap * (Double(divider) + 0.5)) / max(span, 1) - before
         let first = min(max(wanted, minimum), pair - minimum)
         shares[divider] = first
         shares[divider + 1] = pair - first

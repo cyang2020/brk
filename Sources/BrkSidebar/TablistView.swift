@@ -586,13 +586,15 @@ final class SplitSegmentView: HoverView {
         for view in [icon, title, close] as [NSView] { addSubview(view) }
         close.action = { [weak self] _ in
             guard let id = self?.pane?.id else { return }
-            dispatch(.tab(.close(.item(id))))
+            dispatch(.split(.closePaneAt(id)))
         }
         close.toolTip = Copy.archiveTabTooltip
     }
 
     func render(_ pane: TabRow, palette: Palette) {
         self.pane = pane
+        identify(.splitSegment(pane.id))
+        toolTip = pane.title
         self.palette = palette
         title.stringValue = pane.title
         title.textColor = palette.ink.text
@@ -607,7 +609,7 @@ final class SplitSegmentView: HoverView {
     override func layout() {
         super.layout()
         let t = Metrics.tablist
-        let side = t.favicon.value, size = 2 * t.hoverButtonRadius.value
+        let side = t.favicon.value, size = min(2 * t.hoverButtonRadius.value, bounds.width / 3)
         icon.frame = CGRect(x: Draw.faviconLeading.value / 2, y: (bounds.height - side) / 2, width: side, height: side)
         close.frame = CGRect(x: bounds.width - size, y: (bounds.height - size) / 2, width: size, height: size)
         let height = title.intrinsicContentSize.height
@@ -618,9 +620,14 @@ final class SplitSegmentView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        layer?.backgroundColor = isHovered ? palette.color(palette.tokens.tabChild).cgColor : nil
+        layer?.backgroundColor = (isHovered || pane?.status == .current) ? palette.color(palette.tokens.tabChild).cgColor : nil
         close.alphaValue = isHovered ? 1 : 0
         needsLayout = true
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let pane else { return }
+        dispatch(.sidebar(.popupMenu(.item(pane.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 }
 

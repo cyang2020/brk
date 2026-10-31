@@ -126,6 +126,7 @@ public enum ViewID: Hashable, Sendable, Codable {
     case resizeHandle, revealStrip
     case card(Int), divider(Int)
     case findBar, findQuery, findReplacement, findStatus, findNext, findPrevious, findClose, findReplace, findReplaceAll, findCapture
+    case splitTool(ActionID), splitSegment(ItemID), splitDropPreview
     case commandBar, commandBarInput, commandBarResult(Int)
     case archive, archiveGroup(ArchiveBucket), archiveEntry(ArchiveID), archiveRestore(ArchiveID), archiveClear, archiveThreshold
     case spaceDialog
@@ -174,6 +175,9 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .findReplace: "find-replace"
         case .findReplaceAll: "find-replace-all"
         case .findCapture: "find-capture"
+        case .splitTool(let action): "split-tool-\(action.rawValue)"
+        case .splitSegment(let item): "split-segment-\(item)"
+        case .splitDropPreview: "split-drop-preview"
         case .commandBar: "command-bar"
         case .commandBarInput: "command-bar-input"
         case .commandBarResult(let i): "command-bar-result-\(i)"
@@ -226,7 +230,7 @@ extension WindowFrames {
         case .dockPlus: return sidebar?.plusButton
         case .resizeHandle: return resizeHandle
         case .revealStrip: return revealStrip
-        case .card(let i): return i < cards.count ? cards[i].rect : nil
+        case .card(let i): return cards.first { $0.pane == i }?.rect
         case .divider(let i): return i < dividers.count ? dividers[i] : nil
         case .findBar: return find?.bar
         case .findQuery, .findReplacement, .findStatus, .findNext, .findPrevious, .findClose, .findReplace, .findReplaceAll, .findCapture: return nil
@@ -238,7 +242,7 @@ extension WindowFrames {
         case .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
-             .settingsField:
+             .settingsField, .splitTool, .splitSegment, .splitDropPreview:
             return nil   // view-owned: reported by `actual` only
         }
     }

@@ -134,6 +134,17 @@ final class ControlExecutor {
             try events.click(at: at, modifiers: flags, count: max(1, count), in: target)
             return .ok
 
+        case .pointer(let window, let phase, let point):
+            let c = try controller(window)
+            store.inputWindow = c.window
+            let type: NSEvent.EventType = switch phase {
+            case .down: .leftMouseDown
+            case .dragged: .leftMouseDragged
+            case .up: .leftMouseUp
+            }
+            try events.pointer(type, at: c.root.convert(point, to: nil), in: c.window)
+            return .ok
+
         case .hover(let point):
             let c = try controller(nil)
             events.hover(at: c.root.convert(point, to: nil), in: c.window)

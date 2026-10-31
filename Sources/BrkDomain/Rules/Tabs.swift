@@ -181,7 +181,9 @@ extension Work {
             live.document = .unavailable
             effects.append(.page(page, .recover))
         case .gainedFocus:
-            if let split = state.tree(scope)?.splitContaining(tab) { state.doc.windows[window]!.splitFocus[split] = tab }
+            if state.presentedPanes(in: window).contains(tab), let split = state.tree(scope)?.splitContaining(tab) {
+                state.doc.windows[window]!.splitFocus[split] = tab
+            }
         case .closedByPage:
             closePage(page)
             return

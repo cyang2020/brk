@@ -67,6 +67,7 @@ public struct MetricsTable: MetricGroup {
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
     public let find = FindMetrics()
+    public let splitTools = SplitToolsMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -329,4 +330,11 @@ public struct FindMetrics: MetricGroup {
     public let gap = Metric(4.0, .guess("Find control spacing"))
     public let button = Metric(28.0, .guess("Find navigation and close button width"))
     public let actionWidth = Metric(92.0, .guess("Minimum width for readable replacement action labels"))
+}
+
+public struct SplitToolsMetrics: MetricGroup {
+    public let width = Metric(240.0, .guess("Compact native split-toolbar width; Arc pixel parity is unmeasured"))
+    public let height = Metric(28.0, .guess("Native small split-toolbar control height"))
+    public let inset = Metric(6.0, .guess("Split-toolbar inset within the content area"))
+    public let overlayGap = Metric(4.0, .guess("Gap between Find and split controls"))
 }
