@@ -162,6 +162,7 @@ enum CommandInventory {
             case .importFile: "importFile"
             case .importSelected: "importSelected"
             case .exportSelected: "exportSelected"
+            }
         case .assist(let intent):
             switch intent {
             case .open: "open"
