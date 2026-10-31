@@ -29,7 +29,9 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
-    var pictureInPictureWindows: [Int32: DocumentPiPHost] = [:]
+    var pictureInPictureWindows: [CefBrowser] {
+        resources.entries.values.flatMap { $0.resource.pictureInPictureAuxiliaries }
+    }
     let resources = BrowserResources<ChromePage>()
     var live: [PageID: ChromePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
@@ -616,6 +618,12 @@ public final class CEFEngine: WebEngine {
     }
 
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
+
+    func auxiliaryCountChanged(_ page: ChromePage, count: Int) {
+        let lease = BrowserResources<ChromePage>.Lease.auxiliary("native-children")
+        if count > 0 { _ = resources.acquire(lease, browser: page.incarnation) }
+        else { resources.release(lease, browser: page.incarnation); closeIfUnowned(page.incarnation) }
+    }
 
     private func retire(_ page: ChromePage) {
         guard ledger.retire(page.id) == page.incarnation else { return }

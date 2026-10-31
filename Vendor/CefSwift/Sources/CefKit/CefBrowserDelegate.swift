@@ -21,7 +21,8 @@ public enum CefPopupDecision: Sendable {
 /// has a no-op default implementation — adopt only what you need.
 @MainActor
 public protocol CefBrowserDelegate: AnyObject {
-    func browser(_ b: CefBrowser, didCreateNativePopup popup: CefBrowser)
+    func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind)
+    func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int)
     func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool)
     func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition
     func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage)
@@ -186,7 +187,8 @@ public protocol CefBrowserDelegate: AnyObject {
 
 // Default no-op implementations.
 extension CefBrowserDelegate {
-    public func browser(_ b: CefBrowser, didCreateNativePopup popup: CefBrowser) { popup.close(force: true) }
+    public func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {}
+    public func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {}
     public func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool) {}
     public func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition {
         CefKeyDisposition(handled: browser(b, handleKeyEvent: event, isBeforePage: true), shortcut: false)

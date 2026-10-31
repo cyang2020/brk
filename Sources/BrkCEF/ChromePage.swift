@@ -30,6 +30,8 @@ final class ChromePage: CefBrowserDelegate {
     private var mediaError: String?
     private var mediaOperationError: String?
     var audioError: String?
+    var documentPiPSource: DocumentToken?
+    var documentPiPActive = false
     private(set) var captureRevision: UInt64 = 0
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
@@ -181,12 +183,13 @@ final class ChromePage: CefBrowserDelegate {
         reloadSequence.cancel()
         cancelPermissions()
         contextMenu.cancel()
+        browser.closeNativeAuxiliaries()
         browser.closeDevTools()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
 
-    func park() { captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); browser.closeNativeAuxiliaries(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -310,18 +313,26 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
-        if request.disposition == .newPictureInPicture { return .allowNativePopup }
-        if let url = request.targetURL {
-            let disposition: OpenDisposition
-            switch request.disposition {
-            case .newBackgroundTab: disposition = .backgroundTab
-            case .newPopup: disposition = .popup
-            case .newWindow: disposition = .newWindow
-            default: disposition = .foregroundTab
-            }
-            engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
+        guard engine.isLive(self) else { return .deny }
+        if request.disposition == .newPictureInPicture {
+            guard let document = readyDocument else { return .deny }
+            documentPiPSource = document
         }
-        return .handled
+        let namedWindow = !request.frameName.isEmpty && !["_blank","_self","_parent","_top"].contains(request.frameName.lowercased())
+        if !request.features.isPopup, !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
+           url.absoluteString != "about:blank", request.disposition == .newForegroundTab || request.disposition == .newBackgroundTab {
+            engine.pageDidEmit(self,.openRequested(url,request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,metadata:openMetadata(request)))
+            return .handled
+        }
+        return .allowNativePopup
+    }
+    func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {
+        engine.auxiliaryCountChanged(self,count:count)
+        observePictureInPictureAuxiliaries()
+    }
+    func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {
+        guard engine.isLive(self) else { auxiliary.close(force:true); return }
+        observePictureInPictureAuxiliary(auxiliary,kind:kind)
     }
 
     /// A link opened with a modifier (Cmd+click) arrives here (CEF's OnOpenURLFromTab), not as a popup. Handled the

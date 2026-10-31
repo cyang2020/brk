@@ -2,28 +2,29 @@ import BrkBase
 import CefKit
 import Foundation
 
-@MainActor final class DocumentPiPHost: CefBrowserDelegate {
-    let browser: CefBrowser
-    let source: DocumentToken
-    unowned let engine: CEFEngine
-    init(browser: CefBrowser, source: DocumentToken, engine: CEFEngine) { self.browser = browser; self.source = source; self.engine = engine; browser.delegate = self }
-    func browserDidClose(_ b: CefBrowser) {
-        engine.pictureInPictureWindows[b.id] = nil
-        guard let page = engine.live[source.browser.page], page.readyDocument == source else { return }
-        engine.pageDidEmit(page, .documentPictureInPictureChanged(source, false, error: nil))
-    }
-    func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction { .deny }
-    func browser(_ b: CefBrowser, didRequestNewTab url: URL?) -> Bool { true }
-}
-
 extension ChromePage {
-    func browser(_ b: CefBrowser, didCreateNativePopup popup: CefBrowser) {
-        guard engine.isLive(self), let document = readyDocument else { popup.close(force: true); return }
-        let host = DocumentPiPHost(browser: popup, source: document, engine: engine)
-        engine.pictureInPictureWindows[popup.id] = host
+    var pictureInPictureAuxiliaries: [CefBrowser] {
+        browser.nativeAuxiliaries.compactMap { value in
+            if case .popup(let request) = value.kind, request.disposition == .newPictureInPicture { value.browser } else { nil }
+        }
+    }
+    func observePictureInPictureAuxiliary(_ auxiliary: CefBrowser, kind: CefAuxiliaryKind) {
+        guard case .popup(let request) = kind, request.disposition == .newPictureInPicture else { return }
+        guard let document = documentPiPSource, readyDocument == document, engine.isLive(self) else { auxiliary.close(force:true); return }
+        documentPiPActive = true
+        engine.pageDidEmit(self,.documentPictureInPictureChanged(document,true,error:nil))
+    }
+    func observePictureInPictureAuxiliaries() {
+        guard pictureInPictureAuxiliaries.isEmpty else { return }
+        let source = documentPiPSource, wasActive = documentPiPActive
+        if browser.nativeAuxiliaryCount == 0 || wasActive { documentPiPSource = nil }
+        documentPiPActive = false
+        if wasActive, let source, readyDocument == source, engine.isLive(self) { engine.pageDidEmit(self,.documentPictureInPictureChanged(source,false,error:nil)) }
     }
     func closeDocumentPiP() {
-        for host in Array(engine.pictureInPictureWindows.values) where host.source.browser == incarnation { host.browser.close(force: true) }
+        browser.closeNativeAuxiliaries(matching: { kind in
+            if case .popup(let request) = kind { request.disposition == .newPictureInPicture } else { false }
+        })
     }
     func controlDocumentPiP(_ control: DocumentPiPControl) {
         guard control.document == readyDocument, engine.isLive(self) else { return }
