@@ -11,7 +11,10 @@
     "implementation_commit": "c21611c61506781f2d2d9aba5d678c7d0b9673bc",
     "parent_merge": "d88035c7f61fd3deab86428eca20b52edd723ad5",
     "parent_layout_repair": "d75a70db7f5886922d4c426bce6d48064f40628b",
-    "acceptance": "pending parent native run and independent review"
+    "acceptance": "verified: 537 tests with3known skips,14 ownership tests,79 native passes",
+    "parent_review_repair": "190f8e79820e4113caa919f615be20883c67e9dc",
+    "parent_tested_commit": "30db64d76588aefd24e0c228c45b3664d482e7f2",
+    "evidence": "verify/completion/find-parent/REPORT.md"
   },
   "slices": [
     {
@@ -130,7 +133,9 @@
         "A077"
       ],
       "brief": "splits.md",
-      "status": "framed"
+      "status": "delivered; two independent review findings await parent repair",
+      "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+      "review": "verify/completion/splits-parent/review/REPORT.md"
     },
     {
       "id": "sites-extensions",

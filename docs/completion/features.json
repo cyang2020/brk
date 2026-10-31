@@ -1731,34 +1731,65 @@
       "arc_evidence": "rows 53 to 58",
       "description": "Find bar, next, previous, replace, jump to selection",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "verified",
       "acceptance": "A native find bar supports new search, next/previous, match count and active result, close/clear, Find and Replace in supported editable contexts, Use Selection to Find and Jump to Selection, with correct focus and stale-result handling.",
-      "owner": "platform-grounding",
+      "owner": "parent-find-integration",
       "required_checks": [
         "unit",
         "native",
         "visual"
       ],
-      "verification": [],
-      "remaining": [
-        "Wrap findNext, stop_finding and on_find_result with operation/document identity and count/ordinal/final state.",
-        "Build find UI and keyboard/focus behavior.",
-        "Specify and implement replace, selection retrieval and jump; do not silently omit these smaller actions.",
-        "Test navigation, close, profile replacement, split/Peek, multiple frames and out-of-order results."
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/find-parent/run.py build-complete",
+          "artifact": "verify/completion/find-parent/build-complete.log",
+          "scope": "537 tests, three inherited skips, zero failures; includes production capture, retirement, direction, late confirmation and real AppKit focus regressions."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test --package-path Vendor/CefSwift --filter 'DownloadOwnershipTests|ReviewContextMenuTests|ControlReentryTests|ContextMenuOwnershipTests|FindOwnershipTests|MainFrameOwnershipTests'",
+          "artifact": "verify/completion/find-parent/ownership-complete.log",
+          "scope": "14 raw ownership/bridge tests."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/find-parent/run.py suite",
+          "artifact": "verify/completion/find-parent/native-complete/REPORT.md",
+          "scope": "79 passing native cases including F1-F12, original 67 cases, real page-first/remapped keys, counts, Unicode editing/input/undo, scope refusal, DOM/frame changes, private/Peek/two-window/split targets, narrow controls and repeated focus. Hardware input and arbitrary rich editors are outside this proof."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "Parent inspection of real signed-application captures; python3 verify/completion/find-parent/check.py",
+          "artifact": "verify/completion/find-parent/VISUAL.md",
+          "scope": "Ordinary, narrow replacement and repeated-find bar readability/control placement. Supported editing limits are recorded; no authenticated Arc pixel-parity claim."
+        }
       ],
+      "remaining": [],
       "implementation": [
-        "Sources/BrkDomain/Actions.swift",
-        "Sources/BrkBase/Page.swift",
+        "Sources/BrkBase/Find.swift",
+        "Sources/BrkDomain/Rules/Find.swift",
+        "Sources/BrkCEF/PageFind.swift",
+        "Sources/BrkCEF/FindCorrelation.swift",
+        "Sources/BrkOverlays/FindBarView.swift",
+        "Sources/BrkLayout/FindLayout.swift",
         "Sources/BrkEngine/WebEngine.swift",
-        "Vendor/CefSwift/Sources/CefKit/CefBrowser.swift",
-        "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
-        "Vendor/CefSwift/Sources/CCef/include/include/capi/cef_find_handler_capi.h"
+        "Vendor/CefSwift/Sources/CefKit/CefRendererChannel.swift",
+        "Vendor/CefSwift/Sources/CefKit/FindEditorScript.swift"
       ],
-      "current_behavior": "All six actions are .later(.findInPage). CefBrowser.find exists but always uses findNext=0; no find handler or Brk UI.",
+      "current_behavior": "All six actions use a native per-window Find bar and browser/document-scoped searches. CEF generated IDs are correlated without prediction; editable replacement is restricted to explicitly captured supported fields with input/undo and idempotent mutation handling. Selection/frame retirement, late replies, repeated focus, private/Peek/split targets and narrow controls are checked.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "30db64d76588aefd24e0c228c45b3664d482e7f2",
+          "artifact": "verify/completion/find-parent/REPORT.md"
+        }
       }
     },
     {
