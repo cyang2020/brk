@@ -1,0 +1,280 @@
+{
+  "doc" : {
+    "archive" : [
+
+    ],
+    "deletingProfiles" : {
+
+    },
+    "downloads" : [
+
+    ],
+    "favorites" : {
+      "default" : "ED06EF21-A817-4511-AF41-99CFDA9905FF"
+    },
+    "history" : [
+      {
+        "id" : "08C9E9DF-893C-4323-AF53-BB8FF24CEA1C",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/third",
+        "visitedAt" : 1790000000000
+      },
+      {
+        "id" : "6881FF60-045F-48FE-81CC-897D91E43F92",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/second",
+        "visitedAt" : 1790000000000
+      },
+      {
+        "id" : "0F52C653-7A9B-4D47-86C2-34A337F2451F",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/start",
+        "visitedAt" : 1790000000000
+      }
+    ],
+    "historyVisits" : [
+      {
+        "id" : "08C9E9DF-893C-4323-AF53-BB8FF24CEA1C",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/third",
+        "visitedAt" : 1790000000000
+      },
+      {
+        "id" : "6881FF60-045F-48FE-81CC-897D91E43F92",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/second",
+        "visitedAt" : 1790000000000
+      },
+      {
+        "id" : "0F52C653-7A9B-4D47-86C2-34A337F2451F",
+        "profile" : "default",
+        "title" : "",
+        "url" : "https://legacy.example/start",
+        "visitedAt" : 1790000000000
+      }
+    ],
+    "items" : {
+      "89EE694D-26A9-4A77-9694-60FE0F4C3055" : {
+        "children" : [
+
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "tab",
+        "parent" : "DEF73301-E901-4065-80F2-8465527EB0BA",
+        "tab" : {
+          "lastActiveAt" : 1790000000000,
+          "muted" : false,
+          "title" : "",
+          "url" : "https://legacy.example/second"
+        }
+      },
+      "B6D7086E-6997-480B-8D90-3C93F1BF8F12" : {
+        "children" : [
+
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "tab",
+        "parent" : "DEF73301-E901-4065-80F2-8465527EB0BA",
+        "tab" : {
+          "lastActiveAt" : 1790000000000,
+          "muted" : false,
+          "title" : "",
+          "url" : "https://legacy.example/third"
+        }
+      },
+      "BC446AFF-E1F9-4AB9-B4C0-D257B71347BD" : {
+        "children" : [
+          "FE6348EC-5166-469E-9247-BF87673AA16B"
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "section",
+        "section" : {
+          "kind" : "pinned",
+          "space" : "60240427-934B-43DB-876D-7B8C50DD31A5"
+        }
+      },
+      "C992833D-6E47-4401-9D99-54A4D7ACFED6" : {
+        "children" : [
+
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "tab",
+        "parent" : "FE6348EC-5166-469E-9247-BF87673AA16B",
+        "tab" : {
+          "lastActiveAt" : 1790000000000,
+          "muted" : false,
+          "pinnedURL" : "https://legacy.example/start",
+          "title" : "",
+          "url" : "https://legacy.example/start"
+        }
+      },
+      "DEF73301-E901-4065-80F2-8465527EB0BA" : {
+        "children" : [
+          "B6D7086E-6997-480B-8D90-3C93F1BF8F12",
+          "89EE694D-26A9-4A77-9694-60FE0F4C3055"
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "section",
+        "section" : {
+          "kind" : "today",
+          "space" : "60240427-934B-43DB-876D-7B8C50DD31A5"
+        }
+      },
+      "ED06EF21-A817-4511-AF41-99CFDA9905FF" : {
+        "children" : [
+
+        ],
+        "createdAt" : 1790000000000,
+        "kind" : "section",
+        "section" : {
+          "kind" : "favorites",
+          "profile" : "default"
+        }
+      },
+      "FE6348EC-5166-469E-9247-BF87673AA16B" : {
+        "children" : [
+          "C992833D-6E47-4401-9D99-54A4D7ACFED6"
+        ],
+        "createdAt" : 1790000000000,
+        "folder" : {
+          "collapsed" : false,
+          "group" : false,
+          "title" : "Legacy Reading"
+        },
+        "kind" : "folder",
+        "parent" : "BC446AFF-E1F9-4AB9-B4C0-D257B71347BD"
+      }
+    },
+    "keyOverrides" : {
+
+    },
+    "linkRoutes" : [
+
+    ],
+    "profiles" : {
+      "default" : {
+        "name" : "Default"
+      }
+    },
+    "settings" : {
+      "advanced" : {
+        "autoPictureInPicture" : true,
+        "boostsEnabled" : true,
+        "hapticsOnReorder" : true,
+        "restoreWindowsOnLaunch" : true,
+        "sharedQuotes" : true,
+        "showFullURLInToolbar" : false,
+        "soundEffects" : true,
+        "themeToCSS" : false,
+        "windowDraggingFromPages" : true
+      },
+      "general" : {
+        "defaultBrowserPromptDismissed" : false,
+        "warnBeforeQuitting" : false,
+        "webAppearance" : "automatic"
+      },
+      "links" : {
+        "externalLinksInLittleArc" : true,
+        "littleArcAutoArchive" : "twelveHours",
+        "optionCommandClickLittleArc" : true,
+        "peekFromPinnedAndFavorites" : true,
+        "shiftClickPeek" : true
+      },
+      "max" : {
+        "provider" : "auto",
+        "renamePinnedTabs" : false,
+        "tidyTabs" : false
+      },
+      "profiles" : {
+        "default" : {
+          "autoArchive" : "twelveHours",
+          "promptForDownloadLocation" : false,
+          "searchEngine" : "google",
+          "searchSuggestions" : true
+        }
+      }
+    },
+    "sidebarData" : {
+      "onboardingCompleted" : true
+    },
+    "sitePreferences" : {
+
+    },
+    "spaceOrder" : [
+      "60240427-934B-43DB-876D-7B8C50DD31A5"
+    ],
+    "spaces" : {
+      "60240427-934B-43DB-876D-7B8C50DD31A5" : {
+        "icon" : {
+          "none" : {
+
+          }
+        },
+        "pinnedCollapsed" : false,
+        "pinnedRoot" : "BC446AFF-E1F9-4AB9-B4C0-D257B71347BD",
+        "profile" : "default",
+        "theme" : {
+          "appearance" : "auto",
+          "colors" : [
+            {
+              "alpha" : 1,
+              "blue" : 0.8392156862745098,
+              "green" : 0.7215686274509804,
+              "red" : 0.49411764705882355
+            }
+          ],
+          "intensity" : 0.25,
+          "noise" : 0.5,
+          "texture" : "grain",
+          "wheel" : "analogous"
+        },
+        "title" : "",
+        "todayRoot" : "DEF73301-E901-4065-80F2-8465527EB0BA"
+      }
+    },
+    "tabPreferences" : {
+      "archiveEducationDismissed" : false,
+      "hoverPreviews" : true,
+      "includeFavoritesInNumbers" : true
+    },
+    "windows" : {
+      "0D8C5938-A42C-43EA-B8C1-2BE16F8EDA52" : {
+        "activeBySpace" : {
+          "60240427-934B-43DB-876D-7B8C50DD31A5" : "B6D7086E-6997-480B-8D90-3C93F1BF8F12"
+        },
+        "emptySelections" : [
+
+        ],
+        "folderExpansion" : {
+          "FE6348EC-5166-469E-9247-BF87673AA16B" : false
+        },
+        "sidebarVisible" : true,
+        "sidebarWidth" : 228,
+        "slots" : {
+          "89EE694D-26A9-4A77-9694-60FE0F4C3055" : {
+            "committedURL" : "https://legacy.example/second"
+          },
+          "B6D7086E-6997-480B-8D90-3C93F1BF8F12" : {
+            "committedURL" : "https://legacy.example/third"
+          },
+          "C992833D-6E47-4401-9D99-54A4D7ACFED6" : {
+            "committedURL" : "https://legacy.example/start"
+          }
+        },
+        "space" : "60240427-934B-43DB-876D-7B8C50DD31A5",
+        "spaceHeaderVisible" : true,
+        "splitFocus" : {
+
+        },
+        "stayOnTop" : false,
+        "toolbarVisible" : false
+      }
+    }
+  },
+  "version" : 3
+}

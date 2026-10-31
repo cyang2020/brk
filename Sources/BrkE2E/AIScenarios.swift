@@ -81,8 +81,10 @@ enum AIScenarios {
     private static func hover(_ app: AppUnderTest) throws {
         try enable(app)
         let source = try load(app)
+        try app.evaluate(source, "document.querySelector('#preview').addEventListener('mouseover',e=>document.title=e.isTrusted?'ai-trusted-hover':'ai-untrusted-hover')")
         let card = try visible(app.native(), .card(0)).frame
         try app.hover(CGPoint(x: card.minX + 90, y: card.minY + 48))
+        try waitForTitle(app, source.item, "ai-trusted-hover")
         try answer(app, contains: "Fixture preview")
         try expect(try currentTab(app.view())?.id == source.item, "preview took tab focus")
         try app.waitUntil("AI readers closed", timeout: 10) { try readersClosed(app) }

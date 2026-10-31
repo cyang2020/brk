@@ -268,6 +268,8 @@ final class EventInjector {
     /// new position (exits, entries, moves to the owners of the tracking areas that contain it), because synthetic
     /// events do not drive the window server's tracking-area bookkeeping.
     func hover(at point: CGPoint, in window: NSWindow) {
+        let hit = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point)
+        print("[control] hover key=\(window.isKeyWindow) acceptsMoved=\(window.acceptsMouseMovedEvents) target=\(hit.map { NSStringFromClass(Swift.type(of: $0)) } ?? "nil")")
         if let moved = try? mouse(.mouseMoved, at: point, modifiers: [], clickCount: 0, in: window) {
             if window.isKeyWindow { NSApp.sendEvent(moved) }
             else {

@@ -80,13 +80,14 @@ extension AppState {
         return out
     }
 
-    /// A tab's or split's recency: a split is as recent as its most recent pane.
+    /// Container recency follows its newest descendant; an empty folder uses its creation time.
     func lastActiveOf(_ id: ItemID) -> Instant {
         guard let scope = locate(id), let tree = tree(scope), let node = tree[id] else { return Instant(milliseconds: 0) }
         switch node.body {
         case .tab(let t): return t.lastActiveAt
         case .split(let s): return s.panes.ids.compactMap { self.tab($0)?.lastActiveAt }.reduce(s.lastActiveAt, max)
-        case .folder, .section: return Instant(milliseconds: 0)
+        case .folder: return node.children.map { lastActiveOf($0) }.max() ?? node.createdAt
+        case .section: return Instant(milliseconds: 0)
         }
     }
 

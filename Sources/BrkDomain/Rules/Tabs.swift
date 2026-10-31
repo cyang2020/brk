@@ -81,7 +81,7 @@ extension Work {
             // Every Today item of the current space with no pane on screen in any window.
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let onScreen = state.onScreenTabs()
-            let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.panes(of: $0).contains(where: onScreen.contains) }
+            let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.doc.tree.tabs(under: $0).contains(where: onScreen.contains) }
             archiveTabs(idle, reason: .clearToday, in: window)
         }
     }
