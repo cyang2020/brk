@@ -19,11 +19,15 @@ enum IdentityScenarios {
     }
 
     @Sendable static func overlappingNavigation(_ app: AppUnderTest) throws {
+        defer {
+            let target = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/I5-main-frame-trace.jsonl")
+            if let data = try? Data(contentsOf:app.dataDirectory.appendingPathComponent("main-frame-trace.jsonl")) { try? data.write(to:target) }
+        }
         let item = try app.load(app.site.url("identity.html"))
         let page = PageID(window: app.window!, item: item)
         _ = try ready(app, page)
         var last = app.site.url("identity.html")
-        for attempt in 0..<3 {
+        for attempt in 0..<12 {
             let previous = try ready(app, page)
             try app.dispatch(.commandBar(.open(.editCurrent)))
             try app.dispatch(.commandBar(.submit(app.site.url("slow-document?attempt=\(attempt)").absoluteString)))
@@ -39,7 +43,7 @@ enum IdentityScenarios {
         try app.flush(); try app.restart()
         _ = try ready(app, page)
         try expect(try observations(app)[page]?.committedURL == last, "restart lost the replacement address")
-        app.note("Three slow main-frame loads were replaced; \(app.site.requestCount("slow-document-interrupted")) server streams observed disconnects. Replacement readiness and restart URL passed; exact callback ordering is covered separately by the adapter tests.")
+        app.note("Twelve slow main-frame loads were replaced; \(app.site.requestCount("slow-document-interrupted")) server streams observed disconnects. Replacement readiness and restart URL passed; exact callback ordering is covered separately by the adapter tests.")
     }
 
     @Sendable static func sharedMutations(_ app: AppUnderTest) throws {

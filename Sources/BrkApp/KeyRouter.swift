@@ -22,14 +22,18 @@ final class KeyRouter: WebEngineDelegate {
 
     /// Physical input requires the origin slot to be visible and attached to its owner's native window.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
+        self.engine(engine, page: page, keyHandling: key, stage: stage, pressID: pressID).handled
+    }
+
+    func engine(_ engine: any WebEngine, page: PageID, keyHandling key: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling {
         guard store.window(showing: page) == page.window,
               let controller = store.windowController(page.window), let surface = engine.surface(for: page),
-              surface.window === controller.window, !surface.isHiddenOrHasHiddenAncestor else { return false }
-        let window = page.window
-        return store.dispatchKey(window, KeyInput(press: key, stage: stage, pressID: pressID))
+              surface.window === controller.window, !surface.isHiddenOrHasHiddenAncestor else { return KeyHandling(handled: false, shortcut: false) }
+        return store.dispatchKeyHandling(page.window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
     func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { store.windowController(id)?.window }
+    func engine(_ engine: any WebEngine, find update: FindUpdate) { store.dispatch(.system(.find(update))) }
     func engine(_ engine: any WebEngine, download update: DownloadUpdate) {
         store.dispatch(.system(.download(update)))
     }
@@ -67,6 +71,7 @@ final class KeyRouter: WebEngineDelegate {
     /// key-down) it is a `.menu`-stage key input with the id minted from that event, so the duplicate guard can see
     /// it; a mouse choice has no press and dispatches the action's command directly (a click is never a duplicate).
     func menuAction(_ action: ActionID, in window: WindowID, event: NSEvent?) {
+        if case .find = action.spec.command, let native = NSApp.keyWindow ?? store.inputWindow, !(native is any HostWindow) { return }
         if let event, let input = KeyInput(menuEvent: event) {
             _ = store.dispatchKey(window, input)
         } else {

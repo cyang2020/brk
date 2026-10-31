@@ -69,10 +69,12 @@ public final class AppStore {
     }
 
     /// CEF and menu key delivery. Returns whether the key was consumed (`Transition.keyHandled`).
-    public func dispatchKey(_ window: WindowID, _ key: KeyInput) -> Bool {
+    public func dispatchKey(_ window: WindowID, _ key: KeyInput) -> Bool { dispatchKeyHandling(window, key).handled }
+
+    func dispatchKeyHandling(_ window: WindowID, _ key: KeyInput) -> KeyHandling {
         if dispatching {
             log.notice("key \(key.press.chord.description) arrived during a dispatch; passed to the page")
-            return false
+            return KeyHandling(handled: false, shortcut: false)
         }
         dispatching = true
         let handled = apply(.key(window, key))
@@ -121,7 +123,7 @@ public final class AppStore {
         dispatching = false
     }
 
-    private func apply(_ input: Input) -> Bool {
+    private func apply(_ input: Input) -> KeyHandling {
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         // Revocation must happen before reconcile sees the new demand, including synchronous engine callbacks.
         for effect in t.effects { if case .disposeContext(let request) = effect { engine.disposeContext(request) } }
@@ -130,7 +132,7 @@ public final class AppStore {
             publish(docChanged: t.docChanged)
         }
         run(t.effects)
-        return t.keyHandled
+        return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut)
     }
 
     /// Project, save, reconcile pages, then windows: closed ones go, new ones are placed and
@@ -188,6 +190,7 @@ public final class AppStore {
     private func run(_ effects: [Effect]) {
         for effect in effects {
             switch effect {
+            case .find(let request): engine.find(request)
             case .page(let page, let action):
                 engine.perform(action, on: page)
             case .copyToPasteboard(let text):

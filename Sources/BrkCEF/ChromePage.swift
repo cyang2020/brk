@@ -19,9 +19,13 @@ final class ChromePage: CefBrowserDelegate {
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
     private let contextMenu = PageContextMenu()
+    private(set) lazy var find = PageFind(browser: browser) { [weak self] update in
+        guard let self, self.engine.isLive(self) else { return }
+        self.engine.findUpdated(update)
+    }
     private var mainDocument: MainDocumentState
 
-    private func emit(_ events: [PageEvent]) { for event in events { engine.pageDidEmit(self, event) } }
+    private func emit(_ events: [PageEvent]) { for event in events { find.observe(event); engine.pageDidEmit(self, event) } }
     /// Latest projected policy; each operation freezes its own copy on its first callback.
     var downloadPolicy: DownloadPolicy
     /// CEF destroyed the host window (after OnBeforeClose); nothing of this page is left on screen.
@@ -73,12 +77,13 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        find.invalidate()
         contextMenu.cancel()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
 
-    func park() { contextMenu.cancel(); surface.park() }
+    func park() { find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -102,6 +107,11 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func prepareStop() { emit(mainDocument.stopped()) }
+
+    func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool) {
+        find.nativeResult(id: identifier, count: count, ordinal: ordinal, final: final)
+    }
+    func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage) { find.receive(rendererMessage) }
 
     // MARK: CefBrowserDelegate -> PageEvent
 
@@ -173,7 +183,7 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { contextMenu.cancel(); engine.pageDidClose(self) }
+    func browserDidClose(_ b: CefBrowser) { find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
@@ -196,8 +206,10 @@ final class ChromePage: CefBrowserDelegate {
     /// after the page (`OnKeyEvent`, only when the page did not consume it) the id is the partner's, paired by
     /// `PressCorrelator`. Modifier-only keys and character events are not routed (Control reaches BrkApp as
     /// `WindowEvent.modifiersChanged` from the window's `flagsChanged` events).
-    func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool {
-        guard let press = KeyTranslation.press(from: event) else { return false }
+    func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition { route(event, before: true) }
+    func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool { route(event, before: isBeforePage).handled }
+    private func route(_ event: CefKeyEvent, before isBeforePage: Bool) -> CefKeyDisposition {
+        guard let press = KeyTranslation.press(from: event) else { return CefKeyDisposition(handled: false, shortcut: false) }
         // Monotonic; only the correlation timeout reads it, never app time (the app clock stays in BrkApp/Clock.swift).
         let uptime = ProcessInfo.processInfo.systemUptime
         let now = Instant(milliseconds: Int64(uptime * 1000))
@@ -207,12 +219,19 @@ final class ChromePage: CefBrowserDelegate {
         } else {
             pressID = presses.afterPage(press, at: now) ?? PressID(eventTimestamp: uptime)
         }
-        let handled = engine.pageKey(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
+        let result = engine.pageKeyHandling(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
+        var handled = result.handled
+        // Embedded Chrome's native responder does not execute these unhandled editing accelerators.
+        // Renderer prevention and any user-remapped app command have already had their turn.
+        if !isBeforePage, !handled, press.phase == .down, event.isEditableFieldFocused, press.chord.key == .z {
+            if press.chord.modifiers == .command { browser.undo(); handled = true }
+            else if press.chord.modifiers == [.command, .shift] { browser.redo(); handled = true }
+        }
         if isBeforePage { presses.beforePage(press, id: pressID, handled: handled, at: now) }
         if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
         }
-        return handled
+        return CefKeyDisposition(handled: handled, shortcut: result.shortcut)
     }
 }
 

@@ -30,6 +30,7 @@ final class BrowserClient {
     nonisolated(unsafe) var contextMenuPointer: UnsafeMutablePointer<cef_context_menu_handler_t>?
     nonisolated(unsafe) var permissionPointer: UnsafeMutablePointer<cef_permission_handler_t>?
     nonisolated(unsafe) var requestPointer: UnsafeMutablePointer<cef_request_handler_t>?
+    nonisolated(unsafe) var findPointer: UnsafeMutablePointer<cef_find_handler_t>?
     nonisolated(unsafe) var keyboardPointer: UnsafeMutablePointer<cef_keyboard_handler_t>?
     nonisolated(unsafe) var focusPointer: UnsafeMutablePointer<cef_focus_handler_t>?
     nonisolated(unsafe) var renderPointer: UnsafeMutablePointer<cef_render_handler_t>?
@@ -80,6 +81,7 @@ final class BrowserClient {
         if let pointer = contextMenuPointer { contextMenuPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = permissionPointer { permissionPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = requestPointer { requestPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = findPointer { findPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = keyboardPointer { keyboardPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = focusPointer { focusPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = renderPointer { renderPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
@@ -178,8 +180,9 @@ final class BrowserClient {
             }
         }
         load.pointee.on_load_start = { handlerSelf, browser, frame, _ in
-            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            MainFrameTrace.record("start", browser: browser, frame: frame, url: "")
             guard let frame, frame.pointee.is_main?(frame) != 0,
                   let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             let url = frame.pointee.get_url?(frame)
@@ -190,8 +193,9 @@ final class BrowserClient {
             }
         }
         load.pointee.on_load_error = { handlerSelf, browser, frame, errorCode, errorText, failedURL in
-            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            MainFrameTrace.record("error", browser: browser, frame: frame, url: CefStringUtil.string(from: failedURL))
             guard let frame, frame.pointee.is_main?(frame) != 0 else { return }
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             let text = CefStringUtil.string(from: errorText)
@@ -203,9 +207,10 @@ final class BrowserClient {
             }
         }
         load.pointee.on_load_end = { handlerSelf, browser, frame, _ in
-            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
-            guard let frame, frame.pointee.is_main?(frame) != 0 else { return }
+            MainFrameTrace.record("end", browser: browser, frame: frame, url: "")
+            guard let frame, frame.pointee.is_main?(frame) != 0, MainFrameScope.contains(frame, in: browser) else { return }
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             let address = CefStringUtil.takingUserFree(frame.pointee.get_url?(frame)) ?? ""
             MainActor.assumeIsolated {
@@ -231,8 +236,9 @@ final class BrowserClient {
             MainActor.assumeIsolated { client.updateTitle(title) }
         }
         display.pointee.on_address_change = { handlerSelf, browser, frame, url in
-            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            MainFrameTrace.record("address", browser: browser, frame: frame, url: CefStringUtil.string(from: url))
             guard let frame, frame.pointee.is_main?(frame) != 0 else { return }
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             let urlString = CefStringUtil.string(from: url)
@@ -382,7 +388,30 @@ final class BrowserClient {
             makeRenderHandler()
         }
 
+        let find = cefAllocate(cef_find_handler_t.self, owner: self)
+        find.pointee.on_find_result = { handler, browser, identifier, count, _, ordinal, final in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            BrowserClient.withBrowser(handler.map(UnsafeMutableRawPointer.init), default: ()) { _, b in
+                b.delegate?.browser(b, findResult: Int(identifier), count: Int(count), ordinal: Int(ordinal), final: final != 0)
+            }
+        }
+        findPointer = find
         let client = cefAllocate(cef_client_t.self, owner: self)
+        client.pointee.get_find_handler = { raw in
+            guard let handler = BrowserClient.owner(raw.map(UnsafeMutableRawPointer.init))?.findPointer else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler)); return handler
+        }
+        client.pointee.on_process_message_received = { raw, browser, frame, source, message in
+            defer {
+                cefRelease(browser.map(UnsafeMutableRawPointer.init)); cefRelease(frame.map(UnsafeMutableRawPointer.init))
+                cefRelease(message.map(UnsafeMutableRawPointer.init))
+            }
+            guard source == PID_RENDERER, let frame, let message,
+                  let payload = CefRendererMessage.read(message, frame: frame) else { return 0 }
+            return BrowserClient.withBrowser(raw.map(UnsafeMutableRawPointer.init), default: Int32(0)) { _, b in
+                b.receiveRenderer(payload); return 1
+            }
+        }
         client.pointee.get_render_handler = { clientSelf in
             guard let me = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init)),
                   let handler = me.renderPointer else { return nil }
@@ -796,12 +825,14 @@ extension BrowserClient {
 
     private func makeKeyboardHandler() {
         let handler = cefAllocate(cef_keyboard_handler_t.self, owner: self)
-        handler.pointee.on_pre_key_event = { handlerSelf, browser, event, _, _ in
+        handler.pointee.on_pre_key_event = { handlerSelf, browser, event, _, shortcut in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let event else { return 0 }
             let keyEvent = CefKeyEvent(raw: event.pointee)
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                (cefBrowser.delegate?.browser(cefBrowser, handleKeyEvent: keyEvent, isBeforePage: true) ?? false) ? 1 : 0
+                let result = cefBrowser.delegate?.browser(cefBrowser, preKeyEvent: keyEvent) ?? CefKeyDisposition(handled: false, shortcut: false)
+                shortcut?.pointee = result.shortcut ? 1 : 0
+                return result.handled ? 1 : 0
             }
         }
         handler.pointee.on_key_event = { handlerSelf, browser, event, _ in

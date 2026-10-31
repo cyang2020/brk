@@ -21,6 +21,9 @@ public enum CefPopupDecision: Sendable {
 /// has a no-op default implementation — adopt only what you need.
 @MainActor
 public protocol CefBrowserDelegate: AnyObject {
+    func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool)
+    func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition
+    func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage)
     /// The page title changed.
     func browser(_ b: CefBrowser, didChangeTitle title: String)
     /// The main-frame URL changed.
@@ -174,6 +177,11 @@ public protocol CefBrowserDelegate: AnyObject {
 
 // Default no-op implementations.
 extension CefBrowserDelegate {
+    public func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool) {}
+    public func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition {
+        CefKeyDisposition(handled: browser(b, handleKeyEvent: event, isBeforePage: true), shortcut: false)
+    }
+    public func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage) {}
     public func browser(_ b: CefBrowser, didChangeTitle title: String) {}
     public func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {}
     public func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {}
@@ -255,4 +263,10 @@ public struct CefBrowserOptions {
     public var forwardsRawTouchEvents: Bool = false
 
     public init() {}
+}
+
+public struct CefKeyDisposition: Sendable {
+    public let handled: Bool
+    public let shortcut: Bool
+    public init(handled: Bool, shortcut: Bool) { self.handled = handled; self.shortcut = shortcut }
 }

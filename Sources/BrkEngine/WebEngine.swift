@@ -49,6 +49,8 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func find(_ request: FindRequest)
+
     func cancelDownload(_ id: DownloadID)
     /// Revokes synchronously. Final drain results arrive through the delegate.
     func disposeContext(_ request: ContextDisposal)
@@ -70,7 +72,10 @@ public protocol WebEngineDelegate: AnyObject {
     /// current event before the page, paired by `PressCorrelator` after it.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool
 
+    func engine(_ engine: any WebEngine, page: PageID, keyHandling key: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling
+
     func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow?
+    func engine(_ engine: any WebEngine, find update: FindUpdate)
     func engine(_ engine: any WebEngine, download update: DownloadUpdate)
     func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt,
                 reply: @escaping @MainActor (DestinationAnswer) -> Void)
@@ -84,7 +89,11 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngineDelegate {
+    public func engine(_ engine: any WebEngine, page: PageID, keyHandling key: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling {
+        KeyHandling(handled: self.engine(engine, page: page, key: key, stage: stage, pressID: pressID), shortcut: false)
+    }
     public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
+    public func engine(_ engine: any WebEngine, find update: FindUpdate) {}
     public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}
     public func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
     public func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) {}
@@ -116,4 +125,10 @@ open class PageSurfaceView: NSView {
     /// routes it before and after the page. True for a surface that consumes no keys (the stub), so app shortcuts
     /// work on it the way they do with a native view focused.
     open var routesKeysThroughWindow: Bool { false }
+}
+
+extension WebEngine {
+    public func find(_ request: FindRequest) {
+        if let id = request.requestID { delegate?.engine(self, find: .failed(id, .unavailable)) }
+    }
 }

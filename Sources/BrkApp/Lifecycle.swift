@@ -84,6 +84,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             self.router?.menuAction(action, in: window, event: event)
         }
         menuTarget.isEnabled = { [weak self] action in
+            if case .find = action.spec.command, let native = NSApp.keyWindow ?? self?.store?.inputWindow, !(native is any HostWindow) { return false }
             guard let self, let window = self.store?.windowController(nil)?.id,
                   let snapshot = self.store?.snapshot.windows[window] else { return true }
             return snapshot.enabledActions.contains(action)

@@ -109,7 +109,7 @@ public class WindowController: NSObject, NSWindowDelegate {
             engine.focus(page, in: window)
         case .none:
             engine.focus(nil, in: window)
-        case .commandBarInput, .renameField, .spaceDialog, .profileDialog, .sidebar:
+        case .findInput, .commandBarInput, .renameField, .spaceDialog, .profileDialog, .sidebar:
             engine.focus(nil, in: window)
             if !root.focus(target) {
                 // The view is not on screen yet (same render that opened it): re-applied by the next render.

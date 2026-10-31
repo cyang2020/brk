@@ -70,8 +70,13 @@ public enum WindowLayout {
         case nil: break
         }
 
-        return WindowFrames(contentSize: contentSize, sidebar: sidebar, sidebarFloats: floats, resizeHandle: handle, revealStrip: reveal,
+        var result = WindowFrames(contentSize: contentSize, sidebar: sidebar, sidebarFloats: floats, resizeHandle: handle, revealStrip: reveal,
                             contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, library: library, peek: peek)
+        if let find = snapshot.find,
+           let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.rect {
+            result.find = FindLayout.compute(in: card, replacing: find.replacement)
+        }
+        return result
     }
 }
 

@@ -262,7 +262,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     // Focus.
     let focus: FocusTarget
-    if case .commandBar? = session.overlay { focus = .commandBarInput }
+    if session.find?.focusInput == true { focus = .findInput }
+    else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
@@ -292,7 +293,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
-        renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, overlay: overlay, focus: focus,
+        renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, find: session.find.map {
+            FindSnapshot(page: $0.page, query: $0.query, replacement: $0.replacement, count: $0.count, ordinal: $0.ordinal,
+                         searching: $0.searching, canReplace: $0.ticket != nil && $0.editable != nil && $0.operation == nil && !$0.query.text.isEmpty,
+                         message: $0.message, scope: $0.replacement ? "Only the captured editable field" : "This page")
+        }, overlay: overlay, focus: focus,
         enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
     )
 }
@@ -313,6 +318,9 @@ private func profileRows(_ state: AppState) -> [ProfileRow] {
 /// in…" when the window holds no Little Arc tab or Peek; in an ephemeral window, what needs a space's sidebar.
 private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
     var enabled = Set(ActionID.allCases.filter { $0.spec.later == nil })
+    if state.findPage(in: window) == nil {
+        enabled.subtract([.find, .findAndReplace, .findNext, .findPrevious, .useSelectionForFind, .jumpToSelection])
+    }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
         enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,

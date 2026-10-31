@@ -8,6 +8,8 @@ enum LibraryScenarios {
     @Sendable static func activeQuit(_ app: AppUnderTest) throws { try quitAfterDownload(app, active: true) }
 
     private static func quitAfterDownload(_ app: AppUnderTest, active: Bool) throws {
+        let initial = try app.view().content.panes[0].tab
+        try app.waitForPageInput(PageID(window: app.window!, item: initial), at: app.site.url("index.html"))
         try app.dispatch(.profile(.create(name: "Downloads", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings),
               let profile = settings.profiles.first(where: { $0.profile.id != .default })?.profile.id else {

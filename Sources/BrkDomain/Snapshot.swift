@@ -51,6 +51,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var renaming: ItemID?
     public var dialog: SpaceDialogSnapshot?
     public var profileDialog: ProfileDialogSnapshot?
+    public var find: FindSnapshot? = nil
     public var overlay: OverlaySnapshot?
     /// Who should have keyboard focus. Applied by the window controller only when it changes.
     public var focus: FocusTarget
@@ -355,6 +356,7 @@ public struct ArchiveEntry: Sendable, Equatable, Codable {
 
 public enum FocusTarget: Sendable, Equatable, Codable {
     case page(PageID)
+    case findInput
     case commandBarInput
     case renameField(ItemID)
     case spaceDialog

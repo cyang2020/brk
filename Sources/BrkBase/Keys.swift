@@ -22,7 +22,7 @@ public struct Modifiers: OptionSet, Hashable, Sendable, Codable {
 /// `CaseIterable` is the inventory: lookups go through `allCases`, so a key added here is found by code and by
 /// name with no second list to keep in step (KeyTests pins the round trip for every case).
 public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomStringConvertible {
-    case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, c = 8, q = 12, w = 13, e = 14, r = 15, y = 16, t = 17
+    case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, z = 6, c = 8, q = 12, w = 13, e = 14, r = 15, y = 16, t = 17
     case two = 19, equals = 24, minus = 27, zero = 29, rightBracket = 30, o = 31, u = 32, leftBracket = 33
     case i = 34, j = 38, l = 37, k = 40, comma = 43, n = 45, m = 46, p = 35, period = 47
     case tab = 48, space = 49, escape = 53, returnKey = 36, f12 = 111
@@ -40,6 +40,7 @@ public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomString
         case .f: "f"
         case .h: "h"
         case .g: "g"
+        case .z: "z"
         case .c: "c"
         case .q: "q"
         case .w: "w"
@@ -194,4 +195,10 @@ public struct PressID: Hashable, Sendable, Codable, CustomStringConvertible {
     /// From an event's `timestamp` (seconds since boot, sub-millisecond resolution).
     public init(eventTimestamp: TimeInterval) { raw = UInt64(max(0, eventTimestamp) * 1_000_000_000) }
     public var description: String { "press#\(raw)" }
+}
+
+public struct KeyHandling: Sendable, Equatable {
+    public let handled: Bool
+    public let shortcut: Bool
+    public init(handled: Bool, shortcut: Bool) { self.handled = handled; self.shortcut = shortcut }
 }
