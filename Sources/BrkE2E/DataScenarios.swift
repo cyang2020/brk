@@ -108,9 +108,13 @@ enum DataScenarios {
             var native: PageFacts?
         }
         guard case .pageObservations(let after) = try app.send(.pageObservations) else { throw Check(description: "missing post-assignment observations") }
-        let encoded = try JSONEncoder().encode(Assignment(expected: profile, browser: after[page]?.browser, native: try app.native().pages[page]))
+        let native = try app.native().pages[page]
+        let encoded = try JSONEncoder().encode(Assignment(expected: profile, browser: after[page]?.browser, native: native))
         try receipt(app, "assignment-" + profile.rawValue + "-" + String(after[page]?.browser?.generation ?? 0),
                     JSONSerialization.jsonObject(with: encoded))
+        let expectedDirectory = profile == .default ? "Default" : "Profile-" + profile.rawValue
+        try expect(native?.context == .profile(profile) && native?.nativeContextPath.map { URL(fileURLWithPath: $0).lastPathComponent } == expectedDirectory,
+                   "native profile binding differs: expected " + expectedDirectory + ", actual " + (native?.nativeContextPath ?? "missing"))
     }
     static func captureSettingsWindow(_ app: AppUnderTest, _ name: String) throws {
         guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.className == "NSWindow" })?.number else { throw Check(description: "visible settings window missing") }
@@ -265,6 +269,7 @@ enum DataScenarios {
         try expect(otherInstalled.id == installed.id && otherInstalled.enabled, "fixture is not independently enabled in other profile")
         try expect(try !SitePolicyScenarios.controls(app).pinnedExtensions.contains(installed.id), "pin leaked")
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(second))); try app.flush(); try app.restart()
+        try focus(app, second)
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("other catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
         var value = try SitePolicyScenarios.controls(app)

@@ -89,6 +89,8 @@ public final class CEFEngine: WebEngine {
         ProfileDirectories(root: root).deleteMarked()
         config.rootCachePath = root
         config.cachePath = root.appendingPathComponent("Default", isDirectory: true)
+        // Chrome otherwise restores last_used as its global profile, including a custom Brk profile.
+        config.extraCommandLineSwitches["profile-directory"] = "Default"
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
