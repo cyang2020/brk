@@ -17,7 +17,7 @@ enum FilePanelScenarios {
     ]
 
     @discardableResult
-    static func recordPanel(_ app: AppUnderTest, verifiedSelection: URL? = nil) throws -> URL {
+    static func recordPanel(_ app: AppUnderTest, verifiedSelection: URL? = nil, selection: NativePickerInput.Selection? = nil, filename: AXUIElement? = nil) throws -> URL {
         guard let hello = app.hello else { throw Check(description: "No launched panel owner") }
         let facts = try app.native()
         let panels = facts.appWindows.filter { $0.isVisible && ($0.className == "NSOpenPanel" || $0.className == "NSSavePanel") }
@@ -42,7 +42,7 @@ enum FilePanelScenarios {
         let directory = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("panels")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let receipt = directory.appendingPathComponent(stem + ".json")
-        let ax = try NativePickerInput.receipt(app)
+        let ax = try NativePickerInput.receipt(app, selection: selection, filename: filename, prompt: controls[1])
         guard case .menuItems(let selection) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { throw Check(description: "Cannot read actual picker selection") }
         try JSONSerialization.data(withJSONObject: ["accessibility": ax, "panelSelection": selection, "pid": hello.pid, "class": panel.className, "number": panel.number,
             "windowServer": window, "controls": controls, "screenshot": "shots/" + screenshot.lastPathComponent,
@@ -138,10 +138,8 @@ enum FilePanelScenarios {
         try app.dispatch(.sidebarData(.importFile)); try ImportSyncScenarios.waitPanel(app, "Preview")
         try app.waitUntil("AX sheet ready") { (try? NativePickerInput.sheet(app)) != nil }
         let sheet = try NativePickerInput.sheet(app)
-        try app.waitUntil("owned row loaded") { NativePickerInput.tree(sheet).contains { node in
-            [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].contains { NativePickerInput.string(node, $0) == fixture.lastPathComponent }
-        } }
-        try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
+        try app.waitUntil("owned row loaded") { NativePickerInput.findFile(sheet, name: fixture.lastPathComponent) != nil }
+        _ = try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
         do {
             try NativePickerInput.drive(app, file: app.dataDirectory.appendingPathComponent("absent-owned.html"))
             throw Check(description: "Missing fixture unexpectedly confirmed")
