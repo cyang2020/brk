@@ -19,9 +19,10 @@ enum NativePickerInput {
 
     static func find(_ root: AXUIElement, _ matches: (AXUIElement, String) -> Bool) -> AXUIElement? {
         var queue = [root], visited: [CFHashCode: [AXUIElement]] = [:], count = 0
+        let searchDeadline = ProcessInfo.processInfo.systemUptime + 3
         let leaves = [kAXTextFieldRole, kAXStaticTextRole, kAXImageRole, kAXButtonRole, kAXCheckBoxRole,
                       kAXRadioButtonRole, kAXMenuItemRole, kAXPopUpButtonRole, kAXComboBoxRole]
-        while !queue.isEmpty, count < 2500 {
+        while !queue.isEmpty, count < 2500, ProcessInfo.processInfo.systemUptime < searchDeadline {
             let node = queue.removeFirst(), hash = CFHash(node)
             guard !(visited[hash] ?? []).contains(where: { CFEqual($0, node) }) else { continue }
             visited[hash, default: []].append(node); count += 1
