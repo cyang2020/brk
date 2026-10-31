@@ -81,3 +81,7 @@ The parent accepted A039 after the completed implementation, an independent revi
 The split branch has delivered A071-A077. Independent review proved two regressions: background pane closure changed foreground demand, and unrelated title renders hid valid drag feedback. The parent reproduced and repaired both in an archived source copy; 26 focused component/domain tests pass. [The retained review and repair](../../verify/completion/splits-parent/) precede main integration. Merge must preserve Find's key-intent/focus/document rules, avoid Find/split toolbar overlap, and verify native input after separation in both windows. No split row is promoted from that branch's handoff alone.
 
 The parent accepted all seven split rows after review repairs and combined native verification: 568 tests with three inherited skips,14 ownership tests,14 focused and87 full native passes. Controls, feedback and both-window typing are covered. The tabs branch remains outside main until its isolated fixes are integrated; Chrome audibility and other partial acceptance gates remain.
+
+## Handoff
+
+The parent paused on 2026-10-31 with main at `a485d69`. [The handoff](handoff-20261031.md) records the current build and native results, the five open native failures, the stale ledger counts that still need reconciliation, every remaining feature group, the blocked Arc reference gate, open branches and the exact commands and rules for continuing.
