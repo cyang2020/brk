@@ -45,6 +45,7 @@ public protocol WebEngine: AnyObject {
 
     /// Diagnostics for the control socket. Never used for app behavior.
     func facts(for page: PageID) -> PageFacts?
+    func isPageHostWindow(_ window: NSWindow) -> Bool
 
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
@@ -106,6 +107,7 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func isPageHostWindow(_ window: NSWindow) -> Bool { false }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}
 }

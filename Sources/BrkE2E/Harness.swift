@@ -319,7 +319,7 @@ final class AppUnderTest {
         let result = try send(.native(window: id))
         guard case .native(let facts) = result else { throw Check(description: "native answered \(Self.describe(result))") }
         let hostNumbers = Set(facts.pages.values.compactMap(\.hostWindowNumber))
-        for w in facts.appWindows where w.isKey && (hostNumbers.contains(w.number) || w.className.contains("NativeWidget")) {
+        for w in facts.appWindows where w.isKey && (hostNumbers.contains(w.number) || (w.isPageHost ?? w.className.contains("NativeWidget"))) {
             let entry = "window \(w.number) (\(w.className))"
             if !hostKeyViolations.contains(entry) { hostKeyViolations.append(entry) }
         }

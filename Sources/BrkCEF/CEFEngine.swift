@@ -52,6 +52,8 @@ public final class CEFEngine: WebEngine {
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
     var wanted: [PageSpec] = []
+    private var reconciling = false
+    private var reconcileAgain = false
     var phase: ShutdownPhase = .running
     private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
@@ -206,8 +208,19 @@ public final class CEFEngine: WebEngine {
 
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
-        let pages = pages.filter { contexts.permitsWork($0.context) }
-        self.wanted = pages
+        self.wanted = pages.filter { contexts.permitsWork($0.context) }
+        // Constructing a CEF surface can pump AppKit and synchronously publish another page demand.
+        // Finish registering that incarnation before replaying the newest demand.
+        guard !reconciling else { reconcileAgain = true; return }
+        reconciling = true
+        defer { reconciling = false }
+        repeat {
+            reconcileAgain = false
+            reconcilePages(wanted)
+        } while reconcileAgain && phase == .running
+    }
+
+    private func reconcilePages(_ pages: [PageSpec]) {
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.
@@ -332,6 +345,7 @@ public final class CEFEngine: WebEngine {
     }
 
     public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
+    public func isPageHostWindow(_ window: NSWindow) -> Bool { HostWindows.isHost(window) }
 
     public func find(_ request: FindRequest) {
         guard phase == .running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }

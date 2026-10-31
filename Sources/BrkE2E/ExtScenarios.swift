@@ -210,7 +210,11 @@ enum ExtScenarios {
                 } catch {
                     var policy: WebsitePolicyStatus?
                     if case .pageObservations(let observations) = try app.send(.pageObservations) { policy = observations[PageID(window: app.window!, item: item)]?.websitePolicyStatus }
-                    throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy))
+                    try app.dispatch(.tab(.focus(item)))
+                    try SitePolicyScenarios.evaluate(app, item, "document.title=" + js("after:" + name + ":") + "+" + readback)
+                    app.sleep(0.5)
+                    let after = try tab(item, in: app.view())?.title ?? "missing"
+                    throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy) + "; DOM after showing=" + after)
                 }
             } else {
                 app.sleep(1.4)
@@ -240,7 +244,7 @@ enum ExtScenarios {
         try expect(copied == app.site.url("site-policy.html").absoluteString, "site control copied a different page")
         try app.click(.settingsField("siteExportLink"))
         try app.waitUntil("real link export save panel") { try app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
-        try app.perform(.answerSavePanel(window: app.window, path: nil))
+        try app.perform(.sheetButton(title: "Cancel"))
         try app.waitUntil("link export cancellation") { try !app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
         try app.dispatch(.profile(.create(name: "Ext Profile", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings), let other = settings.profiles.first(where: { $0.profile.name == "Ext Profile" })?.profile.id else { throw Check(description: "profile missing") }

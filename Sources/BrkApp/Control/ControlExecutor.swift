@@ -208,7 +208,7 @@ final class ControlExecutor {
             return .ok
         case .sheetButton(let title):
             guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
-            if let panel = sheet as? NSOpenPanel, title == "Cancel" { panel.cancel(nil); return .ok }
+            if let panel = sheet as? NSSavePanel, title == "Cancel" { panel.cancel(nil); return .ok }
             var selected: NSButton?
             ViewTree.walk(content) { view in
                 if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }
@@ -232,7 +232,7 @@ final class ControlExecutor {
             if let viewID {
                 // The browser window first, then any other app window (the settings window, wave 2).
                 let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
-                    ?? NSApp.windows.lazy.compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
+                    ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
                 guard let (view, window) = found else {
                     throw Failure(message: "no visible view \(viewID.identifier) in any window")
                 }
@@ -409,7 +409,7 @@ final class ControlExecutor {
         var focusedPage = ViewTree.page(containing: responder)
         if focusedPage == nil { focusedPage = pages.first(where: { $0.value.hasKeyboardFocus })?.key }
         let windows = NSApp.windows.map {
-            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible)
+            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible, isPageHost: engine.isPageHostWindow($0))
         }
         var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,

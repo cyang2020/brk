@@ -221,11 +221,13 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
     public var className: String
     public var isKey: Bool
     public var isVisible: Bool
-    public init(number: Int, className: String, isKey: Bool, isVisible: Bool) {
+    public var isPageHost: Bool?
+    public init(number: Int, className: String, isKey: Bool, isVisible: Bool, isPageHost: Bool? = nil) {
         self.number = number
         self.className = className
         self.isKey = isKey
         self.isVisible = isVisible
+        self.isPageHost = isPageHost
     }
 }
 
