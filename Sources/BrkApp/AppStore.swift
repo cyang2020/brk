@@ -605,7 +605,7 @@ public final class AppStore {
 
 /// Builds a native popup from a `MenuModel`; each item dispatches its entry's command when chosen.
 @MainActor
-final class PopupTarget: NSObject {
+final class PopupTarget: NSObject, NSMenuDelegate {
     private var commands: [Int: Command] = [:]
     private var choose: ((Command) -> Void)?
 
@@ -627,7 +627,19 @@ final class PopupTarget: NSObject {
             }
         }
         menu.autoenablesItems = false
+        menu.delegate = self
         return menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            NotificationCenter.default.post(name: PageSurfaceView.contextMenuWillOpen, object: menu)
+        }
+    }
+    func menuDidClose(_ menu: NSMenu) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            NotificationCenter.default.post(name: PageSurfaceView.contextMenuDidClose, object: menu)
+        }
     }
 
     func clear() { commands.removeAll(); choose = nil }

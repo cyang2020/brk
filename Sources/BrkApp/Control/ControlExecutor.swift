@@ -482,8 +482,13 @@ final class ControlExecutor {
                            actual: ViewTree.identified(in: window, relativeTo: c.root), pages: pages,
                            firstResponder: ViewTree.describe(responder), focusedPage: focusedPage, appWindows: windows)
         facts.windowLevel = window.level.rawValue
+        facts.ownedPages = Dictionary(uniqueKeysWithValues: store.snapshot.pages.filter { $0.id.window == c.id }.compactMap { spec in
+            engine.facts(for: spec.id).map { (spec.id, $0) }
+        })
         facts.miniaturized = window.isMiniaturized
         facts.fullscreen = window.styleMask.contains(.fullScreen)
+        facts.fullscreenTransitioning = c.isFullscreenTransitioning || facts.ownedPages?.values.contains { $0.nativeFullscreenTransitioning == true } == true
+        facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue

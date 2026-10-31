@@ -31,6 +31,18 @@ import Testing
         cefRelease(UnsafeMutableRawPointer(handler)); cefRelease(UnsafeMutableRawPointer(raw)); client.releaseHandlers()
     }
 
+    @Test func missingAuxiliaryDelegatePreservesChromesShortcutIntent() {
+        let client = BrowserClient(), raw = client.makeClient()
+        let browser = CefBrowser(raw: nil, client: client, delegate: nil)
+        client.attach(browser)
+        let handler = raw.pointee.get_keyboard_handler!(raw)!
+        var event = cef_key_event_t(); event.type = KEYEVENT_RAWKEYDOWN
+        var shortcut: Int32 = 1
+        #expect(handler.pointee.on_pre_key_event!(handler, nil, &event, nil, &shortcut) == 0)
+        #expect(shortcut == 1, "A native auxiliary without a key delegate must preserve Chrome's intent")
+        cefRelease(UnsafeMutableRawPointer(handler)); cefRelease(UnsafeMutableRawPointer(raw)); client.releaseHandlers()
+    }
+
     @Test func pdfOutgoingReferenceKeepsOwnerUntilNativeReleaseAndRepliesOnce() {
         let native = Native()
         let host = cefAllocate(cef_browser_host_t.self, owner: native)

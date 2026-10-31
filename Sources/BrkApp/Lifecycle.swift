@@ -41,6 +41,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var pendingExternalURLs: [Input] = []
     private let menuTarget = MenuTarget()
     private var quitting = false
+    private var overlayEscapeMonitor: Any?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
     public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
@@ -93,7 +94,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         engine.delegate = router
         self.store = store
         self.router = router
-        menuTarget.edits.window = { [weak store] in store?.windowController(nil)?.window }
+        menuTarget.edits.window = { [weak store] in NSApp.keyWindow ?? store?.windowController(nil)?.window }
 
         menuTarget.perform = { [weak self] action, event in
             guard let self, let window = self.store?.windowController(nil)?.id else { return }
@@ -115,6 +116,22 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         littleEntryPoints = entryPoints
         store.didPublish = { [weak entryPoints] in entryPoints?.update($0) }
         store.start()
+        // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
+        overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let handled = MainActor.assumeIsolated {
+                guard event.keyCode == Key.escape.code else { return false }
+                // AppKit's fullscreen toolbar may be key while its owning browser still reports key status.
+                let window = (NSApp.keyWindow as? any HostWindow)
+                    ?? NSApp.windows.compactMap { $0 as? any HostWindow }.first { $0.isKeyWindow && $0.attachedSheet == nil }
+                let handled = window?.attachedSheet == nil && window?.onEscapeBeforePage?(event) == true
+                if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                    let key = NSApp.keyWindow.map { NSStringFromClass(type(of: $0)) } ?? "nil"
+                    FileHandle.standardError.write(Data("escape ingress key=\(key) host=\(window?.windowNumber ?? -1) handled=\(handled)\n".utf8))
+                }
+                return handled
+            }
+            return handled ? nil : event
+        }
 
         // Links from other apps (F3) and the local AI tools on PATH (the Max pane, `.auto`).
         installURLHandler()
@@ -144,6 +161,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         Quit.fixtureTrace("delegate entered")
         guard !quitting else { return .terminateLater }
         quitting = true
+        if let overlayEscapeMonitor { NSEvent.removeMonitor(overlayEscapeMonitor); self.overlayEscapeMonitor = nil }
         store?.prepareForTermination()
         littleEntryPoints?.stop()
         sweep?.invalidate()

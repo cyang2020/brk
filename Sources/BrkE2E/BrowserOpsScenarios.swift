@@ -9,7 +9,9 @@ enum BrowserOpsScenarios {
         Scenario("BO2", "real empty popup, document.write, opener, native identity and close", cefOnly: "CEF popup browsing contexts", popups),
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
-        Scenario("BO5", "real context-owned media-router enumeration and source rejection", cefOnly: "CEF media router", cast),
+        Scenario("BO4N", "isolated native fullscreen shortcut and Escape", cefOnly: "native fullscreen", nativeFullscreen),
+        Scenario("BO5", "Default-profile Cast reports its shutdown limitation without starting the unsafe router", cefOnly: "CEF media router", cast),
+        Scenario("BO5C", "custom-profile media-router enumeration and source-close drain", cefOnly: "CEF media router context lifetime", castCustomProfile),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
     ]
     private static func load(_ app: AppUnderTest, _ path: String) throws -> PageID {
@@ -23,7 +25,8 @@ enum BrowserOpsScenarios {
         return (allTabs(view) + tabRows(view.scratch?.rows ?? [])).first { $0.id == page.item }?.title
     }
     private static func facts(_ app: AppUnderTest, _ page: PageID) throws -> PageFacts {
-        guard let facts = try app.native(page.window).pages[page] else { throw Check(description: "Page facts missing") }
+        let native = try app.native(page.window)
+        guard let facts = native.pages[page] ?? native.ownedPages?[page] else { throw Check(description: "Page facts missing") }
         return facts
     }
     private static func record<T: Encodable>(_ app: AppUnderTest, _ name: String, _ value: T) throws {
@@ -160,33 +163,69 @@ enum BrowserOpsScenarios {
         }
     }
     @Sendable static func fullscreen(_ app: AppUnderTest) throws {
+        let port = try BrowserBasicInspection.unusedPort()
+        app.remoteDebuggingPort = port
+        try app.restart()
+        let url = app.site.url("browser-basic.html?fullscreen")
         let page = try load(app, "browser-basic.html?fullscreen")
+        var phase = "document"
+        defer {
+            if let data = try? BrowserBasicInspection.evaluate(port: port, document: url,
+                expression: "({phase:window.boPhase,title:document.title,fullscreen:!!document.fullscreenElement,trace:window.boFullscreenTrace})") {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent(app.scenarioID + "-fullscreen-trace.json"))
+            }
+            try? record(app, "fullscreen-native", app.native())
+        }
+        try app.evaluate(page, "window.boFullscreenTrace=[];for(let name of ['fullscreenchange','fullscreenerror','focus','blur','visibilitychange','resize'])window.addEventListener(name,()=>boFullscreenTrace.push({event:name,t:performance.now(),fullscreen:!!document.fullscreenElement,visible:document.visibilityState,focused:document.hasFocus()}),true)")
         for video in [false, true] {
+            phase = video ? "video" : "document"
+            try app.evaluate(page, "window.boPhase='\(phase)'")
             try clickedScript(app, page, "{let el=document.documentElement;\(video ? "let canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;canvas.getContext('2d').fillRect(0,0,64,64);el=document.createElement('video');el.controls=true;el.muted=true;el.srcObject=canvas.captureStream(5);document.body.append(el);el.play();window.boVideo=el;" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
-            try app.waitUntil("DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
+            try app.waitUntil("\(phase) DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen && app.native().fullscreenTransitioning == false }
             if video {
                 try app.evaluate(page, "boVideo.play().then(()=>document.title='video-playing:'+(!boVideo.paused&&boVideo.readyState>=2))")
                 try app.waitUntil("actual captured video playback") { try title(app, page) == "video-playing:true" }
             }
             try app.dispatch(.library(.open(.history)))
+            try app.waitUntil("Library is visible before fullscreen Escape") {
+                if case .library? = try app.view().overlay { return true }; return false
+            }
             try app.press("escape")
             try app.waitUntil("overlay closes before fullscreen") { try app.view().overlay == nil }
             try expect(try app.native().fullscreen, "First Escape left fullscreen before closing overlay")
             try app.press("escape")
-            try app.waitUntil("page fullscreen exits native window", timeout: 15) { try !app.native().fullscreen }
+            try app.waitUntil("page fullscreen exits native window", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
             try app.waitUntil("focus returns to document") { try app.native().focusedPage == page }
         }
         try app.press("ctrl+cmd+f")
-        try app.waitUntil("native fullscreen shortcut", timeout: 15) { try app.native().fullscreen }
+        try app.waitUntil("native fullscreen shortcut", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning == false }
         try app.press("escape")
-        try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen }
+        try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
         try app.screenshot("fullscreen-focus-returned")
         app.note("Actual NSWindow style and DOM fullscreen were observed for document/video elements and injected native key input. Physical keys and traffic-light gestures remain manual.")
+    }
+    @Sendable static func nativeFullscreen(_ app: AppUnderTest) throws {
+        _ = try load(app, "browser-basic.html?native-fullscreen")
+        defer { try? record(app, "native-fullscreen-only", app.native()) }
+        try app.press("ctrl+cmd+f")
+        try app.waitUntil("isolated native fullscreen entry", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning == false }
+        try app.screenshot("native-fullscreen-entered")
+        try app.press("escape")
+        try app.waitUntil("isolated native fullscreen Escape", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
     }
     @Sendable static func cast(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?cast")
         defer { try? record(app, "media-router", facts(app, page)) }
         try app.perform(.menuAction("Cast"))
+        try app.waitUntil("Cast panel reports availability") { try facts(app, page).castAvailable != nil }
+        if try facts(app, page).castAvailable == false {
+            try expect(app.scenarioID == "BO5", "Owned profile unexpectedly lacks a router")
+            try expect(try facts(app, page).castError?.contains("cannot close") == true, "Missing Default-profile Cast explanation")
+            try expect(try facts(app, page).castSinkNotifications == nil, "Unsafe router was initialized")
+            try app.recordWindows("cast-unavailable")
+            app.note("Default-profile Cast explicitly unavailable before get_media_router; pinned CEF shutdown trap retained in prior runs. This is a partial feature, not receiver enumeration.")
+            return
+        }
         try app.waitUntil("real media-router enumeration", timeout: 15) {
             let f = try facts(app, page)
             return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castSourceSupported != nil
@@ -195,6 +234,13 @@ enum BrowserOpsScenarios {
         try expect(result.castSourceSupported == false, "The pinned router unexpectedly accepted arbitrary HTTP page mirroring")
         try app.recordWindows("cast-receivers")
         app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). GetSource rejected HTTP page mirroring. No native route creation or termination is claimed without a receiver. ABI callback/termination ownership is covered separately by raw unit fixtures.")
+    }
+    @Sendable static func castCustomProfile(_ app: AppUnderTest) throws {
+        try app.dispatch(.profile(.create(name: "Cast owner", icon: nil)))
+        guard case .settings(let settings) = try app.send(.settings),
+              let profile = settings.profiles.first(where: { $0.profile.name == "Cast owner" })?.profile.id else { throw Check(description: "Cast profile missing") }
+        try app.dispatch(.profile(.assign(.current, to: profile)))
+        try cast(app)
     }
     @Sendable static func transformations(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?transformations")

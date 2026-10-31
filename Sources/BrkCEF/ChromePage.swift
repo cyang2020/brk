@@ -19,6 +19,7 @@ final class ChromePage: CefBrowserDelegate {
     unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    private var fullscreenTransition = ChromeFullscreenTransition()
     private var keyReceipts: [PageKeyReceipt] = []
     var sourceWindow: NSWindow?
     var sourceRequest: UInt64 = 0
@@ -87,6 +88,7 @@ final class ChromePage: CefBrowserDelegate {
         for event in events {
             if case .documentChanged(let document) = event {
                 mediaPlayers = []; mediaError = nil; mediaOperationError = nil
+                fullscreenTransition.cancelPending()
                 audio.document(document)
                 if !audio.audible { engine.pageDidEmit(self, .audioChanged(false)) }
             }
@@ -131,6 +133,13 @@ final class ChromePage: CefBrowserDelegate {
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         if let host = chrome.nsWindow { HostWindows.adopt(host,parent:nil) }
         chrome.browser.delegate = self
+        chrome.onFullscreenTransition = { [weak self] nativeFullscreen, completed in
+            guard let self else { return }
+            self.surface.nativeFullscreenChanged(nativeFullscreen, completed: completed)
+            if let fullscreen = self.fullscreenTransition.nativeChanged(fullscreen: nativeFullscreen, completed: completed) {
+                self.emitFullscreen(fullscreen)
+            }
+        }
         chrome.onWindowDestroyed = { [weak self] in
             guard let self else { return }
             self.windowDestroyed = true
@@ -210,6 +219,7 @@ final class ChromePage: CefBrowserDelegate {
         facts.linkPreviewFrameCount = linkPreviews.frameCount
         facts.linkPreviewTitle = linkPreviews.title
         facts.linkPreviewURL = linkPreviews.destination
+        facts.nativeFullscreenTransitioning = fullscreenTransition.isTransitioning
         facts.requestedReloads = requestedReloads
         facts.extensionDialogDecision = extensionDialogDecision
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
@@ -222,13 +232,15 @@ final class ChromePage: CefBrowserDelegate {
         facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }
         facts.popupRequests = popupRequests
         facts.developerResult = developerResult
-        facts.castSinkNotifications = cast?.router.sinkNotifications
-        facts.castRouteNotifications = cast?.router.routeNotifications
-        facts.castSinks = cast?.router.sinks.map(\.name)
-        facts.castRoutes = cast?.router.routes
-        facts.castResult = cast?.router.lastResult
-        facts.castError = cast?.router.lastError
-        facts.castSourceSupported = cast?.router.sourceSupported
+        facts.castSinkNotifications = cast?.router?.sinkNotifications
+        facts.castRouteNotifications = cast?.router?.routeNotifications
+        facts.castSinks = cast?.router?.sinks.map(\.name)
+        facts.castRoutes = cast?.router?.routes
+        facts.castResult = cast?.router?.lastResult
+        facts.castAvailable = cast.map { $0.router != nil }
+        facts.castError = cast?.unavailableReason ?? cast?.router?.lastError
+        facts.castSourceSupported = cast?.router?.sourceSupported
+        if let number = cast?.visibleWindowNumber { facts.auxiliaryWindows?.append(number) }
         if let sourceWindow, sourceWindow.isVisible { facts.auxiliaryWindows?.append(sourceWindow.windowNumber) }
         return facts
     }
@@ -238,6 +250,7 @@ final class ChromePage: CefBrowserDelegate {
     func close() {
         captureRevision &+= 1
         closeDocumentPiP()
+        fullscreenTransition.cancelPending()
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
@@ -253,7 +266,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); browser.closeNativeAuxiliaries(); linkPreviews.stop(); closeDeveloperWindows(); stopCasting(); surface.park() }
+    func park() { fullscreenTransition.cancelPending(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); linkPreviews.stop(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -272,6 +285,7 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
+        fullscreenTransition.cancelPending()
         expectedReloadBrowse = nil
         reloadSequence.cancel()
         prepareDocumentNavigation()
@@ -299,7 +313,11 @@ final class ChromePage: CefBrowserDelegate {
     func prepareStop() { reloadSequence.cancel(); emit(mainDocument.stopped()) }
     func reportZoom() { engine.pageDidEmit(self, .zoomChanged(BrowserZoom.percentage(level: browser.zoomLevel))) }
     func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool) {
-        engine.pageDidEmit(self, .fullscreenChanged(isFullscreen))
+        if let fullscreen = fullscreenTransition.pageChanged(isFullscreen) { emitFullscreen(fullscreen) }
+    }
+    private func emitFullscreen(_ fullscreen: Bool) {
+        guard surface.window?.isVisible == true, !surface.isHiddenOrHasHiddenAncestor else { return }
+        engine.pageDidEmit(self, .fullscreenChanged(fullscreen))
     }
 
     func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool) {
@@ -406,8 +424,8 @@ final class ChromePage: CefBrowserDelegate {
         popupRequests.append(openMetadata(request))
         if popupRequests.count > 16 { popupRequests.removeFirst() }
         let namedWindow = !request.frameName.isEmpty && !["_blank", "_self", "_parent", "_top"].contains(request.frameName.lowercased())
-        if !request.features.isPopup, !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
-           url.absoluteString != "about:blank", request.disposition == .newForegroundTab || request.disposition == .newBackgroundTab {
+        if !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
+           url.absoluteString != "about:blank", [.newForegroundTab, .newBackgroundTab, .newPopup].contains(request.disposition) {
             engine.pageDidEmit(self, .openRequested(url, request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,
                                                   metadata: openMetadata(request)))
             return .handled

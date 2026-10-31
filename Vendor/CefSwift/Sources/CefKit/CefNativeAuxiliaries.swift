@@ -48,8 +48,12 @@ extension BrowserClient {
 
     func didCloseNativeAuxiliary() {
         guard let parent = auxiliaryParent, let key = auxiliaryKey else { return }
+        let owner = auxiliaryRoot.browser
         parent.nativeAuxiliaries[key] = nil
         auxiliaryParent = nil
+        if let owner, let auxiliary = browser, let kind = auxiliaryKind {
+            owner.delegate?.browser(owner, didCloseAuxiliary: auxiliary, kind: kind)
+        }
         parent.notifyAuxiliaryChange()
     }
 

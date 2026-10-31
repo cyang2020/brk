@@ -1,11 +1,14 @@
 import AppKit
+import BrkBase
 import BrkEngine
 import CefKit
 
 /// Native controls and CEF references belonging to one page's original request context.
 @MainActor final class PageCast: NSObject {
     let id = UUID().uuidString
-    let router: CefMediaRouting
+    let router: CefMediaRouting?
+    let unavailableReason: String?
+    var visibleWindowNumber: Int? { panel.isVisible ? panel.windowNumber : nil }
     private let panel: NSPanel
     private let receivers = NSPopUpButton(frame: .zero, pullsDown: false)
     private let source = NSTextField(string: "")
@@ -13,9 +16,15 @@ import CefKit
     private let connectButton = NSButton(title: "Connect", target: nil, action: nil)
     private let stopButton = NSButton(title: "Stop Casting", target: nil, action: nil)
 
-    init?(browser: CefBrowser) {
-        guard let router = CefMediaRouting(browser: browser) else { return nil }
-        self.router = router
+    init(browser: CefBrowser, context: BrowsingContext) {
+        // The pinned CEF global router traps during runtime shutdown; an owned profile drains safely.
+        if context == .profile(.default) {
+            router = nil
+            unavailableReason = "Cast is unavailable in the Default profile because this Chromium build cannot close its receiver service safely. Use a separate profile for Cast presentations."
+        } else {
+            router = CefMediaRouting(browser: browser)
+            unavailableReason = router == nil ? "The receiver service is unavailable for this page." : nil
+        }
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 540, height: 260),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
@@ -38,37 +47,40 @@ import CefKit
             stack.topAnchor.constraint(equalTo: panel.contentView!.topAnchor, constant: 20),
             source.widthAnchor.constraint(equalTo: stack.widthAnchor), receivers.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
-        router.onChange = { [weak self] in self?.render() }
-        router.refresh()
+        router?.onChange = { [weak self] in self?.render() }
+        router?.refresh()
         render()
     }
-    func show() { if !panel.isVisible { panel.center() }; panel.makeKeyAndOrderFront(nil); router.refresh() }
+    func show() { if !panel.isVisible { panel.center() }; panel.makeKeyAndOrderFront(nil); router?.refresh() }
     private func render() {
         let selected = receivers.selectedItem?.representedObject as? String
         receivers.removeAllItems()
-        for sink in router.sinks {
+        for sink in router?.sinks ?? [] {
             receivers.addItem(withTitle: sink.name); receivers.lastItem?.representedObject = sink.id
             if sink.id == selected { receivers.select(receivers.lastItem) }
         }
-        connectButton.isEnabled = !router.sinks.isEmpty
-        stopButton.isEnabled = router.ownedRouteCount > 0
-        status.stringValue = router.lastError ?? (router.sinks.isEmpty ? "No receivers found on this network." : "\(router.sinks.count) receiver(s), \(router.routes.count) route(s)")
+        connectButton.isEnabled = !(router?.sinks.isEmpty ?? true)
+        source.isEnabled = router != nil
+        receivers.isEnabled = router != nil
+        stopButton.isEnabled = (router?.ownedRouteCount ?? 0) > 0
+        status.stringValue = unavailableReason ?? router?.lastError ?? ((router?.sinks.isEmpty ?? true) ? "No receivers found on this network." : "\(router?.sinks.count ?? 0) receiver(s), \(router?.routes.count ?? 0) route(s)")
     }
     @objc private func connect() {
         guard let id = receivers.selectedItem?.representedObject as? String else { return }
-        router.connect(sourceURN: source.stringValue, sinkID: id)
+        router?.connect(sourceURN: source.stringValue, sinkID: id)
     }
-    @objc private func stopRoutes() { router.terminateOwnedRoutes(); router.refresh() }
-    @objc private func refresh() { router.refresh() }
-    func stop() { panel.close(); router.stop() }
+    @objc private func stopRoutes() { router?.terminateOwnedRoutes(); router?.refresh() }
+    @objc private func refresh() { router?.refresh() }
+    func stop() { panel.close(); router?.stop() }
 }
 
 extension ChromePage {
     func showCast() {
         guard engine.isLive(self), surface.window?.isVisible == true else { return }
-        if cast == nil, let controller = PageCast(browser: browser) {
+        if cast == nil {
+            let controller = PageCast(browser: browser, context: context)
             let lease = BrowserResources<ChromePage>.Lease.auxiliary("cast-" + controller.id)
-            controller.router.onPendingChange = { [weak self, weak controller] pending in
+            controller.router?.onPendingChange = { [weak self, weak controller] pending in
                 guard let self else { return }
                 if pending { _ = self.engine.resources.acquire(lease, browser: self.incarnation) }
                 else {
@@ -78,14 +90,14 @@ extension ChromePage {
                 }
             }
             cast = controller
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let url = browser.url { controller.router.validateSource(url.absoluteString) }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let url = browser.url { controller.router?.validateSource(url.absoluteString) }
         }
         cast?.show()
     }
     func stopCasting() {
         guard let cast else { return }
         self.cast = nil
-        if cast.router.hasPendingRoutes { drainingCasts.append(cast) }
+        if cast.router?.hasPendingRoutes == true { drainingCasts.append(cast) }
         cast.stop()
     }
 }

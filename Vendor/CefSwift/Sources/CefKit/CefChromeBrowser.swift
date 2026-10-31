@@ -22,7 +22,6 @@ public struct CefChromeBrowserOptions {
 
     /// Configure the native window before its first show. Embedding clients can install
     /// their activation policy before CEF can make the window key.
-    public var prepareNativeWindow: (@MainActor (NSWindow) -> Void)? = nil
 
     /// Background color applied before the first paint.
     public var backgroundColor: NSColor?
@@ -33,6 +32,8 @@ public struct CefChromeBrowserOptions {
     public var requestRules: CefRequestRules? = nil
     /// Prepare the native host before CEF shows it. Embedders can prevent activation before moving its views.
     public var prepareWindow: (@MainActor (NSWindow) -> Void)?
+    /// Configure an embedded native host before CEF first shows or activates it. Standalone windows leave this nil.
+    public var prepareNativeWindow: (@MainActor (NSWindow) -> Void)? = nil
 
     public init() {}
 }
@@ -69,6 +70,9 @@ public final class CefChromeBrowser {
     /// Called after CEF destroys the window (user close, ``close()``, or app
     /// teardown). The instance is unusable afterwards.
     public var onWindowDestroyed: (() -> Void)?
+
+    /// Chrome's actual native-window transition; DOM fullscreen can start this before its display callback.
+    public var onFullscreenTransition: ((_ isFullscreen: Bool, _ isCompleted: Bool) -> Void)?
 
     /// The AppKit window CEF created, once available. CEF owns this window —
     /// don't close or release it directly (use ``close()``); ordering,
@@ -448,6 +452,21 @@ final class ChromeWindowDelegate {
             guard let me = ChromeWindowDelegate.owner(delegateSelf.map(UnsafeMutableRawPointer.init)) else { return }
             MainActor.assumeIsolated {
                 me.chrome?.handleWindowDestroyed()
+            }
+        }
+
+        d.pointee.on_window_fullscreen_transition = { delegateSelf, window, completed in
+            defer { cefRelease(window.map(UnsafeMutableRawPointer.init)) }
+            guard let me = ChromeWindowDelegate.owner(delegateSelf.map(UnsafeMutableRawPointer.init)), let window else { return }
+            MainActor.assumeIsolated {
+                let fullscreen = window.pointee.is_fullscreen?(window) == 1
+                if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                    let handle = window.pointee.get_window_handle?(window)
+                    let native = handle.flatMap { Unmanaged<NSView>.fromOpaque($0).takeUnretainedValue().window }
+                    let line = "cef fullscreen \(ProcessInfo.processInfo.systemUptime) window=\(native?.windowNumber ?? -1) completed=\(completed) full=\(fullscreen)\n"
+                    FileHandle.standardError.write(Data(line.utf8))
+                }
+                me.chrome?.onFullscreenTransition?(fullscreen, completed != 0)
             }
         }
 
