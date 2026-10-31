@@ -20,6 +20,8 @@ enum CommandInventory {
     static let commands: [Command] = [
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
+        .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
+        .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
         .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
         .find(.open(replace: false)), .find(.query(FindQuery(text: "x"))), .find(.step(.next)), .find(.close),
         .find(.useSelection), .find(.jumpToSelection), .find(.captureScope), .find(.replaceCurrent("y")), .find(.replaceAll("y")),
@@ -140,6 +142,10 @@ enum CommandInventory {
             case .welcome: "welcome"
             case .tour: "tour"
             case .importFile: "importFile"
+            case .importSelected: "importSelected"
+            case .connectSelectedFolder: "connectSelectedFolder"
+            case .exportSelected: "exportSelected"
+            case .cancelFilePanel: "cancelFilePanel"
             case .syncSettings: "syncSettings"
             case .syncNow: "syncNow"
             case .disconnect: "disconnect"

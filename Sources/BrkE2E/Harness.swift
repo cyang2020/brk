@@ -289,6 +289,7 @@ final class AppUnderTest {
     @discardableResult
     func send(_ op: ControlOp, timeout: Double = 30) throws -> ControlResult {
         guard let process else { throw Check(description: "\(Self.describe(op)) before launch") }
+        if let result = try nativePickerReply(op) { return result }
         do {
             return try client.send(op, timeout: timeout)
         } catch let error as ControlClientError {

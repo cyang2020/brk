@@ -9,6 +9,16 @@ extension Work {
         case .tour: effects.append(.sidebarData(.tour(window)))
         case .importFile: effects.append(.sidebarData(.panel(window, .importFile)))
         case .syncSettings: effects.append(.sidebarData(.panel(window, .syncSettings)))
+        case .importSelected(let url, let format):
+            guard url.isFileURL, let target = state.sidebarImportTarget(in: window) else { return }
+            effects.append(.sidebarData(.importSelected(window, url, format, target)))
+        case .connectSelectedFolder(let url):
+            guard url.isFileURL, let target = state.sidebarImportTarget(in: window) else { return }
+            effects.append(.sidebarData(.connectSelectedFolder(window, url, target)))
+        case .exportSelected(let url):
+            guard url.isFileURL else { return }
+            effects.append(.sidebarData(.exportSelected(window, url)))
+        case .cancelFilePanel: effects.append(.sidebarData(.cancelFilePanel(window)))
         case .syncNow: requestSidebarSync()
         case .disconnect:
             state.doc.sidebarData.sync?.folder = nil

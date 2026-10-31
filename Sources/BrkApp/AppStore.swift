@@ -478,6 +478,19 @@ public final class AppStore {
         case .panel(let owner, let panel):
             guard let window = windows[owner]?.window else { return }
             sidebarPanels.show(panel, owner: owner, window: window, status: snapshot.sidebarData)
+        case .importSelected(let owner, let url, let format, let target):
+            guard let window = windows[owner]?.window else { return }
+            sidebarPanels.importSelected(url, format: format, captured: target, owner: owner, window: window)
+        case .connectSelectedFolder(let owner, let url, let target):
+            guard let window = windows[owner]?.window else { return }
+            sidebarPanels.connectSelectedFolder(url, captured: target, owner: owner, window: window)
+        case .exportSelected(let owner, let url):
+            if !exports.saveSelected(url, owner: owner) {
+                dispatch(.system(.exportFinished(owner, .failed("No open export belongs to this window."))))
+            }
+        case .cancelFilePanel(let owner):
+            sidebarPanels.cancelFilePanel(owner)
+            exports.ownerGone(owner)
         case .tour(let owner):
             do {
                 let url = try BrkTour.write(in: stateFile.url.deletingLastPathComponent())

@@ -26,11 +26,19 @@ public enum ShareExport {
         let finish: @MainActor (NSApplication.ModalResponse) -> Void = { [weak window] response in
             guard !completed else { return }; completed = true
             guard response == .OK, isValid(), window?.isVisible == true, let url = panel.url else { completion(.cancelled); return }
-            let format: ExportFormat = url.pathExtension.lowercased() == "html" ? .html : .json
-            do { try write(ExportCodec.encode(document, as: format), url); completion(.saved(url)) }
-            catch { completion(.failed(error.localizedDescription)) }
+            completion(writeSelected(document, to: url, write: write))
         }
         panel.beginSheetModal(for: window, completionHandler: finish)
         return panel
+    }
+
+    public static func writeSelected(_ document: ExportDocument, to url: URL,
+                                     write: @MainActor (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) -> ExportOutcome {
+        guard url.isFileURL else { return .failed("Export requires a selected local file.") }
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let format: ExportFormat = url.pathExtension.lowercased() == "html" ? .html : .json
+        do { try write(ExportCodec.encode(document, as: format), url); return .saved(url) }
+        catch { return .failed(error.localizedDescription) }
     }
 }

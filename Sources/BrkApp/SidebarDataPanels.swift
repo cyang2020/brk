@@ -141,13 +141,40 @@ final class SidebarDataPanels {
             guard let self, self.operations[owner]?.id == ticket else { return }
             self.operations[owner] = nil
             guard response == .OK, let url = panel.url, let window, window.isVisible, self.target(owner) == captured else { return }
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let source = try SidebarImport.parse(Data(contentsOf: url), format: SidebarImportFormat.allCases[format.indexOfSelectedItem])
-                self.preview(source, filename: url.lastPathComponent, captured: captured, owner: owner, window: window)
-            } catch { self.error("Import failed: \(error)", owner: owner, window: window) }
+            self.command(owner, .sidebarData(.importSelected(url, format: SidebarImportFormat.allCases[format.indexOfSelectedItem])))
         }
+    }
+
+    /// Retires only this adapter's picker before using an explicitly selected URL. AppKit owns its completion.
+    private func prepareSelectedFile(owner: WindowID, window: NSWindow) -> Bool {
+        guard window.isVisible, tasks[owner] == nil else { return false }
+        if let operation = operations[owner] {
+            guard operation.sheet is NSOpenPanel else { return false }
+            operations[owner] = nil
+            operation.sheet.sheetParent?.endSheet(operation.sheet, returnCode: .cancel)
+            operation.sheet.orderOut(nil)
+        }
+        return window.attachedSheet == nil
+    }
+
+    func cancelFilePanel(_ owner: WindowID) {
+        guard operations[owner]?.sheet is NSOpenPanel else { return }
+        ownerGone(owner)
+    }
+
+    func importSelected(_ url: URL, format: SidebarImportFormat, captured: SidebarImportTarget, owner: WindowID, window: NSWindow) {
+        guard url.isFileURL, target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let source = try SidebarImport.parse(Data(contentsOf: url), format: format)
+            preview(source, filename: url.lastPathComponent, captured: captured, owner: owner, window: window)
+        } catch { self.error("Import failed: \(error)", owner: owner, window: window) }
+    }
+
+    func connectSelectedFolder(_ url: URL, captured: SidebarImportTarget, owner: WindowID, window: NSWindow) {
+        guard url.isFileURL, target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
+        send(.connected(owner, folder: url.path))
     }
 
     private func preview(_ source: SidebarImportSource, filename: String, captured: SidebarImportTarget, owner: WindowID, window: NSWindow) {
@@ -214,7 +241,7 @@ final class SidebarDataPanels {
             guard let self, self.operations[owner]?.id == ticket else { return }
             self.operations[owner] = nil
             guard response == .OK, let url = panel.url, window?.isVisible == true, self.target(owner) == captured else { return }
-            self.send(.connected(owner, folder: url.path))
+            self.command(owner, .sidebarData(.connectSelectedFolder(url)))
         }
     }
 

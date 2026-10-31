@@ -6,10 +6,10 @@ import Foundation
 enum ImportSyncScenarios {
     static let all = [
         Scenario("ImportSync-Onboarding", "first-run native choices seed once, restart without duplicates, complete the local tour", cefOnly: "local tour DOM execution", onboarding),
-        Scenario("ImportSync-Import", "native file selection previews bookmarks, cancellation changes nothing, accepted import keeps source bytes", cefOnly: "imported fixture DOM execution", bookmarks),
-        Scenario("ImportSync-Export", "native save panels export a Space, folder and selected tabs; cancellation writes nothing", exports),
+        Scenario("ImportSync-Import", "record file panels; selected fixture URLs prove preview, cancel, import and unchanged source bytes", cefOnly: "imported fixture DOM execution", bookmarks),
+        Scenario("ImportSync-Export", "record save panels; selected fixture destinations prove Space, folder and tab bytes and cancellation", exports),
         Scenario("ImportSync-ExportLifetime", "closing an export owner dismisses its save sheet; quit with another save sheet drains cleanly", exportLifetime),
-        Scenario("ImportSync-Sync", "native folder selection publishes only whitelisted sidebar bytes and disconnect stops publication", sync),
+        Scenario("ImportSync-Sync", "record folder panels; selected fixture folders prove two-process convergence, restart and disconnect", sync),
     ]
 
     static func data(_ app: AppUnderTest) throws -> SidebarDataSnapshot {
@@ -18,6 +18,15 @@ enum ImportSyncScenarios {
     }
 
     static func panel(_ app: AppUnderTest, _ action: SidebarPanelControlAction) throws {
+        if !FilePanelScenarios.usesHelper, action == .button("Cancel") {
+            let kind = try app.native().sheetClass
+            if kind == "NSOpenPanel" || kind == "NSSavePanel" {
+                _ = try FilePanelScenarios.recordPanel(app)
+                try app.dispatch(.sidebarData(.cancelFilePanel))
+                app.note("MANUAL physical Cancel gesture gap; the owner-bound production cancellation retired the recorded picker.")
+                return
+            }
+        }
         let result = try app.send(.sidebarPanel(window: nil, action: action))
         if case .failed(let error) = result { throw Check(description: error) }
     }
@@ -60,17 +69,18 @@ enum ImportSyncScenarios {
         try bytes.write(to: file)
         let before = try pinnedIDs(app.view())
         try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
-        try panel(app, .open(path: file.path)); try waitPanel(app, "1 bookmarks")
+        try FilePanelScenarios.selectImport(app, file); try waitPanel(app, "1 bookmarks")
         _ = try app.panelScreenshot("import-preview")
         try panel(app, .button("Cancel"))
         try expect(try pinnedIDs(app.view()) == before, "cancel changed Pinned")
         try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
-        try panel(app, .open(path: file.path)); try waitPanel(app, "1 bookmarks")
+        try FilePanelScenarios.selectImport(app, file); try waitPanel(app, "1 bookmarks")
         try panel(app, .button("Import")); try waitPanel(app, "Imported 1 bookmarks")
         try panel(app, .button("Close"))
         let imported = try allTabs(app.view()).first { $0.title == "Owned fixture" }
         try expect(imported != nil, "accepted bookmark not shown")
         try expect(try Data(contentsOf: file) == bytes, "source bytes changed")
+        try FilePanelScenarios.retain(app, file, label: "source-after-preview-and-import")
         if let imported { try app.dispatch(.tab(.focus(imported.id))) }
         try app.waitUntil("imported page loads actual fixture DOM") { try currentTab(app.view())?.title == "Owned fixture" && app.view().urlPill.text?.contains("page2.html") == true }
         if let imported, let owner = app.window {
@@ -84,15 +94,16 @@ enum ImportSyncScenarios {
         try historyBytes.write(to: historyFile)
         try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
         try panel(app, .select(identifier: "import-format", index: 2))
-        try panel(app, .open(path: historyFile.path)); try waitPanel(app, "1 history entries")
+        try FilePanelScenarios.selectImport(app, historyFile, format: .historyJSON); try waitPanel(app, "1 history entries")
         try panel(app, .button("Import")); try waitPanel(app, "1 new history URLs"); try panel(app, .button("Close"))
         try app.dispatch(.library(.open(.history)))
         guard case .library(let library)? = try app.view().overlay else { throw Check(description: "History not shown") }
         try expect(library.history.contains { $0.title == "Owned imported History" }, "selected History import not in the actual Library")
         try expect(try Data(contentsOf: historyFile) == historyBytes, "history source changed")
+        try FilePanelScenarios.retain(app, historyFile, label: "history-source-after-import")
         _ = try app.screenshot("imported-history")
         try app.dispatch(.library(.close))
-        app.note("Selected HTML file retained identical bytes after preview cancellation and import. Invalid script URL rejected; one bookmark imported through the actual native open/preview sheets.")
+        app.note("Selected HTML retained identical bytes after preview cancellation and import. Invalid script URL rejected; one bookmark passed the production parser and actual native preview sheets. Physical selection is reported separately by FP-OpenGesture.")
         app.note("A separately selected History JSON source produced one new profile History URL visible in the Library; its source bytes stayed identical.")
     }
 
@@ -103,9 +114,9 @@ enum ImportSyncScenarios {
         try app.dispatch(.item(.move(first, to: .into(parent: folder, index: 0))))
         for (subject, filename) in [(ExportSubject.space(.current), "space.json"), (.items([folder]), "folder.html"), (.items([first]), "tabs.json")] {
             try app.dispatch(.app(.export(subject))); try waitPanel(app, "Export")
-            try panel(app, .save(directory: app.dataDirectory.path, filename: filename))
             let output = app.dataDirectory.appendingPathComponent(filename)
-            try app.waitUntil("native save writes \(filename)") { FileManager.default.fileExists(atPath: output.path) }
+            try FilePanelScenarios.selectSave(app, output)
+            try app.waitUntil("selected destination writes \(filename)") { FileManager.default.fileExists(atPath: output.path) }
             let bytes = try Data(contentsOf: output)
             try expect(!bytes.isEmpty, "empty export")
             if filename.hasSuffix(".json") {
@@ -113,12 +124,22 @@ enum ImportSyncScenarios {
                 try expect(!document.entries.isEmpty, "export contains no links")
             } else {
                 try expect(String(decoding: bytes, as: UTF8.self).contains("Owned exports"), "HTML lost folder hierarchy")
+                let parsed = try SidebarImport.parse(bytes, format: .bookmarksHTML)
+                try expect(parsed.preview.bookmarkCount == 1, "HTML does not parse back to the exported bookmark")
             }
-            app.note("Native save wrote \(filename), \(bytes.count) bytes.")
+            try FilePanelScenarios.retain(app, output, label: "saved")
+            app.note("Production writer saved \(filename), \(bytes.count) bytes; physical gesture is reported separately by FP-SaveGesture.")
         }
+        func exportedFiles() throws -> Set<String> {
+            Set(try FileManager.default.contentsOfDirectory(atPath: app.dataDirectory.path).filter {
+                $0 != "state.json" && ($0.hasSuffix(".json") || $0.hasSuffix(".html"))
+            })
+        }
+        let filesBeforeCancel = try exportedFiles()
         try app.dispatch(.app(.export(.space(.current)))); try waitPanel(app, "Export")
         try panel(app, .button("Cancel"))
         try expect(try data(app).status.contains("cancelled"), "export cancel result missing")
+        try expect(try exportedFiles() == filesBeforeCancel, "cancel created an export file")
         _ = try app.screenshot("export-finished")
     }
 
@@ -147,11 +168,11 @@ enum ImportSyncScenarios {
         let file = app.dataDirectory.appendingPathComponent("sync-seed.html")
         try ExportCodec.encode(ExportDocument(title: "Fixture", entries: [.link(title: "Approved link", url: URL(string: "https://example.test/public")!)]), as: .html).write(to: file)
         try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
-        try panel(app, .open(path: file.path)); try waitPanel(app, "1 bookmarks"); try panel(app, .button("Import"))
+        try FilePanelScenarios.selectImport(app, file); try waitPanel(app, "1 bookmarks"); try panel(app, .button("Import"))
         try waitPanel(app, "Imported 1 bookmarks"); try panel(app, .button("Close"))
         try app.dispatch(.sidebarData(.syncSettings)); try waitPanel(app, "Choose sync folder")
         try panel(app, .button("Choose sync folder…")); try waitPanel(app, "Connect this profile")
-        try panel(app, .open(path: folder.path))
+        try FilePanelScenarios.selectSyncFolder(app, folder)
         try app.waitUntil("replica saved to chosen folder") { try data(app).status.contains("Saved revision") }
         let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
         try expect(files.count == 1, "expected one own replica file")
@@ -160,6 +181,9 @@ enum ImportSyncScenarios {
         let text = String(decoding: bytes, as: UTF8.self)
         try expect(!text.contains(app.dataDirectory.path) && !text.contains("history") && !text.contains("cookies"), "sync leaked local state")
         try twoApps(app, sharedFolder: folder)
+        for file in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) where file.pathExtension == "json" {
+            try FilePanelScenarios.retain(app, file, label: "converged")
+        }
         try app.dispatch(.sidebarData(.syncSettings)); try waitPanel(app, "Disconnect")
         _ = try app.panelScreenshot("sync-status")
         try panel(app, .button("Disconnect"))
@@ -167,7 +191,8 @@ enum ImportSyncScenarios {
         let disconnected = try Data(contentsOf: files[0])
         _ = try app.advanceClock(seconds: 61)
         try expect(try Data(contentsOf: files[0]) == disconnected, "disconnected app published")
-        app.note("Actual folder chooser selected owned folder; validated version-1 replica contains approved Pinned link and excludes local path/history/cookies. Disconnect stopped writes.")
+        try FilePanelScenarios.retain(app, files[0], label: "after-disconnect")
+        app.note("Actual folder choosers were recorded; the selected folder reached the production connection command. Validated replicas exclude local path/history/cookies. Disconnect stopped writes. Physical selection is reported separately by FP-FolderGesture.")
     }
 
     static func twoApps(_ app: AppUnderTest, sharedFolder: URL) throws {
@@ -178,11 +203,11 @@ enum ImportSyncScenarios {
         let seed = second.dataDirectory.appendingPathComponent("selected.html")
         try ExportCodec.encode(ExportDocument(title: "Owned B", entries: [.link(title: "Second device link", url: URL(string: "https://example.test/second-device")!)]), as: .html).write(to: seed)
         try second.dispatch(.sidebarData(.importFile)); try waitPanel(second, "Preview")
-        try panel(second, .open(path: seed.path)); try waitPanel(second, "1 bookmarks"); try panel(second, .button("Import"))
+        try FilePanelScenarios.selectImport(second, seed); try waitPanel(second, "1 bookmarks"); try panel(second, .button("Import"))
         try waitPanel(second, "Imported 1 bookmarks"); try panel(second, .button("Close"))
         try second.dispatch(.sidebarData(.syncSettings)); try waitPanel(second, "Choose sync folder")
         try panel(second, .button("Choose sync folder…")); try waitPanel(second, "Connect this profile")
-        try panel(second, .open(path: sharedFolder.path))
+        try FilePanelScenarios.selectSyncFolder(second, sharedFolder)
         try second.waitUntil("second actual app publishes its replica") { try data(second).status.contains("Saved revision") }
         try app.dispatch(.sidebarData(.syncNow))
         try app.waitUntil("two actual app roots converge on both saved links") {
@@ -203,6 +228,7 @@ enum ImportSyncScenarios {
         }
         try expect(found, "remote saved link did not reach the first app's real sidebar")
         try second.flush()
+        try FilePanelScenarios.retain(second, second.dataDirectory.appendingPathComponent("state.json"), label: "before-crash")
         if let process = second.process {
             _ = Foundation.kill(process.process.processIdentifier, SIGKILL)
             try expect(process.waitForExit(timeout: 5), "owned crash process did not exit")
