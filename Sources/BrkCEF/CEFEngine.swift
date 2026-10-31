@@ -345,7 +345,15 @@ public final class CEFEngine: WebEngine {
         live[page]?.browser.executeJavaScript(script)
     }
 
-    public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
+    public func facts(for id: PageID) -> PageFacts? {
+        guard let page = live[id] else { return nil }
+        var facts = page.facts
+        facts.context = page.context
+        let native = ProfileDataStore.inspect(browser: Int(page.browser.id))
+        facts.nativeContextPath = native?.path
+        facts.nativeContextIsGlobal = native?.global
+        return facts
+    }
 
     public func find(_ request: FindRequest) {
         guard phase == .running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }

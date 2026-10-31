@@ -102,6 +102,15 @@ enum DataScenarios {
             return true
         }
         try focus(app, item)
+        struct Assignment: Encodable {
+            var expected: ProfileID
+            var browser: BrowserToken?
+            var native: PageFacts?
+        }
+        guard case .pageObservations(let after) = try app.send(.pageObservations) else { throw Check(description: "missing post-assignment observations") }
+        let encoded = try JSONEncoder().encode(Assignment(expected: profile, browser: after[page]?.browser, native: try app.native().pages[page]))
+        try receipt(app, "assignment-" + profile.rawValue + "-" + String(after[page]?.browser?.generation ?? 0),
+                    JSONSerialization.jsonObject(with: encoded))
     }
     static func captureSettingsWindow(_ app: AppUnderTest, _ name: String) throws {
         guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.className == "NSWindow" })?.number else { throw Check(description: "visible settings window missing") }
