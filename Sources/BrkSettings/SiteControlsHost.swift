@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkLayout
 import BrkUIKit
 import SwiftUI
 
@@ -33,11 +34,42 @@ private struct SiteControlsView: View {
         var rule = value.rule; edit(&rule)
         dispatch(.site(.rule(target, rule)))
     }
+    private var extensionControls: some View {
+        VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
+                Button("Refresh installed extensions") { dispatch(.site(.nativeExtensions)) }
+                if let error = value.extensionError { Text(error).font(.caption) }
+                ForEach(value.extensions.sorted { (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name) }) { item in
+                    VStack(alignment: .leading) {
+                    HStack {
+                        Toggle("Pin \(item.name)", isOn: Binding(get: { value.pinnedExtensions.contains(item.id) }, set: { dispatch(.site(.pinExtension(item.id, $0))) }))
+                        Button("Open action") { dispatch(.site(.invokeExtension(item.id))) }.disabled(!item.enabled || !item.supportsNativeAction || value.target == nil)
+                        Button("Remove") { dispatch(.site(.removeExtension(item.id))) }.disabled(privateSession)
+                    }
+                    Toggle("Allow in private windows", isOn: Binding(get: { item.incognitoAllowed == true }, set: { dispatch(.site(.extensionIncognito(item.id, $0))) }))
+                        .disabled(privateSession || item.canChangeIncognito != true)
+                        .accessibilityIdentifier(ViewID.settingsField("extension-incognito-" + item.id).identifier)
+                    ForEach(item.commands ?? []) { command in
+                        ExtensionShortcutEditor(extensionID: item.id, command: command, dispatch: dispatch)
+                    }
+                    }
+                }
+                Text("Use the manager to change permissions or enable and disable extensions. Opening action popups is currently unavailable.").font(.caption).foregroundStyle(.secondary)
+                Button("Manage extensions…") { dispatch(.site(.extensions)) }
+                Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }
+        }
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
                 Text(value.profileName).foregroundStyle(.secondary)
+                if value.target != nil {
+                    HStack {
+                        Button("Copy URL") { dispatch(.page(.copyURL(.plain))) }.accessibilityIdentifier(ViewID.settingsField("siteCopyURL").identifier)
+                        Button("Export link…") { dispatch(.app(.export(.focusedTab))) }.accessibilityIdentifier(ViewID.settingsField("siteExportLink").identifier)
+                    }
+                }
+                extensionControls
                 Picker("Website appearance for this profile", selection: Binding(get: { value.appearance }, set: { dispatch(.site(.appearance($0))) })) {
                     ForEach(WebsiteAppearance.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                 }
@@ -50,7 +82,7 @@ private struct SiteControlsView: View {
                     Toggle("Hide matching cookie banners", isOn: Binding(get: { value.rule.hideCookieBanners }, set: { on in change { $0.hideCookieBanners = on } }))
                     Text("Rules v\(value.rulesVersion). Hiding a banner does not give consent.").font(.caption).foregroundStyle(.secondary)
                     HStack {
-                        Button("Load rules JSON…") { dispatch(.site(.loadBlockingRules)) }
+                        Button("Import blocking rules…") { dispatch(.site(.loadBlockingRules)) }
                         Button("Restore built-in rules") { dispatch(.site(.resetBlockingRules)) }
                     }
                     if let error = value.rulesError { Text(error).font(.caption) }
@@ -60,12 +92,17 @@ private struct SiteControlsView: View {
                             ForEach(SitePermission.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                         }
                     }
+                    if let authorization = value.applied?.osAuthorization {
+                        ForEach([SiteCapability.camera, .microphone, .location, .notifications], id: \.self) { capability in
+                            Text("macOS " + capability.rawValue + ": " + (authorization[capability] ?? "unknown")).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     Text("macOS may also require authorization. Screen capture needs a separate source picker.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Toggle("Suspend this site while its tab is hidden", isOn: Binding(get: { value.rule.suspendWhenHidden }, set: { on in change { $0.suspendWhenHidden = on } }))
                     Toggle("Keep this site alive", isOn: Binding(get: { value.rule.keepAlive }, set: { on in change { $0.keepAlive = on } }))
                     Toggle("Exclude this site from suspension", isOn: Binding(get: { value.rule.excludeSuspension }, set: { on in change { $0.excludeSuspension = on } }))
-                    Text("Playing audio/video and active downloads keep pages active. Automatic picture in picture is not available yet.").font(.caption).foregroundStyle(.secondary)
+                    Text("Playing audio/video, audible WebAudio, picture in picture and active operations keep pages active. Automatic picture in picture is not available yet.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Button("Clear cookies and refresh…") { dispatch(.site(.clear(kinds: [.cookies], scope: .site, reload: true))) }
                     Button("Clear profile HTTP cache and refresh…") { dispatch(.site(.clear(kinds: [.cache], scope: .profile, reload: true))) }
@@ -90,28 +127,33 @@ private struct SiteControlsView: View {
                         Text(result.error ?? "Cleared: " + result.completed.map(\.rawValue).sorted().joined(separator: ", ")).foregroundStyle(result.error == nil ? .secondary : .primary)
                     }
                     Divider()
-                    HStack {
-                        Button("Copy URL") { dispatch(.page(.copyURL(.plain))) }
-                        Button("Export link…") { dispatch(.app(.export(.focusedTab))) }
-                    }
+
                 }
-                Divider()
-                Button("Refresh installed extensions") { dispatch(.site(.nativeExtensions)) }
-                if let error = value.extensionError { Text(error).font(.caption) }
-                ForEach(value.extensions.sorted { (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name) }) { item in
-                    HStack {
-                        Toggle("Pin \(item.name)", isOn: Binding(get: { value.pinnedExtensions.contains(item.id) }, set: { dispatch(.site(.pinExtension(item.id, $0))) }))
-                        Button("Open action") { dispatch(.site(.invokeExtension(item.id))) }.disabled(!item.enabled || !item.supportsNativeAction || value.target == nil)
-                        Button("Remove") { dispatch(.site(.removeExtension(item.id))) }
-                    }
-                }
-                Text("Use the manager to change permissions or enable and disable extensions. Opening action popups is currently unavailable.").font(.caption).foregroundStyle(.secondary)
-                Button("Manage extensions…") { dispatch(.site(.extensions)) }
-                Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }
                 Text("Boosts and page capture are not available yet.").font(.caption).foregroundStyle(.secondary)
             }.padding(s.sectionSpacing.value)
         }
         .onChange(of: dataScope) { _, scope in if scope == .profile { selectedData.remove(.storage) } }
         .onChange(of: value.context) { _, _ in selectedData = [.cookies]; dataScope = .site; refreshAfterClear = true }
+    }
+}
+
+private struct ExtensionShortcutEditor: View {
+    let extensionID: String
+    let command: BrowserExtensionCommand
+    let dispatch: Dispatch
+    @State private var draft = ""
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(command.description + (command.active ? "" : " (unassigned)"))
+            HStack {
+                TextField("cmd+shift+u; empty clears", text: $draft)
+                    .accessibilityIdentifier(ViewID.settingsField("extension-shortcut-" + extensionID + "-" + command.name).identifier)
+                Button("Save shortcut") { dispatch(.site(.extensionShortcut(extensionID, command.name, draft))) }
+                    .accessibilityIdentifier(ViewID.settingsField("extension-shortcut-save-" + extensionID + "-" + command.name).identifier)
+            }
+            Text("Current: " + (command.keybinding.isEmpty ? "None" : command.keybinding)).font(.caption)
+        }
+        .onAppear { draft = command.keybinding }
+        .onChange(of: command.keybinding) { _, value in draft = value }
     }
 }

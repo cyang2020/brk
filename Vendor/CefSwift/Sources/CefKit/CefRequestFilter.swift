@@ -6,7 +6,8 @@ public struct CefRequestRules: Sendable {
     public let enabled: Bool
     public let hosts: [String]
     public let paths: [String]
-    public init(enabled: Bool, hosts: [String], paths: [String]) { self.enabled = enabled; self.hosts = hosts; self.paths = paths }
+    public let urlPrefixes: [String]
+    public init(enabled: Bool, hosts: [String], paths: [String], urlPrefixes: [String] = []) { self.enabled = enabled; self.hosts = hosts; self.paths = paths; self.urlPrefixes = urlPrefixes }
 }
 
 public final class CefRequestFilter: @unchecked Sendable {
@@ -14,17 +15,21 @@ public final class CefRequestFilter: @unchecked Sendable {
     private var enabled = false
     private var hosts: [String] = []
     private var paths: [String] = []
+    private var urlPrefixes: [String] = []
     public init() {}
-    public func configure(enabled: Bool, hosts: [String], paths: [String]) {
+    public func configure(enabled: Bool, hosts: [String], paths: [String], urlPrefixes: [String] = []) {
         lock.lock(); defer { lock.unlock() }
-        self.enabled = enabled; self.hosts = hosts; self.paths = paths
+        self.enabled = enabled; self.hosts = hosts; self.paths = paths; self.urlPrefixes = urlPrefixes
     }
     public func blocks(_ url: URL) -> Bool {
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return false }
         lock.lock(); defer { lock.unlock() }
         guard enabled else { return false }
         let host = (url.host?.lowercased() ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
-        return hosts.contains { host == $0 || host.hasSuffix("." + $0) } || paths.contains { url.path.hasPrefix($0) }
+        return hosts.contains { host == $0 || host.hasSuffix("." + $0) } || paths.contains { url.path.hasPrefix($0) } || urlPrefixes.contains { prefix in
+            guard let rule = URL(string: prefix), url.scheme == rule.scheme, url.host == rule.host, url.port == rule.port else { return false }
+            return url.path.hasPrefix(rule.path)
+        }
     }
     func makeHandler() -> UnsafeMutablePointer<cef_resource_request_handler_t> {
         let handler = cefAllocate(cef_resource_request_handler_t.self, owner: self)

@@ -15,6 +15,8 @@ public enum SiteCommand: Hashable, Sendable, Codable {
     case resetBlockingRules
     case nativeExtensions
     case pinExtension(String, Bool)
+    case extensionIncognito(String, Bool)
+    case extensionShortcut(String, String, String)
     case invokeExtension(String)
     case removeExtension(String)
     case extensions

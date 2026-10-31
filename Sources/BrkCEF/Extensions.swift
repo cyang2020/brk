@@ -43,10 +43,41 @@ extension CEFEngine {
             }
             let values = rows.compactMap { row -> BrowserExtension? in
                 guard let id = row["id"] as? String, id != AudioExtension.id, let name = row["name"] as? String, let version = row["version"] as? String else { return nil }
-                return BrowserExtension(id: id, name: name, version: version, enabled: row["state"] as? String == "ENABLED")
+                let access = row["incognitoAccess"] as? [String: Any]
+                let commands = (row["commands"] as? [[String: Any]] ?? []).compactMap { command -> BrowserExtensionCommand? in
+                    guard let name = command["name"] as? String, let key = command["keybinding"] as? String else { return nil }
+                    return BrowserExtensionCommand(name: name, description: command["description"] as? String ?? name, keybinding: key, active: command["isActive"] as? Bool ?? false)
+                }
+                return BrowserExtension(id: id, name: name, version: version, enabled: row["state"] as? String == "ENABLED",
+                    incognitoAllowed: access?["isActive"] as? Bool, canChangeIncognito: access?["isEnabled"] as? Bool, commands: commands)
             }.sorted { ($0.name, $0.id) < ($1.name, $1.id) }
             return ExtensionCatalog(context: context, extensions: values, error: nil)
         } catch { return ExtensionCatalog(context: context, extensions: [], error: error.localizedDescription) }
+    }
+
+    public func editExtension(_ id: String, edit: ExtensionEdit, context: BrowsingContext) async -> String? {
+        guard case .profile = context, id != AudioExtension.id else { return "Private extension management is disabled" }
+        do {
+            let page = try await extensionManager(context: context)
+            let literal = ChromePage.jsString(id)
+            let expression: String
+            switch edit {
+            case .incognito(let allowed):
+                expression = "chrome.developerPrivate.updateExtensionConfiguration({extensionId:\(literal),incognitoAccess:\(allowed)})"
+            case .shortcut(let command, let chord):
+                var parts: [String] = []
+                if let chord {
+                    if chord.modifiers.contains(.command) { parts.append("Command") }
+                    if chord.modifiers.contains(.control) { parts.append("Ctrl") }
+                    if chord.modifiers.contains(.option) { parts.append("Alt") }
+                    if chord.modifiers.contains(.shift) { parts.append("Shift") }
+                    parts.append(chord.key.name.uppercased())
+                }
+                expression = "chrome.developerPrivate.updateExtensionCommand({extensionId:\(literal),commandName:\(ChromePage.jsString(command)),keybinding:\(ChromePage.jsString(parts.joined(separator: "+"))),scope:'CHROME'})"
+            }
+            _ = try await managerValue(page, expression: expression, userGesture: true)
+            return nil
+        } catch { return error.localizedDescription }
     }
 
     public func installExtension(at directory: URL, context: BrowsingContext, in target: PageID) async -> String? {

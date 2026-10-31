@@ -2,12 +2,17 @@ import BrkBase
 import Foundation
 
 extension AppState {
-    func siteTarget(in window: WindowID) -> SiteTarget? {
+    func siteTarget(in window: WindowID, allowLoading: Bool = false) -> SiteTarget? {
         guard let item = resolveTab(.focused, in: window) else { return nil }
         let page = PageID(window: window, item: item)
-        guard session.loaded.contains(page), let live = session.live[page], live.requestedURL == nil,
-              case .ready(let document) = live.document,
-              let url = address(of: item, in: window, for: .savedDocument), let origin = SiteOrigin(url) else { return nil }
+        guard session.loaded.contains(page), let live = session.live[page], live.requestedURL == nil else { return nil }
+        let document: DocumentToken
+        switch live.document {
+        case .ready(let value): document = value
+        case .loading(let value) where allowLoading: document = value
+        default: return nil
+        }
+        guard let url = address(of: item, in: window, for: .savedDocument), let origin = SiteOrigin(url) else { return nil }
         return SiteTarget(document: document, context: browsingContext(of: item), origin: origin)
     }
 
@@ -60,7 +65,7 @@ extension AppState {
     func siteSnapshots() -> [WindowID: SiteControlSnapshot] {
         Dictionary(uniqueKeysWithValues: session.sites.controls.compactMap { window in
             guard doc.windows[window] != nil else { return nil }
-            let target = siteTarget(in: window)
+            let target = siteTarget(in: window, allowLoading: true)
             let context = target?.context ?? libraryContext(in: window)
             let preferences = sitePreferences(context)
             let name: String
@@ -151,6 +156,24 @@ extension Work {
                 if !present { _ = openTab(URL(string: "chrome://extensions/")!, inSpace: state.doc.windows[window]!.space, window: window, focus: false) }
             }
             effects.append(.queryExtensions(context))
+        case .extensionIncognito(let id, let allowed):
+            let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
+            guard case .profile = context, let item = state.session.sites.catalogs[context]?.extensions.first(where: { $0.id == id }), item.canChangeIncognito == true else { return }
+            state.session.sites.extensionErrors[context] = nil
+            effects.append(.editExtension(id, .incognito(allowed), context))
+        case .extensionShortcut(let id, let command, let text):
+            let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
+            guard case .profile = context, let catalog = state.session.sites.catalogs[context]?.extensions,
+                  catalog.contains(where: { $0.id == id && $0.commands?.contains(where: { $0.name == command }) == true }) else { return }
+            let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let chord = ExtensionShortcuts.chord(input)
+            let error: String?
+            if input.isEmpty { error = nil }
+            else if let chord { error = ExtensionShortcuts.error(for: chord, extensionID: id, command: command, catalog: catalog, overrides: state.doc.keyOverrides) }
+            else { error = "Use a shortcut such as cmd+shift+u, or leave empty to clear." }
+            state.session.sites.extensionErrors[context] = error
+            guard error == nil else { return }
+            effects.append(.editExtension(id, .shortcut(command: command, chord: chord), context))
         case .pinExtension(let id, let pinned):
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context, state.session.sites.catalogs[context]?.extensions.contains(where: { $0.id == id }) == true else { return }

@@ -120,8 +120,10 @@ public struct WebsitePolicyStatus: Hashable, Sendable, Codable {
     public let appearance: WebsiteAppearance
     public let themeApplied: Bool
     public let frozen: Bool
+    public let osAuthorization: [SiteCapability: String]?
     public let error: String?
-    public init(document: DocumentToken, appearance: WebsiteAppearance, themeApplied: Bool, frozen: Bool, error: String?) {
+    public init(document: DocumentToken, appearance: WebsiteAppearance, themeApplied: Bool, frozen: Bool, error: String?, osAuthorization: [SiteCapability: String]? = nil) {
+        self.osAuthorization = osAuthorization
         self.document = document; self.appearance = appearance; self.themeApplied = themeApplied; self.frozen = frozen; self.error = error
     }
 }

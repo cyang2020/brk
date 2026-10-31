@@ -85,6 +85,7 @@
 #include "include/capi/views/cef_view_capi.h"
 #include "include/capi/views/cef_view_delegate_capi.h"
 #include "include/capi/views/cef_panel_capi.h"
+#include "include/capi/views/cef_box_layout_capi.h"
 #include "include/capi/views/cef_panel_delegate_capi.h"
 #include "include/capi/views/cef_browser_view_capi.h"
 #include "include/capi/views/cef_browser_view_delegate_capi.h"

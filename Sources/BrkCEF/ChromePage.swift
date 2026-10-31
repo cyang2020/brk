@@ -41,6 +41,7 @@ final class ChromePage: CefBrowserDelegate {
     var policyRevision: UInt64 = 0
     var websiteError: String?
     var frozen = false
+    var pictureInPictureDocument: DocumentToken?
 
     private func emit(_ events: [PageEvent]) {
         for event in events {
@@ -76,7 +77,7 @@ final class ChromePage: CefBrowserDelegate {
         options.isFrameless = true
         let initialRule = SiteOrigin(url).map { spec.websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
         let list = spec.websitePolicy.preferences.blockingRules ?? .builtIn
-        options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes)
+        options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes, urlPrefixes: list.blockedURLPrefixes ?? [])
         options.showsChromeToolbar = false
         options.backgroundColor = .white
         options.initialBounds = Self.offscreenBounds
@@ -118,7 +119,7 @@ final class ChromePage: CefBrowserDelegate {
         guard engine.isLive(self), reading.target == ticket.target, audio.accept(reading.audible, tab: reading.tab, for: ticket) else { return }
         audioObserverID = observer
         audioError = nil
-        if changed { emit([.audioChanged(reading.audible)]) }
+        if changed { emit([.audioChanged(reading.audible)]); refreshWebsitePolicy() }
     }
 
     func audioUnavailable(_ error: String) {
@@ -187,6 +188,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     private func prepareDocumentNavigation() {
+        pictureInPictureDocument = nil
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()

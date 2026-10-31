@@ -13,7 +13,7 @@ final class ImportRulesTests: XCTestCase {
         "BrkDomain": ["BrkBase", "Foundation", "CoreGraphics"],
         "BrkLayout": ["BrkBase", "BrkDomain", "Foundation", "CoreGraphics"],
         "BrkEngine": ["BrkBase", "AppKit", "Foundation", "os"],
-        "BrkCEF": ["PDFKit", "BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
+        "BrkCEF": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
         "BrkTheme": ["BrkBase", "BrkDomain", "AppKit", "Metal", "QuartzCore", "Foundation", "CoreGraphics"],
         "BrkUIKit": ["BrkBase", "BrkDomain", "BrkLayout", "AppKit", "Foundation", "CoreGraphics"],
         "BrkSidebar": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "Foundation", "CoreGraphics"],

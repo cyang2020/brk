@@ -36,6 +36,7 @@ APP="dist/$PRODUCT.app"
 # 5. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
 #    because the plugin signed before the edit.
 mkdir -p "$APP/Contents/Resources/BrkAudibility"
+cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website-rules.json"
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"

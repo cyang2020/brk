@@ -57,6 +57,7 @@ enum CommandInventory {
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
         .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
         .site(.loadBlockingRules), .site(.selectedBlockingRules(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))), .site(.resetBlockingRules),
+        .site(.extensionIncognito("ghost", false)), .site(.extensionShortcut("ghost", "run", "cmd+shift+u")),
         .site(.nativeExtensions), .site(.pinExtension("ghost", true)), .site(.invokeExtension("ghost")), .site(.removeExtension("ghost")),
         .site(.controls), .site(.closeControls), .site(.rule(siteTarget, SiteRule())),
         .site(.permission(siteTarget, SiteOrigin(example)!, [.notifications], .deny)), .site(.appearance(.dark)),
@@ -303,6 +304,8 @@ enum CommandInventory {
             case .selectedBlockingRules: "selectedBlockingRules"
             case .resetBlockingRules: "resetBlockingRules"
             case .nativeExtensions: "nativeExtensions"
+            case .extensionIncognito: "extensionIncognito"
+            case .extensionShortcut: "extensionShortcut"
             case .pinExtension: "pinExtension"
             case .invokeExtension: "invokeExtension"
             case .removeExtension: "removeExtension"

@@ -125,7 +125,7 @@ public final class CefChromeBrowser {
         )
 
         let client = BrowserClient()
-        if let rules = options.requestRules { client.requestFilter.configure(enabled: rules.enabled, hosts: rules.hosts, paths: rules.paths) }
+        if let rules = options.requestRules { client.requestFilter.configure(enabled: rules.enabled, hosts: rules.hosts, paths: rules.paths, urlPrefixes: rules.urlPrefixes) }
         let clientPointer = client.makeClient()
 
         // Same wrapper as embedded browsers: all existing functionality
