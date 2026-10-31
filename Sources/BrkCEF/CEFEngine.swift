@@ -34,6 +34,8 @@ public final class CEFEngine: WebEngine {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
     private let transfers = Transfers()
+    private let outputs = DocumentOutputs()
+    private var outputAdapters: [OutputID: AnyObject] = [:]
     private var contexts = ContextLifetimes()
     private var disposals: [DisposalID: ContextDisposal] = [:]
     private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
@@ -82,6 +84,9 @@ public final class CEFEngine: WebEngine {
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         config.defaultRuntimeStyle = .chrome
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            config.extraCommandLineSwitches["use-mock-keychain"] = .some(nil)
+        }
         try CefRuntime.shared.initialize(configuration: config)
         // CefSwift's terminate handler closes browsers while their views are still moved into our window, which
         // segfaulted on quit in every spike run. Remove it: -terminate: then reaches the app delegate's
@@ -93,6 +98,48 @@ public final class CEFEngine: WebEngine {
     }
 
     private init() {
+        outputs.acquire = { [weak self] id, browser in self?.resources.acquire(.documentOutput(id.rawValue), browser: browser) ?? false }
+        outputs.release = { [weak self] id, browser in
+            guard let self else { return }
+            self.resources.release(.documentOutput(id.rawValue), browser: browser)
+            self.closeIfUnowned(browser)
+        }
+        outputs.available = { [weak self] request, epoch in
+            guard let self, self.phase == .running, self.contexts.permitsWork(epoch.context),
+                  let entry = self.resources.entries[request.document.browser], entry.context == epoch,
+                  entry.presented, entry.resource.readyDocument == request.document,
+                  self.delegate?.engine(self, ownerWindow: request.document.browser.page.window)?.isVisible == true else { return false }
+            return true
+        }
+        outputs.publish = { [weak self] update in guard let self else { return }; self.delegate?.engine(self, output: update) }
+        outputs.destination = { [weak self] prompt, reply in
+            guard let self, let delegate = self.delegate else { reply(.ownerGone); return }
+            delegate.engine(self, outputDestination: prompt, reply: reply)
+        }
+        outputs.print = { [weak self] request, url, reply in
+            guard let self, let delegate = self.delegate else { reply(.ownerGone); return }
+            delegate.engine(self, printOutput: request, pdf: url, reply: reply)
+        }
+        outputs.dismiss = { [weak self] id in guard let self else { return }; self.delegate?.engine(self, dismissOutput: id) }
+        outputs.render = { [weak self] request, path, done in
+            guard let self, let page = self.resources.entries[request.document.browser]?.resource,
+                  page.readyDocument == request.document else { done(.failure(CocoaError(.userCancelled))); return }
+            let adapter: AnyObject
+            if request.intent == .mhtml {
+                adapter = page.browser.captureMHTML { [weak self] result in
+                    self?.outputAdapters[request.id] = nil
+                    do { try result.get().write(to: path, options: .withoutOverwriting); done(.success(())) }
+                    catch { done(.failure(error)) }
+                }
+            } else {
+                adapter = page.browser.printPDF(to: path) { [weak self] ok in
+                    self?.outputAdapters[request.id] = nil
+                    done(ok ? .success(()) : .failure(CocoaError(.fileWriteUnknown)))
+                }
+            }
+            if self.outputs.contains(request.id) { self.outputAdapters[request.id] = adapter }
+        }
+
         transfers.publish = { [weak self] update in
             guard let self else { return }
             self.delegate?.engine(self, download: update)
@@ -147,19 +194,28 @@ public final class CEFEngine: WebEngine {
         guard phase == .running, let live = live[page] else { return }
         let browser = live.browser
         switch action {
+        case .navigate, .goBack, .goForward, .reload, .recover: outputs.sourceGone(live.incarnation)
+        default: break
+        }
+        switch action {
         case .navigate(let url): live.prepareNavigation(); browser.load(url)
         case .goBack: live.prepareNavigation(); browser.goBack()
         case .goForward: live.prepareNavigation(); browser.goForward()
         case .reload(let ignoringCache): live.prepareNavigation(); browser.reload(ignoreCache: ignoringCache)
         case .stop: live.prepareStop(); browser.stopLoading()
         case .zoom(let step):
-            // TODO(W2): Chrome's zoom presets instead of fixed 0.5 steps.
-            switch step {
-            case .zoomIn: browser.zoomLevel += 0.5
-            case .zoomOut: browser.zoomLevel -= 0.5
-            case .reset: browser.zoomLevel = 0
-            }
+            browser.zoomLevel = BrowserZoom.next(step, level: browser.zoomLevel)
+            live.reportZoom()
+            DispatchQueue.main.async { [weak live] in live?.reportZoom() }
         case .toggleDevTools: browser.toggleDevTools()
+        case .developer(let operation):
+            switch operation {
+            case .source: browser.viewSource()
+            case .inspect: browser.inspectElement(at: CGPoint(x: live.surface.bounds.midX, y: live.surface.bounds.midY))
+            case .console: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_CONSOLE")
+            case .network: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_NETWORK")
+            }
+        case .exitFullscreen: browser.exitFullscreen()
         case .recover: live.prepareNavigation(); browser.reload()
         }
     }
@@ -198,6 +254,15 @@ public final class CEFEngine: WebEngine {
 
     public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
 
+    public func output(_ request: OutputRequest) {
+        guard let entry = resources.entries[request.document.browser] else {
+            delegate?.engine(self, output: OutputUpdate(id: request.id, document: request.document, stage: .terminal(.failed("Document has closed", .absent))))
+            return
+        }
+        outputs.start(request, context: entry.context)
+    }
+    public func cancelOutput(_ id: OutputID) { outputs.cancel(id) }
+
     public func cancelDownload(_ id: DownloadID) { transfers.cancel(id) }
 
     public func disposeContext(_ request: ContextDisposal) {
@@ -210,11 +275,13 @@ public final class CEFEngine: WebEngine {
         contexts.revoke(request.context)
         wanted.removeAll { $0.context == request.context }
         disposals[request.id] = request
+        outputs.revoke(request.context)
         transfers.revoke(request.context)
         for page in live.values where page.context == request.context { retire(page) }
         Task { @MainActor in
             let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
                 !self.resources.entries.values.contains { $0.context.context == request.context }
+                    && !self.outputs.contains(context: request.context)
                     && !self.transfers.contains(context: request.context)
                     && self.contexts.isDrained(request.context)
             }
@@ -314,12 +381,14 @@ public final class CEFEngine: WebEngine {
         focusRequests.removeAll()
         wanted = []
         contexts.stop()
+        outputs.stop()
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            self.outputs.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
         }
         guard drained else {
+            outputs.reportTimeout()
             transfers.reportTimeout()
             log.fault("shutdown did not drain: \(self.resources.entries.count, privacy: .public) browser/host records; transfers empty=\(self.transfers.isEmpty, privacy: .public); readiness drained=\(self.contexts.readinessDrained, privacy: .public)")
             phase = .done
@@ -349,12 +418,19 @@ public final class CEFEngine: WebEngine {
 
     // MARK: Called by ChromePage
 
+    func expectsShortcut(_ key: KeyPress, page: ChromePage) -> Bool {
+        isLive(page) && (delegate?.engine(self, expectsShortcut: key, page: page.id) ?? false)
+    }
     func isLive(_ page: ChromePage) -> Bool {
         phase == .running && ledger.isLive(page.incarnation) && live[page.id] === page
     }
 
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
         guard isLive(page) else { return }
+        switch event {
+        case .navigationRequested, .rendererGone: outputs.sourceGone(page.incarnation)
+        default: break
+        }
         if case .gainedFocus = event {
             guard page.surface.window?.isVisible == true, !page.surface.isHiddenOrHasHiddenAncestor else { return }
         }
@@ -406,6 +482,7 @@ public final class CEFEngine: WebEngine {
         case .stale: break
         }
         // A transfer result can synchronously publish/reconcile. Remove page demand before publishing it.
+        outputs.sourceGone(page.incarnation)
         transfers.browserClosed(page.incarnation)
     }
 
@@ -415,6 +492,7 @@ public final class CEFEngine: WebEngine {
         guard ledger.retire(page.id) == page.incarnation else { return }
         resources.unpresent(page.incarnation)
         page.park()
+        outputs.sourceGone(page.incarnation)
         transfers.sourceGone(page.incarnation)
         closeIfUnowned(page.incarnation)
     }

@@ -279,7 +279,8 @@ final class URLPillView: HoverView {
         let wasLoading = self.pill?.loading == true
         self.pill = pill
         self.palette = palette
-        label.stringValue = pill.text ?? Copy.urlPlaceholder
+        label.stringValue = (pill.text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
+        toolTip = "Zoom: \(pill.zoomPercent)%"
         label.textColor = pill.text == nil ? palette.ink.placeholder : palette.ink.secondary
         copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
                         hoverFill: palette.tokens.itemHover)

@@ -1,6 +1,13 @@
 import CCef
 import Foundation
 
+/// CEF requires an explicit out-parameter when a key should reach the renderer and then the app handler.
+public enum CefPreKeyDecision: Sendable, Equatable {
+    case handled, passThrough, shortcutAfterPage
+    public var consumes: Bool { self == .handled }
+    public var isKeyboardShortcut: Bool { self == .shortcutAfterPage }
+}
+
 /// A keyboard event delivered to
 /// ``CefBrowserDelegate/browser(_:handleKeyEvent:isBeforePage:)``, letting the
 /// app implement shortcuts before (or after) the page handles the key.

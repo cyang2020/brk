@@ -29,11 +29,11 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if let window = projectWindow(id, state, ctx) { windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
-                           (page, PageObservation(browser: state.session.live[page]?.browser,
+                           (page, PageObservation(lastOpenRequest: state.session.live[page]?.lastOpenRequest, browser: state.session.live[page]?.browser,
                                                   document: state.session.live[page]?.document ?? .unavailable,
                                                   requestedURL: state.session.live[page]?.requestedURL,
                                                   committedURL: state.doc.windows[page.window]?.slots[page.item]?.committedURL))
@@ -187,7 +187,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         focusedTab = t
         pill.text = t.url.map(displayURL)
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
-            pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward
+            pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
         }
     }
     if doc.kind == .incognito {
@@ -215,14 +215,25 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         let engine = state.searchEngine(in: id)
         let profile = space.profile
         // Type travel lists what the menu would enable now; of the two Pinned rows only the one that applies.
-        var enabled = enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
+        var enabled = enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: state.resolveTab(.focused, in: id).flatMap { p in state.displayedTab(p, in: id).map { (p, $0) } })
         enabled.remove(space.pinnedCollapsed ? .collapsePinnedSection : .expandPinnedSection)
         let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) }
         let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
         overlay = .commandBar(CommandBarSnapshot(
             openID: openID, placement: placement, initialQuery: initialQuery,
             tabs: switchCandidates(state, window: id, tree: tree, space: space, focused: focusedPane),
-            history: state.doc.history.filter { $0.profile == profile }.map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            history: historyIndex(state.doc.history.filter { doc.kind != .incognito && $0.profile == profile }).map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            bookmarks: doc.kind == .incognito ? [] : state.doc.tree.allTabs().compactMap { tab in
+                guard state.browsingContext(of: tab) == .profile(profile),
+                      state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites,
+                      let value = state.displayedTab(tab, in: id, for: .savedDocument), let url = value.url else { return nil }
+                return HistoryCandidate(url: url, title: value.displayTitle, visitedAt: value.lastActiveAt)
+            },
+            folders: doc.kind != .standard ? [] : state.doc.tree.items.values.compactMap { item in
+                guard case .folder(let folder) = item.body, let role = state.doc.tree.role(of: item.id),
+                      role.space.flatMap({ state.doc.spaces[$0]?.profile }) == profile else { return nil }
+                return FolderDestinationCandidate(id: item.id, title: folder.title)
+            }.sorted { $0.title < $1.title },
             actions: listed,
             keys: Dictionary(uniqueKeysWithValues: listed.compactMap { action in
                 if case .valid(let chord)? = bindings[action]?.state { (action, chord) } else { nil }
@@ -230,10 +241,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             spaces: state.doc.spaceOrder.compactMap { sid in
                 state.doc.spaces[sid].map { SpaceCandidate(id: sid, title: state.displayTitle(of: sid), icon: $0.icon, isCurrent: sid == space.id) }
             },
-            engine: SearchEngineCandidate(id: engine.id, name: engine.name, keyword: engine.keyword),
-            siteSearch: SearchEngine.builtIn.filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
+            engine: SearchEngineCandidate(template: engine.template, id: engine.id, name: engine.name, keyword: engine.keyword),
+            siteSearch: (SearchEngine.builtIn + (state.profileSettings(in: id).siteSearchEngines ?? [])).filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
             suggestions: session.suggestions?.results ?? [],
-            suggestedFor: session.suggestions?.query
+            suggestedFor: session.suggestions?.query,
+            suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
@@ -246,7 +258,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                             end: $0.end, state: $0.state, startedAt: $0.startedAt)
             } : [],
             history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
-                HistoryRow(url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
+                HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
             } : []
         ))
     case .peek(let openID, let tab)?:
@@ -254,7 +266,12 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         if case .tab(let t)? = state.session.scratch[id]?[tab]?.body {
             let page: PageID? = state.address(of: tab, in: id, for: .visible) != nil && state.session.loaded.contains(PageID(window: id, item: tab)) ? PageID(window: id, item: tab) : nil
             peekPage = page
-            overlay = .peek(PeekSnapshot(openID: openID, tab: tabRow(tab, t, .scratch), page: page))
+            if let page, let live = state.session.live[page] {
+                pill.zoomPercent = live.zoomPercent
+                pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.loading = live.loading
+                pill.text = state.address(of: tab, in: id, for: .visible).map(displayURL)
+            }
+            overlay = .peek(PeekSnapshot(spaces: dock, folders: openInFolders(state), openID: openID, tab: tabRow(tab, t, .scratch), page: page))
         }
     case nil:
         break
@@ -293,7 +310,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
         renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, overlay: overlay, focus: focus,
-        enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
+        enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: state.resolveTab(.focused, in: id).flatMap { p in state.displayedTab(p, in: id).map { (p, $0) } })
     )
 }
 
@@ -313,12 +330,13 @@ private func profileRows(_ state: AppState) -> [ProfileRow] {
 /// in…" when the window holds no Little Arc tab or Peek; in an ephemeral window, what needs a space's sidebar.
 private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
     var enabled = Set(ActionID.allCases.filter { $0.spec.later == nil })
+    if state.doc.windows[window]?.kind != .standard { enabled.remove(.peekEmail) }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
         enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection])
     }
-    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
+    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }
@@ -347,6 +365,7 @@ private func switchCandidates(_ state: AppState, window: WindowID, tree: Sidebar
     for s in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
         for root in [s.pinnedRoot, s.todayRoot] {
             for tab in tree.tabs(under: root) {
+                if root == s.pinnedRoot, !state.session.loaded.contains(where: { $0.item == tab }) { continue }
                 guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
                 out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: state.displayTitle(of: s.id),
                                             inCurrentSpace: s.id == space.id, isFocused: tab == focused), t.lastActiveAt))
@@ -355,9 +374,17 @@ private func switchCandidates(_ state: AppState, window: WindowID, tree: Sidebar
     }
     if let favorites = state.favoritesRoot(for: space) {
         for tab in tree.tabs(under: favorites) {
+            guard state.session.loaded.contains(where: { $0.item == tab }) else { continue }
             guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: nil,
                                         inCurrentSpace: true, isFocused: tab == focused), t.lastActiveAt))
+        }
+    }
+    if case .window = tree.scope {
+        for tab in tree.allTabs() {
+            guard let value = state.displayedTab(tab, in: window), let url = value.url else { continue }
+            out.append((SwitchCandidate(tab: tab, title: value.displayTitle, url: url, favicon: value.favicon, spaceTitle: nil,
+                                        inCurrentSpace: true, isFocused: tab == focused), value.lastActiveAt))
         }
     }
     return out.enumerated().sorted { a, b in

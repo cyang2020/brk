@@ -120,13 +120,14 @@ struct ProfileSettingsForm: View {
                     .frame(width: S.popUpWidth.value)
             }
             SettingsSection(.text(SettingsCopy.searchEngine)) {
-                SettingsPopUp(field: "searchEngine-\(id)", entries: context.settings.engines.map { .option($0.name, $0.id) },
+                SettingsPopUp(field: "searchEngine-\(id)", entries: (context.settings.engines.map { ($0.name, $0.id) } + (settings.siteSearchEngines ?? []).map { ($0.name, $0.id) }).map { .option($0.0, $0.1) },
                               selected: settings.searchEngine) { send(.searchEngine($0)) }
                     .frame(width: S.popUpWidth.value)
                 SettingsCheckbox(title: SettingsCopy.searchSuggestions, field: "searchSuggestions-\(id)", isOn: settings.searchSuggestions) {
                     send(.searchSuggestions($0))
                 }
             }
+            SiteSearchEditor(profile: id, engines: settings.siteSearchEngines ?? [], dispatch: context.dispatch)
             SettingsSection(.text(SettingsCopy.downloadLocation)) {
                 SettingsPopUp(field: "downloadLocation-\(id)", entries: downloadEntries,
                               selected: settings.promptForDownloadLocation ? DownloadChoice.prompt : .folder) { choice in

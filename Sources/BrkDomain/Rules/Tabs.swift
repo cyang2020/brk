@@ -98,12 +98,18 @@ extension Work {
         case .reload(let ref, let ignoringCache): emit(ref, .reload(ignoringCache: ignoringCache))
         case .stop(let ref): emit(ref, .stop)
         case .zoom(let step): emit(.focused, .zoom(step))
+        case .output(let intent):
+            guard let tab = state.resolveTab(.focused, in: window),
+                  case .ready(let document) = state.session.live[PageID(window: window, item: tab)]?.document else { return }
+            let title = state.displayedTab(tab, in: window)?.displayTitle ?? "Page"
+            effects.append(.output(OutputRequest(id: OutputID(ctx.newID()), document: document, intent: intent, suggestedName: title)))
         case .toggleDevTools: emit(.focused, .toggleDevTools)
+        case .developer(let operation): emit(.focused, .developer(operation))
         case .copyURL(let format):
             guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window), let url = t.url else { return }
             let text: String = switch format {
             case .plain: url.absoluteString
-            case .markdown: "[\(t.displayTitle)](\(url.absoluteString))"
+            case .markdown: "[\(markdownTitle(t.displayTitle))](\(url.absoluteString.replacingOccurrences(of: "(", with: "%28").replacingOccurrences(of: ")", with: "%29")))"
             case .quote: "> \(t.displayTitle)\n\(url.absoluteString)"
             }
             effects.append(.copyToPasteboard(text))
@@ -155,7 +161,11 @@ extension Work {
             if (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites), current.pinnedURL == nil {
                 state.withTree(scope) { $0.updateTab(tab) { $0.pinnedURL = url } }
             }
-            if case .profile(let profile) = state.browsingContext(of: tab) { recordVisit(url, title: live.observedTitle ?? current.title, profile: profile) }
+            if case .profile(let profile) = state.browsingContext(of: tab), (live.document.token == nil ? live.lastHistoryAddress != url : live.recordedVisit != live.document.token) {
+                live.recordedVisitID = recordVisit(url, title: live.observedTitle ?? current.title, profile: profile)
+                live.recordedVisit = live.document.token
+                live.lastHistoryAddress = url
+            }
             live.failure = nil
             live.crashed = false
         case .titleChanged(let title):
@@ -163,10 +173,14 @@ extension Work {
             if live.requestedURL == nil {
                 state.doc.windows[window]!.slots[tab]?.observedTitle = title
                 if case .profile(let profile) = state.browsingContext(of: tab),
-                   let index = state.doc.history.firstIndex(where: { $0.url == state.doc.windows[window]?.slots[tab]?.committedURL && $0.profile == profile }) {
+                   let index = state.doc.history.firstIndex(where: { $0.id == live.recordedVisitID && $0.profile == profile }) {
                     state.doc.history[index].title = title
                 }
             }
+        case .zoomChanged(let percent): live.zoomPercent = min(500, max(25, percent))
+        case .fullscreenChanged(let full):
+            if live.fullscreen != full { effects.append(.window(window, .pageFullScreen(full))) }
+            live.fullscreen = full
         case .faviconChanged(let url): state.doc.windows[window]!.slots[tab]?.favicon = url
         case .loadingChanged(let loading, let back, let forward):
             live.loading = loading
@@ -183,10 +197,14 @@ extension Work {
         case .gainedFocus:
             if let split = state.tree(scope)?.splitContaining(tab) { state.doc.windows[window]!.splitFocus[split] = tab }
         case .closedByPage:
+            if live.fullscreen { effects.append(.window(window, .pageFullScreen(false))) }
             closePage(page)
             return
-        case .openRequested(let url, let disposition):
-            openRequested(url, disposition, from: page, state.displayedTab(tab, in: window, for: .savedDocument) ?? current)
+        case .openRequested(let url, let disposition, let metadata):
+            let source = state.displayedTab(tab, in: window, for: .savedDocument) ?? current
+            guard isAllowedURL(url), !url.isFileURL || source.url?.isFileURL == true else { return }
+            live.lastOpenRequest = metadata
+            openRequested(url, disposition, from: page, source)
         case .closed:
             live.browser = nil
             live.document = .unavailable
@@ -219,13 +237,20 @@ extension Work {
         case nil:
             break
         }
+        if disposition == .newWindow {
+            let kind: WindowKind = state.doc.windows[window]?.kind == .incognito ? .incognito : .standard
+            let owner = newWindow(kind: kind, space: target, sidebar: (true, state.doc.windows[window]!.sidebarWidth), cascadingFrom: state.doc.windows[window]?.bounds)
+            if kind == .incognito { openScratchTab(url, in: owner, focus: true) }
+            else { openTab(url, inSpace: target, window: owner, focus: true) }
+            return
+        }
         // A link opened from an ephemeral window's tab stays in that window's own container.
         if state.doc.windows[window]?.kind != .standard, state.locate(opener) == .window(window) {
             openScratchTab(url, in: window, focus: disposition != .backgroundTab)
             return
         }
         switch disposition {
-        case .foregroundTab, .popup:
+        case .foregroundTab, .popup, .newWindow:
             commitCycle(in: window)
             openTab(url, inSpace: target, window: window, focus: true)
         case .backgroundTab:
@@ -233,17 +258,13 @@ extension Work {
         }
     }
 
-    /// Newest first, one entry per URL and profile (capped by normalize): a visit in one profile never removes
+    /// Newest first, one entry per committed main document, retained until explicit removal. A visit never removes
     /// another profile's. about:blank and URLs a page may not open are not history. Committing the newest entry's
     /// URL again in the same profile refreshes it in place.
-    private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID) {
-        guard url.absoluteString != "about:blank", isAllowedURL(url) else { return }
-        if let first = state.doc.history.first, first.url == url, first.profile == profile {
-            if first.visitedAt != ctx.now { state.doc.history[0].visitedAt = ctx.now }
-            if first.title != title { state.doc.history[0].title = title }
-            return
-        }
-        state.doc.history.removeAll { $0.url == url && $0.profile == profile }
-        state.doc.history.insert(HistoryEntry(url: url, title: title, visitedAt: ctx.now, profile: profile), at: 0)
+    private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID) -> HistoryVisitID? {
+        guard url.absoluteString != "about:blank", isAllowedURL(url) else { return nil }
+        let id = HistoryVisitID(ctx.newID())
+        state.doc.history.insert(HistoryEntry(id: id, url: url, title: title, visitedAt: ctx.now, profile: profile), at: 0)
+        return id
     }
 }

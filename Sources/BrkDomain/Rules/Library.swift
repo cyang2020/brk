@@ -37,6 +37,9 @@ extension Work {
             // This profile's finished, failed and cancelled entries go; running ones stay (Arc keeps them).
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.downloads.removeAll { $0.profile == profile && $0.state.isActive == false }
+        case .removeHistoryVisit(let id):
+            guard case .profile(let profile) = state.libraryContext(in: window) else { return }
+            state.doc.history.removeAll { $0.profile == profile && $0.id == id }
         case .removeHistory(let url):
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile && $0.url == url }
@@ -49,6 +52,8 @@ extension Work {
 
     mutating func downloadEvent(_ update: DownloadUpdate) {
         let page = update.owner.browser.page
+        if case .terminal = update.stage { state.session.activeDownloadOwners[update.id] = nil }
+        else if !state.session.terminalDownloads.contains(update.id), update.revision > (state.session.downloadRevisions[update.id] ?? 0) { state.session.activeDownloadOwners[update.id] = page }
         if state.session.live[page]?.browser == update.owner.browser,
            state.session.live[page]?.admittedDownloads.insert(update.id).inserted == true {
             switch update.stage {

@@ -146,6 +146,8 @@ public protocol CefBrowserDelegate: AnyObject {
     /// A key event before it reaches the page — your chance to intercept
     /// app-level shortcuts. Return `true` if you handled it (the page won't
     /// see it). Defaults to `false`.
+    func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefPreKeyDecision
+    func browser(_ b: CefBrowser, openURLFromTab request: CefWindowOpenRequest) -> Bool
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool
 
     /// The browser is about to lose focus to the next/previous component.
@@ -221,6 +223,10 @@ extension CefBrowserDelegate {
     public func browser(_ b: CefBrowser, renderProcessDidTerminate reason: CefTerminationReason, errorCode: Int) {}
     public func browser(_ b: CefBrowser, didReceiveAuthChallenge challenge: CefAuthChallenge, callback: CefAuthCallback) -> Bool { false }
 
+    public func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefPreKeyDecision {
+        browser(b, handleKeyEvent: event, isBeforePage: true) ? .handled : .passThrough
+    }
+    public func browser(_ b: CefBrowser, openURLFromTab request: CefWindowOpenRequest) -> Bool { browser(b, didRequestNewTab: request.targetURL) }
     public func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool { false }
     public func browser(_ b: CefBrowser, willTakeFocusNext next: Bool) {}
     public func browserShouldCancelSetFocus(_ b: CefBrowser) -> Bool { false }

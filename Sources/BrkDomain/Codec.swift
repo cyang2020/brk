@@ -113,7 +113,17 @@ public enum StateCodec {
             }
             repairs.append("migrated window page addresses and split focus to v3")
         }
+        if !doc.settings.advanced.restoreWindowsOnLaunch {
+            // Keep saved public sidebar documents, but start one fresh window with no loaded selection.
+            let id = WindowID(ctx.newID())
+            doc.windows = [id: WindowDoc(id: id, kind: .standard, bounds: nil, space: doc.spaceOrder[0], activeBySpace: [:],
+                                        emptySelections: Set(doc.spaceOrder), sidebarVisible: true, sidebarWidth: Metrics.sidebar.defaultWidth.value)]
+        }
         var state = AppState(doc: doc, session: Session.fresh(for: doc, contentSize: seed.contentSize))
+        if !doc.settings.advanced.restoreWindowsOnLaunch, let window = doc.windows.keys.first {
+            state.session.windows[window]?.overlay = .commandBar(openID: 1, target: .newTab)
+            state.session.windows[window]?.overlayOpens = 1
+        }
         let normalized = normalize(&state)
         return (state, repairs + normalized)
     }
@@ -212,6 +222,8 @@ struct StoredDocV3: Codable {
     var favorites: [ProfileID: ItemID]
     var archive: [StoredArchived]
     var history: [StoredHistory]
+    /// Full visit ledger. Absent in existing v3 files; legacy history remains a derived compatibility index.
+    var historyVisits: [StoredHistory]? = nil
     var windows: [WindowID: StoredWindow]
     var settings: StoredSettings
     var profiles: [ProfileID: StoredProfile]
@@ -290,7 +302,7 @@ struct StoredDocV3: Codable {
         var id: ArchiveID, tabID: ItemID, tab: StoredTab, archivedAt: Instant, reason: ArchiveReason
         var fromSpace: SpaceID?, fromSection: SectionKind
     }
-    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID }
+    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID; var id: HistoryVisitID? = nil }
     struct StoredWindow: Codable {
         var bounds: CGRect?
         var space: SpaceID
@@ -300,6 +312,7 @@ struct StoredDocV3: Codable {
         var slots: [ItemID: SavedSlot]?
         var splitFocus: [ItemID: ItemID]?
         var emptySelections: [SpaceID]?
+        var stayOnTop: Bool?
     }
 
     /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
@@ -333,10 +346,11 @@ struct StoredDocV3: Codable {
             StoredArchived(id: $0.id, tabID: $0.tabID, tab: StoredTab($0.tab), archivedAt: $0.archivedAt, reason: $0.reason,
                            fromSpace: $0.fromSpace, fromSection: $0.fromSection)
         }
-        history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) }
+        history = historyIndex(doc.history).map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile, id: $0.id) }
+        historyVisits = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile, id: $0.id) }
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
-                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted())
+                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted(), stayOnTop: $0.stayOnTop)
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
@@ -479,7 +493,7 @@ struct StoredDocV3: Codable {
             docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: shown,
                                        emptySelections: Set(w.emptySelections ?? []),
                                        slots: (w.slots ?? [:]).filter { tree[$0.key]?.kind == .tab && opens($0.value.committedURL, "slot \(id)/\($0.key)") },
-                                       splitFocus: w.splitFocus ?? [:], sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
+                                       splitFocus: w.splitFocus ?? [:], stayOnTop: w.stayOnTop ?? false, sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
         }
         if docWindows.isEmpty {
             let id = WindowID(ctx.newID())
@@ -488,6 +502,15 @@ struct StoredDocV3: Codable {
                                        sidebarWidth: Metrics.sidebar.defaultWidth.value)
         }
 
+        func migrateHistoryVisits() -> [HistoryEntry] {
+            var seen: Set<HistoryVisitID> = []
+            return (historyVisits ?? history).filter { opens($0.url, "a history entry") }.map { value in
+                var id = value.id ?? HistoryVisitID(ctx.newID())
+                if !seen.insert(id).inserted { id = HistoryVisitID(ctx.newID()); seen.insert(id) }
+                return HistoryEntry(id: id, url: value.url, title: value.title,
+                                    visitedAt: usable(value.visitedAt, "history \(value.url): visitedAt"), profile: value.profile)
+            }
+        }
         let doc = Doc(
             tree: tree,
             spaces: docSpaces,
@@ -498,9 +521,7 @@ struct StoredDocV3: Codable {
                             archivedAt: usable($0.archivedAt, "archive \($0.id): archivedAt"), reason: $0.reason,
                             fromSpace: $0.fromSpace, fromSection: $0.fromSection)
             },
-            history: history.filter { opens($0.url, "a history entry") }.map {
-                HistoryEntry(url: $0.url, title: $0.title, visitedAt: usable($0.visitedAt, "history \($0.url): visitedAt"), profile: $0.profile)
-            },
+            history: migrateHistoryVisits(),
             windows: docWindows,
             settings: Settings(general: settings.general, profiles: settings.profiles, links: settings.links, max: settings.max,
                                advanced: settings.advanced),

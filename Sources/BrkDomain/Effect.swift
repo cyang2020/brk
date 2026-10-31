@@ -9,13 +9,14 @@ import Foundation
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
     case page(PageID, PageAction)
+    case output(OutputRequest)
     case copyToPasteboard(String)
     case window(WindowID, WindowEffect)
     case app(AppEffect)
     /// A native popup menu built from state; each entry carries the command it dispatches when chosen.
     case popupMenu(WindowID, MenuModel, at: CGPoint)
     /// Share-by-link replaced by a file: BrkApp shows a save panel (JSON or HTML) and writes `ExportCodec`'s bytes.
-    case export(ExportDocument)
+    case export(WindowID, ExportDocument)
     /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
     /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
@@ -47,8 +48,20 @@ public enum ExportEntry: Hashable, Sendable, Codable {
 
 public enum ExportFormat: String, Hashable, Sendable, Codable, CaseIterable { case json, html }
 
+public enum ExportOutcome: Hashable, Sendable, Codable {
+    case saved(URL), cancelled, failed(String)
+    public var message: String {
+        switch self {
+        case .saved(let url): "Exported \(url.lastPathComponent)"
+        case .cancelled: "Export cancelled"
+        case .failed(let reason): "Export failed: \(reason)"
+        }
+    }
+}
+
 public enum WindowEffect: Hashable, Sendable {
     case toggleFullScreen
+    case pageFullScreen(Bool)
     /// Esc with nothing to close: leave full screen if the window is in it, else nothing (the reducer does not
     /// track full-screen state; the window does).
     case leaveFullScreen

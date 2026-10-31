@@ -106,6 +106,8 @@ public final class PeekCardView: NSView {
     private let close = NSButton(title: PeekCopy.close, target: nil, action: nil)
     private let openIn = NSButton(title: PeekCopy.openInTab, target: nil, action: nil)
     private var last: PeekSnapshot?
+    private let destinations = NSPopUpButton(frame: .zero, pullsDown: true)
+    private var destinationCommands: [Command] = []
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -134,6 +136,9 @@ public final class PeekCardView: NSView {
             button.identify(id)
             strip.addSubview(button)
         }
+        destinations.target = self; destinations.action = #selector(destinationChosen)
+        destinations.controlSize = .small
+        strip.addSubview(destinations)
         close.keyEquivalent = "\u{1b}"   // the card's Close is Esc's "Exit", also reachable by mouse
         isHidden = true
     }
@@ -161,9 +166,20 @@ public final class PeekCardView: NSView {
         close.frame = CGRect(x: rect.width - 72, y: y, width: 64, height: buttonHeight)
         openIn.frame = CGRect(x: close.frame.minX - 8 - 104, y: y, width: 104, height: buttonHeight)
         hint.frame = CGRect(x: 8, y: 0, width: max(0, openIn.frame.minX - 16), height: hintHeight)
+        let entries = OpenInMenu.model(spaces: peek.spaces, folders: peek.folders).entries
+        destinationCommands = entries.compactMap { if case .action(_, let command, _) = $0 { command } else { nil } }
+        let titles = entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } }
+        destinations.removeAllItems(); destinations.addItems(withTitles: ["Move to…"] + titles)
+        destinations.frame = CGRect(x: max(8, openIn.frame.minX - 126), y: y, width: 118, height: buttonHeight)
+        destinations.toolTip = "Reopens the committed address in the destination profile; unsaved form state stays in the temporary page until moved."
+        hint.frame.size.width = max(0, destinations.frame.minX - 16)
         last = peek
     }
 
+    @objc private func destinationChosen() {
+        let index = destinations.indexOfSelectedItem - 1
+        if destinationCommands.indices.contains(index) { dispatch(destinationCommands[index]) }
+    }
     @objc private func closeClicked() { dispatch(.peek(.close)) }
     @objc private func openInClicked() { dispatch(.window(.openIn(.current))) }
 }

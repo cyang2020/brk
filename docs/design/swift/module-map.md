@@ -70,7 +70,7 @@ Brk (main)  -> BrkApp, BrkCEF, BrkEngine, BrkBase
 BrkE2E      -> BrkControl, BrkLayout, BrkDomain, BrkBase
 ```
 
-Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, the UI targets, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkOverlays and BrkSettings; UniformTypeIdentifiers only in BrkApp; `os` only in BrkEngine, BrkCEF and BrkApp); the exact lists are in `ImportRulesTests.allowedImports`.
+Each line lists the first-party modules a module may import. Apple frameworks are allowed per module as well (AppKit only in BrkEngine, BrkCEF, BrkTheme, the UI targets, BrkApp and main; Metal and QuartzCore only in BrkTheme; SwiftUI only in BrkOverlays and BrkSettings; UniformTypeIdentifiers only in BrkApp; `os` only in BrkEngine, BrkCEF and BrkApp); the exact lists are in `ImportRulesTests.allowedImports`. Browser-basic document output adds PDFKit in BrkCEF for output validation, BrkApp for native printing, and BrkE2E for independent file parsing. BrkApp also uses Carbon for its registered Little Brk global shortcut. These system imports add no first-party dependency edge.
 
 1. `BrkBase`, `BrkDomain`, `BrkLayout` and `BrkControl` import only Foundation and CoreGraphics besides each other: no AppKit, so the reducer, the projection, the layout and the wire format are testable headless and cannot touch views.
 2. `BrkEngine` imports only BrkBase and AppKit: it knows pages, not tabs.

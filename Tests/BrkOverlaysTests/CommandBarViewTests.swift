@@ -12,7 +12,7 @@ final class CommandBarViewTests: XCTestCase {
     private var sent: [Command] = []
     /// What the user chose: everything dispatched except the `queryChanged` each edit sends.
     private var chosen: [Command] {
-        sent.filter { if case .commandBar(.queryChanged) = $0 { false } else { true } }
+        sent.filter { switch $0 { case .commandBar(.queryChanged), .commandBar(.queryChangedForSite): false; default: true } }
     }
     private let box = CGRect(x: 300, y: 219, width: 766, height: 338)
 

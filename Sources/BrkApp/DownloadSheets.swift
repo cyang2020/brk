@@ -28,6 +28,12 @@ import BrkBase
         let entries = pending.filter { $0.prompt.window == window }
         guard !entries.contains(where: { $0.panel != nil }), let entry = entries.first else { return }
         guard let owner = entry.window, owner.isVisible else { ownerGone(window); return }
+        if owner.attachedSheet != nil {
+            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.showNext(window) }
+            }
+            return
+        }
         let panel = NSSavePanel()
         panel.directoryURL = entry.prompt.directory
         panel.nameFieldStringValue = entry.prompt.suggestedName

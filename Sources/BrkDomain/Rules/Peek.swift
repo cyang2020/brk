@@ -12,6 +12,8 @@ import Foundation
 extension Work {
     mutating func peek(_ command: PeekCommand, in window: WindowID) {
         switch command {
+        case .email:
+            peek(.open(URL(string: "https://mail.google.com/mail/u/0/")!), in: window)
         case .open(let url):
             // A new peek replaces an open one (its tab is dropped): one Peek per window, as one card draws.
             guard isAllowedURL(url), state.doc.windows[window]?.kind == .standard else { return }
@@ -26,6 +28,7 @@ extension Work {
     /// Drops the peeked tab and its page; the overlay closes. No archive entry: a Peek is a preview, not a tab.
     mutating func closePeek(in window: WindowID) {
         guard let tab = state.peekedTab(in: window) else { return }
+        if state.session.live[PageID(window: window, item: tab)]?.fullscreen == true { effects.append(.window(window, .pageFullScreen(false))) }
         state.session.windows[window]!.overlay = nil
         _ = removeItem(tab)
         unload(tab)
@@ -45,7 +48,7 @@ extension Work {
         // Little Arc uses a persistent profile. The modifier must not move private navigation into it.
         if state.doc.windows[window]?.kind != .incognito,
            links.optionCommandClickLittleArc, held.contains(.option), held.contains(.command) { return .littleArc }
-        if links.shiftClickPeek, held.contains(.shift), state.doc.windows[window]?.kind == .standard { return .peek }
+        if links.shiftClickPeek, held.contains(.shift), !held.contains(.command), state.doc.windows[window]?.kind == .standard { return .peek }
         return nil
     }
 }
@@ -63,16 +66,22 @@ enum LinkDestinationKind: Equatable { case peek, littleArc }
 /// Arc's Links setting speaks of "links to other sites" ("Open a Peek window when clicking on links to other
 /// sites", Favorites and Pinned tabs only). Two hosts are the same site when their registrable domains match:
 /// `news.example.com` and `example.com` are one site, `a.co.uk` and `b.co.uk` are two. The public-suffix list is
-/// not shipped; the common two-label suffixes (co.uk, com.au, ac.jp…) are recognized as a short second label under
-/// a two-letter country code. IP literals compare whole. Case does not matter.
+/// compiled from the checked-in Public Suffix List, including wildcard, exception and private rules.
+/// IP literals compare whole. Case does not matter.
 public func sameSite(_ a: String, _ b: String) -> Bool { registrableDomain(a) == registrableDomain(b) }
 
 public func registrableDomain(_ host: String) -> String {
-    let lowered = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+    let cleaned = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+    if cleaned.contains(":") { return cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "[]")) }
+    let lowered = URL(string: "https://" + cleaned)?.host?.lowercased() ?? cleaned
     let labels = lowered.split(separator: ".").map(String.init)
-    guard labels.count > 2, !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }) else { return lowered }
-    let tld = labels[labels.count - 1], second = labels[labels.count - 2]
-    let secondLevel: Set<String> = ["co", "com", "org", "net", "gov", "edu", "ac", "or", "ne", "go", "ltd", "plc", "me"]
-    let keep = tld.count == 2 && secondLevel.contains(second) ? 3 : 2
-    return labels.suffix(keep).joined(separator: ".")
+    guard labels.count > 1, !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }) else { return lowered }
+    var suffixLength = 1
+    for index in labels.indices {
+        let suffix = labels[index...].joined(separator: "."), count = labels.count - index
+        if PublicSuffixRules.exception.contains(suffix) { return labels.suffix(count).joined(separator: ".") }
+        if PublicSuffixRules.exact.contains(suffix) { suffixLength = max(suffixLength, count) }
+        if index > 0, PublicSuffixRules.wildcard.contains(suffix) { suffixLength = max(suffixLength, count + 1) }
+    }
+    return labels.suffix(min(labels.count, suffixLength + 1)).joined(separator: ".")
 }

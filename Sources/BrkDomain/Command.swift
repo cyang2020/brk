@@ -83,6 +83,8 @@ public enum CommandBarMode: String, Hashable, Sendable, Codable {
 }
 
 public enum CommandBarCommand: Hashable, Sendable, Codable {
+    case calculate(String)
+    case queryChangedForSite(SearchEngineID, String)
     case open(CommandBarMode)
     /// Typed text or a history URL; resolved by `resolveTypedInput` with the profile's engine and applied per the
     /// open bar's target.
@@ -130,6 +132,8 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case stop(ItemRef)
     case zoom(ZoomStep)
     case toggleDevTools
+    case output(OutputIntent)
+    case developer(DeveloperOperation)
     /// Cmd+Shift+C (plain), Opt+Shift+Cmd+C (Markdown), Ctrl+Shift+Cmd+C (quote: Arc rows 45 to 47).
     case copyURL(CopyURLFormat)
 }
@@ -264,6 +268,8 @@ public enum GeneralSetting: Hashable, Sendable, Codable {
 }
 
 public enum ProfileSetting: Hashable, Sendable, Codable {
+    case addSiteSearch(name: String, keyword: String, template: String)
+    case removeSiteSearch(SearchEngineID)
     case searchEngine(SearchEngineID)
     case searchSuggestions(Bool)
     case autoArchive(AutoArchiveThreshold)
@@ -327,12 +333,16 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case revealDownload(DownloadID)
     case removeDownload(DownloadID)
     case clearDownloads
+    case removeHistoryVisit(HistoryVisitID)
     case removeHistory(URL)
     case clearHistory
 }
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.
 public enum WindowCommand: Hashable, Sendable, Codable {
+    /// A public, session-only window with its own empty sidebar.
+    case newBlank
+    case toggleStayOnTop
     /// Cmd+N: a second standard window on the current space, sharing the global sidebar.
     case new
     /// Shift+Cmd+N (Arc's nib; conflicts with New Folder, see `KeyBindings`): a session-only window whose pages
@@ -347,10 +357,13 @@ public enum WindowCommand: Hashable, Sendable, Codable {
     /// that space's Today and a standard window on that space shows it; the Little Arc window or Peek closes.
     /// `.current` is the most recently focused standard window's space.
     case openIn(SpaceRef)
+    case openInFolder(ItemID)
 }
 
 /// Peek (Arc: `modalV2`): a card over the content showing a scratch tab of this window.
 public enum PeekCommand: Hashable, Sendable, Codable {
+    /// Gmail in the initiating standard window's current profile.
+    case email
     /// Shift+click, or a link from a Pinned or Favorites tab to another site per `LinkSettings`.
     case open(URL)
     /// Esc, the card's close button, Cmd+W while peeking.
@@ -378,6 +391,8 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 public enum SystemEvent: Sendable, Equatable {
     case page(BrowserToken, PageEvent)
     case download(DownloadUpdate)
+    case output(OutputUpdate)
+    case exportFinished(WindowID, ExportOutcome)
     case contextDisposed(ContextDisposalResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
@@ -395,6 +410,9 @@ public enum SystemEvent: Sendable, Equatable {
 }
 
 public enum WindowEvent: Sendable, Equatable {
+    case becameKey
+    case activity
+    case resignedKey
     /// NSWindow moved or resized. `bounds` (screen) is saved for restore; `contentSize` drives layout.
     case geometry(bounds: CGRect, contentSize: CGSize)
     /// The modifier keys now held, from the window's `flagsChanged` events (sent whichever view has focus).
@@ -428,7 +446,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
+        case .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
         default: false
         }
     }

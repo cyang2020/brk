@@ -10,6 +10,8 @@ struct MainDocumentState {
     private var acceptedURLs: Set<String> = []
     private var pendingAddress: URL?
 
+    var readyDocument: DocumentToken? { if case .ready(let token) = document { token } else { nil } }
+
     init(browser: BrowserToken) { self.browser = browser }
 
     mutating func prepareNavigation() {

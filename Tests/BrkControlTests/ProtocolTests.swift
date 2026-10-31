@@ -11,12 +11,21 @@ final class ProtocolTests: XCTestCase {
     /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
-        case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case chooseOutputFixture, cancelCurrentOutput, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet, hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL
     }
 
     static func tag(of op: ControlOp) -> Tag {
         switch op {
+        case .chooseOutputFixture: .chooseOutputFixture
+        case .cancelCurrentOutput: .cancelCurrentOutput
+        case .configureSavePanel: .configureSavePanel
+        case .answerSavePanel: .answerSavePanel
+        case .cancelPrintPanel: .cancelPrintPanel
+        case .menuAction: .menuAction
+        case .pasteboard: .pasteboard
+        case .readPasteboard: .readPasteboard
+        case .screenshotSheet: .screenshotSheet
         case .hello: .hello
         case .view: .view
         case .activate: .activate
@@ -49,6 +58,15 @@ final class ProtocolTests: XCTestCase {
     static func samples(_ tag: Tag) -> [ControlOp] {
         let page = PageID(window: WindowID("w"), item: ItemID("t3"))
         switch tag {
+        case .chooseOutputFixture: return [.chooseOutputFixture(window: nil, path: "/tmp/fixture.pdf")]
+        case .cancelCurrentOutput: return [.cancelCurrentOutput(window: nil)]
+        case .configureSavePanel: return [.configureSavePanel(window: nil, path: "/tmp/fixture.pdf")]
+        case .answerSavePanel: return [.answerSavePanel(window: nil, path: "/tmp/fixture.pdf"), .answerSavePanel(window: nil, path: nil)]
+        case .cancelPrintPanel: return [.cancelPrintPanel(window: nil)]
+        case .menuAction: return [.menuAction("Copy")]
+        case .pasteboard: return [.pasteboard("fixture"), .pasteboard(nil)]
+        case .readPasteboard: return [.readPasteboard]
+        case .screenshotSheet: return [.screenshotSheet(window: nil, path: "/tmp/sheet.png")]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
         case .activate: return [.activate(window: WindowID("w"))]
@@ -102,7 +120,7 @@ final class ProtocolTests: XCTestCase {
 
     func testRepliesRoundTrip() throws {
         let results: [ControlResult] = [
-            .menuItems(["Back", "Reload"]),
+            .text("fixture"), .menuItems(["Back", "Reload"]),
             .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
             .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),

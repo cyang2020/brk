@@ -115,11 +115,18 @@ struct Work {
             for window in state.doc.windows.keys.sorted() { commitCycle(in: window) }
         }
         switch event {
-        case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _): begin(window: window)
+        case .output, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
+        case .exportFinished(let window, let outcome): state.session.windows[window]?.exportOutcome = outcome
+        case .output(let update):
+            state.session.windows[update.document.browser.page.window]?.exportOutcome = nil
+            let window = update.document.browser.page.window
+            if state.session.windows[window]?.outputUpdates[update.id] == nil { state.session.windows[window]?.outputOrder.append(update.id) }
+            if case .terminal? = state.session.windows[window]?.outputUpdates[update.id]?.stage { break }
+            state.session.windows[window]?.outputUpdates[update.id] = update
         case .download(let update): downloadEvent(update)
         case .contextDisposed(let result):
             switch result {

@@ -101,6 +101,10 @@ public struct CefPopupFeatures: Sendable, Equatable {
 /// ``CefBrowserDelegate/browser(_:decideWindowOpenFor:)``, modeled on
 /// Electron's `setWindowOpenHandler` details.
 public struct CefWindowOpenRequest: Sendable, Equatable {
+    public var rawDisposition: Int? = nil
+    public var sourceFrame: String? = nil
+    public var sourceIsMainFrame: Bool = true
+    public var popupID: Int? = nil
     /// The URL the page wants to open (may be `nil` for `about:blank` popups).
     public var targetURL: URL?
     /// The target frame name (`window.open`'s second argument / `target=`).

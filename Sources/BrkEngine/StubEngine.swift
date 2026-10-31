@@ -48,7 +48,7 @@ public final class StubEngine: WebEngine {
         switch action {
         case .navigate(let url): load(url, in: surface)
         case .reload, .recover: if let url = surface.url { load(url, in: surface) }
-        case .goBack, .goForward, .stop, .zoom, .toggleDevTools: break
+        case .goBack, .goForward, .stop, .zoom, .toggleDevTools, .developer, .exitFullscreen: break
         }
     }
 
@@ -71,6 +71,10 @@ public final class StubEngine: WebEngine {
     /// The stub has no request contexts; nothing to forget.
     private var revoked: Set<BrowsingContext> = []
     private var disposed: Set<DisposalID> = []
+    public func output(_ request: OutputRequest) {
+        delegate?.engine(self, output: OutputUpdate(id: request.id, document: request.document, stage: .terminal(.failed("Document output requires the CEF engine", .absent))))
+    }
+    public func cancelOutput(_ id: OutputID) {}
     public func cancelDownload(_ id: DownloadID) {}
     public func disposeContext(_ request: ContextDisposal) {
         revoked.insert(request.context)

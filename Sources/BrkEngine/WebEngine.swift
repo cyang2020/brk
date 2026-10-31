@@ -49,6 +49,9 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func output(_ request: OutputRequest)
+    func cancelOutput(_ id: OutputID)
+
     func cancelDownload(_ id: DownloadID)
     /// Revokes synchronously. Final drain results arrive through the delegate.
     func disposeContext(_ request: ContextDisposal)
@@ -70,7 +73,12 @@ public protocol WebEngineDelegate: AnyObject {
     /// current event before the page, paired by `PressCorrelator` after it.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool
 
+    func engine(_ engine: any WebEngine, expectsShortcut key: KeyPress, page: PageID) -> Bool
     func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow?
+    func engine(_ engine: any WebEngine, output update: OutputUpdate)
+    func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void)
+    func engine(_ engine: any WebEngine, printOutput request: OutputRequest, pdf: URL, reply: @escaping @MainActor (PrintAnswer) -> Void)
+    func engine(_ engine: any WebEngine, dismissOutput id: OutputID)
     func engine(_ engine: any WebEngine, download update: DownloadUpdate)
     func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt,
                 reply: @escaping @MainActor (DestinationAnswer) -> Void)
@@ -83,7 +91,17 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool
 }
 
+extension WebEngine {
+    public func output(_ request: OutputRequest) {}
+    public func cancelOutput(_ id: OutputID) {}
+}
+
 extension WebEngineDelegate {
+    public func engine(_ engine: any WebEngine, expectsShortcut key: KeyPress, page: PageID) -> Bool { false }
+    public func engine(_ engine: any WebEngine, output update: OutputUpdate) {}
+    public func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
+    public func engine(_ engine: any WebEngine, printOutput request: OutputRequest, pdf: URL, reply: @escaping @MainActor (PrintAnswer) -> Void) { reply(.ownerGone) }
+    public func engine(_ engine: any WebEngine, dismissOutput id: OutputID) {}
     public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
     public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}
     public func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }

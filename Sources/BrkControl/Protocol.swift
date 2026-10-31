@@ -27,6 +27,16 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case view(window: WindowID?)
     /// Activate a specific native window before physical input.
     case activate(window: WindowID)
+    /// Operate actual app-owned UI; available only on the opt-in control socket.
+    case chooseOutputFixture(window: WindowID?, path: String)
+    case cancelCurrentOutput(window: WindowID?)
+    case configureSavePanel(window: WindowID?, path: String)
+    case answerSavePanel(window: WindowID?, path: String?)
+    case cancelPrintPanel(window: WindowID?)
+    case screenshotSheet(window: WindowID?, path: String)
+    case menuAction(String)
+    case pasteboard(String?)
+    case readPasteboard
     /// Computed frames, actual AppKit frames by view identifier, page facts, focus. See `NativeFacts`.
     case native(window: WindowID?)
     /// Runs a command through the normal dispatch path, as if a view sent it.
@@ -99,6 +109,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case view(WindowSnapshot)
     case native(NativeFacts)
     case menuItems([String])
+    case text(String)
     case dispatched(rev: Int)
     case loaded(tab: ItemID)
     case pixel(red: Int, green: Int, blue: Int, alpha: Int)
@@ -125,6 +136,11 @@ public struct Hello: Codable, Sendable, Equatable {
 
 /// What the window really looks like, next to what layout computed.
 public struct NativeFacts: Codable, Sendable, Equatable {
+    public var windowLevel: Int = 0
+    public var miniaturized: Bool = false
+    public var fullscreen: Bool = false
+    public var appHidden: Bool = false
+    public var sheetClass: String? = nil
     public var window: WindowID
     /// NSWindow frame (screen, bottom-left origin) and content size.
     public var windowFrame: CGRect

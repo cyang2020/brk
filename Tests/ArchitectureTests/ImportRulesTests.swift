@@ -13,7 +13,7 @@ final class ImportRulesTests: XCTestCase {
         "BrkDomain": ["BrkBase", "Foundation", "CoreGraphics"],
         "BrkLayout": ["BrkBase", "BrkDomain", "Foundation", "CoreGraphics"],
         "BrkEngine": ["BrkBase", "AppKit", "Foundation", "os"],
-        "BrkCEF": ["BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
+        "BrkCEF": ["PDFKit", "BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
         "BrkTheme": ["BrkBase", "BrkDomain", "AppKit", "Metal", "QuartzCore", "Foundation", "CoreGraphics"],
         "BrkUIKit": ["BrkBase", "BrkDomain", "BrkLayout", "AppKit", "Foundation", "CoreGraphics"],
         "BrkSidebar": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "Foundation", "CoreGraphics"],
@@ -22,9 +22,9 @@ final class ImportRulesTests: XCTestCase {
         "BrkSettings": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "SwiftUI", "Foundation", "CoreGraphics"],
         "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
-        "BrkApp": ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "os"],
+        "BrkApp": ["PDFKit", "Carbon", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkEngine", "AppKit", "Foundation"],
-        "BrkE2E": ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
+        "BrkE2E": ["PDFKit", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
     ]
 
     /// (pattern, the only files allowed to match, why). Paths relative to Sources/.

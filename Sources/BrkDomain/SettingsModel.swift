@@ -40,6 +40,7 @@ public enum WebAppearance: String, Hashable, Sendable, Codable, CaseIterable { c
 /// Arc: `ProfilePreferences.State` (anatomy-m 1.12) plus the profile's auto-archive threshold (anatomy-m 4.3,
 /// `AutoArchiveTimeThresholdsPerProfile`).
 public struct ProfileSettings: Hashable, Sendable, Codable {
+    public var siteSearchEngines: [SearchEngine]? = nil
     public var searchEngine: SearchEngineID
     /// "Include search engine suggestions" (`searchSuggestEnabled`).
     public var searchSuggestions: Bool

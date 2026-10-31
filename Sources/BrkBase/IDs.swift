@@ -37,6 +37,7 @@ public enum ItemTag {}
 public enum SpaceTag {}
 public enum WindowTag {}
 public enum ArchiveTag {}
+public enum HistoryVisitTag {}
 public enum ProfileTag {}
 public enum DownloadTag {}
 public enum LinkRouteTag {}
@@ -51,6 +52,7 @@ public typealias SpaceID = ID<SpaceTag>
 public typealias WindowID = ID<WindowTag>
 /// One archive entry. Distinct from the archived tab's own ItemID, which restore reuses.
 public typealias ArchiveID = ID<ArchiveTag>
+public typealias HistoryVisitID = ID<HistoryVisitTag>
 /// Arc: `ADKModels.Profile`. Spaces, favorites roots, settings and pages carry one; `Doc.profiles` lists them.
 public typealias ProfileID = ID<ProfileTag>
 /// One file download (Arc: `StorableDownloadMetadata`). Minted by the engine on the first native callback.

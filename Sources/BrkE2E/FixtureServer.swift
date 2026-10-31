@@ -165,7 +165,7 @@ final class FixtureServer: @unchecked Sendable {
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
         } else if case let file = root.appendingPathComponent(String(path.split(separator: "?")[0].dropFirst())).standardizedFileURL,
                   file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
-            let type = ["html": "text/html; charset=utf-8", "css": "text/css", "js": "text/javascript", "png": "image/png"][file.pathExtension]
+            let type = ["html": "text/html; charset=utf-8", "css": "text/css", "js": "text/javascript", "png": "image/png", "svg": "image/svg+xml"][file.pathExtension]
                 ?? "application/octet-stream"
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
         } else {

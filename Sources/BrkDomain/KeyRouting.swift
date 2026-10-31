@@ -102,3 +102,8 @@ enum KeyRouting {
         }
     }
 }
+
+/// Native pre-key intent uses the same resolved map as dispatch, including fixed alternate chords.
+public func hasShortcut(_ chord: KeyChord, in state: AppState) -> Bool {
+    KeyMap(overrides: state.doc.keyOverrides).lookup(chord) != nil
+}

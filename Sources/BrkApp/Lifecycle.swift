@@ -37,6 +37,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var sweep: Timer?
     private var termination: DispatchSourceSignal?
     private var getURL: GetURLHandler?
+    private var littleEntryPoints: LittleEntryPoints?
+    private var pendingExternalURLs: [Input] = []
     private let menuTarget = MenuTarget()
     private var quitting = false
     private let log = Logger(subsystem: "brk", category: "lifecycle")
@@ -45,6 +47,19 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         self.options = options
         self.engine = engine
         self.engineKind = engineKind
+    }
+
+    public func applicationWillFinishLaunching(_ notification: Notification) { installURLHandler() }
+
+    private func installURLHandler() {
+        guard getURL == nil else { return }
+        let handler = GetURLHandler(send: { [weak self] input in
+            guard let self else { return }
+            if let store = self.store { store.dispatch(input) }
+            else { self.pendingExternalURLs.append(input) }
+        })
+        handler.install()
+        getURL = handler
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -90,12 +105,15 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
+        let entryPoints = LittleEntryPoints(target: menuTarget)
+        littleEntryPoints = entryPoints
+        store.didPublish = { [weak entryPoints] in entryPoints?.update($0) }
         store.start()
 
         // Links from other apps (F3) and the local AI tools on PATH (the Max pane, `.auto`).
-        let handler = GetURLHandler(send: { [weak store] in store?.dispatch($0) })
-        handler.install()
-        getURL = handler
+        installURLHandler()
+        let pending = pendingExternalURLs; pendingExternalURLs = []
+        for input in pending { store.dispatch(input) }
         store.dispatch(.system(.aiProvidersDetected(AIProviderSeam.detect())))
 
         sweep = Timer.scheduledTimer(withTimeInterval: Metrics.persistence.sweepInterval.value, repeats: true) { _ in
@@ -119,6 +137,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !quitting else { return .terminateLater }
         quitting = true
+        store?.prepareForTermination()
+        littleEntryPoints?.stop()
         sweep?.invalidate()
         control?.stopAccepting()
         let store = store, engine = engine, log = log
@@ -142,6 +162,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     /// `shutdown-incomplete.log` naming each unclosed page. The caller turns the outcome into the exit status.
     static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
         store?.flush()
+        store?.cancelExports()
         let outcome = await engine.shutdown()
         store?.flush()
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
@@ -173,7 +194,12 @@ public enum Quit {
 
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
     /// without terminating the test process.
-    public static var perform: @MainActor () -> Void = { RunLoop.main.perform { NSApp.terminate(nil) } }
+    public static var perform: @MainActor () -> Void = {
+        RunLoop.main.perform {
+            (NSApp.delegate as? Lifecycle)?.store?.prepareForTermination()
+            RunLoop.main.perform { NSApp.terminate(nil) }
+        }
+    }
 }
 
 /// A fatal signal in the browser process writes a backtrace to stderr before the default action, so an e2e log

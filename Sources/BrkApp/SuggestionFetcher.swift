@@ -22,6 +22,14 @@ public final class SuggestionFetcher {
         self.override = override
     }
 
+    public func cancel(_ window: WindowID) { pending.removeValue(forKey: window)?.cancel() }
+
+    public func reconcile(_ snapshot: AppSnapshot) {
+        for window in Array(pending.keys) {
+            guard case .commandBar(let bar)? = snapshot.windows[window]?.overlay, bar.suggestionsEnabled else { cancel(window); continue }
+        }
+    }
+
     public func fetch(_ window: WindowID, query: String, url engineURL: URL) {
         pending[window]?.cancel()
         var url = engineURL

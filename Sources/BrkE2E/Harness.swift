@@ -133,6 +133,7 @@ final class AppUnderTest {
     private(set) var process: AppProcess?
     private(set) var hello: Hello?
     private(set) var launches = 0
+    var remoteDebuggingPort: Int?
     private(set) var logs: [URL] = []
     private(set) var screenshots: [URL] = []
     private(set) var notes: [String] = []
@@ -174,6 +175,7 @@ final class AppUnderTest {
         environment["BRK_CONTROL_SOCKET"] = client.path
         environment["BRK_DATA_DIR"] = dataDirectory.path
         environment["BRK_TEST_CLOCK"] = "1"
+        if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
         environment["BRK_START_URL"] = site.url("index.html").absoluteString
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
@@ -423,6 +425,14 @@ final class AppUnderTest {
         guard case .screenshot(_, let w, let h) = result else { throw Check(description: "screenshot answered \(Self.describe(result))") }
         if !screenshots.contains(url) { screenshots.append(url) }
         return (url, w, h)
+    }
+
+    @discardableResult
+    func screenshotSheet(_ name: String, window id: WindowID? = nil) throws -> URL {
+        let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
+        guard case .screenshot = try send(.screenshotSheet(window: id ?? window, path: url.path)) else { throw Check(description: "Sheet capture failed") }
+        screenshots.append(url)
+        return url
     }
 
     @discardableResult

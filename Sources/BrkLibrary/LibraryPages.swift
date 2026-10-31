@@ -139,7 +139,7 @@ final class HistoryPageView: LibraryListPage {
     private func row(_ visit: HistoryRow, index: Int) -> LibraryRowView {
         let url = visit.url
         let open: () -> Void = { [weak self] in self?.dispatch(.commandBar(.submit(url.absoluteString))) }
-        let remove: () -> Void = { [weak self] in self?.dispatch(.library(.removeHistory(url))) }
+        let remove: () -> Void = { [weak self] in self?.dispatch(visit.id.map { .library(.removeHistoryVisit($0)) } ?? .library(.removeHistory(url))) }
         let host = url.host ?? displayURL(url)
         return LibraryRowView(id: .historyEntry(index), icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
                               title: visit.title.isEmpty ? displayURL(url) : visit.title,

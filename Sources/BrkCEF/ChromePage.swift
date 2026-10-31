@@ -63,6 +63,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     var browser: CefBrowser { chrome.browser }
+    var readyDocument: DocumentToken? { mainDocument.readyDocument }
 
     var facts: PageFacts {
         PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: surface.embeddedViewClasses,
@@ -74,6 +75,7 @@ final class ChromePage: CefBrowserDelegate {
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
         contextMenu.cancel()
+        browser.closeDevTools()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
@@ -102,6 +104,10 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func prepareStop() { emit(mainDocument.stopped()) }
+    func reportZoom() { engine.pageDidEmit(self, .zoomChanged(BrowserZoom.percentage(level: browser.zoomLevel))) }
+    func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool) {
+        engine.pageDidEmit(self, .fullscreenChanged(isFullscreen))
+    }
 
     // MARK: CefBrowserDelegate -> PageEvent
 
@@ -124,6 +130,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {
         emit(mainDocument.finished(url))
+        reportZoom()
     }
 
     func browser(_ b: CefBrowser, didChangeTitle title: String) {
@@ -147,7 +154,14 @@ final class ChromePage: CefBrowserDelegate {
         engine.pageDidEmit(self, .rendererGone)
     }
 
-    func browserDidGainFocus(_ b: CefBrowser) { engine.pageDidEmit(self, .gainedFocus) }
+    func browserDidGainFocus(_ b: CefBrowser) { engine.pageDidEmit(self, .gainedFocus); reportZoom() }
+
+    private func openMetadata(_ request: CefWindowOpenRequest) -> PageOpenMetadata {
+        PageOpenMetadata(rawDisposition: request.rawDisposition, userGesture: request.userGesture,
+                         sourceFrame: request.sourceFrame, sourceIsMainFrame: request.sourceIsMainFrame,
+                         targetFrame: request.frameName, popupID: request.popupID, x: request.features.x,
+                         y: request.features.y, width: request.features.width, height: request.features.height)
+    }
 
     /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
@@ -156,9 +170,10 @@ final class ChromePage: CefBrowserDelegate {
             switch request.disposition {
             case .newBackgroundTab: disposition = .backgroundTab
             case .newPopup: disposition = .popup
+            case .newWindow: disposition = .newWindow
             default: disposition = .foregroundTab
             }
-            engine.pageDidEmit(self, .openRequested(url, disposition))
+            engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
         }
         return .handled
     }
@@ -167,6 +182,13 @@ final class ChromePage: CefBrowserDelegate {
     /// same way: a tab the domain creates; unhandled, CEF would make a Chrome-runtime browser without a client that
     /// nothing closes and that crashes cef_shutdown. The wrapper does not forward the disposition on this path, so
     /// every such open is a background tab (Cmd+click's); Cmd+Shift+click is not told apart.
+    func browser(_ b: CefBrowser, openURLFromTab request: CefWindowOpenRequest) -> Bool {
+        guard let url = request.targetURL else { return true }
+        let disposition: OpenDisposition = request.disposition == .newBackgroundTab ? .backgroundTab : (request.disposition == .newWindow ? .newWindow : .foregroundTab)
+        engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
+        return true
+    }
+
     func browser(_ b: CefBrowser, didRequestNewTab url: URL?) -> Bool {
         guard let url else { return false }
         engine.pageDidEmit(self, .openRequested(url, .backgroundTab))
@@ -196,6 +218,12 @@ final class ChromePage: CefBrowserDelegate {
     /// after the page (`OnKeyEvent`, only when the page did not consume it) the id is the partner's, paired by
     /// `PressCorrelator`. Modifier-only keys and character events are not routed (Control reaches BrkApp as
     /// `WindowEvent.modifiersChanged` from the window's `flagsChanged` events).
+    func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefPreKeyDecision {
+        if browser(b, handleKeyEvent: event, isBeforePage: true) { return .handled }
+        guard let press = KeyTranslation.press(from: event), engine.expectsShortcut(press, page: self) else { return .passThrough }
+        return .shortcutAfterPage
+    }
+
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool {
         guard let press = KeyTranslation.press(from: event) else { return false }
         // Monotonic; only the correlation timeout reads it, never app time (the app clock stays in BrkApp/Clock.swift).
