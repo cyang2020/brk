@@ -417,6 +417,15 @@ final class AppUnderTest {
 
     /// `<out>/shots/<scenario>-<name>.png`; returns its path and pixel size.
     @discardableResult
+    func panelScreenshot(_ name: String) throws -> URL {
+        let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
+        guard case .screenshot(_, _, _) = try send(.sidebarPanel(window: nil, action: .capture(path: url.path))) else {
+            throw Check(description: "Native sheet screenshot failed")
+        }
+        screenshots.append(url)
+        return url
+    }
+
     func screenshot(_ name: String, window id: WindowID? = nil) throws -> (url: URL, width: Int, height: Int) {
         let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
         let result = try send(.screenshot(window: id ?? window, path: url.path))

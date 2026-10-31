@@ -57,7 +57,7 @@ final class ControlExecutor {
         case .sidebarData: return .sidebarData(store.snapshot.sidebarData)
         case .sidebarPanel(let owner, let action):
             let window = try controller(owner).window
-            return try SidebarPanelControl.run(action, in: window)
+            return try await SidebarPanelControl.run(action, in: window)
         case .hello:
             return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))

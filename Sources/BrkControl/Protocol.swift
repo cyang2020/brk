@@ -115,6 +115,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
 }
 
 public enum SidebarPanelControlAction: Codable, Sendable, Equatable {
+    case capture(path: String)
     case inspect
     case button(String)
     case text(identifier: String, value: String)
