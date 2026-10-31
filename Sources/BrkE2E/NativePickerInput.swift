@@ -119,19 +119,22 @@ enum NativePickerInput {
     static func selectRow(_ app: AppUnderTest, panel: AXUIElement, file: URL) throws -> Selection {
         guard let hit = findFile(panel, name: file.lastPathComponent) else { throw Check(description: "Owned fixture row absent: \(file.lastPathComponent); no confirm sent") }
         func selected() throws -> Selection? {
-            guard try actualSelection(app, equals: file) else { return nil }
-            return observedSelection(hit)
+            // The remote view and the owning NSOpenPanel publish selection on different run-loop turns.
+            let deadline = ProcessInfo.processInfo.systemUptime + 2
+            repeat {
+                if try actualSelection(app, equals: file), let selection = observedSelection(hit) { return selection }
+                Thread.sleep(forTimeInterval: 0.1)
+            } while ProcessInfo.processInfo.systemUptime < deadline
+            return nil
         }
         var node = hit
         for _ in 0..<7 {
             if set(node, kAXSelectedAttribute, kCFBooleanTrue) {
-                Thread.sleep(forTimeInterval: 0.15)
                 if let selection = try selected() { return selection }
             }
             guard let parent = parent(node) else { break }
             for attribute in [kAXSelectedChildrenAttribute, kAXSelectedRowsAttribute] {
                 if set(parent, attribute, [node] as CFArray) {
-                    Thread.sleep(forTimeInterval: 0.15)
                     if let selection = try selected() { return selection }
                 }
             }
