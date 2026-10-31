@@ -744,14 +744,41 @@ extension StateCodec {
         do {
             let rules = try JSONDecoder().decode(WebsiteBlockingRules.self, from: data)
             guard rules.version > 0, rules.version <= 1_000_000,
-                  rules.blockedHosts.count + rules.blockedPathPrefixes.count + rules.cosmeticSelectors.count <= 20_000 else { return .failed("Invalid rule version or too many rules") }
+                  rules.blockedHosts.count + rules.blockedPathPrefixes.count + rules.cosmeticSelectors.count + (rules.blockedURLPrefixes?.count ?? 0) <= 20_000 else { return .failed("Invalid rule version or too many rules") }
+            guard (rules.blockedURLPrefixes ?? []).allSatisfy({ value in
+                guard let url = URL(string: value), ["http", "https"].contains(url.scheme), url.host != nil,
+                      url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else { return false }
+                return value.count <= 2048 && !value.contains("*") && !value.contains("\n")
+            }) else { return .failed("URL prefixes must be absolute HTTP URLs without wildcards, credentials, query or fragment") }
             let hosts = rules.blockedHosts.map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
             guard hosts.allSatisfy({ $0.range(of: #"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"#, options: .regularExpression) != nil && !$0.contains("..") }),
                   rules.blockedPathPrefixes.allSatisfy({ $0.hasPrefix("/") && !$0.contains("\n") && !$0.contains("?") && $0.count <= 1024 }),
                   rules.cosmeticSelectors.allSatisfy({ $0.range(of: #"^(?:[.#][A-Za-z_][A-Za-z0-9_-]*|\[[A-Za-z_][A-Za-z0-9_-]*(?:="[A-Za-z0-9_ -]+")?\])$"#, options: .regularExpression) != nil }) else {
                 return .failed("Rules must use host names, absolute path prefixes, and simple class, ID or attribute selectors")
             }
-            return .loaded(WebsiteBlockingRules(version: rules.version, blockedHosts: Array(Set(hosts)).sorted(), blockedPathPrefixes: Array(Set(rules.blockedPathPrefixes)).sorted(), cosmeticSelectors: Array(Set(rules.cosmeticSelectors)).sorted()))
+            return .loaded(WebsiteBlockingRules(version: rules.version, blockedHosts: Array(Set(hosts)).sorted(), blockedPathPrefixes: Array(Set(rules.blockedPathPrefixes)).sorted(), cosmeticSelectors: Array(Set(rules.cosmeticSelectors)).sorted(), blockedURLPrefixes: rules.blockedURLPrefixes.map { Array(Set($0)).sorted() }))
         } catch { return .failed("Cannot read this rule file: " + error.localizedDescription) }
+    }
+}
+
+extension StateCodec {
+    /// Strict import: unsupported syntax rejects the entire update, preserving the last good list.
+    public static func decodeEasyListRules(_ data: Data) -> WebsiteRulesUpdate {
+        guard data.count <= 1_048_576, let text = String(data: data, encoding: .utf8) else { return .failed("Rule text must be UTF-8 and at most 1 MB") }
+        var hosts: [String] = []; var urls: [String] = []; var selectors: [String] = []
+        for (index, raw) in text.components(separatedBy: .newlines).enumerated() {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("!") || line == "[Adblock Plus 2.0]" { continue }
+            if line.hasPrefix("||"), line.hasSuffix("^"), !line.contains("$") {
+                hosts.append(String(line.dropFirst(2).dropLast()))
+            } else if line.hasPrefix("|http://") || line.hasPrefix("|https://"), !line.contains("$") {
+                urls.append(String(line.dropFirst()))
+            } else if line.hasPrefix("##") {
+                selectors.append(String(line.dropFirst(2)))
+            } else { return .failed("Unsupported EasyList syntax at line \(index + 1): \(line.prefix(100))") }
+        }
+        guard !hosts.isEmpty || !urls.isEmpty || !selectors.isEmpty else { return .failed("The rule file contains no supported rules") }
+        let rules = WebsiteBlockingRules(version: 1, blockedHosts: hosts, blockedPathPrefixes: [], cosmeticSelectors: selectors, blockedURLPrefixes: urls)
+        return decodeWebsiteRules(try! JSONEncoder().encode(rules))
     }
 }

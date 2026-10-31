@@ -58,6 +58,8 @@ public protocol WebEngine: AnyObject {
     func cancelSiteData(_ id: String)
     func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult
     func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult
+    func setPictureInPicture(_ active: Bool, document: DocumentToken)
+    func editExtension(_ id: String, edit: ExtensionEdit, context: BrowsingContext) async -> String?
     func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog
     func invokeExtension(_ id: String, target: SiteTarget) async -> String?
     func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String?
@@ -165,6 +167,7 @@ extension WebEngine {
     public func find(_ request: FindRequest) {
         if let id = request.requestID { delegate?.engine(self, find: .failed(id, .unavailable)) }
     }
+    public func setPictureInPicture(_ active: Bool, document: DocumentToken) {}
     public func cancelSiteData(_ id: String) {}
     public func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult {
         ClearProfileDataResult(request: request, completed: [], error: "This engine has no profile storage")
@@ -172,6 +175,7 @@ extension WebEngine {
     public func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult {
         ClearSiteDataResult(request: request, completed: [], error: "This engine has no website storage")
     }
+    public func editExtension(_ id: String, edit: ExtensionEdit, context: BrowsingContext) async -> String? { "This engine has no extensions" }
     public func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog { ExtensionCatalog(context: context, extensions: [], error: "This engine has no extensions") }
     public func invokeExtension(_ id: String, target: SiteTarget) async -> String? { "This engine has no extension actions" }
     public func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String? { "This engine has no extensions" }

@@ -23,7 +23,8 @@ extension ChromePage {
     }
 
     func websiteOperationProtected() -> Bool {
-        engine.transfers.contains(context: context) || !permissionRequests.isEmpty
+        audio.audible || pictureInPictureDocument == mainDocument.readyDocument && pictureInPictureDocument != nil
+            || engine.transfers.contains(context: context) || !permissionRequests.isEmpty
             || engine.resources.entries[incarnation]?.leases.isEmpty == false
     }
 
@@ -51,7 +52,7 @@ extension ChromePage {
     func configureRequestFilter(_ url: URL?) {
         let rule = url.flatMap(SiteOrigin.init).map { websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
         let rules = websitePolicy.preferences.blockingRules ?? .builtIn
-        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes)
+        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes, urlPrefixes: rules.blockedURLPrefixes ?? [])
     }
 
     func refreshWebsitePolicy() {
@@ -109,7 +110,9 @@ extension ChromePage {
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 self.frozen = freeze
                 self.websiteError = nil
-                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: !policy.themeCSS.isEmpty, frozen: freeze, error: nil)))
+                let authorization = await OSSiteAuthorization.shared.readback()
+                guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
+                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: !policy.themeCSS.isEmpty, frozen: freeze, error: nil, osAuthorization: authorization, htmlMediaActive: shouldFreeze ? media : nil)))
             } catch {
                 self.websiteError = error.localizedDescription
                 guard self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
@@ -143,12 +146,24 @@ extension ChromePage {
         if kinds.contains(.desktopCapture) || kinds.contains(.other) { callback.resolve(.deny); return }
         let decisions = websitePolicy.preferences.permissions(for: requesting, embeddedIn: origin)
         if kinds.contains(where: { decisions[$0] == .deny }) { callback.resolve(.deny); return }
-        if kinds.allSatisfy({ decisions[$0] == .allow }) { callback.resolve(.allow); return }
         let prompt = SitePermissionPrompt(id: UUID().uuidString,
             target: SiteTarget(document: document, context: context, origin: origin), requestingOrigin: requesting,
             capabilities: kinds, frame: request.frameIdentifier, mask: request.requestedMask)
         permissionRequests[prompt.id] = PagePermissionRequest(prompt: prompt, nativeID: request.promptID, callback: callback)
-        engine.permission(self, prompt: prompt) { [weak self] decision in self?.answerPermission(prompt.id, decision) }
+        Task { @MainActor [weak self] in
+            let granted = await OSSiteAuthorization.shared.grants(kinds) { [weak self] in
+                guard let self else { return false }
+                return self.permissionRequests[prompt.id] != nil && self.engine.isLive(self) && self.matchesPermission(prompt.target)
+            }
+            guard let self, self.permissionRequests[prompt.id] != nil else { return }
+            guard self.engine.isLive(self), self.matchesPermission(prompt.target), granted else {
+                self.answerPermission(prompt.id, .deny); return
+            }
+            let currentDecisions = self.websitePolicy.preferences.permissions(for: requesting, embeddedIn: origin)
+            if kinds.contains(where: { currentDecisions[$0] == .deny }) { self.answerPermission(prompt.id, .deny); return }
+            if kinds.allSatisfy({ currentDecisions[$0] == .allow }) { self.answerPermission(prompt.id, .allow); return }
+            self.engine.permission(self, prompt: prompt) { [weak self] decision in self?.answerPermission(prompt.id, decision) }
+        }
     }
 
     func answerPermission(_ id: String, _ decision: SitePermission) {
@@ -170,5 +185,15 @@ extension ChromePage {
             engine.dismissPermission(id)
             owner.callback.invalidate()
         }
+    }
+}
+
+extension CEFEngine {
+    /// captures-media owns the actual PiP surface. A stale owner cannot protect a replacement page.
+    public func setPictureInPicture(_ active: Bool, document: DocumentToken) {
+        guard phase == .running, let page = live[document.browser.page], page.incarnation == document.browser,
+              page.readyDocument == document, contexts.permitsWork(page.context) else { return }
+        page.pictureInPictureDocument = active ? document : nil
+        page.refreshWebsitePolicy()
     }
 }

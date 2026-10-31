@@ -22,7 +22,7 @@ public struct Modifiers: OptionSet, Hashable, Sendable, Codable {
 /// `CaseIterable` is the inventory: lookups go through `allCases`, so a key added here is found by code and by
 /// name with no second list to keep in step (KeyTests pins the round trip for every case).
 public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomStringConvertible {
-    case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, z = 6, c = 8, q = 12, w = 13, e = 14, r = 15, y = 16, t = 17
+    case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, z = 6, x = 7, c = 8, v = 9, b = 11, q = 12, w = 13, e = 14, r = 15, y = 16, t = 17
     case one = 18, three = 20, four = 21, six = 22, five = 23, nine = 25, seven = 26, eight = 28
     case two = 19, equals = 24, minus = 27, zero = 29, rightBracket = 30, o = 31, u = 32, leftBracket = 33
     case i = 34, j = 38, l = 37, k = 40, comma = 43, n = 45, m = 46, p = 35, period = 47
@@ -36,6 +36,9 @@ public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomString
     public var menuKeyEquivalent: String {
         switch self {
         case .a: "a"
+        case .b: "b"
+        case .v: "v"
+        case .x: "x"
         case .s: "s"
         case .d: "d"
         case .f: "f"

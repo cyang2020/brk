@@ -28,7 +28,7 @@ let package = Package(
     ],
     targets: [
         // Vocabulary shared by every layer: ids, time, keys, the page vocabulary, the constants file.
-        .target(name: "BrkBase", swiftSettings: strict),
+        .target(name: "BrkBase", resources: [.process("Resources")], swiftSettings: strict),
         // The one state owner's logic: model, commands, pure reducer, projection, codec, shortcut table.
         .target(name: "BrkDomain", dependencies: ["BrkBase"], swiftSettings: strict),
         // Pure geometry: every frame in a window, computed from a snapshot and the constants.

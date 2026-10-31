@@ -445,10 +445,19 @@ public final class AppStore {
             case .chooseWebsiteRules(let id, let context):
                 guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
                 let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
-                panel.message = "Choose Brk blocking rules JSON. This replaces this profile's current network and cosmetic rules."
+                panel.message = "Choose Brk rules JSON or a supported EasyList subset text file. This replaces this profile's current network and cosmetic rules."
                 panel.beginSheetModal(for: owner) { [weak self] response in
                     guard let self, response == .OK, let file = panel.url else { return }
                     self.dispatch(.user(id, .site(.selectedBlockingRules(file, context))))
+                }
+            case .editExtension(let id, let edit, let context):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if let error = await self.engine.editExtension(id, edit: edit, context: context) {
+                        self.dispatch(.system(.extensionOperationFailed(context, error)))
+                    } else {
+                        self.dispatch(.system(.extensionsRead(await self.engine.extensionCatalog(context: context))))
+                    }
                 }
             case .queryExtensions(let context):
                 Task { @MainActor [weak self] in

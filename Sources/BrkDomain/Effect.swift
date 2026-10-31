@@ -34,6 +34,7 @@ public enum Effect: Hashable, Sendable {
     case disposeContext(ContextDisposal)
     case loadWebsiteRules(URL, BrowsingContext)
     case chooseWebsiteRules(WindowID, BrowsingContext)
+    case editExtension(String, ExtensionEdit, BrowsingContext)
     case queryExtensions(BrowsingContext)
     case invokeExtension(String, SiteTarget)
     case removeExtension(String, BrowsingContext, PageID)
