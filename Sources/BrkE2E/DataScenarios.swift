@@ -218,7 +218,19 @@ enum DataScenarios {
         var value = try SitePolicyScenarios.controls(app)
         try expect(value.extensions.contains { $0.id == installed.id && $0.enabled } && !value.pinnedExtensions.contains(installed.id), "other enable/pin state differs after restart")
         _ = try clearProfile(app, other, [.cookies, .cache, .history])
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.profile(.assign(.current, to: .default)))
+        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(second)))
+        let probe = PageID(window: app.window!, item: second)
+        guard case .pageObservations(let before) = try app.send(.pageObservations) else { throw Check(description: "extension document missing") }
+        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
+        try app.waitUntil("new extension document after profile clear") {
+            guard case .pageObservations(let after) = try app.send(.pageObservations), case .ready? = after[probe]?.document else { return false }
+            return after[probe]?.document != before[probe]?.document
+        }
+        try app.waitUntil("extension executes again after profile data clearing") {
+            try SitePolicyScenarios.evaluate(app, second, "document.title='data-extension-kept:'+document.documentElement.getAttribute('data-brk-extension')")
+            return tab(second, in: try app.view())?.title == "data-extension-kept:installed"
+        }
+        try app.dispatch(.profile(.assign(.current, to: .default)))
         try app.dispatch(.tab(.focus(first))); try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("Default catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
         value = try SitePolicyScenarios.controls(app)
