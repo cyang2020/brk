@@ -91,6 +91,7 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case siteControlsScreenshot(window: WindowID, path: String)
     case siteControls
     case mediaSounds
+    case mediaWindowScreenshot(number: Int, path: String)
     case captureProbe(page: PageID, directory: URL)
     case pageObservations
     /// Writes state.json now (skips the debounce).

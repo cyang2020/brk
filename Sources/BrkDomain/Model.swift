@@ -236,8 +236,8 @@ struct HistoryEntry: Sendable, Equatable {
 // MARK: - Session
 
 struct Session: Sendable, Equatable {
+    var automaticPiPCandidates: [PageID: DocumentToken] = [:]
     var captures = CaptureLibrary()
-    var captureError: String? = nil
     var sidebarDataStatus = "Not connected."
     var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
@@ -274,6 +274,7 @@ struct Session: Sendable, Equatable {
 struct WindowSession: Sendable, Equatable {
     var capture: CaptureSnapshot? = nil
     var capturePreview: String? = nil
+    var captureMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
     var expandedSplit: ItemID? = nil

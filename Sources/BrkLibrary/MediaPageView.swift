@@ -69,7 +69,7 @@ import BrkUIKit
         for button in buttons { let width = button.fittingSize.width; button.frame = CGRect(x:bx,y:bounds.height-m-30,width:width,height:30); bx += width+gap }
     }
     @objc private func choose(_ sender: NSButton) { if let id = sender.identifier?.rawValue { dispatch(.capture(.preview(id))) } }
-    @objc private func open() { if let selected, let url = files[selected.id] { NSWorkspace.shared.open(url) } }
+    @objc private func open() { if let selected { dispatch(.capture(.open(selected.id))) } }
     @objc private func export() { if let selected { dispatch(.capture(.export(selected.id))) } }
     @objc private func remove() { if let selected { dispatch(.capture(.remove(selected.id))) } }
     @objc private func insert() { if let selected { dispatch(.capture(.insertInEasel(selected.id))) } }

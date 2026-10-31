@@ -10,9 +10,10 @@ extension CEFEngine {
               page.incarnation == request.document.browser, contexts.permitsWork(request.context),
               let channel = CefDevTools(browser: page.browser) else { throw CefDevTools.Failure.unavailable }
         defer { channel.invalidate() }
+        let revision = page.captureRevision
         func valid() throws {
             try Task.checkCancellation()
-            guard isLive(page), page.readyDocument == request.document, contexts.permitsWork(request.context) else { throw CefDevTools.Failure.detached }
+            guard isLive(page), page.captureRevision == revision, page.readyDocument == request.document, contexts.permitsWork(request.context) else { throw CefDevTools.Failure.detached }
         }
         try valid()
         let metricsData = try await channel.call("Page.getLayoutMetrics")

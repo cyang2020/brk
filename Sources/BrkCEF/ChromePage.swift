@@ -30,6 +30,7 @@ final class ChromePage: CefBrowserDelegate {
     private var mediaError: String?
     private var mediaOperationError: String?
     var audioError: String?
+    private(set) var captureRevision: UInt64 = 0
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
@@ -172,6 +173,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        captureRevision &+= 1
         closeDocumentPiP()
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
@@ -184,7 +186,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -209,6 +211,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     private func prepareDocumentNavigation() {
+        captureRevision &+= 1
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()

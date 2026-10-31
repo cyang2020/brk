@@ -3,7 +3,7 @@ import Foundation
 
 public enum CaptureCommand: Hashable, Sendable, Codable {
     case begin(CaptureMode), select(CaptureRegion), cancel
-    case preview(String), export(String), remove(String), insertInEasel(String)
+    case open(String), preview(String), export(String), remove(String), insertInEasel(String)
 }
 public enum CaptureEvent: Sendable, Equatable {
     case loaded(ProfileID, [CaptureRecord], [String: URL], error: String?)
@@ -15,7 +15,7 @@ public enum CaptureEvent: Sendable, Equatable {
 }
 public enum CaptureEffect: Hashable, Sendable {
     case load(ProfileID), render(CaptureRequest), store(CaptureRequest, CaptureImage)
-    case remove(CaptureRecord), export(CaptureRecord, WindowID), insertInEasel(CaptureRecord, WindowID)
+    case open(CaptureRecord, WindowID), remove(CaptureRecord), export(CaptureRecord, WindowID), insertInEasel(CaptureRecord, WindowID)
     case forget(ProfileID)
 }
 public struct CaptureSnapshot: Hashable, Sendable, Codable {
@@ -27,5 +27,6 @@ public struct CaptureSnapshot: Hashable, Sendable, Codable {
 struct CaptureLibrary: Sendable, Equatable {
     var records: [CaptureRecord] = []
     var files: [String: URL] = [:]
+    var errors: [ProfileID: String] = [:]
     var loaded: Set<ProfileID> = []
 }

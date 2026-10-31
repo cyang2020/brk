@@ -2,7 +2,6 @@ import AppKit
 import BrkBase
 import BrkDomain
 import Foundation
-import UniformTypeIdentifiers
 
 extension AppStore {
     func runCapture(_ effect: CaptureEffect) {
@@ -35,18 +34,22 @@ extension AppStore {
                     if let insertCaptureInEasel { insertCaptureInEasel(EaselCaptureInsertion(capture: record, png: bytes), window) }
                     else { dispatch(.system(.capture(.exported(window, "Open an Easel to insert this capture.")))) }
                 } catch { fail(window, record.id, error) }
+            case .open(let record, let window):
+                guard let owner = captureWindow(window) else { return }
+                do { let bytes = try await captureFiles.bytes(record); try captureSheets.open(record,png:bytes,in:owner,id:window) }
+                catch { fail(window,record.id,error) }
             case .export(let record, let window):
                 guard let owner = captureWindow(window) else { return }
-                let panel = NSSavePanel()
-                panel.allowedContentTypes = [.png]; panel.nameFieldStringValue = "Capture-" + record.id + ".png"
-                panel.beginSheetModal(for: owner) { [weak self, weak owner] answer in
-                    guard answer == .OK, let url = panel.url, owner?.isVisible == true, let self else { return }
+                captureSheets.choose(name:"Capture-" + record.id + ".png", capture:record.id, in:owner, id:window) { [weak self, weak owner] url in
+                    guard let self, let url, owner?.isVisible == true,
+                          case .library(let library)? = self.snapshot.windows[window]?.overlay,
+                          library.captures.contains(where: { $0.id == record.id && $0.profile == record.profile }) else { return }
                     Task { @MainActor in
                         do {
                             let bytes = try await self.captureFiles.bytes(record)
-                            try await Task.detached { try bytes.write(to: url, options: .atomic) }.value
-                            self.dispatch(.system(.capture(.exported(window, "Exported " + url.lastPathComponent))))
-                        } catch { self.dispatch(.system(.capture(.failed(window, record.id, error.localizedDescription)))) }
+                            try await Task.detached { try bytes.write(to:url,options:.atomic) }.value
+                            self.dispatch(.system(.capture(.exported(window,"Exported " + url.lastPathComponent))))
+                        } catch { self.dispatch(.system(.capture(.failed(window,record.id,error.localizedDescription)))) }
                     }
                 }
             }

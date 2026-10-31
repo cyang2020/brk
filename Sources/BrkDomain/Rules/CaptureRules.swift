@@ -7,7 +7,8 @@ extension Work {
         case .begin(let mode):
             guard let tab = state.resolveTab(.focused, in: window), let value = state.displayedTab(tab, in: window),
                   let url = value.url, let live = state.session.live[PageID(window: window, item: tab)],
-                  case .ready(let document) = live.document, let context = live.requestContext else { return }
+                  case .ready(let document) = live.document, live.requestedURL == nil, let context = live.requestContext else { return }
+            state.session.windows[window]?.captureMessage = nil
             let request = CaptureRequest(id: ctx.newID(), document: document, context: context, mode: mode, title: value.displayTitle, url: url, createdAt: ctx.now)
             state.session.windows[window]?.capture = CaptureSnapshot(request: request)
             if mode == .fullPage { state.session.windows[window]?.capture?.rendering = true; effects.append(.capture(.render(request))) }
@@ -17,10 +18,11 @@ extension Work {
             state.session.windows[window]?.capture = capture
             effects.append(.capture(.render(capture.request)))
         case .cancel: state.session.windows[window]?.capture = nil
-        case .preview(let id), .export(let id), .remove(let id), .insertInEasel(let id):
+        case .open(let id), .preview(let id), .export(let id), .remove(let id), .insertInEasel(let id):
             guard case .profile(let profile) = state.libraryContext(in: window),
                   let record = state.session.captures.records.first(where: { $0.id == id && $0.profile == profile }) else { return }
             switch command {
+            case .open: effects.append(.capture(.open(record, window)))
             case .preview: state.session.windows[window]?.capturePreview = id
             case .export: effects.append(.capture(.export(record, window)))
             case .remove: effects.append(.capture(.remove(record)))
@@ -37,7 +39,7 @@ extension Work {
             state.session.captures.records.removeAll { $0.profile == profile }
             state.session.captures.records += rows.filter { $0.profile == profile }
             state.session.captures.files.merge(files) { _, new in new }
-            if let error { state.session.captureError = error }
+            state.session.captures.errors[profile] = error
         case .rendered(let request, let image):
             let window = request.document.browser.page.window
             guard let capture = state.session.windows[window]?.capture, capture.request == request,
@@ -69,9 +71,9 @@ extension Work {
             let pending = state.session.windows[window]?.capture?.request.id == id
             guard pending || state.session.captures.records.contains(where: { $0.id == id }) || id.isEmpty else { return }
             if pending { state.session.windows[window]?.capture = nil }
-            state.session.captureError = error
+            state.session.windows[window]?.captureMessage = error
             toast("Capture failed: " + error, in: window)
-        case .exported(_, let message): state.session.captureError = message
+        case .exported(let window, let message): state.session.windows[window]?.captureMessage = message
         }
     }
     mutating func reconcileCaptures(from before: AppState) {
@@ -82,7 +84,7 @@ extension Work {
         for window in state.session.windows.keys {
             guard let capture = state.session.windows[window]?.capture else { continue }
             let page = capture.request.document.browser.page
-            if state.session.live[page]?.document != .ready(capture.request.document)
+            if state.session.live[page]?.requestedURL != nil || state.session.live[page]?.document != .ready(capture.request.document)
                 || state.session.live[page]?.requestContext != capture.request.context
                 || state.resolveTab(.focused, in: window) != page.item {
                 state.session.windows[window]?.capture = nil

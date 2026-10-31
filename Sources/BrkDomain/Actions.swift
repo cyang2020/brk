@@ -208,9 +208,9 @@ extension ActionID {
         case .share:
             // Arc titles the result "Share URL"; Brk's Share… exports to a file, so the menu title stays and "Export" is ours.
             entry(33, "Share…", .file, 4, [], .app(.export(.focusedTab)), bar: listing("square.and.arrow.up", "Share", "Export"))
-        case .videoPictureInPicture: entry(1020, "Video Picture in Picture", .view, 9, [], .page(.pictureInPicture(.video)), bar: listing("pip", "Picture in Picture", "Video PiP"))
-        case .documentPictureInPicture: entry(1021, "Page Picture in Picture", .view, 9, [], .page(.pictureInPicture(.document)), bar: listing("pip", "Page Picture in Picture", "Meet PiP"))
-        case .closePictureInPicture: entry(1022, "Close Picture in Picture", .view, 9, [], .page(.pictureInPicture(.close)), bar: listing("pip.exit", "Close Picture in Picture"))
+        case .videoPictureInPicture: entry(220, "Video Picture in Picture", .view, 9, [], .page(.pictureInPicture(.video)), bar: listing("pip", "Picture in Picture", "Video PiP"))
+        case .documentPictureInPicture: entry(221, "Page Picture in Picture", .view, 9, [], .page(.pictureInPicture(.document)), bar: listing("pip", "Page Picture in Picture", "Meet PiP"))
+        case .closePictureInPicture: entry(222, "Close Picture in Picture", .view, 9, [], .page(.pictureInPicture(.close)), bar: listing("pip.exit", "Close Picture in Picture"))
         case .capturePage:
             entry(35, "Capture…", .file, 4, [key([shift, cmd], .two, .page)], .capture(.begin(.area)), bar: listing("camera", "Capture", "Screenshot", "Snapshot", "Cut Out"))
         case .captureFullPage:

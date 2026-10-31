@@ -284,7 +284,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         overlay = .library(LibrarySnapshot(
             captures: page == .media ? state.session.captures.records.filter { $0.profile == listed }.sorted { $0.createdAt > $1.createdAt } : [],
             captureFiles: page == .media ? state.session.captures.files.filter { key, _ in state.session.captures.records.contains { $0.id == key && $0.profile == listed } } : [:],
-            capturePreview: session.capturePreview, captureMessage: state.session.captureError,
+            capturePreview: session.capturePreview, captureMessage: session.captureMessage ?? listed.flatMap { state.session.captures.errors[$0] },
             openID: openID, page: page,
             archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(space.profile).autoArchive) : nil,
             downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == listed }.map {

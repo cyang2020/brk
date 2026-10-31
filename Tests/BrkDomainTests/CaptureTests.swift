@@ -19,6 +19,11 @@ final class CaptureTests: XCTestCase {
         d.user(.capture(.cancel))
         let image = CaptureImage(png: Data([1]), width: 10, height: 10, scale: 2)
         XCTAssertTrue(d.system(.capture(.rendered(request, image))).effects.isEmpty)
+        d.user(.capture(.begin(.area)))
+        let fragment = URL(string:"https://example.com/#capture-race")!
+        d.page(document.browser.page.item,.navigationRequested(fragment))
+        XCTAssertNil(d.view.capture,"A same-document navigation request must cancel capture before document replacement")
+        d.page(document.browser.page.item,.committed(fragment))
         d.user(.capture(.begin(.fullPage)))
         let next = DocumentToken(browser: document.browser, sequence: 2)
         d.page(document.browser.page.item, .documentChanged(.loading(next)))
@@ -36,6 +41,7 @@ final class CaptureTests: XCTestCase {
         let file = URL(fileURLWithPath:"/tmp/owned.png")
         d.system(.capture(.stored(request,record,file)))
         d.system(.capture(.loaded(.default,[record],[record.id:file],error:nil)))
+        XCTAssertEqual(d.user(.capture(.open(record.id))).effects,[.capture(.open(record,d.window))])
         d.user(.capture(.preview(record.id)))
         guard case .library(let library)? = d.view.overlay else { return XCTFail("Media closed on preview") }
         XCTAssertEqual(library.captures,[record]); XCTAssertEqual(library.captureFiles[record.id],file)
@@ -45,6 +51,16 @@ final class CaptureTests: XCTestCase {
         d.system(.capture(.removed(.default,record.id)))
         d.system(.capture(.exported(d.window,"Exported")))
         XCTAssertEqual(try StateCodec.decodeCaptures(StateCodec.encodeCaptures([record])),[record])
+    }
+    func testLateObservationStartsAutoPiPOnceAndDisablingClosesIt() throws {
+        let d = Driver(); let document = try ready(d)
+        d.user(.commandBar(.open(.newTab))); d.user(.commandBar(.submit("https://example.com/background")))
+        let player = MediaPlayer(id:MediaPlayerID(document:"late",frame:0,element:"video"),kind:.video,paused:false,ended:false)
+        let observed = d.page(document.browser.page.item,.mediaChanged(document,[player],error:nil))
+        XCTAssertTrue(observed.effects.contains(.page(document.browser.page,.media(MediaControl(document:document,player:player.id,operation:.enterPictureInPicture,userInitiated:false)))))
+        XCTAssertTrue(d.page(document.browser.page.item,.mediaChanged(document,[player],error:nil)).effects.isEmpty)
+        let disabled = d.user(.settings(.advanced(.autoPictureInPicture(false))))
+        XCTAssertTrue(disabled.effects.contains(.page(document.browser.page,.media(MediaControl(document:document,player:player.id,operation:.exitPictureInPicture,userInitiated:false)))))
     }
     func testAutomaticPiPSelectsPlayingVideoAndReattachesWithoutForgingActivation() throws {
         let d = Driver(); let document = try ready(d)

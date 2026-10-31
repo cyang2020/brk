@@ -26,6 +26,8 @@ extension CEFEngine {
             try png.write(to: directory.appendingPathComponent(name + ".png"))
             result[name] = ["width": image.pixelsWide, "height": image.pixelsHigh, "bytes": png.count]
         }
+        let gpu = try await channel.call("Runtime.evaluate", parameters: ["expression":"(()=>{const c=document.getElementById('gpu');const g=c?.getContext('webgl2')||c?.getContext('webgl');if(!g)return null;const e=g.getExtension('WEBGL_debug_renderer_info');return {renderer:g.getParameter(e?e.UNMASKED_RENDERER_WEBGL:g.RENDERER),width:g.drawingBufferWidth,height:g.drawingBufferHeight};})()", "returnByValue":true])
+        result["webGL"] = try JSONSerialization.jsonObject(with:gpu)
         for (name, expression) in [("videoPiP", "await video.requestPictureInPicture(); const active = document.pictureInPictureElement === video; await document.exitPictureInPicture(); return {active};"),
                                     ("documentPiP", "const w = await documentPictureInPicture.requestWindow({width:320,height:180}); const active = !!w; w.close(); return {active};")] {
             let script = "(async()=>{try {const video=document.querySelector('video'); \(expression)} catch(e) {return {error:e.name+': '+e.message, videoEnabled:document.pictureInPictureEnabled, documentAvailable:typeof documentPictureInPicture !== 'undefined'};}})()"

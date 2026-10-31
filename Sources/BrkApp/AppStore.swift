@@ -56,6 +56,7 @@ public final class AppStore {
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
     let sounds = SoundEffects()
+    let captureSheets = CaptureSheets()
     let captureFiles: CaptureFiles
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
@@ -121,13 +122,14 @@ public final class AppStore {
     /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right).
     public func refresh() {
         snapshot = projected()
+        reconcileCaptureSheets()
         engine.reconcile(snapshot.pages)
         renderWindows()
     }
 
     /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down. A failure is
     /// logged and reported; the quit goes on (the debounced copy on disk is the fallback).
-    public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll() }
+    public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll(); captureSheets.cancelAll() }
 
     @discardableResult
     public func flush() -> Bool {
@@ -216,6 +218,7 @@ public final class AppStore {
         snapshot = projected()
         sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
+        reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
@@ -330,6 +333,13 @@ public final class AppStore {
         if owner.isVisible, owner.attachedSheet == nil { alert.beginSheetModal(for: owner) }
     }
 
+    private func reconcileCaptureSheets() {
+        let captures = snapshot.windows.mapValues { window -> Set<String> in
+            if case .library(let library)? = window.overlay { return Set(library.captures.map(\.id)) }
+            return []
+        }
+        captureSheets.reconcile(Set(snapshot.windows.keys), captures:captures)
+    }
     func captureWindow(_ id: WindowID) -> NSWindow? { windows[id]?.window }
 
     private func run(_ effects: [Effect]) {

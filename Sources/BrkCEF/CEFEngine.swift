@@ -205,10 +205,28 @@ public final class CEFEngine: WebEngine {
         return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
+    private var reconciling = false
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
+        wanted = pages.filter { contexts.permitsWork($0.context) }
+        // Native browser creation pumps callbacks, including profile readiness. Replay the latest demand after
+        // the current pass; a nested pass must never create the same window/page before its first insert.
+        guard !reconciling else {
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: deferred nested reconciliation\n".utf8)) }
+            return
+        }
+        reconciling = true
+        defer { reconciling = false }
+        var applied: [PageSpec]?
+        while applied != wanted {
+            let next = wanted
+            reconcilePages(next)
+            applied = next
+        }
+    }
+    private func reconcilePages(_ pages: [PageSpec]) {
+        guard phase == .running else { return }
         let pages = pages.filter { contexts.permitsWork($0.context) }
-        self.wanted = pages
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.
