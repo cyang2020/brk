@@ -30,10 +30,13 @@ import BrkUIKit
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    func render(_ value: CaptureSnapshot?, frames: WindowFrames) {
-        guard let value, let card = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } }) else { isHidden = true; snapshot = nil; return }
+    func render(_ value: CaptureSnapshot?, frames: WindowFrames, peek: PeekSnapshot?) {
+        guard let value else { isHidden = true; snapshot = nil; return }
+        let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.rect
+            ?? (peek?.page == value.request.document.browser.page ? frames.peek.map { CGRect(x:$0.minX,y:$0.minY,width:$0.width,height:max(0,$0.height-Metrics.peek.hintHeight.value)) } : nil)
+        guard let rect else { isHidden = true; snapshot = nil; return }
         let fresh = snapshot?.request.id != value.request.id
-        snapshot = value; frame = card.rect; isHidden = false
+        snapshot = value; frame = rect; isHidden = false
         if fresh {
             let width = min(360, bounds.width, bounds.height * 9 / 16)
             selection = value.request.mode == .portrait ? CGRect(x: (bounds.width - width) / 2, y: (bounds.height - width * 16 / 9) / 2, width: width, height: width * 16 / 9) : .zero

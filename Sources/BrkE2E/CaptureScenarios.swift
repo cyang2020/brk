@@ -92,6 +92,20 @@ enum CaptureScenarios {
         app.window=publicWindow; _ = try app.send(.activate(window:publicWindow))
         try app.dispatch(.library(.open(.media)))
         try expect(try library(app)?.captures.count == 2,"private capture entered public index")
+        try app.dispatch(.library(.close))
+        try app.dispatch(.peek(.open(url)))
+        try app.waitUntil("Peek source owns its ready page") { if case .peek(let peek)? = try app.view().overlay { return peek.page != nil };return false }
+        guard case .peek(let peek)? = try app.view().overlay, let peekPage = peek.page else { throw Check(description:"Peek page missing") }
+        try app.waitForPageInput(peekPage,at:url)
+        try app.dispatch(.capture(.begin(.area)))
+        try expect(try app.view().capture?.request.document.browser.page == peekPage,"Capture switched from Peek to the underlying tab")
+        let peekRect = try app.native().computed.peek!
+        _ = try app.send(.pointerDrag(from:CGPoint(x:peekRect.minX+peekRect.width*0.4,y:peekRect.minY+peekRect.height*0.4),to:CGPoint(x:peekRect.minX+peekRect.width*0.65,y:peekRect.minY+peekRect.height*0.65),cancel:false))
+        try app.click(.tabTool("capture-confirm"))
+        try app.waitUntil("Peek capture reaches its public profile library") { try library(app)?.captures.count == 3 }
+        guard let peekCapture = try library(app)?.captures.first, let peekFile = try library(app)?.captureFiles[peekCapture.id] else { throw Check(description:"Peek capture missing") }
+        try expect(peekCapture.url == url,"Peek capture has the underlying tab's address")
+        try Data(contentsOf:peekFile).write(to:app.shotsDirectory.appendingPathComponent("peek-area.png"))
         let originalSpace = try app.view().space.id
         _ = try createSpace(app,title:"Capture profile")
         try app.dispatch(.profile(.create(name:"Capture isolated",icon:nil)))
@@ -110,7 +124,7 @@ enum CaptureScenarios {
         try app.waitUntil("profile deletion removes its capture folder") { !FileManager.default.fileExists(atPath:isolatedFile.path) }
         try app.dispatch(.space(.focus(originalSpace)))
         try app.dispatch(.library(.open(.media)))
-        try app.waitUntil("default profile captures survive isolated profile deletion") { try library(app)?.captures.count == 2 }
+        try app.waitUntil("default profile captures survive isolated profile deletion") { try library(app)?.captures.count == 3 }
         let evidence=try JSONEncoder().encode([full,area,portrait]);try evidence.write(to:app.shotsDirectory.appendingPathComponent("product-records.json"))
     }
     @Sendable static func scale(_ app: AppUnderTest) throws {

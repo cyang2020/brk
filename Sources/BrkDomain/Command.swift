@@ -488,7 +488,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .tabTools(.dismissToast), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
+        case .capture, .tabTools(.dismissToast), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
         default: false
         }
     }

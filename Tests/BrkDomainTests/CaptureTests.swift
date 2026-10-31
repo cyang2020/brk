@@ -52,6 +52,19 @@ final class CaptureTests: XCTestCase {
         d.system(.capture(.exported(d.window,"Exported")))
         XCTAssertEqual(try StateCodec.decodeCaptures(StateCodec.encodeCaptures([record])),[record])
     }
+    func testCaptureBindsPeekBeforeAnyOverlayCanCloseItsSource() throws {
+        let d = Driver(); _ = try ready(d)
+        d.user(.peek(.open(URL(string:"https://example.com/peek-capture")!)))
+        guard case .peek(let peek)? = d.view.overlay, let page = peek.page else { return XCTFail("No Peek") }
+        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
+        let document = DocumentToken(browser:browser,sequence:1)
+        d.page(page.item,.documentChanged(.loading(document)))
+        d.page(page.item,.committed(URL(string:"https://example.com/peek-capture")!))
+        d.page(page.item,.documentChanged(.ready(document)))
+        d.user(.capture(.begin(.area)))
+        XCTAssertEqual(d.view.capture?.request.document,document)
+        guard case .peek? = d.view.overlay else { return XCTFail("Capture closed its Peek source") }
+    }
     func testLateObservationStartsAutoPiPOnceAndDisablingClosesIt() throws {
         let d = Driver(); let document = try ready(d)
         d.user(.commandBar(.open(.newTab))); d.user(.commandBar(.submit("https://example.com/background")))

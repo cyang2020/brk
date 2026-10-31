@@ -113,7 +113,7 @@ public final class WindowRootView: NSView {
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
-        captureOverlay.render(snapshot.capture, frames: frames)
+        captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
         lastTheme = snapshot.theme
     }
 }
