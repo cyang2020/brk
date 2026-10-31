@@ -249,10 +249,13 @@ enum TransferScenarios {
         try complete(app, name: "transfer-window.bin", at: dir.appendingPathComponent("transfer-window.bin"))
     }
     private static func reassign(_ app: AppUnderTest) throws {
+        try reassign(app, path: "transfer-reassign")
+    }
+    static func reassign(_ app: AppUnderTest, path: String) throws {
         let dir = try folder(app); let page = try home(app)
         let before = try app.native().pages[page]?.browserID
-        try start(app, "transfer-reassign", in: page); try library(app)
-        _ = try receiving(app, name: "transfer-reassign.bin")
+        try start(app, path, in: page); try library(app)
+        _ = try receiving(app, name: path + ".bin")
         let other = try profile(app, name: "Other")
         _ = try folder(app, profile: other, name: "wrong-owner")
         try app.dispatch(.profile(.assign(.current, to: other)))
@@ -262,8 +265,8 @@ enum TransferScenarios {
         try app.dispatch(.profile(.assign(.current, to: .default)))
         _ = try folder(app, name: "later-policy")
         try library(app)
-        try complete(app, name: "transfer-reassign.bin", at: dir.appendingPathComponent("transfer-reassign.bin"))
-        try expect(app.site.requestCount("/transfer-reassign") == 1, "download replayed")
+        try complete(app, name: path + ".bin", at: dir.appendingPathComponent(path + ".bin"))
+        try expect(app.site.requestCount("/" + path) == 1, "download replayed")
     }
     private static func privateExpiry(_ app: AppUnderTest) throws {
         let dir = try folder(app)
@@ -294,15 +297,18 @@ enum TransferScenarios {
         try expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["fixture.txt"], "expired private transfer left output or staging files")
     }
     private static func deleteProfile(_ app: AppUnderTest) throws {
+        try deleteProfile(app, path: "transfer-delete")
+    }
+    static func deleteProfile(_ app: AppUnderTest, path: String) throws {
         let p = try profile(app, name: "Dispose")
         let dir = try folder(app, profile: p)
         try app.dispatch(.profile(.assign(.current, to: p)))
         let page = try home(app)
-        try start(app, "transfer-delete", in: page); try library(app)
-        _ = try receiving(app, name: "transfer-delete.bin")
+        try start(app, path, in: page); try library(app)
+        _ = try receiving(app, name: path + ".bin")
         try app.dispatch(.profile(.assign(.current, to: .default)))
         try app.dispatch(.profile(.delete(p)))
-        try stopped(app, "/transfer-delete")
+        try stopped(app, "/" + path)
         try app.waitUntil("final disposal") {
             guard case .settings(let settings) = try app.send(.settings) else { return false }
             return settings.deletingProfiles.isEmpty

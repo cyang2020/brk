@@ -211,8 +211,14 @@ public final class CEFEngine: WebEngine {
         wanted = pages.filter { contexts.permitsWork($0.context) }
         // Chrome browser construction pumps AppKit. A loader or page callback can reenter with
         // newer demand before the first ChromePage has been installed in resources.
-        guard !reconcilingPages else { return }
+        let reentered = reconcilingPages
         reconcilingPages = true
+        // Revoke old presentation synchronously, even while construction is deferred. Input must
+        // not reach the previous profile after the reducer has accepted a reassignment.
+        for page in Array(live.values) where !wanted.contains(where: { $0.id == page.id && $0.context == page.context }) {
+            retire(page)
+        }
+        guard !reentered else { return }
         defer { reconcilingPages = false }
         while phase == .running {
             let demand = wanted
@@ -223,12 +229,7 @@ public final class CEFEngine: WebEngine {
 
     private func reconcilePages(_ pages: [PageSpec]) {
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
-        // page to its request context for life. The new incarnation inherits its window's request.
         focusRequests = focusRequests.filter { $0.value.window != nil && wanted[$0.value.page] != nil }
-        for (id, page) in live where wanted[id]?.context != page.context {
-            retire(page)
-        }
         for spec in pages {
             if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
