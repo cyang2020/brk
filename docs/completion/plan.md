@@ -48,7 +48,7 @@ The second command is expected to fail until the agreed feature scope is complet
 - [Native-shell grounding](grounding/native-shell.md) assessed 79 rows covering UI, domain, layout, persistence, menus, and settings.
 - The parent reviewed the remaining 26 productivity/integration rows in [integration grounding](grounding/integrations.md).
 
-All 148 rows now have a current assessment. The counts are 6 verified, 26 implemented, 52 partial, 58 missing, 3 excluded, 2 deferred, and 1 blocked. These categories describe acceptance and evidence, not effort or a completion percentage. The parent merged the 122 delegated proposals with `scripts/merge-completion-proposals.py`, then recorded subsequent corrections without rewriting the historical reports.
+All 148 rows now have a current assessment. The counts are 8 verified, 26 implemented, 50 partial, 58 missing, 3 excluded, 2 deferred, and 1 blocked. These categories describe acceptance and evidence, not effort or a completion percentage. The parent merged the 122 delegated proposals with `scripts/merge-completion-proposals.py`, then recorded subsequent corrections without rewriting the historical reports.
 
 The History review found a destructive coupling between history removal and profile disposal. Commit `ddc2854` removes that coupling and labels the action **Clear History…**. Its [before/after evidence](../../verify/completion/history-safety/REPORT.md) includes a failing native reproduction, 460 build tests with three known skips and zero failures, and 46 passing native scenarios. Full scoped browsing-data clearing remains unfinished.
 
@@ -67,3 +67,9 @@ The next [transfer contract](core-design/transfers.md) and [typed boundary sketc
 The C2-C3 implementation and parent corrections are merged. The [parent receipt](../../verify/completion/transfers-parent/REPORT.md) records 508 tests with three skips, nine raw ownership tests, and 67 native passes. A048 is verified against that contract and its disclosed limits, including explicit failure/recovery for mandatory native browser destruction. Directory deletion remains scheduled for next launch.
 
 The next [Find contract](core-design/find.md) and [typed sketch](core-design/Find.swift) resolve C4: native page find, generated-ID correlation, scoped selection, Jump and supported editable replacement with real undo/input tests. C5 output and C6 broad data removal remain separate, followed by the rest of the full inventory.
+
+## User-prioritized parallel batch
+
+The user requested parallel implementation of browser foundations, tabs/Spaces, split views, website/extensions, and import/sync. The [batch contract](batches/browser-20261031/README.md) partitions these into six isolated implementation branches, with the existing Find task continuing independently. The [manifest](batches/browser-20261031/manifest.json) assigns 105 rows without overlap plus A039 to the existing task. Shared settings/menu rows are integrated by the parent; cross-feature rows remain partial where their other dependencies are outside this batch.
+
+Workers implement complete native flows and publish separate evidence/proposals. Only the parent integrates the branches and updates canonical acceptance. Production shared files are merged sequentially; builds and native GUI tests use the batch locks. Output C5 and data-removal C6 must resolve their earlier design gates in their assigned slices. Creative/media/AI work follows this priority batch. Authenticated Arc visual comparison remains a separate unresolved reference gate.

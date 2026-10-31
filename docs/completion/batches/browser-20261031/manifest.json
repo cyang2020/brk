@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "base_commit": "2e9935b54dcee18c7da680c6e3a28fc7a9bb7f15",
+  "user_request": "Prioritize parallel completion of browser basics, tabs/Spaces, splits, website/extensions and import/sync. Other agreed work remains scheduled.",
+  "existing_find": {
+    "feature_ids": [
+      "A039"
+    ],
+    "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3A23034b31-f2f1-42bd-aac3-54bda0aef72b",
+    "status_at_frame": "running; preserve existing task"
+  },
+  "slices": [
+    {
+      "id": "browser-basic",
+      "title": "Browser foundations and native operations",
+      "feature_ids": [
+        "A036",
+        "A037",
+        "A038",
+        "A040",
+        "A041",
+        "A044",
+        "A045",
+        "A046",
+        "A047",
+        "A049",
+        "A050",
+        "A052",
+        "A053",
+        "A055",
+        "A066",
+        "A067",
+        "A068",
+        "A069",
+        "A070",
+        "A083",
+        "A084",
+        "A085",
+        "A086",
+        "A087",
+        "A088",
+        "A111",
+        "A112"
+      ],
+      "brief": "browser-basic.md",
+      "status": "framed"
+    },
+    {
+      "id": "tabs",
+      "title": "Tabs, folders, archive and tab workflows",
+      "feature_ids": [
+        "A002",
+        "A008",
+        "A009",
+        "A010",
+        "A011",
+        "A012",
+        "A013",
+        "A014",
+        "A015",
+        "A016",
+        "A017",
+        "A018",
+        "A019",
+        "A020",
+        "A021",
+        "A022",
+        "A023",
+        "A024",
+        "A025",
+        "A026",
+        "A027",
+        "A028",
+        "A029",
+        "A030",
+        "A031",
+        "A032",
+        "A033",
+        "A034",
+        "A035",
+        "A078",
+        "A079",
+        "A080",
+        "A082",
+        "A089",
+        "A090",
+        "A091",
+        "A092"
+      ],
+      "brief": "tabs.md",
+      "status": "framed"
+    },
+    {
+      "id": "spaces",
+      "title": "Spaces, sidebar layout and full theme tools",
+      "feature_ids": [
+        "A001",
+        "A003",
+        "A005",
+        "A006",
+        "A007",
+        "A056",
+        "A057",
+        "A058",
+        "A059",
+        "A060",
+        "A061",
+        "A062",
+        "A063",
+        "A064",
+        "A081"
+      ],
+      "brief": "spaces.md",
+      "status": "framed"
+    },
+    {
+      "id": "splits",
+      "title": "Complete split-view workflows",
+      "feature_ids": [
+        "A071",
+        "A072",
+        "A073",
+        "A074",
+        "A075",
+        "A076",
+        "A077"
+      ],
+      "brief": "splits.md",
+      "status": "framed"
+    },
+    {
+      "id": "sites-extensions",
+      "title": "Website controls, data, permissions and extensions",
+      "feature_ids": [
+        "A042",
+        "A043",
+        "A065",
+        "A093",
+        "A094",
+        "A095",
+        "A096",
+        "A097",
+        "A098",
+        "A107",
+        "A108",
+        "A109",
+        "A110"
+      ],
+      "brief": "sites-extensions.md",
+      "status": "framed"
+    },
+    {
+      "id": "import-sync",
+      "title": "Onboarding, authorized import, local sync and export",
+      "feature_ids": [
+        "A119",
+        "A120",
+        "A121",
+        "A122",
+        "A143",
+        "A144"
+      ],
+      "brief": "import-sync.md",
+      "status": "framed"
+    }
+  ],
+  "parent_integration_rows": [
+    "A113",
+    "A114",
+    "A115",
+    "A116",
+    "A117",
+    "A130"
+  ],
+  "unchanged_verified_regression_rows": [
+    "A004",
+    "A048",
+    "A051",
+    "A054",
+    "A145",
+    "A146",
+    "A147"
+  ],
+  "deferred_to_later_batches": [
+    "creative documents and Boosts",
+    "capture/media/PiP implementation",
+    "AI tasks",
+    "authenticated Arc pixel comparison"
+  ]
+}
