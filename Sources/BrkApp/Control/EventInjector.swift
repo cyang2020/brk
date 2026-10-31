@@ -274,7 +274,7 @@ final class EventInjector {
                 // Match inactive-window click delivery: Chromium still receives actual native pointer input.
                 let target = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point)
                 target?.mouseMoved(with: moved)
-                print("[control] inactive hover target=\(target.map { NSStringFromClass(type(of: $0)) } ?? "nil")")
+                print("[control] inactive hover target=\(target.map { NSStringFromClass(Swift.type(of: $0)) } ?? "nil")")
             }
         }
         guard let top = window.contentView?.superview ?? window.contentView else { return }
