@@ -79,7 +79,9 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Afa34208e-1744-48b8-a2b3-4b364cc70961",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Afa34208e-1744-48b8-a2b3-4b364cc70961",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered PASS (A042/A093/A094/A095 implemented; 22/22 native incl. T9, SitePolicy-clear); parent reviews",
+      "delivered_commit": "7d235b1fa57178bf83e3a67fcf0359ab199897a2",
+      "branch": "t3/privacy-data-completion"
     },
     {
       "slice": "extensions-sites",
