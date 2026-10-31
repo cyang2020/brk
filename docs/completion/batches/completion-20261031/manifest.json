@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "batch": "completion-20261031",
+  "base_commit": "ee4e2ec04eb370977bc957981c07c39eb54da836",
+  "user_request": "Finish every partial and missing feature row in parallel; do not stop; use the pstack skills that fit.",
+  "generated_by": "docs/completion/batches/completion-20261031/make-briefs.py",
+  "slices": [
+    {
+      "id": "browser-ops",
+      "wave": 1,
+      "title": "Browser operations close-out: download/navigation regression, keys, developer tools, output, fullscreen, edit menu, popups",
+      "feature_ids": [
+        "A037",
+        "A041",
+        "A044",
+        "A045",
+        "A046",
+        "A048",
+        "A049"
+      ],
+      "scenario_prefix": "BO",
+      "brief": "browser-ops.md",
+      "evidence": "verify/completion/batch2-browser-ops/",
+      "status": "framed"
+    },
+    {
+      "id": "file-panels",
+      "wave": 1,
+      "title": "Native open/save panel input and the import, export and sync receipts that depend on it",
+      "feature_ids": [
+        "A122",
+        "A143",
+        "A144"
+      ],
+      "scenario_prefix": "FP",
+      "brief": "file-panels.md",
+      "evidence": "verify/completion/batch2-file-panels/",
+      "status": "framed"
+    },
+    {
+      "id": "privacy-data",
+      "wave": 1,
+      "title": "Profiles, incognito, scoped data removal and their restart receipts",
+      "feature_ids": [
+        "A042",
+        "A093",
+        "A094",
+        "A095"
+      ],
+      "scenario_prefix": "Data",
+      "brief": "privacy-data.md",
+      "evidence": "verify/completion/batch2-privacy-data/",
+      "status": "framed"
+    },
+    {
+      "id": "extensions-sites",
+      "wave": 1,
+      "title": "Extension actions and popups, extension shortcuts, site permissions, blocking and per-site rules",
+      "feature_ids": [
+        "A096",
+        "A097",
+        "A098",
+        "A107",
+        "A108",
+        "A109",
+        "A110"
+      ],
+      "scenario_prefix": "Ext",
+      "brief": "extensions-sites.md",
+      "evidence": "verify/completion/batch2-extensions-sites/",
+      "status": "framed"
+    },
+    {
+      "id": "sidebar-tabs",
+      "wave": 1,
+      "title": "Favorites badges, join meeting, custom icons, loading glow, hover cards, crashed page",
+      "feature_ids": [
+        "A014",
+        "A015",
+        "A021",
+        "A030",
+        "A031",
+        "A032"
+      ],
+      "scenario_prefix": "SidebarTools",
+      "brief": "sidebar-tabs.md",
+      "evidence": "verify/completion/batch2-sidebar-tabs/",
+      "status": "framed"
+    },
+    {
+      "id": "ai-features",
+      "wave": 1,
+      "title": "Local-CLI AI features: command bar question, ask on page, previews, tidy tabs, renames, instant links, browse for me, translation, Max pane",
+      "feature_ids": [
+        "A134",
+        "A135",
+        "A136",
+        "A137",
+        "A138",
+        "A139",
+        "A140",
+        "A141",
+        "A142"
+      ],
+      "scenario_prefix": "AI",
+      "brief": "ai-features.md",
+      "evidence": "verify/completion/batch2-ai-features/",
+      "status": "framed"
+    },
+    {
+      "id": "captures-media",
+      "wave": 1,
+      "title": "Capture, Media library, picture in picture, media controls, sound effects",
+      "feature_ids": [
+        "A102",
+        "A103",
+        "A104",
+        "A105",
+        "A106"
+      ],
+      "scenario_prefix": "Capture",
+      "brief": "captures-media.md",
+      "evidence": "verify/completion/batch2-captures-media/",
+      "status": "framed"
+    },
+    {
+      "id": "boosts",
+      "wave": 1,
+      "title": "Boosts: per-site CSS and JavaScript, Zap, editor, gallery, install, export and import",
+      "feature_ids": [
+        "A099"
+      ],
+      "scenario_prefix": "Boost",
+      "brief": "boosts.md",
+      "evidence": "verify/completion/batch2-boosts/",
+      "status": "framed"
+    },
+    {
+      "id": "easels-notes",
+      "wave": 2,
+      "title": "Notes and Easels, their appearance and export",
+      "feature_ids": [
+        "A100",
+        "A101"
+      ],
+      "scenario_prefix": "Creative",
+      "brief": "easels-notes.md",
+      "evidence": "verify/completion/batch2-easels-notes/",
+      "status": "framed"
+    },
+    {
+      "id": "settings-panes",
+      "wave": 2,
+      "title": "Settings window, General, Profiles, Shortcuts, Advanced and App Icon panes with their runtime consumers",
+      "feature_ids": [
+        "A113",
+        "A114",
+        "A115",
+        "A116",
+        "A117",
+        "A118"
+      ],
+      "scenario_prefix": "Settings",
+      "brief": "settings-panes.md",
+      "evidence": "verify/completion/batch2-settings-panes/",
+      "status": "framed"
+    },
+    {
+      "id": "menus-system",
+      "wave": 2,
+      "title": "Default browser and incoming links, Help menu, About, menu bar coverage, Dock tile, status item, AppleScript",
+      "feature_ids": [
+        "A112",
+        "A125",
+        "A129",
+        "A130",
+        "A131",
+        "A132",
+        "A133"
+      ],
+      "scenario_prefix": "System",
+      "brief": "menus-system.md",
+      "evidence": "verify/completion/batch2-menus-system/",
+      "status": "framed"
+    },
+    {
+      "id": "little-arc-folders",
+      "wave": 2,
+      "title": "Command bar actions, Little Brk entry points and auto-archive, Live Folders",
+      "feature_ids": [
+        "A068",
+        "A085",
+        "A086",
+        "A092"
+      ],
+      "scenario_prefix": "Little",
+      "brief": "little-arc-folders.md",
+      "evidence": "verify/completion/batch2-little-arc-folders/",
+      "status": "framed"
+    }
+  ],
+  "parent_rows": {
+    "A043": "Website appearance: Easels and Notes consumers come from easels-notes; the parent records the receipt.",
+    "A081": "Library: Media, Easels and Notes, Boosts and Spaces pages come from their slices; the parent verifies the whole after integration.",
+    "A148": "Arc pixel reference: blocked on the user's Arc login; unchanged in this batch."
+  },
+  "open_rows_at_dispatch": {
+    "partial": [
+      "A014",
+      "A015",
+      "A021",
+      "A030",
+      "A031",
+      "A032",
+      "A037",
+      "A041",
+      "A042",
+      "A043",
+      "A044",
+      "A045",
+      "A046",
+      "A049",
+      "A068",
+      "A081",
+      "A085",
+      "A086",
+      "A092",
+      "A093",
+      "A094",
+      "A095",
+      "A096",
+      "A097",
+      "A098",
+      "A107",
+      "A108",
+      "A109",
+      "A110",
+      "A112",
+      "A113",
+      "A114",
+      "A115",
+      "A116",
+      "A117",
+      "A122",
+      "A125",
+      "A129",
+      "A130",
+      "A138",
+      "A142",
+      "A143",
+      "A144"
+    ],
+    "missing": [
+      "A099",
+      "A100",
+      "A101",
+      "A102",
+      "A103",
+      "A104",
+      "A105",
+      "A106",
+      "A118",
+      "A131",
+      "A132",
+      "A133",
+      "A134",
+      "A135",
+      "A136",
+      "A137",
+      "A139",
+      "A140",
+      "A141"
+    ]
+  }
+}
