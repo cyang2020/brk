@@ -15,7 +15,6 @@ import Testing
         let handled = handler.pointee.run_context_menu!(handler, nil, nil, nil, model, callback)
         print("REPRO windowed run_context_menu handled =", handled)
         #expect(handled == 0, "Windowed Brk must fall through to CEF's native menu")
-        cefRelease(UnsafeMutableRawPointer(model))
         cefRelease(UnsafeMutableRawPointer(handler))
         cefRelease(UnsafeMutableRawPointer(rawClient))
         client.releaseHandlers()

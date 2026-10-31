@@ -11,6 +11,9 @@ import AppKit
         center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(100))
         try events.rightClick(at: point, in: window)
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         while !ended && ProcessInfo.processInfo.systemUptime < deadline { try await Task.sleep(for: .milliseconds(20)) }

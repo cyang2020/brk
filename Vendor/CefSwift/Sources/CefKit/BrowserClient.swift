@@ -574,6 +574,10 @@ extension BrowserClient {
         handler.pointee.on_before_context_menu = { handlerSelf, browser, frame, params, model in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
+            defer {
+                cefRelease(params.map(UnsafeMutableRawPointer.init))
+                cefRelease(model.map(UnsafeMutableRawPointer.init))
+            }
             guard let params, let model else { return }
             let snapshot = CefContextMenuParams(raw: params)
             let menu = CefMenuModel(raw: model)
@@ -585,8 +589,11 @@ extension BrowserClient {
         handler.pointee.run_context_menu = { handlerSelf, browser, frame, params, model, callback in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
-            guard let model, let callback else {
+            defer {
+                cefRelease(params.map(UnsafeMutableRawPointer.init))
                 cefRelease(model.map(UnsafeMutableRawPointer.init))
+            }
+            guard let model, let callback else {
                 cefRelease(callback.map(UnsafeMutableRawPointer.init))
                 return 0
             }
@@ -603,8 +610,15 @@ extension BrowserClient {
                 client.osrHost != nil
             }
             if !isOSR {
-                cefRelease(UnsafeMutableRawPointer(callback))
-                return 0
+                return MainActor.assumeIsolated {
+                    let wrapper = CefRunContextMenuCallback(raw: callback)
+                    let handled = BrowserClientCallbacks.run(handlerSelf, default: false) { _, browser in
+                        browser.delegate?.browser(browser, presentContextMenu: CefMenuModel(raw: model),
+                            params: params.map { CefContextMenuParams(raw: $0) } ?? CefContextMenuParams(), callback: wrapper) ?? false
+                    }
+                    if !handled { wrapper.discard() }
+                    return handled ? 1 : 0
+                }
             }
             let menu = CefMenuModel(raw: model)
             let viewPoint = params.map { CGPoint(x: CGFloat($0.pointee.get_xcoord?($0) ?? 0), y: CGFloat($0.pointee.get_ycoord?($0) ?? 0)) } ?? .zero
@@ -622,6 +636,7 @@ extension BrowserClient {
         handler.pointee.on_context_menu_command = { handlerSelf, browser, frame, params, commandID, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
+            defer { cefRelease(params.map(UnsafeMutableRawPointer.init)) }
             let snapshot = params.map { CefContextMenuParams(raw: $0) }
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { client, cefBrowser in
                 let p = snapshot ?? client.currentContextMenuParams

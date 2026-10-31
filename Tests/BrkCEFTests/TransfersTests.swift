@@ -173,7 +173,7 @@ import XCTest
     func testInterruptedIsDistinctAndTimeoutRetainsWriterOwnership() throws {
         let f = Fixture(); defer { f.dispose() }
         f.decide(f.item()); f.update(f.item(interrupted: true))
-        XCTAssertEqual(f.updates.last?.stage, .terminal(.interrupted(reason: "CEF interruption 9", .removed)))
+        XCTAssertEqual(f.updates.last?.stage, .terminal(.interrupted(reason: "Download interrupted (error 9)", .removed)))
         let d = f.decide(f.item(2)); let c = Control(); f.update(f.item(2), c)
         f.transfers.reportTimeout()
         guard case .terminal(.failed(_, .retained(let directory, _))) = f.updates.last?.stage else { return XCTFail("timeout erased file ownership") }

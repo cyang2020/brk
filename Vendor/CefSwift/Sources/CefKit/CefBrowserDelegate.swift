@@ -99,6 +99,8 @@ public protocol CefBrowserDelegate: AnyObject {
     /// ``CefMenuModel/userCommandIDFirst``...``CefMenuModel/userCommandIDLast``,
     /// remove items) before it is shown. `params` describes the click target.
     func browser(_ b: CefBrowser, configureContextMenu menu: CefMenuModel, params: CefContextMenuParams)
+    /// Snapshot synchronously, then present outside this CEF callback. False keeps native default handling.
+    func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool
 
     /// A context-menu command was selected. Return `true` if you handled a
     /// custom command, `false` to let CEF run its built-in command.
@@ -207,6 +209,7 @@ extension CefBrowserDelegate {
     public func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool { false }
 
     public func browser(_ b: CefBrowser, configureContextMenu menu: CefMenuModel, params: CefContextMenuParams) {}
+    public func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool { false }
     public func browser(_ b: CefBrowser, contextMenuCommand commandID: Int, params: CefContextMenuParams) -> Bool { false }
     public func browserContextMenuDidClose(_ b: CefBrowser) {}
 

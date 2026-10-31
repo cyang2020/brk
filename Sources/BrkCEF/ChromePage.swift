@@ -18,6 +18,7 @@ final class ChromePage: CefBrowserDelegate {
     private unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    private let contextMenu = PageContextMenu()
     private var mainDocument: MainDocumentState
 
     private func emit(_ events: [PageEvent]) { for event in events { engine.pageDidEmit(self, event) } }
@@ -72,6 +73,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        contextMenu.cancel()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
@@ -93,12 +95,22 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
+        contextMenu.cancel()
         mainDocument.prepareNavigation()
     }
 
     func prepareStop() { emit(mainDocument.stopped()) }
 
     // MARK: CefBrowserDelegate -> PageEvent
+
+    func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool {
+        contextMenu.show(menu, at: CGPoint(x: params.x, y: params.y), in: surface, callback: callback) { [weak self] in
+            guard let self else { return false }; return self.engine.isLive(self) && !self.surface.isHiddenOrHasHiddenAncestor
+        }
+        return true
+    }
+
+    func browserContextMenuDidClose(_ b: CefBrowser) { contextMenu.cancel() }
 
     func browser(_ b: CefBrowser, didChangeURL url: URL?) {
         emit(mainDocument.addressChanged(url, loading: b.isLoading))
@@ -159,13 +171,14 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { engine.pageDidClose(self) }
+    func browserDidClose(_ b: CefBrowser) { contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
     func browser(_ b: CefBrowser, decidePolicyForNavigation url: URL?, isRedirect: Bool, userGesture: Bool) -> CefNavigationDecision {
         guard let url else { return .allow }
         guard isRedirect || engine.pageShouldNavigate(self, to: url, userGesture: userGesture) else { return .cancel }
+        contextMenu.cancel()
         emit(mainDocument.allowed(url, redirect: isRedirect))
         return .allow
     }

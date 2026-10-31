@@ -176,8 +176,8 @@ extension CefDownloadControl: TransferControl {}
             if let files = op.files {
                 do { end = .completed(try files.commit()) }
                 catch let error as TransferFiles.CommitCleanupError {
-                    end = .failed(reason: "File saved, but staging cleanup failed: " + error.reason,
-                                  .retained(error.receipt.url, reason: "Staging remains at " + error.directory.path))
+                    end = .failed(reason: "The file was saved, but temporary files could not be removed: " + error.reason,
+                                  .retained(error.receipt.url, reason: "Temporary files remain at " + error.directory.path))
                 }
                 catch { end = .failed(reason: "Destination commit failed: " + error.localizedDescription,
                                      .retained(files.directory, reason: "Completed bytes await recovery")) }
@@ -186,7 +186,7 @@ extension CefDownloadControl: TransferControl {}
             let partial = op.files?.cleanup() ?? .absent
             if let failure = op.failure { end = .failed(reason: failure, partial) }
             else if case .retained = partial { end = .failed(reason: "Partial file cleanup failed", partial) }
-            else if item.isInterrupted { end = .interrupted(reason: "CEF interruption \(item.interruptionReason)", partial) }
+            else if item.isInterrupted { end = .interrupted(reason: "Download interrupted (error \(item.interruptionReason))", partial) }
             else { end = .cancelled(partial) }
         }
         finish(key, op: op, end: end)
@@ -210,8 +210,8 @@ extension CefDownloadControl: TransferControl {}
             if op.terminal == nil { cancel(op.id) }
             // Mandatory native closure is not proof that a download writer has acknowledged termination.
             // A synchronous terminal callback may have already finished this operation during cancel.
-            let recovery = op.files.map { PartialFile.retained($0.directory, reason: "Native termination was not acknowledged") } ?? .absent
-            finish(key, op: op, end: op.terminal ?? .failed(reason: "Browser closed without a terminal download callback", recovery))
+            let recovery = op.files.map { PartialFile.retained($0.directory, reason: "Partial files were kept because download termination could not be confirmed") } ?? .absent
+            finish(key, op: op, end: op.terminal ?? .failed(reason: "The page closed before the download finished", recovery))
         }
         tombstones = tombstones.filter { $0.browser != browser }
     }
@@ -220,8 +220,8 @@ extension CefDownloadControl: TransferControl {}
     func reportTimeout(context: BrowsingContext? = nil) {
         for op in operations.values where context == nil || op.owner.context.context == context {
             guard op.terminal == nil else { continue }
-            op.terminal = .failed(reason: "No terminal callback; writer may still be active",
-                                 op.files.map { .retained($0.directory, reason: "Writer not drained") } ?? .unknown)
+            op.terminal = .failed(reason: "The download did not finish cancelling",
+                                 op.files.map { .retained($0.directory, reason: "Partial files kept for recovery") } ?? .unknown)
             emit(op)
         }
     }

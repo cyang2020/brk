@@ -161,6 +161,16 @@ public final class CefMenuModel {
     public func isSeparator(at index: Int) -> Bool {
         raw.pointee.get_type_at?(raw, index) == MENUITEMTYPE_SEPARATOR
     }
+
+    public func isEnabled(at index: Int) -> Bool { (raw.pointee.is_enabled_at?(raw, index) ?? 0) != 0 }
+    public func isVisible(at index: Int) -> Bool { (raw.pointee.is_visible_at?(raw, index) ?? 1) != 0 }
+    public func isChecked(at index: Int) -> Bool { (raw.pointee.is_checked_at?(raw, index) ?? 0) != 0 }
+    public func withSubmenu<T>(at index: Int, _ body: (CefMenuModel) -> T) -> T? {
+        guard raw.pointee.get_type_at?(raw, index) == MENUITEMTYPE_SUBMENU,
+              let child = raw.pointee.get_sub_menu_at?(raw, index) else { return nil }
+        defer { cefRelease(UnsafeMutableRawPointer(child)) }
+        return body(CefMenuModel(raw: child))
+    }
 }
 
 /// Resolves a CEF "run context menu" request: the OSR host presents a native
@@ -170,7 +180,7 @@ public final class CefMenuModel {
 /// ``cancel()`` exactly once.
 @MainActor
 public final class CefRunContextMenuCallback {
-    private var raw: UnsafeMutablePointer<cef_run_context_menu_callback_t>?
+    nonisolated(unsafe) private var raw: UnsafeMutablePointer<cef_run_context_menu_callback_t>?
 
     init(raw: UnsafeMutablePointer<cef_run_context_menu_callback_t>) {
         self.raw = raw
@@ -179,16 +189,30 @@ public final class CefRunContextMenuCallback {
     /// Completes the menu by selecting `commandID`.
     public func select(commandID: Int) {
         guard let raw else { return }
+        self.raw = nil
         raw.pointee.cont?(raw, Int32(commandID), cef_event_flags_t(rawValue: 0))
         cefRelease(UnsafeMutableRawPointer(raw))
-        self.raw = nil
     }
 
     /// Cancels the menu without selecting anything.
     public func cancel() {
         guard let raw else { return }
+        self.raw = nil
         raw.pointee.cancel?(raw)
         cefRelease(UnsafeMutableRawPointer(raw))
-        self.raw = nil
+    }
+
+    /// Decline custom handling without disconnecting CEF's default menu callback.
+    func discard() {
+        guard let raw else { return }; self.raw = nil
+        cefRelease(UnsafeMutableRawPointer(raw))
+    }
+
+    deinit {
+        if let raw {
+            precondition(Thread.isMainThread)
+            raw.pointee.cancel?(raw)
+            cefRelease(UnsafeMutableRawPointer(raw))
+        }
     }
 }

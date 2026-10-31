@@ -215,7 +215,7 @@ final class EventInjector {
         guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags(modifiers),
                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                                              context: nil, eventNumber: eventNumber, clickCount: clickCount,
-                                             pressure: type == .leftMouseDown ? 1 : 0) else { throw InjectionError("could not build a mouse event") }
+                                             pressure: type == .leftMouseDown || type == .rightMouseDown ? 1 : 0) else { throw InjectionError("could not build a mouse event") }
         return event
     }
 
