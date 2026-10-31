@@ -258,13 +258,19 @@ enum ExtScenarios {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
         try app.dispatch(.site(.controls))
         try app.waitUntil("native policy and OS readback") { try SitePolicyScenarios.controls(app).applied?.osAuthorization?.count == 4 }
+        try app.perform(.pasteboard("Ext-copy-pending"))
         try app.click(.settingsField("siteCopyURL"))
-        guard case .text(let copied) = try app.send(.readPasteboard) else { throw Check(description: "clipboard readback missing") }
-        try expect(copied == app.site.url("site-policy.html").absoluteString, "site control copied a different page")
+        try app.waitUntil("actual copied page URL") {
+            guard case .text(let copied) = try app.send(.readPasteboard) else { return false }
+            return copied == app.site.url("site-policy.html").absoluteString
+        }
         try app.click(.settingsField("siteExportLink"))
         try app.waitUntil("real link export save panel") { try app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
         try app.perform(.sheetButton(title: "Cancel"))
-        try app.waitUntil("link export cancellation") { try !app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
+        try app.waitUntil("link export cancellation") {
+            let facts = try app.native()
+            return facts.sheetClass == nil && !facts.appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible }
+        }
         try app.click(.settingsField("siteExportLink"))
         try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
         let destination = app.dataDirectory.appendingPathComponent("Ext-link-export.json")
