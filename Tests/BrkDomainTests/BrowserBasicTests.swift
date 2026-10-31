@@ -40,7 +40,7 @@ final class BrowserBasicTests: XCTestCase {
         d.user(.peek(.open(url("https://export-peek.example/"))))
         guard case .peek(let peek)? = d.view.overlay else { return XCTFail("Peek missing") }
         d.page(peek.tab.id, .committed(url("https://export-peek.example/")))
-        guard case .export(let owner, let document)? = d.user(.app(.export(.focusedTab))).effects.first else { return XCTFail("Export missing") }
+        guard case .export(let document, let owner)? = d.user(.app(.export(.focusedTab))).effects.first else { return XCTFail("Export missing") }
         XCTAssertEqual(owner, d.window)
         XCTAssertEqual(document.entries, [.link(title: "export-peek.example", url: url("https://export-peek.example/"))])
         d.system(.exportFinished(d.window, .failed("Disk full")))
