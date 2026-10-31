@@ -20,6 +20,10 @@ public struct CefChromeBrowserOptions {
     /// bottom-left origin). `nil` centers a default-sized window.
     public var initialBounds: CGRect?
 
+    /// Configure the native window before its first show. Embedding clients can install
+    /// their activation policy before CEF can make the window key.
+    public var prepareNativeWindow: (@MainActor (NSWindow) -> Void)? = nil
+
     /// Background color applied before the first paint.
     public var backgroundColor: NSColor?
 
@@ -27,8 +31,6 @@ public struct CefChromeBrowserOptions {
     /// Brk wave-2 addition: per-profile and incognito contexts for Chrome-runtime browsers.
     public var profile: CefProfile?
     public var requestRules: CefRequestRules? = nil
-    /// Configure the native host after creation, before its first show.
-    public var prepareWindow: ((NSWindow) -> Void)?
 
     public init() {}
 }
@@ -248,10 +250,6 @@ public final class CefChromeBrowser {
             var size = cef_size_t(width: 1100, height: 760)
             window.pointee.center_window?(window, &size)
         }
-        if let handle = window.pointee.get_window_handle?(window),
-           let host = Unmanaged<NSView>.fromOpaque(handle).takeUnretainedValue().window {
-            options.prepareWindow?(host)
-        }
         window.pointee.show?(window)
     }
 
@@ -429,6 +427,11 @@ final class ChromeWindowDelegate {
                 return
             }
             MainActor.assumeIsolated {
+                if let prepare = me.options.prepareNativeWindow,
+                   let handle = window.pointee.get_window_handle?(window),
+                   let native = Unmanaged<NSView>.fromOpaque(handle).takeUnretainedValue().window {
+                    prepare(native)
+                }
                 me.chrome?.handleWindowCreated(window)
             }
             cefRelease(UnsafeMutableRawPointer(window))

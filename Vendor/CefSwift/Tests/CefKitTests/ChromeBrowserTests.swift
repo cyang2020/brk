@@ -98,4 +98,43 @@ import Testing
         #expect(rect?.width == 0)
         #expect(rect?.height == 0)
     }
+
+    @Test func nativeWindowPolicyRunsDuringCreationBeforeShowing() {
+        _ = NSApplication.shared
+        let native = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true)
+        native.isReleasedWhenClosed = false
+        native.contentView = NSView(frame: .zero)
+        defer { native.close() }
+        let fixture = NativeWindowFixture(window: native)
+        var prepared = false
+        var options = CefChromeBrowserOptions()
+        options.prepareNativeWindow = { window in
+            #expect(window === native)
+            #expect(window.isVisible == false)
+            prepared = true
+        }
+        let owner = ChromeWindowDelegate(chrome: nil, options: options)
+        let delegate = owner.makeStruct()
+        let raw = cefAllocate(cef_window_t.self, owner: fixture)
+        defer {
+            _ = ccef_object_release(UnsafeMutableRawPointer(delegate))
+            _ = ccef_object_release(UnsafeMutableRawPointer(raw))
+        }
+        raw.pointee.get_window_handle = { window in
+            guard let window, let fixture = cefOwner(NativeWindowFixture.self, UnsafeMutableRawPointer(window)) else { return nil }
+            nonisolated(unsafe) var handle: UnsafeMutableRawPointer?
+            MainActor.assumeIsolated { handle = Unmanaged.passUnretained(fixture.window.contentView!).toOpaque() }
+            return handle
+        }
+        cefAddRef(UnsafeMutableRawPointer(raw)) // The callback owns its argument reference.
+        delegate.pointee.on_window_created?(delegate, raw)
+        #expect(prepared)
+        #expect(native.isVisible == false)
+    }
+}
+
+@MainActor
+private final class NativeWindowFixture {
+    let window: NSWindow
+    init(window: NSWindow) { self.window = window }
 }
