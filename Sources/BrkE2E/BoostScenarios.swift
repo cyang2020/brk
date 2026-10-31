@@ -19,10 +19,11 @@ enum BoostScenarios {
     }
     private static func report(_ app: AppUnderTest, _ item: ItemID) throws -> [String: Any] {
         let tag = UUID().uuidString
-        try app.evaluate(PageID(window: app.window!, item: item), "boostReport('\(tag)')")
         var result: [String: Any] = [:]
         try app.waitUntil("fresh Boost DOM report") {
-            let title = try tab(item, in: app.view())?.title ?? ""
+            try app.evaluate(PageID(window: app.window!, item: item), "if(typeof boostReport==='function')boostReport('\(tag)')")
+            let view = try app.view()
+            let title = (tab(item, in: view) ?? tabRows(view.scratch?.rows ?? []).first { $0.id == item })?.title ?? ""
             let prefix = "boost:" + tag + ":"
             guard title.hasPrefix(prefix), let data = String(title.dropFirst(prefix.count)).data(using: .utf8),
                   let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
