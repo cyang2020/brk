@@ -328,4 +328,5 @@ public struct FindMetrics: MetricGroup {
     public let row = Metric(28.0, .guess("Native small text controls plus vertical breathing room"))
     public let gap = Metric(4.0, .guess("Find control spacing"))
     public let button = Metric(28.0, .guess("Find navigation and close button width"))
+    public let actionWidth = Metric(92.0, .guess("Minimum width for readable replacement action labels"))
 }
