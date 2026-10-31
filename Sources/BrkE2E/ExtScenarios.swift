@@ -60,6 +60,11 @@ enum ExtScenarios {
     @Sendable static func shortcuts(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
         let command = "fixture-command"
+        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
+        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
+        try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
+        try app.dispatch(.site(.nativeExtensions))
+        try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
         // Drive the native text editor and its Save action, not the manager's mutation API directly.
         try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
         try app.press("cmd+a"); try app.type("cmd+shift+u")
@@ -68,6 +73,9 @@ enum ExtScenarios {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
             return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
         }
+        try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
+        try app.press("cmd+shift+u"); app.sleep(0.5)
+        try expect(try tab(item, in: app.view())?.title == "Site policy fixture", "native editor leaked the extension command to the page")
         try app.dispatch(.site(.extensionShortcut(fixture.id, "_execute_action", "cmd+shift+u")))
         try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("already assigned") == true, "duplicate shortcut did not report a conflict")
         try app.dispatch(.site(.extensionShortcut(fixture.id, command, "cmd+t")))
@@ -122,9 +130,18 @@ enum ExtScenarios {
         try SitePolicyScenarios.evaluate(app, item, "fetch('/site-policy-redirect').then(r=>document.title='redirect:'+r.ok).catch(()=>document.title='redirect:blocked')")
         try waitForTitle(app, item, "redirect:blocked")
         try expect(app.site.requestCount("/site-policy-redirect") > 0 && app.site.requestCount(blockedPath) == baseline, "redirect destination escaped request filter")
+        try app.dispatch(.site(.controls))
+        guard let frameTarget = try SitePolicyScenarios.controls(app).target else { throw Check(description: "frame policy target missing") }
+        var frameRule = SiteRule(); frameRule.blocking = false
+        try app.dispatch(.site(.rule(frameTarget, frameRule)))
+        try SitePolicyScenarios.evaluate(app, item, "let allowed=document.createElement('iframe');allowed.src=\(js(frame));document.body.append(allowed)")
+        try app.waitUntil("unblocked cross-origin frame positive control") { app.site.requestCount(blockedPath) == baseline + 1 }
+        frameRule.blocking = true
+        try app.dispatch(.site(.rule(frameTarget, frameRule))); try app.dispatch(.site(.closeControls))
+        let permitted = app.site.requestCount(blockedPath)
         _ = try app.load(app.site.url("brk-blocked-tracker/tracker.js"))
         app.sleep(0.8)
-        try expect(app.site.requestCount(blockedPath) == baseline, "blocked main-frame request reached server")
+        try expect(app.site.requestCount(blockedPath) == permitted, "blocked main-frame request reached server")
         try app.dispatch(.tab(.focus(item))); try app.dispatch(.site(.controls))
         guard let context = try SitePolicyScenarios.controls(app).context else { throw Check(description: "rules context missing") }
         let source = app.dataDirectory.appendingPathComponent("selected-easylist.txt")
@@ -207,7 +224,7 @@ enum ExtScenarios {
         try app.dispatch(.profile(.create(name: "Ext Profile", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings), let other = settings.profiles.first(where: { $0.profile.name == "Ext Profile" })?.profile.id else { throw Check(description: "profile missing") }
         try app.dispatch(.profile(.assign(.current, to: other)))
-        try app.waitUntil("site controls rebind to profile") { try SitePolicyScenarios.controls(app).profileName == "Ext Profile" }
+        try app.waitUntil("site controls rebind to profile") { try SitePolicyScenarios.controls(app).profileName == "Ext Profile" && SitePolicyScenarios.controls(app).target?.context == .profile(other) }
         _ = try app.screenshotSiteControls("origin-profile-os-readback")
         app.note("Actual OS status readback did not request authorization. Copy and export-panel cancellation used the active page snapshot. Actual selected-destination file output waits for file-panels. Boost/capture actions await their owning slices.")
     }

@@ -36,7 +36,8 @@ private struct SiteControlsView: View {
     }
     private var extensionControls: some View {
         VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
-                Button("Refresh installed extensions") { dispatch(.site(.nativeExtensions)) }
+                if privateSession { Text("Extension management and action popups are unavailable in private windows.").font(.caption) }
+                Button("Refresh installed extensions") { dispatch(.site(.nativeExtensions)) }.disabled(privateSession)
                 if let error = value.extensionError { Text(error).font(.caption) }
                 ForEach(value.extensions.sorted { (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name) }) { item in
                     VStack(alignment: .leading) {
@@ -54,8 +55,8 @@ private struct SiteControlsView: View {
                     }
                 }
                 Text("Use the manager to change permissions or enable and disable extensions. Opening action popups is currently unavailable.").font(.caption).foregroundStyle(.secondary)
-                Button("Manage extensions…") { dispatch(.site(.extensions)) }
-                Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }
+                Button("Manage extensions…") { dispatch(.site(.extensions)) }.disabled(privateSession)
+                Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }.disabled(privateSession)
         }
     }
     var body: some View {
@@ -69,7 +70,7 @@ private struct SiteControlsView: View {
                         Button("Export link…") { dispatch(.app(.export(.focusedTab))) }.accessibilityIdentifier(ViewID.settingsField("siteExportLink").identifier)
                     }
                 }
-                extensionControls
+                extensionControls.id(value.context)
                 Picker("Website appearance for this profile", selection: Binding(get: { value.appearance }, set: { dispatch(.site(.appearance($0))) })) {
                     ForEach(WebsiteAppearance.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                 }
