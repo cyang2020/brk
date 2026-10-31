@@ -43,6 +43,7 @@ public enum Command: Hashable, Sendable, Codable {
     case settings(SettingsCommand)
     /// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). F5.
     case library(LibraryCommand)
+    case boost(BoostCommand)
     /// Windows: new standard, incognito and Little Arc windows, closing, "Open in <space>". F3.
     case window(WindowCommand)
     /// Peek: a link previewed in a card over the content. F3.
@@ -425,6 +426,7 @@ public enum SystemEvent: Sendable, Equatable {
     case exportFinished(WindowID, ExportOutcome)
     case contextDisposed(ContextDisposalResult)
     case websiteRulesLoaded(BrowsingContext, WebsiteRulesUpdate)
+    case boost(BoostEvent)
     case extensionOperationFailed(BrowsingContext, String)
     case extensionsRead(ExtensionCatalog)
     case siteDataCleared(ClearSiteDataResult)
@@ -472,7 +474,7 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
+        case .boost, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         default: false
         }

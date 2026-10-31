@@ -34,7 +34,7 @@ final class ImportRulesTests: XCTestCase {
         (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCEF/"], "host-window tricks stay in BrkCEF"),
         (#"CefRuntime|CefBrowser|CefChromeBrowser"#, ["BrkCEF/"], "Chromium API stays in BrkCEF"),
         (#"cornerRadius\s*=\s*[1-9]"#, [], "layout numbers live in BrkBase/Metrics.swift"),
-        (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkControl/", "BrkE2E/"], "one state format, one wire format"),
+        (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/"], "one state format, one wire format"),
     ]
 
     func testEveryTargetImportsOnlyWhatTheModuleMapAllows() throws {

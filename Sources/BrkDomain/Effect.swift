@@ -9,6 +9,7 @@ import Foundation
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
     case find(FindRequest)
+    case boost(BoostEffect)
     case sidebarData(SidebarDataEffect)
     case page(PageID, PageAction)
     case iconPicker(WindowID, ItemID, initial: CustomIcon? = nil)

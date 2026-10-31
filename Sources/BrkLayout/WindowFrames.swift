@@ -117,7 +117,7 @@ public struct RowFrame: Sendable, Equatable, Codable {
 /// Every view the harness can address. `identifier` is the view's NSAccessibility identifier (set by BrkUI from
 /// this enum, never typed by hand), and `WindowFrames.frame(of:)` is its computed frame when layout owns it.
 public enum ViewID: Hashable, Sendable, Codable {
-    case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String)
+    case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String), boostControl(String)
     case siteInfo
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
@@ -152,6 +152,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .toolbar: "address-toolbar"
         case .toolbarAddress: "toolbar-address"
         case .toolbarButton(let name): "toolbar-\(name)"
+        case .boostControl(let name): "boost-\(name)"
         case .spaceToolsControl(let name): "space-tools-\(name)"
         case .sidebar: "sidebar"
         case .floatingSidebar: "floating-sidebar"
@@ -224,7 +225,7 @@ extension WindowFrames {
         switch view {
         case .toolbar: return toolbar
         case .toolbarAddress: return toolbar.map(AddressToolbarLayout.address(in:))
-        case .toolbarButton, .spaceToolsControl: return nil
+        case .toolbarButton, .spaceToolsControl, .boostControl: return nil
         case .sidebar: return sidebarFloats ? nil : sidebar?.frame
         case .floatingSidebar: return sidebarFloats ? sidebar?.frame : nil
         case .titleRow: return sidebar?.titleRow

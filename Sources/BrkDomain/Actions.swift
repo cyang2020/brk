@@ -184,16 +184,15 @@ extension ActionID {
                   bar: listing("arrow.uturn.backward", "Reopen Closed Tab"))
         case .addressBar: entry(22, "Open Command Bar", .file, 1, [key(cmd, .l, .app)], .commandBar(.open(.editCurrent)))
         case .newBoost:
-            entry(23, "New Boost", .file, 2, [], .later(.boosts), bar: listing("paintbrush", "Boost", "New Boost", "Create boost", "extension",
+            entry(23, "New Boost", .file, 2, [], .boost(.create), bar: listing("paintbrush", "Boost", "New Boost", "Create boost", "extension",
                                                                                "Boost the Current Page", "Edit Boost"), hidden: true)
         case .editBoost:
-            entry(24, "Edit Boost", .file, 2, [], .later(.boosts), bar: listing("paintbrush", "Boost", "New Boost", "Create boost", "extension",
+            entry(24, "Edit Boost", .file, 2, [], .boost(.editCurrent), bar: listing("paintbrush", "Boost", "New Boost", "Create boost", "extension",
                                                                                 "Boost the Current Page", "Edit Boost"), hidden: true)
         case .newLegacyBoost:
-            entry(25, "New Legacy Boost (Advanced)", .file, 2, [], .later(.boosts), bar: listing("burst", "Create legacy boost", "legacy boost"), hidden: true)
+            entry(25, "New Legacy Boost (Advanced)", .file, 2, [], .boost(.legacy), bar: listing("burst", "Create legacy boost", "legacy boost"), hidden: true)
         case .boostGallery:
-            entry(26, "Boost Gallery", .file, 2, [], .later(.boosts), bar: listing("paintbrush", "Boost Gallery", "Boosts Gallery", "Boost Store", "Boosts Store"),
-                  hidden: true)
+            entry(26, "Boost Gallery", .file, 2, [], .boost(.gallery), bar: listing("paintbrush", "Boost Gallery", "Boosts Gallery", "Boost Store", "Boosts Store"), hidden: true)
         case .newProfile: entry(27, "New Profile", .file, 2, [], .profile(.openDialog(.create)), bar: listing("person.fill", "Profile"))
         case .newNote:
             entry(28, "New Note", .file, 2, [key([ctrl, shift], .n, .pageThenApp)], .later(.notes), bar: listing("note.text", "Create Note", "Note", "Scratchpad"))

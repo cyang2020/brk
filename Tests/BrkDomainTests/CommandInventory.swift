@@ -66,12 +66,18 @@ enum CommandInventory {
         .site(.clear(kinds: [.cookies], scope: .site, reload: true)), .site(.confirmClear("ghost", false)),
         .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
         .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
+        .boost(.create), .boost(.legacy), .boost(.editCurrent), .boost(.edit("ghost")), .boost(.gallery), .boost(.preset("reader")),
+        .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.cancel), .boost(.zap),
+        .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
+        .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .later(.boosts),
         .window(.close),
     ]
 
     static let events: [SystemEvent] = [
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadProgress(0.5)),
+        .boost(.loaded(profile, BoostCatalog(), error: nil)),
+        .page(siteTarget.document.browser, .boostFailed(siteTarget.document, "fixture")),
         .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
@@ -102,6 +108,7 @@ enum CommandInventory {
 
     static func area(_ command: Command) -> String {
         switch command {
+        case .boost: "boost"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -126,6 +133,25 @@ enum CommandInventory {
 
     static func name(_ command: Command) -> String {
         let leaf: String = switch command {
+        case .boost(let c):
+            switch c {
+            case .create: "create"
+            case .legacy: "legacy"
+            case .editCurrent: "editCurrent"
+            case .edit: "edit"
+            case .gallery: "gallery"
+            case .preset: "preset"
+            case .update: "update"
+            case .save: "save"
+            case .cancel: "cancel"
+            case .zap: "zap"
+            case .enable: "enable"
+            case .remove: "remove"
+            case .export: "export"
+            case .importFile: "importFile"
+            case .importSelected: "importSelected"
+            case .exportSelected: "exportSelected"
+            }
         case .find(let c):
             switch c {
             case .open: "open"
@@ -334,6 +360,7 @@ enum CommandInventory {
 
     static func name(_ event: SystemEvent) -> String {
         switch event {
+        case .boost: "boost"
         case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {
@@ -348,6 +375,7 @@ enum CommandInventory {
             case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"
+            case .boostFailed: "page.boostFailed"
             case .websitePolicyApplied: "page.websitePolicyApplied"
             case .loadProgress: "page.loadProgress"
             case .rendererGone: "page.rendererGone"

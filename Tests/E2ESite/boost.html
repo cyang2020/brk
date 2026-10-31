@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>Boost fixture</title>
+<style id="page-style">body{margin:40px;font:18px system-ui;background:#fff;color:#24222c} #zap-target{position:fixed;left:40px;top:130px;width:220px;height:60px;background:#ffe8ad;padding:12px;box-sizing:border-box} #style-target{position:fixed;left:40px;top:230px;color:rgb(20,30,40)} h1{font-size:28px}</style>
+<h1>Make this site your own</h1><div id="zap-target">Zap this banner</div><p id="style-target">A Boost can change this text.</p>
+<script>
+function boostReport(tag){document.title='boost:'+tag+':'+JSON.stringify({color:getComputedStyle(document.querySelector('#style-target')).color,display:getComputedStyle(document.querySelector('#zap-target')).display,runs:Number(document.documentElement.dataset.boostRuns||0),pageStyle:!!document.querySelector('#page-style'),styles:document.querySelectorAll('style[data-brk-boost-owner]').length});}
+</script>

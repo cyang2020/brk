@@ -131,6 +131,7 @@ struct Work {
         case .app(let c): app(c, in: window)
         case .settings(let c): settings(c, in: window)
         case .library(let c): library(c, in: window)
+        case .boost(let c): boosts(c, in: window)
         case .window(let c): windows(c, in: window)
         case .peek(let c): peek(c, in: window)
         case .site(let c): sites(c, in: window)
@@ -145,7 +146,7 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .boost, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -163,6 +164,7 @@ struct Work {
             state.session.windows[window]?.outputUpdates[update.id] = update
         case .download(let update): downloadEvent(update)
         case .websiteRulesLoaded(let context, let update): websiteRulesLoaded(context, update)
+        case .boost(let event): boostEvent(event)
         case .extensionOperationFailed(let context, let error): extensionOperationFailed(context, error)
         case .extensionsRead(let catalog): extensionsRead(catalog)
         case .siteDataCleared(let result): siteDataCleared(result)

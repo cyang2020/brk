@@ -68,6 +68,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     /// Shortcut-table actions that apply right now (menu validation greys out the others).
     public var enabledActions: Set<ActionID>
     public var tabTools = TabToolsSnapshot()
+    public var boostEditor: BoostEditor? = nil
 }
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {
@@ -265,6 +266,9 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var downloads: [DownloadRow]
     /// Newest first, the current space's profile only. F5.
     public var history: [HistoryRow]
+    public var boosts: [Boost] = []
+    public var boostMessage: String? = nil
+    public var canManageBoosts = true
     public var spaces: [SpaceManagerRow] = []
     public var spaceExportMessage: String? = nil
     public var spaceExportInProgress: Bool = false

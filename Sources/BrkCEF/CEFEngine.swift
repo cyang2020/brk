@@ -216,7 +216,7 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages {
-            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); page.linkPreviews.setEnabled(spec.hoverPreviews); continue }
+            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); page.linkPreviews.setEnabled(spec.hoverPreviews); page.applyBoostPolicy(spec.boostPolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
