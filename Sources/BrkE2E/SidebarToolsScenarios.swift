@@ -179,6 +179,7 @@ enum SidebarToolsScenarios {
         let frame = try app.native().pages[id]!.surfaceFrame!
         let point = CGPoint(x: frame.minX + 100, y: frame.minY + 100)
         let before = app.site.requestCount("/sidebar-preview-target")
+        let iconBefore = app.site.requestCount("sidebar-preview-icon-auth-" + label)
         try app.hover(point); app.sleep(0.2)
         try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); app.sleep(0.7)
         try expect(app.site.requestCount("/sidebar-preview-target") == before, "brief hover fetched a preview")
@@ -188,10 +189,12 @@ enum SidebarToolsScenarios {
         try app.waitUntil("hover probe observed") { try tab(item, in: app.view())?.title.hasPrefix("Hover probe ") == true }
         app.note(try tab(item, in: app.view())?.title ?? "Missing hover probe")
         try app.waitUntil("fetched \(label) preview in originating cookie context", timeout: 12) { try app.native().pages[id]?.linkPreviewTitle == "\(label) preview destination" }
+        try expect(app.site.requestCount("sidebar-preview-icon-auth-" + label) > iconBefore, "favicon did not use the originating \(label) credentials")
         return id
     }
     @Sendable static func preview(_ app: AppUnderTest) throws {
         let publicPage = try previewSetup(app, label: "Public")
+        app.sleep(0.25)
         _ = try app.panelScreenshot("public-link-card")
         try expect(app.site.requestCount("/sidebar-preview-icon.png") > 0, "favicon never fetched")
         try app.press("escape")
@@ -210,18 +213,21 @@ enum SidebarToolsScenarios {
         try app.waitUntil("isolated iframe hover world") { try (app.native().pages[publicPage]?.linkPreviewFrameCount ?? 0) > 1 }
         try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
         try app.waitUntil("fetched iframe link preview") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" }
+        app.sleep(0.25)
         _ = try app.panelScreenshot("iframe-link-card")
         try app.dispatch(.window(.newIncognito))
         guard case .hello(let hello) = try app.send(.hello), let other = hello.windows.first(where: { $0 != publicPage.window }) else { throw Check(description: "private window missing") }
         app.window = other
         _ = try previewSetup(app, label: "Private")
+        app.sleep(0.25)
         _ = try app.panelScreenshot("private-link-card")
         try app.dispatch(.window(.close))
         app.window = publicPage.window
         _ = try app.send(.activate(window: publicPage.window))
         // Re-enter in the public window after the private epoch has been revoked.
+        let beforeReturn = app.site.requestCount("/sidebar-preview-target")
         try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
-        try app.waitUntil("public cookies remain separate") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" }
+        try app.waitUntil("public cookies remain separate") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" && app.site.requestCount("/sidebar-preview-target") > beforeReturn }
         try app.dispatch(.commandBar(.open(.editCurrent))); try app.dispatch(.commandBar(.submit(app.site.url("page2.html").absoluteString)))
         try app.waitForPageInput(publicPage, at: app.site.url("page2.html"))
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "navigation retained stale preview metadata")
