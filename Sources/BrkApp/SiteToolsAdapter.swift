@@ -67,7 +67,7 @@ final class SiteToolsAdapter {
         repository.placeholderString = "owner/repository"
         repository.identify(.tabTool("repository"))
         let token = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
-        token.placeholderString = "Optional token with Pull requests: read"
+        token.placeholderString = if case .github(_, .some) = request.kind { "Classic token with notifications scope (not saved)" } else { "Optional token with Pull requests: read" }
         accessory.addSubview(repository)
         accessory.addSubview(token)
         alert.buttons[0].identify(.tabTool("connect-repository"))

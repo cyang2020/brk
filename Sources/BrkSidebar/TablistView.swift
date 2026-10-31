@@ -500,13 +500,7 @@ final class RowView: HoverView {
 
     override func stateChanged() {
         guard let palette, let row else { return }
-        let previewText: String
-        switch row {
-        case .tab(let tab): previewText = tab.title + "\n" + (tab.url?.absoluteString ?? "")
-        case .folder(let folder): previewText = folder.title + "\n" + String(folder.children.count) + " items"
-        case .split(let split): previewText = split.panes.map(\.title).joined(separator: "\n")
-        }
-        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: previewText, over: self)
+        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: row.hoverPreviewText, over: self)
         let tokens = palette.tokens
         let status: RowStatus? = switch row {
         case .tab(let tab): tab.status

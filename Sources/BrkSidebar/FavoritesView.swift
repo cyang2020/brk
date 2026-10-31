@@ -211,6 +211,9 @@ final class FavoriteTileView: HoverView {
         subtitle.stringValue = row.subtitle ?? row.sourceStatus ?? ""
         subtitle.toolTip = toolTip
         subtitle.isHidden = row.subtitle == nil && row.sourceStatus == nil
+        subtitle.lineBreakMode = .byTruncatingTail
+        if row.sourceStatus?.hasPrefix("Access failed") == true { subtitle.stringValue = "Access" }
+        if row.sourceStatus?.hasPrefix("Expired") == true || row.sourceStatus?.hasPrefix("Calendar expired") == true { subtitle.stringValue = "Expired" }
         badge.textColor = .white
         subtitle.textColor = palette.ink.secondary
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, loading: row.loading)

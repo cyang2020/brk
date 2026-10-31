@@ -108,4 +108,22 @@ final class SidebarToolsTests: XCTestCase {
         XCTAssertFalse(d.snapshot.pages[0].hoverPreviews)
         XCTAssertFalse(Driver(file: d.savedFile).snapshot.pages[0].hoverPreviews)
     }
+    func testTodayFolderHasTheSameIconAndHoverMetadataAsAPinnedFolder() throws {
+        let d = Driver()
+        let child = d.todayIDs[0]
+        d.user(.item(.newFolder))
+        guard case .folder(let made)? = d.view.space.pinned.rows.first else { return XCTFail("missing folder") }
+        d.user(.item(.rename(made.id, title: "Topic")))
+        d.user(.item(.move(child, to: .into(parent: made.id, index: 0))))
+        d.user(.item(.setIcon(made.id, .emoji("📚"))))
+        guard case .folder(var folder)? = d.view.space.pinned.rows.first else { return XCTFail("missing folder") }
+        let pinned = Row.folder(folder).hoverPreviewText
+        folder.section = .today
+        XCTAssertEqual(Row.folder(folder).hoverPreviewText, pinned)
+        XCTAssertEqual(Row.folder(folder).hoverPreviewText, "Topic\n1 items")
+        XCTAssertEqual(folder.icon, .emoji("📚"))
+        XCTAssertEqual(folder.children.first?.id, child)
+        XCTAssertTrue(d.user(.tabTools(.chooseIcon(made.id))).effects.contains(.iconPicker(d.window, made.id, initial: .emoji("📚"))))
+    }
+
 }

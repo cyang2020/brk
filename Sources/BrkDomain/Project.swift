@@ -146,7 +146,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                 case .ready:
                     if ctx.now.since(feed.fetchedAt) < .seconds(300) {
                         row.badge = feed.badge
-                        row.sourceStatus = "Updated · token used once"
+                        row.sourceStatus = "Updated · first 50 notifications · token used once"
                         row.subtitle = "GitHub notifications"
                     } else { row.sourceStatus = "Expired · reconnect" }
                 case .failed: row.sourceStatus = "Access failed · reconnect"; row.subtitle = feed.subtitle

@@ -181,6 +181,7 @@ struct SpaceDialogForm: View {
     let profiles: [ProfileRow]
     @State private var stage = 0
     @State private var symbolDraft: String
+    @FocusState private var emojiFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     init(draft: SpaceDraft, profiles: [ProfileRow] = [], dispatch: @escaping Dispatch) {
@@ -282,11 +283,12 @@ struct SpaceDialogForm: View {
             HStack(spacing: m.padding.value / 4) {
                 TextField(OverlayCopy.emojiPlaceholder, text: Binding(get: { draft.emoji }, set: { draft.setEmoji($0) }))
                     .spaceToolsID("emoji")
+                    .focused($emojiFocused)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: side * 2.5)
                 choice(selected: draft.icon == SpaceIcon.none, help: OverlayCopy.noIcon) {
                     Circle().fill(draft.theme.colors.first?.swiftUI ?? .gray).frame(width: side / 3, height: side / 3)
-                } action: { draft.icon = SpaceIcon.none }
+                } action: { draft.icon = SpaceIcon.none }.spaceToolsID("icon-none")
             }
             HStack {
                 TextField("SF Symbol name", text: $symbolDraft)
@@ -294,7 +296,10 @@ struct SpaceDialogForm: View {
                         if value.isEmpty, case .custom(.symbol) = draft.icon { draft.icon = .none }
                         else if NSImage(systemSymbolName: value, accessibilityDescription: nil) != nil { draft.icon = .custom(.symbol(value)) }
                     }.textFieldStyle(.roundedBorder).spaceToolsID("symbol")
-                Button("Emoji & Symbols…") { NSApp.orderFrontCharacterPalette(nil) }
+                Button("Emoji & Symbols…") {
+                    emojiFocused = true
+                    Task { @MainActor in await Task.yield(); NSApp.orderFrontCharacterPalette(nil) }
+                }
             }
             ForEach(rows, id: \.self) { row in
                 HStack(spacing: m.padding.value / 4) {

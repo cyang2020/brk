@@ -50,7 +50,7 @@ enum SidebarPanelControl {
             }
             button.performClick(nil)
         case .focus(let identifier):
-            guard let view = views.first(where: { $0.identifier?.rawValue == identifier }), sheet.makeFirstResponder(view) else {
+            guard let view = views.first(where: { $0.identifier?.rawValue == identifier || $0.accessibilityIdentifier() == identifier }), sheet.makeFirstResponder(view) else {
                 throw Invalid(message: "Native control cannot take focus: " + identifier)
             }
         case .text(let identifier, let value):

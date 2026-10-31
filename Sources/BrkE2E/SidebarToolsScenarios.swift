@@ -134,6 +134,21 @@ enum SidebarToolsScenarios {
         try app.click(.spaceToolsControl("emoji")); try app.press("cmd+a"); try app.type("🦊")
         try app.click(.spaceToolsControl("cancel"))
         try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space Cancel changed icon")
+        try app.dispatch(.tabTools(.chooseIcon(folder))); try panel(app, .button("Cancel"))
+        guard case .folder(let retained)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
+        try expect(retained.icon == .symbol("sparkles"), "folder cancel or restart lost its icon")
+        try app.dispatch(.tabTools(.chooseIcon(folder))); try panel(app, .button("Clear"))
+        try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("Cancel"))
+        try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("Clear"))
+        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
+        try app.click(.spaceToolsControl("icon-none")); try app.click(.spaceToolsControl("save"))
+        try app.flush(); try app.restart()
+        try expect(try app.view().space.icon == .none, "space clear did not persist")
+        guard case .folder(let cleared)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
+        try expect(cleared.icon == nil, "folder clear did not persist")
+        try expect(try app.view().space.today.rows.contains { row in
+            if case .split(let value) = row { return value.id == split && value.icon == nil }; return false
+        }, "split clear did not persist")
     }
     @Sendable static func glow(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("held-document")), id = page(app, item)
@@ -158,7 +173,7 @@ enum SidebarToolsScenarios {
         let item = try app.load(sourceURL), id = page(app, item)
         try app.waitForPageInput(id, at: sourceURL)
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: url.absoluteString, options: .fragmentsAllowed), as: UTF8.self)
-        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"display:block;margin:80px;width:240px;height:40px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal)")
+        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"position:absolute;left:80px;top:80px;margin:0;display:block;width:240px;height:40px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal)")
         try app.waitUntil("isolated hover observer") { try (app.native().pages[id]?.linkPreviewFrameCount ?? 0) > 0 }
         let frame = try app.native().pages[id]!.surfaceFrame!
         let point = CGPoint(x: frame.minX + 100, y: frame.minY + 100)
@@ -183,7 +198,7 @@ enum SidebarToolsScenarios {
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "disabled previews still appeared")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         let target = app.site.url("sidebar-preview-target").absoluteString.replacingOccurrences(of: "127.0.0.1", with: "preview.brk.test")
-        let srcdoc = "<a href='\(target)' style='display:block;margin:80px;width:240px;height:40px'>Iframe preview</a>"
+        let srcdoc = "<a href='\(target)' style='position:absolute;left:80px;top:80px;margin:0;display:block;width:240px;height:40px'>Iframe preview</a>"
         let html = "<iframe style='position:fixed;left:0;top:0;width:600px;height:300px;border:0' srcdoc=\"\(srcdoc)\"></iframe>"
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)
         try app.evaluate(publicPage, "document.body.innerHTML=\(literal)")
