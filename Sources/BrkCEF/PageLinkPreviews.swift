@@ -245,7 +245,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
       if(globalThis.__brkPreview) return;
       let candidate=null,since=0,suppressed=null,lastHref='';
       const clear=()=>{candidate=null;since=0;lastHref=''};
-      addEventListener('pointerover',e=>{
+      addEventListener('pointerover',e=>{if(!e.isTrusted)return;
         const a=e.composedPath().find(n=>n instanceof HTMLAnchorElement);
         if(a!==candidate){candidate=a||null;since=performance.now();suppressed=null;lastHref=a?.href||'';}
       },true);
