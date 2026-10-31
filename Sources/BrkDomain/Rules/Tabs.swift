@@ -109,6 +109,7 @@ extension Work {
             if case .terminal = output.stage { return }
             effects.append(.cancelOutput(output.id))
         case .toggleDevTools: emit(.focused, .toggleDevTools)
+        case .cast: emit(.focused, .cast)
         case .developer(let operation): emit(.focused, .developer(operation))
         case .copyURL(let format):
             guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window), let url = t.url else { return }

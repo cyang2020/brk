@@ -287,13 +287,8 @@ public final class CEFEngine: WebEngine {
             live.reportZoom()
             DispatchQueue.main.async { [weak live] in live?.reportZoom() }
         case .toggleDevTools: browser.toggleDevTools()
-        case .developer(let operation):
-            switch operation {
-            case .source: browser.viewSource()
-            case .inspect: browser.inspectElement(at: CGPoint(x: live.surface.bounds.midX, y: live.surface.bounds.midY))
-            case .console: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_CONSOLE")
-            case .network: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_NETWORK")
-            }
+        case .cast: live.showCast()
+        case .developer(let operation): live.developer(operation)
         case .exitFullscreen: browser.exitFullscreen()
         case .recover: live.prepareNavigation(); browser.reload()
         }
@@ -578,6 +573,12 @@ public final class CEFEngine: WebEngine {
     }
 
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
+
+    func auxiliaryCountChanged(_ page: ChromePage, count: Int) {
+        let lease = BrowserResources<ChromePage>.Lease.auxiliary("native-children")
+        if count > 0 { _ = resources.acquire(lease, browser: page.incarnation) }
+        else { resources.release(lease, browser: page.incarnation); closeIfUnowned(page.incarnation) }
+    }
 
     private func retire(_ page: ChromePage) {
         guard ledger.retire(page.id) == page.incarnation else { return }

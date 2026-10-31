@@ -18,6 +18,22 @@ final class ChromePage: CefBrowserDelegate {
     unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    private var keyReceipts: [PageKeyReceipt] = []
+    var sourceWindow: NSWindow?
+    var sourceRequest: UInt64 = 0
+    var developerResult: String?
+    var toolsBrowser: CefBrowser?
+    var requestedDeveloperPanel: String?
+    var developerPanelTask: Task<Void, Never>?
+    var developerTransport: CefDevTools?
+    private var popupRequests: [PageOpenMetadata] = []
+    var cast: PageCast?
+    var drainingCasts: [PageCast] = []
+    private func recordKey(_ receipt: PageKeyReceipt) {
+        guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
+        keyReceipts.append(receipt)
+        if keyReceipts.count > 64 { keyReceipts.removeFirst(keyReceipts.count - 64) }
+    }
     private let contextMenu = PageContextMenu()
     private(set) lazy var find = PageFind(browser: browser) { [weak self] update in
         guard let self, self.engine.isLive(self) else { return }
@@ -145,6 +161,19 @@ final class ChromePage: CefBrowserDelegate {
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
         facts.websiteFrozen = frozen
         facts.websitePolicyError = websiteError
+        facts.keyReceipts = keyReceipts
+        facts.hasDevTools = browser.hasDevTools
+        facts.auxiliaryBrowsers = browser.nativeAuxiliaries.map { Int($0.browser.id) }
+        facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }
+        facts.popupRequests = popupRequests
+        facts.developerResult = developerResult
+        facts.castSinkNotifications = cast?.router.sinkNotifications
+        facts.castRouteNotifications = cast?.router.routeNotifications
+        facts.castSinks = cast?.router.sinks.map(\.name)
+        facts.castRoutes = cast?.router.routes
+        facts.castResult = cast?.router.lastResult
+        facts.castError = cast?.router.lastError
+        if let sourceWindow, sourceWindow.isVisible { facts.auxiliaryWindows?.append(sourceWindow.windowNumber) }
         return facts
     }
 
@@ -157,12 +186,15 @@ final class ChromePage: CefBrowserDelegate {
         reloadSequence.cancel()
         cancelPermissions()
         contextMenu.cancel()
+        closeDeveloperWindows()
+        stopCasting()
+        browser.closeNativeAuxiliaries()
         browser.closeDevTools()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
 
-    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -187,6 +219,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     private func prepareDocumentNavigation() {
+        stopCasting()
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()
@@ -282,19 +315,18 @@ final class ChromePage: CefBrowserDelegate {
                          y: request.features.y, width: request.features.width, height: request.features.height)
     }
 
-    /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
+    /// Keep the actual Chromium browsing context so empty window.open/document.write and opener survive.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
-        if let url = request.targetURL {
-            let disposition: OpenDisposition
-            switch request.disposition {
-            case .newBackgroundTab: disposition = .backgroundTab
-            case .newPopup: disposition = .popup
-            case .newWindow: disposition = .newWindow
-            default: disposition = .foregroundTab
-            }
-            engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
-        }
-        return .handled
+        guard engine.isLive(self) else { return .deny }
+        popupRequests.append(openMetadata(request))
+        if popupRequests.count > 16 { popupRequests.removeFirst() }
+        return .allowNativePopup
+    }
+
+    func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) { engine.auxiliaryCountChanged(self, count: count) }
+    func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {
+        guard engine.isLive(self) else { auxiliary.close(force: true); return }
+        if case .devTools = kind { toolsBrowser = auxiliary; selectDeveloperPanel() }
     }
 
     /// A link opened with a modifier (Cmd+click) arrives here (CEF's OnOpenURLFromTab), not as a popup. Handled the
@@ -314,7 +346,7 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
+    func browserDidClose(_ b: CefBrowser) { closeDeveloperWindows(); stopCasting(); cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
@@ -344,6 +376,10 @@ final class ChromePage: CefBrowserDelegate {
     /// `PressCorrelator`. Modifier-only keys and character events are not routed (Control reaches BrkApp as
     /// `WindowEvent.modifiersChanged` from the window's `flagsChanged` events).
     func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition { route(event, before: true) }
+    func browser(_ b: CefBrowser, chromeCommand id: Int, disposition: CefWindowOpenDisposition) -> Bool {
+        recordKey(PageKeyReceipt(stage: "chrome", handled: false, chromeCommand: id))
+        return false
+    }
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool { route(event, before: isBeforePage).handled }
     private func route(_ event: CefKeyEvent, before isBeforePage: Bool) -> CefKeyDisposition {
         guard let press = KeyTranslation.press(from: event) else { return CefKeyDisposition(handled: false, shortcut: false) }
@@ -352,9 +388,9 @@ final class ChromePage: CefBrowserDelegate {
         let now = Instant(milliseconds: Int64(uptime * 1000))
         let pressID: PressID
         if isBeforePage {
-            pressID = PressID(eventTimestamp: NSApp.currentEvent?.timestamp ?? uptime)
+            pressID = PressID(eventTimestamp: event.nativeTimestamp ?? NSApp.currentEvent?.timestamp ?? uptime)
         } else {
-            pressID = presses.afterPage(press, at: now) ?? PressID(eventTimestamp: uptime)
+            pressID = presses.afterPage(press, nativeID: event.nativeTimestamp.map { PressID(eventTimestamp: $0) }, at: now) ?? PressID(eventTimestamp: uptime)
         }
         let result = engine.pageKeyHandling(self, press, stage: isBeforePage ? .beforePage : .afterPage, pressID: pressID)
         var handled = result.handled
@@ -366,9 +402,11 @@ final class ChromePage: CefBrowserDelegate {
         }
         if isBeforePage { presses.beforePage(press, id: pressID, handled: handled, at: now) }
         if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
+            recordKey(PageKeyReceipt(stage: isBeforePage ? "pre" : "post", chord: press.chord.description,
+                                     press: pressID.raw, handled: handled, shortcut: result.shortcut))
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
         }
-        return CefKeyDisposition(handled: handled, shortcut: result.shortcut)
+        return CefKeyDisposition(handled: handled, shortcutIntent: handled ? .unchanged : (result.shortcut ? .enabled : .disabled))
     }
 }
 

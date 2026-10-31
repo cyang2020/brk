@@ -31,6 +31,8 @@ public struct CefKeyEvent: Sendable, Equatable {
     public var character: Character?
     /// Whether focus is on an editable field (useful for shortcut gating).
     public var isEditableFieldFocused: Bool
+    /// Copied from CEF's borrowed NSEvent during the callback; no native event is retained.
+    public var nativeTimestamp: TimeInterval? = nil
 
     public init(
         phase: Phase,

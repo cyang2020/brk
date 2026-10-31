@@ -86,6 +86,18 @@ public enum MenuName: String, Hashable, Sendable, Codable, CaseIterable {
 /// Format > Font, Services) are built there too.
 public enum Submenu: String, Hashable, Sendable, Codable, CaseIterable { case find, appearance, developer, troubleshooting }
 
+extension ActionID {
+    public var unsupportedReason: String? {
+        switch self {
+        case .allowJavaScriptFromAppleEvents:
+            "JavaScript Apple Events are unavailable until Brk's authenticated scripting adapter is integrated. No inert permission switch is exposed."
+        case .toggleDeveloperMode:
+            "Arc's Developer Mode behavior has no verified Brk implementation. DevTools and element inspection are available separately."
+        default: nil
+        }
+    }
+}
+
 public struct CommandBarListing: Hashable, Sendable {
     /// Extra search words (Arc: `arcTypeTravelTriggers`). `{app}` is replaced with `Product.name`.
     public let triggers: [String]
@@ -291,7 +303,7 @@ extension ActionID {
         case .zoomOut:
             entry(109, "Zoom Out", .view, 4, [key(cmd, .minus, .page), key([shift, cmd], .minus, .page)], .page(.zoom(.zoomOut)),
                   bar: listing("minus.magnifyingglass"), repeats: true)
-        case .cast: entry(111, "Cast", .view, 5, [], .later(.cast), bar: listing("rectangle.portrait.and.arrow.right.fill"))
+        case .cast: entry(111, "Cast", .view, 5, [], .page(.cast), bar: listing("rectangle.portrait.and.arrow.right.fill"))
         case .viewSource:
             entry(113, "View Source", .view, 0, [key([opt, cmd], .u, .pageThenApp)], .page(.developer(.source)), in: .developer, bar: listing("curlybraces", "View Source"))
         case .developerTools:
@@ -304,7 +316,7 @@ extension ActionID {
             entry(117, "JavaScript Console", .view, 0, [key([opt, cmd], .j, .page)], .page(.developer(.console)), in: .developer,
                   bar: listing("terminal", "Toggle console", "Console", "Javascript Console", "JS console"))
         case .networkInspector:
-            entry(118, "Network Inspector", .view, 0, [], .later(.developerMenu), in: .developer, bar: listing("wifi", "Network Inspector"))
+            entry(118, "Network Inspector", .view, 0, [], .page(.developer(.network)), in: .developer, bar: listing("wifi", "Network Inspector"))
         case .allowJavaScriptFromAppleEvents: entry(119, "Allow JavaScript from Apple Events", .view, 0, [], .later(.developerMenu), in: .developer)
         case .toggleDeveloperMode:
             entry(120, "Toggle Developer Mode", .view, 0, [key(ctrl, .d, .pageThenApp)], .later(.developerMenu), in: .developer,

@@ -132,6 +132,7 @@ enum MainMenu {
         let item = NSMenuItem(title: title ?? action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
         item.target = target
         item.representedObject = action.rawValue
+        item.toolTip = action.unsupportedReason
         item.tag = binding
         item.isHidden = hidden
         item.isAlternate = binding == 0 && action.spec.alternate

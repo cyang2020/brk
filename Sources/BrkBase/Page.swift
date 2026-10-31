@@ -102,6 +102,7 @@ public enum PageAction: Hashable, Sendable, Codable {
     case stop
     case zoom(ZoomStep)
     case toggleDevTools
+    case cast
     case developer(DeveloperOperation)
     case exitFullscreen
     /// Restart a renderer that died (`PageEvent.rendererGone`). The domain decides; the engine reloads.
@@ -203,6 +204,18 @@ public enum ShutdownOutcome: Hashable, Sendable {
 
 /// What the engine can tell the e2e harness about one page. Diagnostic only: the app never branches on it.
 public struct PageFacts: Hashable, Sendable, Codable {
+    public var keyReceipts: [PageKeyReceipt]? = nil
+    public var hasDevTools: Bool? = nil
+    public var auxiliaryBrowsers: [Int]? = nil
+    public var auxiliaryWindows: [Int]? = nil
+    public var popupRequests: [PageOpenMetadata]? = nil
+    public var developerResult: String? = nil
+    public var castSinkNotifications: Int? = nil
+    public var castRouteNotifications: Int? = nil
+    public var castSinks: [String]? = nil
+    public var castRoutes: [String]? = nil
+    public var castResult: Int? = nil
+    public var castError: String? = nil
     public var requestedReloads: Int? = nil
     public var extensionDialogDecision: String? = nil
     public var extensionFileDialogCallbacks: Int? = nil

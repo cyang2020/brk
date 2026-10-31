@@ -1,0 +1,172 @@
+import BrkBase
+import BrkControl
+import BrkDomain
+import Foundation
+
+enum BrowserOpsScenarios {
+    static let all = [
+        Scenario("BO1", "raw shortcut receipts, Chrome ordering, Downloads priority, remaps and two windows", cefOnly: "CEF keys", keys),
+        Scenario("BO2", "real empty popup, document.write, opener, native identity and close", cefOnly: "CEF popup browsing contexts", popups),
+        Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
+        Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
+        Scenario("BO5", "real context-owned media-router enumeration and invalid-route callback", cefOnly: "CEF media router", cast),
+        Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
+    ]
+    private static func load(_ app: AppUnderTest, _ path: String) throws -> PageID {
+        let url = app.site.url(path), item = try app.load(url)
+        let page = PageID(window: app.window!, item: item)
+        try app.waitForPageInput(page, at: url)
+        return page
+    }
+    private static func title(_ app: AppUnderTest, _ page: PageID) throws -> String? {
+        let view = try app.view(page.window)
+        return (allTabs(view) + tabRows(view.scratch?.rows ?? [])).first { $0.id == page.item }?.title
+    }
+    private static func facts(_ app: AppUnderTest, _ page: PageID) throws -> PageFacts {
+        guard let facts = try app.native(page.window).pages[page] else { throw Check(description: "Page facts missing") }
+        return facts
+    }
+    private static func record<T: Encodable>(_ app: AppUnderTest, _ name: String, _ value: T) throws {
+        let url = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent(app.scenarioID + "-" + name + ".json")
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(value).write(to: url)
+    }
+    private static func clickedScript(_ app: AppUnderTest, _ page: PageID, _ script: String) throws {
+        let encoded = String(decoding: try JSONEncoder().encode(script), as: UTF8.self)
+        try app.evaluate(page, "(()=>{document.getElementById('bo-action')?.remove();let b=document.createElement('button');b.id='bo-action';b.textContent='Run browser operation';b.style='position:fixed;left:12px;top:12px;width:210px;height:55px;z-index:999999';b.onclick=()=>{(0,eval)(\(encoded))};document.body.append(b);document.title='BO action ready'})()")
+        try app.waitUntil("operation button") { try title(app, page) == "BO action ready" }
+        guard let frame = try facts(app, page).surfaceFrame else { throw Check(description: "No native page frame") }
+        _ = try app.send(.activate(window: page.window))
+        try app.click(at: CGPoint(x: frame.minX + 40, y: frame.minY + 35))
+    }
+    @Sendable static func keys(_ app: AppUnderTest) throws {
+        let page = try load(app, "keys.html?swallow=1")
+        defer { try? record(app, "keys", facts(app, page)) }
+        try app.press("cmd+shift+j")
+        try app.waitUntil("Downloads app priority") { if case .library(let library)? = try app.view().overlay { library.page == .downloads } else { false } }
+        try expect(try title(app, page) == "keys:loads=1", "App-priority Downloads reached the renderer")
+        try app.dispatch(.library(.close))
+        try app.waitUntil("page focus after Downloads") { try app.native().focusedPage == page }
+        try app.dispatch(.settings(.shortcuts(.setPriority(.viewDownloads, .page))))
+        try app.press("cmd+shift+j")
+        try app.waitUntil("explicit page-priority Downloads override") { try title(app, page) == NativeScenarios.keyTitle("cmd+shift+j", swallowed: true) }
+        try expect(try app.view().overlay == nil, "A page-swallowed override opened Downloads")
+        try app.dispatch(.settings(.shortcuts(.setPriority(.viewDownloads, .app))))
+        try app.dispatch(.settings(.shortcuts(.setChord(.viewDownloads, KeyChord([.command, .option, .control], .j)))))
+        try app.press("ctrl+alt+cmd+j")
+        try app.waitUntil("remapped Downloads") { if case .library(let library)? = try app.view().overlay { library.page == .downloads } else { false } }
+        try app.dispatch(.library(.close))
+        try app.press("cmd+l"); try app.type("native-edit"); try app.press("cmd+a")
+        try app.perform(.menuAction("Copy"))
+        try expect(try app.send(.readPasteboard) == .text("native-edit"), "Native field did not execute Copy")
+        try app.press("escape")
+        let reload = try load(app, "keys.html?chrome-order")
+        try app.press("cmd+r")
+        try app.waitUntil("one unconsumed reload") { try title(app, reload) == "keys:loads=2" }
+        try record(app, "chrome-order", facts(app, reload))
+        try app.dispatch(.window(.new))
+        guard case .hello(let hello) = try app.send(.hello), let second = hello.windows.first(where: { $0 != page.window }) else { throw Check(description: "No second window") }
+        _ = try app.send(.activate(window: second))
+        try app.press("ctrl+alt+cmd+j")
+        try app.waitUntil("remap routes to second window") { if case .library(let library)? = try app.view(second).overlay { library.page == .downloads } else { false } }
+        try expect(try app.view(page.window).overlay == nil, "Second-window key opened the first window's Library")
+        try app.screenshot("downloads-second-window", window: second)
+        app.note("Raw pre/post/Chrome receipts retained. Downloads default app priority, explicit page override, remapping, native editor and separate window routing exercised.")
+    }
+    @Sendable static func popups(_ app: AppUnderTest) throws {
+        let page = try load(app, "browser-basic.html?popup")
+        defer { try? record(app, "popup-final", facts(app, page)) }
+        try clickedScript(app, page, "window.boChild=window.open('','bo-child','width=420,height=260');if(boChild){boChild.document.write('<title>Owned popup</title><body>Written popup</body>');boChild.document.close();document.title='popup:'+boChild.document.body.textContent+':'+(boChild.opener===window)}else{document.title='popup:blocked'}")
+        try app.waitUntil("document.write and opener survive") { try title(app, page) == "popup:Written popup:true" }
+        try app.waitUntil("owned native popup appears") { !(try facts(app, page).auxiliaryWindows ?? []).isEmpty }
+        let popup = try facts(app, page)
+        guard let metadata = popup.popupRequests?.last else { throw Check(description: "No raw popup metadata") }
+        try expect(metadata.popupID != nil && metadata.sourceFrame != nil && metadata.userGesture && metadata.width == 420,
+                   "Popup lost identity, frame, gesture or features")
+        try record(app, "popup-open", popup)
+        try app.recordWindows("popup-open")
+        try app.evaluate(page, "boChild.close();document.title='popup:closed'")
+        try app.waitUntil("native child closure drains") { try facts(app, page).auxiliaryBrowsers?.isEmpty == true }
+        try clickedScript(app, page, "window.boChild=window.open('','bo-child-again','width=420,height=260');if(boChild){boChild.document.write('<body>Close with owner</body>');boChild.document.close();document.title='popup:second'}")
+        try app.waitUntil("second popup") { try title(app, page) == "popup:second" }
+        let windows = Set(try facts(app, page).auxiliaryWindows ?? [])
+        try app.dispatch(.tab(.close(.item(page.item))))
+        try app.waitUntil("source close removes native popup windows") {
+            let visible = Set(try app.native().appWindows.filter(\.isVisible).map(\.number))
+            return windows.isDisjoint(with: visible)
+        }
+        app.note("The real CEF popup retained document.write and opener. Raw popup/frame/gesture/features were observed; child and owner-close paths drained.")
+    }
+    @Sendable static func developer(_ app: AppUnderTest) throws {
+        let page = try load(app, "browser-basic.html?developer")
+        defer { try? record(app, "developer-final", facts(app, page)) }
+        try app.perform(.menuAction("View Source"))
+        try app.waitUntil("source text in owned native window") { try facts(app, page).developerResult?.hasPrefix("Source displayed:") == true }
+        try record(app, "source", facts(app, page))
+        for panel in [DeveloperOperation.console, .network] {
+            _ = try app.send(.dispatch(window: page.window, command: .page(.developer(panel))))
+            try app.waitUntil("DevTools \(panel.rawValue) selected", timeout: 12) { try facts(app, page).developerResult == panel.rawValue + " selected" }
+            try record(app, panel.rawValue, facts(app, page))
+        }
+        _ = try app.send(.dispatch(window: page.window, command: .page(.developer(.inspect))))
+        try app.waitUntil("real DevTools belongs to page") { try facts(app, page).hasDevTools == true }
+        let windows = Set(try facts(app, page).auxiliaryWindows ?? [])
+        try app.recordWindows("developer-windows")
+        try app.dispatch(.tab(.close(.item(page.item))))
+        try app.waitUntil("developer windows close with owner") {
+            let visible = Set(try app.native().appWindows.filter(\.isVisible).map(\.number))
+            return windows.isDisjoint(with: visible)
+        }
+    }
+    @Sendable static func fullscreen(_ app: AppUnderTest) throws {
+        let page = try load(app, "browser-basic.html?fullscreen")
+        for video in [false, true] {
+            try clickedScript(app, page, "{let el=document.documentElement;\(video ? "el=document.createElement('video');el.controls=true;document.body.append(el);" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
+            try app.waitUntil("DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
+            try app.dispatch(.library(.open(.history)))
+            try app.press("escape")
+            try app.waitUntil("overlay closes before fullscreen") { try app.view().overlay == nil }
+            try expect(try app.native().fullscreen, "First Escape left fullscreen before closing overlay")
+            try app.press("escape")
+            try app.waitUntil("page fullscreen exits native window", timeout: 15) { try !app.native().fullscreen }
+            try app.waitUntil("focus returns to document") { try app.native().focusedPage == page }
+        }
+        try app.press("ctrl+cmd+f")
+        try app.waitUntil("native fullscreen shortcut", timeout: 15) { try app.native().fullscreen }
+        try app.press("escape")
+        try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen }
+        try app.screenshot("fullscreen-focus-returned")
+        app.note("Actual NSWindow style and DOM fullscreen were observed for document/video elements and injected native key input. Physical keys and traffic-light gestures remain manual.")
+    }
+    @Sendable static func cast(_ app: AppUnderTest) throws {
+        let page = try load(app, "browser-basic.html?cast")
+        defer { try? record(app, "media-router", facts(app, page)) }
+        try app.perform(.menuAction("Cast"))
+        try app.waitUntil("real media-router enumeration", timeout: 15) {
+            let f = try facts(app, page)
+            return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castResult != nil
+        }
+        let result = try facts(app, page)
+        try expect(result.castError?.contains("Source") == true, "Invalid route did not return CEF's real source error")
+        try app.recordWindows("cast-receivers")
+        app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). CEF invalid-source create_route result \(result.castResult ?? -1): \(result.castError ?? ""). No fake receiver or successful hardware route is claimed; no receiver is available for termination proof.")
+    }
+    @Sendable static func transformations(_ app: AppUnderTest) throws {
+        let page = try load(app, "browser-basic.html?transformations")
+        for element in ["input", "textarea", "editable", "frame-input"] {
+            let target = element == "frame-input" ? "document.querySelector('iframe').contentDocument.getElementById('frame-input')" : "document.getElementById('\(element)')"
+            let setup = element == "editable"
+                ? "let el=\(target);el.textContent='abCdef';el.focus();let r=document.createRange();r.setStart(el.firstChild,1);r.setEnd(el.firstChild,4);getSelection().removeAllRanges();getSelection().addRange(r)"
+                : "let el=\(target);el.value='abCdef';el.focus();el.setSelectionRange(1,4)"
+            try app.evaluate(page, "{\(setup);document.title='transform-ready:\(element)'}")
+            try app.waitUntil("transform selection ready") { try title(app, page) == "transform-ready:" + element }
+            try app.perform(.menuAction("Make Upper Case"))
+            try app.waitUntil("uppercase selection in \(element)") { try title(app, page) == "value:aBCDef" }
+        }
+        try app.press("cmd+l"); try app.type("mixed Text"); try app.press("cmd+a")
+        try app.perform(.menuAction("Make Upper Case")); try app.perform(.menuAction("Copy"))
+        try expect(try app.send(.readPasteboard) == .text("MIXED TEXT"), "Native field uppercase failed")
+        try app.press("escape")
+        try app.screenshot("transformations")
+    }
+}

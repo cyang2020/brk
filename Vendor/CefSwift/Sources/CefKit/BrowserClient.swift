@@ -36,6 +36,7 @@ final class BrowserClient {
     nonisolated(unsafe) var requestPointer: UnsafeMutablePointer<cef_request_handler_t>?
     nonisolated(unsafe) var findPointer: UnsafeMutablePointer<cef_find_handler_t>?
     nonisolated(unsafe) var keyboardPointer: UnsafeMutablePointer<cef_keyboard_handler_t>?
+    nonisolated(unsafe) var commandPointer: UnsafeMutablePointer<cef_command_handler_t>?
     nonisolated(unsafe) var focusPointer: UnsafeMutablePointer<cef_focus_handler_t>?
     nonisolated(unsafe) var renderPointer: UnsafeMutablePointer<cef_render_handler_t>?
 
@@ -47,6 +48,11 @@ final class BrowserClient {
     /// The OSR browser wrapper awaiting its async-created raw cef_browser_t
     /// (adopted in on_after_created).
     var pendingOSRBrowser: CefBrowser?
+    var nativeAuxiliaries: [UUID: BrowserClient] = [:]
+    weak var auxiliaryParent: BrowserClient?
+    var auxiliaryKey: UUID?
+    var auxiliaryKind: CefAuxiliaryKind?
+    var auxiliaryCancelled = false
 
     // The most recent context-menu params, captured in on_before_context_menu
     // and replayed to the command/dismiss callbacks (which also receive params,
@@ -90,6 +96,7 @@ final class BrowserClient {
         if let pointer = requestPointer { requestPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = findPointer { findPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = keyboardPointer { keyboardPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = commandPointer { commandPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = focusPointer { focusPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = renderPointer { renderPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
     }
@@ -115,6 +122,8 @@ final class BrowserClient {
                     cefAddRef(UnsafeMutableRawPointer(browser))  // adoptRaw takes a +1 it owns
                     pending.adoptRaw(browser)
                     client.pendingOSRBrowser = nil
+                    client.attach(pending)
+                    client.didCreateNativeAuxiliary(pending)
                 }
             }
             cefRelease(UnsafeMutableRawPointer(browser))
@@ -127,13 +136,15 @@ final class BrowserClient {
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             MainActor.assumeIsolated {
+                client.closeNativeAuxiliaries()
                 client.browser?.handleBeforeClose()
+                client.didCloseNativeAuxiliary()
                 client.releaseHandlers()
             }
         }
         lifeSpan.pointee.on_before_popup = {
             handlerSelf, browser, frame, popupID, targetURL, targetFrameName, targetDisposition,
-            userGesture, popupFeatures, _, _, _, _, _ in
+            userGesture, popupFeatures, _, popupClient, _, _, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             let sourceFrame = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
             let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
@@ -167,6 +178,8 @@ final class BrowserClient {
                 // delegate returned `.allowNativePopup` for an OSR browser.
                 switch CefWindowOpenPolicy.resolve(raw, for: request) {
                 case .allowNativePopup:
+                    guard let popupClient else { return 1 }
+                    client.installNativeAuxiliary(.popup(request), replacing: popupClient)
                     return 0  // let CEF create the native popup
                 case .openInCurrentBrowser:
                     if let url { cefBrowser.load(url) }
@@ -174,6 +187,19 @@ final class BrowserClient {
                 case .deny, .handled:
                     return 1  // app handled it (or denied); block CEF's popup
                 }
+            }
+        }
+        lifeSpan.pointee.on_before_popup_aborted = { raw, browser, id in
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
+            BrowserClient.withBrowser(raw.map(UnsafeMutableRawPointer.init), default: ()) { client, _ in
+                client.abortNativePopup(Int(id))
+            }
+        }
+        lifeSpan.pointee.on_before_dev_tools_popup = { raw, browser, _, client, _, _, _ in
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
+            guard let client else { return }
+            BrowserClient.withBrowser(raw.map(UnsafeMutableRawPointer.init), default: ()) { owner, _ in
+                owner.installNativeAuxiliary(.devTools, replacing: client)
             }
         }
         lifeSpanPointer = lifeSpan
@@ -534,6 +560,10 @@ final class BrowserClient {
             cefAddRef(UnsafeMutableRawPointer(handler))
             return handler
         }
+        client.pointee.get_command_handler = { clientSelf in
+            guard let handler = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init))?.commandPointer else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler)); return handler
+        }
         client.pointee.get_focus_handler = { clientSelf in
             guard let me = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init)),
                   let handler = me.focusPointer else { return nil }
@@ -608,6 +638,7 @@ extension BrowserClient {
         makePermissionHandler()
         makeRequestHandler()
         makeKeyboardHandler()
+        makeCommandHandler()
         makeFocusHandler()
     }
 
@@ -936,25 +967,47 @@ extension BrowserClient {
 
     private func makeKeyboardHandler() {
         let handler = cefAllocate(cef_keyboard_handler_t.self, owner: self)
-        handler.pointee.on_pre_key_event = { handlerSelf, browser, event, _, shortcut in
+        handler.pointee.on_pre_key_event = { handlerSelf, browser, event, native, shortcut in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let event else { return 0 }
-            let keyEvent = CefKeyEvent(raw: event.pointee)
+            var keyEvent = CefKeyEvent(raw: event.pointee)
+            keyEvent.nativeTimestamp = native.map { Unmanaged<NSEvent>.fromOpaque($0).takeUnretainedValue().timestamp }
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
                 let result = cefBrowser.delegate?.browser(cefBrowser, preKeyEvent: keyEvent) ?? CefKeyDisposition(handled: false, shortcut: false)
-                shortcut?.pointee = result.shortcut ? 1 : 0
+                switch result.shortcutIntent {
+                case .unchanged: break
+                case .disabled: shortcut?.pointee = 0
+                case .enabled: shortcut?.pointee = 1
+                }
                 return result.handled ? 1 : 0
             }
         }
-        handler.pointee.on_key_event = { handlerSelf, browser, event, _ in
+        handler.pointee.on_key_event = { handlerSelf, browser, event, native in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let event else { return 0 }
-            let keyEvent = CefKeyEvent(raw: event.pointee)
+            var keyEvent = CefKeyEvent(raw: event.pointee)
+            keyEvent.nativeTimestamp = native.map { Unmanaged<NSEvent>.fromOpaque($0).takeUnretainedValue().timestamp }
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
                 (cefBrowser.delegate?.browser(cefBrowser, handleKeyEvent: keyEvent, isBeforePage: false) ?? false) ? 1 : 0
             }
         }
         keyboardPointer = handler
+    }
+
+    private func makeCommandHandler() {
+        let handler = cefAllocate(cef_command_handler_t.self, owner: self)
+        handler.pointee.on_chrome_command = { raw, browser, id, disposition in
+            defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
+            return BrowserClientCallbacks.run(raw, default: Int32(0)) { _, browser in
+                (browser.delegate?.browser(browser, chromeCommand: Int(id), disposition: CefWindowOpenDisposition(cefValue: disposition)) ?? false) ? 1 : 0
+            }
+        }
+        // Installing an observer must preserve Chrome's default menu and toolbar visibility.
+        handler.pointee.is_chrome_app_menu_item_visible = { _, browser, _ in cefRelease(browser.map(UnsafeMutableRawPointer.init)); return 1 }
+        handler.pointee.is_chrome_app_menu_item_enabled = { _, browser, _ in cefRelease(browser.map(UnsafeMutableRawPointer.init)); return 1 }
+        handler.pointee.is_chrome_page_action_icon_visible = { _, _ in 1 }
+        handler.pointee.is_chrome_toolbar_button_visible = { _, _ in 1 }
+        commandPointer = handler
     }
 
     // MARK: Focus

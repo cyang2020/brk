@@ -114,14 +114,17 @@ enum BrowserBasicScenarios {
         let page = try page(app, source)
         let archive = app.dataDirectory.appendingPathComponent("fixture.mhtml")
         let pdf = app.dataDirectory.appendingPathComponent("fixture.pdf")
-        let mhtml = try save(app, page, .mhtml, path: archive)
-        let exportedPDF = try save(app, page, .pdf, path: pdf)
+        // Native save-panel input is verified by the file-panels slice. Use the explicit destination for byte
+        // acceptance so a missing Return gesture cannot be mistaken for a lost renderer completion callback.
+        let mhtml = try fixtureSave(app, page, .mhtml, path: archive)
+        let exportedPDF = try fixtureSave(app, page, .pdf, path: pdf)
         guard let document = PDFDocument(url: pdf) else { throw Check(description: "Generated PDF failed to parse") }
         try expect(document.pageCount > 0 && document.string.map { $0.filter { !$0.isWhitespace }.contains("Browserbasicoutputfixture") } == true, "PDF missed actual fixture text")
         let evidence = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("artifacts/" + app.scenarioID, isDirectory: true)
         try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
         for file in [archive, pdf] { try Data(contentsOf: file).write(to: evidence.appendingPathComponent(file.lastPathComponent), options: .atomic) }
-        let receipt: [String: Any] = ["mhtmlBytes": mhtml.bytes, "pdfBytes": exportedPDF.bytes, "pdfPages": document.pageCount, "pdfContainsFixtureText": true]
+        let receipt: [String: Any] = ["mhtmlBytes": mhtml.bytes, "pdfBytes": exportedPDF.bytes, "pdfPages": document.pageCount, "pdfContainsFixtureText": true,
+                                      "destination": "explicit owned fixture answer; native save-panel gesture belongs to file-panels"]
         try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]).write(to: evidence.appendingPathComponent("output-receipts.json"))
 
         try dispatch(app, page.window, .page(.output(.print)))
