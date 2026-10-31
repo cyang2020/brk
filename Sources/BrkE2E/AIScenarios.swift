@@ -130,7 +130,7 @@ enum AIScenarios {
         }
         let renamed = directory.appendingPathComponent("Reading (1).txt")
         try expect(try Data(contentsOf: existing) == Data("KEEP".utf8), "collision overwritten")
-        try expect(try Data(contentsOf: renamed).count > 0, "renamed file empty")
+        try expect(try Data(contentsOf: renamed) == Data("fixture download\n".utf8), "renamed bytes changed")
         _ = try app.screenshot("AIDownload-renamed")
     }
     private static func instant(_ app: AppUnderTest) throws {
@@ -185,10 +185,14 @@ enum AIScenarios {
         try enable(app)
         try app.dispatch(.settings(.max(.provider(.codex))))
         try app.dispatch(.settings(.openPane(.max)))
-        guard let settingsWindow = try app.native().appWindows.first(where: { $0.isKey }) else { throw Check(description: "settings has no key window") }
+        var settingsWindow: AppWindowFact?
+        try app.waitUntil("visible owned settings window") {
+            settingsWindow = try app.native().appWindows.first { $0.className == "NSWindow" && $0.isVisible }
+            return settingsWindow != nil
+        }
         let capture = Process()
         capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        capture.arguments = ["-x", "-l", String(settingsWindow.number), app.shotsDirectory.appendingPathComponent("AIMax-settings.png").path]
+        capture.arguments = ["-x", "-l", String(settingsWindow!.number), app.shotsDirectory.appendingPathComponent("AIMax-settings.png").path]
         try capture.run(); capture.waitUntilExit()
         try expect(capture.terminationStatus == 0, "settings capture failed")
         try app.flush(); try app.restart()
