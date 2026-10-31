@@ -72,6 +72,27 @@ final class ExtCompletionTests: XCTestCase {
         XCTAssertEqual(d.state.doc.sitePreferences[.default]?.blockingRules, rules)
         XCTAssertEqual(Driver(file: d.savedFile).state.doc.sitePreferences[.default]?.blockingRules, rules)
     }
+    func testControlsReadSavedChoicesDuringLoadingWithoutEnablingDestructiveOperations() throws {
+        let d = Driver()
+        let page = d.snapshot.pages[0].id
+        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
+        d.page(page.item, .documentChanged(.loading(DocumentToken(browser: browser, sequence: 1))))
+        d.page(page.item, .documentChanged(.ready(DocumentToken(browser: browser, sequence: 1))))
+        let previous = try XCTUnwrap(d.state.siteTarget(in: d.window))
+        d.user(.site(.permission(previous, previous.origin, [.notifications], .deny)))
+        let destination = previous.origin.url.appendingPathComponent("loading")
+        d.page(previous.page.item, .navigationRequested(destination))
+        let document = DocumentToken(browser: previous.document.browser, sequence: previous.document.sequence + 1)
+        d.page(previous.page.item, .documentChanged(.loading(document)))
+        d.user(.site(.controls))
+        XCTAssertNil(d.snapshot.sites[d.window]?.target, "An uncommitted navigation has no readback target")
+        d.page(previous.page.item, .committed(destination))
+        XCTAssertEqual(d.snapshot.sites[d.window]?.target?.document, document)
+        XCTAssertEqual(d.snapshot.sites[d.window]?.rule.permissions[.notifications], .deny)
+        XCTAssertNil(d.state.siteTarget(in: d.window), "Clear/export readiness is still strict")
+        XCTAssertTrue(d.user(.site(.clear(kinds: [.cookies], scope: .site, reload: true))).effects.isEmpty)
+    }
+
     func testBundledRulesUseTheDocumentedResource() {
         XCTAssertEqual(WebsiteBlockingRules.builtIn.version, 1)
         XCTAssertTrue(WebsiteBlockingRules.builtIn.blockedHosts.contains("doubleclick.net"))

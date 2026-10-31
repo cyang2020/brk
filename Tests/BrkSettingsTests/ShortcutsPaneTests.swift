@@ -25,12 +25,15 @@ final class ShortcutsPaneTests: XCTestCase {
     /// key the table cannot name is refused
     func test_theRecorderReadsAPressAsArcsTableWould() {
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: Key.e.code, flags: .command), .record(KeyChord(.command, .e)))
+        for supported in [Key.b, .v, .x] {
+            XCTAssertEqual(ChordRecorderView.interpret(keyCode: supported.code, flags: .command), .record(KeyChord(.command, supported)))
+        }
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: Key.equals.code, flags: [.control, .shift, .capsLock]), .record(KeyChord([.control, .shift], .equals)))
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: Key.f12.code, flags: []), .record(KeyChord([], .f12)))
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: 53, flags: []), .cancel)
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: 51, flags: []), .clear)
         XCTAssertEqual(ChordRecorderView.interpret(keyCode: Key.e.code, flags: .shift), .refuse(ShortcutsCopy.needsModifier))
-        XCTAssertEqual(ChordRecorderView.interpret(keyCode: 11, flags: .command), .refuse(ShortcutsCopy.unsupportedKey), "B has no Key case yet")
+        XCTAssertEqual(ChordRecorderView.interpret(keyCode: 10, flags: .command), .refuse(ShortcutsCopy.unsupportedKey), "The ISO section key has no Key case")
     }
 
     /// clicking starts a recording; the next accepted press is dispatched once and ends it; a refused press keeps it
