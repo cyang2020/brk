@@ -25,6 +25,13 @@ enum SidebarPanelControl {
             try await Task.sleep(for: .milliseconds(400))
         }
         switch action {
+        case .directory(let path):
+            guard let panel = sheet as? NSSavePanel else { throw Invalid(message: "No native file panel") }
+            panel.directoryURL = URL(fileURLWithPath: path)
+        case .selection:
+            guard let panel = sheet as? NSSavePanel else { throw Invalid(message: "No native file panel") }
+            let urls = (panel as? NSOpenPanel)?.urls ?? panel.url.map { [$0] } ?? []
+            return .menuItems(urls.map { $0.resolvingSymlinksInPath().path })
         case .capture(let path):
             guard let image = WindowCapture.image(of: sheet),
                   let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
@@ -35,9 +42,9 @@ enum SidebarPanelControl {
         case .inspect:
             let panel = sheet as? NSSavePanel
             return .menuItems([sheet.title, panel?.prompt ?? "", String(describing: type(of: sheet))] + views.compactMap { view in
+                if let popup = view as? NSPopUpButton { return "select:" + (popup.identifier?.rawValue ?? "") + ":" + String(popup.indexOfSelectedItem) }
                 if let button = view as? NSButton { return "button:" + button.title }
                 if let field = view as? NSTextField, !field.isEditable { return field.stringValue }
-                if let popup = view as? NSPopUpButton { return "select:" + (popup.identifier?.rawValue ?? "") }
                 return view.identifier.map { "view:" + $0.rawValue }
             })
         case .button(let title):

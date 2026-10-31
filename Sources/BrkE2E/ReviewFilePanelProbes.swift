@@ -4,14 +4,14 @@ import BrkDomain
 import Foundation
 
 /// Adversarial review probes for the file-panels slice, written by the claude-fable-5-1 reviewer of 3b48d60 and adopted
-/// by the parent as permanent regression scenarios. Every probe uses owned fixture files only. The failure-alert probe
-/// for the explicit export path is not registered: that difference is recorded as part of A144's manual gap.
+/// by the parent as permanent regression scenarios. Every probe uses owned fixture files only.
 enum ReviewFilePanelProbes {
     static let all = [
         Scenario("Review-NoPanelImport", "importSelected with no picker ever shown reads an explicit local file and shows the preview", noPanelImport),
         Scenario("Review-NoPanelConnect", "importSelected+Import and connectSelectedFolder with no picker ever shown import a bookmark, connect sync and write transport files", noPanelConnect),
         Scenario("Review-ConnectRegularFile", "connectSelectedFolder with a regular file path the real folder chooser could never produce", connectRegularFile),
         Scenario("Review-ExportSelectedLateCallback", "exportSelected writes once; the late system callback neither rewrites nor changes the status; a refused repeat overrides the status", exportSelectedLateCallback),
+        Scenario("Review-ExportSelectedFailureAlert", "selected export failure presents the same alert as native completion", exportSelectedFailureAlert),
         Scenario("Review-ImportDuringSavePanel", "importSelected while a save panel is attached is refused and leaves the save panel", importDuringSavePanel),
         Scenario("Review-CancelNonPicker", "cancelFilePanel never dismisses a non-picker sheet (sync settings alert, import preview alert)", cancelNonPicker),
         Scenario("Review-CrossWindowExport", "another window and a private window cannot complete or cancel this window's pending export", crossWindowExport),

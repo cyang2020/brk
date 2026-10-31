@@ -18,7 +18,7 @@ enum ImportSyncScenarios {
     }
 
     static func panel(_ app: AppUnderTest, _ action: SidebarPanelControlAction) throws {
-        if !FilePanelScenarios.usesHelper, action == .button("Cancel") {
+        if !FilePanelScenarios.usesAccessibility, action == .button("Cancel") {
             let kind = try app.native().sheetClass
             if kind == "NSOpenPanel" || kind == "NSSavePanel" {
                 _ = try FilePanelScenarios.recordPanel(app)
@@ -92,9 +92,13 @@ enum ImportSyncScenarios {
         let historyBytes = try JSONSerialization.data(withJSONObject: [["url": app.site.url("imported-history-only.html").absoluteString,
             "title": "Owned imported History", "visitedAt": Int64(1_790_000_000_000)]])
         try historyBytes.write(to: historyFile)
+        // The same JSON must fail under the default HTML menu, then succeed when the menu selects History.
+        try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
+        try FilePanelScenarios.selectImport(app, historyFile); try waitPanel(app, "Import failed")
+        try panel(app, .button("OK"))
         try app.dispatch(.sidebarData(.importFile)); try waitPanel(app, "Preview")
         try panel(app, .select(identifier: "import-format", index: 2))
-        try FilePanelScenarios.selectImport(app, historyFile, format: .historyJSON); try waitPanel(app, "1 history entries")
+        try FilePanelScenarios.selectImport(app, historyFile); try waitPanel(app, "1 history entries")
         try panel(app, .button("Import")); try waitPanel(app, "1 new history URLs"); try panel(app, .button("Close"))
         try app.dispatch(.library(.open(.history)))
         guard case .library(let library)? = try app.view().overlay else { throw Check(description: "History not shown") }
@@ -103,7 +107,7 @@ enum ImportSyncScenarios {
         try FilePanelScenarios.retain(app, historyFile, label: "history-source-after-import")
         _ = try app.screenshot("imported-history")
         try app.dispatch(.library(.close))
-        app.note("Selected HTML retained identical bytes after preview cancellation and import. Invalid script URL rejected; one bookmark passed the production parser and actual native preview sheets. Physical selection is reported separately by FP-OpenGesture.")
+        app.note("Selected HTML retained identical bytes after preview cancellation and import. Invalid script URL rejected; one bookmark passed the production parser and actual native preview sheets. Panel-path notes above identify real AX selection or the AX-unavailable fallback.")
         app.note("A separately selected History JSON source produced one new profile History URL visible in the Library; its source bytes stayed identical.")
     }
 
@@ -128,7 +132,7 @@ enum ImportSyncScenarios {
                 try expect(parsed.preview.bookmarkCount == 1, "HTML does not parse back to the exported bookmark")
             }
             try FilePanelScenarios.retain(app, output, label: "saved")
-            app.note("Production writer saved \(filename), \(bytes.count) bytes; physical gesture is reported separately by FP-SaveGesture.")
+            app.note("Production writer saved \(filename), \(bytes.count) bytes; panel-path notes above identify real AX selection or fallback.")
         }
         func exportedFiles() throws -> Set<String> {
             Set(try FileManager.default.contentsOfDirectory(atPath: app.dataDirectory.path).filter {
@@ -192,7 +196,7 @@ enum ImportSyncScenarios {
         _ = try app.advanceClock(seconds: 61)
         try expect(try Data(contentsOf: files[0]) == disconnected, "disconnected app published")
         try FilePanelScenarios.retain(app, files[0], label: "after-disconnect")
-        app.note("Actual folder choosers were recorded; the selected folder reached the production connection command. Validated replicas exclude local path/history/cookies. Disconnect stopped writes. Physical selection is reported separately by FP-FolderGesture.")
+        app.note("Actual folder choosers were recorded; the selected folder reached the production connection command. Validated replicas exclude local path/history/cookies. Disconnect stopped writes. Panel-path notes above identify real AX selection or fallback.")
     }
 
     static func twoApps(_ app: AppUnderTest, sharedFolder: URL) throws {

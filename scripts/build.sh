@@ -27,7 +27,7 @@ BUNDLE_ID="dev.$(echo "$PRODUCT" | tr '[:upper:]' '[:lower:]').${PRODUCT}"
 echo "[build] product $PRODUCT ($BUNDLE_ID), configuration $CONFIG"
 
 swift build -c "$CONFIG" --explicit-target-dependency-import-check error
-swift test
+if [[ "${SKIP_TESTS:-0}" != "1" ]]; then swift test; fi
 
 swift package --allow-writing-to-package-directory --allow-network-connections all \
   cef bundle --product "$PRODUCT" --configuration "$CONFIG" --bundle-id "$BUNDLE_ID" --sign -

@@ -1,3 +1,4 @@
+import ApplicationServices
 import BrkBase
 import BrkControl
 import BrkDomain
@@ -5,17 +6,18 @@ import CoreGraphics
 import Foundation
 
 enum FilePanelScenarios {
-    static let gestureGap = "Physical XPC picker selection remains manual after bounded focus/input attempts; no selection receipt. ImportSync scenarios independently exercise explicitly selected fixture URLs."
-    static var usesHelper: Bool { ProcessInfo.processInfo.environment["BRK_E2E_PICKER_HELPER"] != nil }
+    static let gestureGap = "Accessibility is unavailable on this host (AXIsProcessTrusted is false); no permission requested. Explicit owned fixture commands cover downstream behavior only."
+    static var usesAccessibility: Bool { NativePickerInput.available }
     static let all = [
-        Scenario("FP-OpenGesture", "record the real open panel and separately report its physical selection gap", openGesture),
-        Scenario("FP-SaveGesture", "record the real save panel and separately report its physical destination gap", saveGesture),
-        Scenario("FP-FolderGesture", "record the real folder chooser and separately report its physical selection gap", folderGesture),
+        Scenario("FP-OpenGesture", "AX-select the real open panel fixture and prove the completion reaches preview", openGesture),
+        Scenario("FP-SaveGesture", "AX-enter a real save destination and prove the completion writes JSON", saveGesture),
+        Scenario("FP-FolderGesture", "AX-select the real folder row and prove the completion connects sync", folderGesture),
+        Scenario("FP-SelectionGuard", "a missing fixture never confirms the panel's different selected row", selectionGuard),
         Scenario("FP-SelectedLifetime", "selected export preserves its captured document and rejects stale destinations after cancellation", selectedLifetime),
     ]
 
     @discardableResult
-    static func recordPanel(_ app: AppUnderTest) throws -> URL {
+    static func recordPanel(_ app: AppUnderTest, verifiedSelection: URL? = nil) throws -> URL {
         guard let hello = app.hello else { throw Check(description: "No launched panel owner") }
         let facts = try app.native()
         let panels = facts.appWindows.filter { $0.isVisible && ($0.className == "NSOpenPanel" || $0.className == "NSSavePanel") }
@@ -40,12 +42,14 @@ enum FilePanelScenarios {
         let directory = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("panels")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let receipt = directory.appendingPathComponent(stem + ".json")
-        try JSONSerialization.data(withJSONObject: ["pid": hello.pid, "class": panel.className, "number": panel.number,
+        let ax = try NativePickerInput.receipt(app)
+        guard case .menuItems(let selection) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { throw Check(description: "Cannot read actual picker selection") }
+        try JSONSerialization.data(withJSONObject: ["accessibility": ax, "panelSelection": selection, "pid": hello.pid, "class": panel.className, "number": panel.number,
             "windowServer": window, "controls": controls, "screenshot": "shots/" + screenshot.lastPathComponent,
-            "physicalSelectionVerified": false], options: [.prettyPrinted, .sortedKeys]).write(to: receipt)
+            "selectionVerifiedBeforeConfirm": verifiedSelection.map { selection == [$0.resolvingSymlinksInPath().path] } ?? false], options: [.prettyPrinted, .sortedKeys]).write(to: receipt)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(facts).write(to: directory.appendingPathComponent(stem + "-native.json"))
-        app.note("Recorded actual \(panel.className) #\(panel.number), PID \(hello.pid), bounds and screenshot: \(receipt.path). This records presentation, not selection.")
+        app.note("Recorded actual \(panel.className) #\(panel.number), PID \(hello.pid), bounds and screenshot: \(receipt.path). Window census and AX observations are retained; white PNGs are not rendered-content evidence.")
         return receipt
     }
 
@@ -55,23 +59,28 @@ enum FilePanelScenarios {
         try Data(contentsOf: file).write(to: directory.appendingPathComponent(app.scenarioID + "-" + label + "-" + file.lastPathComponent), options: .atomic)
     }
 
-    private static func requireOwnedFixture(_ app: AppUnderTest, _ url: URL) throws {
+    static func requireOwnedFixture(_ app: AppUnderTest, _ url: URL) throws {
         let root = ProcessInfo.processInfo.environment["BRK_E2E_DATA_ROOT"].map { URL(fileURLWithPath: $0) }
             ?? (app.scenarioID == "ImportSync-Second" ? app.dataDirectory.deletingLastPathComponent() : app.dataDirectory)
         try expect(url.resolvingSymlinksInPath().path.hasPrefix(root.resolvingSymlinksInPath().path + "/"), "Selected fixture must stay inside the owned temporary root")
     }
 
-    static func selectImport(_ app: AppUnderTest, _ file: URL, format: SidebarImportFormat = .bookmarksHTML) throws {
+    static func selectImport(_ app: AppUnderTest, _ file: URL) throws {
         try requireOwnedFixture(app, file)
-        if usesHelper { try ImportSyncScenarios.panel(app, .open(path: file.path)); return }
+        if usesAccessibility { try ImportSyncScenarios.panel(app, .open(path: file.path)); return }
         _ = try recordPanel(app)
-        try app.dispatch(.sidebarData(.importSelected(file, format: format)))
+        guard case .menuItems(let controls) = try app.send(.sidebarPanel(window: nil, action: .inspect)),
+              let choice = controls.first(where: { $0.hasPrefix("select:import-format:") }),
+              let index = Int(choice.split(separator: ":").last ?? ""), SidebarImportFormat.allCases.indices.contains(index) else {
+            throw Check(description: "Import format menu selection unavailable")
+        }
+        try app.dispatch(.sidebarData(.importSelected(file, format: SidebarImportFormat.allCases[index])))
         app.note("MANUAL picker gesture gap: " + gestureGap + " Import uses the production importSelected command for \(file.lastPathComponent).")
     }
 
     static func selectSyncFolder(_ app: AppUnderTest, _ directory: URL) throws {
         try requireOwnedFixture(app, directory)
-        if usesHelper { try ImportSyncScenarios.panel(app, .open(path: directory.path)); return }
+        if usesAccessibility { try ImportSyncScenarios.panel(app, .open(path: directory.path)); return }
         _ = try recordPanel(app)
         try app.dispatch(.sidebarData(.connectSelectedFolder(directory)))
         app.note("MANUAL picker gesture gap: folder presentation recorded; production connectSelectedFolder received an explicitly selected owned directory.")
@@ -79,7 +88,11 @@ enum FilePanelScenarios {
 
     static func selectSave(_ app: AppUnderTest, _ file: URL) throws {
         try requireOwnedFixture(app, file)
-        if usesHelper { try ImportSyncScenarios.panel(app, .save(directory: file.deletingLastPathComponent().path, filename: file.lastPathComponent)); return }
+        if usesAccessibility {
+            try ImportSyncScenarios.panel(app, .save(directory: file.deletingLastPathComponent().path, filename: file.lastPathComponent))
+            try app.waitUntil("real save completion wrote destination") { FileManager.default.fileExists(atPath: file.path) }
+            return
+        }
         _ = try recordPanel(app)
         try app.dispatch(.sidebarData(.exportSelected(file)))
         app.note("MANUAL picker gesture gap: save panel recorded; production exportSelected writes its captured document to \(file.lastPathComponent).")
@@ -90,17 +103,17 @@ enum FilePanelScenarios {
         try ExportCodec.encode(ExportDocument(title: "Owned gesture", entries: [.link(title: "Fixture", url: app.site.url("page2.html"))]), as: .html).write(to: file)
         try app.dispatch(.sidebarData(.importFile)); try ImportSyncScenarios.waitPanel(app, "Preview")
         _ = try recordPanel(app)
-        guard usesHelper else { throw Skipped(description: gestureGap) }
-        try ImportSyncScenarios.panel(app, .open(path: file.path)); try ImportSyncScenarios.waitPanel(app, "1 bookmarks")
+        guard usesAccessibility else { throw Skipped(description: gestureGap) }
+        try selectImport(app, file); try ImportSyncScenarios.waitPanel(app, "1 bookmarks")
         try ImportSyncScenarios.panel(app, .button("Cancel"))
     }
 
     @Sendable static func saveGesture(_ app: AppUnderTest) throws {
         try app.dispatch(.app(.export(.space(.current)))); try ImportSyncScenarios.waitPanel(app, "Export")
         _ = try recordPanel(app)
-        guard usesHelper else { throw Skipped(description: gestureGap) }
+        guard usesAccessibility else { throw Skipped(description: gestureGap) }
         let output = app.dataDirectory.appendingPathComponent("gesture.json")
-        try ImportSyncScenarios.panel(app, .save(directory: app.dataDirectory.path, filename: output.lastPathComponent))
+        try selectSave(app, output)
         try app.waitUntil("actual picker wrote destination") { FileManager.default.fileExists(atPath: output.path) }
         _ = try SidebarDataCodec.decodeExport(Data(contentsOf: output))
         try retain(app, output, label: "actual-save")
@@ -112,10 +125,34 @@ enum FilePanelScenarios {
         try app.dispatch(.sidebarData(.syncSettings)); try ImportSyncScenarios.waitPanel(app, "Choose sync folder")
         try ImportSyncScenarios.panel(app, .button("Choose sync folder…")); try ImportSyncScenarios.waitPanel(app, "Connect this profile")
         _ = try recordPanel(app)
-        guard usesHelper else { throw Skipped(description: gestureGap) }
-        try ImportSyncScenarios.panel(app, .open(path: directory.path))
+        guard usesAccessibility else { throw Skipped(description: gestureGap) }
+        try selectSyncFolder(app, directory)
         try app.waitUntil("actual picker connected folder") { try ImportSyncScenarios.data(app).connected }
         try app.dispatch(.sidebarData(.disconnect))
+    }
+
+    @Sendable static func selectionGuard(_ app: AppUnderTest) throws {
+        guard usesAccessibility else { throw Skipped(description: gestureGap) }
+        let fixture = app.dataDirectory.appendingPathComponent("different-owned.html")
+        try ExportCodec.encode(ExportDocument(title: "Other", entries: []), as: .html).write(to: fixture)
+        try app.dispatch(.sidebarData(.importFile)); try ImportSyncScenarios.waitPanel(app, "Preview")
+        try app.waitUntil("AX sheet ready") { (try? NativePickerInput.sheet(app)) != nil }
+        let sheet = try NativePickerInput.sheet(app)
+        try app.waitUntil("owned row loaded") { NativePickerInput.tree(sheet).contains { node in
+            [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].contains { NativePickerInput.string(node, $0) == fixture.lastPathComponent }
+        } }
+        try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
+        do {
+            try NativePickerInput.drive(app, file: app.dataDirectory.appendingPathComponent("absent-owned.html"))
+            throw Check(description: "Missing fixture unexpectedly confirmed")
+        } catch let error as Check {
+            try expect(error.description.contains("fixture row available"), "Unexpected selection refusal: \(error)")
+        }
+        try expect(try app.native().sheetClass == "NSOpenPanel", "Unverified selection dismissed the picker")
+        _ = try recordPanel(app)
+        try ImportSyncScenarios.panel(app, .button("Cancel"))
+        try expect(!(try ImportSyncScenarios.data(app).status.contains("Import failed")), "The other selected file was read")
+        app.note("Missing requested fixture refused before AXPress; the different owned selection was never confirmed or imported.")
     }
 
     @Sendable static func selectedLifetime(_ app: AppUnderTest) throws {

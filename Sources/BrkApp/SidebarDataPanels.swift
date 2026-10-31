@@ -131,6 +131,8 @@ final class SidebarDataPanels {
         panel.title = "Choose an exported browser file"
         panel.prompt = "Preview"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.json, .html, .commaSeparatedText]
+        if let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
+           ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { panel.directoryURL = URL(fileURLWithPath: path) }
         let format = NSPopUpButton()
         format.identifier = NSUserInterfaceItemIdentifier("import-format")
         format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV (local Keychain)"])
@@ -139,9 +141,13 @@ final class SidebarDataPanels {
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
-            self.operations[owner] = nil
-            guard response == .OK, let url = panel.url, let window, window.isVisible, self.target(owner) == captured else { return }
-            self.command(owner, .sidebarData(.importSelected(url, format: SidebarImportFormat.allCases[format.indexOfSelectedItem])))
+            guard response == .OK, let url = panel.url else { self.operations[owner] = nil; return }
+            let selectedFormat = SidebarImportFormat.allCases[format.indexOfSelectedItem]
+            // AppKit calls completion while the sheet is still attached. Keep the ticket until the shared path retires it.
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window, self.operations[owner]?.id == ticket, self.target(owner) == captured else { return }
+                self.command(owner, .sidebarData(.importSelected(url, format: selectedFormat)))
+            }
         }
     }
 
@@ -243,13 +249,17 @@ final class SidebarDataPanels {
         panel.title = "Choose sidebar sync folder"; panel.prompt = "Connect this profile"
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
         panel.message = "This folder's shared profile maps only to the current local profile. No credentials or browsing settings are copied."
+        if let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
+           ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { panel.directoryURL = URL(fileURLWithPath: path) }
         let ticket = UUID()
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
-            self.operations[owner] = nil
-            guard response == .OK, let url = panel.url, window?.isVisible == true, self.target(owner) == captured else { return }
-            self.command(owner, .sidebarData(.connectSelectedFolder(url)))
+            guard response == .OK, let url = panel.url else { self.operations[owner] = nil; return }
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, window?.isVisible == true, self.operations[owner]?.id == ticket, self.target(owner) == captured else { return }
+                self.command(owner, .sidebarData(.connectSelectedFolder(url)))
+            }
         }
     }
 
