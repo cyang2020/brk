@@ -117,6 +117,7 @@ enum NativePickerInput {
         } ?? []
         return ["available": true, "sheet": fields(panel),
                 "wherePopups": wherePopup(panel).map { [fields($0)] } ?? [], "selectedRows": selectedRows,
+                "selectedRowsInspected": selection != nil,
                 "filenameField": filename.map(fields) ?? [:],
                 "buttons": ["Cancel", prompt].compactMap { button(panel, title: $0).map(fields) }]
     }

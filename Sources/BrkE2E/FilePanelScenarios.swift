@@ -139,7 +139,7 @@ enum FilePanelScenarios {
         try app.waitUntil("AX sheet ready") { (try? NativePickerInput.sheet(app)) != nil }
         let sheet = try NativePickerInput.sheet(app)
         try app.waitUntil("owned row loaded") { NativePickerInput.findFile(sheet, name: fixture.lastPathComponent) != nil }
-        _ = try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
+        let differentSelection = try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
         do {
             try NativePickerInput.drive(app, file: app.dataDirectory.appendingPathComponent("absent-owned.html"))
             throw Check(description: "Missing fixture unexpectedly confirmed")
@@ -147,7 +147,7 @@ enum FilePanelScenarios {
             try expect(error.description.contains("fixture row available"), "Unexpected selection refusal: \(error)")
         }
         try expect(try app.native().sheetClass == "NSOpenPanel", "Unverified selection dismissed the picker")
-        _ = try recordPanel(app)
+        _ = try recordPanel(app, selection: differentSelection)
         try ImportSyncScenarios.panel(app, .button("Cancel"))
         try expect(!(try ImportSyncScenarios.data(app).status.contains("Import failed")), "The other selected file was read")
         app.note("Missing requested fixture refused before AXPress; the different owned selection was never confirmed or imported.")
