@@ -268,7 +268,13 @@ final class EventInjector {
     /// new position (exits, entries, moves to the owners of the tracking areas that contain it), because synthetic
     /// events do not drive the window server's tracking-area bookkeeping.
     func hover(at point: CGPoint, in window: NSWindow) {
-        if let moved = try? mouse(.mouseMoved, at: point, modifiers: [], clickCount: 0, in: window) { NSApp.sendEvent(moved) }
+        if let moved = try? mouse(.mouseMoved, at: point, modifiers: [], clickCount: 0, in: window) {
+            if let target = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point), ViewTree.page(containing: target) != nil {
+                // Synthetic moves do not update NSWindow's window-server mouse target. Use its actual hit view.
+                target.mouseMoved(with: moved)
+                print("[control] page-hover target=\(NSStringFromClass(Swift.type(of: target))) acceptsMoves=\(window.acceptsMouseMovedEvents)")
+            } else { NSApp.sendEvent(moved) }
+        }
         guard let top = window.contentView?.superview ?? window.contentView else { return }
         var inside: [ObjectIdentifier: NSTrackingArea] = [:]
         ViewTree.walk(top) { view in

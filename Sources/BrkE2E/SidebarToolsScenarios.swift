@@ -173,7 +173,7 @@ enum SidebarToolsScenarios {
         let item = try app.load(sourceURL), id = page(app, item)
         try app.waitForPageInput(id, at: sourceURL)
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: url.absoluteString, options: .fragmentsAllowed), as: UTF8.self)
-        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"position:absolute;left:40px;top:40px;margin:0;display:block;width:300px;height:150px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal);document.title='Hover fixture ready'")
+        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"position:absolute;left:40px;top:40px;margin:0;display:block;width:300px;height:150px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal);globalThis.hoverProbe={moves:0};addEventListener('pointermove',e=>{hoverProbe={moves:hoverProbe.moves+1,x:e.clientX,y:e.clientY}},true);document.title='Hover fixture ready'")
         try app.waitUntil("hover fixture DOM ready") { try tab(item, in: app.view())?.title == "Hover fixture ready" }
         try app.waitUntil("isolated hover observer") { try (app.native().pages[id]?.linkPreviewFrameCount ?? 0) > 0 }
         let frame = try app.native().pages[id]!.surfaceFrame!
@@ -183,6 +183,10 @@ enum SidebarToolsScenarios {
         try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); app.sleep(0.7)
         try expect(app.site.requestCount("/sidebar-preview-target") == before, "brief hover fetched a preview")
         try app.hover(point)
+        app.sleep(0.2)
+        try app.evaluate(id, "document.title='Hover probe '+JSON.stringify({hidden:document.hidden,hover:document.querySelector('a:hover')?.id,probe:hoverProbe,rect:document.getElementById('preview').getBoundingClientRect().toJSON(),width:innerWidth})")
+        try app.waitUntil("hover probe observed") { try tab(item, in: app.view())?.title.hasPrefix("Hover probe ") == true }
+        app.note(try tab(item, in: app.view())?.title ?? "Missing hover probe")
         try app.waitUntil("fetched \(label) preview in originating cookie context", timeout: 12) { try app.native().pages[id]?.linkPreviewTitle == "\(label) preview destination" }
         return id
     }
