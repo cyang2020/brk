@@ -145,7 +145,8 @@ final class SidebarDataPanels {
             let selectedFormat = SidebarImportFormat.allCases[format.indexOfSelectedItem]
             // AppKit calls completion while the sheet is still attached. Keep the ticket until the shared path retires it.
             DispatchQueue.main.async { [weak self, weak window] in
-                guard let self, let window, self.operations[owner]?.id == ticket, self.target(owner) == captured else { return }
+                guard let self, self.operations[owner]?.id == ticket else { return }
+                guard let window, window.isVisible, self.target(owner) == captured else { self.ownerGone(owner); return }
                 self.command(owner, .sidebarData(.importSelected(url, format: selectedFormat)))
             }
         }
@@ -257,7 +258,8 @@ final class SidebarDataPanels {
             guard let self, self.operations[owner]?.id == ticket else { return }
             guard response == .OK, let url = panel.url else { self.operations[owner] = nil; return }
             DispatchQueue.main.async { [weak self, weak window] in
-                guard let self, window?.isVisible == true, self.operations[owner]?.id == ticket, self.target(owner) == captured else { return }
+                guard let self, self.operations[owner]?.id == ticket else { return }
+                guard window?.isVisible == true, self.target(owner) == captured else { self.ownerGone(owner); return }
                 self.command(owner, .sidebarData(.connectSelectedFolder(url)))
             }
         }
