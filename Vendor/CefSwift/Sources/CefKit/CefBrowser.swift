@@ -51,6 +51,7 @@ public final class CefBrowser: Identifiable {
     /// Owned +1 reference to the underlying cef_browser_t; nil after close.
     var rendererDocuments: [String: String] = [:]
     private var raw: UnsafeMutablePointer<cef_browser_t>?
+    var toolsSession: CefDevToolsSession?
     let client: BrowserClient?
 
     init(raw: UnsafeMutablePointer<cef_browser_t>?, client: BrowserClient?, delegate: CefBrowserDelegate?) {
@@ -258,6 +259,8 @@ public final class CefBrowser: Identifiable {
     }
 
     func handleBeforeClose() {
+        toolsSession?.close()
+        toolsSession = nil
         delegate?.browserDidClose(self)
         if let raw {
             cefRelease(UnsafeMutableRawPointer(raw))

@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import BrkLayout
 import os
 
 /// The one owner of application state. `dispatch` is the only path into `reduce`, and `reduce` is the only writer;
@@ -56,6 +57,12 @@ public final class AppStore {
     private var appearanceObservation: NSKeyValueObservation?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
+    let siteDialogs = SiteDialogs()
+    lazy var sitePanels: SitePanels = {
+        let panels = SitePanels()
+        panels.send = { [weak self] id, command in self?.dispatch(.user(id, command)) }
+        return panels
+    }()
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -110,6 +117,7 @@ public final class AppStore {
     /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right).
     public func refresh() {
         snapshot = projected()
+        engine.reconcile(snapshot.pages)
         renderWindows()
     }
 
@@ -256,6 +264,8 @@ public final class AppStore {
     }
 
     private func renderWindows() {
+        siteDialogs.validate(snapshot)
+        sitePanels.render(snapshot.sites) { windows[$0]?.window }
         for (id, controller) in windows {
             if let window = snapshot.windows[id] { controller.render(window) }
         }
@@ -263,6 +273,57 @@ public final class AppStore {
     }
 
     private lazy var siteTools = SiteToolsAdapter { [weak self] event in self?.dispatch(.system(event)) }
+    private func chooseLocalExtension(_ id: WindowID, context: BrowsingContext) {
+        guard let owner = windows[id]?.window, owner.attachedSheet == nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        panel.message = "Choose an unpacked extension folder containing manifest.json."
+        panel.beginSheetModal(for: owner) { [weak self, weak owner] response in
+            guard let self, let owner, owner.isVisible, response == .OK, let directory = panel.url,
+                  self.snapshot.pages.contains(where: { $0.context == context && $0.id.window == id }) else { return }
+            self.dispatch(.user(id, .site(.installSelectedExtension(directory))))
+        }
+    }
+
+    private func confirmLocalExtension(_ id: WindowID, context: BrowsingContext, directory: URL) {
+        guard let owner = windows[id]?.window, owner.attachedSheet == nil else { return }
+        let manifest = directory.appendingPathComponent("manifest.json")
+        let size = (try? FileManager.default.attributesOfItem(atPath: manifest.path)[.size] as? NSNumber)?.intValue ?? Int.max
+        guard size <= 1_048_576 else { extensionNotice("The selected manifest is missing or exceeds 1 MB", owner: owner); return }
+        let summary = (try? Data(contentsOf: manifest)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        guard let summary, let name = summary["name"] as? String else { extensionNotice("The selected folder has no valid manifest.json", owner: owner); return }
+        let alert = NSAlert()
+        alert.messageText = "Install \(name)?"
+        let disclosure: String
+        do { disclosure = try ExtensionInstallPermissions.text(summary) }
+        catch { extensionNotice("The selected manifest has invalid permission declarations", owner: owner); return }
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 500, height: 230))
+        scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
+        let text = NSTextView(frame: scroll.bounds)
+        text.isEditable = false; text.isSelectable = true
+        text.font = .systemFont(ofSize: NSFont.systemFontSize)
+        text.textContainerInset = NSSize(width: 8, height: 8)
+        text.textContainer?.widthTracksTextView = true
+        text.isVerticallyResizable = true; text.autoresizingMask = [.width]
+        text.string = disclosure
+        text.identifier = NSUserInterfaceItemIdentifier("extension-permission-summary")
+        text.setAccessibilityIdentifier("extension-permission-summary")
+        scroll.documentView = text
+        alert.informativeText = "Review the extension's declared access before installing."
+        alert.accessoryView = scroll
+        alert.addButton(withTitle: "Install"); alert.addButton(withTitle: "Cancel")
+        let key = ViewID.settingsField("confirmExtensionInstall").identifier
+        alert.buttons[0].identifier = NSUserInterfaceItemIdentifier(key); alert.buttons[0].setAccessibilityIdentifier(key)
+        alert.beginSheetModal(for: owner) { [weak self, weak owner] response in
+            guard let self, let owner, owner.isVisible, response == .alertFirstButtonReturn else { return }
+            self.dispatch(.user(id, .site(.executeExtensionInstall(directory, context))))
+        }
+    }
+
+    private func extensionNotice(_ message: String, owner: NSWindow) {
+        let alert = NSAlert(); alert.messageText = "Extensions"; alert.informativeText = message
+        if owner.isVisible, owner.attachedSheet == nil { alert.beginSheetModal(for: owner) }
+    }
 
     private func run(_ effects: [Effect]) {
         siteTools.reconcile(Set(snapshot.windows.values.compactMap { $0.tabTools.pendingSiteRequest }))
@@ -344,6 +405,66 @@ public final class AppStore {
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
             case .disposeContext: break
+            case .loadWebsiteRules(let file, let context):
+                Task { @MainActor [weak self] in
+                    let update = await Task.detached(priority: .utility) { SiteRulesFiles.read(file) }.value
+                    self?.dispatch(.system(.websiteRulesLoaded(context, update)))
+                }
+            case .chooseWebsiteRules(let id, let context):
+                guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
+                let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
+                panel.message = "Choose Brk blocking rules JSON. This replaces this profile's current network and cosmetic rules."
+                panel.beginSheetModal(for: owner) { [weak self] response in
+                    guard let self, response == .OK, let file = panel.url else { return }
+                    self.dispatch(.user(id, .site(.selectedBlockingRules(file, context))))
+                }
+            case .queryExtensions(let context):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.dispatch(.system(.extensionsRead(await self.engine.extensionCatalog(context: context))))
+                }
+            case .invokeExtension(let id, let target):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if let error = await self.engine.invokeExtension(id, target: target) {
+                        self.dispatch(.system(.extensionsRead(ExtensionCatalog(context: target.context, extensions: [], error: error))))
+                    }
+                }
+            case .removeExtension(let id, let context, let page):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let error = await self.engine.removeExtension(id, context: context, in: page)
+                    let result = error.map { ExtensionCatalog(context: context, extensions: [], error: $0) }
+                    if let result { self.dispatch(.system(.extensionsRead(result))) }
+                    else { self.dispatch(.system(.extensionsRead(await self.engine.extensionCatalog(context: context)))) }
+                }
+            case .confirmSiteData(let request):
+                siteDialogs.confirm(request, in: windows[request.target.page.window]?.window) { [weak self] answer in
+                    self?.dispatch(.user(request.target.page.window, .site(.confirmClear(request.id, answer))))
+                }
+            case .cancelSiteData(let id): engine.cancelSiteData(id)
+            case .clearSiteData(let request):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let result = await self.engine.clearSiteData(request)
+                    self.dispatch(.system(.siteDataCleared(result)))
+                }
+            case .confirmLocalExtension(let window, let context, let directory):
+                confirmLocalExtension(window, context: context, directory: directory)
+            case .installLocalExtension(let page, let context, let directory):
+                let window = page.window
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let error = await self.engine.installExtension(at: directory, context: context, in: page)
+                    self.dispatch(.system(.extensionsRead(await self.engine.extensionCatalog(context: context))))
+                    if let error { self.dispatch(.system(.extensionOperationFailed(context, error))) }
+                    if let error, let owner = self.windows[window]?.window,
+                       self.snapshot.pages.contains(where: { $0.id.window == window && $0.context == context && $0.websitePolicy.visible }) {
+                        self.extensionNotice(error, owner: owner)
+                    }
+                }
+            case .addLocalExtension(let window, let context):
+                chooseLocalExtension(window, context: context)
             case .cancelDownload(let id): engine.cancelDownload(id)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])

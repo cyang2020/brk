@@ -1,0 +1,1 @@
+chrome.commands.onCommand.addListener(async command=>{await chrome.storage.local.set({lastCommand:command});for(const tab of await chrome.tabs.query({url:'http://127.0.0.1/*'})){chrome.tabs.sendMessage(tab.id,{command}).catch(()=>{})}});

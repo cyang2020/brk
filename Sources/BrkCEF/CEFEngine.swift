@@ -29,14 +29,17 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
-    private let resources = BrowserResources<ChromePage>()
-    private var live: [PageID: ChromePage] {
+    let resources = BrowserResources<ChromePage>()
+    var live: [PageID: ChromePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
-    private let transfers = Transfers()
+    let transfers = Transfers()
     private let outputs = DocumentOutputs()
     private var outputAdapters: [OutputID: AnyObject] = [:]
-    private var contexts = ContextLifetimes()
+    private var outputPreparations: [OutputID: Task<Void, Never>] = [:]
+    var contexts = ContextLifetimes()
+    var cancelledSiteClears: Set<String> = []
+    var clearingContexts: [BrowsingContext: String] = [:]
     private var disposals: [DisposalID: ContextDisposal] = [:]
     private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
     private var ledger = PageLedger()
@@ -48,8 +51,9 @@ public final class CEFEngine: WebEngine {
     /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
-    private var wanted: [PageSpec] = []
-    private var phase: ShutdownPhase = .running
+    var wanted: [PageSpec] = []
+    var phase: ShutdownPhase = .running
+    private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Each native window keeps its own page intent, including while a profile or input view is being created.
     /// A native editor in another window must not cancel this request. Weak ownership permits window teardown.
@@ -85,6 +89,10 @@ public final class CEFEngine: WebEngine {
         config.cachePath = root.appendingPathComponent("Default", isDirectory: true)
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            config.safeStorage = .mockKeychain
+            config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1"
+        }
         config.defaultRuntimeStyle = .chrome
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
             config.extraCommandLineSwitches["use-mock-keychain"] = .some(nil)
@@ -92,15 +100,20 @@ public final class CEFEngine: WebEngine {
         AudioExtension.configure(&config)
         try CefRuntime.shared.initialize(configuration: config)
         // CefSwift's terminate handler closes browsers while their views are still moved into our window, which
-        // segfaulted on quit in every spike run. Remove it: -terminate: then reaches the app delegate's
-        // applicationShouldTerminate, which returns .terminateLater and runs Lifecycle's ordered quit, which ends in
-        // `shutdown()` below.
-        CEFApplication.setTerminateHandler(nil)
+        // segfaulted on quit in every spike run. Replace it with auxiliary-dialog cancellation only. Once those
+        // choices are dismissed, -terminate: reaches applicationShouldTerminate and Lifecycle's ordered shutdown.
+        CEFApplication.setTerminateHandler { () -> ObjCBool in
+            ObjCBool(MainActor.assumeIsolated { HostWindows.prepareForApplicationTermination() })
+        }
         HostWindows.installKeyGuard()
         return CEFEngine()
     }
 
     private init() {
+        resources.leasesDidChange = { [weak self] browser in
+            guard let self, self.phase == .running, let page = self.resources.entries[browser]?.resource else { return }
+            page.refreshWebsitePolicy()
+        }
         outputs.acquire = { [weak self] id, browser in self?.resources.acquire(.documentOutput(id.rawValue), browser: browser) ?? false }
         outputs.release = { [weak self] id, browser in
             guard let self else { return }
@@ -127,22 +140,44 @@ public final class CEFEngine: WebEngine {
         outputs.render = { [weak self] request, path, done in
             guard let self, let page = self.resources.entries[request.document.browser]?.resource,
                   page.readyDocument == request.document else { done(.failure(CocoaError(.userCancelled))); return }
-            let adapter: AnyObject
-            if request.intent == .mhtml {
-                adapter = page.browser.captureMHTML { [weak self] result in
-                    self?.outputAdapters[request.id] = nil
-                    do { try result.get().write(to: path, options: .withoutOverwriting); done(.success(())) }
-                    catch { done(.failure(error)) }
-                }
-            } else {
-                adapter = page.browser.printPDF(to: path) { [weak self] ok in
-                    self?.outputAdapters[request.id] = nil
-                    done(ok ? .success(()) : .failure(CocoaError(.fileWriteUnknown)))
+            let preparation = Task { @MainActor [weak self] in
+                guard let self else { done(.failure(CocoaError(.userCancelled))); return }
+                do {
+                    try await page.resumeForOperation(request.document)
+                    guard self.phase == .running, self.outputs.permitsRender(request.id),
+                          page.readyDocument == request.document else {
+                        self.outputPreparations[request.id] = nil
+                        done(.failure(CocoaError(.userCancelled))); return
+                    }
+                    self.outputPreparations[request.id] = nil
+                    let adapter: AnyObject
+                    if request.intent == .mhtml {
+                        adapter = page.browser.captureMHTML { [weak self] result in
+                            self?.outputAdapters[request.id] = nil
+                            do { try result.get().write(to: path, options: .withoutOverwriting); done(.success(())) }
+                            catch { done(.failure(error)) }
+                        }
+                    } else {
+                        adapter = page.browser.printPDF(to: path) { [weak self] ok in
+                            self?.outputAdapters[request.id] = nil
+                            done(ok ? .success(()) : .failure(CocoaError(.fileWriteUnknown)))
+                        }
+                    }
+                    if self.outputs.contains(request.id) { self.outputAdapters[request.id] = adapter }
+                } catch {
+                    self.outputPreparations[request.id] = nil
+                    done(.failure(error))
                 }
             }
-            if self.outputs.contains(request.id) { self.outputAdapters[request.id] = adapter }
+            self.outputPreparations[request.id] = preparation
         }
 
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.phase == .running else { return }
+                for page in self.live.values where page.websitePolicy.appearance == .automatic { page.refreshWebsitePolicy() }
+            }
+        }
         transfers.publish = { [weak self] update in
             guard let self else { return }
             self.delegate?.engine(self, download: update)
@@ -181,7 +216,7 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages {
-            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); continue }
+            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
@@ -245,7 +280,7 @@ public final class CEFEngine: WebEngine {
         case .navigate(let url): live.prepareNavigation(); browser.load(url)
         case .goBack: live.prepareNavigation(); browser.goBack()
         case .goForward: live.prepareNavigation(); browser.goForward()
-        case .reload(let ignoringCache): live.prepareNavigation(); browser.reload(ignoreCache: ignoringCache)
+        case .reload(let ignoringCache): live.requestReload(ignoringCache: ignoringCache)
         case .stop: live.prepareStop(); browser.stopLoading()
         case .zoom(let step):
             browser.zoomLevel = BrowserZoom.next(step, level: browser.zoomLevel)
@@ -432,6 +467,8 @@ public final class CEFEngine: WebEngine {
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: shutdown started\n".utf8)) }
+        appearanceObservation = nil
         phase = .restoringViews
         audioLoop?.cancel(); audioLoop = nil
         for observer in audioObservers.values { observer.stop() }
@@ -442,7 +479,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            self.outputs.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained)
         }
         guard drained else {
@@ -550,7 +587,7 @@ public final class CEFEngine: WebEngine {
         transfers.sourceGone(page.incarnation)
         closeIfUnowned(page.incarnation)
     }
-    private func closeIfUnowned(_ browser: BrowserToken) {
+    func closeIfUnowned(_ browser: BrowserToken) {
         guard resources.beginClose(browser), let page = resources.entries[browser]?.resource else { return }
         record(.closeRequested, page)
         page.close()

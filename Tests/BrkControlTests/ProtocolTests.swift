@@ -14,6 +14,7 @@ final class ProtocolTests: XCTestCase {
         case chooseOutputFixture, cancelCurrentOutput, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
     }
@@ -31,6 +32,10 @@ final class ProtocolTests: XCTestCase {
         case .pasteboard: .pasteboard
         case .readPasteboard: .readPasteboard
         case .screenshotSheet: .screenshotSheet
+        case .nativeDialogKey: .nativeDialogKey
+        case .setAppAppearance: .setAppAppearance
+        case .siteControlsScreenshot: .siteControlsScreenshot
+        case .siteControls: .siteControls
         case .hello: .hello
         case .view: .view
         case .activate: .activate
@@ -79,6 +84,10 @@ final class ProtocolTests: XCTestCase {
         case .pasteboard: return [.pasteboard("fixture"), .pasteboard(nil)]
         case .readPasteboard: return [.readPasteboard]
         case .screenshotSheet: return [.screenshotSheet(window: nil, path: "/tmp/sheet.png")]
+        case .nativeDialogKey: return [.nativeDialogKey(number: 7, chord: "return")]
+        case .setAppAppearance: return [.setAppAppearance(.dark), .setAppAppearance(nil)]
+        case .siteControlsScreenshot: return [.siteControlsScreenshot(window: WindowID("w"), path: "/tmp/panel.png")]
+        case .siteControls: return [.siteControls]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
         case .activate: return [.activate(window: WindowID("w"))]
@@ -140,6 +149,7 @@ final class ProtocolTests: XCTestCase {
     func testRepliesRoundTrip() throws {
         let results: [ControlResult] = [
             .text("fixture"), .menuItems(["Back", "Reload"]),
+            .siteControls([:]),
             .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
             .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),

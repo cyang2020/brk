@@ -4,7 +4,7 @@ import BrkBase
 /// Presentation and operations are independent reasons to keep the original browser alive.
 @MainActor
 public final class BrowserResources<Resource: AnyObject> {
-    public enum Lease: Hashable { case transfer(DownloadID), documentOutput(String) }
+    public enum Lease: Hashable { case transfer(DownloadID), documentOutput(String), siteData(String), extensionOperation(String) }
     public struct Entry {
         public let resource: Resource
         public let context: ContextEpoch
@@ -15,6 +15,7 @@ public final class BrowserResources<Resource: AnyObject> {
         public fileprivate(set) var hostClosed = false
     }
     public private(set) var entries: [BrowserToken: Entry] = [:]
+    public var leasesDidChange: ((BrowserToken) -> Void)?
     public init() {}
     public func insert(_ resource: Resource, browser: BrowserToken, context: ContextEpoch) {
         precondition(entries[browser] == nil)
@@ -22,12 +23,13 @@ public final class BrowserResources<Resource: AnyObject> {
     }
     public func acquire(_ lease: Lease, browser: BrowserToken) -> Bool {
         guard let entry = entries[browser], !entry.closing else { return false }
-        entries[browser]!.leases.insert(lease)
+        if entries[browser]!.leases.insert(lease).inserted { leasesDidChange?(browser) }
         return true
     }
     public func release(_ lease: Lease, browser: BrowserToken) {
-        entries[browser]?.leases.remove(lease)
+        let removed = entries[browser]?.leases.remove(lease)
         removeIfClosed(browser)
+        if removed != nil { leasesDidChange?(browser) }
     }
     public func unpresent(_ browser: BrowserToken) { entries[browser]?.presented = false }
     public func beginClose(_ browser: BrowserToken) -> Bool {

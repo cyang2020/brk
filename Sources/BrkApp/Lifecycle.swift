@@ -140,6 +140,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Quit.fixtureTrace("delegate entered")
         guard !quitting else { return .terminateLater }
         quitting = true
         store?.prepareForTermination()
@@ -170,6 +171,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         await store?.stopSidebarData()
         store?.flush()
         store?.cancelExports()
+        Quit.fixtureTrace("engine shutdown starting")
         let outcome = await engine.shutdown()
         store?.flush()
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
@@ -201,11 +203,17 @@ public enum Quit {
 
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
     /// without terminating the test process.
-    public static var perform: @MainActor () -> Void = {
-        RunLoop.main.perform {
-            (NSApp.delegate as? Lifecycle)?.store?.prepareForTermination()
-            RunLoop.main.perform { NSApp.terminate(nil) }
-        }
+    public static var perform: @MainActor () -> Void = { enqueue {
+        (NSApp.delegate as? Lifecycle)?.store?.prepareForTermination()
+        enqueue { NSApp.terminate(nil) }
+    } }
+
+    static func fixtureTrace(_ message: String) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data(("fixture quit: " + message + "\n").utf8)) }
+    }
+
+    static func enqueue(_ action: @escaping @MainActor () -> Void) {
+        RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { MainActor.assumeIsolated { fixtureTrace("run-loop block entered"); action() } }
     }
 }
 

@@ -57,6 +57,15 @@ final class KeyRouter: WebEngineDelegate {
         store.destinations.present(prompt, in: store.windowController(prompt.window)?.window, reply: reply)
     }
     func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) { store.destinations.dismiss(ticket) }
+    func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void) {
+        store.siteDialogs.permission(prompt, in: store.windowController(prompt.target.page.window)?.window) { [weak self] answer, remember in
+            if remember, answer != .ask {
+                self?.store.dispatch(.user(prompt.target.page.window, .site(.permission(prompt.target, prompt.requestingOrigin, prompt.capabilities, answer))))
+            }
+            reply(answer)
+        }
+    }
+    func engine(_ engine: any WebEngine, dismissPermission id: String) { store.siteDialogs.dismiss(id) }
     func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult) { store.dispatch(.system(.contextDisposed(result))) }
 
     /// Arc's Links setting "Open a Peek window when clicking on links to other sites" ("This only affects Favorites

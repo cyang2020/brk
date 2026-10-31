@@ -6,11 +6,13 @@ struct MainDocumentState {
     let browser: BrowserToken
     private var sequence: UInt64 = 0
     private var document: DocumentAvailability = .unavailable
+    var availability: DocumentAvailability { document }
+    var readyDocument: DocumentToken? { if case .ready(let token) = document { token } else { nil } }
+    var lastSequence: UInt64 { sequence }
     private var failed = false
     private var acceptedURLs: Set<String> = []
     private var pendingAddress: URL?
-
-    var readyDocument: DocumentToken? { if case .ready(let token) = document { token } else { nil } }
+    private var committedAddress: URL?
 
     init(browser: BrowserToken) { self.browser = browser }
 
@@ -28,6 +30,7 @@ struct MainDocumentState {
     }
 
     mutating func addressChanged(_ url: URL?, loading: Bool) -> [PageEvent] {
+        if url == committedAddress { return loadingChanged(loading) }
         pendingAddress = url
         return url.map { [.navigationRequested($0)] + loadingChanged(loading) } ?? []
     }
@@ -36,7 +39,10 @@ struct MainDocumentState {
         sequence += 1
         pendingAddress = nil
         if acceptedURLs.isEmpty, let url { acceptedURLs.insert(url.absoluteString) }
-        return changed(failed ? .unavailable : .loading(DocumentToken(browser: browser, sequence: sequence)))
+        let events = changed(failed ? .unavailable : .loading(DocumentToken(browser: browser, sequence: sequence)))
+        guard !failed, let url else { return events }
+        committedAddress = url
+        return events + [.committed(url)]
     }
 
     mutating func finished(_ url: URL?) -> [PageEvent] {

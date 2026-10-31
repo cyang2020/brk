@@ -230,6 +230,7 @@ struct StoredDocV3: Codable {
     var settings: StoredSettings
     var profiles: [ProfileID: StoredProfile]
     var tabPreferences: TabPreferences?
+    var sitePreferences: [ProfileID: SitePreferences]?
     var deletingProfiles: [ProfileID: ProfileDeletion]?
     var downloads: [StoredDownload]
     var linkRoutes: [LinkRoute]
@@ -369,6 +370,7 @@ struct StoredDocV3: Codable {
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
         tabPreferences = doc.tabPreferences
+        sitePreferences = doc.sitePreferences
         deletingProfiles = doc.deletingProfiles
         profiles = doc.profiles.mapValues { StoredProfile(name: $0.name, icon: $0.icon) }
         downloads = doc.downloads.map {
@@ -578,6 +580,8 @@ struct StoredDocV3: Codable {
             if let group = value.folder?.group { doc.tree.updateFolder(id) { $0.isGroup = group } }
             if let title = value.split?.title { doc.tree.updateSplit(id) { $0.title = title } }
         }
+        // Named v3 extension migration: absent policy inherits the pre-existing global appearance.
+        doc.sitePreferences = restoreSitePreferencesV3(sitePreferences, profiles: Set(doc.profiles.keys), repairs: &repairs)
         return (doc, repairs)
     }
 }
@@ -705,5 +709,49 @@ public enum SidebarDataCodec {
                 guard id.hasPrefix("i-") else { throw SidebarDataError.invalid("Invalid sync split key.") }
             }
         }
+    }
+}
+
+private func restoreSitePreferencesV3(_ saved: [ProfileID: SitePreferences]?, profiles: Set<ProfileID>, repairs: inout [String]) -> [ProfileID: SitePreferences] {
+    guard let saved else { return [:] }
+    var result: [ProfileID: SitePreferences] = [:]
+    for (id, var preferences) in saved where profiles.contains(id) {
+        preferences.rules = preferences.rules.filter { key, _ in
+            guard let url = URL(string: key), SiteOrigin(url)?.value == key else { repairs.append("dropped a noncanonical site policy origin"); return false }
+            return true
+        }
+        if let list = preferences.blockingRules {
+            switch StateCodec.decodeWebsiteRules(try! JSONEncoder().encode(list)) {
+            case .loaded(let valid): preferences.blockingRules = valid
+            case .failed: preferences.blockingRules = nil; repairs.append("restored built-in website rules after an invalid saved list")
+            }
+        }
+        if let embedded = preferences.embeddedPermissions {
+            preferences.embeddedPermissions = embedded.filter { key, _ in
+                let origins = key.split(separator: "\n", omittingEmptySubsequences: false)
+                return origins.count == 2 && origins.allSatisfy { value in URL(string: String(value)).flatMap(SiteOrigin.init)?.value == String(value) }
+            }
+        }
+        result[id] = preferences
+    }
+    return result
+}
+
+// Local, explicitly selected rule updates share the codec boundary. This is a small JSON format, not an EasyList parser.
+extension StateCodec {
+    public static func decodeWebsiteRules(_ data: Data) -> WebsiteRulesUpdate {
+        guard data.count <= 1_048_576 else { return .failed("The rule file exceeds 1 MB") }
+        do {
+            let rules = try JSONDecoder().decode(WebsiteBlockingRules.self, from: data)
+            guard rules.version > 0, rules.version <= 1_000_000,
+                  rules.blockedHosts.count + rules.blockedPathPrefixes.count + rules.cosmeticSelectors.count <= 20_000 else { return .failed("Invalid rule version or too many rules") }
+            let hosts = rules.blockedHosts.map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+            guard hosts.allSatisfy({ $0.range(of: #"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"#, options: .regularExpression) != nil && !$0.contains("..") }),
+                  rules.blockedPathPrefixes.allSatisfy({ $0.hasPrefix("/") && !$0.contains("\n") && !$0.contains("?") && $0.count <= 1024 }),
+                  rules.cosmeticSelectors.allSatisfy({ $0.range(of: #"^(?:[.#][A-Za-z_][A-Za-z0-9_-]*|\[[A-Za-z_][A-Za-z0-9_-]*(?:="[A-Za-z0-9_ -]+")?\])$"#, options: .regularExpression) != nil }) else {
+                return .failed("Rules must use host names, absolute path prefixes, and simple class, ID or attribute selectors")
+            }
+            return .loaded(WebsiteBlockingRules(version: rules.version, blockedHosts: Array(Set(hosts)).sorted(), blockedPathPrefixes: Array(Set(rules.blockedPathPrefixes)).sorted(), cosmeticSelectors: Array(Set(rules.cosmeticSelectors)).sorted()))
+        } catch { return .failed("Cannot read this rule file: " + error.localizedDescription) }
     }
 }

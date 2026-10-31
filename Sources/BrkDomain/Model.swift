@@ -76,6 +76,7 @@ struct Doc: Sendable, Equatable {
     var profiles: [ProfileID: Profile]
     /// Newest first (Arc: `StorableDownloadMetadata`). Fed by `SystemEvent.download`; private transfers are omitted.
     var downloads: [Download]
+    var sitePreferences: [ProfileID: SitePreferences] = [:]
     var deletingProfiles: [ProfileID: ProfileDeletion] = [:]
     /// Air Traffic Control, in priority order: the first route whose pattern matches wins. F3 owns the rules.
     var linkRoutes: [LinkRoute]
@@ -236,6 +237,7 @@ struct HistoryEntry: Sendable, Equatable {
 
 struct Session: Sendable, Equatable {
     var sidebarDataStatus = "Not connected."
+    var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
     var rev: Int
     var windows: [WindowID: WindowSession]
@@ -365,6 +367,7 @@ struct SavedSlot: Sendable, Equatable, Codable {
 
 struct LivePage: Sendable, Equatable {
     /// Admission is handled once per originating browser, independently of the public download ledger.
+    var websitePolicyStatus: WebsitePolicyStatus? = nil
     var admittedDownloads: Set<DownloadID> = []
     var requestedURL: URL? = nil
     var requestContext: BrowsingContext? = nil

@@ -15,7 +15,7 @@ final class ChromePage: CefBrowserDelegate {
     let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
     private let chrome: CefChromeBrowser
-    private unowned let engine: CEFEngine
+    unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
     private let contextMenu = PageContextMenu()
@@ -23,11 +23,24 @@ final class ChromePage: CefBrowserDelegate {
         guard let self, self.engine.isLive(self) else { return }
         self.engine.findUpdated(update)
     }
-    private var mainDocument: MainDocumentState
     private(set) var audio: AudioObservation
     private var audioTargetTransport: CefDevTools?
     var audioObserverID: Int?
     var audioError: String?
+    var mainDocument: MainDocumentState
+    private var reloadSequence = ReloadSequence()
+    private var expectedReloadBrowse: URL?
+    var requestedReloads = 0
+    var extensionDialogDecision: String?
+    var extensionFileDialogCallbacks = 0
+    var extensionInstallerDocument: DocumentToken?
+    var approvedExtensionDirectory: (document: DocumentToken, directory: URL)?
+    var websiteStyleOwner: (document: DocumentToken, id: String)?
+    var websitePolicy = WebsitePolicy()
+    var permissionRequests: [String: PagePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
+    var policyRevision: UInt64 = 0
+    var websiteError: String?
+    var frozen = false
 
     private func emit(_ events: [PageEvent]) {
         for event in events {
@@ -61,6 +74,9 @@ final class ChromePage: CefBrowserDelegate {
         surface = EmbeddedSurface(page: spec.id)
         var options = CefChromeBrowserOptions()
         options.isFrameless = true
+        let initialRule = SiteOrigin(url).map { spec.websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
+        let list = spec.websitePolicy.preferences.blockingRules ?? .builtIn
+        options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes)
         options.showsChromeToolbar = false
         options.backgroundColor = .white
         options.initialBounds = Self.offscreenBounds
@@ -80,6 +96,7 @@ final class ChromePage: CefBrowserDelegate {
             self.engine.pageReadyForFocus(self)
         }
         surface.adopt(chrome)
+        applyWebsitePolicy(spec.websitePolicy)
     }
 
     func resolveAudioTarget() async {
@@ -119,10 +136,16 @@ final class ChromePage: CefBrowserDelegate {
     var readyDocument: DocumentToken? { mainDocument.readyDocument }
 
     var facts: PageFacts {
-        PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: surface.embeddedViewClasses,
+        var facts = PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: surface.embeddedViewClasses,
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.requestedReloads = requestedReloads
+        facts.extensionDialogDecision = extensionDialogDecision
+        facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
+        facts.websiteFrozen = frozen
+        facts.websitePolicyError = websiteError
+        return facts
     }
 
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
@@ -131,13 +154,15 @@ final class ChromePage: CefBrowserDelegate {
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
+        reloadSequence.cancel()
+        cancelPermissions()
         contextMenu.cancel()
         browser.closeDevTools()
         surface.returnViews()
         chrome.browser.close(force: true)
     }
 
-    func park() { audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -156,13 +181,21 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
+        expectedReloadBrowse = nil
+        reloadSequence.cancel()
+        prepareDocumentNavigation()
+    }
+
+    private func prepareDocumentNavigation() {
+        approvedExtensionDirectory = nil
+        cancelPermissions()
         audio.navigationRequested()
         engine.pageDidEmit(self, .audioChanged(false))
         contextMenu.cancel()
         mainDocument.prepareNavigation()
     }
 
-    func prepareStop() { emit(mainDocument.stopped()) }
+    func prepareStop() { reloadSequence.cancel(); emit(mainDocument.stopped()) }
     func reportZoom() { engine.pageDidEmit(self, .zoomChanged(BrowserZoom.percentage(level: browser.zoomLevel))) }
     func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool) {
         engine.pageDidEmit(self, .fullscreenChanged(isFullscreen))
@@ -172,6 +205,19 @@ final class ChromePage: CefBrowserDelegate {
         find.nativeResult(id: identifier, count: count, ordinal: ordinal, final: final)
     }
     func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage) { find.receive(rendererMessage) }
+    func requestReload(ignoringCache: Bool) {
+        requestedReloads += 1
+        if let request = reloadSequence.request(ignoringCache: ignoringCache, after: mainDocument.lastSequence) { issueReload(request) }
+    }
+
+    private func issueReload(_ request: ReloadSequence.Request) {
+        guard engine.isLive(self), reloadSequence.current == request else { return }
+        guard mainDocument.lastSequence == request.afterDocumentSequence else { reloadSequence.cancel(); return }
+        prepareDocumentNavigation()
+        expectedReloadBrowse = browser.url
+        browser.reload(ignoreCache: request.ignoringCache)
+    }
+
 
     // MARK: CefBrowserDelegate -> PageEvent
 
@@ -196,10 +242,15 @@ final class ChromePage: CefBrowserDelegate {
         setMuted(desiredMuted)
         emit(mainDocument.finished(url))
         reportZoom()
+        refreshWebsitePolicy()
+        if case .ready(let document) = mainDocument.availability,
+           let request = reloadSequence.finished(documentSequence: document.sequence) {
+            Task { @MainActor [weak self] in self?.issueReload(request) }
+        }
     }
 
     func browser(_ b: CefBrowser, didChangeTitle title: String) {
-        log.notice("page \(self.id.description, privacy: .public) title: \(title, privacy: .public)")
+        if case .profile = context { log.debug("page title changed") }
         engine.pageDidEmit(self, .titleChanged(title))
     }
 
@@ -211,10 +262,13 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, didFailLoad code: Int, errorText: String, failedURL: String) {
+        reloadSequence.cancel()
         emit(mainDocument.loadFailed(code: code, description: errorText, url: failedURL))
     }
 
     func browser(_ b: CefBrowser, renderProcessDidTerminate reason: CefTerminationReason, errorCode: Int) {
+        reloadSequence.cancel()
+        cancelPermissions()
         emit(mainDocument.rendererGone())
         engine.pageDidEmit(self, .rendererGone)
     }
@@ -260,13 +314,19 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
+    func browserDidClose(_ b: CefBrowser) { cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
     func browser(_ b: CefBrowser, decidePolicyForNavigation url: URL?, isRedirect: Bool, userGesture: Bool) -> CefNavigationDecision {
         guard let url else { return .allow }
         guard isRedirect || engine.pageShouldNavigate(self, to: url, userGesture: userGesture) else { return .cancel }
+        if !isRedirect, reloadSequence.current != nil {
+            if expectedReloadBrowse == url { expectedReloadBrowse = nil }
+            else { reloadSequence.cancel(); expectedReloadBrowse = nil }
+        }
+        cancelPermissions()
+        configureRequestFilter(url)
         contextMenu.cancel()
         emit(mainDocument.allowed(url, redirect: isRedirect))
         return .allow

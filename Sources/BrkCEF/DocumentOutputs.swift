@@ -31,6 +31,11 @@ import PDFKit
     var dismiss: (OutputID) -> Void = { _ in }
     var isEmpty: Bool { operations.isEmpty }
     func contains(_ id: OutputID) -> Bool { operations[id] != nil }
+    func permitsRender(_ id: OutputID) -> Bool {
+        guard let operation = operations[id] else { return false }
+        return current(operation) && operation.rendering && !operation.cancelRequested
+            && available(operation.request, operation.context)
+    }
     func contains(context: BrowsingContext) -> Bool { operations.values.contains { $0.context.context == context } }
 
     func start(_ request: OutputRequest, context: ContextEpoch) {

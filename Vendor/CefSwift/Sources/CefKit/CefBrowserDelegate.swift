@@ -113,12 +113,18 @@ public protocol CefBrowserDelegate: AnyObject {
     /// The context menu was dismissed (canceled or a command was chosen).
     func browserContextMenuDidClose(_ b: CefBrowser)
 
+    func browser(_ b: CefBrowser, fileDialog request: CefFileDialogRequest, callback: CefFileDialogCallback) -> Bool
+
     // MARK: Permissions
 
     /// The page requested one or more permissions. Return how to resolve it.
     /// The default is ``CefPermissionDecision/deny`` (apps that want the
     /// system prompt should override and return `.allow`).
     func browser(_ b: CefBrowser, requestsPermission request: CefPermissionRequest) -> CefPermissionDecision
+
+    func browser(_ b: CefBrowser, permission request: CefPermissionRequest, callback: CefPermissionCallback)
+    func browser(_ b: CefBrowser, dismissedPermission promptID: UInt64)
+    func browser(_ b: CefBrowser, willNavigateFrame identifier: String)
 
     // MARK: Navigation / requests
 
@@ -273,4 +279,14 @@ public struct CefKeyDisposition: Sendable {
     public let handled: Bool
     public let shortcut: Bool
     public init(handled: Bool, shortcut: Bool) { self.handled = handled; self.shortcut = shortcut }
+}
+
+extension CefBrowserDelegate {
+    public func browser(_ b: CefBrowser, permission request: CefPermissionRequest, callback: CefPermissionCallback) { callback.resolve(browser(b, requestsPermission: request)) }
+    public func browser(_ b: CefBrowser, dismissedPermission promptID: UInt64) {}
+    public func browser(_ b: CefBrowser, willNavigateFrame identifier: String) {}
+}
+
+extension CefBrowserDelegate {
+    public func browser(_ b: CefBrowser, fileDialog request: CefFileDialogRequest, callback: CefFileDialogCallback) -> Bool { false }
 }

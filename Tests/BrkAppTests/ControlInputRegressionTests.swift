@@ -7,6 +7,27 @@ import XCTest
 
 @MainActor
 final class ControlInputRegressionTests: XCTestCase {
+    func testWindowlessTypingTargetsTheAttachedSheetBeforeTheBrowser() async throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        let owner = try XCTUnwrap(h.store.windowController(h.window)?.window)
+        let sheet = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 300, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
+        sheet.isReleasedWhenClosed = false
+        let editor = NSTextView(frame: CGRect(x: 10, y: 10, width: 280, height: 100))
+        sheet.contentView?.addSubview(editor)
+        owner.beginSheet(sheet, completionHandler: { _ in })
+        defer { owner.endSheet(sheet); sheet.orderOut(nil) }
+        sheet.makeFirstResponder(editor)
+        NSApp.keyWindow?.resignKey()
+        XCTAssertNil(NSApp.keyWindow)
+        h.store.inputWindow = owner
+        let executor = ControlExecutor(store: h.store, engine: h.engine, clock: nil)
+        let result = await executor.run(.type(text: "sheet input"))
+        XCTAssertEqual(result, .ok)
+        XCTAssertEqual(editor.string, "sheet input", "The browser must not receive typing intended for its native sheet")
+    }
+
     func testLoadingInAnIncognitoWindowReturnsItsPrivateTab() async throws {
         let h = Harness()
         defer { h.cleanUp() }
@@ -93,7 +114,8 @@ final class ControlInputRegressionTests: XCTestCase {
         defer { h.store.dispatch(.user(h.window, .settings(.closeWindow))); h.cleanUp() }
         h.store.start()
         let executor = ControlExecutor(store: h.store, engine: h.engine, clock: nil)
-        guard case .dispatched = await executor.run(.openSettings(pane: .profiles)) else { return XCTFail("openSettings failed") }
+        let opened = await executor.run(.openSettings(pane: .profiles))
+        guard case .dispatched = opened else { return XCTFail("openSettings failed: \(opened)") }
         NSApp.keyWindow?.resignKey()
         XCTAssertNil(NSApp.keyWindow)
         let tabs = h.store.snapshot.windows[h.window]?.space.today.rows

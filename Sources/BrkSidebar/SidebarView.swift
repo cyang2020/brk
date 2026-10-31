@@ -313,6 +313,7 @@ final class URLPillView: HoverView {
     private let label = NSTextField(labelWithString: "")
     private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
+    private let siteInfo = GlyphButton()
     private let shimmer = CAGradientLayer()
     private var pill: URLPillSnapshot?
     private var palette: Palette?
@@ -331,6 +332,10 @@ final class URLPillView: HoverView {
         shimmer.endPoint = CGPoint(x: 1, y: 0.5)
         shimmer.isHidden = true
         layer?.addSublayer(shimmer)
+        siteInfo.action = { _ in dispatch(.site(.controls)) }
+        siteInfo.toolTip = "Website controls and privacy"
+        siteInfo.identify(.siteInfo)
+        addSubview(siteInfo)
         addSubview(label)
         addSubview(badge)
         copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
@@ -349,6 +354,7 @@ final class URLPillView: HoverView {
         label.textColor = pill.text == nil ? palette.ink.placeholder : palette.ink.secondary
         copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
                         hoverFill: palette.tokens.itemHover)
+        siteInfo.render(.siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
         let accent = palette.ink.loading
         shimmer.colors = [accent.withAlphaComponent(0).cgColor, accent.withAlphaComponent(Draw.pillShimmerAlpha.value).cgColor, accent.withAlphaComponent(0).cgColor]
         shimmer.isHidden = !pill.loading
@@ -363,7 +369,8 @@ final class URLPillView: HoverView {
         super.layout()
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
         copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
-        let leading = Draw.pillTextLeading.value
+        siteInfo.frame = CGRect(x: inset, y: (bounds.height - size) / 2, width: size, height: size)
+        let leading = inset + size + Draw.pillTextLeading.value
         var trailing = copyLink.alphaValue > 0 ? copyLink.frame.minX : bounds.width - inset
         if !badge.isHidden {
             let width = min(badge.fittingWidth, max(0, (trailing - leading) / 2))
@@ -396,6 +403,9 @@ final class URLPillView: HoverView {
         copyLink.alphaValue = isHovered && pill?.text != nil ? 1 : 0
         needsLayout = true
     }
+
+    @objc private func showSiteControls() { dispatch(.site(.controls)) }
+    override func rightMouseDown(with event: NSEvent) { dispatch(.site(.controls)) }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }
 

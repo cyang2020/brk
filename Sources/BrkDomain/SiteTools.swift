@@ -36,14 +36,14 @@ public enum SiteOutcome: Hashable, Sendable {
     case failed(String)
     case cancelled
 }
-enum SiteTarget: Hashable, Sendable {
+enum FeedTarget: Hashable, Sendable {
     case folder(ItemID), favorite(ItemID), calendar(ProfileID), newFolder(WindowID)
 }
 struct PendingSiteRequest: Equatable, Sendable {
     let request: SiteRequest
     let folder: ItemID?
     let space: SpaceID
-    var target: SiteTarget {
+    var target: FeedTarget {
         if let folder { return .folder(folder) }
         switch request.kind {
         case .github(_, let favorite?): return .favorite(favorite)

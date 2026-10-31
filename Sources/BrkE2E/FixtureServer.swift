@@ -157,7 +157,9 @@ final class FixtureServer: @unchecked Sendable {
         }
         if path == "/" { path = "/index.html" }
         let response: Data
-        if path == "/repos/fixture/repo/pulls" {
+        if let siteResponse = SitePolicyFixture.response(path, request: request) {
+            response = siteResponse
+        } else if path == "/repos/fixture/repo/pulls" {
             let round = requestCount(path)
             let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []
             guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }

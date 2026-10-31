@@ -11,7 +11,7 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case globe, chevronDown, chevronRight, speaker, speakerMuted
+    case siteControls, globe, chevronDown, chevronRight, speaker, speakerMuted
 
     var symbol: String {
         switch self {
@@ -26,6 +26,7 @@ enum Glyph {
         case .closeKeepPinned: "minus"
         case .clearDown: "arrow.down"
         case .copyLink: "link"
+        case .siteControls: "slider.horizontal.3"
         case .globe: "globe"
         case .chevronDown: "chevron.down"
         case .chevronRight: "chevron.right"

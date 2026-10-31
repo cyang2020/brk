@@ -31,7 +31,19 @@ final class IndependentSplitReviewTests: XCTestCase {
             let observations = d.snapshot.observations, pages = d.snapshot.pages
             let t = d.user(.split(.separateAll))
             XCTAssertEqual(d.snapshot.observations, observations)
-            XCTAssertEqual(d.snapshot.pages, pages)
+            let priorVisibility = Dictionary(uniqueKeysWithValues: pages.map { ($0.id, $0.websitePolicy.visible) })
+            let requests = d.snapshot.pages.map { value -> PageSpec in
+                var value = value
+                value.websitePolicy.visible = priorVisibility[value.id] ?? false
+                return value
+            }
+            XCTAssertEqual(requests, pages, "Separation retains requests and ownership; visibility follows the resulting panes")
+            let visible = Set(d.snapshot.windows.values.flatMap { window in
+                window.content.presentedPanes.compactMap { pane -> PageID? in
+                    if case .page(let id) = pane.content { return id }; return nil
+                }
+            })
+            XCTAssertEqual(Set(d.snapshot.pages.filter { $0.websitePolicy.visible }.map(\.id)), visible)
             XCTAssertTrue(t.effects.isEmpty)
             if hidden { d.user(.space(.focus(space)), in: other) }
             XCTAssertEqual(d.view(of: other).content.panes.map(\.tab), [panes[selected]])

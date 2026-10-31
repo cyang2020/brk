@@ -15,7 +15,8 @@
 #    dist/<Product>.app with "<Product> Helper", "(Alerts)", "(GPU)", "(Plugin)", "(Renderer)", sets
 #    LSEnvironment MallocNanoZone=0, signs ad hoc (--sign -).
 # 5. scripts/declare-url-types.sh adds CFBundleURLTypes for http and https to the bundle's Info.plist (the plugin
-#    writes the plist without them; the default-browser registration needs them), then the bundle is signed again.
+#    writes the plist without them; the default-browser registration needs them). Device permission usage strings
+#    are declared for the main app and all helpers before the bundle is signed again.
 # 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -37,6 +38,7 @@ APP="dist/$PRODUCT.app"
 mkdir -p "$APP/Contents/Resources/BrkAudibility"
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
+python3 scripts/declare-site-permissions.py "$APP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "[build] $APP signed ad hoc and verified"

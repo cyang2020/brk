@@ -22,6 +22,7 @@ import Foundation
 func normalize(_ state: inout AppState) -> [String] {
     var repairs: [String] = []
     repairProfiles(&state, &repairs)
+    normalizeSitePolicies(&state)
     repairSpaces(&state, &repairs)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)

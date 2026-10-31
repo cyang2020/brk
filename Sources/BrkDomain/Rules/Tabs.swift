@@ -196,6 +196,9 @@ extension Work {
             live.loading = false
             live.document = .unavailable
         case .audioChanged(let audible): live.audible = audible
+        case .websitePolicyApplied(let status):
+            guard live.document == .ready(status.document), status.document.browser == token else { return }
+            live.websitePolicyStatus = status
         case .rendererGone:
             live.audible = false
             live.loading = false

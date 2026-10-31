@@ -33,7 +33,8 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
     for id in state.doc.windows.keys {
         if var window = projectWindow(id, state, ctx) { window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
-    return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
+    return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme), settings: projectSettings(state),
+                       sites: state.siteSnapshots(),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
                            (page, PageObservation(lastOpenRequest: state.session.live[page]?.lastOpenRequest, browser: state.session.live[page]?.browser,
                                                   document: state.session.live[page]?.document ?? .unavailable,
@@ -44,7 +45,7 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
 
 /// Every demanded window/tab slot, sorted by composite id (stable for the engine's reconcile), in the request context of its
 /// section's profile (incognito for an incognito window's tabs).
-func projectPages(_ state: AppState) -> [PageSpec] {
+func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec] {
     state.session.loaded.sorted().compactMap { page in
         guard state.owns(page) else { return nil }
         let live = state.session.live[page]
@@ -55,7 +56,9 @@ func projectPages(_ state: AppState) -> [PageSpec] {
         let directory = settings.downloadsDirectory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? DownloadPolicy.defaultDirectory
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
-        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
+        var spec = PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
+        spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
+        return spec
     }
 }
 
@@ -389,6 +392,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
+    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
