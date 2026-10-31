@@ -93,7 +93,19 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A454fe162-fb4f-4b3f-8efb-9741a9fb9f24",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A454fe162-fb4f-4b3f-8efb-9741a9fb9f24",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered ISSUES (six rows proposed verified; TabTools4b/6 menu-capture hang reproduced on its own branch)",
+      "delivered_commit": "a4cc460befbda4510a959d9425c96c36dda015d8",
+      "branch": "t3/sidebar-tabs-completion",
+      "reviews": [
+        {
+          "model": "claude-fable-5-1",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A0ba7dcc8-c533-46de-836e-c5610598f89b"
+        },
+        {
+          "model": "claude-opus-5-5",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A13e2a692-3803-4948-9ce4-56c8bffc4422"
+        }
+      ]
     },
     {
       "slice": "ai-features",
