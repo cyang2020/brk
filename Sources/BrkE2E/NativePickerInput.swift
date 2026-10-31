@@ -16,8 +16,11 @@ enum NativePickerInput {
     static func string(_ element: AXUIElement, _ name: String) -> String { attribute(element, name) as? String ?? "" }
     static func tree(_ root: AXUIElement) -> [AXUIElement] {
         var queue = [root], result: [AXUIElement] = []
+        var visited: [CFHashCode: [AXUIElement]] = [:]
         while !queue.isEmpty, result.count < 3000 {
-            let node = queue.removeFirst()
+            let node = queue.removeFirst(), hash = CFHash(node)
+            guard !(visited[hash] ?? []).contains(where: { CFEqual($0, node) }) else { continue }
+            visited[hash, default: []].append(node)
             result.append(node)
             queue += attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
         }
@@ -31,7 +34,9 @@ enum NativePickerInput {
         }
         let root = AXUIElementCreateApplication(hello.pid)
         AXUIElementSetMessagingTimeout(root, 1)
-        let sheets = tree(root).filter { string($0, kAXRoleAttribute) == kAXSheetRole }
+        let windows = attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        let sheets = windows.flatMap { attribute($0, kAXChildrenAttribute) as? [AXUIElement] ?? [] }
+            .filter { string($0, kAXRoleAttribute) == kAXSheetRole }
         guard sheets.count == 1 else { throw Check(description: "Expected one owned AX sheet, found \(sheets.count)") }
         return sheets[0]
     }
