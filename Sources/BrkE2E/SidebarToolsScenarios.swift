@@ -36,7 +36,8 @@ enum SidebarToolsScenarios {
         try expect(try app.native().actual["favorite-badge-" + item.rawValue]?.hidden == false, "native badge missing")
         _ = try app.screenshot("fresh-badge")
         let tile = try app.native().actual[ViewID.favorite(item).identifier]!.frame
-        try app.hover(CGPoint(x: tile.midX, y: tile.midY)); app.sleep(0.9)
+        try app.hover(CGPoint(x: tile.midX, y: tile.midY))
+        try app.waitUntil("native Favorite metadata card") { try app.native().appWindows.contains { $0.isVisible && $0.className.contains("Popover") } }
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: false)))
         try expect(try !app.native().appWindows.contains { $0.isVisible && $0.className.contains("Popover") }, "disabled setting left a Favorite hover card open")
         _ = try app.advanceClock(seconds: 301)
