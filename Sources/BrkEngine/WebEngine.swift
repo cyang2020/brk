@@ -132,6 +132,8 @@ extension WebEngineDelegate {
 /// A page's view. Engines subclass it; callers treat it as a plain NSView placed inside a card.
 @MainActor
 open class PageSurfaceView: NSView {
+    public static let contextMenuWillOpen = Notification.Name("brk.page-context-menu.will-open")
+    public static let contextMenuDidClose = Notification.Name("brk.page-context-menu.did-close")
     public let page: PageID
 
     public init(page: PageID) {

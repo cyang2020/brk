@@ -1,8 +1,9 @@
 import AppKit
+import BrkEngine
 import CefKit
 
 /// CEF's host window no longer contains the page. Present its menu on the actual embedded surface.
-@MainActor final class PageContextMenu: NSObject {
+@MainActor final class PageContextMenu: NSObject, NSMenuDelegate {
     private struct Item {
         let title: String
         let command: Int
@@ -69,7 +70,7 @@ import CefKit
     }
 
     private func makeMenu(_ items: [Item], target: Pending) -> NSMenu {
-        let menu = NSMenu(); menu.autoenablesItems = false
+        let menu = NSMenu(); menu.autoenablesItems = false; menu.delegate = self
         for item in items {
             if item.separator { menu.addItem(.separator()); continue }
             let native = NSMenuItem(title: item.title, action: #selector(Pending.choose(_:)), keyEquivalent: "")
@@ -79,6 +80,17 @@ import CefKit
             menu.addItem(native)
         }
         return menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            NotificationCenter.default.post(name: PageSurfaceView.contextMenuWillOpen, object: menu)
+        }
+    }
+    func menuDidClose(_ menu: NSMenu) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            NotificationCenter.default.post(name: PageSurfaceView.contextMenuDidClose, object: menu)
+        }
     }
 
 }

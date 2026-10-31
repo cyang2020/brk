@@ -12,9 +12,10 @@ extension EmbeddedSurface: NSMenuItemValidation {
         defer { transport.invalidate(); if editingMenuTransport === transport { editingMenuTransport = nil } }
         do {
             let result = try await transport.call("Runtime.evaluate", parameters: ["expression": "(()=>{try{let d=document;while(d.activeElement?.tagName==='IFRAME')d=d.activeElement.contentDocument;let e=d.activeElement;if(!e||e.disabled||e.readOnly||e.type==='password')return false;if(e.tagName==='INPUT'||e.tagName==='TEXTAREA')return e.selectionStart!==null&&e.selectionEnd>e.selectionStart;return e.isContentEditable&&d.getSelection().toString().length>0}catch{return false}})()", "returnByValue": true])
+            guard editingMenuTransport === transport else { return }
             let json = try JSONSerialization.jsonObject(with: result) as? [String: Any]
             if editingBrowser === browser { editableSelection = (json?["result"] as? [String: Any])?["value"] as? Bool == true }
-        } catch { editableSelection = false }
+        } catch { if editingMenuTransport === transport { editableSelection = false } }
     }
     func invalidateEditingMenu() { editableSelection = false; editingMenuTransport?.invalidate(); editingMenuTransport = nil }
     @objc override func uppercaseWord(_ sender: Any?) { transform("upper") }

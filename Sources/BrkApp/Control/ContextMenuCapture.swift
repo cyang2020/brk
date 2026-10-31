@@ -1,4 +1,5 @@
 import AppKit
+import BrkEngine
 
 /// Only instantiated for the explicit control-socket probe. No observer runs in ordinary browsing.
 @MainActor final class ContextMenuCapture: NSObject {
@@ -10,8 +11,8 @@ import AppKit
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
-        center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
+        center.addObserver(self, selector: #selector(began(_:)), name: PageSurfaceView.contextMenuWillOpen, object: nil)
+        center.addObserver(self, selector: #selector(finished(_:)), name: PageSurfaceView.contextMenuDidClose, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -25,9 +26,6 @@ import AppKit
     @objc private func began(_ note: Notification) {
         precondition(Thread.isMainThread)
         guard menu == nil, let current = note.object as? NSMenu else { return }
-        // Activating an embedded Chrome view can begin tracking the menu bar before the popup's notification.
-        // It is not the web menu we injected the right click to inspect.
-        guard current !== NSApp.mainMenu else { return }
         menu = current
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)

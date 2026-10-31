@@ -87,6 +87,17 @@ enum BrowserOpsScenarios {
         try app.recordWindows("popup-open")
         try app.evaluate(page, "boChild.close();document.title='popup:closed'")
         try app.waitUntil("native child closure drains") { try facts(app, page).auxiliaryBrowsers?.isEmpty == true }
+        let nonce = UUID().uuidString
+        var auth = URLComponents(url: app.site.url("browser-ops-auth.html"), resolvingAgainstBaseURL: false)!
+        let returnOrigin = "http://127.0.0.1:\(auth.port!)"
+        auth.host = "localhost"
+        auth.queryItems = [URLQueryItem(name: "nonce", value: nonce), URLQueryItem(name: "returnOrigin", value: returnOrigin)]
+        let authURL = String(decoding: try JSONEncoder().encode(auth.url!.absoluteString), as: UTF8.self)
+        try clickedScript(app, page, "window.addEventListener('message',e=>{if(e.source===window.boChild&&e.origin==='http://localhost:\(auth.port!)'&&e.data.kind==='bo-auth'&&e.data.nonce==='\(nonce)')document.title='auth:opener-preserved'});window.boChild=window.open(\(authURL),'bo-auth-window')")
+        try app.waitUntil("cross-origin named popup posts to its real opener") { try title(app, page) == "auth:opener-preserved" }
+        try record(app, "cross-origin-opener", facts(app, page))
+        try app.evaluate(page, "boChild.close()")
+        try app.waitUntil("auth child closes") { try facts(app, page).auxiliaryBrowsers?.isEmpty == true }
         try clickedScript(app, page, "window.boChild=window.open('','bo-child-again','width=420,height=260');if(boChild){boChild.document.write('<body>Close with owner</body>');boChild.document.close();document.title='popup:second'}")
         try app.waitUntil("second popup") { try title(app, page) == "popup:second" }
         let windows = Set(try facts(app, page).auxiliaryWindows ?? [])
@@ -95,7 +106,37 @@ enum BrowserOpsScenarios {
             let visible = Set(try app.native().appWindows.filter(\.isVisible).map(\.number))
             return windows.isDisjoint(with: visible)
         }
+        try privatePopup(app)
         app.note("The real CEF popup retained document.write and opener. Raw popup/frame/gesture/features were observed; child and owner-close paths drained.")
+    }
+    private static func privatePopup(_ app: AppUnderTest) throws {
+        let marker = "bo-private-" + UUID().uuidString
+        try app.dispatch(.window(.newIncognito))
+        guard case .hello(let hello) = try app.send(.hello),
+              let window = hello.windows.first(where: { (try? app.view($0).kind) == .incognito }),
+              case .loaded(let item) = try app.send(.load(window: window, url: app.site.url("browser-basic.html?" + marker))) else {
+            throw Check(description: "Private popup owner missing")
+        }
+        let page = PageID(window: window, item: item)
+        try app.waitForPageInput(page, at: app.site.url("browser-basic.html?" + marker))
+        try clickedScript(app, page, "document.cookie='bo_private=\(marker);path=/';window.boChild=window.open('','bo-private-child','width=420,height=260');boChild.document.write('<body>Private child</body>');boChild.document.close();document.title='private:opened'")
+        try app.waitUntil("private native child exists") { !(try facts(app, page).auxiliaryWindows ?? []).isEmpty }
+        _ = try app.send(.load(window: window, url: app.site.url("page2.html")))
+        try app.waitUntil("private source is hidden") { try !app.view(window).content.panes.contains { $0.tab == item } }
+        try app.evaluate(page, "document.title='private:'+boChild.document.cookie.includes('\(marker)')+':'+(boChild.opener===window)")
+        try app.waitUntil("hidden source retains private popup context and opener") { try title(app, page) == "private:true:true" }
+        let windows = Set(try facts(app, page).auxiliaryWindows ?? [])
+        try record(app, "hidden-private-popup", facts(app, page))
+        _ = try app.send(.dispatch(window: window, command: .window(.close)))
+        try app.waitUntil("last private owner closes its popup") {
+            windows.isDisjoint(with: Set(try app.native().appWindows.filter(\.isVisible).map(\.number)))
+        }
+        let publicPage = try load(app, "browser-basic.html?public-after-private")
+        try app.evaluate(publicPage, "document.title='public-private-cookie:'+document.cookie.includes('bo_private=')")
+        try app.waitUntil("private popup cookie is absent publicly") { try title(app, publicPage) == "public-private-cookie:false" }
+        try app.flush()
+        let saved = try String(contentsOf: app.dataDirectory.appendingPathComponent("state.json"), encoding: .utf8)
+        try expect(!saved.contains(marker), "Private popup identity entered saved metadata")
     }
     @Sendable static func developer(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?developer")
