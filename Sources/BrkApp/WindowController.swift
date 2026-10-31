@@ -189,7 +189,10 @@ public class WindowController: NSObject, NSWindowDelegate {
         root.cancelDrag()
         send(.system(.window(id, .closed)))
     }
-    public func windowDidResignKey(_ notification: Notification) { root.cancelDrag() }
+    public func windowDidResignKey(_ notification: Notification) {
+        root.cancelDrag()
+        send(.system(.window(id, .resignedKey)))
+    }
 
     /// Becoming key again (app switch, a closed overlay panel) re-applies the snapshot's focus, so a page gets its
     /// Chromium view back as first responder and a native field keeps its own.
@@ -198,7 +201,6 @@ public class WindowController: NSObject, NSWindowDelegate {
         if let last = lastSnapshot { applyFocus(last.focus) }
     }
 
-    public func windowDidResignKey(_ notification: Notification) { send(.system(.window(id, .resignedKey))) }
     public func windowDidEnterFullScreen(_ notification: Notification) { window.level = .normal }
     public func windowDidExitFullScreen(_ notification: Notification) {
         if case .page(let page)? = lastSnapshot?.focus { engine.perform(.exitFullscreen, on: page) }
