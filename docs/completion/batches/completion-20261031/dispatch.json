@@ -112,7 +112,19 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Af6ff7ff4-df0e-4b79-9b5c-f0589c292a7f",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Af6ff7ff4-df0e-4b79-9b5c-f0589c292a7f",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered PASS (nine rows proposed implemented)",
+      "delivered_commit": "0caaf05bd884a533657273d123efec84ca086b78",
+      "branch": "t3/ai-features-implementation",
+      "reviews": [
+        {
+          "model": "claude-fable-5-1",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A8209a2a3-484b-4206-ac06-069364e0a00f"
+        },
+        {
+          "model": "claude-opus-5-5",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A121d6ede-d41b-43dd-9ec7-9100f25ab7a7"
+        }
+      ]
     },
     {
       "slice": "captures-media",
