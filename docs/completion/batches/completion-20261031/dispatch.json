@@ -172,5 +172,14 @@
   "integration_branch": {
     "name": "integration/completion-20261031",
     "purpose": "one unified build and full regression per delivery; wave-1 heads merged by the parent; fast-forwards main after acceptance"
+  },
+  "convergence": {
+    "at": "2026-10-31T19:30:00Z",
+    "rule": "No new delegates. Remaining deliveries are reviewed by the parent; the unified regression on the integration branch is the gate. Wave 2 waits for the user.",
+    "cancelled_reviews": [
+      "ai-features fable",
+      "ai-features opus",
+      "sidebar-tabs fable"
+    ]
   }
 }
