@@ -10,7 +10,6 @@ final class SidebarDataPanels {
     private struct Operation {
         let id: UUID
         let sheet: NSWindow
-        let cancel: @MainActor () -> Void
     }
     private var operations: [WindowID: Operation] = [:]
     private var tasks: [WindowID: Task<Void, Never>] = [:]
@@ -29,9 +28,17 @@ final class SidebarDataPanels {
         if let observer = closeObservers.removeValue(forKey: id) { NotificationCenter.default.removeObserver(observer) }
         tasks.removeValue(forKey: id)?.cancel()
         guard let operation = operations.removeValue(forKey: id) else { return }
-        operation.cancel()
         if let parent = operation.sheet.sheetParent { parent.endSheet(operation.sheet, returnCode: .cancel) }
         operation.sheet.orderOut(nil)
+    }
+
+    func cancelForQuit() {
+        for task in tasks.values { task.cancel() }
+        for owner in Array(operations.keys) {
+            guard let operation = operations.removeValue(forKey: owner) else { continue }
+            operation.sheet.sheetParent?.endSheet(operation.sheet, returnCode: .cancel)
+            operation.sheet.orderOut(nil)
+        }
     }
 
     func shutdown() async {
@@ -79,7 +86,7 @@ final class SidebarDataPanels {
     private func begin(_ alert: NSAlert, owner: WindowID, window: NSWindow,
                        finish: @escaping @MainActor (NSApplication.ModalResponse) -> Void) {
         let ticket = UUID()
-        operations[owner] = Operation(id: ticket, sheet: alert.window, cancel: {})
+        operations[owner] = Operation(id: ticket, sheet: alert.window)
         alert.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
             self.operations[owner] = nil
@@ -129,7 +136,7 @@ final class SidebarDataPanels {
         format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV (local Keychain)"])
         panel.accessoryView = stack([label("Select the format of the file you exported. Brk never scans browser profiles or reads browser password databases."), format])
         let ticket = UUID()
-        operations[owner] = Operation(id: ticket, sheet: panel, cancel: { panel.cancel(nil) })
+        operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
             self.operations[owner] = nil
@@ -202,7 +209,7 @@ final class SidebarDataPanels {
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
         panel.message = "This folder's shared profile maps only to the current local profile. No credentials or browsing settings are copied."
         let ticket = UUID()
-        operations[owner] = Operation(id: ticket, sheet: panel, cancel: { panel.cancel(nil) })
+        operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
             self.operations[owner] = nil

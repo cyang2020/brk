@@ -45,7 +45,7 @@ public final class AppStore {
     private var syncTask: Task<Void, Never>?
     private var syncTaskID: UUID?
     private var sidebarShuttingDown = false
-    private var exportPanels: [WindowID: NSSavePanel] = [:]
+    private let exports = ExportSheets()
     private lazy var sidebarPanels = SidebarDataPanels(send: { [weak self] event in
         self?.dispatch(.system(.sidebarData(event)))
     }, command: { [weak self] window, command in
@@ -115,8 +115,7 @@ public final class AppStore {
         let pending = syncTask
         pending?.cancel()
         await sidebarPanels.shutdown()
-        for panel in exportPanels.values { panel.cancel(nil) }
-        exportPanels.removeAll()
+        exports.shutdown()
         await pending?.value
         syncTask = nil; syncTaskID = nil
     }
@@ -147,11 +146,16 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> Bool {
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
+        var checkpointed = false
+        if t.docChanged, let failure = t.checkpointFailure {
+            do { try stateFile.writeNow(StateCodec.encode(t.state)); checkpointed = true }
+            catch { queue.append(.system(failure)); return false }
+        }
         // Revocation must happen before reconcile sees the new demand, including synchronous engine callbacks.
         for effect in t.effects { if case .disposeContext(let request) = effect { engine.disposeContext(request) } }
         if t.changed {
             state = t.state
-            publish(docChanged: t.docChanged)
+            publish(docChanged: t.docChanged && !checkpointed)
         }
         run(t.effects)
         return t.keyHandled
@@ -167,7 +171,7 @@ public final class AppStore {
         for id in windows.keys where snapshot.windows[id] == nil {
             destinations.ownerGone(id)
             sidebarPanels.ownerGone(id)
-            exportPanels.removeValue(forKey: id)?.cancel(nil)
+            exports.ownerGone(id)
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
@@ -230,7 +234,11 @@ public final class AppStore {
                 }
             case .app(let effect):
                 switch effect {
-                case .quit: Quit.request()
+                case .quit:
+                    // AppKit can defer termination while a save sheet remains attached.
+                    sidebarPanels.cancelForQuit()
+                    exports.cancelAll()
+                    Quit.request()
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
@@ -247,8 +255,7 @@ public final class AppStore {
                 menu.popUp(positioning: nil, at: at, in: controller.root)
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }
-                exportPanels[owner] = ShareExport.run(document, in: window, completion: { [weak self] message in
-                    self?.exportPanels[owner] = nil
+                exports.present(document, owner: owner, in: window, reply: { [weak self] message in
                     self?.dispatch(.system(.sidebarData(.exportFinished(message))))
                 })
             case .sidebarData(let effect): runSidebarData(effect)
@@ -300,8 +307,8 @@ public final class AppStore {
                 }
                 guard self.syncTaskID == ticket else { return }
                 self.syncTask = nil; self.syncTaskID = nil
-                if succeeded, self.state.docNeedsSidebarPublication, let window = self.snapshot.windows.keys.sorted().first {
-                    self.dispatch(.user(window, .sidebarData(.syncNow)))
+                if succeeded, self.state.docNeedsSidebarPublication {
+                    self.dispatch(.system(.sidebarData(.syncPoll)))
                 }
             }
         }

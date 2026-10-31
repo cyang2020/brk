@@ -8,6 +8,7 @@ enum ImportSyncScenarios {
         Scenario("ImportSync-Onboarding", "first-run native choices seed once, restart without duplicates, complete the local tour", cefOnly: "local tour DOM execution", onboarding),
         Scenario("ImportSync-Import", "native file selection previews bookmarks, cancellation changes nothing, accepted import keeps source bytes", cefOnly: "imported fixture DOM execution", bookmarks),
         Scenario("ImportSync-Export", "native save panels export a Space, folder and selected tabs; cancellation writes nothing", exports),
+        Scenario("ImportSync-ExportLifetime", "closing an export owner dismisses its save sheet; quit with another save sheet drains cleanly", exportLifetime),
         Scenario("ImportSync-Sync", "native folder selection publishes only whitelisted sidebar bytes and disconnect stops publication", sync),
     ]
 
@@ -119,6 +120,24 @@ enum ImportSyncScenarios {
         try panel(app, .button("Cancel"))
         try expect(try data(app).status.contains("cancelled"), "export cancel result missing")
         _ = try app.screenshot("export-finished")
+    }
+
+    @Sendable static func exportLifetime(_ app: AppUnderTest) throws {
+        guard let first = app.window else { throw Check(description: "Missing first window") }
+        try app.dispatch(.app(.export(.space(.current)))); try waitPanel(app, "Export")
+        _ = try app.send(.dispatch(window: first, command: .window(.newStandard)))
+        guard case .hello(let hello) = try app.send(.hello), let second = hello.windows.first(where: { $0 != first }) else {
+            throw Check(description: "Second window missing")
+        }
+        _ = try app.send(.dispatch(window: first, command: .window(.close)))
+        try app.waitUntil("closed owner's native save sheet is hidden") {
+            try !app.native(second).appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible }
+        }
+        _ = try app.send(.dispatch(window: second, command: .app(.export(.space(.current)))))
+        try waitPanel(app, "Export")
+        let outcome = try app.quit()
+        try expect(outcome.clean, "Quit with save sheet failed: \(outcome.exit)")
+        app.note("Actual NSSavePanel resources were dismissed on owner closure and before quit. No destination or OS file permission was fabricated; the normal native app quit completed cleanly.")
     }
 
     @Sendable static func sync(_ app: AppUnderTest) throws {

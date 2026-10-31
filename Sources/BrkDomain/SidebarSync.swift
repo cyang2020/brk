@@ -120,6 +120,7 @@ public enum SidebarDataCommand: Hashable, Sendable, Codable {
 public enum SidebarPanel: Hashable, Sendable { case welcome, importFile, syncSettings }
 
 public enum SidebarDataEvent: Sendable, Equatable {
+    case syncPoll
     case imported(WindowID, target: SidebarImportTarget, SidebarImportPreview, favorites: Bool)
     case connected(WindowID, folder: String)
     case syncRead(epoch: String, SidebarSyncDocument)

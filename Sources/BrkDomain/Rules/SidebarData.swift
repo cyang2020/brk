@@ -37,6 +37,7 @@ extension Work {
 
     mutating func sidebarDataEvent(_ event: SidebarDataEvent) {
         switch event {
+        case .syncPoll: requestSidebarSync()
         case .imported(let window, let target, let preview, let favorites):
             guard state.sidebarImportTarget(in: window) == target, let space = state.doc.spaces[target.space] else { return }
             // Credential writes have already succeeded (or were cancelled) before this event is dispatched.

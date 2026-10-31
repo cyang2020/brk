@@ -13,27 +13,29 @@ public enum ShareExport {
     @discardableResult
     public static func run(_ document: ExportDocument, in window: NSWindow?,
                            write: @escaping @MainActor (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) },
-                           completion: @escaping @MainActor (String) -> Void = { _ in }) -> NSSavePanel? {
-        guard let window, window.isVisible, window.attachedSheet == nil else { completion("Export unavailable: finish the open sheet first."); return nil }
+                           isValid: @escaping @MainActor () -> Bool = { true },
+                           completion: @escaping @MainActor (ExportFileResult) -> Void = { _ in }) -> NSSavePanel? {
+        guard let window, window.isVisible, window.attachedSheet == nil else { completion(.failed("Finish the open sheet first.")); return nil }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json, .html]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = ExportCodec.filename(document, as: .json)
         panel.title = "Export"
-        let finish: (NSApplication.ModalResponse) -> Void = { [weak window] response in
-            guard response == .OK else { completion("Export cancelled. No file written."); return }
-            guard window?.isVisible == true, let url = panel.url else { completion("Export cancelled because its window closed."); return }
+        var completed = false
+        let finish: @MainActor (NSApplication.ModalResponse) -> Void = { [weak window] response in
+            guard !completed else { return }; completed = true
+            guard response == .OK, isValid(), window?.isVisible == true, let url = panel.url else { completion(.cancelled); return }
             let format: ExportFormat = url.pathExtension.lowercased() == "html" ? .html : .json
-            do { try write(ExportCodec.encode(document, as: format), url); completion("Exported \(url.lastPathComponent).") }
-            catch {
-                completion("Export failed: \(error.localizedDescription)")
-                if let window {
-                    let alert = NSAlert(); alert.messageText = "Export failed"; alert.informativeText = error.localizedDescription
-                    alert.beginSheetModal(for: window)
-                }
-            }
+            do { try write(ExportCodec.encode(document, as: format), url); completion(.saved(url)) }
+            catch { completion(.failed(error.localizedDescription)) }
         }
         panel.beginSheetModal(for: window, completionHandler: finish)
         return panel
     }
+}
+
+public enum ExportFileResult: Sendable {
+    case saved(URL)
+    case cancelled
+    case failed(String)
 }

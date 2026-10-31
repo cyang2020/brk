@@ -23,6 +23,8 @@ public struct Transition: Sendable {
     public let changed: Bool
     /// For `Input.key`: the key was an app shortcut and was consumed. CEF's key handler returns this.
     public let keyHandled: Bool
+    /// This transition must reach the local atomic checkpoint before publication. Failure leaves its state unapplied.
+    public var checkpointFailure: SystemEvent? = nil
 }
 
 /// The only writer of application state. Pure: same inputs, same output; no clock reads, no I/O, no traps for any
@@ -53,7 +55,11 @@ public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transit
     case .system(let event):
         work.observe(event)
     }
-    return work.finish(from: state)
+    var transition = work.finish(from: state)
+    if case .system(.sidebarData(.imported)) = input {
+        transition.checkpointFailure = .sidebarData(.failed(epoch: nil, "Import could not be saved. No bookmarks or history were changed; the source file was kept."))
+    }
+    return transition
 }
 
 extension Transition {
