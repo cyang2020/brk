@@ -240,7 +240,7 @@ struct Work {
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
         reconcileFind(from: input)
-        if state.doc.archive.count > input.doc.archive.count { playSound(.tabsArchived) }
+        if let archived = state.doc.archive.first, !input.doc.archive.contains(where: { $0.id == archived.id }) { playSound(.tabsArchived) }
         captureSidebarChanges()
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {

@@ -4,6 +4,22 @@ import XCTest
 @testable import BrkDomain
 
 final class MediaSoundTests: XCTestCase {
+    func testArchiveAtRetentionCapacityStillEmitsItsAcceptedEventSound() throws {
+        let d = Driver()
+        d.user(.tab(.close(.focused)))
+        let template = try XCTUnwrap(d.state.doc.archive.first)
+        d.open("https://example.com/capacity")
+        var state = d.state
+        let cap = Metrics.persistence.archiveCap.value
+        state.doc.archive = (0..<cap).map { n in
+            ArchivedTab(id: ArchiveID("retained-\(n)"), tabID: ItemID("old-\(n)"), tab: template.tab,
+                        archivedAt: template.archivedAt, reason: template.reason, fromSpace: template.fromSpace, fromSection: template.fromSection)
+        }
+        let result = reduce(state, .user(d.window, .tab(.close(.focused))), d.ctx)
+        XCTAssertEqual(result.state.doc.archive.count, cap)
+        XCTAssertTrue(result.effects.contains(.sound(.tabsArchived)))
+    }
+
     func testSoundSettingConsumesRealArchiveAndDeduplicatedDownloadEvents() throws {
         for enabled in [true, false] {
             let d = Driver()
