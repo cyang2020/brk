@@ -39,6 +39,7 @@ public enum Effect: Hashable, Sendable {
     case removeExtension(String, BrowsingContext, PageID)
     case cancelSiteData(String)
     case clearSiteData(ClearSiteData)
+    case clearProfileData(ClearProfileData)
     case confirmSiteData(ClearSiteData)
     case confirmLocalExtension(WindowID, BrowsingContext, URL)
     case installLocalExtension(PageID, BrowsingContext, URL)

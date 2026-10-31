@@ -157,3 +157,89 @@ private func releaseRef<T>(_ object: UnsafeMutablePointer<T>) {
     let base = UnsafeMutableRawPointer(object).assumingMemoryBound(to: cef_base_ref_counted_t.self)
     _ = base.pointee.release?(base)
 }
+
+/// Owns the native request context through each acknowledged cookie/cache operation.
+/// No profile directory or origin index is involved in clearing these two classes.
+@MainActor
+final class ProfileDataStore {
+    let context: UnsafeMutablePointer<cef_request_context_t>
+    init(context: UnsafeMutablePointer<cef_request_context_t>) { self.context = context }
+    func release() { releaseRef(context) }
+
+    func clearCookies(deleted: () -> Void) async throws {
+        try await completion { callback in
+            guard let get = context.pointee.get_cookie_manager else { releaseRef(callback); return false }
+            guard let manager = get(context, callback) else { return false }
+            releaseRef(manager)
+            return true
+        }
+        guard let manager = context.pointee.get_cookie_manager?(context, nil) else { throw CocoaError(.featureUnsupported) }
+        defer { releaseRef(manager) }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let owner = Completion(continuation)
+            let callback = Self.allocate(cef_delete_cookies_callback_t.self, owner: owner)
+            callback.pointee.on_complete = { object, count in
+                guard let object else { return }
+                MainActor.assumeIsolated { ProfileDataStore.owner(object)?.finish(count >= 0) }
+            }
+            guard let remove = manager.pointee.delete_cookies else {
+                releaseRef(callback); owner.finish(false); return
+            }
+            if remove(manager, nil, nil, callback) == 0 { owner.finish(false) }
+        }
+        deleted()
+        do {
+            try await completion { callback in
+                guard let flush = manager.pointee.flush_store else { releaseRef(callback); return false }
+                return flush(manager, callback) != 0
+            }
+        } catch {
+            throw NSError(domain: "Brk.SiteData", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cookies were deleted, but their disk flush failed. Restart durability is unconfirmed"])
+        }
+    }
+
+    func clearCache() async throws {
+        try await completion { callback in
+            guard let clear = context.pointee.clear_http_cache else { releaseRef(callback); return false }
+            clear(context, callback)
+            return true
+        }
+    }
+
+    private func completion(_ start: (UnsafeMutablePointer<cef_completion_callback_t>) -> Bool) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let owner = Completion(continuation)
+            let callback = Self.allocate(cef_completion_callback_t.self, owner: owner)
+            callback.pointee.on_complete = { object in
+                guard let object else { return }
+                MainActor.assumeIsolated { ProfileDataStore.owner(object)?.finish(true) }
+            }
+            if !start(callback) { owner.finish(false) }
+        }
+    }
+
+    private final class Completion {
+        private var continuation: CheckedContinuation<Void, any Error>?
+        init(_ continuation: CheckedContinuation<Void, any Error>) { self.continuation = continuation }
+        func finish(_ success: Bool) {
+            guard let continuation else { return }
+            self.continuation = nil
+            if success { continuation.resume() } else { continuation.resume(throwing: CocoaError(.fileWriteUnknown)) }
+        }
+    }
+    private static func owner<T>(_ object: UnsafeMutablePointer<T>) -> Completion? {
+        guard let opaque = ccef_object_get_swift(object) else { return nil }
+        return Unmanaged<AnyObject>.fromOpaque(opaque).takeUnretainedValue() as? Completion
+    }
+    private static func allocate<T>(_ type: T.Type, owner: Completion) -> UnsafeMutablePointer<T> {
+        let box = Unmanaged.passRetained(owner as AnyObject).toOpaque()
+        let raw = ccef_object_alloc(MemoryLayout<T>.stride, box, { opaque in
+            if let opaque { Unmanaged<AnyObject>.fromOpaque(opaque).release() }
+        })
+        guard let raw else {
+            Unmanaged<AnyObject>.fromOpaque(box).release()
+            fatalError("Brk: out of memory allocating a data-removal callback")
+        }
+        return raw.assumingMemoryBound(to: T.self)
+    }
+}

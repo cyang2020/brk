@@ -11,7 +11,7 @@ enum SitePolicyFixture {
                 ? "Set-Cookie: domainfixture=\(value); Domain=brk.test; Path=/; Max-Age=3600\r\n" : ""
             return Data("HTTP/1.1 200 OK\r\nContent-Length: 6\r\nSet-Cookie: httponlyfixture=\(value); HttpOnly; Path=/; Max-Age=3600\r\n\(domain)Cache-Control: no-store\r\nConnection: close\r\n\r\nseeded".utf8)
         }
-        if path == "/site-policy-cookie-read" {
+        if path == "/site-policy-cookie-read" || path == "/nested/data-cookie-read" {
             let cookie = String(decoding: request, as: UTF8.self).components(separatedBy: "\r\n").first { $0.lowercased().hasPrefix("cookie:") }.map { String($0.dropFirst(7)) } ?? ""
             let body = try! JSONSerialization.data(withJSONObject: ["cookie": cookie])
             return Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

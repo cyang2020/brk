@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Data fixture</title>
+<style>body{font:18px system-ui;padding:32px;background:white;color:#181818}</style>
+<h1>Data storage fixture</h1><p>Storage is seeded only by an explicit scenario request.</p>
+<script>
+window.seedData=async value=>{
+  document.cookie=`sitefixture=${value};Path=/;Max-Age=3600`;
+  document.cookie=`pathfixture=${value};Path=/nested;Max-Age=3600`;
+  document.cookie=`domainfixture=${value};Domain=data.localhost;Path=/;Max-Age=3600`;
+  localStorage.setItem('sitefixture',value);
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('sitefixture',1);r.onupgradeneeded=()=>r.result.createObjectStore('values');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+  await new Promise((resolve,reject)=>{const t=db.transaction('values','readwrite');t.objectStore('values').put(value,'key');t.oncomplete=resolve;t.onerror=()=>reject(t.error)});db.close();
+  await caches.open('sitefixture').then(c=>c.put('/fixture',new Response(value)));
+  await fetch('/site-policy-cookie-seed?value='+encodeURIComponent(value),{cache:'no-store'});
+  const worker=await navigator.serviceWorker.register('/site-policy-worker.js',{scope:'/site-policy-worker-scope/'});
+  if(!worker.active) await new Promise(resolve=>{const w=worker.installing||worker.waiting;if(!w)return resolve();w.addEventListener('statechange',()=>{if(w.state==='activated')resolve()})});
+  document.title='seed:'+value;
+};
+window.readData=async tag=>{
+  const names=await indexedDB.databases();let idb=null;
+  if(names.some(x=>x.name==='sitefixture')) {const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('sitefixture');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});idb=await new Promise((resolve,reject)=>{const r=db.transaction('values').objectStore('values').get('key');r.onsuccess=()=>resolve(r.result??null);r.onerror=()=>reject(r.error)});db.close()}
+  let cache=null;if((await caches.keys()).includes('sitefixture')){const r=await caches.open('sitefixture').then(c=>c.match('/fixture'));cache=r?await r.text():null}
+  const server=await fetch('/site-policy-cookie-read',{cache:'no-store'}).then(r=>r.json());
+  const nested=await fetch('/nested/data-cookie-read',{cache:'no-store'}).then(r=>r.json()).catch(()=>({cookie:''}));
+  const workers=await navigator.serviceWorker.getRegistrations();
+  document.title='data:'+tag+':'+JSON.stringify({local:localStorage.getItem('sitefixture'),idb,cache,worker:workers.some(w=>w.scope.includes('/site-policy-worker-scope/')),cookie:document.cookie,serverCookie:server.cookie,nestedCookie:nested.cookie});
+};
+window.readHTTPCache=async tag=>{await fetch('/site-policy-cache.js?data=1').then(r=>r.text());document.title='http:'+tag};
+</script>

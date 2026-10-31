@@ -8,6 +8,7 @@ public enum SiteCommand: Hashable, Sendable, Codable {
     case permission(SiteTarget, SiteOrigin, Set<SiteCapability>, SitePermission)
     case appearance(WebsiteAppearance)
     case clear(kinds: Set<SiteDataKind>, scope: SiteDataScope, reload: Bool)
+    case clearProfile(ProfileID, Set<SiteDataKind>)
     case cancelClearing
     case confirmClear(String, Bool)
     case loadBlockingRules
@@ -42,6 +43,8 @@ public struct SiteControlSnapshot: Sendable, Equatable, Codable {
 }
 
 struct SiteSession: Sendable, Equatable {
+    var profileClears: [ProfileID: ClearProfileData] = [:]
+    var profileResults: [ProfileID: ClearProfileDataResult] = [:]
     var extensionErrors: [BrowsingContext: String] = [:]
     var rulesErrors: [BrowsingContext: String] = [:]
     var catalogs: [BrowsingContext: ExtensionCatalog] = [:]

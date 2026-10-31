@@ -4,6 +4,49 @@ import CefKit
 import Foundation
 
 extension CEFEngine {
+    func hasProtectedDataOperation(_ context: BrowsingContext, except clear: String? = nil) -> Bool {
+        transfers.contains(context: context) || resources.entries.values.contains { entry in
+            entry.context.context == context && entry.leases.contains { lease in
+                if case .siteData(let id) = lease, id == clear { return false }
+                return true
+            }
+        }
+    }
+
+    public func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult {
+        let context = BrowsingContext.profile(request.profile)
+        var completed: Set<SiteDataKind> = []
+        func result(_ error: String?) -> ClearProfileDataResult { .init(request: request, completed: completed, error: error) }
+        guard !request.kinds.isEmpty, !request.kinds.contains(.storage) else {
+            return result("Profile-wide localStorage, IndexedDB, Cache Storage and service-worker removal is unavailable. Use Website Controls for each website")
+        }
+        guard phase == .running, contexts.permitsWork(context) else { return result("The profile is closing") }
+        guard clearingContexts[context] == nil else { return result("Website data is already being cleared in this profile") }
+        guard !hasProtectedDataOperation(context) else { return result("Wait for this profile's active downloads, document output or extension operations before clearing website data") }
+        clearingContexts[context] = request.id
+        defer { if clearingContexts[context] == request.id { clearingContexts[context] = nil } }
+        func check() throws {
+            guard phase == .running, contexts.permitsWork(context) else { throw CefProtocolError(message: "The profile closed while clearing data") }
+            guard !hasProtectedDataOperation(context) else { throw CefProtocolError(message: "A new protected operation started. Remaining data classes were not cleared") }
+        }
+        do {
+            let store = try await dataStore(for: request.profile)
+            defer { store.release() }
+            try check()
+            if request.kinds.contains(.cookies) {
+                try await store.clearCookies { completed.insert(.cookies) }
+            }
+            try check()
+            if request.kinds.contains(.cache) {
+                try await store.clearCache()
+                completed.insert(.cache)
+            }
+            try check()
+            if request.kinds.contains(.history) { completed.insert(.history) }
+            return result(nil)
+        } catch { return result(error.localizedDescription) }
+    }
+
     public func cancelSiteData(_ id: String) {
         if clearingContexts.values.contains(id) { cancelledSiteClears.insert(id) }
     }
@@ -13,13 +56,7 @@ extension CEFEngine {
         func result(_ error: String?) -> ClearSiteDataResult { ClearSiteDataResult(request: request, completed: completed, error: error) }
         guard phase == .running, contexts.permitsWork(request.target.context),
               let page = live[request.target.page], page.matches(request.target) else { return result("The originating document is no longer available") }
-        func protectedOperation() -> Bool {
-            transfers.contains(context: request.target.context) || resources.entries.values.contains { entry in
-                entry.context.context == request.target.context && entry.leases.contains { lease in
-                    if case .siteData(let id) = lease, id == request.id { return false }; return true
-                }
-            }
-        }
+        func protectedOperation() -> Bool { hasProtectedDataOperation(request.target.context, except: request.id) }
         guard !protectedOperation() else { return result("Wait for this profile's active downloads, document output or extension operations before clearing website data") }
         guard clearingContexts[request.target.context] == nil else { return result("Website data is already being cleared in this profile") }
         guard request.scope != .profile || !request.kinds.contains(.storage) else { return result("Choose a site to clear origin storage. Profile-wide storage removal is unavailable") }

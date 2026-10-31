@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkEngine
+import CCef
 import CCefAppKit
 import CefKit
 import os
@@ -91,7 +92,7 @@ public final class CEFEngine: WebEngine {
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
             config.safeStorage = .mockKeychain
-            config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1"
+            config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"
         }
         config.defaultRuntimeStyle = .chrome
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
@@ -369,6 +370,7 @@ public final class CEFEngine: WebEngine {
                 !self.resources.entries.values.contains { $0.context.context == request.context }
                     && !self.outputs.contains(context: request.context)
                     && !self.transfers.contains(context: request.context)
+                    && self.clearingContexts[request.context] == nil
                     && self.contexts.isDrained(request.context)
                     && (self.audioObservers[request.context]?.drained ?? true)
             }
@@ -423,6 +425,28 @@ public final class CEFEngine: WebEngine {
             }
         }
         return false
+    }
+
+    func dataStore(for profile: ProfileID) async throws -> ProfileDataStore {
+        let context = BrowsingContext.profile(profile)
+        let deadline = ProcessInfo.processInfo.systemUptime + 15
+        while !isReady(context) {
+            guard phase == .running, contexts.permitsWork(context), ProcessInfo.processInfo.systemUptime < deadline else {
+                throw CocoaError(.userCancelled)
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let raw: UnsafeMutablePointer<cef_request_context_t>?
+        if profile == .default { raw = cef_request_context_get_global_context() }
+        else {
+            raw = loaders[profile]?.context
+            if let raw {
+                let base = UnsafeMutableRawPointer(raw).assumingMemoryBound(to: cef_base_ref_counted_t.self)
+                base.pointee.add_ref?(base)
+            }
+        }
+        guard let raw else { throw CocoaError(.featureUnsupported) }
+        return ProfileDataStore(context: raw)
     }
 
     /// The request context for a page's browsing context (BrkEngine/WebEngine.swift `BrowsingContext`): nil for the
@@ -481,7 +505,7 @@ public final class CEFEngine: WebEngine {
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
             self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
-                && self.audioObservers.values.allSatisfy(\.drained)
+                && self.audioObservers.values.allSatisfy(\.drained) && self.clearingContexts.isEmpty
         }
         guard drained else {
             outputs.reportTimeout()

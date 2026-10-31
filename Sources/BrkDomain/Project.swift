@@ -98,7 +98,8 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
     return SettingsSnapshot(
         sidebarData: state.sidebarDataSnapshot,
         pane: state.session.settingsPane, general: doc.settings.general,
-        profiles: profiles.map { ProfileSettingsRow(profile: row($0), settings: state.profileSettings($0.id)) },
+        profiles: profiles.map { ProfileSettingsRow(profile: row($0), settings: state.profileSettings($0.id),
+            clearingData: state.session.sites.profileClears[$0.id] != nil, clearDataResult: state.session.sites.profileResults[$0.id]) },
         deletingProfiles: doc.deletingProfiles.keys.sorted().map { ProfileDeletionRow(profile: $0, name: doc.deletingProfiles[$0]!.name, failure: doc.deletingProfiles[$0]!.failure) },
         links: doc.settings.links,
         routes: doc.linkRoutes.map { LinkRouteRow(route: $0, destinationTitle: destinationTitle($0.destination)) },
