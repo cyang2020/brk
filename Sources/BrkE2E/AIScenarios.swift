@@ -21,7 +21,11 @@ enum AIScenarios {
         for feature in features { try app.dispatch(.settings(.max(.feature(feature, true)))) }
     }
     private static func answer(_ app: AppUnderTest, contains expected: String) throws {
-        try app.waitUntil("AI answer containing \(expected)", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains(expected) == true }
+        try app.waitUntil("AI answer containing \(expected)", timeout: 15) {
+            let facts = try app.native()
+            try expect(!facts.appWindows.contains { $0.isKey && $0.className.contains("CefNSWindow") }, "AI work activated a CEF window")
+            return try app.view().ai?.busy == false && app.view().ai?.text.contains(expected) == true
+        }
     }
     private static func load(_ app: AppUnderTest, _ path: String = "ai.html") throws -> PageID {
         let url = app.site.url(path), item = try app.load(url), page = PageID(window: app.window!, item: item)
