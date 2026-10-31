@@ -8,7 +8,7 @@ import AppKit
     private var ended = false
     private var choice: String?
     private var driver: DispatchWorkItem?
-    private let completion = DispatchSemaphore(value:0)
+    private var completion = DispatchSemaphore(value:0)
 
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
@@ -31,7 +31,8 @@ import AppKit
         guard let current = note.object as? NSMenu,
               note.name == Self.willPresent || menu == nil else { return }
         if current === menu { return }
-        driver?.cancel(); menu = current; ended = false
+        driver?.cancel(); completion.signal(); completion = DispatchSemaphore(value:0)
+        menu = current; ended = false
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let enabled = current.items.filter { !$0.isSeparatorItem && $0.isEnabled }.map(\.title)
         let index = choice.flatMap { enabled.firstIndex(of:$0) }
@@ -44,7 +45,7 @@ import AppKit
     }
 
     @objc private func finished(_ note: Notification) {
-        if let current = note.object as? NSMenu, current === menu { ended = true }
+        if let current = note.object as? NSMenu, current === menu { ended = true; completion.signal() }
     }
 
     private nonisolated static func drive(prefix: String?, index: Int?, pid: pid_t, done: DispatchSemaphore) {

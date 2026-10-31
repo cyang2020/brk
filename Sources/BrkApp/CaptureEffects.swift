@@ -4,6 +4,10 @@ import BrkDomain
 import Foundation
 
 extension AppStore {
+    private func captureRemainsListed(_ record: CaptureRecord, in window: WindowID) -> Bool {
+        guard case .library(let library)? = snapshot.windows[window]?.overlay else { return false }
+        return library.captures.contains { $0.id == record.id && $0.profile == record.profile }
+    }
     func runCapture(_ effect: CaptureEffect) {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -44,19 +48,23 @@ extension AppStore {
             case .insertInEasel(let record, let window):
                 do {
                     let bytes = try await captureFiles.bytes(record)
+                    guard captureWindow(window)?.isVisible == true, captureRemainsListed(record,in:window) else { return }
                     if let insertCaptureInEasel { insertCaptureInEasel(EaselCaptureInsertion(capture: record, png: bytes), window) }
                     else { dispatch(.system(.capture(.exported(window, "Open an Easel to insert this capture.")))) }
                 } catch { fail(window, record.id, error) }
             case .open(let record, let window):
                 guard let owner = captureWindow(window) else { return }
-                do { let bytes = try await captureFiles.bytes(record); try captureSheets.open(record,png:bytes,in:owner,id:window) }
+                do {
+                    let bytes = try await captureFiles.bytes(record)
+                    guard captureWindow(window) === owner, owner.isVisible, captureRemainsListed(record,in:window) else { return }
+                    try captureSheets.open(record,png:bytes,in:owner,id:window)
+                }
                 catch { fail(window,record.id,error) }
             case .export(let record, let window):
                 guard let owner = captureWindow(window) else { return }
                 captureSheets.choose(name:"Capture-" + record.id + ".png", capture:record.id, in:owner, id:window) { [weak self, weak owner] url in
                     guard let self, let url, owner?.isVisible == true,
-                          case .library(let library)? = self.snapshot.windows[window]?.overlay,
-                          library.captures.contains(where: { $0.id == record.id && $0.profile == record.profile }) else { return }
+                          self.captureWindow(window) === owner, self.captureRemainsListed(record,in:window) else { return }
                     Task { @MainActor in
                         do {
                             let bytes = try await self.captureFiles.bytes(record)
