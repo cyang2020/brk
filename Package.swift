@@ -39,6 +39,7 @@ let package = Package(
         .target(
             name: "BrkCEF",
             dependencies: ["BrkBase", "BrkEngine", .product(name: "CefKit", package: "CefSwift")],
+            exclude: ["AudibilityExtension"],
             swiftSettings: strict
         ),
         // Themed window background: Metal gradient, procedural textures, crossfade.

@@ -146,10 +146,28 @@ enum TabToolsScenarios {
         try expect(try currentTab(app.view())?.id == item && app.view().tabTools.recent == nil, "Escape did not cancel recent cycle")
         try ready(app, item, url)
         let card = try app.native().computed.cards[0].rect
+        try app.click(at: CGPoint(x: card.minX + 80, y: card.minY + 150))
+        try app.waitUntil("running silent oscillator proved by analyser") {
+            try tab(item, in: app.view())?.title.contains("running silence source=true rms=0.00000") == true
+        }
+        try AudioScenarios.staysSilent(app, item)
+        try app.recordWindows("running-silent-source")
         try app.click(at: CGPoint(x: card.minX + 80, y: card.minY + 50))
+        try app.waitUntil("running tone and nonzero source samples") {
+            try tab(item, in: app.view())?.title.contains("running tone source=true") == true
+        }
         try app.waitUntil("real CEF audio event") { try tab(item, in: app.view())?.audible == true }
+        try app.recordWindows("audible-tone")
         try app.click(.tabTool("audio-" + item.rawValue))
         try app.waitUntil("CEF reports native mute applied") { try app.native().pages[PageID(window: app.window!, item: item)]?.audioMuted == true }
+        try app.recordWindows("muted-tone")
+        try app.click(.tabTool("audio-" + item.rawValue))
+        try app.waitUntil("CEF reports native unmute applied") { try app.native().pages[PageID(window: app.window!, item: item)]?.audioMuted == false }
+        try app.click(at: CGPoint(x: card.minX + 280, y: card.minY + 50))
+        try app.waitUntil("source stopped and context closed") { try tab(item, in: app.view())?.title.contains("closed silence source=false") == true }
+        try app.waitUntil("Chromium recently-audible timeout after stop") { try tab(item, in: app.view())?.audible == false }
+        try app.recordWindows("stopped")
+        try app.dispatch(.tabTools(.mute(.item(item))))
         try app.flush(); try app.restart()
         try ready(app, item, url)
         try app.waitUntil("restored native mute") { try app.native().pages[PageID(window: app.window!, item: item)]?.audioMuted == true }

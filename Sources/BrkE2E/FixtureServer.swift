@@ -12,7 +12,9 @@ final class FixtureServer: @unchecked Sendable {
     private let countLock = NSLock()
     private var counts: [String: Int] = [:]
     private let heldDocument = DispatchSemaphore(value: 0)
+    private let heldAudioDocument = DispatchSemaphore(value: 0)
     func releaseHeldDocument() { heldDocument.signal() }
+    func releaseAudioDocument() { heldAudioDocument.signal() }
     func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
     private var listener: Int32 = -1
 
@@ -110,6 +112,20 @@ final class FixtureServer: @unchecked Sendable {
             return
         }
         if path == "/fail" { return }   // drop the connection: no status line, no body
+        if path == "/audio-loading" {
+            guard let body = try? Data(contentsOf: root.appendingPathComponent("tab-tools-audio.html")) else { return }
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(body.count + 1)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+            let prefix = header + body
+            var offset = 0
+            while offset < prefix.count {
+                let count = prefix.withUnsafeBytes { write(fd, $0.baseAddress! + offset, $0.count - offset) }
+                guard count > 0 else { return }; offset += count
+            }
+            _ = heldAudioDocument.wait(timeout: .now() + 12)
+            countLock.withLock { counts["audio-loading-completed", default: 0] += 1 }
+            _ = Data(" ".utf8).withUnsafeBytes { write(fd, $0.baseAddress!, $0.count) }
+            return
+        }
         if path == "/held-document" {
             let prefix = Data("<html><title>Held document</title><body>pending".utf8)
             let suffix = Data("</body></html>".utf8)

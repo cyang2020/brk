@@ -24,8 +24,20 @@ final class ChromePage: CefBrowserDelegate {
         self.engine.findUpdated(update)
     }
     private var mainDocument: MainDocumentState
+    private(set) var audio: AudioObservation
+    private var audioTargetTransport: CefDevTools?
+    var audioObserverID: Int?
+    var audioError: String?
 
-    private func emit(_ events: [PageEvent]) { for event in events { find.observe(event); engine.pageDidEmit(self, event) } }
+    private func emit(_ events: [PageEvent]) {
+        for event in events {
+            if case .documentChanged(let document) = event {
+                audio.document(document)
+                if !audio.audible { engine.pageDidEmit(self, .audioChanged(false)) }
+            }
+            find.observe(event); engine.pageDidEmit(self, event)
+        }
+    }
     /// Latest projected policy; each operation freezes its own copy on its first callback.
     var downloadPolicy: DownloadPolicy
     private var desiredMuted: Bool
@@ -43,6 +55,7 @@ final class ChromePage: CefBrowserDelegate {
         downloadPolicy = spec.downloadPolicy
         desiredMuted = spec.muted
         self.incarnation = incarnation
+        audio = AudioObservation(browser: incarnation, context: spec.context)
         mainDocument = MainDocumentState(browser: incarnation)
         self.engine = engine
         surface = EmbeddedSurface(page: spec.id)
@@ -69,7 +82,33 @@ final class ChromePage: CefBrowserDelegate {
         surface.adopt(chrome)
     }
 
-    func browser(_ b: CefBrowser, didChangeAudio audible: Bool) { emit([.audioChanged(audible)]) }
+    func resolveAudioTarget() async {
+        guard engine.isLive(self), browser.id > 0, audio.target == nil, audioTargetTransport == nil,
+              let transport = CefDevTools(browser: browser) else { return }
+        audioTargetTransport = transport
+        defer { transport.invalidate(); audioTargetTransport = nil }
+        do {
+            let data = try await transport.call("Target.getTargetInfo")
+            guard engine.isLive(self), let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let info = result["targetInfo"] as? [String: Any], info["type"] as? String == "page",
+                  let target = info["targetId"] as? String, !target.isEmpty else { return }
+            audio.bind(target)
+        } catch { audioError = String(describing: error) }
+    }
+
+    func applyAudio(_ reading: ChromeAudibility.Reading, ticket: AudioObservation.Ticket, observer: Int) {
+        let changed = audio.audible != reading.audible
+        guard engine.isLive(self), reading.target == ticket.target, audio.accept(reading.audible, tab: reading.tab, for: ticket) else { return }
+        audioObserverID = observer
+        audioError = nil
+        if changed { emit([.audioChanged(reading.audible)]) }
+    }
+
+    func audioUnavailable(_ error: String) {
+        audioError = error
+        if let ticket = audio.ticket, let tab = audio.tab, audio.audible,
+           audio.accept(false, tab: tab, for: ticket) { emit([.audioChanged(false)]) }
+    }
 
     func setMuted(_ value: Bool) {
         desiredMuted = value
@@ -82,12 +121,15 @@ final class ChromePage: CefBrowserDelegate {
     var facts: PageFacts {
         PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: surface.embeddedViewClasses,
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
-                  hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted)
+                  hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
+                  audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
     }
 
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        audio.invalidate(retire: true)
+        audioTargetTransport?.invalidate()
         find.invalidate()
         contextMenu.cancel()
         browser.closeDevTools()
@@ -95,7 +137,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -114,6 +156,8 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
+        audio.invalidate()
+        engine.pageDidEmit(self, .audioChanged(false))
         contextMenu.cancel()
         mainDocument.prepareNavigation()
     }
@@ -216,7 +260,7 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
+    func browserDidClose(_ b: CefBrowser) { audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
