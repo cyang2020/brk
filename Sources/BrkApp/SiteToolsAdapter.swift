@@ -77,6 +77,7 @@ final class SiteToolsAdapter {
         alert.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, window?.isVisible == true, self.requests[request.window] == request.id else { return }
             self.panels[request.window] = nil
+            alert.window.orderOut(nil)
             guard response == .alertFirstButtonReturn else { self.send(.siteResult(request.id, .cancelled)); return }
             self.fetch(repository.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), token: token.stringValue, request: request)
             token.stringValue = ""

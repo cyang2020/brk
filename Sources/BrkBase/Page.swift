@@ -205,6 +205,8 @@ public enum ShutdownOutcome: Hashable, Sendable {
 
 /// What the engine can tell the e2e harness about one page. Diagnostic only: the app never branches on it.
 public struct PageFacts: Hashable, Sendable, Codable {
+    public var loadProgressSamples: [Double]? = nil
+    public var linkPreviewError: String? = nil
     public var linkPreviewFrameCount: Int? = nil
     public var linkPreviewTitle: String? = nil
     public var linkPreviewURL: URL? = nil

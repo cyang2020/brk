@@ -49,6 +49,7 @@ enum TabIconPicker {
         alert.buttons[2].setAccessibilityIdentifier("tab-icon-clear")
         alert.beginSheetModal(for: window) { [input] response in
             _ = input
+            alert.window.orderOut(nil)
             if response == .alertThirdButtonReturn { choose(nil) }
             guard response == .alertFirstButtonReturn else { return }
             let text = emoji.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)

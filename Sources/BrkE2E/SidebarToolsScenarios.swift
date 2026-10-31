@@ -16,12 +16,18 @@ enum SidebarToolsScenarios {
     ]
     private static func page(_ app: AppUnderTest, _ item: ItemID) -> PageID { PageID(window: app.window!, item: item) }
     private static func panel(_ app: AppUnderTest, _ action: SidebarPanelControlAction) throws {
-        _ = try app.send(.sidebarPanel(window: app.window, action: action))
+        let result = try app.send(.sidebarPanel(window: app.window, action: action))
+        guard result == .ok else { throw Check(description: "Native panel action failed: \(result)") }
     }
     private static func connect(_ app: AppUnderTest, _ item: ItemID) throws {
+        try app.waitUntil("previous source sheet dismissed") {
+            if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }
+            return false
+        }
         try app.dispatch(.tabTools(.site(.connectGitHub(favorite: item))))
-        try app.click(.tabTool("repository")); try app.type("fixture/repo")
-        try app.click(.tabTool("connect-repository"))
+        try panel(app, .focus(identifier: ViewID.tabTool("repository").identifier))
+        try app.type("fixture/repo")
+        try panel(app, .button("Connect"))
     }
     @Sendable static func sources(_ app: AppUnderTest) throws {
         let item = try currentTab(app.view())!.id
@@ -106,9 +112,8 @@ enum SidebarToolsScenarios {
         try app.dispatch(.item(.newFolder)); try app.press("return")
         let folder = try app.view().space.pinned.rows.first!.id
         try app.dispatch(.tabTools(.chooseIcon(folder)))
-        // Arrow navigation and Return are native NSPopUpButton/NSAlert behavior.
-        try app.press("down"); try app.press("escape")
-        try panel(app, .text(identifier: "tab-icon-custom", value: "sparkles")); try panel(app, .button("Save"))
+        try panel(app, .focus(identifier: "tab-icon-custom"))
+        try app.press("cmd+a"); try app.type("sparkles"); try app.press("tab"); try app.press("return")
         guard case .folder(let row)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
         try expect(row.icon == .symbol("sparkles"), "folder picker did not apply SF Symbol")
         _ = try app.screenshot("custom-folder")
@@ -154,6 +159,7 @@ enum SidebarToolsScenarios {
         try app.waitForPageInput(id, at: sourceURL)
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: url.absoluteString, options: .fragmentsAllowed), as: UTF8.self)
         try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"display:block;margin:80px;width:240px;height:40px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal)")
+        try app.waitUntil("isolated hover observer") { try (app.native().pages[id]?.linkPreviewFrameCount ?? 0) > 0 }
         let frame = try app.native().pages[id]!.surfaceFrame!
         let point = CGPoint(x: frame.minX + 100, y: frame.minY + 100)
         try app.hover(point)

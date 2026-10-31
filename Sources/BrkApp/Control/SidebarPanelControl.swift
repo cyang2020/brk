@@ -49,6 +49,10 @@ enum SidebarPanelControl {
                 throw Invalid(message: "Native button not found: " + title)
             }
             button.performClick(nil)
+        case .focus(let identifier):
+            guard let view = views.first(where: { $0.identifier?.rawValue == identifier }), sheet.makeFirstResponder(view) else {
+                throw Invalid(message: "Native control cannot take focus: " + identifier)
+            }
         case .text(let identifier, let value):
             guard let field = views.first(where: { $0.identifier?.rawValue == identifier }) as? NSTextField, field.isEditable else {
                 throw Invalid(message: "Native field not found")

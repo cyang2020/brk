@@ -26,6 +26,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private(set) var title: String?
     private(set) var destination: URL?
     private var escape: Any?
+    private var activityObservers: [NSObjectProtocol] = []
+    private(set) var lastFailure: String?
 
     init(browser: CefBrowser, surface: NSView, available: @escaping () -> Bool,
          summarize: @escaping (LinkPreviewRequest, @escaping @MainActor (String?) -> Void) -> Void) {
@@ -49,6 +51,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     }
     func stop(keepDocument: Bool = false) {
         poll?.cancel(); poll = nil; fetch?.cancel(); fetch = nil
+        for observer in activityObservers { NotificationCenter.default.removeObserver(observer) }
+        activityObservers.removeAll()
         closeCard(); session?.invalidate(); session = nil
         world = nil; frameWorlds = []; currentFrame = nil; current = nil; dismissed = nil
         if !keepDocument { document = nil }
@@ -56,6 +60,17 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private func start(_ document: DocumentToken) {
         guard poll == nil, let transport = CefDevTools(browser: browser) else { return }
         session = transport
+        activityObservers = [NSWindow.didResignKeyNotification, NSApplication.didResignActiveNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let owner = (note.object as? NSWindow).map { ObjectIdentifier($0) }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if name == NSWindow.didResignKeyNotification, owner != self.surface?.window.map({ ObjectIdentifier($0) }) { return }
+                    if name == NSWindow.didResignKeyNotification, self.pointerInCard() { return }
+                    self.dismissed = self.current; self.fetch?.cancel(); self.closeCard()
+                }
+            }
+        }
         poll = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -64,7 +79,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                 while !Task.isCancelled, self.document == document, self.enabled {
                     if ticks % 12 == 0 { try await self.refreshFrames() }
                     ticks += 1
-                    if self.available(), self.surface?.window?.isKeyWindow == true || self.pointerInCard() {
+                    if self.available() {
                         var candidate: (FrameWorld, [String: Any])?
                         for frame in self.frameWorlds {
                             if let value = try? await self.evaluate("globalThis.__brkPreview.read()", context: frame.context) as? [String: Any], value["href"] is String {
@@ -83,7 +98,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                     } else { self.fetch?.cancel(); self.current = nil; self.closeCard() }
                     try await Task.sleep(for: .milliseconds(150))
                 }
-            } catch { if self.document == document { self.closeCard() } }
+            } catch { if self.document == document { self.lastFailure = String(describing: error); self.closeCard() } }
         }
     }
     private func refreshFrames() async throws {
@@ -155,7 +170,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                 text = parsed?["text"] as? String ?? ""
                 if let icon = parsed?["icon"] as? String, let iconURL = URL(string: icon),
                    let bytes = try? await self.resource(iconURL, limit: 131_072, frameID: frame.frame) { image = NSImage(data: bytes) }
-            } catch { status = "Preview unavailable. You can still open this link." }
+            } catch { self.lastFailure = String(describing: error); status = "Preview unavailable. You can still open this link." }
             guard !Task.isCancelled, self.document == document, self.current == url.absoluteString, self.currentFrame == frame.frame,
                   self.dismissed != url.absoluteString, self.available(), let surface = self.surface else { return }
             // Recheck the DOM after transport; leaving or replacing the link cancels its result.
@@ -217,6 +232,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
       addEventListener('pointerdown',clear,true);addEventListener('scroll',clear,true);
       addEventListener('keydown',e=>{if(e.key==='Escape'){suppressed=candidate;clear()}},true);
       globalThis.__brkPreview={read(){
+        if(!candidate?.isConnected)clear();
+        if(!candidate){const a=document.querySelector('a:hover');if(a&&a!==suppressed){candidate=a;since=performance.now()}}
         if(!candidate?.isConnected||candidate===suppressed||performance.now()-since<650||document.hidden)return null;
         const r=candidate.getBoundingClientRect();return {href:candidate.href,text:candidate.textContent.trim(),x:r.x,y:r.y,w:r.width,h:r.height};
       }};

@@ -37,6 +37,8 @@ final class ChromePage: CefBrowserDelegate {
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
+    private var currentLoadProgress: Double = 0
+    private var progressSamples: [Double] = []
     var requestedReloads = 0
     var extensionDialogDecision: String?
     var extensionFileDialogCallbacks = 0
@@ -148,6 +150,8 @@ final class ChromePage: CefBrowserDelegate {
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.loadProgressSamples = progressSamples
+        facts.linkPreviewError = linkPreviews.lastFailure
         facts.linkPreviewFrameCount = linkPreviews.frameCount
         facts.linkPreviewTitle = linkPreviews.title
         facts.linkPreviewURL = linkPreviews.destination
@@ -199,12 +203,19 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     private func prepareDocumentNavigation() {
+        currentLoadProgress = 0
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()
         engine.pageDidEmit(self, .audioChanged(false))
         contextMenu.cancel()
         mainDocument.prepareNavigation()
+    }
+
+    /// Construction can deliver CEF's first progress callback before the engine publishes browserCreated.
+    func reportInitialLoading() {
+        engine.pageDidEmit(self, .loadingChanged(isLoading: browser.isLoading, canGoBack: browser.canGoBack, canGoForward: browser.canGoForward))
+        if browser.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
 
     func prepareStop() { reloadSequence.cancel(); emit(mainDocument.stopped()) }
@@ -248,6 +259,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         emit(mainDocument.started(url))
+        if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
 
     func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {
@@ -271,9 +283,15 @@ final class ChromePage: CefBrowserDelegate {
     func browser(_ b: CefBrowser, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
         emit(mainDocument.loadingChanged(isLoading))
+        if isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
+        else { currentLoadProgress = 0 }
     }
 
     func browser(_ b: CefBrowser, didChangeProgress progress: Double) {
+        guard progress.isFinite else { return }
+        currentLoadProgress = progress
+        progressSamples.append(progress)
+        if progressSamples.count > 24 { progressSamples.removeFirst() }
         engine.pageLoadProgress(self, progress: progress)
     }
 

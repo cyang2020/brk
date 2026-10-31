@@ -223,6 +223,7 @@ public final class CEFEngine: WebEngine {
             resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
             record(.created, page)
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
+            page.reportInitialLoading()
         }
         if audioLoop == nil {
             audioLoop = Task { @MainActor [weak self] in
