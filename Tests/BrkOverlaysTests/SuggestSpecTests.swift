@@ -224,7 +224,7 @@ final class SuggestSpecTests: XCTestCase {
             "open:Search pa",
             "domain:paypal.com",
             "history:https://ha.test/",
-            "action:Refresh the Page:⌘R", // word start, after the sources above
+            "action:Import from Another Browser…:-", // Passwords is a word start; action follows the sources above
         ])
     }
 

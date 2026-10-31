@@ -28,6 +28,7 @@ public enum Input: Sendable, Equatable {
 }
 
 public enum Command: Hashable, Sendable, Codable {
+    case sidebarData(SidebarDataCommand)
     case commandBar(CommandBarCommand)
     case archive(ArchiveCommand)
     case tab(TabCommand)
@@ -210,6 +211,7 @@ public enum SpaceDialogRequest: Hashable, Sendable, Codable {
 
 public enum PopupMenuRequest: Hashable, Sendable, Codable {
     case item(ItemID)
+    case selection([ItemID])
     case space(SpaceID)
     case plusButton
 }
@@ -376,6 +378,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 // MARK: - System events
 
 public enum SystemEvent: Sendable, Equatable {
+    case sidebarData(SidebarDataEvent)
     case page(BrowserToken, PageEvent)
     case download(DownloadUpdate)
     case contextDisposed(ContextDisposalResult)

@@ -92,6 +92,7 @@ struct Work {
         applyOverlayRule(for: command, in: window)
         begin(window: window)
         switch command {
+        case .sidebarData(let command): sidebarData(command, in: window)
         case .commandBar(let c): commandBar(c, in: window)
         case .archive(let c): archive(c, in: window)
         case .tab(let c): tabs(c, in: window)
@@ -116,9 +117,10 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .sidebarData, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
+        case .sidebarData(let event): sidebarDataEvent(event)
         case .page(let page, let e): pageEvent(e, for: page)
         case .download(let update): downloadEvent(update)
         case .contextDisposed(let result):
@@ -129,7 +131,9 @@ struct Work {
                 if state.doc.deletingProfiles[profile]?.id == id { state.doc.deletingProfiles[profile]?.failure = reason }
             default: break
             }
-        case .clockTick: sweepAutoArchive()
+        case .clockTick:
+            sweepAutoArchive()
+            requestSidebarSync()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
@@ -185,6 +189,8 @@ struct Work {
 
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
+        captureSidebarChanges()
+        if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
             if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }

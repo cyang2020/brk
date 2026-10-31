@@ -155,7 +155,7 @@ extension ActionID {
             entry(3, "Preferences…", .app, 1, [key(cmd, .comma, .page)], .settings(.openPane(.general)), bar: listing("gearshape", "Settings"))
         case .setAsDefaultBrowser: entry(5, "Set as Default Browser", .app, 1, [], .app(.setAsDefaultBrowser), bar: listing("heart", "Default Browser"))
         case .importFromBrowser:
-            entry(6, "Import from Another Browser…", .app, 2, [], .later(.importer),
+            entry(6, "Import from Another Browser…", .app, 2, [], .sidebarData(.importFile),
                   bar: listing("arrow.turn.right.down", "Import Bookmarks", "Import Settings", "Import Logins", "Import Passwords", "Transfer Bookmarks",
                                "Transfer Settings", "Transfer Logins", "Transfer Passwords", "Bookmarks"))
         case .checkForUpdates: entry(7, "Check for Updates…", .app, 2, [], .later(.updater), bar: listing("sparkles", "Download", "Update", "Check for Updates"))
@@ -398,7 +398,7 @@ extension ActionID {
         case .viewBoosts: entry(174, "View Boosts", .window, 1, [], .library(.open(.boosts)), bar: listing("paintbrush", "Boosts"))
 
         // MARK: Help (groups: Getting Started to Export Notes | Troubleshooting; inside it: Trace, Task Manager | Data, Info)
-        case .gettingStarted: entry(177, "Getting Started", .help, 0, [], .later(.onboarding), bar: listing("safari", "Welcome to {app}"))
+        case .gettingStarted: entry(177, "Getting Started", .help, 0, [], .sidebarData(.welcome), bar: listing("safari", "Welcome to {app}"))
         case .keyboardShortcutsEDU:
             entry(178, "Essential Keyboard Shortcuts", .help, 0, [], .settings(.openPane(.shortcuts)),
                   bar: listing("keyboard", "Essential Keyboard Shortcuts", "keyboard", "shortcuts"))

@@ -174,7 +174,7 @@ final class AppUnderTest {
         environment["BRK_CONTROL_SOCKET"] = client.path
         environment["BRK_DATA_DIR"] = dataDirectory.path
         environment["BRK_TEST_CLOCK"] = "1"
-        environment["BRK_START_URL"] = site.url("index.html").absoluteString
+        if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")

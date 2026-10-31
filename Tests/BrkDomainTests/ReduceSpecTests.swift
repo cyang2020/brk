@@ -249,7 +249,7 @@ final class ReduceSpecTests: XCTestCase {
         let a = d.todayIDs[0]
         d.user(.tab(.togglePin(.item(a))))
         let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(a), at: .zero)))))
-        XCTAssertEqual(titles(menu), ["Pin/Unpin Tab", "Rename Current Item", "Close and Keep Pinned", "Archive Tab"])
+        XCTAssertEqual(titles(menu), ["Pin/Unpin Tab", "Export…", "Rename Current Item", "Close and Keep Pinned", "Archive Tab"])
         XCTAssertEqual(command(menu, "Close and Keep Pinned"), .tab(.close(.item(a))))
         let archive = try XCTUnwrap(command(menu, "Archive Tab"))
         XCTAssertEqual(archive, .tab(.archive(.item(a))))
@@ -1381,7 +1381,7 @@ final class ReduceSpecTests: XCTestCase {
         guard case .popupMenu(let window, let menu, let at)? = t.effects.first else { return XCTFail("no popup") }
         XCTAssertEqual(window, d.window)
         XCTAssertEqual(at, CGPoint(x: 40, y: 120))
-        XCTAssertEqual(titles(menu), ["Pin/Unpin Tab", "Rename Current Item", "Move to Today in Work", "Archive Tab"])
+        XCTAssertEqual(titles(menu), ["Pin/Unpin Tab", "Export…", "Rename Current Item", "Move to Today in Work", "Archive Tab"])
         d.user(try XCTUnwrap(command(menu, "Move to Today in Work")))
         d.user(.space(.focus(work)))
         XCTAssertEqual(d.todayIDs, [a])
@@ -1391,6 +1391,7 @@ final class ReduceSpecTests: XCTestCase {
             .action(title: "Change Space Icon…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
             .action(title: "Edit Theme Color…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
             .separator,
+            .action(title: "Export Space…", command: .app(.export(.space(.space(work)))), enabled: true),
             .action(title: "Delete Space", command: .space(.delete(work)), enabled: true),
         ])
         let plus = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.plusButton, at: .zero)))))
@@ -1402,7 +1403,7 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.item(.newFolder))
         let folder = d.pinnedIDs[0]
         let folderMenu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(folder), at: .zero)))))
-        XCTAssertEqual(titles(folderMenu), ["Rename Current Item", "Collapse Folder", "Delete Folder"])
+        XCTAssertEqual(titles(folderMenu), ["Rename Current Item", "Collapse Folder", "Export Folder…", "Delete Folder"])
         XCTAssertEqual(d.user(.sidebar(.popupMenu(.item(ItemID("ghost")), at: .zero))).effects, [])
         XCTAssertEqual(d.user(.sidebar(.popupMenu(.space(SpaceID("ghost")), at: .zero))).effects, [])
     }

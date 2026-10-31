@@ -39,6 +39,19 @@ struct GeneralPane: View {
                 }
             }
             SettingsDivider()
+            SettingsSection {
+                SettingsButton(title: "Sidebar Data: Import, Sync and Export", field: "sidebarData") {
+                    context.dispatch(.sidebarData(.syncSettings))
+                }
+                SettingsNote(text: s.sidebarData?.status ?? "Not connected.")
+                SettingsButton(title: "Import an exported browser file…", field: "importBrowserFile") {
+                    context.dispatch(.sidebarData(.importFile))
+                }
+                SettingsButton(title: "Open Brk 101", field: "brk101") {
+                    context.dispatch(.sidebarData(.tour))
+                }
+            }
+            SettingsDivider()
             SettingsSection(.text(SettingsCopy.appearanceLabel)) {
                 Text(SettingsCopy.webAppearance)
                 SettingsPopUp(field: "webAppearance", entries: WebAppearance.allCases.map { .option(SettingsCopy.appearance($0), $0) },

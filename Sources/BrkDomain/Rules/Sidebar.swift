@@ -198,6 +198,9 @@ extension Work {
             .action(title: title, command: command, enabled: enabled)
         }
         switch request {
+        case .selection(let ids):
+            let publicIDs = ids.filter { state.locate($0) == .global }
+            return MenuModel(entries: publicIDs.isEmpty ? [] : [entry("Export Selected Tabs…", .app(.export(.items(publicIDs))))])
         case .plusButton:
             return MenuModel(entries: [
                 entry("New Tab", .commandBar(.open(.newTab))),
@@ -209,6 +212,7 @@ extension Work {
             let edit = Command.sidebar(.openDialog(.editSpace(.space(id))))
             return MenuModel(entries: [
                 entry("Rename Space", edit), entry("Change Space Icon…", edit), entry("Edit Theme Color…", edit), .separator,
+                entry("Export Space…", .app(.export(.space(.space(id))))),
                 entry("Delete Space", .space(.delete(id)), enabled: state.doc.spaceOrder.count > 1),
             ])
         case .item(let id):
@@ -222,6 +226,7 @@ extension Work {
                 return MenuModel(entries: [
                     entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))),
                     entry(f.collapsed ? "Expand Folder" : "Collapse Folder", .item(.toggleFolder(id))), .separator,
+                    entry("Export Folder…", .app(.export(.items([id]))), enabled: scope == .global),
                     entry("Delete Folder", .item(.deleteFolder(id))),
                 ])
             case .tab, .split:
@@ -234,7 +239,8 @@ extension Work {
                 }
                 let pinTarget: ItemID
                 if case .split(let s) = node.body { pinTarget = s.panes.ids[0] } else { pinTarget = id }
-                var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))))]
+                var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget)))),
+                               entry("Export…", .app(.export(.items([id]))), enabled: scope == .global)]
                 guard case .tab(let tab) = node.body else {
                     return MenuModel(entries: moves.isEmpty ? entries : entries + [.separator] + moves)
                 }
@@ -269,7 +275,7 @@ extension Work {
         case .export(let subject):
             // Share-by-link replaced by a file (user decision): the document is built here from state, so the
             // writer (BrkApp/ShareExport.swift) never reads the tree.
-            if let document = exportDocument(for: subject, in: window) { effects.append(.export(document)) }
+            if let document = exportDocument(for: subject, in: window) { effects.append(.export(document, owner: window)) }
         case .exit:
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,
             // else cancel a rename or dialog, else leave full screen (the window decides whether it is in one).

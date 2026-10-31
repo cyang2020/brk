@@ -63,12 +63,12 @@ final class AssistAndExportSpecTests: XCTestCase {
         let b = d.open("http://127.0.0.1:9/b")
         d.user(.item(.move(b, to: .into(parent: folder, index: 0))))
         let space = d.user(.app(.export(.space(.current))))
-        guard case .export(let document)? = space.effects.first else { return XCTFail("\(space.effects)") }
+        guard case .export(let document, _)? = space.effects.first else { return XCTFail("\(space.effects)") }
         XCTAssertEqual(document.title, "Space 1")
         XCTAssertEqual(document.entries, [.folder(title: "Reading", children: [.link(title: "127.0.0.1:9/b", url: url("http://127.0.0.1:9/b"))]),
                                           .link(title: "Home", url: start)])
         let tab = d.user(.app(.export(.focusedTab)))
-        guard case .export(let one)? = tab.effects.first else { return XCTFail("\(tab.effects)") }
+        guard case .export(let one, _)? = tab.effects.first else { return XCTFail("\(tab.effects)") }
         XCTAssertEqual(one.entries, [.link(title: "127.0.0.1:9/b", url: url("http://127.0.0.1:9/b"))])
         XCTAssertEqual(d.user(.app(.export(.items([ItemID("ghost")])))).effects, [])
     }

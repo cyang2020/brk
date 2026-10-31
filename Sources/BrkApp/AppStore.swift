@@ -41,6 +41,16 @@ public final class AppStore {
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
     let destinations = DownloadSheets()
+    private let syncIO = SidebarSyncIO()
+    private var syncTask: Task<Void, Never>?
+    private var syncTaskID: UUID?
+    private var sidebarShuttingDown = false
+    private var exportPanels: [WindowID: NSSavePanel] = [:]
+    private lazy var sidebarPanels = SidebarDataPanels(send: { [weak self] event in
+        self?.dispatch(.system(.sidebarData(event)))
+    }, command: { [weak self] window, command in
+        self?.dispatch(.user(window, command))
+    }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -59,6 +69,9 @@ public final class AppStore {
         publish(docChanged: false)
         dispatching = false
         drain()
+        if let window = snapshot.windows.keys.sorted().first {
+            dispatch(.user(window, .sidebarData(snapshot.sidebarData.needsOnboarding ? .welcome : .syncNow)))
+        }
     }
 
     /// Every user command, system event and page event enters here.
@@ -95,6 +108,17 @@ public final class AppStore {
             log.error("flush failed: \(error)")
             return false
         }
+    }
+
+    public func stopSidebarData() async {
+        sidebarShuttingDown = true
+        let pending = syncTask
+        pending?.cancel()
+        await sidebarPanels.shutdown()
+        for panel in exportPanels.values { panel.cancel(nil) }
+        exportPanels.removeAll()
+        await pending?.value
+        syncTask = nil; syncTaskID = nil
     }
 
     /// The page's owner, if its current snapshot shows `page`: in one of its panes, or in its Peek card (F3), so a key from
@@ -142,6 +166,8 @@ public final class AppStore {
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             destinations.ownerGone(id)
+            sidebarPanels.ownerGone(id)
+            exportPanels.removeValue(forKey: id)?.cancel(nil)
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
@@ -160,6 +186,7 @@ public final class AppStore {
         }
         renderWindows()
         renderSettings()
+        if !snapshot.sidebarData.connected { syncTask?.cancel(); syncTask = nil; syncTaskID = nil }
     }
 
     /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens).
@@ -218,8 +245,13 @@ public final class AppStore {
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 menu.popUp(positioning: nil, at: at, in: controller.root)
-            case .export(let document):
-                ShareExport.run(document, in: windowController(nil)?.window)
+            case .export(let document, let owner):
+                guard let window = windows[owner]?.window else { continue }
+                exportPanels[owner] = ShareExport.run(document, in: window, completion: { [weak self] message in
+                    self?.exportPanels[owner] = nil
+                    self?.dispatch(.system(.sidebarData(.exportFinished(message))))
+                })
+            case .sidebarData(let effect): runSidebarData(effect)
             case .ai(let id, let task, let choice):
                 let detected = snapshot.settings.max.detected
                 Task { @MainActor [weak self] in
@@ -232,6 +264,45 @@ public final class AppStore {
             case .cancelDownload(let id): engine.cancelDownload(id)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            }
+        }
+    }
+
+    private func runSidebarData(_ effect: SidebarDataEffect) {
+        guard !sidebarShuttingDown else { return }
+        switch effect {
+        case .panel(let owner, let panel):
+            guard let window = windows[owner]?.window else { return }
+            sidebarPanels.show(panel, owner: owner, window: window, status: snapshot.sidebarData)
+        case .tour(let owner):
+            do {
+                let url = try BrkTour.write(in: stateFile.url.deletingLastPathComponent())
+                dispatch(.user(owner, .commandBar(.open(.newTab))))
+                dispatch(.user(owner, .commandBar(.submit(url.absoluteString))))
+            } catch { dispatch(.system(.sidebarData(.failed(epoch: nil, "Could not write the local Brk tour.")))) }
+        case .exchange(let epoch, let folder, let replica, let revision, let document):
+            guard syncTask == nil else { return }
+            // Publishing is permitted only after this exact sidebar edit + replica checkpoint is durable.
+            guard flush() else { dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync paused because local state could not be saved.")))); return }
+            let ticket = UUID()
+            syncTaskID = ticket
+            syncTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                var succeeded = false
+                do {
+                    let received = try await self.syncIO.exchange(folder: URL(fileURLWithPath: folder, isDirectory: true), replica: replica, document: document)
+                    guard !Task.isCancelled else { return }
+                    self.dispatch(.system(.sidebarData(.syncRead(epoch: epoch, received))))
+                    self.dispatch(.system(.sidebarData(.syncWritten(epoch: epoch, revision: revision, published: document))))
+                    succeeded = true
+                } catch is CancellationError {} catch {
+                    self.dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync failed. Check folder access and replica files, then retry. \(error.localizedDescription)"))))
+                }
+                guard self.syncTaskID == ticket else { return }
+                self.syncTask = nil; self.syncTaskID = nil
+                if succeeded, self.state.docNeedsSidebarPublication, let window = self.snapshot.windows.keys.sorted().first {
+                    self.dispatch(.user(window, .sidebarData(.syncNow)))
+                }
             }
         }
     }

@@ -57,6 +57,7 @@ extension AppState {
 }
 
 struct Doc: Sendable, Equatable {
+    var sidebarData = SidebarDataSaved()
     var tree: SidebarTree
     var spaces: [SpaceID: Space]
     /// Dock order.
@@ -223,6 +224,7 @@ struct HistoryEntry: Sendable, Equatable {
 // MARK: - Session
 
 struct Session: Sendable, Equatable {
+    var sidebarDataStatus = "Not connected."
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
     var rev: Int
     var windows: [WindowID: WindowSession]

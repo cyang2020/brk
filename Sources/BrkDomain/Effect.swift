@@ -8,6 +8,7 @@ import Foundation
 /// Only imperative one-shots are effects. Anything that is a function of state (which pages are live, which windows
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
+    case sidebarData(SidebarDataEffect)
     case page(PageID, PageAction)
     case copyToPasteboard(String)
     case window(WindowID, WindowEffect)
@@ -15,7 +16,7 @@ public enum Effect: Hashable, Sendable {
     /// A native popup menu built from state; each entry carries the command it dispatches when chosen.
     case popupMenu(WindowID, MenuModel, at: CGPoint)
     /// Share-by-link replaced by a file: BrkApp shows a save panel (JSON or HTML) and writes `ExportCodec`'s bytes.
-    case export(ExportDocument)
+    case export(ExportDocument, owner: WindowID)
     /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
     /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
