@@ -35,14 +35,20 @@ extension CEFEngine {
         // Bound renderer allocation before requesting bytes. Never silently truncate a long page.
         guard scale.isFinite, scale > 0, w >= 1, h >= 1, w * scale <= 32768, h * scale <= 32768,
               w * h * scale * scale <= 80_000_000 else { throw CefDevTools.Failure.protocolError("Capture exceeds 80 million pixels or 32,768 pixels per side. Choose a smaller area.") }
+        // Fractional protocol clips can lose the embedded display profile in this runtime. The proven integer
+        // source preserves it; request an enclosing integer CSS rectangle, then crop exact native pixels.
+        let clipX = request.mode == .fullPage ? x : floor(x), clipY = request.mode == .fullPage ? y : floor(y)
+        let clipW = request.mode == .fullPage ? w : ceil(x+w)-clipX, clipH = request.mode == .fullPage ? h : ceil(y+h)-clipY
         let data = try await channel.call("Page.captureScreenshot", parameters: ["format":"png", "fromSurface":true,
-            "captureBeyondViewport":true, "clip":["x":x,"y":y,"width":w,"height":h,"scale":1]])
+            "captureBeyondViewport":true, "clip":["x":clipX,"y":clipY,"width":clipW,"height":clipH,"scale":1]])
         try valid()
         guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any], let encoded = body["data"] as? String,
               let png = Data(base64Encoded: encoded), let image = NSBitmapImageRep(data: png),
-              abs(Double(image.pixelsWide) - w * scale) <= 2, abs(Double(image.pixelsHigh) - h * scale) <= 2 else {
+              abs(Double(image.pixelsWide) - clipW * scale) <= 2, abs(Double(image.pixelsHigh) - clipH * scale) <= 2 else {
             throw CefDevTools.Failure.protocolError("Capture pixels do not match the selected dimensions")
         }
-        return CaptureImage(png: png, width: image.pixelsWide, height: image.pixelsHigh, scale: scale)
+        if request.mode == .fullPage { return CaptureImage(png:png,width:image.pixelsWide,height:image.pixelsHigh,scale:scale) }
+        let pixels = CGRect(x:((x-clipX)*scale).rounded(),y:((y-clipY)*scale).rounded(),width:(w*scale).rounded(),height:(h*scale).rounded())
+        return try CapturePixels.crop(png,pixels:pixels,scale:scale)
     }
 }
