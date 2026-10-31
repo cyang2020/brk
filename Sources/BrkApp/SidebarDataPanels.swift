@@ -131,6 +131,7 @@ final class SidebarDataPanels {
         panel.title = "Choose an exported browser file"
         panel.prompt = "Preview"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.json, .html, .commaSeparatedText]
+        SidebarPanelControl.configureTestDirectory(panel)
         let format = NSPopUpButton()
         format.identifier = NSUserInterfaceItemIdentifier("import-format")
         format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV (local Keychain)"])
@@ -139,9 +140,14 @@ final class SidebarDataPanels {
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
-            self.operations[owner] = nil
-            guard response == .OK, let url = panel.url, let window, window.isVisible, self.target(owner) == captured else { return }
-            self.command(owner, .sidebarData(.importSelected(url, format: SidebarImportFormat.allCases[format.indexOfSelectedItem])))
+            guard response == .OK, let url = panel.url else { self.operations[owner] = nil; return }
+            let selectedFormat = SidebarImportFormat.allCases[format.indexOfSelectedItem]
+            // AppKit calls completion while the sheet is still attached. Keep the ticket until the shared path retires it.
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, self.operations[owner]?.id == ticket else { return }
+                guard let window, window.isVisible, self.target(owner) == captured else { self.ownerGone(owner); return }
+                self.command(owner, .sidebarData(.importSelected(url, format: selectedFormat)))
+            }
         }
     }
 
@@ -176,12 +182,12 @@ final class SidebarDataPanels {
         // The folder chooser cannot return a file (canChooseFiles is false); the explicit command re-checks that here so a
         // regular file is never persisted as the sync folder (parent repair after the Fable review of 3b48d60).
         var isDirectory: ObjCBool = false
-        guard url.isFileURL, target(owner) == captured else { return }
+        guard url.isFileURL, target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             send(.failed(epoch: nil, "Sync could not use that path: it is not a folder. Choose a folder."))
             return
         }
-        guard prepareSelectedFile(owner: owner, window: window) else { return }
+
         send(.connected(owner, folder: url.path))
     }
 
@@ -243,13 +249,17 @@ final class SidebarDataPanels {
         panel.title = "Choose sidebar sync folder"; panel.prompt = "Connect this profile"
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
         panel.message = "This folder's shared profile maps only to the current local profile. No credentials or browsing settings are copied."
+        SidebarPanelControl.configureTestDirectory(panel)
         let ticket = UUID()
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, self.operations[owner]?.id == ticket else { return }
-            self.operations[owner] = nil
-            guard response == .OK, let url = panel.url, window?.isVisible == true, self.target(owner) == captured else { return }
-            self.command(owner, .sidebarData(.connectSelectedFolder(url)))
+            guard response == .OK, let url = panel.url else { self.operations[owner] = nil; return }
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, self.operations[owner]?.id == ticket else { return }
+                guard window?.isVisible == true, self.target(owner) == captured else { self.ownerGone(owner); return }
+                self.command(owner, .sidebarData(.connectSelectedFolder(url)))
+            }
         }
     }
 

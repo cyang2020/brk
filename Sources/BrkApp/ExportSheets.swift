@@ -17,34 +17,18 @@ final class ExportSheets {
     private var pending: [WindowID: Pending] = [:]
     private var stopped = false
 
-    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
+    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, selected: @escaping @MainActor (URL) -> Void, reply: @escaping @MainActor (ExportOutcome) -> Void) {
         guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
             reply(.failed("Finish the open sheet first.")); return
         }
         let entry = Pending(document: document, window: window, reply: reply)
         pending[owner] = entry
-        let panel = ShareExport.run(document, in: window, isValid: { [weak self, weak entry] in
-            guard let self, let entry else { return false }
-            return !self.stopped && self.pending[owner] === entry && entry.window?.isVisible == true
-        }, completion: { [weak self, weak entry] result in
-            guard let self, let entry, self.pending[owner] === entry else { return }
-            entry.sheet = nil
-            switch result {
-            case .saved(let url): self.finish(owner, entry, outcome: .saved(url))
-            case .cancelled: self.finish(owner, entry, outcome: .cancelled)
-            case .failed(let reason):
-                let reply = entry.reply; entry.reply = nil
-                reply?(.failed(reason))
-                guard !self.stopped, self.pending[owner] === entry, let window = entry.window, window.isVisible else { return }
-                let alert = NSAlert(); alert.messageText = "Export failed"; alert.informativeText = reason
-                entry.sheet = alert.window
-                alert.beginSheetModal(for: window) { [weak self, weak entry] _ in
-                    guard let self, let entry, self.pending[owner] === entry else { return }
-                    self.finish(owner, entry, outcome: nil)
-                }
-            }
-        })
-        if pending[owner] === entry, entry.sheet == nil { entry.sheet = panel }
+        entry.sheet = ShareExport.run(document, in: window) { [weak self, weak entry] url in
+            guard let self, let entry, self.pending[owner] === entry, entry.sheet is NSSavePanel,
+                  entry.window?.isVisible == true, !self.stopped else { return }
+            if let url { selected(url) }
+            else { self.finish(owner, entry, outcome: .cancelled) }
+        }
     }
 
     /// Explicit post-selection fixture bridge; it does not prove the remote chooser gesture.
@@ -65,10 +49,24 @@ final class ExportSheets {
     func saveSelected(_ url: URL, owner: WindowID) -> Bool {
         guard !stopped, url.isFileURL, let entry = pending[owner], entry.window?.isVisible == true,
               entry.sheet is NSSavePanel else { return false }
-        let reply = entry.reply
-        // Invalidate before endSheet, so the system's eventual cancellation cannot race this write or reply.
-        finish(owner, entry, outcome: nil)
-        reply?(ShareExport.writeSelected(entry.document, to: url))
+        // Retire the picker before writing; late system completion cannot replay this operation.
+        let sheet = entry.sheet; entry.sheet = nil
+        if let sheet {
+            sheet.sheetParent?.endSheet(sheet, returnCode: .cancel)
+            sheet.orderOut(nil)
+        }
+        let result = ShareExport.writeSelected(entry.document, to: url)
+        if case .failed(let reason) = result {
+            let reply = entry.reply; entry.reply = nil
+            reply?(result)
+            guard !stopped, pending[owner] === entry, let window = entry.window, window.isVisible else { return true }
+            let alert = NSAlert(); alert.messageText = "Export failed"; alert.informativeText = reason
+            entry.sheet = alert.window
+            alert.beginSheetModal(for: window) { [weak self, weak entry] _ in
+                guard let self, let entry else { return }
+                self.finish(owner, entry, outcome: nil)
+            }
+        } else { finish(owner, entry, outcome: result) }
         return true
     }
 

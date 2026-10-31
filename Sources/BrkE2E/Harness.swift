@@ -179,6 +179,7 @@ final class AppUnderTest {
         environment["BRK_CONTROL_SOCKET"] = client.path
         environment["BRK_DATA_DIR"] = dataDirectory.path
         environment["BRK_TEST_CLOCK"] = "1"
+        environment["BRK_TEST_FILE_PANEL_DIRECTORY"] = dataDirectory.path
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
         if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }

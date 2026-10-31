@@ -149,6 +149,9 @@ public enum ControlResult: Codable, Sendable, Equatable {
 
 public enum SidebarPanelControlAction: Codable, Sendable, Equatable {
     case capture(path: String)
+    /// Configure only the starting directory; selection and confirmation remain real AX operations.
+    case directory(path: String)
+    case selection
     case inspect
     case button(String)
     case focus(identifier: String)
