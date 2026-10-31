@@ -53,6 +53,7 @@ public final class CEFEngine: WebEngine {
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
     var wanted: [PageSpec] = []
+    private var reconcilingPages = false
     var phase: ShutdownPhase = .running
     private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
@@ -207,8 +208,20 @@ public final class CEFEngine: WebEngine {
 
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
-        let pages = pages.filter { contexts.permitsWork($0.context) }
-        self.wanted = pages
+        wanted = pages.filter { contexts.permitsWork($0.context) }
+        // Chrome browser construction pumps AppKit. A loader or page callback can reenter with
+        // newer demand before the first ChromePage has been installed in resources.
+        guard !reconcilingPages else { return }
+        reconcilingPages = true
+        defer { reconcilingPages = false }
+        while phase == .running {
+            let demand = wanted
+            reconcilePages(demand)
+            if wanted == demand { break }
+        }
+    }
+
+    private func reconcilePages(_ pages: [PageSpec]) {
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.
@@ -223,9 +236,14 @@ public final class CEFEngine: WebEngine {
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
             resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
             record(.created, page)
+            guard phase == .running, contexts.permitsWork(spec.context),
+                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else {
+                retire(page)
+                continue
+            }
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
         }
-        if audioLoop == nil {
+        if phase == .running, audioLoop == nil {
             audioLoop = Task { @MainActor [weak self] in
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -366,7 +384,7 @@ public final class CEFEngine: WebEngine {
         for page in live.values where page.context == request.context { retire(page) }
         Task { @MainActor in
             let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-                !self.resources.entries.values.contains { $0.context.context == request.context }
+                !self.reconcilingPages && !self.resources.entries.values.contains { $0.context.context == request.context }
                     && !self.outputs.contains(context: request.context)
                     && !self.transfers.contains(context: request.context)
                     && self.clearingContexts[request.context] == nil
@@ -503,7 +521,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            !self.reconcilingPages && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained) && self.clearingContexts.isEmpty
         }
         guard drained else {
@@ -604,7 +622,7 @@ public final class CEFEngine: WebEngine {
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
 
     private func retire(_ page: ChromePage) {
-        guard ledger.retire(page.id) == page.incarnation else { return }
+        guard ledger.isLive(page.incarnation), ledger.retire(page.id) == page.incarnation else { return }
         resources.unpresent(page.incarnation)
         page.park()
         outputs.sourceGone(page.incarnation)
