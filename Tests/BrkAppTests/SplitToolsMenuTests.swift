@@ -8,7 +8,7 @@ final class SplitToolsMenuTests: XCTestCase {
     func testEverySupplementalSplitActionHasARealMenuItemAndResolvedKey() throws {
         let menu = MainMenu.build(target: MenuTarget())
         let view = try XCTUnwrap(menu.items.first { $0.title == "View" }?.submenu)
-        let actions = ActionID.allCases.filter { $0.spec.row > 189 }
+        let actions = ActionID.allCases.filter { (190...199).contains($0.spec.row) }
         XCTAssertEqual(actions.count, 10)
         for action in actions {
             let item = try XCTUnwrap(view.items.first { $0.representedObject as? String == action.rawValue })
