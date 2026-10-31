@@ -52,6 +52,9 @@ enum TransferScenarios {
             try rows(app).contains { $0.id == first.id && $0.received > first.received }
         }
         guard case .pageObservations(let observations) = try app.send(.pageObservations) else { throw Check(description: "no observations") }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(observations).write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("T13-navigation-observations.json"))
+        app.note("T13 actual requested URL: \(observations[page]?.requestedURL?.absoluteString ?? "nil"); committed URL: \(observations[page]?.committedURL?.absoluteString ?? "nil"); document: \(String(describing: observations[page]?.document))")
         try expect(observations[page]?.requestedURL == pending, "old progress erased the newer navigation")
         try app.evaluate(page, "document.title='Provisional transfer title'")
         try app.waitUntil("provisional title") { try tab(page.item, in: app.view())?.title == "Provisional transfer title" }

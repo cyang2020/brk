@@ -292,6 +292,7 @@ final class SuggestWave2Tests: XCTestCase {
             .commandBar(.submit("work")),
             .space(.focus(SpaceID("work"))),
             .item(.move(ItemID("t0"), to: .space(SpaceID("work")))),
+            .page(.developer(.network)),
         ])
         XCTAssertEqual(suggest("focus on", bar).first?.title, "Focus on Work")
         XCTAssertFalse(suggest("home", bar).contains { $0.kind == .action }, "the current space is no result")
