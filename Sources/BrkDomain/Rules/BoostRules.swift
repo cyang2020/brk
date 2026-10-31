@@ -76,7 +76,7 @@ extension Work {
                 state.session.windows[window]?.boostEditor?.pickID = nil; return
             }
             guard let editor = state.session.windows[window]?.boostEditor, !editor.picking,
-                  let target = editor.target, state.validSiteTarget(target) else {
+                  let target = editor.target, state.validSiteTarget(target), state.siteTarget(in: window) == target else {
                 state.session.windows[window]?.boostEditor?.message = "Open the Boost on a committed website to Zap an element."
                 return
             }

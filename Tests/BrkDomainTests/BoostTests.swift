@@ -210,3 +210,22 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.draft.css, "")
     }
 }
+
+extension BoostTests {
+    func testExitCancelsZapBeforeClosingTheUnsavedEditor() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.zap))
+        let draft = try XCTUnwrap(d.view.boostEditor?.draft)
+        d.user(.app(.exit))
+        XCTAssertEqual(d.view.boostEditor?.picking, false)
+        XCTAssertNil(d.view.boostEditor?.pickID)
+        XCTAssertEqual(d.view.boostEditor?.draft, draft)
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.boostEditor)
+    }
+    func testZapRefusesAnEditorWhoseCapturedPageIsNoLongerVisible() throws {
+        let d = readyDriver(); d.user(.boost(.create))
+        _ = d.open("https://other.example/")
+        XCTAssertTrue(d.user(.boost(.zap)).effects.isEmpty)
+        XCTAssertEqual(d.view.boostEditor?.picking, false)
+    }
+}

@@ -349,7 +349,11 @@ extension Work {
             // The overlay rule has already closed an open overlay for this command (Exit does not keep it).
             if state.session.windows[window]?.recentCycle != nil { tabTools(.cancelRecent, in: window); return }
             guard !closedOverlay, var session = state.session.windows[window] else { return }
-            if session.overlay != nil { session.overlay = nil }
+            if let editor = session.boostEditor {
+                if editor.picking { session.boostEditor?.picking = false; session.boostEditor?.pickID = nil }
+                else { session.boostEditor = nil }
+            }
+            else if session.overlay != nil { session.overlay = nil }
             else if session.renaming != nil { session.renaming = nil }
             else if session.dialog != nil { session.dialog = nil }
             else if session.profileDialog != nil { session.profileDialog = nil }

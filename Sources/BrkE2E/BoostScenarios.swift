@@ -141,6 +141,10 @@ enum BoostScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
         try app.dispatch(.boost(.create)); try typeField(app, "name", "Zap banner")
         try app.click(.boostControl("zap"))
+        try app.waitUntil("first Zap attempt starts") { try app.view().boostEditor?.picking == true }
+        try app.press("escape")
+        try app.waitUntil("Escape cancels Zap and keeps the draft") { try app.view().boostEditor?.picking == false }
+        try app.click(.boostControl("zap"))
         try app.waitUntil("Zap picker hides editor") { try app.view().boostEditor?.picking == true }
         // DOM installation is asynchronous. A fixture mouseover confirms the listener before the native click.
         let card = try app.native().computed.contentArea
