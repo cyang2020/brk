@@ -18,7 +18,7 @@ enum SidebarPanelControl {
         func goTo(_ path: String, in panel: NSWindow) async throws {
             try press("cmd+shift+g", in: panel)
             try await Task.sleep(for: .milliseconds(300))
-            let destination = panel.attachedSheet ?? NSApp.keyWindow ?? panel
+            let destination = panel.attachedSheet ?? panel
             try press("cmd+a", in: destination)
             try events.type(path, in: destination)
             try press("return", in: destination)
