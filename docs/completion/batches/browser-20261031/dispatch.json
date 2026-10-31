@@ -1,0 +1,44 @@
+{
+  "checkpoint": "e408e364f1206577d46c0319a3a5ac366590b76d",
+  "provider": "codex",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "xhigh",
+  "tasks": [
+    {
+      "slice": "browser-basic",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-browser-basic-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-browser-basic-e408e36",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "tabs",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-tabs-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-tabs-e408e36",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "spaces",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-spaces-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-spaces-e408e36",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "splits",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-splits-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-splits-e408e36",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "sites-extensions",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-sites-extensions-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-sites-extensions-e408e36",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "import-sync",
+      "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-import-sync-e408e36",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3Abrk-browser-20261031-import-sync-e408e36",
+      "status_at_dispatch": "running"
+    }
+  ]
+}

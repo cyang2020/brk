@@ -7,7 +7,11 @@
       "A039"
     ],
     "task_id": "node:delegated-task:command%3Amcp%3Abd7a76e3-b834-4a75-bcd4-2eff00572203%3Adelegate-task%3A23034b31-f2f1-42bd-aac3-54bda0aef72b",
-    "status_at_frame": "running; preserve existing task"
+    "status_at_frame": "running; preserve existing task",
+    "implementation_commit": "c21611c61506781f2d2d9aba5d678c7d0b9673bc",
+    "parent_merge": "d88035c7f61fd3deab86428eca20b52edd723ad5",
+    "parent_layout_repair": "d75a70db7f5886922d4c426bce6d48064f40628b",
+    "acceptance": "pending parent native run and independent review"
   },
   "slices": [
     {
