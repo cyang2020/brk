@@ -6,7 +6,8 @@
 
 Waiting is dynamic: the command starts the moment the locks are free and it is this process's turn.
 Turns are first come, first served through tickets in /tmp/brk-lock-queue, so seven waiters cannot
-starve one. While waiting it prints, every 30 seconds, its position, who holds the locks and for how
+starve one; a waiter whose locks nobody ahead of it wants goes straight through, so a native run does
+not wait behind iteration builds that hold only the build lock. While waiting it prints, every 30 seconds, its position, who holds the locks and for how
 long. Tickets and holder records of dead processes are cleaned up by whoever notices them; the
 operating system releases a dead holder's flock by itself. There is no default give-up time;
 `--timeout` is an optional ceiling in seconds after which it exits 75 without running the command.
@@ -105,7 +106,15 @@ def acquire(paths, timeout, command):
     try:
         while True:
             queue = tickets()
-            my_turn = bool(queue) and queue[0][0] == ticket
+            # It is my turn when I am at the head, or when nobody ahead of me wants any lock I want: a native run
+            # need not wait behind iteration builds that hold only the build lock.
+            my_turn = False
+            for path, data in queue:
+                if path == ticket:
+                    my_turn = True
+                    break
+                if set(data.get('locks', [])) & set(paths):
+                    break
             if not any(p == ticket for p, _ in queue):  # someone cleaned us up; re-register at the back
                 ticket.write_text(json.dumps(dict(pid=me, since=time.time(), locks=paths, command=command, cwd=os.getcwd())))
             if my_turn:
