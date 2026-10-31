@@ -198,5 +198,19 @@
       "ai-features opus",
       "sidebar-tabs fable"
     ]
+  },
+  "wave1_result": {
+    "integrated_commit_for_ledger": "1c6bc97e2981677e517a192d169338091a9f3f8f",
+    "final_gate": "verify/completion/batch2-parent/integration-final-2/",
+    "ledger": {
+      "implemented": 71,
+      "verified": 33,
+      "partial": 31,
+      "blocked": 2,
+      "missing": 6,
+      "excluded": 3,
+      "deferred": 2
+    },
+    "report": "verify/completion/batch2-parent/REPORT.md"
   }
 }
