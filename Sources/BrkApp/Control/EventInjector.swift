@@ -94,7 +94,17 @@ final class EventInjector {
     /// page), so the event goes straight to the window and the menu never sees it. With a native view focused, a
     /// key-down is offered as a key equivalent to the window's views, then to the menu, then to the first responder.
     private func deliver(_ event: NSEvent, to window: NSWindow) throws {
-        let current = Self.dequeue(event)
+        var current = Self.dequeue(event)
+        var owner: NSWindow? = window
+        while let candidate = owner, !(candidate is NSSavePanel) { owner = candidate.sheetParent }
+        if owner is NSSavePanel, current.type == .keyDown || current.type == .keyUp {
+            // Give remote file views their host window ID; CGEvent-backed events have no window.
+            guard let targeted = NSEvent.keyEvent(with: current.type, location: .zero, modifierFlags: current.modifierFlags,
+                timestamp: current.timestamp, windowNumber: window.windowNumber, context: nil,
+                characters: current.characters ?? "", charactersIgnoringModifiers: current.charactersIgnoringModifiers ?? "",
+                isARepeat: current.isARepeat, keyCode: current.keyCode) else { throw InjectionError("native file-panel event") }
+            current = targeted
+        }
         if NSApp.keyWindow === window {
             NSApp.sendEvent(current)
             return

@@ -11,12 +11,15 @@ final class ProtocolTests: XCTestCase {
     /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
+        case sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
     }
 
     static func tag(of op: ControlOp) -> Tag {
         switch op {
+        case .sidebarData: .sidebarData
+        case .sidebarPanel: .sidebarPanel
         case .hello: .hello
         case .view: .view
         case .activate: .activate
@@ -50,6 +53,8 @@ final class ProtocolTests: XCTestCase {
     static func samples(_ tag: Tag) -> [ControlOp] {
         let page = PageID(window: WindowID("w"), item: ItemID("t3"))
         switch tag {
+        case .sidebarData: return [.sidebarData]
+        case .sidebarPanel: return [.sidebarPanel(window: nil, action: .inspect), .sidebarPanel(window: WindowID("w"), action: .save(directory: "/tmp/owned", filename: "tabs.html")), .sidebarPanel(window: nil, action: .open(path: "/tmp/selected.html"))]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
         case .activate: return [.activate(window: WindowID("w"))]

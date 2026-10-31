@@ -571,7 +571,8 @@ final class RowView: HoverView {
 
     override func rightMouseDown(with event: NSEvent) {
         guard let row else { return }
-        dispatch(.sidebar(.popupMenu(.item(row.id), at: rootPoint(fromWindow: event.locationInWindow))))
+        let targets = closeTargets?(row.id) ?? [row.id]
+        dispatch(.sidebar(.popupMenu(targets.count > 1 ? .selection(targets) : .item(row.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 
     @objc private func toggleMute() { if let row { dispatch(.tabTools(.mute(.item(row.id)))) } }

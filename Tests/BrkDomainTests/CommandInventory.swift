@@ -75,6 +75,7 @@ enum CommandInventory {
     static func area(_ command: Command) -> String {
         switch command {
         case .find: "find"
+        case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
         case .archive: "archive"
         case .tab: "tab"
@@ -107,6 +108,16 @@ enum CommandInventory {
             case .captureScope: "captureScope"
             case .replaceCurrent: "replaceCurrent"
             case .replaceAll: "replaceAll"
+            }
+        case .sidebarData(let c):
+            switch c {
+            case .welcome: "welcome"
+            case .tour: "tour"
+            case .importFile: "importFile"
+            case .syncSettings: "syncSettings"
+            case .syncNow: "syncNow"
+            case .disconnect: "disconnect"
+            case .completeOnboarding: "completeOnboarding"
             }
         case .commandBar(let c):
             switch c {
@@ -253,6 +264,7 @@ enum CommandInventory {
 
     static func name(_ event: SystemEvent) -> String {
         switch event {
+        case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {
             case .browserCreated: "page.browserCreated"

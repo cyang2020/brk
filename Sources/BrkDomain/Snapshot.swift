@@ -8,6 +8,7 @@ import Foundation
 // Sendable, Equatable (views skip unchanged slices), Codable (the socket).
 
 public struct AppSnapshot: Sendable, Equatable, Codable {
+    public var sidebarData: SidebarDataSnapshot
     /// Counts state changes. Equal revs come from the same state, but `now` moves on its own, so never use `rev`
     /// to skip rendering; use slice equality.
     public var rev: Int
@@ -382,6 +383,7 @@ public enum FocusTarget: Sendable, Equatable, Codable {
 /// settings; `pane` is the open pane (nil: window closed). `shortcuts` is the resolved table (defaults plus
 /// overrides) with Arc's three states. F1 owns the projection; F2 (profiles), F3 (links), F4 (shortcuts) read it.
 public struct SettingsSnapshot: Sendable, Equatable, Codable {
+    public var sidebarData: SidebarDataSnapshot? = nil
     public var pane: SettingsPane?
     public var general: GeneralSettings
     /// In `Doc.profiles` order: default first, then by name.

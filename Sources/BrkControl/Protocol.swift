@@ -21,6 +21,9 @@ public struct ControlRequest: Codable, Sendable, Equatable {
 }
 
 public enum ControlOp: Codable, Sendable, Equatable {
+    case sidebarData
+    /// Opt-in native verification only. Operates on the initiating browser's real attached sheet controls.
+    case sidebarPanel(window: WindowID?, action: SidebarPanelControlAction)
     /// Process facts: pid, windows, engine kind, data directory. The runner's readiness probe.
     case hello
     /// The window's `WindowSnapshot`, exactly what its views rendered last.
@@ -97,6 +100,7 @@ public struct ControlReply: Codable, Sendable, Equatable {
 }
 
 public enum ControlResult: Codable, Sendable, Equatable {
+    case sidebarData(SidebarDataSnapshot)
     case ok
     case hello(Hello)
     case view(WindowSnapshot)
@@ -111,6 +115,16 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case pageObservations([PageID: PageObservation])
     case settings(SettingsSnapshot)
     case failed(String)
+}
+
+public enum SidebarPanelControlAction: Codable, Sendable, Equatable {
+    case capture(path: String)
+    case inspect
+    case button(String)
+    case text(identifier: String, value: String)
+    case select(identifier: String, index: Int)
+    case save(directory: String, filename: String)
+    case open(path: String)
 }
 
 public struct Hello: Codable, Sendable, Equatable {

@@ -142,6 +142,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     /// `page-log.txt` (every created, closeRequested and closed entry, for the e2e report) and, on a timeout,
     /// `shutdown-incomplete.log` naming each unclosed page. The caller turns the outcome into the exit status.
     static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
+        await store?.stopSidebarData()
         store?.flush()
         let outcome = await engine.shutdown()
         store?.flush()

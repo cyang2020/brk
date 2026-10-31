@@ -41,6 +41,16 @@ public final class AppStore {
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
     let destinations = DownloadSheets()
+    private let syncIO = SidebarSyncIO()
+    private var syncTask: Task<Void, Never>?
+    private var syncTaskID: UUID?
+    private var sidebarShuttingDown = false
+    private let exports = ExportSheets()
+    private lazy var sidebarPanels = SidebarDataPanels(send: { [weak self] event in
+        self?.dispatch(.system(.sidebarData(event)))
+    }, command: { [weak self] window, command in
+        self?.dispatch(.user(window, command))
+    }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -59,6 +69,9 @@ public final class AppStore {
         publish(docChanged: false)
         dispatching = false
         drain()
+        if let window = snapshot.windows.keys.sorted().first {
+            dispatch(.user(window, .sidebarData(snapshot.sidebarData.needsOnboarding ? .welcome : .syncNow)))
+        }
     }
 
     /// Every user command, system event and page event enters here.
@@ -99,6 +112,16 @@ public final class AppStore {
         }
     }
 
+    public func stopSidebarData() async {
+        sidebarShuttingDown = true
+        let pending = syncTask
+        pending?.cancel()
+        await sidebarPanels.shutdown()
+        exports.shutdown()
+        await pending?.value
+        syncTask = nil; syncTaskID = nil
+    }
+
     /// The page's owner, if its current snapshot shows `page`: in one of its panes, or in its Peek card (F3), so a key from
     /// the peeked page (Esc, Cmd+W) routes to that window instead of being passed to the page.
     public func window(showing page: PageID) -> WindowID? {
@@ -125,11 +148,16 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> KeyHandling {
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
+        var checkpointed = false
+        if t.docChanged, let failure = t.checkpointFailure {
+            do { try stateFile.writeNow(StateCodec.encode(t.state)); checkpointed = true }
+            catch { queue.append(.system(failure)); return KeyHandling(handled: false, shortcut: false) }
+        }
         // Revocation must happen before reconcile sees the new demand, including synchronous engine callbacks.
         for effect in t.effects { if case .disposeContext(let request) = effect { engine.disposeContext(request) } }
         if t.changed {
             state = t.state
-            publish(docChanged: t.docChanged)
+            publish(docChanged: t.docChanged && !checkpointed)
         }
         run(t.effects)
         return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut)
@@ -144,6 +172,8 @@ public final class AppStore {
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             destinations.ownerGone(id)
+            sidebarPanels.ownerGone(id)
+            exports.ownerGone(id)
             if let owner = windows[id]?.window, let sheet = owner.attachedSheet {
                 owner.endSheet(sheet, returnCode: .cancel)
                 sheet.orderOut(nil)
@@ -166,6 +196,7 @@ public final class AppStore {
         }
         renderWindows()
         renderSettings()
+        if !snapshot.sidebarData.connected { syncTask?.cancel(); syncTask = nil; syncTaskID = nil }
     }
 
     /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens).
@@ -222,7 +253,11 @@ public final class AppStore {
                 }
             case .app(let effect):
                 switch effect {
-                case .quit: Quit.request()
+                case .quit:
+                    // AppKit can defer termination while a save sheet remains attached.
+                    sidebarPanels.cancelForQuit()
+                    exports.cancelAll()
+                    Quit.request()
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
@@ -238,8 +273,12 @@ public final class AppStore {
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 menu.popUp(positioning: nil, at: at, in: controller.root)
                 popupTarget.clear()
-            case .export(let document):
-                ShareExport.run(document, in: windowController(nil)?.window)
+            case .export(let document, let owner):
+                guard let window = windows[owner]?.window else { continue }
+                exports.present(document, owner: owner, in: window, reply: { [weak self] message in
+                    self?.dispatch(.system(.sidebarData(.exportFinished(message))))
+                })
+            case .sidebarData(let effect): runSidebarData(effect)
             case .ai(let id, let task, let choice):
                 let detected = snapshot.settings.max.detected
                 Task { @MainActor [weak self] in
@@ -252,6 +291,45 @@ public final class AppStore {
             case .cancelDownload(let id): engine.cancelDownload(id)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            }
+        }
+    }
+
+    private func runSidebarData(_ effect: SidebarDataEffect) {
+        guard !sidebarShuttingDown else { return }
+        switch effect {
+        case .panel(let owner, let panel):
+            guard let window = windows[owner]?.window else { return }
+            sidebarPanels.show(panel, owner: owner, window: window, status: snapshot.sidebarData)
+        case .tour(let owner):
+            do {
+                let url = try BrkTour.write(in: stateFile.url.deletingLastPathComponent())
+                dispatch(.user(owner, .commandBar(.open(.newTab))))
+                dispatch(.user(owner, .commandBar(.submit(url.absoluteString))))
+            } catch { dispatch(.system(.sidebarData(.failed(epoch: nil, "Could not write the local Brk tour.")))) }
+        case .exchange(let epoch, let folder, let replica, let revision, let document):
+            guard syncTask == nil else { return }
+            // Publishing is permitted only after this exact sidebar edit + replica checkpoint is durable.
+            guard flush() else { dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync paused because local state could not be saved.")))); return }
+            let ticket = UUID()
+            syncTaskID = ticket
+            syncTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                var succeeded = false
+                do {
+                    let received = try await self.syncIO.exchange(folder: URL(fileURLWithPath: folder, isDirectory: true), replica: replica, document: document)
+                    guard !Task.isCancelled else { return }
+                    self.dispatch(.system(.sidebarData(.syncRead(epoch: epoch, received))))
+                    self.dispatch(.system(.sidebarData(.syncWritten(epoch: epoch, revision: revision, published: document))))
+                    succeeded = true
+                } catch is CancellationError {} catch {
+                    self.dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync failed. Check folder access and replica files, then retry. \(error.localizedDescription)"))))
+                }
+                guard self.syncTaskID == ticket else { return }
+                self.syncTask = nil; self.syncTaskID = nil
+                if succeeded, self.state.docNeedsSidebarPublication {
+                    self.dispatch(.system(.sidebarData(.syncPoll)))
+                }
             }
         }
     }

@@ -225,7 +225,7 @@ final class SuggestSpecTests: XCTestCase {
             "open:Search pa",
             "domain:paypal.com",
             "history:https://ha.test/",
-            "action:Find…:⌘F", // Find in Page now participates in the action index
+            "action:Import from Another Browser…:-", // Passwords is a word start; action follows the sources above
         ])
     }
 

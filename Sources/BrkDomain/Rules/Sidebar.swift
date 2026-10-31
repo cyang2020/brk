@@ -209,6 +209,9 @@ extension Work {
             .action(title: title, command: command, enabled: enabled)
         }
         switch request {
+        case .selection(let ids):
+            let publicIDs = ids.filter { state.locate($0) == .global }
+            return MenuModel(entries: publicIDs.isEmpty ? [] : [entry("Export Selected Tabs…", .app(.export(.items(publicIDs))))])
         case .plusButton:
             return MenuModel(entries: [
                 entry("New Tab", .commandBar(.open(.newTab))),
@@ -225,6 +228,7 @@ extension Work {
                 entry("Reset All Pinned Tabs", .tabTools(.resetPinned), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
                 entry("Collapse All Folders", .tabTools(.folders(expanded: false)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
                 entry("Expand All Folders", .tabTools(.folders(expanded: true)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
+                entry("Export Space…", .app(.export(.space(.space(id))))),
                 entry("Delete Space", .space(.delete(id)), enabled: state.doc.spaceOrder.count > 1),
             ])
         case .item(let id):
@@ -241,6 +245,7 @@ extension Work {
                     entry("Change Icon…", .tabTools(.chooseIcon(id))),
                     entry(f.isGroup ? "Archive Group" : "Archive Folder", .tabTools(.bulk(.items([id]), .archive))),
                     entry("Duplicate Folder", .tabTools(.bulk(.items([id]), .duplicate(nil)))),
+                    entry("Export Folder…", .app(.export(.items([id]))), enabled: scope == .global),
                     entry("Delete Folder", .item(.deleteFolder(id))),
                 ])
             case .tab, .split:
@@ -253,7 +258,8 @@ extension Work {
                 }
                 let pinTarget: ItemID
                 if case .split(let s) = node.body { pinTarget = s.panes.ids[0] } else { pinTarget = id }
-                var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))), enabled: role.kind != .scratch),
+                var entries = [entry("Export…", .app(.export(.items([id]))), enabled: scope == .global),
+                    entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))), enabled: role.kind != .scratch),
                     entry("Change Icon…", .tabTools(.chooseIcon(id))),
                     entry("Duplicate", .tabTools(.bulk(.items([unit]), .duplicate(nil)))),
                     entry("Archive Item", .tabTools(.bulk(.items([unit]), .archive))),
@@ -314,7 +320,7 @@ extension Work {
         case .export(let subject):
             // Share-by-link replaced by a file (user decision): the document is built here from state, so the
             // writer (BrkApp/ShareExport.swift) never reads the tree.
-            if let document = exportDocument(for: subject, in: window) { effects.append(.export(document)) }
+            if let document = exportDocument(for: subject, in: window) { effects.append(.export(document, owner: window)) }
         case .exit:
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,
             // else cancel a rename or dialog, else leave full screen (the window decides whether it is in one).

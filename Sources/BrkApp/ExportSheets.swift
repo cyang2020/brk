@@ -1,0 +1,71 @@
+import AppKit
+import BrkBase
+import BrkDomain
+
+/// File-export resources use the same remove-before-callback and endSheet ordering as DownloadSheets.
+@MainActor
+final class ExportSheets {
+    private final class Pending {
+        weak var window: NSWindow?
+        var sheet: NSWindow?
+        var reply: (@MainActor (String) -> Void)?
+        init(window: NSWindow, reply: @escaping @MainActor (String) -> Void) { self.window = window; self.reply = reply }
+    }
+    private var pending: [WindowID: Pending] = [:]
+    private var stopped = false
+
+    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (String) -> Void) {
+        guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
+            reply("Export unavailable: finish the open sheet first."); return
+        }
+        let entry = Pending(window: window, reply: reply)
+        pending[owner] = entry
+        let panel = ShareExport.run(document, in: window, isValid: { [weak self, weak entry] in
+            guard let self, let entry else { return false }
+            return !self.stopped && self.pending[owner] === entry && entry.window?.isVisible == true
+        }, completion: { [weak self, weak entry] result in
+            guard let self, let entry, self.pending[owner] === entry else { return }
+            entry.sheet = nil
+            switch result {
+            case .saved(let url): self.finish(owner, entry, message: "Exported \(url.lastPathComponent).")
+            case .cancelled: self.finish(owner, entry, message: "Export cancelled. No file written.")
+            case .failed(let reason):
+                let reply = entry.reply; entry.reply = nil
+                reply?("Export failed: \(reason)")
+                guard !self.stopped, self.pending[owner] === entry, let window = entry.window, window.isVisible else { return }
+                let alert = NSAlert(); alert.messageText = "Export failed"; alert.informativeText = reason
+                entry.sheet = alert.window
+                alert.beginSheetModal(for: window) { [weak self, weak entry] _ in
+                    guard let self, let entry, self.pending[owner] === entry else { return }
+                    self.finish(owner, entry, message: nil)
+                }
+            }
+        })
+        if pending[owner] === entry, entry.sheet == nil { entry.sheet = panel }
+    }
+
+    func ownerGone(_ owner: WindowID) {
+        if let entry = pending[owner] { finish(owner, entry, message: "Export cancelled. No file written.") }
+    }
+
+    func shutdown() {
+        stopped = true
+        cancelAll()
+    }
+
+    func cancelAll() {
+        for owner in Array(pending.keys) { ownerGone(owner) }
+    }
+
+    private func finish(_ owner: WindowID, _ entry: Pending, message: String?) {
+        guard pending[owner] === entry else { return }
+        pending[owner] = nil
+        let reply = entry.reply; entry.reply = nil
+        if let sheet = entry.sheet {
+            entry.sheet = nil
+            sheet.sheetParent?.endSheet(sheet, returnCode: .cancel)
+            sheet.orderOut(nil)
+        }
+        if let message { reply?(message) }
+    }
+}

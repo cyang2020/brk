@@ -9,6 +9,7 @@ import Foundation
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
     case find(FindRequest)
+    case sidebarData(SidebarDataEffect)
     case page(PageID, PageAction)
     case iconPicker(WindowID, ItemID)
     case siteRequest(SiteRequest)
@@ -18,7 +19,7 @@ public enum Effect: Hashable, Sendable {
     /// A native popup menu built from state; each entry carries the command it dispatches when chosen.
     case popupMenu(WindowID, MenuModel, at: CGPoint)
     /// Share-by-link replaced by a file: BrkApp shows a save panel (JSON or HTML) and writes `ExportCodec`'s bytes.
-    case export(ExportDocument)
+    case export(ExportDocument, owner: WindowID)
     /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
     /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)

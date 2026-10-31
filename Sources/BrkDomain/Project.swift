@@ -31,7 +31,7 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
     for id in state.doc.windows.keys {
         if let window = projectWindow(id, state, ctx) { windows[id] = window }
     }
-    return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
+    return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
                            (page, PageObservation(browser: state.session.live[page]?.browser,
                                                   document: state.session.live[page]?.document ?? .unavailable,
@@ -89,6 +89,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
     case .auto: state.session.detectedAI.contains(.claude) ? .claude : (state.session.detectedAI.contains(.codex) ? .codex : nil)
     }
     return SettingsSnapshot(
+        sidebarData: state.sidebarDataSnapshot,
         pane: state.session.settingsPane, general: doc.settings.general,
         profiles: profiles.map { ProfileSettingsRow(profile: row($0), settings: state.profileSettings($0.id)) },
         deletingProfiles: doc.deletingProfiles.keys.sorted().map { ProfileDeletionRow(profile: $0, name: doc.deletingProfiles[$0]!.name, failure: doc.deletingProfiles[$0]!.failure) },
@@ -346,7 +347,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
-        enabled.subtract([.newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
+        enabled.subtract([.importFromBrowser, .gettingStarted, .newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }

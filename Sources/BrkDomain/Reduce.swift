@@ -24,6 +24,8 @@ public struct Transition: Sendable {
     /// For `Input.key`: the key was an app shortcut and was consumed. CEF's key handler returns this.
     public let keyShortcut: Bool
     public let keyHandled: Bool
+    /// This transition must reach the local atomic checkpoint before publication. Failure leaves its state unapplied.
+    public var checkpointFailure: SystemEvent? = nil
 }
 
 /// The only writer of application state. Pure: same inputs, same output; no clock reads, no I/O, no traps for any
@@ -54,7 +56,11 @@ public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transit
     case .system(let event):
         work.observe(event)
     }
-    return work.finish(from: state)
+    var transition = work.finish(from: state)
+    if case .system(.sidebarData(.imported)) = input {
+        transition.checkpointFailure = .sidebarData(.failed(epoch: nil, "Import could not be saved. No bookmarks or history were changed; the source file was kept."))
+    }
+    return transition
 }
 
 extension Transition {
@@ -110,6 +116,7 @@ struct Work {
         begin(window: window)
         switch command {
         case .find(let intent): find(intent, in: window)
+        case .sidebarData(let command): sidebarData(command, in: window)
         case .commandBar(let c): commandBar(c, in: window)
         case .archive(let c): archive(c, in: window)
         case .tab(let c):
@@ -137,10 +144,11 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
+        case .sidebarData(let event): sidebarDataEvent(event)
         case .page(let page, let e): pageEvent(e, for: page)
         case .siteResult(let id, let outcome): siteResult(id, outcome)
         case .download(let update): downloadEvent(update)
@@ -157,6 +165,7 @@ struct Work {
             for window in state.session.windows.keys {
                 if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now { state.session.windows[window]?.toast = nil }
             }
+            requestSidebarSync()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
@@ -216,6 +225,8 @@ struct Work {
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
         reconcileFind(from: input)
+        captureSidebarChanges()
+        if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
             if !walking && !suppressActivityStamp { stamp(before.symmetricDifference(state.onScreenTabs())) }

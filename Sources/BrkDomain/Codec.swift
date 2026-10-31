@@ -172,6 +172,7 @@ public enum StateCodec {
             session.windows[window]!.overlayOpens = 1
         }
         var state = AppState(doc: doc, session: session)
+        state.doc.sidebarData.onboardingCompleted = seed.startURL != nil
         normalize(&state)
         return state
     }
@@ -206,6 +207,7 @@ struct StoredDocV1: Decodable {
 /// The v3 stored shape. New window fields are optional when decoding v1/v2. Every field of `Doc` appears here, and `init(_ doc:)` / `validated(ctx:)` construct fields
 /// explicitly, so a field added to `Doc` but not here is a compile error in one of the two.
 struct StoredDocV3: Codable {
+    var sidebarData: SidebarDataSaved?
     var items: [ItemID: StoredItem]
     var spaces: [SpaceID: StoredSpace]
     var spaceOrder: [SpaceID]
@@ -313,6 +315,7 @@ struct StoredDocV3: Codable {
     /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
     /// window's items live in `Session.scratch`, so saving its `WindowDoc` would restore an empty window.
     init(_ doc: Doc) {
+        sidebarData = doc.sidebarData
         items = doc.tree.items.mapValues { item in
             var stored = StoredItem(kind: item.kind, parent: item.parent, children: item.children, createdAt: item.createdAt,
                                     tab: nil, folder: nil, split: nil, section: nil)
@@ -499,7 +502,22 @@ struct StoredDocV3: Codable {
                                        sidebarWidth: Metrics.sidebar.defaultWidth.value)
         }
 
+        var restoredSidebarData = sidebarData ?? SidebarDataSaved()
+        if var sync = restoredSidebarData.sync {
+            do {
+                try SidebarDataCodec.validate(sync.document)
+                guard profiles.contains(sync.profile), !sync.replica.isEmpty,
+                      sync.replica.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }),
+                      sync.folder.map({ $0.hasPrefix("/") }) ?? true else { throw SidebarDataError.invalid("Invalid local sync mapping.") }
+                sync.counter = max(sync.counter, sync.document.records.values.map(\.stamp.counter).max() ?? 0)
+                restoredSidebarData.sync = sync
+            } catch {
+                restoredSidebarData.sync = nil
+                repairs.append("Disconnected invalid sidebar sync metadata; local sidebar kept")
+            }
+        }
         var doc = Doc(
+            sidebarData: restoredSidebarData,
             tree: tree,
             spaces: docSpaces,
             spaceOrder: order,
@@ -609,5 +627,56 @@ public enum SiteCodec {
         struct Pull: Decodable { let title: String; let html_url: URL }
         guard data.count <= 2_000_000 else { throw CocoaError(.fileReadTooLarge) }
         return try JSONDecoder().decode([Pull].self, from: data).prefix(100).map { PullRequestLink(title: $0.title, url: $0.html_url) }
+    }
+}
+/// Separate, versioned sidebar protocol. Never calls StateCodec or encodes AppState.
+public enum SidebarDataCodec {
+    static let recordLimit = 10_000
+    static let revisionLimit = UInt64.max - 10_000
+    public static func decodeExport(_ data: Data) throws -> ExportDocument {
+        try JSONDecoder().decode(ExportDocument.self, from: data)
+    }
+
+    public static func encodeSync(_ document: SidebarSyncDocument) throws -> Data {
+        try validate(document)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(document)
+    }
+
+    public static func decodeSync(_ data: Data) throws -> SidebarSyncDocument {
+        guard data.count <= 20_000_000 else { throw SidebarDataError.invalid("Sync file exceeds 20 MB.") }
+        let document = try JSONDecoder().decode(SidebarSyncDocument.self, from: data)
+        try validate(document)
+        return document
+    }
+
+    static func validate(_ document: SidebarSyncDocument) throws {
+        func identifier(_ string: String) -> Bool {
+            !string.isEmpty && string.utf8.count <= 160 && string.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }
+        }
+        guard document.version == 1, document.records.count <= recordLimit else { throw SidebarDataError.invalid("Unsupported sync version or item count.") }
+        for (id, record) in document.records {
+            guard identifier(id), identifier(record.stamp.replica), record.stamp.counter < revisionLimit else {
+                throw SidebarDataError.invalid("Invalid sync identity or revision.")
+            }
+            guard id == "favorites" || id.hasPrefix("i-") || id.hasPrefix("s-") else { throw SidebarDataError.invalid("Invalid sync entity key.") }
+            guard let value = record.value else { continue }
+            guard value.parent.map(identifier) ?? true, (0...10_000).contains(value.order) else { throw SidebarDataError.invalid("Invalid sync placement.") }
+            switch value.payload {
+            case .tab(let title, let url, _):
+                guard id.hasPrefix("i-"), title.count <= 500, SidebarSync.safeURL(url) else { throw SidebarDataError.invalid("Sync tabs require a public HTTP(S) URL without credentials, query or fragment.") }
+            case .folder(let title, _):
+                guard id.hasPrefix("i-"), title.count <= 500 else { throw SidebarDataError.invalid("Invalid sync folder key or name.") }
+            case .space(let title, _, let theme):
+                guard id.hasPrefix("s-"), value.parent == nil, title.count <= 500, theme == clamped(theme), theme.colors.allSatisfy({ $0.red.isFinite && $0.green.isFinite && $0.blue.isFinite && $0.alpha.isFinite }) else {
+                    throw SidebarDataError.invalid("Invalid sync Space theme or name.")
+                }
+            case .root(let space):
+                guard value.parent == nil, space.map({ identifier($0) && $0.hasPrefix("s-") && id.hasPrefix("i-") }) ?? (id == "favorites") else { throw SidebarDataError.invalid("Invalid sync Space key.") }
+            case .split:
+                guard id.hasPrefix("i-") else { throw SidebarDataError.invalid("Invalid sync split key.") }
+            }
+        }
     }
 }
