@@ -61,3 +61,9 @@ The [architecture overview](grounding/overview.md) combines the grounding report
 The first implementation is merged, followed by six parent review corrections. The [parent receipt](../../verify/completion/identity-parent/REPORT.md) records 484 tests with three inherited skips and zero failures, and 52 passing native scenarios. A051 now has verified unit/native acceptance; session restore remains partial because the restore-off setting is not wired. These results do not establish full feature or visual completion.
 
 The next [transfer contract](core-design/transfers.md) and [typed boundary sketch](core-design/Transfers.swift) resolve C2-C3 for actual download cancellation, original browser/context ownership, pending native decisions and disposal. They preserve separate C4-C6 gates for find, output and broad data removal. The implementation must prove real transport/file outcomes and private revoke-before-drain, not only a changed ledger label.
+
+## Transfer integration and page find
+
+The C2-C3 implementation and parent corrections are merged. The [parent receipt](../../verify/completion/transfers-parent/REPORT.md) records 508 tests with three skips, nine raw ownership tests, and 67 native passes. A048 is verified against that contract and its disclosed limits, including explicit failure/recovery for mandatory native browser destruction. Directory deletion remains scheduled for next launch.
+
+The next [Find contract](core-design/find.md) and [typed sketch](core-design/Find.swift) resolve C4: native page find, generated-ID correlation, scoped selection, Jump and supported editable replacement with real undo/input tests. C5 output and C6 broad data removal remain separate, followed by the rest of the full inventory.

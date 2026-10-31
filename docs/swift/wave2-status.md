@@ -2,19 +2,19 @@
 
 The four interrupted workers continued with Codex. Their Settings, Windows, Command bar, and Library changes are merged with the completed Profiles implementation. The signed application is `dist/Brk.app`.
 
-Updated on 2026-10-31 after parent integration of the privacy, native-focus, History storage, and window-owned page fixes. All 52 current native scenarios pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
+Updated on 2026-10-31 after parent integration of the privacy, native-focus, History storage, and window-owned page fixes. All 67 current native scenarios pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
 
 ## Verification
 
-- `scripts/build.sh` passes: 484 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/completion/identity-parent/build-fixed.log).
-- The parent independently ran the merged CEF application through all 52 scenarios: 52 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/completion/identity-parent/native-fixed/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
+- `scripts/build.sh` passes: 508 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/completion/transfers-parent/build-final.log).
+- The parent independently ran the merged CEF application through all 67 scenarios: 67 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/completion/transfers-parent/native-final/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
 - The three skipped tests cover two later Max features and the native file-export save panel. They are not counted as verified behavior.
-- The [source hashes](../../verify/completion/identity-parent/fixed-manifest.json) and [application hash](../../verify/completion/identity-parent/fixed-manifest.json) identify the current tested files.
+- The [source hashes](../../verify/completion/transfers-parent/final-manifest.json) and [application hash](../../verify/completion/transfers-parent/final-manifest.json) identify the current tested files.
 
 The native run used this command after the successful build:
 
 ```sh
-BRK_E2E_DATA_ROOT=/tmp/brk-identity-parent-data SKIP_BUILD=1 scripts/e2e.sh --out verify/completion/identity-parent/native-fixed
+python3 verify/completion/transfers-integration/run-native.py verify/completion/transfers-parent/native-final
 ```
 
 ## Implemented behavior
@@ -45,7 +45,7 @@ The [parent identity review and corrections](../../verify/completion/identity-pa
 
 ## Remaining work and limits
 
-- Download Cancel updates the ledger but does not stop the network transfer. Downloads therefore remain partially implemented.
+- Download Cancel now controls the actual transfer. Accepted public downloads retain their browser across Brk tab/window close and reassignment. Mandatory native browser destruction reports a terminal failure/recovery result. The [parent transfer receipt](../../verify/completion/transfers-parent/REPORT.md) records the tested limits, original review findings and corrections.
 - Media, Easels and Notes, Boosts, and Spaces have Library placeholders. Their underlying features, extension management, import, and other later-wave features remain in the [feature inventory](feature-ledger.md).
 - The native export save panel still needs a runtime check. AI integration uses local Claude or Codex command-line tools; the later Max tasks remain unfinished.
 - No authenticated Arc reference captures were available for this integration. The native captures establish Brk behavior, not pixel parity. Little Arc and Peek still include explicitly estimated dimensions.

@@ -2076,9 +2076,9 @@
       "arc_evidence": "row 171; Library downloads page; Profiles \"Download location\"; `StorableDownloadMetadata`",
       "description": "Downloads list, location setting, download menu",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Downloads use profile location/ask settings and collision-safe names, show truthful progress and terminal states, open/reveal/remove records, and really cancel transport; ownership survives or explicitly terminates after source close/context change, while private metadata stays ephemeral and quit stays clean.",
-      "owner": "platform-grounding",
+      "owner": "parent-core-integration",
       "required_checks": [
         "unit",
         "native",
@@ -2140,15 +2140,37 @@
           "artifact": "verify/completion/platform-grounding/probe-results.json",
           "scope": "Reproduces zero cancellation effects, ignored completion after source close, and ignored completion after profile reassignment.",
           "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "scripts/build.sh",
+          "artifact": "verify/completion/transfers-parent/build-final.log",
+          "scope": "508 tests with three inherited skips and zero failures, including production transfer, navigation/History and callback-reentry checks."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test --package-path Vendor/CefSwift --filter 'DownloadOwnershipTests|ReviewContextMenuTests|ControlReentryTests|ContextMenuOwnershipTests'",
+          "artifact": "verify/completion/transfers-parent/ownership-final.log",
+          "scope": "Nine raw reference/bridge ownership tests."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/transfers-integration/run-native.py verify/completion/transfers-parent/native-final",
+          "artifact": "verify/completion/transfers-parent/native-final/REPORT.md",
+          "scope": "67 cases; T1-T15 cover transport/file outcomes, POST preservation, context/owner loss, private epochs, native panels/menu, navigation overlap and mandatory closure. Exact completed receipts are retained; not a separate blob or physical-input parity claim."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "python3 verify/completion/transfers-integration/run-native.py verify/completion/transfers-parent/visual --only T1; parent inspection of both native PNG captures",
+          "artifact": "verify/completion/transfers-parent/visual/REVIEW.md",
+          "scope": "Brk progress/cancelled/completed states, filename/size and controls inspected for readability and overlap. No authenticated Arc pixel-parity claim."
         }
       ],
-      "remaining": [
-        "Retain and release cef_download_item_callback_t through a defined owner; implement cancel and preserve interrupted vs cancelled state.",
-        "Freeze originating context/incarnation and avoid live-page event filtering for valid operation updates.",
-        "Probe transfer and callback behavior after browser close and context disposal before selecting lifetime policy.",
-        "Make pending save decisions stale-safe; clean destination reservations and partial files on every terminal/aborted path.",
-        "Keep default Cmd+Shift+J app priority, private-navigation/download tests and active/immediate quit checks."
-      ],
+      "remaining": [],
       "implementation": [
         "Sources/BrkBase/Page.swift",
         "Sources/BrkEngine/WebEngine.swift",
@@ -2159,13 +2181,23 @@
         "Sources/BrkDomain/Rules/Library.swift",
         "Sources/BrkLibrary/LibraryPages.swift",
         "Vendor/CefSwift/Sources/CefKit/BrowserClient.swift",
-        "Vendor/CefSwift/Sources/CefKit/CefDownloads.swift"
+        "Vendor/CefSwift/Sources/CefKit/CefDownloads.swift",
+        "Sources/BrkBase/Transfers.swift",
+        "Sources/BrkCEF/Transfers.swift",
+        "Sources/BrkCEF/TransferFiles.swift",
+        "Sources/BrkEngine/BrowserResources.swift",
+        "Sources/BrkEngine/ContextLifetimes.swift",
+        "Sources/BrkApp/DownloadSheets.swift"
       ],
-      "current_behavior": "Real download files/Library/location/collision suffixes are verified in part. Cancel only changes the ledger. Events require a live tab and rederive current profile.",
+      "current_behavior": "Transfers freeze original browser/context/policy, use real native cancellation and owned staging, survive Brk presentation close/reassignment, and revoke/drain private contexts and profile deletion. Mandatory native browser closure reports a truthful terminal failure/recovery result without recreating the page. Profile data deletion is scheduled for next launch; private Library remains metadata-free.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "dc1101f",
+          "artifact": "verify/completion/transfers-parent/REPORT.md"
+        }
       }
     },
     {
