@@ -188,14 +188,23 @@ public struct PageFacts: Hashable, Sendable, Codable {
     /// The window number of the CEF-owned host window, which must never be key.
     public var hostWindowNumber: Int?
     public var audioMuted: Bool? = nil
+    public var audioTargetID: String? = nil
+    public var audioTabID: Int? = nil
+    public var audioObserverID: Int? = nil
+    public var audioError: String? = nil
     public var hasKeyboardFocus: Bool
 
-    public init(surfaceFrame: CGRect?, embeddedViews: [String], browserID: Int?, hostWindowNumber: Int?, hasKeyboardFocus: Bool, audioMuted: Bool? = nil) {
+    public init(surfaceFrame: CGRect?, embeddedViews: [String], browserID: Int?, hostWindowNumber: Int?, hasKeyboardFocus: Bool, audioMuted: Bool? = nil,
+                audioTargetID: String? = nil, audioTabID: Int? = nil, audioObserverID: Int? = nil, audioError: String? = nil) {
         self.surfaceFrame = surfaceFrame
         self.embeddedViews = embeddedViews
         self.browserID = browserID
         self.hostWindowNumber = hostWindowNumber
         self.hasKeyboardFocus = hasKeyboardFocus
         self.audioMuted = audioMuted
+        self.audioTargetID = audioTargetID
+        self.audioTabID = audioTabID
+        self.audioObserverID = audioObserverID
+        self.audioError = audioError
     }
 }

@@ -34,6 +34,8 @@ swift package --allow-writing-to-package-directory --allow-network-connections a
 APP="dist/$PRODUCT.app"
 # 5. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
 #    because the plugin signed before the edit.
+mkdir -p "$APP/Contents/Resources/BrkAudibility"
+cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"

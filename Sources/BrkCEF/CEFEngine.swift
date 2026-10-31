@@ -41,6 +41,8 @@ public final class CEFEngine: WebEngine {
     /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
     /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profile-<id>`; incognito is in memory.
     private var profiles: [BrowsingContext: CefProfile] = [:]
+    private var audioObservers: [BrowsingContext: ChromeAudibility] = [:]
+    private var audioLoop: Task<Void, Never>?
     /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
@@ -82,6 +84,7 @@ public final class CEFEngine: WebEngine {
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         config.defaultRuntimeStyle = .chrome
+        AudioExtension.configure(&config)
         try CefRuntime.shared.initialize(configuration: config)
         // CefSwift's terminate handler closes browsers while their views are still moved into our window, which
         // segfaulted on quit in every spike run. Remove it: -terminate: then reaches the app delegate's
@@ -138,6 +141,47 @@ public final class CEFEngine: WebEngine {
             resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
             record(.created, page)
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
+        }
+        if audioLoop == nil {
+            audioLoop = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                    await self?.pollAudio()
+                }
+            }
+        }
+    }
+
+    private func pollAudio() async {
+        guard phase == .running else { return }
+        let grouped = Dictionary(grouping: Array(live.values), by: \.context)
+        for (context, observer) in audioObservers where observer.drained { audioObservers[context] = nil }
+        for (context, observer) in audioObservers where grouped[context] == nil {
+            observer.stop()
+            if observer.drained { audioObservers[context] = nil }
+        }
+        for (context, pages) in grouped {
+            guard phase == .running, contexts.permitsWork(context) else { continue }
+            let observer: ChromeAudibility
+            if let existing = audioObservers[context] {
+                guard !existing.stopping else { continue }
+                observer = existing
+            }
+            else {
+                observer = ChromeAudibility(context: context, profile: profile(for: context))
+                audioObservers[context] = observer
+            }
+            for page in pages { await page.resolveAudioTarget() }
+            let requests = pages.compactMap { page in page.audio.ticket.map { (page, $0) } }
+            do {
+                let readings = try await observer.read(targets: requests.map { $0.1.target })
+                guard phase == .running, contexts.permitsWork(context), audioObservers[context] === observer else { continue }
+                for (page, ticket) in requests {
+                    let matches = readings.filter { $0.target == ticket.target }
+                    if matches.count == 1 { page.applyAudio(matches[0], ticket: ticket, observer: observer.browserID) }
+                    else if isLive(page) { page.audioUnavailable("No current target in the context's audio observer") }
+                }
+            } catch { for page in pages where isLive(page) { page.audioUnavailable(String(describing: error)) } }
         }
     }
 
@@ -214,6 +258,7 @@ public final class CEFEngine: WebEngine {
         }
         // No asynchronous hop before revocation. A late loader may finish but cannot publish new demand.
         contexts.revoke(request.context)
+        audioObservers[request.context]?.stop()
         wanted.removeAll { $0.context == request.context }
         disposals[request.id] = request
         transfers.revoke(request.context)
@@ -223,6 +268,7 @@ public final class CEFEngine: WebEngine {
                 !self.resources.entries.values.contains { $0.context.context == request.context }
                     && !self.transfers.contains(context: request.context)
                     && self.contexts.isDrained(request.context)
+                    && (self.audioObservers[request.context]?.drained ?? true)
             }
             guard drained else {
                 self.transfers.reportTimeout(context: request.context)
@@ -230,6 +276,7 @@ public final class CEFEngine: WebEngine {
                 return
             }
             self.profiles[request.context]?.release()
+            self.audioObservers[request.context] = nil
             self.profiles[request.context] = nil
             do {
                 let disposition: DataDisposition
@@ -287,7 +334,10 @@ public final class CEFEngine: WebEngine {
         switch context {
         case .profile(.default): return nil
         case .profile(let id): profile = .persistent(name: id.rawValue)
-        case .incognito: profile = .incognito()
+        case .incognito:
+            let enabled = AudioExtension.allowPrivateAccess()
+            log.notice("bundled audio extension private permission=\(enabled, privacy: .public)")
+            profile = .incognito()
         }
         profiles[context] = profile
         return profile
@@ -317,6 +367,8 @@ public final class CEFEngine: WebEngine {
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
         phase = .restoringViews
+        audioLoop?.cancel(); audioLoop = nil
+        for observer in audioObservers.values { observer.stop() }
         focusRequests.removeAll()
         wanted = []
         contexts.stop()
@@ -324,6 +376,7 @@ public final class CEFEngine: WebEngine {
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
             self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+                && self.audioObservers.values.allSatisfy(\.drained)
         }
         guard drained else {
             transfers.reportTimeout()
@@ -332,6 +385,7 @@ public final class CEFEngine: WebEngine {
             return .timedOut(unclosed: resources.entries.keys.map(\.page).sorted())
         }
         phase = .closingBrowsers
+        audioObservers.removeAll()
         for profile in profiles.values { profile.release() }
         profiles.removeAll()
         for loader in loaders.values { loader.release() }

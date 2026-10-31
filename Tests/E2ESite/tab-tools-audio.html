@@ -1,6 +1,47 @@
-<!doctype html><html><meta charset="utf-8"><title>Audio fixture ready</title>
-<body style="margin:0"><button style="width:200px;height:100px" onclick="start()">Play fixture tone</button><script>
-let context, oscillator;
-function start(){context=new AudioContext();oscillator=context.createOscillator();let gain=context.createGain();gain.gain.value=0.001;oscillator.connect(gain).connect(context.destination);oscillator.start();document.title='Audio fixture playing';}
-function stop(){oscillator.stop();context.close();document.title='Audio fixture stopped';}
-</script></body></html>
+<!doctype html><meta charset="utf-8"><title>Audio fixture ready</title>
+<style>body{margin:0;font:16px system-ui}button{width:200px;height:100px}pre{white-space:pre-wrap}</style>
+<button onclick="start(false)">Start tone</button><button onclick="stop()">Stop</button><br>
+<button onclick="start(true)">Run silent source</button><button onclick="suspend()">Suspend</button>
+<pre id="proof">No source</pre>
+<script>
+'use strict';
+let context, oscillator, gain, analyser, timer, sourceStarted = false, sourceStopped = false;
+const receipt = new URLSearchParams(location.search).get('receipt');
+let lastReceipt = '';
+function report() {
+  const samples = new Float32Array(1024);
+  if (analyser && context?.state === 'running') analyser.getFloatTimeDomainData(samples);
+  const rms = Math.sqrt(samples.reduce((sum, x) => sum + x*x, 0) / samples.length);
+  const state = context?.state || 'none';
+  const signal = rms > .005 ? 'tone' : 'silence';
+  window.audioProof = {state, sourceStarted, sourceStopped, gain: gain?.gain.value ?? 0, rms, signal};
+  document.getElementById('proof').textContent = JSON.stringify(window.audioProof);
+  document.title = `Audio fixture ${state} ${signal} source=${sourceStarted && !sourceStopped} rms=${rms.toFixed(5)}`;
+  const key = `${state}-${signal}-${sourceStarted && !sourceStopped}`;
+  if (receipt && lastReceipt !== key) {
+    lastReceipt = key;
+    fetch(`/audio-proof/${encodeURIComponent(receipt)}/${key}`).catch(() => {});
+  }
+}
+async function start(silent) {
+  if (context && context.state !== 'closed') await context.close();
+  clearInterval(timer);
+  context = new AudioContext();
+  oscillator = context.createOscillator(); gain = context.createGain(); analyser = context.createAnalyser();
+  gain.gain.value = silent ? 0 : .04;
+  oscillator.frequency.value = 440;
+  oscillator.connect(gain).connect(analyser).connect(context.destination);
+  sourceStarted = true; sourceStopped = false;
+  oscillator.start();
+  await context.resume();
+  timer = setInterval(report, 100);
+  report();
+}
+async function stop() {
+  if (oscillator && !sourceStopped) { oscillator.stop(); sourceStopped = true; }
+  if (context && context.state !== 'closed') await context.close();
+  clearInterval(timer); report();
+}
+async function suspend() { if (context?.state === 'running') await context.suspend(); report(); }
+if (receipt) fetch(`/audio-proof/${encodeURIComponent(receipt)}/ready`).catch(() => {});
+</script>

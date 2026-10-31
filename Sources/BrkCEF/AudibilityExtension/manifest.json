@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Brk audio observer",
+  "version": "1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsa3wt6rvYdROArqHnP8eu/dyn9JHJT/L2Otcv0ZDPghzQ0Wqgh0k7wMMzgmabfrMs47lvDdJhevccjcOvEnihRQTh/TBK02v5nc4AaLYjM28fwmyTgB3gfseAG5WxRkoE0Lvcg3PAY1Hb55WQPjBvGHQoW9BdPUKAtFTom4twdSEhZ+pmcwnKETQAoHkjc1KZAhltPcIJth0kNuoeCA2IlnJ5M0qabFPH5wHv2XghSLIdMDwjF6wehFdEVo7h6EXlwCsQxpZaZy5UuGuaGqisCelO7adLzopTlsy1Wt5PEpljGDH8kEw7dKAaAA6/iDh7l4rRRcD4+SB3rnabsmvnwIDAQAB",
+  "permissions": [
+    "debugger"
+  ],
+  "incognito": "split",
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; object-src 'none'; connect-src 'none'; frame-src 'none'"
+  }
+}

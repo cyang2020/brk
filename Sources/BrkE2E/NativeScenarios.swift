@@ -16,7 +16,7 @@ enum NativeScenarios {
 
     /// N1 (CEF): app-priority Cmd+T never reaches keys.html; page-priority Cmd+Shift+K reaches it first and then
     /// clears page2 from Today; with ?swallow=1 the first Cmd+S goes to the page and the second within 1 s hides the
-    /// sidebar; two quick unconsumed Cmd+R presses reload twice.
+    /// sidebar; two unconsumed Cmd+R presses each complete a reload.
     @Sendable static func keyPriorities(_ app: AppUnderTest) throws {
         let page2 = try openTab(app, app.site.url("page2.html"))
         let keys = try openTab(app, app.site.url("keys.html"))
@@ -50,6 +50,8 @@ enum NativeScenarios {
         try app.waitUntil("keys.html current again") { try currentTab(app.view())?.id == keys.id }
         try app.settle()
         try app.press("cmd+r")
+        // A second reload before the first commits can replace it. The fixture counts completed documents.
+        try waitForTitle(app, keys.id, "keys:loads=2")
         try app.press("cmd+r")
         try waitForTitle(app, keys.id, "keys:loads=3")
         try app.verifyStablePageFocus("after-reloads")
