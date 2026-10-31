@@ -414,6 +414,7 @@ final class ChromePage: CefBrowserDelegate {
             if expectedReloadBrowse == url { expectedReloadBrowse = nil }
             else { reloadSequence.cancel(); expectedReloadBrowse = nil }
         }
+        if !isRedirect { currentLoadProgress = 0 }
         cancelPermissions()
         configureRequestFilter(url)
         contextMenu.cancel()

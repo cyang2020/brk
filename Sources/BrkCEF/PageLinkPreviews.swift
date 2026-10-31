@@ -131,8 +131,9 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
             let result = try? await call("Page.createIsolatedWorld", ["frameId": id, "worldName": "Brk link previews"])
             guard let context = result?["executionContextId"] as? Int else { continue }
             let frame = FrameWorld(frame: id, context: context, main: id == ids.first)
+            do { _ = try await evaluate(Self.tracker, context: context) }
+            catch { lastFailure = String(describing: error); continue }
             frames.append(frame)
-            _ = try? await evaluate(Self.tracker, context: context)
         }
         frameWorlds = frames
         world = frames.first?.context
@@ -146,6 +147,10 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private func evaluate(_ expression: String, context: Int? = nil) async throws -> Any? {
         guard let world = context ?? world else { throw CancellationError() }
         let result = try await call("Runtime.evaluate", ["expression": expression, "contextId": world, "returnByValue": true])
+        if let exception = result["exceptionDetails"] as? [String: Any] {
+            let detail = (exception["exception"] as? [String: Any])?["description"] as? String ?? exception["text"] as? String ?? "Link preview script failed"
+            throw NSError(domain: "BrkLinkPreview", code: 1, userInfo: [NSLocalizedDescriptionKey: detail])
+        }
         return (result["result"] as? [String: Any])?["value"]
     }
     private func resource(_ url: URL, limit: Int, frameID: String) async throws -> Data {

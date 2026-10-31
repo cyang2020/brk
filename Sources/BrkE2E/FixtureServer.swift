@@ -167,11 +167,16 @@ final class FixtureServer: @unchecked Sendable {
         } else if path == "/sidebar-preview-target" {
             let headers = String(decoding: request, as: UTF8.self)
             let profile = headers.contains("brkSidebarProfile=Private") ? "Private" : headers.contains("brkSidebarProfile=Public") ? "Public" : "No cookie"
-            let body = Data("<html><head><title>\(profile) preview destination</title><link rel='icon' href='/sidebar-preview-icon.png'></head><body>Context scoped preview text.</body></html>".utf8)
-            response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+            let iconContext = profile.replacingOccurrences(of: " ", with: "")
+            let body = Data("<html><head><title>\(profile) preview destination</title><link rel='icon' href='/sidebar-preview-icon.png?preview=\(iconContext)'></head><body>Context scoped preview text.</body></html>".utf8)
+            response = Data("HTTP/1.1 200 OK\r\nCache-Control: no-store\r\nVary: Cookie\r\nContent-Type: text/html\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/sidebar-preview-icon.png" {
-            let body = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=")!
-            response = Data("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+            let headers = String(decoding: request, as: UTF8.self)
+            for label in ["Public", "Private"] where headers.contains("brkSidebarProfile=" + label) && target.contains("preview=" + label) {
+                countLock.withLock { counts["sidebar-preview-icon-auth-" + label, default: 0] += 1 }
+            }
+            let body = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKElEQVR4nGPQK3j9nxLMgMwhBOhnAC7nYpMfrgaMxsJgMGDgYoEcDADWMPxfV2xNEQAAAABJRU5ErkJggg==")!
+            response = Data("HTTP/1.1 200 OK\r\nCache-Control: no-store\r\nVary: Cookie\r\nContent-Type: image/png\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/repos/fixture/repo/pulls" {
             let round = requestCount(path)
             let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []

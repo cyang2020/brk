@@ -432,7 +432,7 @@ final class AppUnderTest {
     @discardableResult
     func panelScreenshot(_ name: String) throws -> URL {
         let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
-        guard case .screenshot(_, _, _) = try send(.sidebarPanel(window: nil, action: .capture(path: url.path))) else {
+        guard case .screenshot(_, _, _) = try send(.sidebarPanel(window: window, action: .capture(path: url.path))) else {
             throw Check(description: "Native sheet screenshot failed")
         }
         screenshots.append(url)

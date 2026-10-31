@@ -87,7 +87,7 @@ func tabRows(_ rows: [Row]) -> [TabRow] {
     rows.compactMap { if case .tab(let t) = $0 { t } else { nil } }
 }
 
-/// Every tab the window lists: favorites, then Pinned and Today with folder children and split panes.
+/// Every tab the window lists, including private scratch rows, folder children and split panes.
 func allTabs(_ v: WindowSnapshot) -> [TabRow] {
     func tabs(_ rows: [Row]) -> [TabRow] {
         rows.flatMap { row -> [TabRow] in
@@ -98,7 +98,7 @@ func allTabs(_ v: WindowSnapshot) -> [TabRow] {
             }
         }
     }
-    return v.favorites.tiles + tabs(v.space.pinned.rows) + tabs(v.space.today.rows)
+    return v.favorites.tiles + tabs(v.space.pinned.rows) + tabs(v.space.today.rows) + tabs(v.scratch?.rows ?? [])
 }
 
 func currentTab(_ v: WindowSnapshot) -> TabRow? { allTabs(v).first { $0.status == .current } }

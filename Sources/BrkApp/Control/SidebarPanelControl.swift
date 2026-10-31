@@ -8,7 +8,7 @@ enum SidebarPanelControl {
     struct Invalid: Error { let message: String }
     static func run(_ action: SidebarPanelControlAction, in owner: NSWindow) async throws -> ControlResult {
         let preview = owner.childWindows?.first { window in
-            return ViewTree.find("web-link-preview", in: window) != nil
+            return window.isVisible && ViewTree.find("web-link-preview", in: window) != nil
         }
         guard let sheet = owner.attachedSheet ?? preview, let root = sheet.contentView else { throw Invalid(message: "No attached native sheet or link preview") }
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
