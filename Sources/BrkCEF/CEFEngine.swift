@@ -294,6 +294,17 @@ public final class CEFEngine: WebEngine {
             case .console: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_CONSOLE")
             case .network: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_NETWORK")
             }
+        case .media(let request):
+            guard request.document == live.readyDocument, live.mediaPlayers.contains(where: { $0.id == request.player }),
+                  let target = live.audio.target, let tab = live.audio.tab,
+                  let observer = audioObservers[live.context], contexts.permitsWork(live.context) else { return }
+            Task { @MainActor [weak self, weak live] in
+                var error: String?
+                do { try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation) }
+                catch let failure { error = String(describing: failure) }
+                guard let self, let live, self.isLive(live), live.readyDocument == request.document else { return }
+                live.mediaControlFinished(error)
+            }
         case .exitFullscreen: browser.exitFullscreen()
         case .recover: live.prepareNavigation(); browser.reload()
         }

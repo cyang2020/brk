@@ -66,6 +66,7 @@ let package = Package(
         .target(
             name: "BrkApp",
             dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings"],
+            exclude: ["SoundAssets"],
             swiftSettings: strict
         ),
         // Composition root: picks the engine, starts CEF before NSApp exists, runs the app.

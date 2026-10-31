@@ -332,6 +332,12 @@ final class ControlExecutor {
             }
             return .ok
 
+        case .mediaSounds:
+            return .text(String(decoding: try JSONEncoder().encode(store.sounds.submissions), as: UTF8.self))
+        case .captureProbe(let page, let directory):
+            let root = Product.dataDirectory().standardizedFileURL.path + "/"
+            guard directory.standardizedFileURL.path.hasPrefix(root) else { throw Failure(message: "Probe path outside owned data") }
+            return .text(try await engine.captureProbe(page, directory: directory))
         case .pageObservations:
             return .pageObservations(store.snapshot.observations)
 

@@ -5,8 +5,8 @@ import CCef
 import Foundation
 import os
 
-/// The only extension we load ourselves. It contains an empty, non-web-accessible document.
-/// Native code evaluates a fixed read-only expression through CEF, never a renderer/web message.
+/// The bundled observer has no web-accessible resources or message listeners. Native code evaluates fixed
+/// expressions through CEF; player state and controls stay in the extension-isolated world of each frame.
 enum AudioExtension {
     static let id = "mkcpfepmhobdegbnlihgcmelnebpfabk"
     static let url = URL(string: "chrome-extension://\(id)/observer.html")!
@@ -66,6 +66,8 @@ final class ChromeAudibility: CefBrowserDelegate {
         let tab: Int
         let audible: Bool
         let incognito: Bool
+        let players: [MediaPlayer]
+        let mediaError: String?
     }
     let context: BrowsingContext
     private let chrome: CefChromeBrowser
@@ -110,7 +112,12 @@ final class ChromeAudibility: CefBrowserDelegate {
             if (matches.length !== 1) continue;
             const tab = await chrome.tabs.get(matches[0].tabId).catch(() => null);
             if (!tab || typeof tab.audible !== 'boolean' || tab.incognito !== chrome.extension.inIncognitoContext) continue;
-            result.push({token: request.token, target: id, tab: tab.id, audible: tab.audible, incognito: tab.incognito});
+            let players = [], mediaError = null;
+            try {
+              const frames = await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
+              for (const frame of frames) for (const player of frame.result ?? []) players.push({...player,document:frame.documentId,frame:frame.frameId});
+            } catch(e) { mediaError = String(e); }
+            result.push({token: request.token, target: id, tab: tab.id, audible: tab.audible, incognito: tab.incognito, players, mediaError});
           }
           return JSON.stringify(result);
         })()
@@ -127,10 +134,43 @@ final class ChromeAudibility: CefBrowserDelegate {
             guard let token = row["token"] as? String, let target = row["target"] as? String,
                   let tab = row["tab"] as? Int, let audible = row["audible"] as? Bool,
                   let incognito = row["incognito"] as? Bool else { return nil }
-            return Reading(token: token, target: target, tab: tab, audible: audible, incognito: incognito)
+            let players = (row["players"] as? [[String: Any]] ?? []).compactMap { value -> MediaPlayer? in
+                guard let document = value["document"] as? String, let frame = value["frame"] as? Int,
+                      let element = value["element"] as? String, let rawKind = value["kind"] as? String,
+                      let kind = MediaKind(rawValue: rawKind), let paused = value["paused"] as? Bool,
+                      let ended = value["ended"] as? Bool, let pip = value["pictureInPicture"] as? Bool else { return nil }
+                return MediaPlayer(id: MediaPlayerID(document: document, frame: frame, element: element), kind: kind, paused: paused, ended: ended, pictureInPicture: pip)
+            }
+            return Reading(token: token, target: target, tab: tab, audible: audible, incognito: incognito, players: players, mediaError: row["mediaError"] as? String)
         }
         let isPrivate: Bool = if case .incognito = context { true } else { false }
         return readings.filter { $0.token == token && $0.incognito == isPrivate && targets.contains($0.target) }
+    }
+
+    func control(target: String, tab: Int, player: MediaPlayerID, operation: MediaOperation) async throws {
+        guard ready, !stopping, let transport else { throw CefDevTools.Failure.unavailable }
+        let args = String(decoding: try JSONSerialization.data(withJSONObject: ["target": target, "tab": tab, "document": player.document, "frame": player.frame, "element": player.element, "operation": operation.rawValue]), as: UTF8.self)
+        let script = """
+        (async()=>{
+          if (location.href !== '\(AudioExtension.url.absoluteString)' || chrome.runtime.id !== '\(AudioExtension.id)') throw Error('observer origin');
+          const r=\(args), targets=await chrome.debugger.getTargets();
+          if (!targets.some(t=>t.id===r.target && t.tabId===r.tab && t.type==='page')) throw Error('Target changed');
+          const tab=await chrome.tabs.get(r.tab);
+          if (tab.incognito !== chrome.extension.inIncognitoContext) throw Error('Context changed');
+          const result=await chrome.scripting.executeScript({target:{tabId:r.tab,documentIds:[r.document]},args:[r.element,r.operation],func:async(id,op)=>{
+            try { if (!globalThis.__brkMedia) throw Error('Player document unavailable'); return {value:await globalThis.__brkMedia.control(id,op)}; }
+            catch(e) { return {error:e.name+': '+e.message}; }
+          }});
+          if (result.length!==1 || result[0].frameId!==r.frame || result[0].documentId!==r.document) throw Error('Player document changed');
+          if (result[0].result?.error) throw Error(result[0].result.error);
+          return true;
+        })()
+        """
+        let data = try await transport.call("Runtime.evaluate", parameters: ["expression": script, "awaitPromise": true, "returnByValue": true])
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any], value["exceptionDetails"] == nil,
+              (value["result"] as? [String: Any])?["value"] as? Bool == true else {
+            throw CefDevTools.Failure.protocolError(String(decoding: data, as: UTF8.self))
+        }
     }
 
     func stop() {

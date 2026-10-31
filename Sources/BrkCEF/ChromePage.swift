@@ -26,6 +26,9 @@ final class ChromePage: CefBrowserDelegate {
     private(set) var audio: AudioObservation
     private var audioTargetTransport: CefDevTools?
     var audioObserverID: Int?
+    private(set) var mediaPlayers: [MediaPlayer] = []
+    private var mediaError: String?
+    private var mediaOperationError: String?
     var audioError: String?
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
@@ -45,6 +48,7 @@ final class ChromePage: CefBrowserDelegate {
     private func emit(_ events: [PageEvent]) {
         for event in events {
             if case .documentChanged(let document) = event {
+                mediaPlayers = []; mediaError = nil; mediaOperationError = nil
                 audio.document(document)
                 if !audio.audible { engine.pageDidEmit(self, .audioChanged(false)) }
             }
@@ -116,12 +120,29 @@ final class ChromePage: CefBrowserDelegate {
     func applyAudio(_ reading: ChromeAudibility.Reading, ticket: AudioObservation.Ticket, observer: Int) {
         let changed = audio.audible != reading.audible
         guard engine.isLive(self), reading.target == ticket.target, audio.accept(reading.audible, tab: reading.tab, for: ticket) else { return }
+        if let document = readyDocument {
+            let error = reading.mediaError ?? mediaOperationError
+            if mediaPlayers != reading.players || mediaError != error {
+                mediaPlayers = reading.players; mediaError = error
+                engine.pageDidEmit(self, .mediaChanged(document, mediaPlayers, error: error))
+            }
+        }
         audioObserverID = observer
         audioError = nil
         if changed { emit([.audioChanged(reading.audible)]) }
     }
 
+    func mediaControlFinished(_ error: String?) {
+        mediaOperationError = error
+        mediaError = error
+        if let document = readyDocument { engine.pageDidEmit(self, .mediaChanged(document, mediaPlayers, error: error)) }
+    }
+
     func audioUnavailable(_ error: String) {
+        if !mediaPlayers.isEmpty {
+            mediaPlayers = []
+            if let document = readyDocument { engine.pageDidEmit(self, .mediaChanged(document, [], error: error)) }
+        }
         audioError = error
         if let ticket = audio.ticket, let tab = audio.tab, audio.audible,
            audio.accept(false, tab: tab, for: ticket) { emit([.audioChanged(false)]) }

@@ -64,11 +64,13 @@ enum CommandInventory {
         .site(.clear(kinds: [.cookies], scope: .site, reload: true)), .site(.confirmClear("ghost", false)),
         .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
         .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
+        .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
         .later(.boosts),
         .window(.close),
     ]
 
     static let events: [SystemEvent] = [
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .mediaChanged(DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), [], error: nil)),
         .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
@@ -197,6 +199,7 @@ enum CommandInventory {
             case .zoom: "zoom"
             case .toggleDevTools: "toggleDevTools"
             case .developer: "developer"
+            case .media: "media"
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"
@@ -338,6 +341,7 @@ enum CommandInventory {
             case .fullscreenChanged: "page.fullscreenChanged"
             case .titleChanged: "page.titleChanged"
             case .faviconChanged: "page.faviconChanged"
+            case .mediaChanged: "page.mediaChanged"
             case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"

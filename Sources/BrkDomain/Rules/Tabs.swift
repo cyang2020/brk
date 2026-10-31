@@ -99,6 +99,12 @@ extension Work {
         case .reload(let ref, let ignoringCache): emit(ref, .reload(ignoringCache: ignoringCache))
         case .stop(let ref): emit(ref, .stop)
         case .zoom(let step): emit(.focused, .zoom(step))
+        case .media(let ref, let player, let operation):
+            guard let tab = state.resolveTab(ref, in: window) else { return }
+            let page = PageID(window: window, item: tab)
+            guard let live = state.session.live[page], case .ready(let document) = live.document,
+                  live.mediaPlayers.contains(where: { $0.id == player }) else { return }
+            effects.append(.page(page, .media(MediaControl(document: document, player: player, operation: operation))))
         case .output(let intent):
             guard let tab = state.resolveTab(.focused, in: window),
                   case .ready(let document) = state.session.live[PageID(window: window, item: tab)]?.document else { return }
@@ -157,6 +163,7 @@ extension Work {
             case .unavailable: break
             }
             live.document = document
+            live.mediaPlayers = []; live.mediaError = nil
         case .navigationRequested(let url): live.requestedURL = url
         case .committed(let url):
             state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: live.observedTitle, favicon: state.doc.windows[window]?.slots[tab]?.favicon)
@@ -195,6 +202,9 @@ extension Work {
             live.failure = LoadFailure(code: code, description: description)
             live.loading = false
             live.document = .unavailable
+        case .mediaChanged(let document, let players, let error):
+            guard live.document == .ready(document) else { return }
+            live.mediaPlayers = players; live.mediaError = error
         case .audioChanged(let audible): live.audible = audible
         case .websitePolicyApplied(let status):
             guard live.document == .ready(status.document), status.document.browser == token else { return }

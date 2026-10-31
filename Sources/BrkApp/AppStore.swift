@@ -55,6 +55,7 @@ public final class AppStore {
     }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
+    let sounds = SoundEffects()
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
     let siteDialogs = SiteDialogs()
@@ -210,6 +211,7 @@ public final class AppStore {
     /// into a Chromium view only sticks in a key window.
     private func publish(docChanged: Bool) {
         snapshot = projected()
+        sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
@@ -466,6 +468,9 @@ public final class AppStore {
             case .addLocalExtension(let window, let context):
                 chooseLocalExtension(window, context: context)
             case .cancelDownload(let id): engine.cancelDownload(id)
+            case .sound(let event):
+                sounds.setEnabled(snapshot.settings.advanced.soundEffects)
+                sounds.play(event)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }

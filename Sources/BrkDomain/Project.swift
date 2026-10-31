@@ -137,6 +137,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
+        row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
+        row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         if kind == .favorites, doc.kind == .standard {
             if let feed = state.session.favoriteFeeds[tab], feed.profile == space.profile, ctx.now.since(feed.fetchedAt) < .seconds(300) {
                 row.badge = feed.badge

@@ -94,6 +94,7 @@ extension Work {
             }
             switch end {
             case .completed(let receipt):
+                playSound(.downloadCompleted)
                 state.doc.downloads[index].state = .finished
                 state.doc.downloads[index].path = receipt.url.path
                 state.doc.downloads[index].filename = receipt.url.lastPathComponent

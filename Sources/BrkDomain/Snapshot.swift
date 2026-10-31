@@ -163,6 +163,8 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
     public var badge: Int? = nil
     public var subtitle: String? = nil
+    public var mediaPlayers: [MediaPlayer] = []
+    public var mediaError: String? = nil
     public var audible: Bool = false
     public var muted: Bool = false
     public var canReset: Bool

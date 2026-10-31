@@ -138,6 +138,7 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case stop(ItemRef)
     case zoom(ZoomStep)
     case toggleDevTools
+    case media(ItemRef, MediaPlayerID, MediaOperation)
     case output(OutputIntent)
     case cancelOutput
     case developer(DeveloperOperation)
@@ -463,7 +464,7 @@ extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
         switch self {
-        case .tabTools(.dismissToast), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
+        case .page(.media), .tabTools(.dismissToast), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
         default: false
         }
     }

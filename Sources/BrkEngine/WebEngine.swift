@@ -49,6 +49,7 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func captureProbe(_ page: PageID, directory: URL) async throws -> String
     func find(_ request: FindRequest)
     func output(_ request: OutputRequest)
     func cancelOutput(_ id: OutputID)
@@ -104,6 +105,7 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func captureProbe(_ page: PageID, directory: URL) async throws -> String { "unsupported" }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}
 }

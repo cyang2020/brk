@@ -387,6 +387,8 @@ struct LivePage: Sendable, Equatable {
     var canGoForward: Bool = false
     var failure: LoadFailure? = nil
     var crashed: Bool = false
+    var mediaPlayers: [MediaPlayer] = []
+    var mediaError: String? = nil
     var audible: Bool = false
 }
 

@@ -90,6 +90,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case setAppAppearance(Scheme?)
     case siteControlsScreenshot(window: WindowID, path: String)
     case siteControls
+    case mediaSounds
+    case captureProbe(page: PageID, directory: URL)
     case pageObservations
     /// Writes state.json now (skips the debounce).
     case flush

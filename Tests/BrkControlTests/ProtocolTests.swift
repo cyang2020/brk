@@ -12,7 +12,7 @@ final class ProtocolTests: XCTestCase {
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
         case chooseOutputFixture, cancelCurrentOutput, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
-        case sidebarData, sidebarPanel
+        case mediaSounds, captureProbe, sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
@@ -21,6 +21,8 @@ final class ProtocolTests: XCTestCase {
 
     static func tag(of op: ControlOp) -> Tag {
         switch op {
+        case .mediaSounds: .mediaSounds
+        case .captureProbe: .captureProbe
         case .sidebarData: .sidebarData
         case .sidebarPanel: .sidebarPanel
         case .chooseOutputFixture: .chooseOutputFixture
@@ -73,6 +75,8 @@ final class ProtocolTests: XCTestCase {
     static func samples(_ tag: Tag) -> [ControlOp] {
         let page = PageID(window: WindowID("w"), item: ItemID("t3"))
         switch tag {
+        case .mediaSounds: return [.mediaSounds]
+        case .captureProbe: return [.captureProbe(page: page, directory: URL(fileURLWithPath: "/tmp/owned"))]
         case .sidebarData: return [.sidebarData]
         case .sidebarPanel: return [.sidebarPanel(window: nil, action: .inspect), .sidebarPanel(window: WindowID("w"), action: .save(directory: "/tmp/owned", filename: "tabs.html")), .sidebarPanel(window: nil, action: .open(path: "/tmp/selected.html"))]
         case .chooseOutputFixture: return [.chooseOutputFixture(window: nil, path: "/tmp/fixture.pdf")]
