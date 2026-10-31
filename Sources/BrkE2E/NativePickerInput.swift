@@ -31,7 +31,7 @@ enum NativePickerInput {
         return nil
     }
     static func executable(_ pid: Int32) -> URL? {
-        var bytes = [CChar](repeating: 0, count: Int(PROC_PIDPATHINFO_MAXSIZE))
+        var bytes = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard proc_pidpath(pid, &bytes, UInt32(bytes.count)) > 0 else { return nil }
         return URL(fileURLWithPath: String(cString: bytes))
     }
@@ -168,7 +168,7 @@ enum NativePickerInput {
             try FilePanelScenarios.requireOwnedFixture(app, file)
             let directory = file.deletingLastPathComponent()
             // The app set its initial directory before presenting. Avoid restarting its remote view for the same path.
-            if directory.resolvingSymlinksInPath() != app.dataDirectory.resolvingSymlinksInPath() {
+            if directory.resolvingSymlinksInPath().path != app.dataDirectory.resolvingSymlinksInPath().path {
                 try app.perform(.sidebarPanel(window: nil, action: .directory(path: directory.path)))
             }
             try app.waitUntil("AX Where popup names owned directory") { try whereMatches(sheet(app), directory) }
