@@ -87,8 +87,10 @@ enum NativePickerInput {
     }
     static func findFile(_ panel: AXUIElement, name: String) -> AXUIElement? {
         let browser = find(panel) { _, role in role == kAXBrowserRole } ?? panel
+        // Column view exposes every ancestor directory under AXBrowser. Search the current directory only.
+        let directory = (attribute(browser, kAXColumnsAttribute) as? [AXUIElement])?.last ?? browser
         var examples: [String] = []
-        let found = find(browser) { node, role in
+        let found = find(directory) { node, role in
             let labels = values(node, [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute]).compactMap { $0 as? String }
             if role == kAXTextFieldRole, examples.count < 12 { examples += labels.filter { !$0.isEmpty } }
             return labels.contains(name)
