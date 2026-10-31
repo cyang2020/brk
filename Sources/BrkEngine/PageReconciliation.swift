@@ -9,10 +9,14 @@ public final class PageReconciliation {
     private var pending: [PageSpec]?
     public init() {}
 
-    public func submit(_ pages: [PageSpec], apply: ([PageSpec]) -> Void) {
+    /// `invalidate` runs synchronously on every submit, nested ones included, while `isApplying` is true, so a
+    /// reassigned page's old presentation is gone before the caller returns; only the outermost pass applies.
+    public func submit(_ pages: [PageSpec], invalidate: () -> Void = {}, apply: ([PageSpec]) -> Void) {
         pending = pages
-        guard !isApplying else { return }
+        let reentered = isApplying
         isApplying = true
+        invalidate()
+        guard !reentered else { return }
         defer { isApplying = false }
         while let next = pending {
             pending = nil

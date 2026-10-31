@@ -232,6 +232,9 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var castResult: Int? = nil
     public var castError: String? = nil
     public var castSourceSupported: Bool? = nil
+    public var nativeContextPath: String? = nil
+    public var nativeContextIsGlobal: Bool? = nil
+    public var context: BrowsingContext? = nil
     public var requestedReloads: Int? = nil
     public var extensionDialogDecision: String? = nil
     public var extensionFileDialogCallbacks: Int? = nil

@@ -14,8 +14,8 @@ enum DataScenarios {
         Scenario("DataExtensionProfiles", "extension catalog, pins and enable state remain profile-scoped across restart", cefOnly: "CEF extensions", extensionProfiles),
         Scenario("DataPrivateExpiry", "last private window resets every storage class, cancels transport and audits disk/logs", cefOnly: "off-record context", privateExpiry),
         Scenario("DataProtectedOperations", "downloads and pending output block clearing; Find survives; frozen targets resume", cefOnly: "CEF operation ownership", protectedOperations),
-        Scenario("DataTransferReassign", "accepted transfer retains original context and destination after reassignment", cefOnly: "CEF transfers", { try TransferScenarios.all.first { $0.id == "T4" }!.run($0) }),
-        Scenario("DataTransferDelete", "deletion revokes retained transport then removes its directory next launch", cefOnly: "CEF transfers", { try TransferScenarios.all.first { $0.id == "T6" }!.run($0) }),
+        Scenario("DataTransferReassign", "accepted transfer retains original context and destination after reassignment", cefOnly: "CEF transfers", { try TransferScenarios.reassign($0, path: "transfer-DataReassign") }),
+        Scenario("DataTransferDelete", "deletion revokes retained transport then removes its directory next launch", cefOnly: "CEF transfers", { try TransferScenarios.deleteProfile($0, path: "transfer-DataDelete") }),
     ]
 
     static func row(_ app: AppUnderTest, _ item: ItemID) throws -> TabRow? {
@@ -91,7 +91,30 @@ enum DataScenarios {
         return id
     }
     static func assign(_ app: AppUnderTest, _ profile: ProfileID, item: ItemID) throws {
-        try app.dispatch(.profile(.assign(.current, to: profile))); try focus(app, item)
+        let page = PageID(window: app.window!, item: item)
+        guard case .pageObservations(let before) = try app.send(.pageObservations) else { throw Check(description: "missing pre-assignment observations") }
+        try app.dispatch(.profile(.assign(.current, to: profile)))
+        try app.dispatch(.tab(.focus(item)))
+        try app.waitUntil("replacement browser in profile " + profile.rawValue) {
+            guard case .pageObservations(let after) = try app.send(.pageObservations),
+                  let state = after[page], state.browser != nil, state.browser != before[page]?.browser,
+                  case .ready = state.document else { return false }
+            return true
+        }
+        try focus(app, item)
+        struct Assignment: Encodable {
+            var expected: ProfileID
+            var browser: BrowserToken?
+            var native: PageFacts?
+        }
+        guard case .pageObservations(let after) = try app.send(.pageObservations) else { throw Check(description: "missing post-assignment observations") }
+        let native = try app.native().pages[page]
+        let encoded = try JSONEncoder().encode(Assignment(expected: profile, browser: after[page]?.browser, native: native))
+        try receipt(app, "assignment-" + profile.rawValue + "-" + String(after[page]?.browser?.generation ?? 0),
+                    JSONSerialization.jsonObject(with: encoded))
+        let expectedDirectory = profile == .default ? "Default" : "Profile-" + profile.rawValue
+        try expect(native?.context == .profile(profile) && native?.nativeContextPath.map { URL(fileURLWithPath: $0).lastPathComponent } == expectedDirectory,
+                   "native profile binding differs: expected " + expectedDirectory + ", actual " + (native?.nativeContextPath ?? "missing"))
     }
     static func captureSettingsWindow(_ app: AppUnderTest, _ name: String) throws {
         guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.className == "NSWindow" })?.number else { throw Check(description: "visible settings window missing") }
@@ -172,7 +195,9 @@ enum DataScenarios {
         try app.dispatch(.settings(.profile(other, .searchSuggestions(false))))
         try assign(app, other, item: a); try seed(app, a, "C"); try http(app, a, "C-warm", requests: 1)
         try app.dispatch(.settings(.openPane(.profiles)))
+        try app.settle()
         try app.click(.settingsField("clearProfileData-" + ProfileID.default.rawValue))
+        try app.settle()
         try app.press("return")
         try app.waitUntil("settings confirmation clears the named profile", timeout: 20) {
             guard case .settings(let settings) = try app.send(.settings), let result = settings.profiles.first(where: { $0.profile.id == .default })?.clearDataResult else { return false }
@@ -239,11 +264,12 @@ enum DataScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: manager), at: URL(string: "chrome://extensions/")!)
         try ExtensionScenarios.changeEnabled(app, manager: manager, id: installed.id, on: false)
         let other = try profile(app, "Data Extensions")
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.profile(.assign(.current, to: other)))
+        try app.dispatch(.site(.closeControls)); try assign(app, other, item: first)
         let (second, otherInstalled) = try ExtensionScenarios.selectedFixture(app)
         try expect(otherInstalled.id == installed.id && otherInstalled.enabled, "fixture is not independently enabled in other profile")
         try expect(try !SitePolicyScenarios.controls(app).pinnedExtensions.contains(installed.id), "pin leaked")
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(second))); try app.flush(); try app.restart()
+        try focus(app, second)
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("other catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
         var value = try SitePolicyScenarios.controls(app)
@@ -261,12 +287,12 @@ enum DataScenarios {
             try SitePolicyScenarios.evaluate(app, second, "document.title='data-extension-kept:'+document.documentElement.getAttribute('data-brk-extension')")
             return tab(second, in: try app.view())?.title == "data-extension-kept:installed"
         }
-        try app.dispatch(.profile(.assign(.current, to: .default)))
-        try app.dispatch(.tab(.focus(first))); try app.dispatch(.site(.nativeExtensions))
+        try assign(app, .default, item: first)
+        try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("Default catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
         value = try SitePolicyScenarios.controls(app)
         try expect(value.extensions.contains { $0.id == installed.id && !$0.enabled } && value.pinnedExtensions.contains(installed.id), "Default enable/pin state leaked across profiles")
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.profile(.assign(.current, to: other))); try app.dispatch(.site(.nativeExtensions))
+        try app.dispatch(.site(.closeControls)); try assign(app, other, item: second); try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("extension catalog after clearing data") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
         try expect(try SitePolicyScenarios.controls(app).extensions.contains { $0.id == installed.id && $0.enabled }, "data clear removed extension installation")
         app.note("The same harmless extension is disabled and pinned in Default, enabled and unpinned in Data Extensions. Both catalogs retain those independent states after restart; clearing profile cookies/cache/history keeps its extension installation.")

@@ -162,6 +162,19 @@ private func releaseRef<T>(_ object: UnsafeMutablePointer<T>) {
 /// No profile directory or origin index is involved in clearing these two classes.
 @MainActor
 final class ProfileDataStore {
+    static func inspect(browser id: Int) -> (path: String?, global: Bool)? {
+        guard id > 0, let browser = cef_browser_host_get_browser_by_identifier(Int32(id)) else { return nil }
+        defer { releaseRef(browser) }
+        guard let host = browser.pointee.get_host?(browser) else { return nil }
+        defer { releaseRef(host) }
+        guard let context = host.pointee.get_request_context?(host) else { return nil }
+        defer { releaseRef(context) }
+        let path = context.pointee.get_cache_path?(context)
+        defer { if let path { cef_string_userfree_utf16_free(path) } }
+        return (path.flatMap { text in text.pointee.str.map { String(utf16CodeUnits: $0, count: text.pointee.length) } },
+                context.pointee.is_global?(context) == 1)
+    }
+
     let context: UnsafeMutablePointer<cef_request_context_t>
     init(context: UnsafeMutablePointer<cef_request_context_t>) { self.context = context }
     func release() { releaseRef(context) }

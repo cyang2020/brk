@@ -93,6 +93,8 @@ public final class CEFEngine: WebEngine {
         ProfileDirectories(root: root).deleteMarked()
         config.rootCachePath = root
         config.cachePath = root.appendingPathComponent("Default", isDirectory: true)
+        // Chrome otherwise restores last_used as its global profile, including a custom Brk profile.
+        config.extraCommandLineSwitches["profile-directory"] = "Default"
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
@@ -210,42 +212,21 @@ public final class CEFEngine: WebEngine {
         return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
-    private var reconciling = false
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
         wanted = pages.filter { contexts.permitsWork($0.context) }
-        // Native browser creation pumps callbacks, including profile readiness. Replay the latest demand after
-        // the current pass; a nested pass must never create the same window/page before its first insert.
-        guard !reconciling else {
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: deferred nested reconciliation\n".utf8)) }
-            return
-        }
-        reconciling = true
-        defer { reconciling = false }
-        var applied: [PageSpec]?
-        while applied != wanted {
-            let next = wanted
-            reconcilePages(next)
-            applied = next
-        }
-    }
-    private func reconcilePages(_ pages: [PageSpec]) {
-        guard phase == .running else { return }
-        let pages = pages.filter { contexts.permitsWork($0.context) }
-        self.wanted = pages
-        reconciliation.submit(pages) { self.applyDemand($0) }
+        reconciliation.submit(wanted, invalidate: {
+            for page in Array(self.live.values) where !self.wanted.contains(where: { $0.id == page.id && $0.context == page.context }) {
+                self.retire(page)
+            }
+        }) { self.applyDemand($0) }
     }
 
     private func applyDemand(_ pages: [PageSpec]) {
         guard phase == .running else { return }
         let pages = pages.filter { contexts.permitsWork($0.context) }
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
-        // page to its request context for life. The new incarnation inherits its window's request.
         focusRequests = focusRequests.filter { $0.value.window != nil && wanted[$0.value.page] != nil }
-        for (id, page) in live where wanted[id]?.context != page.context {
-            retire(page)
-        }
         for spec in pages {
             guard phase == .running, contexts.permitsWork(spec.context),
                   self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else { continue }
@@ -386,7 +367,15 @@ public final class CEFEngine: WebEngine {
         live[page]?.browser.executeJavaScript(script)
     }
 
-    public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
+    public func facts(for id: PageID) -> PageFacts? {
+        guard let page = live[id] else { return nil }
+        var facts = page.facts
+        facts.context = page.context
+        let native = ProfileDataStore.inspect(browser: Int(page.browser.id))
+        facts.nativeContextPath = native?.path
+        facts.nativeContextIsGlobal = native?.global
+        return facts
+    }
 
     public func find(_ request: FindRequest) {
         guard phase == .running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }
