@@ -107,6 +107,36 @@ final class ControlExecutor {
             try events.hold(held, chord: chord, times: max(0, times), in: keyTarget())
             return .ok
 
+        case .pointerDrag(let from, let to, let cancel):
+            let c = try controller(nil)
+            try events.drag(from: c.root.convert(from, to: nil), to: c.root.convert(to, to: nil), cancel: cancel, in: c.window)
+            return .ok
+        case .scrollGesture(let point, let horizontal, let vertical, let cancel):
+            let c = try controller(nil)
+            try events.scroll(at: c.root.convert(point, to: nil), horizontal: horizontal, vertical: vertical, cancel: cancel, in: c.window)
+            return .ok
+        case .selectSheetDirectory(let path):
+            let owner = try controller(nil).id
+            let directory = URL(fileURLWithPath: path, isDirectory: true).resolvingSymlinksInPath().standardizedFileURL
+            let ownedRoot = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            var isDirectory: ObjCBool = false
+            guard directory.path.hasPrefix(ownedRoot), FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                throw Failure(message: "folder selection is outside the owned fixture directory")
+            }
+            guard store.selectSpaceExportFixtureDirectory(directory, owner: owner) else {
+                throw Failure(message: "native panel is not an owned Space export operation")
+            }
+            return .ok
+        case .sheetButton(let title):
+            guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
+            if let panel = sheet as? NSOpenPanel, title == "Cancel" { panel.cancel(nil); return .ok }
+            var selected: NSButton?
+            ViewTree.walk(content) { view in
+                if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }
+            }
+            guard let selected else { throw Failure(message: "sheet button not found: \(title)") }
+            selected.performClick(nil)
+            return .ok
         case .type(let text):
             try events.type(text, in: keyTarget())
             return .ok
@@ -258,8 +288,13 @@ final class ControlExecutor {
 
     /// Without a key window, continue in the last presented or clicked window, including Settings.
     private func keyTarget() throws -> NSWindow {
-        if let key = NSApp.keyWindow { return key }
-        if let target = store.inputWindow, target.isVisible { return target }
+        func deepestSheet(_ window: NSWindow) -> NSWindow {
+            var target = window
+            while let child = target.attachedSheet { target = child }
+            return target
+        }
+        if let key = NSApp.keyWindow { return deepestSheet(key) }
+        if let target = store.inputWindow, target.isVisible { return deepestSheet(target) }
         let window = try controller(nil).window
         window.makeKeyAndOrderFront(nil)
         return window

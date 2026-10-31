@@ -250,7 +250,7 @@ extension ActionID {
         case .showSidebar:
             entry(91, "Show/Hide Sidebar", .view, 1, [key(cmd, .s, .pageThenApp)], .sidebar(.toggle), bar: listing("sidebar.left", "Toggle Sidebar"))
         case .toggleToolbar:
-            entry(92, "Show/Hide Toolbar", .view, 1, [key([shift, cmd], .d, .pageThenApp)], .later(.toolbar),
+            entry(92, "Show/Hide Toolbar", .view, 1, [key([shift, cmd], .d, .pageThenApp)], .sidebar(.toggleToolbar),
                   bar: listing("rectangle.topthird.inset.filled", "Toggle Hide Show Toolbar"), hidden: true)
         case .expandPinnedSection:
             entry(93, "Expand Pinned Section", .view, 1, [], .space(.togglePinnedSection(.current)),
@@ -338,7 +338,7 @@ extension ActionID {
             entry(129, "Previous Space", .spaces, 1, [key([opt, cmd], .leftArrow, .page)], .space(.step(.previous)),
                   bar: listing("arrow.left.to.line", "Focus Previous Space"), repeats: true)
         case .openSpaceManager:
-            entry(130, "Manage Spaces…", .spaces, 2, [], .later(.spaceManager),
+            entry(130, "Manage Spaces…", .spaces, 2, [], .library(.open(.spaces)),
                   bar: listing("rectangle.portrait.on.rectangle.portrait", "Space Management", "Organize", "Toggle Space Manager", "View Spaces"))
 
         // MARK: Tabs (groups: New Tab… to Expand All Folders | Next Tab to Reveal Tab | Clear to Reset Tab; Arc's

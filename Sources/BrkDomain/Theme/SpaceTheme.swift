@@ -56,6 +56,7 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
     /// multiplier (Metrics.theme.*Opacity); wash opacity = min(0.2 + 0.55 x intensity, 0.5).
     public var intensity: Double
     public var appearance: AppearanceChoice
+    public var variants: ThemeVariants? = nil
 
     public init(colors: [RGBA], wheel: ColorWheel = .analogous, texture: Texture, noise: Double = 0.5,
                 intensity: Double, appearance: AppearanceChoice) {
@@ -134,6 +135,7 @@ public struct SidebarTokens: Hashable, Sendable, Codable {
 /// What surfaces paint with. Derived by `resolveTheme`, never stored.
 public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var scheme: Scheme
+    public var positions: [ThemePoint] = ThemePoint.anchors
     /// Gradient stops for the Metal background, primary first (derived from the base colors; 1 to 3 + blends).
     public var gradient: [RGBA]
     public var texture: Texture
@@ -159,7 +161,21 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 /// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
 /// - Wash: white (light) or black at 35% (dark) with opacity min(0.2 + 0.55 x intensity, 0.5).
 /// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
-public func resolveTheme(_ theme: SpaceTheme) -> ResolvedTheme {
+public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> ResolvedTheme {
+    if let variants = theme.variants {
+        let scheme: Scheme = variants.selection == .auto ? systemScheme : (variants.selection == .dark ? .dark : .light)
+        let style = (scheme == .dark ? variants.dark : variants.light).normalized
+        var legacy = SpaceTheme(colors: style.colors.map(\.color), wheel: style.wheel, texture: style.texture,
+                                noise: style.noise, intensity: style.intensity, appearance: scheme == .dark ? .dark : .light)
+        legacy.colors = Array((legacy.colors + companions(of: legacy.colors[0], style.wheel)).prefix(3)).map { color in
+            let (h, s, l) = hsl(color)
+            return rgb(hue: h, saturation: clamp01(s * style.saturation),
+                       lightness: clamp01((l + style.lightness) * (scheme == .dark ? 1 - style.darkBias * 0.8 : 1)))
+        }
+        var result = resolveTheme(legacy)
+        result.positions = (0..<3).map { style.colors.indices.contains($0) ? style.colors[$0].position : ThemePoint.anchors[$0] }
+        return result
+    }
     let base = (theme.colors.isEmpty ? SpaceTheme.default.colors : Array(theme.colors.prefix(3))).map(opaque)
     let primary = base[0]
     let scheme: Scheme = switch theme.appearance {

@@ -36,11 +36,11 @@ enum CommandInventory {
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
         .space(.delete(space)), .space(.move(space, index: 0)), .space(.focus(space)), .space(.step(.previous)),
-        .space(.togglePinnedSection(.current)),
+        .space(.togglePinnedSection(.current)), .space(.requestDelete(space)), .space(.confirmDelete(space, token: "ghost", confirmed: false)), .space(.exportIntoFolder(space)),
         .split(.addPane), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
         .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)),
-        .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
+        .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
         .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
@@ -69,6 +69,7 @@ enum CommandInventory {
         .download(DownloadUpdate(id: download, owner: DownloadOwner(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), context: ContextEpoch(context: .profile(profile), generation: 1), policy: .default), details: DownloadDetails(url: example, suggestedName: "x.zip"), revision: 1, stage: .choosingDestination)),
         .contextDisposed(.completed(DisposalID("ghost"), .profile(profile), .deletionScheduledForNextLaunch)),
         .siteResult("ghost", .cancelled), .clockTick,
+        .spaceExportFinished(WindowID("ghost"), token: "ghost", .cancelled),
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
@@ -185,6 +186,9 @@ enum CommandInventory {
             }
         case .space(let c):
             switch c {
+            case .requestDelete: "requestDelete"
+            case .confirmDelete: "confirmDelete"
+            case .exportIntoFolder: "exportIntoFolder"
             case .create: "create"
             case .update: "update"
             case .delete: "delete"
@@ -201,6 +205,8 @@ enum CommandInventory {
             }
         case .sidebar(let c):
             switch c {
+            case .toggleToolbar: "toggleToolbar"
+            case .toggleSpaceHeader: "toggleSpaceHeader"
             case .toggle: "toggle"
             case .resize: "resize"
             case .peek: "peek"
@@ -290,6 +296,7 @@ enum CommandInventory {
         case .contextDisposed: "contextDisposed"
         case .siteResult: "siteResult"
         case .clockTick: "clockTick"
+        case .spaceExportFinished: "spaceExportFinished"
         case .window(_, let e):
             switch e {
             case .geometry: "window.geometry"

@@ -898,7 +898,7 @@ final class SpaceHeaderView: HoverView {
 
     override func rightMouseDown(with event: NSEvent) {
         guard let space else { return }
-        dispatch(.sidebar(.popupMenu(.space(space.id), at: rootPoint(fromWindow: event.locationInWindow))))
+        dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 }
 

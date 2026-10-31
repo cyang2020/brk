@@ -20,6 +20,7 @@ public final class LibraryView: NSView {
     let archive: ArchivePageView
     let downloads: DownloadsPageView
     let history: HistoryPageView
+    let spaces: SpacesPageView
     let later = LaterPageView(frame: .zero)
     private var last: Slice?
 
@@ -33,6 +34,7 @@ public final class LibraryView: NSView {
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
+        spaces = SpacesPageView(dispatch: dispatch)
         archive = ArchivePageView(dispatch: dispatch)
         downloads = DownloadsPageView(dispatch: dispatch)
         history = HistoryPageView(dispatch: dispatch)
@@ -54,7 +56,7 @@ public final class LibraryView: NSView {
         exit.action = #selector(exitClicked)
         exit.identify(.libraryClose)
         addSubview(exit)
-        for view in [archive, downloads, history, later] as [NSView] { addSubview(view) }
+        for view in [archive, downloads, history, spaces, later] as [NSView] { addSubview(view) }
         isHidden = true
     }
 
@@ -78,6 +80,7 @@ public final class LibraryView: NSView {
             downloads.hide()
             history.hide()
             later.hide()
+            spaces.hide()
             return
         }
         let slice = Slice(library: library, frames: f, palette: palette, day: Calendar.current.startOfDay(for: LibraryDays.date(now)))
@@ -96,9 +99,10 @@ public final class LibraryView: NSView {
         if library.page == .archive, let snapshot = library.archive { archive.show(snapshot, in: page, scheme: scheme) } else { archive.hide() }
         if library.page == .downloads { downloads.show(library.downloads, openID: library.openID, in: page, scheme: scheme, now: now) } else { downloads.hide() }
         if library.page == .history { history.show(library.history, openID: library.openID, in: page, scheme: scheme, now: now) } else { history.hide() }
+        if library.page == .spaces { spaces.show(library, in: page, scheme: scheme) } else { spaces.hide() }
         switch library.page {
-        case .media, .easelsAndNotes, .boosts, .spaces: later.show(library.page, in: page, scheme: scheme)
-        case .downloads, .history, .archive: later.hide()
+        case .media, .easelsAndNotes, .boosts: later.show(library.page, in: page, scheme: scheme)
+        case .downloads, .history, .archive, .spaces: later.hide()
         }
     }
 

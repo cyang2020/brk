@@ -54,6 +54,12 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case hover(point: CGPoint)
     /// A native pointer sequence. The down target keeps receiving dragged/up events, as with a physical mouse.
     case pointer(window: WindowID?, phase: PointerPhase, point: CGPoint)
+    /// Native event sequences for scoped pointer and sidebar gesture acceptance.
+    case pointerDrag(from: CGPoint, to: CGPoint, cancel: Bool)
+    case scrollGesture(at: CGPoint, horizontal: Double, vertical: Double, cancel: Bool)
+    case sheetButton(title: String)
+    /// Select an owned fixture directory in the actual native folder panel.
+    case selectSheetDirectory(path: String)
     /// CGWindowListCreateImage of the window (works without screen recording permission, spike unknown 8), PNG.
     case screenshot(window: WindowID?, path: String)
     /// One pixel of a fresh window capture, at a window point (top-left origin, points), as sRGB 0...255.

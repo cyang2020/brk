@@ -39,6 +39,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var bounds: CGRect?
     /// The current space's theme. A change crossfades (Metrics.motion.themeCrossfade).
     public var theme: ResolvedTheme
+    public var websiteTheme: WebsiteThemeValues { theme.websiteValues }
     public var sidebar: SidebarSnapshot
     public var urlPill: URLPillSnapshot
     public var favorites: FavoritesSnapshot
@@ -51,6 +52,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var content: ContentSnapshot
     public var renaming: ItemID?
     public var dialog: SpaceDialogSnapshot?
+    public var pendingSpaceDeletion: SpaceDeletionRequest? = nil
+    public var spaceProfiles: [ProfileRow] = []
     public var profileDialog: ProfileDialogSnapshot?
     public var find: FindSnapshot? = nil
     public var overlay: OverlaySnapshot?
@@ -66,6 +69,9 @@ public struct SidebarSnapshot: Sendable, Equatable, Codable {
     public var width: Double
     /// Hidden sidebar floating over the content (left-edge hover).
     public var peek: Bool
+    public var toolbarVisible: Bool = false
+    public var spaceHeaderVisible: Bool = true
+    public var hapticsEnabled: Bool = true
 }
 
 public struct URLPillSnapshot: Sendable, Equatable, Codable {
@@ -77,6 +83,7 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// Arc's `ProfileIndicatorView`: shown when the space's profile is not the default one, or the window is
     /// incognito. F2.
     public var profile: ProfileBadge?
+    public var toolbarText: String? = nil
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {
@@ -249,6 +256,10 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var downloads: [DownloadRow]
     /// Newest first, the current space's profile only. F5.
     public var history: [HistoryRow]
+    public var spaces: [SpaceManagerRow] = []
+    public var spaceExportMessage: String? = nil
+    public var spaceExportInProgress: Bool = false
+    public var canManageSpaces: Bool = true
 }
 
 public struct DownloadRow: Sendable, Equatable, Codable {

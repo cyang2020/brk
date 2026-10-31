@@ -306,6 +306,8 @@ struct StoredDocV3: Codable {
         var activeBySpace: [SpaceID: ItemID]
         var sidebarVisible: Bool
         var sidebarWidth: Double
+        var toolbarVisible: Bool?
+        var spaceHeaderVisible: Bool?
         var slots: [ItemID: SavedSlot]?
         var splitFocus: [ItemID: ItemID]?
         var emptySelections: [SpaceID]?
@@ -347,6 +349,7 @@ struct StoredDocV3: Codable {
         history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) }
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
+                         toolbarVisible: $0.toolbarVisible, spaceHeaderVisible: $0.spaceHeaderVisible,
                          slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted(), folderExpansion: $0.folderExpansion)
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
@@ -467,7 +470,9 @@ struct StoredDocV3: Codable {
             let s = spaces[id]!
             let pinned = claim(s.pinnedRoot, as: .pinned(id), slot: "space \(id) pinned")
             let today = claim(s.todayRoot, as: .today(id), slot: "space \(id) today")
-            docSpaces[id] = Space(id: id, title: s.title, icon: s.icon, theme: s.theme, profile: s.profile, pinnedRoot: pinned,
+            let safeTheme = clamped(s.theme)
+            if safeTheme != s.theme { repairs.append("space \(id): normalized theme values") }
+            docSpaces[id] = Space(id: id, title: s.title, icon: s.icon, theme: safeTheme, profile: s.profile, pinnedRoot: pinned,
                                   todayRoot: today, pinnedCollapsed: s.pinnedCollapsed)
         }
         for (id, record) in records where record.payload.kind == .section && !claimed.contains(id) {
@@ -493,7 +498,8 @@ struct StoredDocV3: Codable {
                                        slots: (w.slots ?? [:]).filter { tree[$0.key]?.kind == .tab && opens($0.value.committedURL, "slot \(id)/\($0.key)") },
                                        splitFocus: w.splitFocus ?? [:], folderExpansion: w.folderExpansion ?? tree.items.reduce(into: [:]) { result, pair in
                                            if case .folder(let f) = pair.value.body { result[pair.key] = !f.collapsed }
-                                       }, sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
+                                       }, sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth,
+                                       toolbarVisible: w.toolbarVisible ?? false, spaceHeaderVisible: w.spaceHeaderVisible ?? true)
         }
         if docWindows.isEmpty {
             let id = WindowID(ctx.newID())

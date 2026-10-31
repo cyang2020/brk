@@ -116,6 +116,10 @@ final class ThemeRenderer {
         let stops = (theme.gradient + Array(repeating: theme.gradient.last ?? RGBA(0, 0, 0), count: 3)).prefix(3)
         var gradient: [Float] = []
         for stop in stops { gradient += [Float(stop.red), Float(stop.green), Float(stop.blue), 1] }
+        for i in 0..<3 {
+            let anchor = theme.positions.indices.contains(i) ? theme.positions[i] : ThemePoint.anchors[i]
+            gradient += [Float(anchor.x), Float(anchor.y), 0, 0]
+        }
         gradient += [Float(min(theme.gradient.count, 3)), p, 0, 0]
         pass(commandBuffer, into: targets.gradients[output], gradientPipeline, uniforms: gradient,
              textures: [targets.gradients[from]])
@@ -208,7 +212,7 @@ final class ThemeRenderer {
         return out;
     }
 
-    struct GradientUniforms { float4 colors[3]; float count; float progress; };
+    struct GradientUniforms { float4 colors[3]; float4 anchors[3]; float count; float progress; };
 
     // Primary top-left (where the sidebar is), the lighter companion top-right, the darker one at the bottom.
     // Gaussian weights normalised per pixel give one soft blend with no flat spots or edges.
@@ -219,7 +223,7 @@ final class ThemeRenderer {
         float3 sum = 0;
         float total = 0;
         for (int i = 0; i < int(u.count); i++) {
-            float2 d = in.uv - anchors[i];
+            float2 d = in.uv - u.anchors[i].xy;
             float w = weights[i] * exp(-dot(d, d) / (2 * 0.42 * 0.42));
             sum += w * u.colors[i].rgb;
             total += w;

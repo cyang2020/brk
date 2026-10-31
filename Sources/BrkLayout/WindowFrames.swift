@@ -12,6 +12,7 @@ import Foundation
 // flipped (`isFlipped == true`), so a frame here is assigned to `NSView.frame` without conversion.
 
 public struct WindowFrames: Sendable, Equatable, Codable {
+    public var toolbar: CGRect? = nil
     public var contentSize: CGSize
     /// Nil when the sidebar is hidden and not peeking.
     public var sidebar: SidebarFrames?
@@ -116,6 +117,7 @@ public struct RowFrame: Sendable, Equatable, Codable {
 /// Every view the harness can address. `identifier` is the view's NSAccessibility identifier (set by BrkUI from
 /// this enum, never typed by hand), and `WindowFrames.frame(of:)` is its computed frame when layout owns it.
 public enum ViewID: Hashable, Sendable, Codable {
+    case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String)
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
     case section(SectionKind)
@@ -146,6 +148,10 @@ public enum ViewID: Hashable, Sendable, Codable {
 
     public var identifier: String {
         switch self {
+        case .toolbar: "address-toolbar"
+        case .toolbarAddress: "toolbar-address"
+        case .toolbarButton(let name): "toolbar-\(name)"
+        case .spaceToolsControl(let name): "space-tools-\(name)"
         case .sidebar: "sidebar"
         case .floatingSidebar: "floating-sidebar"
         case .titleRow: "title-row"
@@ -214,6 +220,9 @@ extension WindowFrames {
     /// tab list's document space using its current scroll offset of zero; scrolled rows are reported by `actual`).
     public func frame(of view: ViewID) -> CGRect? {
         switch view {
+        case .toolbar: return toolbar
+        case .toolbarAddress: return toolbar.map(AddressToolbarLayout.address(in:))
+        case .toolbarButton, .spaceToolsControl: return nil
         case .sidebar: return sidebarFloats ? nil : sidebar?.frame
         case .floatingSidebar: return sidebarFloats ? sidebar?.frame : nil
         case .titleRow: return sidebar?.titleRow

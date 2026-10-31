@@ -6,7 +6,9 @@ import Foundation
 public struct ProjectionContext: Sendable {
     public let now: Instant
     public let calendar: Calendar
-    public init(now: Instant, calendar: Calendar) {
+    public let systemScheme: Scheme
+    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light) {
+        self.systemScheme = systemScheme
         self.now = now
         self.calendar = calendar
     }
@@ -186,7 +188,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let dock = state.doc.spaceOrder.compactMap { sid -> DockItem? in
         guard let s = state.doc.spaces[sid] else { return nil }
         return DockItem(id: sid, title: state.displayTitle(of: sid), icon: s.icon, active: sid == space.id,
-                        color: s.theme.colors.first ?? SpaceTheme.default.colors[0])
+                        color: resolveTheme(s.theme, systemScheme: ctx.systemScheme).gradient.first ?? SpaceTheme.default.colors[0])
     }
 
     // Content.
@@ -208,6 +210,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     if let focusedPane, let t = state.displayedTab(focusedPane, in: id) {
         focusedTab = t
         pill.text = t.url.map(displayURL)
+        pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : displayURL($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward
         }
@@ -269,7 +272,18 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             } : [],
             history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
                 HistoryRow(url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
-            } : []
+            } : [],
+            spaces: page == .spaces && doc.kind == .standard ? state.doc.spaceOrder.compactMap { sid in
+                state.doc.spaces[sid].map { value in
+                    SpaceManagerRow(id: sid, title: state.displayTitle(of: sid), icon: value.icon,
+                                    profileName: state.doc.profiles[value.profile]?.name ?? "Default",
+                                    theme: resolveTheme(value.theme, systemScheme: ctx.systemScheme),
+                                    tabCount: state.doc.tree.tabs(under: value.pinnedRoot).count + state.doc.tree.tabs(under: value.todayRoot).count,
+                                    active: sid == space.id)
+                }
+            } : [],
+            spaceExportMessage: session.spaceExportMessage, spaceExportInProgress: session.spaceExport != nil,
+            canManageSpaces: doc.kind == .standard
         ))
     case .peek(let openID, let tab)?:
         // The peeked tab lives in the window's own scratch tree, whatever the window's container is.
@@ -287,6 +301,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     if session.find?.focusInput == true { focus = .findInput }
     else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
+    else if session.pendingSpaceDeletion != nil { focus = .none }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
     else if session.sidebarFocused { focus = .sidebar }
@@ -313,10 +328,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         ? SpaceTheme(colors: [ThemePresets.greyscale[6]], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
         : space.theme
     return WindowSnapshot(
-        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme),
-        sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
+        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme, systemScheme: ctx.systemScheme),
+        sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
+                                 toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
+                                 hapticsEnabled: state.doc.settings.advanced.hapticsOnReorder),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
-        renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, find: session.find.map {
+        renaming: session.renaming, dialog: dialog, pendingSpaceDeletion: session.pendingSpaceDeletion,
+        spaceProfiles: profileRows(state), profileDialog: profileDialog, find: session.find.map {
             FindSnapshot(page: $0.page, query: $0.query, replacement: $0.replacement, count: $0.count, ordinal: $0.ordinal,
                          searching: $0.searching, canReplace: $0.ticket != nil && $0.editable != nil && $0.operation == nil && !$0.query.text.isEmpty,
                          message: $0.message, scope: $0.replacement ? "Only the captured editable field" : "This page", focusRequest: $0.focusRequest)

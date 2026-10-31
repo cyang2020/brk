@@ -1730,8 +1730,8 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 130, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 23, "a SystemEvent case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 135, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.events.count, 24, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
             .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }

@@ -33,22 +33,24 @@ public enum WindowLayout {
         } else if snapshot.sidebar.visible {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
             handle = CGRect(x: frame.maxX - m.resizeHitWidth.value / 2, y: m.resizeHitTop.value,
                             width: m.resizeHitWidth.value, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
         } else if snapshot.sidebar.peek {
             floats = true
             let frame = CGRect(x: m.floatingInset.value, y: m.floatingInset.value, width: snapshot.sidebar.width,
                                height: contentSize.height - 2 * m.floatingInset.value)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
         } else {
             reveal = CGRect(x: -m.revealOutsideFactor.value * inset, y: 0,
                             width: (m.revealOutsideFactor.value + m.revealInsideFactor.value) * inset, height: contentSize.height)
         }
 
         // The inset is kept when the sidebar is hidden (Arc keeps 10 pt).
-        let contentArea = CGRect(x: anchoredWidth + inset, y: inset, width: max(0, contentSize.width - anchoredWidth - 2 * inset),
-                                 height: max(0, contentSize.height - 2 * inset))
+        let toolbarHeight = snapshot.sidebar.toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
+        let toolbar = toolbarHeight > 0 ? CGRect(x: anchoredWidth + inset, y: inset, width: max(0, contentSize.width - anchoredWidth - 2 * inset), height: toolbarHeight) : nil
+        let contentArea = CGRect(x: anchoredWidth + inset, y: inset + toolbarHeight, width: max(0, contentSize.width - anchoredWidth - 2 * inset),
+                                 height: max(0, contentSize.height - 2 * inset - toolbarHeight))
         let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
         let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
                                                     orientation: snapshot.content.orientation)
@@ -63,7 +65,7 @@ public enum WindowLayout {
         var library: LibraryFrames?
         var peek: CGRect?
         switch snapshot.overlay {
-        case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: sidebar?.urlPill)
+        case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: toolbar.map(AddressToolbarLayout.address(in:)) ?? sidebar?.urlPill)
         case .library?:
             library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height), page: contentArea,
                                            contentSize: contentSize)
@@ -77,6 +79,7 @@ public enum WindowLayout {
            let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.rect {
             result.find = FindLayout.compute(in: card, replacing: find.replacement)
         }
+        result.toolbar = toolbar
         return result
     }
 }

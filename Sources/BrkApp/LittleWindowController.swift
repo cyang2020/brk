@@ -119,6 +119,7 @@ public enum LittleArcCopy {
 @MainActor
 public final class BrowserPanel: NSPanel, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+    public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
 

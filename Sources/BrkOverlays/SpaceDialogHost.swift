@@ -17,6 +17,12 @@ import SwiftUI
 @MainActor
 public final class SpaceDialogHost: NSView {
     let dispatch: Dispatch
+    public var profiles: [ProfileRow] = [] {
+        didSet {
+            guard profiles != oldValue, let dialog, let form else { return }
+            form.rootView = SpaceDialogForm(draft: SpaceDraft(dialog), profiles: profiles, dispatch: dispatch)
+        }
+    }
     private var form: NSHostingController<SpaceDialogForm>?
     var hosting: NSView? { form?.view }
     private var dialog: SpaceDialogSnapshot?
@@ -65,7 +71,7 @@ public final class SpaceDialogHost: NSView {
         guard isHidden || dialog != self.dialog || area != self.area || scheme != self.scheme else { return }
         if dialog != self.dialog || form == nil {
             hosting?.removeFromSuperview()
-            let controller = NSHostingController(rootView: SpaceDialogForm(draft: SpaceDraft(dialog), dispatch: dispatch))
+            let controller = NSHostingController(rootView: SpaceDialogForm(draft: SpaceDraft(dialog), profiles: profiles, dispatch: dispatch))
             // The card never sits under the titlebar; without this the window's titlebar inset pads the form.
             controller.safeAreaRegions = []
             addSubview(controller.view)
@@ -83,7 +89,7 @@ public final class SpaceDialogHost: NSView {
         isHidden = false
         let margin = Metrics.commandBar.minVerticalMargin.value
         let width = min(OverlayMetrics.dialog.width.value, area.width - 2 * margin)
-        let fitted = form?.sizeThatFits(in: CGSize(width: width, height: area.height)).height ?? 0
+        let fitted = profiles.isEmpty ? (form?.sizeThatFits(in: CGSize(width: width, height: area.height)).height ?? 0) : min(710, area.height - 32)
         let height = min(fitted, area.height - 2 * margin)
         frame = CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height).integral
         hosting?.frame = bounds
@@ -106,6 +112,7 @@ struct SpaceDraft: Equatable {
     var title: String
     var icon: SpaceIcon
     var theme: SpaceTheme
+    var profile: ProfileID = .default
 
     init(_ dialog: SpaceDialogSnapshot) {
         switch dialog {
@@ -126,7 +133,7 @@ struct SpaceDraft: Equatable {
     var saveCommand: Command {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if let editing { return .space(.update(editing, title: name, icon: icon, theme: theme)) }
-        return .space(.create(title: name, icon: icon, theme: theme))
+        return .space(.create(title: name, icon: icon, theme: theme, profile: profile))
     }
 
     static let cancelCommand: Command = .sidebar(.openDialog(nil))
@@ -171,43 +178,72 @@ extension RGBA {
 struct SpaceDialogForm: View {
     @State private var draft: SpaceDraft
     let dispatch: Dispatch
+    let profiles: [ProfileRow]
+    @State private var stage = 0
     @Environment(\.colorScheme) private var colorScheme
 
-    init(draft: SpaceDraft, dispatch: @escaping Dispatch) {
+    init(draft: SpaceDraft, profiles: [ProfileRow] = [], dispatch: @escaping Dispatch) {
         _draft = State(initialValue: draft)
         self.dispatch = dispatch
+        self.profiles = profiles
     }
 
     private var colors: OverlayColors { .of(colorScheme == .dark ? .dark : .light) }
     private var m: DialogOverlayMetrics { OverlayMetrics.dialog }
 
+    private var staged: Bool { draft.editing == nil && !profiles.isEmpty }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: m.padding.value * 0.7) {
-            Text(draft.editing == nil ? OverlayCopy.newSpaceTitle : OverlayCopy.editSpaceTitle)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(draft.editing == nil ? OverlayCopy.newSpaceTitle : OverlayCopy.editSpaceTitle).font(.headline)
+            if staged { Text(["1. Name and icon", "2. Theme", "3. Profile"][stage]).font(.subheadline).foregroundStyle(.secondary) }
             preview
-            TextField(OverlayCopy.spaceName, text: $draft.title, prompt: Text(OverlayCopy.spaceNamePlaceholder))
-                .textFieldStyle(.roundedBorder)
-                .labelsHidden()
-                .onSubmit(save)
-            section(OverlayCopy.icon) { iconPicker }
-            section(OverlayCopy.color) { swatches }
-            themeControls
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !staged || stage == 0 {
+                        TextField(OverlayCopy.spaceName, text: $draft.title, prompt: Text(OverlayCopy.spaceNamePlaceholder))
+                            .textFieldStyle(.roundedBorder).labelsHidden().onSubmit(save)
+                            .spaceToolsID("name")
+                        section(OverlayCopy.icon) { iconPicker }
+                    }
+                    if profiles.isEmpty {
+                        section(OverlayCopy.color) { swatches }
+                        themeControls
+                    } else if !staged || stage == 1 {
+                        ThemeToolsEditor(theme: $draft.theme)
+                    }
+                    if staged && stage == 2 {
+                        Text("This profile keeps website sign-ins and Favorites separate.").font(.caption).foregroundStyle(.secondary)
+                        if !profiles.contains(where: { $0.id == draft.profile }) {
+                            Text("That profile is no longer available. Choose another profile.").font(.caption).foregroundStyle(.red)
+                        }
+                        ForEach(profiles, id: \.id) { profile in
+                            SpaceToolsButton(title: profile.name + (profile.isDefault ? " · Default" : " · Separate website data"), id: "profile-\(profile.id)", selected: draft.profile == profile.id) { draft.profile = profile.id }
+                                .frame(maxWidth: .infinity, minHeight: 42)
+
+                        }
+                    }
+                }.padding(.trailing, 4)
+            }.frame(maxHeight: profiles.isEmpty ? 440 : (stage == 0 && staged ? 235 : 420))
             HStack {
+                if staged && stage > 0 { SpaceToolsButton(title: "Back", id: "back") { withAnimation(.easeInOut(duration: 0.18)) { stage -= 1 } } }
                 Spacer()
-                Button(OverlayCopy.cancel, action: cancel)
-                    .keyboardShortcut(.cancelAction)
-                Button(draft.editing == nil ? OverlayCopy.createSpace : OverlayCopy.save, action: save)
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color(nsColor: colors.primaryButton))
+                if profiles.isEmpty {
+                    Button(OverlayCopy.cancel, action: cancel).keyboardShortcut(.cancelAction)
+                    Button(draft.editing == nil ? OverlayCopy.createSpace : OverlayCopy.save, action: save).keyboardShortcut(.defaultAction)
+                } else {
+                    SpaceToolsButton(title: OverlayCopy.cancel, id: "cancel", key: "\u{1b}", action: cancel)
+                    SpaceToolsButton(title: staged && stage < 2 ? "Continue" : (draft.editing == nil ? OverlayCopy.createSpace : OverlayCopy.save), id: "save", key: "\r", action: save)
+                        .disabled(staged && stage == 2 && !profiles.contains(where: { $0.id == draft.profile }))
+                }
             }
-        }
-        .padding(m.padding.value)
-        .onExitCommand(perform: cancel)
+        }.padding(m.padding.value).onExitCommand(perform: cancel)
     }
 
-    private func save() { dispatch(draft.saveCommand) }
+    private func save() {
+        if staged && stage < 2 { withAnimation(.easeInOut(duration: 0.18)) { stage += 1 } }
+        else { dispatch(draft.saveCommand) }
+    }
     private func cancel() { dispatch(SpaceDraft.cancelCommand) }
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
@@ -222,12 +258,11 @@ struct SpaceDialogForm: View {
         let resolved = resolveTheme(draft.theme)
         let ink: Color = resolved.scheme == .dark ? .white : .black
         let name = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return RoundedRectangle(cornerRadius: Metrics.content.cornerRadius.value, style: .continuous)
-            .fill(LinearGradient(colors: resolved.gradient.map(\.swiftUI), startPoint: .topLeading, endPoint: .bottomTrailing))
-            .overlay(RoundedRectangle(cornerRadius: Metrics.content.cornerRadius.value, style: .continuous).fill(resolved.wash.swiftUI))
+        return ThemePadPreview(theme: resolved)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.content.cornerRadius.value, style: .continuous))
             .overlay(alignment: .leading) {
                 HStack(spacing: m.padding.value / 2) {
-                    SpaceGlyph(icon: draft.icon, dot: draft.theme.colors.first?.swiftUI ?? .gray)
+                    SpaceGlyph(icon: draft.icon, dot: resolved.gradient.first?.swiftUI ?? .gray)
                     Text(name.isEmpty ? OverlayCopy.spaceNamePlaceholder : name).font(.headline)
                 }
                 .foregroundStyle(ink.opacity(0.8))
@@ -243,6 +278,7 @@ struct SpaceDialogForm: View {
         return ScrollView(.vertical) { VStack(alignment: .leading, spacing: m.padding.value / 4) {
             HStack(spacing: m.padding.value / 4) {
                 TextField(OverlayCopy.emojiPlaceholder, text: Binding(get: { draft.emoji }, set: { draft.setEmoji($0) }))
+                    .spaceToolsID("emoji")
                     .textFieldStyle(.roundedBorder)
                     .frame(width: side * 2.5)
                 choice(selected: draft.icon == SpaceIcon.none, help: OverlayCopy.noIcon) {

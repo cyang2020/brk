@@ -64,6 +64,7 @@ public class WindowController: NSObject, NSWindowDelegate {
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
+        window.onScrollWheel = { [weak root] event in root?.handleScrollWheel(event) ?? false }
         window.onFlagsChanged = { [weak self] flags in
             guard let self else { return }
             let held = Modifiers(rawValue: flags.intersection(.deviceIndependentFlagsMask).rawValue
@@ -168,6 +169,7 @@ public protocol HostWindow: NSWindow {
     /// Called for every `flagsChanged` (and every mouse-down, which carries the modifiers held at that moment), so
     /// Control going up or down and a Shift held for a click reach the reducer whoever has focus.
     var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)? { get set }
+    var onScrollWheel: ((NSEvent) -> Bool)? { get set }
     /// A key equivalent the window's views did not take (a native view has focus, or none): the shortcut table
     /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
     var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
@@ -188,6 +190,7 @@ extension HostWindow {
     /// unbound key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium
     /// gets the event and CEF's key handler routes it (before and after the page). Returns true when consumed.
     func hostEvent(_ event: NSEvent) -> Bool {
+        if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
         switch event.type {
         case .flagsChanged: onFlagsChanged?(event.modifierFlags)
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
@@ -262,6 +265,7 @@ extension HostWindow {
 @MainActor
 public final class BrowserWindow: NSWindow, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
+    public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
 

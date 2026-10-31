@@ -14,7 +14,11 @@ final class DockView: NSView {
     private var cells: [SpaceID: DockCellView] = [:]
     private let library = GlyphButton()
     private let plus = GlyphButton()
+    var hapticsEnabled = true
     private var last: ([DockItem], SidebarFrames, Palette)?
+    private var draggingSpace: SpaceID?
+    private var dragTarget: SpaceID?
+    private var cancelMonitor: Any?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -51,6 +55,8 @@ final class DockView: NSView {
         for item in items {
             let cell = cells[item.id] ?? {
                 let c = DockCellView(dispatch: dispatch, id: item.id)
+                c.reorderChanged = { [weak self] point in self?.updateReorder(item.id, at: point) }
+                c.reorderEnded = { [weak self] point in self?.finishReorder(item.id, at: point) }
                 cells[item.id] = c
                 addSubview(c)
                 return c
@@ -59,6 +65,41 @@ final class DockView: NSView {
             cell.render(item, palette: palette)
         }
     }
+
+    private func updateReorder(_ id: SpaceID, at point: CGPoint) {
+        if draggingSpace == nil {
+            draggingSpace = id
+            cells[id]?.alphaValue = 0.5
+            cancelMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard event.keyCode == 53 else { return event }
+                MainActor.assumeIsolated { self?.cancelReorder() }
+                return nil
+            }
+        }
+        guard draggingSpace == id, let last else { return }
+        dragTarget = last.1.dockSpaces.first { $0.value.contains(point) }?.key
+        showDrop(space: dragTarget)
+    }
+    private func finishReorder(_ id: SpaceID, at point: CGPoint) {
+        guard draggingSpace == id, let last else { cancelReorder(); return }
+        let target = last.1.dockSpaces.first { $0.value.contains(point) }?.key
+        let index = target.flatMap { target in last.0.firstIndex { $0.id == target } }
+        cancelReorder()
+        guard let index, target != id else { return }
+        if hapticsEnabled { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+        dispatch(.space(.move(id, index: index)))
+    }
+    @discardableResult
+    func cancelReorder() -> Bool {
+        let active = draggingSpace != nil || cells.values.contains { $0.isPressed }
+        for cell in cells.values { cell.alphaValue = 1; cell.cancelPress() }
+        draggingSpace = nil; dragTarget = nil
+        showDrop(space: nil)
+        if let cancelMonitor { NSEvent.removeMonitor(cancelMonitor); self.cancelMonitor = nil }
+        return active
+    }
+    override func viewDidHide() { super.viewDidHide(); cancelReorder() }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { cancelReorder() } }
 
     /// Highlights the cell a drag would drop on; nil clears it.
     func showDrop(space: SpaceID?) {
@@ -74,6 +115,10 @@ final class DockView: NSView {
 @MainActor
 final class DockCellView: HoverView {
     let id: SpaceID
+    var reorderChanged: ((CGPoint) -> Void)?
+    var reorderEnded: ((CGPoint) -> Void)?
+    private var pressPoint: CGPoint?
+    private var didDrag = false
     private let dispatch: Dispatch
     private let icon = IconView()
     private var item: DockItem?
@@ -128,15 +173,28 @@ final class DockCellView: HoverView {
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
+        pressPoint = event.locationInWindow; didDrag = false
         isPressed = true
     }
 
+    override func mouseDragged(with event: NSEvent) {
+        guard let start = pressPoint else { return }
+        if hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 { didDrag = true }
+        if didDrag { reorderChanged?(rootPoint(fromWindow: event.locationInWindow)) }
+    }
+
     override func mouseUp(with event: NSEvent) {
-        isPressed = false
+        guard pressPoint != nil else { return }
+        isPressed = false; pressPoint = nil
+        if didDrag { didDrag = false; reorderEnded?(rootPoint(fromWindow: event.locationInWindow)); return }
         if bounds.contains(local(event)) { dispatch(.space(.focus(id))) }
     }
 
+    fileprivate func cancelPress() {
+        pressPoint = nil; didDrag = false; isPressed = false
+    }
+
     override func rightMouseDown(with event: NSEvent) {
-        dispatch(.sidebar(.popupMenu(.space(id), at: rootPoint(fromWindow: event.locationInWindow))))
+        dispatch(.sidebar(.popupMenu(.spaceControls(id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 }
