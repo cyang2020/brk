@@ -29,7 +29,15 @@ final class BoostFilesTests: XCTestCase {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("boosts.json"), data = Data("invalid".utf8)
         try data.write(to: file)
-        XCTAssertNotNil(files.read(.default).1)
-        XCTAssertEqual(try Data(contentsOf: file), data)
+        let (catalog, error) = files.read(.default)
+        XCTAssertNotNil(error); XCTAssertTrue(catalog.boosts.isEmpty)
+        // The unreadable file is set aside, not left in place: the next save must not be able to overwrite it.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        let rejected = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil).filter { $0.lastPathComponent.hasPrefix("boosts.rejected-") }
+        XCTAssertEqual(rejected.count, 1)
+        XCTAssertEqual(try Data(contentsOf: rejected[0]), data)
+        try files.write(BoostCatalog(boosts: [Boost(id: "new", name: "New", scope: .allSites)]), profile: .default)
+        XCTAssertEqual(try Data(contentsOf: rejected[0]), data, "a save after the failed read leaves the set-aside bytes untouched")
+        XCTAssertEqual(files.read(.default).0.boosts.map(\.id), ["new"])
     }
 }
