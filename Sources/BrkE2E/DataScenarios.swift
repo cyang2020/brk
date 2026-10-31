@@ -193,6 +193,14 @@ enum DataScenarios {
         try verify(try read(app, a, "unsupported-preserves-C"), storage: "C", cookies: "C")
         try expect(!FileManager.default.fileExists(atPath: app.dataDirectory.appendingPathComponent("profiles-to-delete").path), "clearing scheduled profile deletion")
         try app.flush(); try app.restart()
+        try app.dispatch(.tab(.focus(a)))
+        try app.waitUntil("restored profile document is ready") {
+            guard case .pageObservations(let pages) = try app.send(.pageObservations), case .ready? = pages[PageID(window: app.window!, item: a)]?.document else { return false }
+            return true
+        }
+        // Request page input with an actual click after using the native settings window.
+        // Deferred context readiness must continue to respect native responders.
+        try app.click(.card(0))
         try focus(app, a); let c = try read(app, a, "C-restart"); try verify(c, storage: "C", cookies: "C"); try http(app, a, "C-restart", requests: 0)
         try assign(app, .default, item: a); let av = try read(app, a, "A-restart"); try verify(av, storage: "A", cookies: nil); try http(app, a, "A-restart", requests: 1)
         try focus(app, b); let bv = try read(app, b, "B-restart"); try verify(bv, storage: "B", cookies: nil, domain: false); try http(app, b, "B-restart", requests: 1)
