@@ -56,6 +56,8 @@ enum AIScenarios {
         try app.dispatch(.assist(.ask("fixture:fail")))
         try answer(app, contains: "23")
         try expect(try app.view().ai!.text.contains("Terminal"), "failure lacks an action")
+        try app.dispatch(.assist(.ask("fixture:empty")))
+        try answer(app, contains: "no answer")
     }
     private static func page(_ app: AppUnderTest) throws {
         try enable(app)

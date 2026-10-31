@@ -203,6 +203,10 @@ extension Work {
             }
             return
         }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completeAI(id, text: "The AI tool returned no answer. Check its sign-in in Terminal, then retry.")
+            return
+        }
         switch task {
         case .renameTab(let tab, _, let url):
             let title = String(text.split(whereSeparator: \.isNewline).first ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)

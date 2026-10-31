@@ -258,4 +258,13 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertEqual(d.row(tab)?.title, "Navigated Home")
     }
 
+    func testEmptySuccessfulReplyShowsAnActionableFailure() throws {
+        let d = enabled()
+        let (id, _) = try request(d.user(.assist(.ask("Question"))))
+        d.system(.aiResult(id, .text("   \n")))
+        XCTAssertFalse(d.view.ai!.busy)
+        XCTAssertTrue(d.view.ai!.text.contains("no answer"))
+        XCTAssertTrue(d.view.ai!.text.contains("Terminal"))
+    }
+
 }
