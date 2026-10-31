@@ -78,7 +78,7 @@ extension ChromePage {
                 }
             }
             cast = controller
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { controller.router.probeUnavailableRoute() }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let url = browser.url { controller.router.validateSource(url.absoluteString) }
         }
         cast?.show()
     }

@@ -9,7 +9,7 @@ enum BrowserOpsScenarios {
         Scenario("BO2", "real empty popup, document.write, opener, native identity and close", cefOnly: "CEF popup browsing contexts", popups),
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
-        Scenario("BO5", "real context-owned media-router enumeration and invalid-route callback", cefOnly: "CEF media router", cast),
+        Scenario("BO5", "real context-owned media-router enumeration and source rejection", cefOnly: "CEF media router", cast),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
     ]
     private static func load(_ app: AppUnderTest, _ path: String) throws -> PageID {
@@ -144,12 +144,12 @@ enum BrowserOpsScenarios {
         try app.perform(.menuAction("Cast"))
         try app.waitUntil("real media-router enumeration", timeout: 15) {
             let f = try facts(app, page)
-            return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castResult != nil
+            return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castSourceSupported != nil
         }
         let result = try facts(app, page)
-        try expect(result.castError?.contains("Source") == true, "Invalid route did not return CEF's real source error")
+        try expect(result.castSourceSupported == false, "The pinned router unexpectedly accepted arbitrary HTTP page mirroring")
         try app.recordWindows("cast-receivers")
-        app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). CEF invalid-source create_route result \(result.castResult ?? -1): \(result.castError ?? ""). No fake receiver or successful hardware route is claimed; no receiver is available for termination proof.")
+        app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). GetSource rejected HTTP page mirroring. No native route creation or termination is claimed without a receiver. ABI callback/termination ownership is covered separately by raw unit fixtures.")
     }
     @Sendable static func transformations(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?transformations")

@@ -62,7 +62,32 @@ import Testing
             native.creates += 1; native.callback = callback
             cefRelease(source.map(UnsafeMutableRawPointer.init)); cefRelease(sink.map(UnsafeMutableRawPointer.init))
         }
+        raw.pointee.get_source = { raw, urn in
+            guard CefStringUtil.string(from: urn).hasPrefix("cast:") else { return nil }
+            return cefAllocate(cef_media_source_t.self, owner: cefOwner(Native.self, raw.map(UnsafeMutableRawPointer.init))!)
+        }
         return CefMediaRouting(taking: raw)
+    }
+    static func installSink(_ native: Native) -> UnsafeMutablePointer<cef_media_sink_t> {
+        let sink = cefAllocate(cef_media_sink_t.self, owner: native)
+        sink.pointee.get_id = { _ in MediaRoutingOwnershipTests.string("abi-sink") }
+        sink.pointee.get_name = { _ in MediaRoutingOwnershipTests.string("ABI fixture, not receiver hardware") }
+        cefAddRef(UnsafeMutableRawPointer(sink))
+        let observer = native.observer!
+        var incoming: UnsafeMutablePointer<cef_media_sink_t>? = sink
+        observer.pointee.on_sinks?(observer, 1, &incoming)
+        return sink
+    }
+    @Test func unsupportedPresentationDoesNotCreateOrAcquirePendingRoute() {
+        let native = Native(), router = Self.router(native)
+        #expect(!router.validateSource("https://fixture.invalid/no-source"))
+        #expect(native.creates == 0, "CEF's generated API rejects null source/sink without a completion callback")
+        #expect(!router.hasPendingRoutes, "Unsupported input must not acquire an undrainable route lease")
+        router.stop()
+        if let callback = native.callback {
+            callback.pointee.on_media_route_create_finished?(callback, CEF_MRCR_UNKNOWN_ERROR, nil, nil)
+            cefRelease(UnsafeMutableRawPointer(callback)); native.callback = nil
+        }
     }
     @Test(.enabled(if: LoaderTests.frameworkAvailable, "Set CEF_FRAMEWORK_PATH for native CEF string ownership"))
     func observerEnumeratesAndOnlyTerminatesItsOwnRoutes() throws {
@@ -70,7 +95,8 @@ import Testing
         let native = Native(), router = Self.router(native)
         router.refresh()
         #expect(router.sinkNotifications == 1 && router.routeNotifications == 1)
-        router.probeUnavailableRoute()
+        let sink = Self.installSink(native)
+        router.connect(sourceURN: "cast:ABI-fixture", sinkID: "abi-sink")
         #expect(native.creates == 1)
         let owned = Self.route("owned", native), foreign = Self.route("foreign", native)
         let callback = native.callback!
@@ -84,17 +110,20 @@ import Testing
         router.stop(); router.stop()
         #expect(native.terminations == ["owned"])
         cefRelease(UnsafeMutableRawPointer(owned)); cefRelease(UnsafeMutableRawPointer(foreign))
+        cefRelease(UnsafeMutableRawPointer(sink))
     }
     @Test(.enabled(if: LoaderTests.frameworkAvailable, "Set CEF_FRAMEWORK_PATH for native CEF string ownership"))
     func lateRouteAfterSourceCloseIsImmediatelyTerminated() throws {
         try Self.loadStrings()
         let native = Native(), router = Self.router(native)
-        router.probeUnavailableRoute(); router.stop()
+        let sink = Self.installSink(native)
+        router.connect(sourceURN: "cast:ABI-fixture", sinkID: "abi-sink"); router.stop()
         let owned = Self.route("late", native), callback = native.callback!
         cefAddRef(UnsafeMutableRawPointer(owned))
         callback.pointee.on_media_route_create_finished?(callback, CEF_MRCR_OK, nil, owned)
         #expect(native.terminations == ["late"])
         cefRelease(UnsafeMutableRawPointer(callback)); native.callback = nil
         cefRelease(UnsafeMutableRawPointer(owned))
+        cefRelease(UnsafeMutableRawPointer(sink))
     }
 }

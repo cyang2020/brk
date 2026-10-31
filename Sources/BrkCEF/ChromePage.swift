@@ -173,6 +173,7 @@ final class ChromePage: CefBrowserDelegate {
         facts.castRoutes = cast?.router.routes
         facts.castResult = cast?.router.lastResult
         facts.castError = cast?.router.lastError
+        facts.castSourceSupported = cast?.router.sourceSupported
         if let sourceWindow, sourceWindow.isVisible { facts.auxiliaryWindows?.append(sourceWindow.windowNumber) }
         return facts
     }

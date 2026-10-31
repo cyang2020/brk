@@ -10,6 +10,7 @@ import Foundation
     public private(set) var routeNotifications = 0
     public private(set) var lastResult: Int?
     public private(set) var lastError: String?
+    public private(set) var sourceSupported: Bool?
     public var onChange: (() -> Void)?
     public var onPendingChange: ((Bool) -> Void)?
     public var hasPendingRoutes: Bool { pendingCreates > 0 }
@@ -86,23 +87,33 @@ import Foundation
         guard !stopped, let raw else { return }
         guard let sink = nativeSinks[sinkID] else { lastError = "No such receiver is currently available"; onChange?(); return }
         let source = CefStringUtil.withCefString(sourceURN) { raw.pointee.get_source?(raw, $0) }
-        guard let source else { lastError = "CEF does not support this presentation source"; onChange?(); return }
+        sourceSupported = source != nil
+        guard let source else { lastError = "The media router does not support this presentation source"; onChange?(); return }
+        lastError = nil
         // CEF consumes ref-counted call arguments. Keep the observer's sink reference separately.
         cefAddRef(UnsafeMutableRawPointer(sink))
         create(source: source, sink: sink)
     }
 
-    /// Opt-in verification probes CEF's real invalid-source result, never inventing a receiver.
-    public func probeUnavailableRoute() { guard !stopped else { return }; create(source: nil, sink: nil) }
+    /// GetSource can reject a presentation without creating a route or borrowing nonexistent receiver hardware.
+    @discardableResult public func validateSource(_ urn: String) -> Bool {
+        guard !stopped, let raw, !urn.isEmpty else { return false }
+        let source = CefStringUtil.withCefString(urn) { raw.pointee.get_source?(raw, $0) }
+        sourceSupported = source != nil
+        cefRelease(source.map(UnsafeMutableRawPointer.init))
+        lastError = source == nil ? "The media router does not support this presentation source" : nil
+        onChange?()
+        return sourceSupported == true
+    }
 
-    private func create(source: UnsafeMutablePointer<cef_media_source_t>?, sink: UnsafeMutablePointer<cef_media_sink_t>?) {
+    private func create(source: UnsafeMutablePointer<cef_media_source_t>, sink: UnsafeMutablePointer<cef_media_sink_t>) {
         guard let raw, let create = raw.pointee.create_route else {
-            cefRelease(source.map(UnsafeMutableRawPointer.init)); cefRelease(sink.map(UnsafeMutableRawPointer.init)); return
+            cefRelease(UnsafeMutableRawPointer(source)); cefRelease(UnsafeMutableRawPointer(sink)); return
         }
         pendingCreates += 1
         onPendingChange?(true)
         guard !stopped else {
-            cefRelease(source.map(UnsafeMutableRawPointer.init)); cefRelease(sink.map(UnsafeMutableRawPointer.init))
+            cefRelease(UnsafeMutableRawPointer(source)); cefRelease(UnsafeMutableRawPointer(sink))
             routeCreationDrained(); return
         }
         let callback = cefAllocate(cef_media_route_create_callback_t.self, owner: Creation(self))
