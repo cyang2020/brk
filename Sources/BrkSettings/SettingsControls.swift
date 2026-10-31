@@ -135,6 +135,7 @@ struct SettingsCheckbox: NSViewRepresentable {
     func updateNSView(_ button: NSButton, context: NSViewRepresentableContext<Self>) {
         context.coordinator.isOn = isOn
         context.coordinator.toggle = toggle
+        button.isEnabled = context.environment.isEnabled
         button.identify(.settingsField(field))
         if button.title != title { button.title = title }
         button.state = isOn ? .on : .off

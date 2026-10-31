@@ -46,9 +46,9 @@ private struct SiteControlsView: View {
                         Button("Open action") { dispatch(.site(.invokeExtension(item.id))) }.disabled(!item.enabled || !item.supportsNativeAction || value.target == nil)
                         Button("Remove") { dispatch(.site(.removeExtension(item.id))) }.disabled(privateSession)
                     }
-                    Toggle("Allow in private windows", isOn: Binding(get: { item.incognitoAllowed == true }, set: { dispatch(.site(.extensionIncognito(item.id, $0))) }))
-                        .disabled(privateSession || item.canChangeIncognito != true)
-                        .accessibilityIdentifier(ViewID.settingsField("extension-incognito-" + item.id).identifier)
+                    SettingsCheckbox(title: "Allow in private windows", field: "extension-incognito-" + item.id, isOn: item.incognitoAllowed == true) {
+                        dispatch(.site(.extensionIncognito(item.id, $0)))
+                    }.disabled(privateSession || item.canChangeIncognito != true)
                     ForEach(item.commands ?? []) { command in
                         ExtensionShortcutEditor(extensionID: item.id, command: command, dispatch: dispatch)
                     }
@@ -66,8 +66,8 @@ private struct SiteControlsView: View {
                 Text(value.profileName).foregroundStyle(.secondary)
                 if value.target != nil {
                     HStack {
-                        Button("Copy URL") { dispatch(.page(.copyURL(.plain))) }.accessibilityIdentifier(ViewID.settingsField("siteCopyURL").identifier)
-                        Button("Export link…") { dispatch(.app(.export(.focusedTab))) }.accessibilityIdentifier(ViewID.settingsField("siteExportLink").identifier)
+                        SettingsButton(title: "Copy URL", field: "siteCopyURL") { dispatch(.page(.copyURL(.plain))) }
+                        SettingsButton(title: "Export link…", field: "siteExportLink") { dispatch(.app(.export(.focusedTab))) }
                     }
                 }
                 extensionControls.id(value.context)
@@ -147,10 +147,11 @@ private struct ExtensionShortcutEditor: View {
         VStack(alignment: .leading) {
             Text(command.description + (command.active ? "" : " (unassigned)"))
             HStack {
-                TextField("cmd+shift+u; empty clears", text: $draft)
-                    .accessibilityIdentifier(ViewID.settingsField("extension-shortcut-" + extensionID + "-" + command.name).identifier)
-                Button("Save shortcut") { dispatch(.site(.extensionShortcut(extensionID, command.name, draft))) }
-                    .accessibilityIdentifier(ViewID.settingsField("extension-shortcut-save-" + extensionID + "-" + command.name).identifier)
+                SettingsTextField(field: "extension-shortcut-" + extensionID + "-" + command.name, text: draft,
+                                  placeholder: "cmd+shift+u; empty clears", edit: { draft = $0 }) { draft = $0 }
+                SettingsButton(title: "Save shortcut", field: "extension-shortcut-save-" + extensionID + "-" + command.name) {
+                    dispatch(.site(.extensionShortcut(extensionID, command.name, draft)))
+                }
             }
             Text("Current: " + (command.keybinding.isEmpty ? "None" : command.keybinding)).font(.caption)
         }
