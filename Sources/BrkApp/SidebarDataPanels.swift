@@ -173,7 +173,11 @@ final class SidebarDataPanels {
     }
 
     func connectSelectedFolder(_ url: URL, captured: SidebarImportTarget, owner: WindowID, window: NSWindow) {
-        guard url.isFileURL, target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
+        // The folder chooser cannot return a file (canChooseFiles is false); the explicit command re-checks that here so a
+        // regular file is never persisted as the sync folder (parent repair after the Fable review of 3b48d60).
+        var isDirectory: ObjCBool = false
+        guard url.isFileURL, FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue,
+              target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
         send(.connected(owner, folder: url.path))
     }
 
