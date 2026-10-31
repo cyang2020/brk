@@ -442,6 +442,17 @@ final class ChromeWindowDelegate {
             }
         }
 
+        d.pointee.on_window_fullscreen_transition = { _, window, completed in
+            defer { cefRelease(window.map(UnsafeMutableRawPointer.init)) }
+            guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let window else { return }
+            MainActor.assumeIsolated {
+                let handle = window.pointee.get_window_handle?(window)
+                let native = handle.flatMap { Unmanaged<NSView>.fromOpaque($0).takeUnretainedValue().window }
+                let line = "cef fullscreen \(ProcessInfo.processInfo.systemUptime) window=\(native?.windowNumber ?? -1) completed=\(completed) full=\(window.pointee.is_fullscreen?(window) ?? -1)\n"
+                FileHandle.standardError.write(Data(line.utf8))
+            }
+        }
+
         d.pointee.can_close = { delegateSelf, window in
             cefRelease(window.map(UnsafeMutableRawPointer.init))
             guard let me = ChromeWindowDelegate.owner(delegateSelf.map(UnsafeMutableRawPointer.init)) else {

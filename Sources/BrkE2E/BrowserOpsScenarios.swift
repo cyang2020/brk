@@ -9,6 +9,7 @@ enum BrowserOpsScenarios {
         Scenario("BO2", "real empty popup, document.write, opener, native identity and close", cefOnly: "CEF popup browsing contexts", popups),
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
+        Scenario("BO4N", "isolated native fullscreen shortcut and Escape", cefOnly: "native fullscreen", nativeFullscreen),
         Scenario("BO5", "Default-profile Cast reports its shutdown limitation without starting the unsafe router", cefOnly: "CEF media router", cast),
         Scenario("BO5C", "custom-profile media-router enumeration and source-close drain", cefOnly: "CEF media router context lifetime", castCustomProfile),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
@@ -202,6 +203,15 @@ enum BrowserOpsScenarios {
         try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
         try app.screenshot("fullscreen-focus-returned")
         app.note("Actual NSWindow style and DOM fullscreen were observed for document/video elements and injected native key input. Physical keys and traffic-light gestures remain manual.")
+    }
+    @Sendable static func nativeFullscreen(_ app: AppUnderTest) throws {
+        _ = try load(app, "browser-basic.html?native-fullscreen")
+        defer { try? record(app, "native-fullscreen-only", app.native()) }
+        try app.press("ctrl+cmd+f")
+        try app.waitUntil("isolated native fullscreen entry", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning == false }
+        try app.screenshot("native-fullscreen-entered")
+        try app.press("escape")
+        try app.waitUntil("isolated native fullscreen Escape", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
     }
     @Sendable static func cast(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?cast")

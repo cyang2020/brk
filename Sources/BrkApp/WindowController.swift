@@ -98,7 +98,10 @@ public class WindowController: NSObject, NSWindowDelegate {
     private func tracePageFullscreen(_ event: String) {
         guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
         let line = "fullscreen \(ProcessInfo.processInfo.systemUptime) \(event) native=\(window.styleMask.contains(.fullScreen)) state=\(pageFullscreen)\n"
-        FileHandle.standardError.write(Data(line.utf8))
+        let windows = NSApp.windows.map { w in
+            "\(NSStringFromClass(type(of: w)))#\(w.windowNumber) full=\(w.styleMask.contains(.fullScreen)) key=\(w.isKeyWindow) parent=\(w.parent?.windowNumber ?? -1) collection=\(w.collectionBehavior.rawValue) frame=\(w.frame)"
+        }.joined(separator: " | ")
+        FileHandle.standardError.write(Data((line + "fullscreen windows active=\(NSApp.isActive) " + windows + "\n").utf8))
     }
 
     /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
