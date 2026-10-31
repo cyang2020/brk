@@ -21,6 +21,7 @@ enum NativeScenarios {
         let page2 = try openTab(app, app.site.url("page2.html"))
         let keys = try openTab(app, app.site.url("keys.html"))
         try waitForTitle(app, keys.id, "keys:loads=1")
+        try app.waitForPageInput(PageID(window: app.window!, item: keys.id), at: app.site.url("keys.html"))
         try app.press("cmd+t")
         try app.waitUntil("Cmd+T to open the command bar") { isCommandBar(try app.view().overlay) }
         app.sleep(0.3)
@@ -37,6 +38,7 @@ enum NativeScenarios {
 
         let swallow = try openTab(app, app.site.url("keys.html?swallow=1"))
         try waitForTitle(app, swallow.id, "keys:loads=1")
+        try app.waitForPageInput(PageID(window: app.window!, item: swallow.id), at: app.site.url("keys.html?swallow=1"))
         try app.press("cmd+s")
         try waitForTitle(app, swallow.id, keyTitle("cmd+s", swallowed: true))
         try expect(try app.view().sidebar.visible, "the first Cmd+S (swallowed by the page) hid the sidebar")

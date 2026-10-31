@@ -118,7 +118,7 @@ extension AppState {
     func units(in window: WindowID, space: SpaceID? = nil, skipCollapsed: Bool = false) -> [ItemID] {
         guard let doc = doc.windows[window] else { return [] }
         if doc.kind == .standard {
-            return skipCollapsed ? sidebarStops(space ?? doc.space) : unitsOfSpace(space ?? doc.space)
+            return skipCollapsed ? visibleUnits(in: window, space: space ?? doc.space) : unitsOfSpace(space ?? doc.space)
         }
         guard let tree = session.scratch[window], let root = tree.root(for: .scratch(window)) else { return [] }
         return tree.units(under: root, skipCollapsed: skipCollapsed)
@@ -151,7 +151,7 @@ extension Tab {
     /// Electron reducer cases that assert on it port unchanged).
     var displayTitle: String {
         if let custom = customTitle, !custom.isEmpty { return custom }
-        if !title.isEmpty { return title }
+        if !title.isEmpty { return TitleRules.shorten(title, url: url) }
         if let url { return displayURL(url) }
         return "New Tab"
     }

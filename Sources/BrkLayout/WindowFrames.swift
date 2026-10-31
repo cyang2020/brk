@@ -131,6 +131,7 @@ public enum ViewID: Hashable, Sendable, Codable {
     case archive, archiveGroup(ArchiveBucket), archiveEntry(ArchiveID), archiveRestore(ArchiveID), archiveClear, archiveThreshold
     case spaceDialog
     case themeBackground
+    case tabTool(String)
     // Wave 2
     /// The Library host, its page strip cells, its close button; the Downloads and History rows (F5).
     case library, libraryPage(LibraryPage), libraryClose, downloadEntry(DownloadID), historyEntry(Int)
@@ -188,6 +189,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .archiveClear: "archive-clear"
         case .archiveThreshold: "archive-threshold"
         case .spaceDialog: "space-dialog"
+        case .tabTool(let name): "tab-tools-\(name)"
         case .themeBackground: "theme-background"
         case .library: "library"
         case .libraryPage(let page): "library-page-\(page.rawValue)"
@@ -242,7 +244,7 @@ extension WindowFrames {
         case .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
-             .settingsField, .splitTool, .splitSegment, .splitDropPreview:
+             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:
             return nil   // view-owned: reported by `actual` only
         }
     }

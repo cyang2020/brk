@@ -18,7 +18,7 @@ final class ArchivePageView: NSView, NSSearchFieldDelegate {
     var timeZone = TimeZone.current
     let filterField = NSSearchField()
     let thresholdMenu = NSPopUpButton()
-    let clearButton = NSButton()
+    let clearButton = ArchiveConfirmationButton()
     let cancelClearButton = NSButton()
     private let title = NSTextField(labelWithString: LibraryCopy.title(.archive))
     private let thresholdLabel = NSTextField(labelWithString: LibraryCopy.archiveThreshold)
@@ -42,6 +42,9 @@ final class ArchivePageView: NSView, NSSearchFieldDelegate {
         layer?.masksToBounds = true
         let a = LibraryDraw.archive
         title.font = .systemFont(ofSize: a.titleFontSize.value, weight: .bold)
+        filterField.identify(.tabTool("archive-filter"))
+        cancelClearButton.identify(.tabTool("archive-cancel-clear"))
+        confirmText.identify(.tabTool("archive-confirmation"))
         filterField.placeholderString = LibraryCopy.archiveFilter
         filterField.setAccessibilityLabel(LibraryCopy.archiveFilter)
         filterField.delegate = self
@@ -114,6 +117,11 @@ final class ArchivePageView: NSView, NSSearchFieldDelegate {
         guard AutoArchiveThreshold.allCases.indices.contains(index) else { return }
         let chosen = AutoArchiveThreshold.allCases[index]
         if chosen != archive?.threshold { dispatch(.settings(.autoArchive(chosen))) }
+    }
+
+    func beginClearConfirmation() {
+        guard !isHidden, archive?.groups.isEmpty == false else { return }
+        setConfirming(true)
     }
 
     @objc private func clearClicked() {
@@ -387,4 +395,10 @@ struct ArchiveTime {
         case .beyond: dayAndYear.string(from: date)
         }
     }
+}
+
+/// The confirmation is already explicit. Accept its deliberate click in an inactive Brk window too.
+@MainActor
+final class ArchiveConfirmationButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

@@ -42,6 +42,7 @@ public final class SidebarView: NSView {
 
     /// Everything `render` reads. Equal slices change nothing, so render returns before touching a view.
     struct Slice: Equatable {
+        var tools: TabToolsSnapshot
         var sidebar: SidebarSnapshot
         var urlPill: URLPillSnapshot
         var favorites: FavoritesSnapshot
@@ -98,7 +99,7 @@ public final class SidebarView: NSView {
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
         let space = SidebarLayout.space(in: snapshot)
-        let slice = Slice(sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
+        let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
         guard slice != last else { return }
@@ -124,11 +125,12 @@ public final class SidebarView: NSView {
         urlPill.frame = local(f.urlPill)
         urlPill.render(snapshot.urlPill, palette: palette)
         favorites.frame = local(f.favoritesTray)
+        favorites.previewsEnabled = snapshot.tabTools.hoverPreviews
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
-        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette)
+        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
         dock.frame = local(f.dock)
         dock.render(snapshot.dock, frames: f, palette: palette)
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)

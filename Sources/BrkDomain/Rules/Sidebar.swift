@@ -6,6 +6,13 @@ import Foundation
 
 extension Work {
     mutating func items(_ command: ItemCommand, in window: WindowID) {
+        // Shared dock/space actions have their own policy. Item editing never crosses a private container.
+        let target: ItemID?
+        switch command {
+        case .beginRename(.item(let id)), .rename(let id, _), .move(let id, _), .toggleFolder(let id), .deleteFolder(let id), .setIcon(let id, _): target = id
+        default: target = nil
+        }
+        if let target, state.tree(of: window)?[target] == nil { return }
         switch command {
         case .beginRename(let ref):
             // The row becomes a text field: its collapsed ancestors (folders, the Pinned section) expand so the field
@@ -19,12 +26,13 @@ extension Work {
                   kind == .tab || kind == .folder else { return }
             var ancestor = tree[id]?.parent
             while let a = ancestor, let node = tree[a] {
-                if case .folder(let f) = node.body, f.collapsed { state.withTree(scope) { $0.updateFolder(a) { $0.collapsed = false } } }
+                if case .folder = node.body { state.doc.windows[window]?.folderExpansion[a] = true }
                 if case .section(let section) = node.body, case .pinned(let space) = section.role, state.doc.spaces[space]?.pinnedCollapsed == true {
                     state.doc.spaces[space]!.pinnedCollapsed = false
                 }
                 ancestor = node.parent
             }
+            reveal(id, in: window)
             if state.session.windows[window]?.renaming != id { state.session.windows[window]!.renaming = id }
             peekIfHidden(window)
         case .rename(let id, let title):
@@ -57,6 +65,7 @@ extension Work {
             guard moveItem(id, to: position) else { return }
             stamp(Set(state.doc.tree.tabs(under: id)))
         case .newFolder:
+            guard state.doc.windows[window]?.kind == .standard else { return }
             // "New Folder" at the top of the current space's Pinned, which expands; the folder is in rename mode.
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let folder = ItemID(ctx.newID())
@@ -67,12 +76,14 @@ extension Work {
             state.session.windows[window]!.renaming = folder
             peekIfHidden(window)
         case .toggleFolder(let id):
-            guard let scope = state.locate(id) else { return }
-            state.withTree(scope) { $0.updateFolder(id) { $0.collapsed.toggle() } }
+            guard state.locate(id) != nil else { return }
+            guard state.tree(of: window)?[id] != nil else { return }
+            let expanded = !state.folderIsExpanded(id, in: window)
+            state.doc.windows[window]?.folderExpansion[id] = expanded
         case .deleteFolder(let id):
             // "Deleting this folder will archive the tabs inside it."
             guard let scope = state.locate(id), case .folder? = state.tree(scope)?[id]?.body else { return }
-            archiveTabs([id], reason: .containerDeleted, in: window)
+            archiveTabs([id], reason: .containerDeleted, in: window, preservingStructure: false)
         case .setIcon(let id, let icon):
             guard let scope = state.locate(id) else { return }
             state.withTree(scope) { tree in
@@ -112,7 +123,7 @@ extension Work {
             let neighbour = index + 1 < order.count ? order[index + 1] : order[index - 1]
             for (wid, w) in state.doc.windows where w.space == id { showSpace(neighbour, in: wid) }
             let contents = [space.pinnedRoot, space.todayRoot].flatMap { state.doc.tree[$0]?.children ?? [] }
-            archiveTabs(contents, reason: .containerDeleted, in: window)
+            archiveTabs(contents, reason: .containerDeleted, in: window, preservingStructure: false)
             for root in [space.pinnedRoot, space.todayRoot] {
                 for (tab, _) in state.doc.tree.removeRoot(root) ?? [] { unload(tab) }
             }
@@ -201,14 +212,19 @@ extension Work {
         case .plusButton:
             return MenuModel(entries: [
                 entry("New Tab", .commandBar(.open(.newTab))),
-                entry("New Folder", .item(.newFolder)),
+                entry("New Folder", .item(.newFolder), enabled: state.doc.windows[window]?.kind == .standard),
                 entry("New Space", .sidebar(.openDialog(.newSpace))),
+                entry("New GitHub Live Folder…", .tabTools(.site(.connectGitHub(favorite: nil))), enabled: state.doc.windows[window]?.kind == .standard),
+                entry("Connect Calendar File…", .tabTools(.site(.connectCalendar)), enabled: state.doc.windows[window]?.kind == .standard),
             ])
         case .space(let id):
             guard state.doc.spaces[id] != nil else { return MenuModel(entries: []) }
             let edit = Command.sidebar(.openDialog(.editSpace(.space(id))))
             return MenuModel(entries: [
                 entry("Rename Space", edit), entry("Change Space Icon…", edit), entry("Edit Theme Color…", edit), .separator,
+                entry("Reset All Pinned Tabs", .tabTools(.resetPinned), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
+                entry("Collapse All Folders", .tabTools(.folders(expanded: false)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
+                entry("Expand All Folders", .tabTools(.folders(expanded: true)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
                 entry("Delete Space", .space(.delete(id)), enabled: state.doc.spaceOrder.count > 1),
             ])
         case .item(let id):
@@ -219,9 +235,12 @@ extension Work {
             case .section:
                 return MenuModel(entries: [])
             case .folder(let f):
-                return MenuModel(entries: [
+                return MenuModel(entries: (f.liveRepository == nil ? [] : [entry("Refresh GitHub Folder", .tabTools(.site(.refreshFolder(id))))]) + [
                     entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))),
                     entry(f.collapsed ? "Expand Folder" : "Collapse Folder", .item(.toggleFolder(id))), .separator,
+                    entry("Change Icon…", .tabTools(.chooseIcon(id))),
+                    entry(f.isGroup ? "Archive Group" : "Archive Folder", .tabTools(.bulk(.items([id]), .archive))),
+                    entry("Duplicate Folder", .tabTools(.bulk(.items([id]), .duplicate(nil)))),
                     entry("Delete Folder", .item(.deleteFolder(id))),
                 ])
             case .tab, .split:
@@ -229,12 +248,25 @@ extension Work {
                 let unitRole = tree.role(of: unit) ?? role
                 let home = unitRole.space ?? state.doc.windows[window]?.space
                 let prefix = unitRole.kind == .pinned ? "Move to Pinned in " : "Move to Today in "
-                let moves = state.doc.spaceOrder.filter { $0 != home && state.doc.spaces[$0] != nil }.map {
+                let moves = state.doc.spaceOrder.filter { scope == .global && $0 != home && state.doc.spaces[$0] != nil }.map {
                     entry(prefix + state.displayTitle(of: $0), .item(.move(unit, to: .space($0))))
                 }
                 let pinTarget: ItemID
                 if case .split(let s) = node.body { pinTarget = s.panes.ids[0] } else { pinTarget = id }
-                var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))))]
+                var entries = [entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))), enabled: role.kind != .scratch),
+                    entry("Change Icon…", .tabTools(.chooseIcon(id))),
+                    entry("Duplicate", .tabTools(.bulk(.items([unit]), .duplicate(nil)))),
+                    entry("Archive Item", .tabTools(.bulk(.items([unit]), .archive))),
+                    entry("Archive Other Items", .tabTools(.bulk(.other(unit), .archive))),
+                    entry("Archive Items Below", .tabTools(.bulk(.below(unit), .archive))),
+                    entry("New Group from Selection", .tabTools(.bulk(.selected, .newFolder(group: true))), enabled: scope == .global),
+                    entry("New Folder from Selection", .tabTools(.bulk(.selected, .newFolder(group: false))), enabled: scope == .global)]
+                if (state.session.windows[window]?.tabSelection.items.count ?? 0) > 1 {
+                    entries += [entry("Archive Selected", .tabTools(.bulk(.selected, .archive))),
+                                entry("Duplicate Selected", .tabTools(.bulk(.selected, .duplicate(nil))))]
+                    entries += state.doc.spaceOrder.map { entry("Move Selected to " + state.displayTitle(of: $0), .tabTools(.bulk(.selected, .move(.space($0))))) }
+                }
+                entries += state.doc.spaceOrder.filter { _ in scope == .global }.map { entry("Duplicate in " + state.displayTitle(of: $0), .tabTools(.bulk(.items([unit]), .duplicate(.space($0))))) }
                 if case .split(let split)? = tree[unit]?.body {
                     let current = state.shownItem(in: window) == unit
                     let pane = node.kind == .tab ? id : (state.focusedPane(of: unit, in: window) ?? split.panes.ids[0])
@@ -243,14 +275,15 @@ extension Work {
                         entry("Split Top and Bottom", .split(.setOrientation(unit, .vertical))),
                         entry("Separate Page from Split View", .split(.separatePane(.item(pane)))),
                         entry("Separate All Split Panes", .split(.separateAll), enabled: current),
-                        entry(state.session.windows[window]?.expandedSplit == unit ? "Restore Split Panes" : "Expand Current Split",
-                              .split(.toggleExpanded), enabled: current),
+                        entry(state.session.windows[window]?.expandedSplit == unit ? "Restore Split Panes" : "Expand Current Split", .split(.toggleExpanded), enabled: current),
                     ]
                 }
                 guard case .tab(let tab) = node.body else {
                     return MenuModel(entries: moves.isEmpty ? entries : entries + [.separator] + moves)
                 }
                 entries.append(entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))))
+                if role.kind == .favorites { entries.append(entry("Connect GitHub Badge…", .tabTools(.site(.connectGitHub(favorite: id))))) }
+                entries.append(entry(tab.muted ? "Unmute Tab" : "Mute Tab", .tabTools(.mute(.item(id)))))
                 if let pinned = tab.pinnedURL, pinned != state.address(of: id, in: window, for: .visible) { entries.append(entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))))) }
                 if !moves.isEmpty { entries += [.separator] + moves }
                 entries.append(.separator)
@@ -286,6 +319,7 @@ extension Work {
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,
             // else cancel a rename or dialog, else leave full screen (the window decides whether it is in one).
             // The overlay rule has already closed an open overlay for this command (Exit does not keep it).
+            if state.session.windows[window]?.recentCycle != nil { tabTools(.cancelRecent, in: window); return }
             guard !closedOverlay, var session = state.session.windows[window] else { return }
             if session.overlay != nil { session.overlay = nil }
             else if session.renaming != nil { session.renaming = nil }

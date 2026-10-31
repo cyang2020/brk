@@ -25,6 +25,7 @@ func normalize(_ state: inout AppState) -> [String] {
     repairSpaces(&state, &repairs)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
+    repairTabTools(&state)
     closeEmptyLittleWindows(&state)
     repairLoaded(&state)
     applyCaps(&state, &repairs)
@@ -140,7 +141,8 @@ private func repairSessionTargets(_ state: inout AppState) {
             let order = cycle.order.filter { tree?[$0] != nil }
             if order.count < 2 { session.recentCycle = nil }
             else if order != cycle.order {
-                session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline)
+                let original = cycle.original.flatMap { tree?[$0] != nil ? $0 : order.first }
+                session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline, original: original)
             }
         }
         if session != before { state.session.windows[id] = session }
@@ -202,4 +204,21 @@ private func applyCaps(_ state: inout AppState, _ repairs: inout [String]) {
             state.doc.windows[id]!.sidebarWidth = clamped
         }
     }
+}
+
+private func repairTabTools(_ state: inout AppState) {
+    for window in state.session.windows.keys {
+        let visible = Set(state.visibleRows(in: window))
+        state.session.windows[window]?.tabSelection.items.removeAll { !visible.contains($0) }
+        if let anchor = state.session.windows[window]?.tabSelection.anchor, !visible.contains(anchor) {
+            state.session.windows[window]?.tabSelection.anchor = nil
+        }
+        if let item = state.session.windows[window]?.revealItem, state.tree(of: window)?[item] == nil {
+            state.session.windows[window]?.revealItem = nil
+        }
+    }
+    state.session.siteRequests = state.session.siteRequests.filter { state.siteRequestIsCurrent($0.value) }
+    state.session.calendars = state.session.calendars.filter { state.doc.profiles[$0.key] != nil }
+    state.session.favoriteFeeds = state.session.favoriteFeeds.filter { state.role(of: $0.key) == .favorites($0.value.profile) }
+    state.session.liveFolderStatus = state.session.liveFolderStatus.filter { state.doc.tree[$0.key] != nil }
 }

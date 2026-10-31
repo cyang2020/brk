@@ -25,6 +25,7 @@ public protocol CefBrowserDelegate: AnyObject {
     func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition
     func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage)
     /// The page title changed.
+    func browser(_ b: CefBrowser, didChangeAudio audible: Bool)
     func browser(_ b: CefBrowser, didChangeTitle title: String)
     /// The main-frame URL changed.
     /// Main-frame cross-document commit and completion. Same-document changes use didChangeURL.
@@ -182,6 +183,7 @@ extension CefBrowserDelegate {
         CefKeyDisposition(handled: browser(b, handleKeyEvent: event, isBeforePage: true), shortcut: false)
     }
     public func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage) {}
+    public func browser(_ b: CefBrowser, didChangeAudio audible: Bool) {}
     public func browser(_ b: CefBrowser, didChangeTitle title: String) {}
     public func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {}
     public func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {}

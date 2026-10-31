@@ -20,14 +20,17 @@ final class TablistView: NSScrollView {
     private let pinnedSection = FlippedView()
     private let todaySection = FlippedView()
     private let divider: DividerRowView
+    private let education: NSButton
     private let newTab: NewTabRowView
     private let dropLine = NSView()
     private let topEdge = NSView()
     private let bottomEdge = NSView()
     private var rowViews: [ItemID: RowView] = [:]
-    /// Cmd+click selection: view state (no command carries it). The hover × on a selected row closes all of them.
+    /// A render cache of the domain selection. Pointer gestures dispatch typed selection and bulk commands.
     private var multiselection: [ItemID] = []
     private var last: (space: SpaceSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette)?
+    private var tools: TabToolsSnapshot?
+    private var lastReveal: UInt64?
     private var dropFolder: ItemID?
     private var contentBottom = 0.0
 
@@ -35,8 +38,10 @@ final class TablistView: NSScrollView {
         self.dispatch = dispatch
         self.drag = drag
         divider = DividerRowView(dispatch: dispatch)
+        education = NSButton(title: "", target: nil, action: nil)
         newTab = NewTabRowView(dispatch: dispatch)
         super.init(frame: .zero)
+        document.onKey = { [weak self] command in self?.dispatch(.tabTools(command)) }
         drawsBackground = false
         hasVerticalScroller = true
         autohidesScrollers = true
@@ -50,6 +55,15 @@ final class TablistView: NSScrollView {
         for view in [pinnedSection, todaySection, dropLine] { document.addSubview(view) }
         todaySection.addSubview(divider)
         todaySection.addSubview(newTab)
+        document.addSubview(education)
+        education.target = self
+        education.action = #selector(dismissEducation)
+        education.bezelStyle = .regularSquare
+        education.cell?.wraps = true
+        education.cell?.usesSingleLineMode = false
+        education.cell?.lineBreakMode = .byWordWrapping
+        education.font = .systemFont(ofSize: 11)
+        education.identify(.tabTool("education"))
         dropLine.wantsLayer = true
         dropLine.isHidden = true
         for edge in [topEdge, bottomEdge] {
@@ -76,8 +90,9 @@ final class TablistView: NSScrollView {
         return window.makeFirstResponder(document)
     }
 
-    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette) {
-        if let last, last.space == space, last.renaming == renaming, last.frames == f, last.palette == palette { return }
+    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot) {
+        self.tools = tools
+        multiselection = tools.selected
         let previousSpace = last?.space.id
         last = (space, renaming, f, palette)
         if let previousSpace, previousSpace != space.id { pushTransition(from: previousSpace, to: space.id, order: dockOrder) }
@@ -106,6 +121,10 @@ final class TablistView: NSScrollView {
         pinnedSection.frame = pinnedRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         todaySection.frame = todayRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         contentBottom = Double(f.rows.last?.rect.maxY ?? 0)
+        education.isHidden = tools.archiveEducation == nil
+        education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
+        education.frame = NSRect(x: 8, y: contentBottom + 10, width: max(0, width - 16), height: 68)
+        if tools.archiveEducation != nil { contentBottom += 88 }
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
 
         multiselection.removeAll { rows[$0] == nil }
@@ -119,6 +138,7 @@ final class TablistView: NSScrollView {
                 let view = rowViews[id] ?? makeRow(id)
                 if view.superview !== container { container.addSubview(view) }
                 view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
+                view.previewsEnabled = tools.hoverPreviews
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
@@ -137,11 +157,19 @@ final class TablistView: NSScrollView {
         }
         dropLine.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).cgColor
         for edge in [topEdge, bottomEdge] { edge.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor }
+        if let reveal = tools.reveal, tools.revealGeneration != lastReveal, let row = rowViews[reveal] {
+            document.scrollToVisible(document.convert(row.bounds, from: row))
+            lastReveal = tools.revealGeneration
+        }
         updateEdges()
     }
 
+    @objc private func dismissEducation() { dispatch(.tabTools(.dismissArchiveEducation)) }
+
     private func makeRow(_ id: ItemID) -> RowView {
         let view = RowView(dispatch: dispatch, drag: drag)
+        view.onRangeSelect = { [weak self] id in self?.dispatch(.tabTools(.select(id, .range))) }
+        view.onSelect = { [weak self] id in self?.dispatch(.tabTools(.select(id, .replace))) }
         view.onToggleMultiselect = { [weak self] id in self?.toggleMultiselect(id) }
         view.onClearMultiselect = { [weak self] in self?.clearMultiselect() }
         view.closeTargets = { [weak self] id in
@@ -152,16 +180,8 @@ final class TablistView: NSScrollView {
         return view
     }
 
-    private func toggleMultiselect(_ id: ItemID) {
-        if let i = multiselection.firstIndex(of: id) { multiselection.remove(at: i) } else { multiselection.append(id) }
-        for (rowID, view) in rowViews { view.multiselected = multiselection.contains(rowID) }
-    }
-
-    private func clearMultiselect() {
-        guard !multiselection.isEmpty else { return }
-        multiselection = []
-        for view in rowViews.values { view.multiselected = false }
-    }
+    private func toggleMultiselect(_ id: ItemID) { dispatch(.tabTools(.select(id, .toggle))) }
+    private func clearMultiselect() {}
 
     /// Arc slides the space pages sideways (`SidebarPagingContainerViewController`): forward in dock order pushes
     /// from the right.
@@ -275,12 +295,20 @@ final class TablistView: NSScrollView {
     }
 }
 
-/// The list's document view. Takes keyboard focus for `FocusTarget.sidebar` but handles no keys itself: app
-/// shortcuts go through the menu and the key router, never through sidebar views.
+/// The focused sidebar handles ordinary arrows and Return locally. App shortcuts still use the action table.
 @MainActor
 final class ListDocumentView: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    var onKey: ((TabToolsCommand) -> Void)?
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 125: onKey?(.sidebarStep(.next))
+        case 126: onKey?(.sidebarStep(.previous))
+        case 36, 53: onKey?(.leaveSidebar)
+        default: super.keyDown(with: event)
+        }
+    }
 }
 
 /// Geometry inside one 40 pt row: the 36 pt selection inset 8 (and indented by depth), the 16 pt icon centred 26
@@ -316,6 +344,8 @@ struct RowGeometry {
 final class RowView: HoverView {
     private let dispatch: Dispatch
     private let drag: DragController
+    private let preview = TabHoverPreview()
+    var previewsEnabled = true
     private(set) var row: Row?
     private var section: SectionKind = .today
     private var depth = 0
@@ -323,6 +353,7 @@ final class RowView: HoverView {
     private let background = NSView()
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    private let audio = GlyphButton()
     private let button = GlyphButton()
     private var segments: [SplitSegmentView] = []
     private var slashes: [CAShapeLayer] = []
@@ -332,6 +363,8 @@ final class RowView: HoverView {
     var multiselected = false { didSet { if multiselected != oldValue { stateChanged() } } }
     var dropInto = false { didSet { if dropInto != oldValue { stateChanged() } } }
     var dragSource = false { didSet { alphaValue = dragSource ? Draw.dragSourceAlpha.value : 1 } }
+    var onRangeSelect: ((ItemID) -> Void)?
+    var onSelect: ((ItemID) -> Void)?
     var onToggleMultiselect: ((ItemID) -> Void)?
     var onClearMultiselect: (() -> Void)?
     /// The tabs the hover × closes: this row, or the whole Cmd+click selection it belongs to.
@@ -347,7 +380,9 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, button] as [NSView] { addSubview(view) }
+        for view in [background, icon, title, audio, button] as [NSView] { addSubview(view) }
+        audio.action = { [weak self] _ in self?.toggleMute() }
+        audio.isHidden = true
         button.action = { [weak self] _ in self?.closeTapped() }
     }
 
@@ -364,6 +399,11 @@ final class RowView: HoverView {
         var dimmed = false
         switch row {
         case .tab(let tab):
+            audio.isHidden = !tab.audible && !tab.muted
+            audio.render(tab.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
+                         radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+            audio.toolTip = tab.muted ? "Unmute Tab" : "Mute Tab"
+            audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
             toolTip = tab.title
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, loading: tab.loading)
@@ -371,7 +411,7 @@ final class RowView: HoverView {
             configureButton(tab: tab, palette: palette)
             setSegments([], palette: palette)
         case .folder(let folder):
-            title.stringValue = folder.title
+            title.stringValue = (folder.group ? "Group · " : "") + folder.title
             toolTip = folder.title
             icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary)
             button.isHidden = true
@@ -427,8 +467,9 @@ final class RowView: HoverView {
         background.frame = g.selection
         icon.frame = g.icon
         button.frame = g.button
+        audio.frame = g.button.offsetBy(dx: -g.button.width, dy: 0)
         let height = title.intrinsicContentSize.height
-        let trailing = button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
+        let trailing = !audio.isHidden ? audio.frame.minX : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
@@ -459,6 +500,13 @@ final class RowView: HoverView {
 
     override func stateChanged() {
         guard let palette, let row else { return }
+        let previewText: String
+        switch row {
+        case .tab(let tab): previewText = tab.title + "\n" + (tab.url?.absoluteString ?? "")
+        case .folder(let folder): previewText = folder.title + "\n" + String(folder.children.count) + " items"
+        case .split(let split): previewText = split.panes.map(\.title).joined(separator: "\n")
+        }
+        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: previewText, over: self)
         let tokens = palette.tokens
         let status: RowStatus? = switch row {
         case .tab(let tab): tab.status
@@ -489,7 +537,8 @@ final class RowView: HoverView {
     override func mouseDown(with event: NSEvent) {
         guard let row else { return }
         if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
-        if event.modifierFlags.contains(.command), row.kind == .tab {
+        if event.modifierFlags.contains(.shift) { onRangeSelect?(row.id); return }
+        if event.modifierFlags.contains(.command) {
             onToggleMultiselect?(row.id)
             return
         }
@@ -504,8 +553,8 @@ final class RowView: HoverView {
     override func mouseUp(with event: NSEvent) {
         isPressed = false
         if drag.release(event) { return }
-        guard let row, !event.modifierFlags.contains(.command), bounds.contains(local(event)) else { return }
-        onClearMultiselect?()
+        guard let row, !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), bounds.contains(local(event)) else { return }
+        onSelect?(row.id)
         if event.clickCount == 2, row.kind != .split {
             dispatch(.item(.beginRename(.item(row.id))))
             return
@@ -525,9 +574,11 @@ final class RowView: HoverView {
         dispatch(.sidebar(.popupMenu(.item(row.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 
+    @objc private func toggleMute() { if let row { dispatch(.tabTools(.mute(.item(row.id)))) } }
+
     private func closeTapped() {
         guard let row else { return }
-        for id in closeTargets?(row.id) ?? [row.id] { dispatch(.tab(.close(.item(id)))) }
+        dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), .close)))
         onClearMultiselect?()
     }
 
@@ -557,6 +608,7 @@ final class RowView: HoverView {
 
     /// Drops the field without committing (the rename ended elsewhere: Esc through the menu, or the row left).
     func retire() {
+        preview.cancel()
         guard let field = renameField else { return }
         field.retire()
         renameField = nil
@@ -572,6 +624,7 @@ final class SplitSegmentView: HoverView {
     private(set) var pane: TabRow?
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    private let audio = GlyphButton()
     private let close = GlyphButton()
     private var palette: Palette?
 
@@ -583,7 +636,8 @@ final class SplitSegmentView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [icon, title, close] as [NSView] { addSubview(view) }
+        audio.action = { [weak self] _ in self?.toggleMute() }
+        for view in [icon, title, audio, close] as [NSView] { addSubview(view) }
         close.action = { [weak self] _ in
             guard let id = self?.pane?.id else { return }
             dispatch(.split(.closePaneAt(id)))
@@ -596,6 +650,11 @@ final class SplitSegmentView: HoverView {
         identify(.splitSegment(pane.id))
         toolTip = pane.title
         self.palette = palette
+        audio.isHidden = !pane.audible && !pane.muted
+        audio.render(pane.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
+                     radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+        audio.toolTip = pane.muted ? "Unmute Tab" : "Mute Tab"
+        audio.identify(.tabTool("audio-" + pane.id.rawValue))
         title.stringValue = pane.title
         title.textColor = palette.ink.text
         icon.render(IconContent(tab: pane), tint: palette.ink.secondary, loading: pane.loading)
@@ -612,11 +671,14 @@ final class SplitSegmentView: HoverView {
         let side = t.favicon.value, size = min(2 * t.hoverButtonRadius.value, bounds.width / 3)
         icon.frame = CGRect(x: Draw.faviconLeading.value / 2, y: (bounds.height - side) / 2, width: side, height: side)
         close.frame = CGRect(x: bounds.width - size, y: (bounds.height - size) / 2, width: size, height: size)
+        audio.frame = close.frame.offsetBy(dx: -size, dy: 0)
         let height = title.intrinsicContentSize.height
         let start = icon.frame.maxX + Draw.faviconLeading.value / 2
-        let end = close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
+        let end = !audio.isHidden ? audio.frame.minX : close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
         title.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, end - start), height: height)
     }
+
+    @objc private func toggleMute() { if let pane { dispatch(.tabTools(.mute(.item(pane.id)))) } }
 
     override func stateChanged() {
         guard let palette else { return }

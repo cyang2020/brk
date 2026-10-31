@@ -47,7 +47,7 @@ final class IndependentSplitViewReviewTests: XCTestCase {
         let before=project(model.state,ProjectionContext(now:model.context.now,calendar:.current)).pages.map(\.id)
         let segment=SplitSegmentView(dispatch:{model.send($0)})
         segment.render(try XCTUnwrap(model.row(panes[1])),palette:Palette(model.view.theme))
-        let close=try XCTUnwrap(segment.subviews.compactMap{$0 as? GlyphButton}.first)
+        let close=try XCTUnwrap(segment.subviews.compactMap{$0 as? GlyphButton}.first{$0.accessibilityIdentifier()==ViewID.rowClose(panes[1]).identifier})
         close.action?([])
         let after=project(model.state,ProjectionContext(now:model.context.now,calendar:.current)).pages.map(\.id)
         print("BACKGROUND_CLOSE foreground=\(foreground) split=\(split) actualShown=\(String(describing:model.view.content.split)) beforeDemand=\(before) afterDemand=\(after)")
@@ -86,11 +86,11 @@ final class IndependentSplitViewReviewTests: XCTestCase {
         guard case .split(let row)=try XCTUnwrap(model.view.space.pinned.rows.first),let pane=row.panes.first(where:{$0.id==panes[1]}) else {return XCTFail("missing pinned fixture")}
         let segment=SplitSegmentView(dispatch:{model.send($0)})
         segment.render(pane,palette:Palette(model.view.theme))
-        try XCTUnwrap(segment.subviews.compactMap{$0 as? GlyphButton}.first).action?([])
+        try XCTUnwrap(segment.subviews.compactMap{$0 as? GlyphButton}.first{$0.accessibilityIdentifier()==ViewID.rowClose(panes[1]).identifier}).action?([])
         XCTAssertEqual(model.view.content.panes.map(\.tab),[foreground])
         XCTAssertEqual(model.view.space.pinned.rows.map(\.id),[split,panes[1]])
         XCTAssertEqual(project(model.state,ProjectionContext(now:model.context.now,calendar:.current)).pages.map(\.id),before)
-        guard case .tab(let retained)=model.view.space.pinned.rows[1] else{return XCTFail("closed pinned pane was lost")}
+        guard model.view.space.pinned.rows.count > 1, case .tab(let retained)=model.view.space.pinned.rows[1] else{return XCTFail("closed pinned pane was lost")}
         XCTAssertEqual(retained.url,pane.url)
     }
     func testCancelledDropPreviewDoesNotReappearOnRender() throws {

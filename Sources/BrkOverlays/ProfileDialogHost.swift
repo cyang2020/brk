@@ -279,7 +279,7 @@ struct ProfileDialogForm: View {
     private var iconPicker: some View {
         let side = m.iconButtonSize.value
         let icons: [CustomIcon?] = [nil] + NamedIcon.allCases.map { CustomIcon.named($0) }
-        let perRow = (icons.count + 1) / 2
+        let perRow = 8
         let rows = stride(from: 0, to: icons.count, by: perRow).map { Array(icons[$0..<min($0 + perRow, icons.count)]) }
         return VStack(alignment: .leading, spacing: m.padding.value / 4) {
             ForEach(rows.indices, id: \.self) { r in

@@ -100,7 +100,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)
         let repeatedFind = snapshot.focus == .findInput && snapshot.find?.focusRequest != lastSnapshot?.find?.focusRequest
-        if snapshot.focus != lastSnapshot?.focus || repeatedFind || pendingFocus != nil {
+        let repeatedReveal = snapshot.focus == .sidebar && snapshot.tabTools.revealGeneration != lastSnapshot?.tabTools.revealGeneration
+        if snapshot.focus != lastSnapshot?.focus || repeatedFind || repeatedReveal || pendingFocus != nil {
             pendingFocus = nil
             applyFocus(snapshot.focus)
         }

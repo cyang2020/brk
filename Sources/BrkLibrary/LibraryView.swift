@@ -102,6 +102,11 @@ public final class LibraryView: NSView {
         }
     }
 
+    public func requestClearConfirmation() {
+        guard !isHidden, last?.library.page == .archive else { return }
+        archive.beginClearConfirmation()
+    }
+
     @objc private func pageClicked(_ sender: LibraryPageButton) { dispatch(.library(.open(sender.page))) }
 
     @objc private func exitClicked() { dispatch(.library(.close)) }

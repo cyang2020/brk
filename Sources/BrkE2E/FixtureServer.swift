@@ -141,7 +141,12 @@ final class FixtureServer: @unchecked Sendable {
         }
         if path == "/" { path = "/index.html" }
         let response: Data
-        if path.hasPrefix("/suggest") {
+        if path == "/repos/fixture/repo/pulls" {
+            let round = requestCount(path)
+            let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []
+            guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path.hasPrefix("/suggest") {
             let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
             guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

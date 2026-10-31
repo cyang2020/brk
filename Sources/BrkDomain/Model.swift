@@ -80,6 +80,7 @@ struct Doc: Sendable, Equatable {
     var linkRoutes: [LinkRoute]
     /// Arc: `StorableKeyBindings.userOverrides`. `KeyBindings.resolve` combines them with the table. F4 owns the rules.
     var keyOverrides: [ActionID: KeyOverride]
+    var tabPreferences = TabPreferences()
 }
 
 /// Arc: `SpaceModel` + `CustomInfo`.
@@ -105,11 +106,10 @@ public enum CustomIcon: Hashable, Sendable, Codable {
     case symbol(String)
 }
 
-/// Arc's `SidebarIconType` has 61 names; v1 ships this subset. Adding a name is one case here and one glyph in the
-/// icon renderer; the model and the file format do not change.
+/// The 61 cached reference names plus five legacy Brk names. systemSymbolName is shared by all icon renderers.
 public enum NamedIcon: String, Hashable, Sendable, Codable, CaseIterable {
     case star, bookmark, heart, flag, folder, calendar, mail, terminal, egg, home, briefcase, book, camera,
-         music, globe, code
+         music, globe, code, flash, triangle, medical, notifications, bulb, shapes, grid, apps, layers, server, albums, copy, fileTrayFull, checkbox, document, chatBubbleEllipses, people, construction, square, ellipse, moon, sunny, planet, leaf, cloud, paw, bag, gift, bed, restaurant, barbell, airplane, musicalNote, colorPallete, video, bandage, baseball, cloudOutline, map, bonfire, pizza, skull, receipt, thumbsUp, train, rss, github, linear, figma, search
 }
 
 /// A space's icon. `.none` draws a dot in the theme color (Arc: `CustomInfo.iconType` nil).
@@ -144,6 +144,7 @@ struct WindowDoc: Sendable, Equatable {
     var emptySelections: Set<SpaceID> = []
     var slots: [ItemID: SavedSlot] = [:]
     var splitFocus: [ItemID: ItemID] = [:]
+    var folderExpansion: [ItemID: Bool] = [:]
     var sidebarVisible: Bool
     var sidebarWidth: Double
 
@@ -199,7 +200,7 @@ public enum ArchiveReason: String, Hashable, Sendable, Codable, CaseIterable {
     case manual, auto, clearToday, containerDeleted
 }
 
-/// Arc: `ArchivedItem`. v1 archives tabs only: archiving a folder or split archives each tab inside it.
+/// A legacy tab payload with an optional detached container structure. Structural records restore as one unit.
 struct ArchivedTab: Sendable, Equatable {
     let id: ArchiveID
     /// Snapshot with its original id; restore reuses the id unless it is taken.
@@ -210,6 +211,10 @@ struct ArchivedTab: Sendable, Equatable {
     /// Where restore puts it back. A deleted space falls back to the restoring window's current space.
     let fromSpace: SpaceID?
     let fromSection: SectionKind
+    var fromParent: ItemID? = nil
+    var fromIndex: Int? = nil
+    var fromProfile: ProfileID? = nil
+    var structure: ArchivedNode? = nil
 }
 
 struct HistoryEntry: Sendable, Equatable {
@@ -245,6 +250,11 @@ struct Session: Sendable, Equatable {
     var detectedAI: [AIProviderKind]
     /// AI requests in flight (`Effect.ai` sent, `SystemEvent.aiResult` not yet received), so a result can be
     /// applied to the item its task names.
+    var siteRequests: [String: PendingSiteRequest] = [:]
+    var liveFolderStatus: [ItemID: String] = [:]
+    var liveFolderUpdated: [ItemID: Instant] = [:]
+    var favoriteFeeds: [ItemID: SiteFeed] = [:]
+    var calendars: [ProfileID: CalendarFeed] = [:]
     var pendingAI: [AIRequestID: AITask]
 }
 
@@ -272,6 +282,11 @@ struct WindowSession: Sendable, Equatable {
     /// Arc's "press twice for Arc's shortcut" memory and the duplicate-press guard (KeyRouting.swift), per window:
     /// a press in one window never satisfies or suppresses a press in another.
     var keyRouting: KeyRoutingMemory
+    var tabSelection = TabSelection()
+    var sidebarFocused = false
+    var revealItem: ItemID?
+    var revealGeneration: UInt64 = 0
+    var toast: ToastSnapshot?
 }
 
 /// What draws over the content card, at most one per window. The archive is one page of the Library; Peek holds a
@@ -317,6 +332,7 @@ struct RecentCycle: Sendable, Equatable {
     var index: Int
     /// Tabs on screen when the cycle began, so the net on-screen change is stamped once at commit.
     var baseline: Set<ItemID>
+    var original: ItemID? = nil
 }
 
 struct SavedSlot: Sendable, Equatable, Codable {
@@ -340,6 +356,7 @@ struct LivePage: Sendable, Equatable {
     var canGoForward: Bool = false
     var failure: LoadFailure? = nil
     var crashed: Bool = false
+    var audible: Bool = false
 }
 
 public struct LoadFailure: Hashable, Sendable, Codable {

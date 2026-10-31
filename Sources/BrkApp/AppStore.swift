@@ -144,6 +144,10 @@ public final class AppStore {
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             destinations.ownerGone(id)
+            if let owner = windows[id]?.window, let sheet = owner.attachedSheet {
+                owner.endSheet(sheet, returnCode: .cancel)
+                sheet.orderOut(nil)
+            }
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
@@ -187,10 +191,21 @@ public final class AppStore {
         renderSettings()
     }
 
+    private lazy var siteTools = SiteToolsAdapter { [weak self] event in self?.dispatch(.system(event)) }
+
     private func run(_ effects: [Effect]) {
+        siteTools.reconcile(Set(snapshot.windows.values.compactMap { $0.tabTools.pendingSiteRequest }))
         for effect in effects {
             switch effect {
             case .find(let request): engine.find(request)
+            case .siteRequest(let request):
+                if let window = windows[request.window]?.window { siteTools.run(request, in: window) }
+            case .iconPicker(let window, let item):
+                guard let owner = windows[window]?.window else { continue }
+                TabIconPicker.present(in: owner) { [weak self, weak owner] icon in
+                    guard owner?.isVisible == true else { return }
+                    self?.dispatch(.user(window, .item(.setIcon(item, icon))))
+                }
             case .page(let page, let action):
                 engine.perform(action, on: page)
             case .copyToPasteboard(let text):
@@ -203,6 +218,7 @@ public final class AppStore {
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
                 case .miniaturize: window.miniaturize(nil)
                 case .close: window.performClose(nil)
+                case .requestArchiveClear: windows[id]?.root.library.requestClearConfirmation()
                 }
             case .app(let effect):
                 switch effect {
@@ -221,6 +237,7 @@ public final class AppStore {
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 menu.popUp(positioning: nil, at: at, in: controller.root)
+                popupTarget.clear()
             case .export(let document):
                 ShareExport.run(document, in: windowController(nil)?.window)
             case .ai(let id, let task, let choice):
@@ -266,6 +283,8 @@ final class PopupTarget: NSObject {
         menu.autoenablesItems = false
         return menu
     }
+
+    func clear() { commands.removeAll(); choose = nil }
 
     @objc private func fire(_ sender: NSMenuItem) {
         if let command = commands[sender.tag] { choose?(command) }

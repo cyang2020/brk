@@ -75,9 +75,9 @@ extension Work {
         }
     }
 
-    mutating func setPinnedAddresses(under item: ItemID, in window: WindowID) {
+    mutating func setPinnedAddresses(under item: ItemID, in window: WindowID, excluding retained: Set<ItemID> = []) {
         guard let scope = state.locate(item), let tree = state.tree(scope) else { return }
-        for tab in tree.tabs(under: item) {
+        for tab in tree.tabs(under: item) where !retained.contains(tab) {
             let home = state.address(of: tab, in: window, for: .savedDocument)
             state.withTree(scope) { $0.updateTab(tab) { $0.pinnedURL = home } }
         }

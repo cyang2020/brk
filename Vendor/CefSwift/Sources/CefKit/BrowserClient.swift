@@ -24,6 +24,7 @@ final class BrowserClient {
     nonisolated(unsafe) private(set) var clientPointer: UnsafeMutablePointer<cef_client_t>?
     nonisolated(unsafe) private var lifeSpanPointer: UnsafeMutablePointer<cef_life_span_handler_t>?
     nonisolated(unsafe) private var loadPointer: UnsafeMutablePointer<cef_load_handler_t>?
+    nonisolated(unsafe) private var audioPointer: UnsafeMutablePointer<cef_audio_handler_t>?
     nonisolated(unsafe) private var displayPointer: UnsafeMutablePointer<cef_display_handler_t>?
     nonisolated(unsafe) private var downloadPointer: UnsafeMutablePointer<cef_download_handler_t>?
     nonisolated(unsafe) var jsDialogPointer: UnsafeMutablePointer<cef_jsdialog_handler_t>?
@@ -75,6 +76,7 @@ final class BrowserClient {
     func releaseHandlers() {
         if let pointer = lifeSpanPointer { lifeSpanPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = loadPointer { loadPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = audioPointer { audioPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = displayPointer { displayPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = downloadPointer { downloadPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = jsDialogPointer { jsDialogPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
@@ -228,6 +230,36 @@ final class BrowserClient {
         }
         loadPointer = load
 
+        let audio = cefAllocate(cef_audio_handler_t.self, owner: self)
+        audio.pointee.get_audio_parameters = { _, browser, _ in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            return 1
+        }
+        audio.pointee.on_audio_stream_started = { handler, browser, _, _ in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            guard let client = BrowserClient.owner(handler.map(UnsafeMutableRawPointer.init)) else { return }
+            Task { @MainActor [weak client] in
+                guard let client, let b = client.browser else { return }
+                b.delegate?.browser(b, didChangeAudio: true)
+            }
+        }
+        audio.pointee.on_audio_stream_stopped = { handler, browser in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            guard let client = BrowserClient.owner(handler.map(UnsafeMutableRawPointer.init)) else { return }
+            Task { @MainActor [weak client] in
+                guard let client, let b = client.browser else { return }
+                b.delegate?.browser(b, didChangeAudio: false)
+            }
+        }
+        audio.pointee.on_audio_stream_error = { handler, browser, _ in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            guard let client = BrowserClient.owner(handler.map(UnsafeMutableRawPointer.init)) else { return }
+            Task { @MainActor [weak client] in
+                guard let client, let b = client.browser else { return }
+                b.delegate?.browser(b, didChangeAudio: false)
+            }
+        }
+        audioPointer = audio
         let display = cefAllocate(cef_display_handler_t.self, owner: self)
         display.pointee.on_title_change = { handlerSelf, browser, title in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
@@ -427,6 +459,11 @@ final class BrowserClient {
         client.pointee.get_load_handler = { clientSelf in
             guard let me = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init)),
                   let handler = me.loadPointer else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler))
+            return handler
+        }
+        client.pointee.get_audio_handler = { clientSelf in
+            guard let me = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init)), let handler = me.audioPointer else { return nil }
             cefAddRef(UnsafeMutableRawPointer(handler))
             return handler
         }

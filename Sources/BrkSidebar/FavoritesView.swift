@@ -13,6 +13,7 @@ final class FavoritesView: NSView {
     private let drag: DragController
     /// `section-favorites`: the tiles' container, so e2e can scope tiles to the section.
     private let section = FlippedView()
+    var previewsEnabled = true
     private var tiles: [ItemID: FavoriteTileView] = [:]
     private let emptyBox = CAShapeLayer()
     private let emptyTitle = NSTextField(labelWithString: Copy.favoritesEmptyTitle)
@@ -68,6 +69,7 @@ final class FavoritesView: NSView {
                 return t
             }()
             if let rect = frames.favoriteTiles[row.id] { tile.frame = rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY) }
+            tile.previewsEnabled = previewsEnabled
             tile.render(row, renaming: row.id == renaming, palette: palette)
         }
         let empty = favorites.tiles.isEmpty
@@ -150,6 +152,10 @@ final class FavoritesView: NSView {
 @MainActor
 final class FavoriteTileView: HoverView {
     let id: ItemID
+    private let preview = TabHoverPreview()
+    var previewsEnabled = true
+    private let badge = NSTextField(labelWithString: "")
+    private let subtitle = NSTextField(labelWithString: "")
     private let dispatch: Dispatch
     private let drag: DragController
     private let icon = IconView()
@@ -168,13 +174,20 @@ final class FavoriteTileView: HoverView {
         ring.fillColor = nil
         layer?.addSublayer(ring)
         addSubview(icon)
+        for label in [badge, subtitle] { label.font = .systemFont(ofSize: 10); label.alignment = .center; addSubview(label) }
         identify(.favorite(id))
     }
 
     func render(_ row: TabRow, renaming: Bool, palette: Palette) {
         self.row = row
         self.palette = palette
-        toolTip = row.title
+        toolTip = row.title + (row.subtitle.map { "\n" + $0 } ?? "")
+        badge.stringValue = row.badge.map(String.init) ?? ""
+        badge.isHidden = row.badge == nil
+        subtitle.stringValue = row.subtitle ?? ""
+        subtitle.isHidden = row.subtitle == nil
+        badge.textColor = palette.ink.text
+        subtitle.textColor = palette.ink.secondary
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, loading: row.loading)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
         if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
@@ -203,6 +216,7 @@ final class FavoriteTileView: HoverView {
 
     /// Drops the field without committing (the rename ended elsewhere, or the tile left).
     func retireRenameField() {
+        preview.cancel()
         guard let field = renameField else { return }
         field.retire()
         renameField = nil
@@ -211,6 +225,8 @@ final class FavoriteTileView: HoverView {
 
     override func layout() {
         super.layout()
+        badge.frame = NSRect(x: bounds.width - 22, y: 2, width: 20, height: 16)
+        subtitle.frame = NSRect(x: 2, y: bounds.height - 16, width: bounds.width - 4, height: 14)
         let side = Draw.tileFavicon.value
         icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
         if let field = renameField {
@@ -227,6 +243,7 @@ final class FavoriteTileView: HoverView {
     }
 
     override func stateChanged() {
+        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: row.map { $0.title + "\n" + ($0.subtitle ?? $0.url?.absoluteString ?? "") }, over: self)
         guard let palette, let row else { return }
         let current = row.status == .current
         let fill: NSColor

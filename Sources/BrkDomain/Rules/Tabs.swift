@@ -41,7 +41,7 @@ extension Work {
                     .map(\.element)
                 let order = (shown.map { [$0] } ?? []) + rest
                 guard order.count >= 2 else { return }
-                cycle = RecentCycle(order: order, index: 0, baseline: state.onScreenTabs())
+                cycle = RecentCycle(order: order, index: 0, baseline: state.onScreenTabs(), original: shown)
             }
             let n = cycle.order.count
             cycle.index = ((cycle.index + (step == .next ? 1 : -1)) % n + n) % n
@@ -77,6 +77,7 @@ extension Work {
             guard let tab = state.resolveTab(ref, in: window), let t = state.displayedTab(tab, in: window), let pinned = t.pinnedURL, pinned != t.url else { return }
             request(pinned, for: PageID(window: window, item: tab))
         case .clearToday:
+            guard state.doc.windows[window]?.kind == .standard else { return }
             // Every Today item of the current space with no pane on screen in any window.
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let onScreen = state.onScreenTabs()
@@ -176,7 +177,10 @@ extension Work {
             live.failure = LoadFailure(code: code, description: description)
             live.loading = false
             live.document = .unavailable
+        case .audioChanged(let audible): live.audible = audible
         case .rendererGone:
+            live.audible = false
+            live.loading = false
             live.crashed = true
             live.document = .unavailable
             effects.append(.page(page, .recover))

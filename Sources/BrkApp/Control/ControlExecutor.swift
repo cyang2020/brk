@@ -150,14 +150,16 @@ final class ControlExecutor {
             events.hover(at: c.root.convert(point, to: nil), in: c.window)
             return .ok
 
-        case .captureContextMenu(let window, let point):
+        case .captureContextMenu(let window, let point, let choice):
             let c = try controller(window)
             store.inputWindow = c.window
             let capture = ContextMenuCapture()
-            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events))
+            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice))
 
         case .screenshot(let window, let path):
             let c = try controller(window)
+            // A snapshot can be newer than the WindowServer/CEF compositor frame. Yield to its commit first.
+            try await Task.sleep(for: .milliseconds(180))
             let image = try capture(c.window)
             let bitmap = NSBitmapImageRep(cgImage: image)
             guard let png = bitmap.representation(using: .png, properties: [:]) else { throw Failure(message: "PNG encoding failed") }

@@ -23,7 +23,8 @@ public struct Modifiers: OptionSet, Hashable, Sendable, Codable {
 /// name with no second list to keep in step (KeyTests pins the round trip for every case).
 public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomStringConvertible {
     case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, z = 6, c = 8, q = 12, w = 13, e = 14, r = 15, y = 16, t = 17
-    case one = 18, two = 19, three = 20, four = 21, equals = 24, minus = 27, zero = 29, rightBracket = 30, o = 31, u = 32, leftBracket = 33
+    case one = 18, three = 20, four = 21, six = 22, five = 23, nine = 25, seven = 26, eight = 28
+    case two = 19, equals = 24, minus = 27, zero = 29, rightBracket = 30, o = 31, u = 32, leftBracket = 33
     case i = 34, j = 38, l = 37, k = 40, comma = 43, n = 45, m = 46, p = 35, period = 47
     case tab = 48, space = 49, escape = 53, returnKey = 36, f12 = 111
     case leftArrow = 123, rightArrow = 124, downArrow = 125, upArrow = 126
@@ -49,6 +50,11 @@ public enum Key: UInt16, Hashable, Sendable, Codable, CaseIterable, CustomString
         case .y: "y"
         case .t: "t"
         case .one: "1"
+        case .five: "5"
+        case .six: "6"
+        case .seven: "7"
+        case .eight: "8"
+        case .nine: "9"
         case .two: "2"
         case .three: "3"
         case .four: "4"

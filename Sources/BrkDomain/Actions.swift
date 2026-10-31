@@ -45,6 +45,8 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case gptMessage, joinLiveMeeting, peekEmail, pinTab, openTabIn, newFolder, duplicate, rename, collapseAllFolders, expandAllFolders
     case selectNextTab, selectPreviousTab, cycleNextTab, cyclePreviousTab, cycleTabForward, cycleTabBackward, revealTabInSidebar
     case clearExplore, resetSpace, resetTab
+    case jumpItem1, jumpItem2, jumpItem3, jumpItem4, jumpItem5, jumpItem6, jumpItem7, jumpItem8, jumpItem9
+    case jumpSpace1, jumpSpace2, jumpSpace3, jumpSpace4, jumpSpace5, jumpSpace6, jumpSpace7, jumpSpace8, jumpSpace9
     // Archive (157 to 163). Rows 158 and 160 are the arrow-key alternates of goBack and goForward.
     case goBack, goForward, viewHistory, viewArchive, clearArchive
     // Extensions (165, 166)
@@ -257,7 +259,7 @@ extension ActionID {
             entry(94, "Collapse Pinned Section", .view, 1, [], .space(.togglePinnedSection(.current)),
                   bar: listing("chevron.right", "Collapse Pinned Tabs", "Hide Pinned Tabs", "Pinned"), hidden: true)
         case .focusSidebar:
-            entry(95, "Reveal Current Tab", .view, 1, [key(ctrl, .space, .pageThenApp)], .later(.sidebarKeyboardFocus), bar: listing("sidebar.left"), hidden: true)
+            entry(95, "Reveal Current Tab", .view, 1, [key(ctrl, .space, .pageThenApp)], .tabTools(.reveal), bar: listing("sidebar.left"), hidden: true)
         case .stopLoading:
             // Arc gives Stop Loading no type-travel attributes; the icon and word are ours.
             entry(96, "Stop Loading", .view, 2, [key(cmd, .period, .page)], .page(.stop(.focused)), bar: listing("xmark", "Stop"))
@@ -342,7 +344,7 @@ extension ActionID {
         // MARK: Tabs (groups: New Tab… to Expand All Folders | Next Tab to Reveal Tab | Clear to Reset Tab; Arc's
         // placeholder submenu between the last two is a separator item)
         case .gptMessage: entry(133, "New ChatGPT Message…", .tabs, 0, [key([opt, cmd], .g, .page)], .later(.aiCommandBar), hidden: true)
-        case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .later(.joinMeeting), hidden: true)
+        case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .tabTools(.site(.joinMeeting)), bar: listing("calendar", "Join Meeting"), hidden: true)
         case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .later(.peekEmail), hidden: true)
         case .pinTab: entry(136, "Pin/Unpin Tab", .tabs, 0, [key(cmd, .d, .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "save"))
         case .openTabIn:
@@ -352,12 +354,12 @@ extension ActionID {
             // Arc: `TypeTravelCandidate.createNewFolder` ("Create a new folder").
             entry(138, "New Folder…", .tabs, 0, [key([shift, cmd], .n, .page)], .item(.newFolder), bar: listing("folder.badge.plus", "Create a new folder", "Folder"))
         case .duplicate:
-            entry(139, "Duplicate", .tabs, 0, [], .later(.duplicate), bar: listing("plus.square.on.square", "Duplicate Current Tab"), hidden: true)
+            entry(139, "Duplicate", .tabs, 0, [], .tabTools(.bulk(.selected, .duplicate(nil))), bar: listing("plus.square.on.square", "Duplicate Current Tab"), hidden: true)
         case .rename:
             // Arc: `TypeTravelCandidate.renameCurrentTab` ("Rename Current Tab…").
             entry(140, "Rename Current Item", .tabs, 0, [], .item(.beginRename(.focused)), bar: listing("pencil", "Rename Current Tab"), hidden: true)
-        case .collapseAllFolders: entry(141, "Collapse All Folders", .tabs, 0, [], .later(.folderTools), bar: listing("folder"), hidden: true)
-        case .expandAllFolders: entry(142, "Expand All Folders", .tabs, 0, [], .later(.folderTools), bar: listing("folder"), hidden: true)
+        case .collapseAllFolders: entry(141, "Collapse All Folders", .tabs, 0, [], .tabTools(.folders(expanded: false)), bar: listing("folder"), hidden: true)
+        case .expandAllFolders: entry(142, "Expand All Folders", .tabs, 0, [], .tabTools(.folders(expanded: true)), bar: listing("folder"), hidden: true)
         case .selectNextTab:
             entry(143, "Next Tab", .tabs, 1, [key([opt, cmd], .downArrow, .app)], .tab(.step(.next)), bar: listing("arrow.right"), repeats: true)
         case .selectPreviousTab:
@@ -366,18 +368,37 @@ extension ActionID {
             entry(145, "Tab Switcher (forward)", .tabs, 1, [key(ctrl, .tab, .app)], .tab(.cycleRecent(.next)), repeats: true, hidden: true)
         case .cyclePreviousTab:
             entry(146, "Tab Switcher (backward)", .tabs, 1, [key([ctrl, shift], .tab, .app)], .tab(.cycleRecent(.previous)), repeats: true, hidden: true)
-        case .cycleTabForward: entry(147, "Cycle Tab Forward", .tabs, 1, [key([ctrl, cmd], .rightArrow, .app)], .later(.linearTabCycling), hidden: true)
-        case .cycleTabBackward: entry(148, "Cycle Tab Backward", .tabs, 1, [key([ctrl, cmd], .leftArrow, .app)], .later(.linearTabCycling), hidden: true)
+        case .cycleTabForward: entry(147, "Cycle Tab Forward", .tabs, 1, [key([ctrl, cmd], .rightArrow, .app)], .tabTools(.cycleLinear(.next)), bar: listing("arrow.right"), hidden: true)
+        case .cycleTabBackward: entry(148, "Cycle Tab Backward", .tabs, 1, [key([ctrl, cmd], .leftArrow, .app)], .tabTools(.cycleLinear(.previous)), bar: listing("arrow.left"), hidden: true)
         case .revealTabInSidebar:
-            entry(149, "Reveal Tab in Sidebar", .tabs, 1, [], .later(.sidebarKeyboardFocus),
+            entry(149, "Reveal Tab in Sidebar", .tabs, 1, [], .tabTools(.reveal),
                   bar: listing("arrow.left.circle", "Show Tab in Sidebar", "Reveal in Sidebar", "Go to Current Tab"))
         case .clearExplore:
             entry(153, "Clear Unpinned Tabs", .tabs, 2, [key([shift, cmd], .k, .page)], .tab(.clearToday),
                   bar: listing("bubbles.and.sparkles", "Close Unpinned Tabs", "Clear Tabs", "Clear Today"))
-        case .resetSpace: entry(154, "Reset all tabs in this Space", .tabs, 2, [], .later(.resetSpace), bar: listing("arrow.backward.to.line"))
+        case .resetSpace: entry(154, "Reset all tabs in this Space", .tabs, 2, [], .tabTools(.resetPinned), bar: listing("arrow.backward.to.line"))
         case .resetTab:
             // Arc has the trigger and no icon for this row.
             entry(155, "Reset Tab to Original URL", .tabs, 2, [], .tab(.reset(.focused)), bar: listing("arrow.uturn.left", "Reset Tab"), hidden: true)
+
+        case .jumpItem1: entry(1001, "Jump to Item 1", .tabs, 1, [key(cmd, .one, .app)], .tabTools(.jumpItem(1)), bar: listing("number"), hidden: true)
+        case .jumpSpace1: entry(1011, "Jump to Space 1", .spaces, 1, [key([ctrl, cmd], .one, .app)], .tabTools(.jumpSpace(1)), bar: listing("number"), hidden: true)
+        case .jumpItem2: entry(1002, "Jump to Item 2", .tabs, 1, [key(cmd, .two, .app)], .tabTools(.jumpItem(2)), bar: listing("number"), hidden: true)
+        case .jumpSpace2: entry(1012, "Jump to Space 2", .spaces, 1, [key([ctrl, cmd], .two, .app)], .tabTools(.jumpSpace(2)), bar: listing("number"), hidden: true)
+        case .jumpItem3: entry(1003, "Jump to Item 3", .tabs, 1, [key(cmd, .three, .app)], .tabTools(.jumpItem(3)), bar: listing("number"), hidden: true)
+        case .jumpSpace3: entry(1013, "Jump to Space 3", .spaces, 1, [key([ctrl, cmd], .three, .app)], .tabTools(.jumpSpace(3)), bar: listing("number"), hidden: true)
+        case .jumpItem4: entry(1004, "Jump to Item 4", .tabs, 1, [key(cmd, .four, .app)], .tabTools(.jumpItem(4)), bar: listing("number"), hidden: true)
+        case .jumpSpace4: entry(1014, "Jump to Space 4", .spaces, 1, [key([ctrl, cmd], .four, .app)], .tabTools(.jumpSpace(4)), bar: listing("number"), hidden: true)
+        case .jumpItem5: entry(1005, "Jump to Item 5", .tabs, 1, [key(cmd, .five, .app)], .tabTools(.jumpItem(5)), bar: listing("number"), hidden: true)
+        case .jumpSpace5: entry(1015, "Jump to Space 5", .spaces, 1, [key([ctrl, cmd], .five, .app)], .tabTools(.jumpSpace(5)), bar: listing("number"), hidden: true)
+        case .jumpItem6: entry(1006, "Jump to Item 6", .tabs, 1, [key(cmd, .six, .app)], .tabTools(.jumpItem(6)), bar: listing("number"), hidden: true)
+        case .jumpSpace6: entry(1016, "Jump to Space 6", .spaces, 1, [key([ctrl, cmd], .six, .app)], .tabTools(.jumpSpace(6)), bar: listing("number"), hidden: true)
+        case .jumpItem7: entry(1007, "Jump to Item 7", .tabs, 1, [key(cmd, .seven, .app)], .tabTools(.jumpItem(7)), bar: listing("number"), hidden: true)
+        case .jumpSpace7: entry(1017, "Jump to Space 7", .spaces, 1, [key([ctrl, cmd], .seven, .app)], .tabTools(.jumpSpace(7)), bar: listing("number"), hidden: true)
+        case .jumpItem8: entry(1008, "Jump to Item 8", .tabs, 1, [key(cmd, .eight, .app)], .tabTools(.jumpItem(8)), bar: listing("number"), hidden: true)
+        case .jumpSpace8: entry(1018, "Jump to Space 8", .spaces, 1, [key([ctrl, cmd], .eight, .app)], .tabTools(.jumpSpace(8)), bar: listing("number"), hidden: true)
+        case .jumpItem9: entry(1009, "Jump to Item 9", .tabs, 1, [key(cmd, .nine, .app)], .tabTools(.jumpItem(9)), bar: listing("number"), hidden: true)
+        case .jumpSpace9: entry(1019, "Jump to Space 9", .spaces, 1, [key([ctrl, cmd], .nine, .app)], .tabTools(.jumpSpace(9)), bar: listing("number"), hidden: true)
 
         // MARK: Archive (groups: Back, Forward | History, Archive, Clear)
         case .goBack:
@@ -388,7 +409,7 @@ extension ActionID {
                   bar: listing("arrow.right", "Go Forward", "Forward", "Navigate Forward"), repeats: true)
         case .viewHistory: entry(161, "View History", .archive, 1, [key(cmd, .y, .page)], .library(.open(.history)), bar: listing("book", "Show History", "History"))
         case .viewArchive: entry(162, "View Archive", .archive, 1, [], .library(.open(.archive)), bar: listing("archivebox", "Archive"))
-        case .clearArchive: entry(163, "Clear Archive", .archive, 1, [], .archive(.clear), bar: listing("archivebox", "Clear Archive", "Delete Archive"))
+        case .clearArchive: entry(163, "Clear Archive", .archive, 1, [], .archive(.requestClear), bar: listing("archivebox", "Clear Archive", "Delete Archive"))
 
         // MARK: Extensions
         case .addExtension:

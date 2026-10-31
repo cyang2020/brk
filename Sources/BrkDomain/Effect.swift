@@ -10,6 +10,8 @@ import Foundation
 public enum Effect: Hashable, Sendable {
     case find(FindRequest)
     case page(PageID, PageAction)
+    case iconPicker(WindowID, ItemID)
+    case siteRequest(SiteRequest)
     case copyToPasteboard(String)
     case window(WindowID, WindowEffect)
     case app(AppEffect)
@@ -49,6 +51,7 @@ public enum ExportEntry: Hashable, Sendable, Codable {
 public enum ExportFormat: String, Hashable, Sendable, Codable, CaseIterable { case json, html }
 
 public enum WindowEffect: Hashable, Sendable {
+    case requestArchiveClear
     case toggleFullScreen
     /// Esc with nothing to close: leave full screen if the window is in it, else nothing (the reducer does not
     /// track full-screen state; the window does).

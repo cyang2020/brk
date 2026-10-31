@@ -124,23 +124,6 @@ struct ProfilePaneGlyph: View {
 
     /// The same SF Symbols the sidebar and the dialogs draw for Arc's named icons.
     static func symbol(_ icon: NamedIcon) -> String {
-        switch icon {
-        case .star: "star.fill"
-        case .bookmark: "bookmark.fill"
-        case .heart: "heart.fill"
-        case .flag: "flag.fill"
-        case .folder: "folder.fill"
-        case .calendar: "calendar"
-        case .mail: "envelope.fill"
-        case .terminal: "terminal.fill"
-        case .egg: "oval.portrait.fill"
-        case .home: "house.fill"
-        case .briefcase: "briefcase.fill"
-        case .book: "book.fill"
-        case .camera: "camera.fill"
-        case .music: "music.note"
-        case .globe: "globe"
-        case .code: "chevron.left.forwardslash.chevron.right"
-        }
+        icon.systemSymbolName
     }
 }
