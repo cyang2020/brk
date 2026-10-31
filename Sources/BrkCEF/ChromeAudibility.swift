@@ -114,7 +114,12 @@ final class ChromeAudibility: CefBrowserDelegate {
             if (!tab || typeof tab.audible !== 'boolean' || tab.incognito !== chrome.extension.inIncognitoContext) continue;
             let players = [], mediaError = null;
             try {
-              const frames = await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
+              let frames = await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? null});
+              const missing = frames.filter(f=>f.result === null).map(f=>f.documentId);
+              if (missing.length) {
+                await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,documentIds:missing},files:['media.js']});
+                frames = await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
+              }
               for (const frame of frames) for (const player of frame.result ?? []) players.push({...player,document:frame.documentId,frame:frame.frameId});
             } catch(e) { mediaError = String(e); }
             result.push({token: request.token, target: id, tab: tab.id, audible: tab.audible, incognito: tab.incognito, players, mediaError});

@@ -207,6 +207,8 @@ public enum ShutdownOutcome: Hashable, Sendable {
 
 /// What the engine can tell the e2e harness about one page. Diagnostic only: the app never branches on it.
 public struct PageFacts: Hashable, Sendable, Codable {
+    public var auxiliaryBrowsers: [Int]? = nil
+    public var auxiliaryWindows: [Int]? = nil
     public var requestedReloads: Int? = nil
     public var extensionDialogDecision: String? = nil
     public var extensionFileDialogCallbacks: Int? = nil

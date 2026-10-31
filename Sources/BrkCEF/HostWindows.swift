@@ -22,6 +22,7 @@ enum HostWindows {
     /// (re-parenting when it already had one; `nil` detaches it). Idempotent.
     static func adopt(_ host: NSWindow, parent: NSWindow?) {
         guardClass(of: host)
+        if host.isKeyWindow { host.resignKey() }
         if !hosts.contains(host) {
             host.styleMask.remove([.titled, .resizable])
             host.titleVisibility = .hidden

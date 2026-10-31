@@ -91,6 +91,7 @@ final class ChromePage: CefBrowserDelegate {
         // context, or the shared incognito one (W2-2 and W2-3 prove the isolation on the real engine).
         options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
+        if let host = chrome.nsWindow { HostWindows.adopt(host,parent:nil) }
         chrome.browser.delegate = self
         chrome.onWindowDestroyed = { [weak self] in
             guard let self else { return }
@@ -169,6 +170,8 @@ final class ChromePage: CefBrowserDelegate {
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
         facts.websiteFrozen = frozen
         facts.websitePolicyError = websiteError
+        facts.auxiliaryBrowsers = browser.nativeAuxiliaries.map { Int($0.browser.id) }
+        facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }
         return facts
     }
 

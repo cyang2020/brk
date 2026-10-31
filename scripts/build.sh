@@ -42,6 +42,8 @@ APP="dist/$PRODUCT.app"
 #    because the plugin signed before the edit.
 mkdir -p "$APP/Contents/Resources/BrkAudibility"
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
+mkdir -p "$APP/Contents/Resources/BrkSounds"
+cp Sources/BrkApp/SoundAssets/*.wav "$APP/Contents/Resources/BrkSounds/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"
 codesign --force --deep --sign - "$APP"

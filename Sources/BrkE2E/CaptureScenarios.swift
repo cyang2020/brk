@@ -12,11 +12,15 @@ enum CaptureScenarios {
     static func library(_ app: AppUnderTest) throws -> LibrarySnapshot? { if case .library(let value)? = try app.view().overlay { value } else { nil } }
     static func pngSize(_ bytes: Data) -> [Int] { [16,20].map { offset in bytes[offset..<(offset+4)].reduce(0) { $0*256+Int($1) } } }
     static func captureRecord(_ app: AppUnderTest, mode: CaptureMode, previous: Int) throws -> CaptureRecord {
-        try app.waitUntil("capture reaches Media as a real indexed PNG", timeout:20) {
+        do { try app.waitUntil("capture reaches Media as a real indexed PNG", timeout:20) {
             if try library(app)?.captures.count == previous + 1 { return true }
             let view = try app.view()
             if view.capture == nil, let toast = view.tabTools.toast { throw Check(description:toast.text) }
             return false
+        } } catch {
+            try? JSONEncoder().encode(try app.view()).write(to:app.shotsDirectory.appendingPathComponent("capture-failed-view.json"))
+            try? JSONEncoder().encode(try app.send(.pageObservations)).write(to:app.shotsDirectory.appendingPathComponent("capture-failed-observations.json"))
+            throw error
         }
         guard let record = try library(app)?.captures.first, let file = try library(app)?.captureFiles[record.id] else { throw Check(description:"No capture record/file") }
         let bytes = try Data(contentsOf:file)
@@ -141,6 +145,8 @@ enum CaptureScenarios {
         let metrics=try JSONSerialization.jsonObject(with:Data(text.utf8)) as! [String:Double]
         try Data(text.utf8).write(to:app.shotsDirectory.appendingPathComponent("zoom-metrics.json"))
         try app.dispatch(.capture(.begin(.fullPage)))
+        let observation = try app.send(.pageObservations)
+        try expect(try app.view().capture != nil,"Capture begin was not admitted after zoom: \(observation)")
         let record=try captureRecord(app,mode:.fullPage,previous:0)
         try expect(abs(Double(record.width)-metrics["width"]!*metrics["dpr"]!)<=2 && abs(Double(record.height)-metrics["height"]!*metrics["dpr"]!)<=2,"zoomed pixels do not match actual DOM devicePixelRatio")
         try Data(text.utf8).write(to:app.shotsDirectory.appendingPathComponent("zoom-metrics.json"))

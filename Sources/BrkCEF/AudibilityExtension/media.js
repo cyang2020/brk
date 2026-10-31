@@ -1,5 +1,6 @@
 // This registry lives only in the bundled extension's isolated world. No DOM or window message bridge.
 (() => {
+  if (globalThis.__brkMedia) return;
   const ids = new WeakMap(), players = new Map();
   function elements(root) {
     const result = [...root.querySelectorAll('audio,video')];

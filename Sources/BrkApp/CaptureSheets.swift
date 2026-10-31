@@ -16,6 +16,7 @@ import BrkLayout
         let field = NSTextField(string:folder.appendingPathComponent(name).path)
         field.frame = CGRect(x:0,y:0,width:480,height:28)
         field.identifier = NSUserInterfaceItemIdentifier(ViewID.tabTool("capture-export-path").identifier)
+        field.setAccessibilityIdentifier(ViewID.tabTool("capture-export-path").identifier)
         field.setAccessibilityLabel("PNG file path")
         alert.accessoryView = field; alert.window.initialFirstResponder = field
         entries[id] = Entry(alert:alert,owner:owner,capture:capture)
