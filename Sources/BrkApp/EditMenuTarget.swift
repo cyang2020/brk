@@ -10,7 +10,7 @@ import BrkEngine
         "toggleAutomaticSpellingCorrection:", "orderFrontSubstitutionsPanel:", "toggleSmartInsertDelete:",
         "toggleAutomaticQuoteSubstitution:", "toggleAutomaticDashSubstitution:", "toggleAutomaticLinkDetection:",
         "toggleAutomaticDataDetection:", "toggleAutomaticTextReplacement:", "uppercaseWord:", "lowercaseWord:",
-        "capitalizeWord:", "startSpeaking:", "stopSpeaking:", "addFontTrait:", "underline:",
+        "capitalizeWord:", "startSpeaking:", "stopSpeaking:", "underline:",
     ]
     private var receiver: NSResponder? {
         guard let window = window() else { return nil }
@@ -24,14 +24,10 @@ import BrkEngine
     }
     override func forwardingTarget(for action: Selector!) -> Any? {
         guard let action, Self.actions.contains(NSStringFromSelector(action)) else { return super.forwardingTarget(for: action) }
-        if action == #selector(NSFontManager.addFontTrait(_:)), receiver is NSTextView { return NSFontManager.shared }
         return receiver
     }
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         guard let action = item.action, let receiver else { return false }
-        if action == #selector(NSFontManager.addFontTrait(_:)), let editor = receiver as? NSTextView {
-            return editor.isEditable && editor.isRichText
-        }
         guard receiver.responds(to: action) else { return false }
         if let validator = receiver as? any NSMenuItemValidation { return validator.validateMenuItem(item) }
         return true

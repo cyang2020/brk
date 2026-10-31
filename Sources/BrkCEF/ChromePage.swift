@@ -90,6 +90,7 @@ final class ChromePage: CefBrowserDelegate {
         surface = EmbeddedSurface(page: spec.id)
         var options = CefChromeBrowserOptions()
         options.isFrameless = true
+        options.beforeShow = { HostWindows.adopt($0, parent: nil) }
         let initialRule = SiteOrigin(url).map { spec.websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
         let list = spec.websitePolicy.preferences.blockingRules ?? .builtIn
         options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes)

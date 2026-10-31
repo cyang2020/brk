@@ -83,6 +83,7 @@ final class ChromeAudibility: CefBrowserDelegate {
         self.context = context
         var options = CefChromeBrowserOptions()
         options.isFrameless = true
+        options.beforeShow = { HostWindows.adopt($0, parent: nil) }
         options.showsChromeToolbar = false
         options.initialBounds = ChromePage.offscreenBounds
         options.profile = profile

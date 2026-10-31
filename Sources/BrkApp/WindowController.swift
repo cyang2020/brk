@@ -23,7 +23,7 @@ public class WindowController: NSObject, NSWindowDelegate {
     private(set) var lastFrames: WindowFrames?
     private var pendingFocus: FocusTarget?
     private var placed = false
-    private var pageFullscreenWasNative: Bool?
+    private var pageFullscreen = PageFullscreenTransition()
 
     /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
     /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
@@ -82,13 +82,11 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
 
     func setPageFullScreen(_ on: Bool) {
-        if on {
-            if pageFullscreenWasNative == nil { pageFullscreenWasNative = window.styleMask.contains(.fullScreen) }
-            if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
-        } else if let original = pageFullscreenWasNative {
-            pageFullscreenWasNative = nil
-            if !original && window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
-        }
+        pageFullscreen.pageChanged(on, nativeFullscreen: window.styleMask.contains(.fullScreen))
+        applyPageFullscreen()
+    }
+    private func applyPageFullscreen() {
+        if pageFullscreen.needsToggle(nativeFullscreen: window.styleMask.contains(.fullScreen)) { window.toggleFullScreen(nil) }
     }
 
     /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
@@ -168,9 +166,18 @@ public class WindowController: NSObject, NSWindowDelegate {
         if let last = lastSnapshot { applyFocus(last.focus) }
     }
 
-    public func windowDidEnterFullScreen(_ notification: Notification) { window.level = .normal }
+    public func windowWillEnterFullScreen(_ notification: Notification) { pageFullscreen.nativeWillChange(to: true) }
+    public func windowWillExitFullScreen(_ notification: Notification) { pageFullscreen.nativeWillChange(to: false) }
+    public func windowDidEnterFullScreen(_ notification: Notification) {
+        pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen()
+    }
     public func windowDidExitFullScreen(_ notification: Notification) {
-        if case .page(let page)? = lastSnapshot?.focus { engine.perform(.exitFullscreen, on: page) }
+        if pageFullscreen.nativeExited() {
+            for pane in lastSnapshot?.content.presentedPanes ?? [] {
+                if case .page(let page) = pane.content { engine.perform(.exitFullscreen, on: page) }
+            }
+        }
+        applyPageFullscreen()
         window.level = lastSnapshot?.stayOnTop == true ? .floating : .normal
     }
 

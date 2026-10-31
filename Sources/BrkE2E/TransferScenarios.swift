@@ -152,7 +152,7 @@ enum TransferScenarios {
         return directory
     }
     private static func rows(_ app: AppUnderTest, in window: WindowID? = nil) throws -> [DownloadRow] {
-        if case .library(let library)? = try app.view(window).overlay { return library.downloads }
+        if case .library(let library)? = try app.view(window ?? app.window).overlay { return library.downloads }
         return []
     }
     private static func library(_ app: AppUnderTest, in window: WindowID? = nil) throws {

@@ -27,6 +27,8 @@ public struct CefChromeBrowserOptions {
     /// Brk wave-2 addition: per-profile and incognito contexts for Chrome-runtime browsers.
     public var profile: CefProfile?
     public var requestRules: CefRequestRules? = nil
+    /// Configure an embedded native host before CEF first shows or activates it. Standalone windows leave this nil.
+    public var beforeShow: ((NSWindow) -> Void)? = nil
 
     public init() {}
 }
@@ -245,6 +247,10 @@ public final class CefChromeBrowser {
         if options.initialBounds == nil {
             var size = cef_size_t(width: 1100, height: 760)
             window.pointee.center_window?(window, &size)
+        }
+        if let handle = window.pointee.get_window_handle?(window),
+           let native = Unmanaged<NSView>.fromOpaque(handle).takeUnretainedValue().window {
+            options.beforeShow?(native)
         }
         window.pointee.show?(window)
     }

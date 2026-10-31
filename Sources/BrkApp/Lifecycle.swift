@@ -93,7 +93,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         engine.delegate = router
         self.store = store
         self.router = router
-        menuTarget.edits.window = { [weak store] in store?.windowController(nil)?.window }
+        menuTarget.edits.window = { [weak store] in NSApp.keyWindow ?? store?.windowController(nil)?.window }
 
         menuTarget.perform = { [weak self] action, event in
             guard let self, let window = self.store?.windowController(nil)?.id else { return }

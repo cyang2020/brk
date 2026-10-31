@@ -420,6 +420,9 @@ final class ControlExecutor {
                            actual: ViewTree.identified(in: window, relativeTo: c.root), pages: pages,
                            firstResponder: ViewTree.describe(responder), focusedPage: focusedPage, appWindows: windows)
         facts.windowLevel = window.level.rawValue
+        facts.ownedPages = Dictionary(uniqueKeysWithValues: store.snapshot.pages.filter { $0.id.window == c.id }.compactMap { spec in
+            engine.facts(for: spec.id).map { (spec.id, $0) }
+        })
         facts.miniaturized = window.isMiniaturized
         facts.fullscreen = window.styleMask.contains(.fullScreen)
         facts.appHidden = NSApp.isHidden

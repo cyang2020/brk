@@ -182,6 +182,8 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var actual: [String: ActualView]
     /// Page surfaces attached to this window, keyed by page.
     public var pages: [PageID: PageFacts]
+    /// All demanded pages belonging to this window, including hidden popup owners. `pages` remains attached surfaces.
+    public var ownedPages: [PageID: PageFacts]? = nil
     /// Class name of the first responder, and the page that has keyboard focus, if any.
     public var firstResponder: String
     public var editorText: String? = nil

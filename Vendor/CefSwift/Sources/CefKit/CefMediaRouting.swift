@@ -23,6 +23,7 @@ import Foundation
     private var terminatingRoutes: Set<String> = []
     private var stopped = false
     private var pendingCreates = 0
+    private var announcedOwnership = false
     private final class Observer { weak var owner: CefMediaRouting?; init(_ owner: CefMediaRouting) { self.owner = owner } }
     private final class Creation { var owner: CefMediaRouting?; init(_ owner: CefMediaRouting) { self.owner = owner } }
 
@@ -125,7 +126,7 @@ import Foundation
             cefRelease(UnsafeMutableRawPointer(source)); cefRelease(UnsafeMutableRawPointer(sink)); return
         }
         pendingCreates += 1
-        onPendingChange?(true)
+        if !announcedOwnership { announcedOwnership = true; onPendingChange?(true) }
         guard !stopped else {
             cefRelease(UnsafeMutableRawPointer(source)); cefRelease(UnsafeMutableRawPointer(sink))
             routeCreationDrained(); return
@@ -173,7 +174,7 @@ import Foundation
             nativeRoutes.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; nativeRoutes.removeAll()
             if let raw { self.raw = nil; cefRelease(UnsafeMutableRawPointer(raw)) }
         }
-        onPendingChange?(false)
+        if announcedOwnership { announcedOwnership = false; onPendingChange?(false) }
         if stopped { onPendingChange = nil }
     }
 

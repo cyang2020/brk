@@ -974,7 +974,7 @@ extension BrowserClient {
             var keyEvent = CefKeyEvent(raw: event.pointee)
             keyEvent.nativeTimestamp = native.map { Unmanaged<NSEvent>.fromOpaque($0).takeUnretainedValue().timestamp }
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                let result = cefBrowser.delegate?.browser(cefBrowser, preKeyEvent: keyEvent) ?? CefKeyDisposition(handled: false, shortcut: false)
+                let result = cefBrowser.delegate?.browser(cefBrowser, preKeyEvent: keyEvent) ?? CefKeyDisposition(handled: false, shortcutIntent: .unchanged)
                 switch result.shortcutIntent {
                 case .unchanged: break
                 case .disabled: shortcut?.pointee = 0

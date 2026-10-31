@@ -10,6 +10,7 @@ enum BrowserOpsScenarios {
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
         Scenario("BO5", "real context-owned media-router enumeration and source rejection", cefOnly: "CEF media router", cast),
+        Scenario("BO5C", "custom-profile media-router enumeration and source-close drain", cefOnly: "CEF media router context lifetime", castCustomProfile),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
     ]
     private static func load(_ app: AppUnderTest, _ path: String) throws -> PageID {
@@ -23,7 +24,8 @@ enum BrowserOpsScenarios {
         return (allTabs(view) + tabRows(view.scratch?.rows ?? [])).first { $0.id == page.item }?.title
     }
     private static func facts(_ app: AppUnderTest, _ page: PageID) throws -> PageFacts {
-        guard let facts = try app.native(page.window).pages[page] else { throw Check(description: "Page facts missing") }
+        let native = try app.native(page.window)
+        guard let facts = native.pages[page] ?? native.ownedPages?[page] else { throw Check(description: "Page facts missing") }
         return facts
     }
     private static func record<T: Encodable>(_ app: AppUnderTest, _ name: String, _ value: T) throws {
@@ -195,6 +197,13 @@ enum BrowserOpsScenarios {
         try expect(result.castSourceSupported == false, "The pinned router unexpectedly accepted arbitrary HTTP page mirroring")
         try app.recordWindows("cast-receivers")
         app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). GetSource rejected HTTP page mirroring. No native route creation or termination is claimed without a receiver. ABI callback/termination ownership is covered separately by raw unit fixtures.")
+    }
+    @Sendable static func castCustomProfile(_ app: AppUnderTest) throws {
+        try app.dispatch(.profile(.create(name: "Cast owner", icon: nil)))
+        guard case .settings(let settings) = try app.send(.settings),
+              let profile = settings.profiles.first(where: { $0.profile.name == "Cast owner" })?.profile.id else { throw Check(description: "Cast profile missing") }
+        try app.dispatch(.profile(.assign(.current, to: profile)))
+        try cast(app)
     }
     @Sendable static func transformations(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?transformations")

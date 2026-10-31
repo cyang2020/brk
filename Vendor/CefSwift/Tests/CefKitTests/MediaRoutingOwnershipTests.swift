@@ -89,6 +89,13 @@ import Testing
             cefRelease(UnsafeMutableRawPointer(callback)); native.callback = nil
         }
     }
+    @Test func observerRefreshAndStopWithoutARouteDoNotReleaseANonexistentLease() {
+        let native = Native(), router = Self.router(native)
+        var ownership: [Bool] = []
+        router.onPendingChange = { ownership.append($0) }
+        router.refresh(); router.stop()
+        #expect(ownership.isEmpty, "An empty observer must not reenter page closure by releasing a lease it never acquired")
+    }
     @Test(.enabled(if: LoaderTests.frameworkAvailable, "Set CEF_FRAMEWORK_PATH for native CEF string ownership"))
     func observerEnumeratesAndOnlyTerminatesItsOwnRoutes() throws {
         try Self.loadStrings()
