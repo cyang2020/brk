@@ -13,6 +13,8 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
+        .find(.open(replace: false)), .find(.query(FindQuery(text: "x"))), .find(.step(.next)), .find(.close),
+        .find(.useSelection), .find(.jumpToSelection), .find(.captureScope), .find(.replaceCurrent("y")), .find(.replaceAll("y")),
         .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.submitSearch(engine: SearchEngine.duckDuckGo.id, query: "x")),
         .commandBar(.queryChanged("exa")), .commandBar(.dismiss),
         .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.clear),
@@ -44,6 +46,7 @@ enum CommandInventory {
     ]
 
     static let events: [SystemEvent] = [
+        .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .faviconChanged(nil)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadFailed(code: -1, description: "x", url: "x")), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .rendererGone),
@@ -61,6 +64,7 @@ enum CommandInventory {
 
     static func area(_ command: Command) -> String {
         switch command {
+        case .find: "find"
         case .commandBar: "commandBar"
         case .archive: "archive"
         case .tab: "tab"
@@ -81,6 +85,18 @@ enum CommandInventory {
 
     static func name(_ command: Command) -> String {
         let leaf: String = switch command {
+        case .find(let c):
+            switch c {
+            case .open: "open"
+            case .query: "query"
+            case .step: "step"
+            case .close: "close"
+            case .useSelection: "useSelection"
+            case .jumpToSelection: "jumpToSelection"
+            case .captureScope: "captureScope"
+            case .replaceCurrent: "replaceCurrent"
+            case .replaceAll: "replaceAll"
+            }
         case .commandBar(let c):
             switch c {
             case .open: "open"
@@ -216,6 +232,7 @@ enum CommandInventory {
             case .openRequested: "page.openRequested"
             case .closed: "page.closed"
             }
+        case .find: "find"
         case .download: "download"
         case .contextDisposed: "contextDisposed"
         case .clockTick: "clockTick"

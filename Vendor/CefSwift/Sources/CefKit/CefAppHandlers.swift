@@ -98,6 +98,11 @@ final class CefAppContext: @unchecked Sendable {
 /// registration (the scheme list arrives on the helper's command line via
 /// `--cefswift-schemes`, appended by `on_before_child_process_launch`).
 final class CefHelperAppContext: @unchecked Sendable {
+    func releaseRendererHandler() {
+        if let handler = rendererHandler { rendererHandler = nil; cefRelease(UnsafeMutableRawPointer(handler)) }
+    }
+    private let renderer = ScopedEditRenderer()
+    private var rendererHandler: UnsafeMutablePointer<cef_render_process_handler_t>?
     let customSchemes: [CefCustomScheme]
 
     init(customSchemes: [CefCustomScheme]) {
@@ -107,7 +112,13 @@ final class CefHelperAppContext: @unchecked Sendable {
     /// Builds the helper app struct. The returned `cef_app_t*` carries one
     /// reference owned by the caller (transferred to cef_execute_process).
     func makeApp() -> UnsafeMutablePointer<cef_app_t> {
+        rendererHandler = renderer.makeHandler()
         let app = cefAllocate(cef_app_t.self, owner: self)
+        app.pointee.get_render_process_handler = { raw in
+            guard let owner = cefOwner(CefHelperAppContext.self, raw.map(UnsafeMutableRawPointer.init)),
+                  let handler = owner.rendererHandler else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler)); return handler
+        }
         app.pointee.on_register_custom_schemes = { appSelf, registrar in
             guard let registrar,
                   let owner = cefOwner(CefHelperAppContext.self, appSelf.map(UnsafeMutableRawPointer.init))

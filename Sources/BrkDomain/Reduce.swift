@@ -22,6 +22,7 @@ public struct Transition: Sendable {
     /// Anything changed (rev was bumped): re-project and render. False means `state` is the input value.
     public let changed: Bool
     /// For `Input.key`: the key was an app shortcut and was consumed. CEF's key handler returns this.
+    public let keyShortcut: Bool
     public let keyHandled: Bool
 }
 
@@ -59,7 +60,7 @@ public func reduce(_ state: AppState, _ input: Input, _ ctx: Context) -> Transit
 extension Transition {
     /// The input state returned as is: nothing to render, write or run.
     static func unchanged(_ state: AppState) -> Transition {
-        Transition(state: state, effects: [], docChanged: false, changed: false, keyHandled: false)
+        Transition(state: state, effects: [], docChanged: false, changed: false, keyShortcut: false, keyHandled: false)
     }
 }
 
@@ -70,6 +71,7 @@ struct Work {
     var state: AppState
     let ctx: Context
     var effects: [Effect] = []
+    var keyShortcut = false
     var keyHandled = false
     /// Tabs on screen right before the first rule of this input ran (after the cycle commit and the overlay rule).
     /// Nil until a command or event starts; `finish` stamps the difference.
@@ -88,10 +90,13 @@ struct Work {
     /// without rules does not compile.
     mutating func run(_ command: Command, in window: WindowID) {
         guard state.doc.windows[window] != nil else { return }
+        if command == .app(.exit), state.session.windows[window]?.find != nil { closeFind(in: window); return }
+        if case .settings(.openPane) = command { closeFind(in: window) }
         commitPendingCycle(unless: command, in: window)
         applyOverlayRule(for: command, in: window)
         begin(window: window)
         switch command {
+        case .find(let intent): find(intent, in: window)
         case .commandBar(let c): commandBar(c, in: window)
         case .archive(let c): archive(c, in: window)
         case .tab(let c): tabs(c, in: window)
@@ -116,9 +121,10 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .find, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
+        case .find(let update): findUpdated(update)
         case .page(let page, let e): pageEvent(e, for: page)
         case .download(let update): downloadEvent(update)
         case .contextDisposed(let result):
@@ -185,12 +191,13 @@ struct Work {
 
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
+        reconcileFind(from: input)
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
             if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }
         }
         let changed = state != input
         if changed { state.session.rev += 1 }
-        return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyHandled: keyHandled)
+        return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyShortcut: keyShortcut, keyHandled: keyHandled)
     }
 }

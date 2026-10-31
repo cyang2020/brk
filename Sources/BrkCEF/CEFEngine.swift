@@ -198,6 +198,12 @@ public final class CEFEngine: WebEngine {
 
     public func facts(for page: PageID) -> PageFacts? { live[page]?.facts }
 
+    public func find(_ request: FindRequest) {
+        guard phase == .running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }
+        page.find.perform(request)
+    }
+    func findUpdated(_ update: FindUpdate) { delegate?.engine(self, find: update) }
+
     public func cancelDownload(_ id: DownloadID) { transfers.cancel(id) }
 
     public func disposeContext(_ request: ContextDisposal) {
@@ -367,11 +373,9 @@ public final class CEFEngine: WebEngine {
         }
     }
 
-    func pageKey(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
-        guard phase == .running, ledger.isLive(page.incarnation), live[page.id] === page,
-              let window = page.surface.window, window.isVisible,
-              !page.surface.isHiddenOrHasHiddenAncestor else { return false }
-        return delegate?.engine(self, page: page.id, key: press, stage: stage, pressID: pressID) ?? false
+    func pageKeyHandling(_ page: ChromePage, _ press: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling {
+        guard isLive(page), page.surface.window?.isVisible == true, !page.surface.isHiddenOrHasHiddenAncestor else { return KeyHandling(handled: false, shortcut: false) }
+        return delegate?.engine(self, page: page.id, keyHandling: press, stage: stage, pressID: pressID) ?? KeyHandling(handled: false, shortcut: false)
     }
 
     /// OnBeforeBrowse for a live page: the delegate decides (Peek from Pinned and Favorites, F3).

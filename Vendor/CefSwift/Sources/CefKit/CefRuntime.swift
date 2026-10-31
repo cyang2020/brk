@@ -286,14 +286,11 @@ public final class CefRuntime {
         // Custom schemes must be registered in every process: the browser
         // forwarded its list via --cefswift-schemes (see CefAppContext).
         let customSchemes = CefCustomScheme.parse(fromArguments: arguments)
-        var helperApp: UnsafeMutablePointer<cef_app_t>?
-        if !customSchemes.isEmpty {
-            // cef_execute_process consumes our +1 reference on the app.
-            helperApp = CefHelperAppContext(customSchemes: customSchemes).makeApp()
-        }
-
+        let helperOwner = CefHelperAppContext(customSchemes: customSchemes)
+        let helperApp = helperOwner.makeApp()
         var mainArgs = cef_main_args_t(argc: CommandLine.argc, argv: CommandLine.unsafeArgv)
         let code = cef_execute_process(&mainArgs, helperApp, nil)
+        helperOwner.releaseRendererHandler()
         exit(code)
     }
 

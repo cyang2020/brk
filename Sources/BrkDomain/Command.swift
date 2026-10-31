@@ -28,6 +28,7 @@ public enum Input: Sendable, Equatable {
 }
 
 public enum Command: Hashable, Sendable, Codable {
+    case find(FindIntent)
     case commandBar(CommandBarCommand)
     case archive(ArchiveCommand)
     case tab(TabCommand)
@@ -55,7 +56,7 @@ public enum Command: Hashable, Sendable, Codable {
 /// Features behind the greyed-out menu rows. One case per feature, not per row, so a wave that ships a feature
 /// replaces every `.later(x)` in the table with real commands and deletes the case.
 public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
-    case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, findInPage, toolbar
+    case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, toolbar
     case sidebarKeyboardFocus, siteData, splitTools, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
     case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding, help, restoreData
     case troubleshooting
@@ -376,6 +377,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 // MARK: - System events
 
 public enum SystemEvent: Sendable, Equatable {
+    case find(FindUpdate)
     case page(BrowserToken, PageEvent)
     case download(DownloadUpdate)
     case contextDisposed(ContextDisposalResult)
@@ -428,7 +430,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
+        case .find, .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
         default: false
         }
     }

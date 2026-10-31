@@ -139,3 +139,7 @@ CCEF_SYM(cef_window_t*, cef_window_create_top_level,
 
 // ponytail: cookie/v8/process_message symbols removed — zero Swift call sites.
 // Add back here (and wire CefKit callers) when task #12 (native JS bridge) ships.
+
+// Frame-scoped browser/renderer requests.
+CCEF_SYM(cef_process_message_t*, cef_process_message_create, (const cef_string_t* name), (name))
+CCEF_SYM(cef_v8_value_t*, cef_v8_value_create_string, (const cef_string_t* value), (value))

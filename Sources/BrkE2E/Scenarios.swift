@@ -33,6 +33,16 @@ struct Scenario: Sendable {
 
 enum Scenarios {
     static let all: [Scenario] = [
+        Scenario("F1", "find native keys, remaps, counts and queued steps", cefOnly: "native find", FindScenarios.keysAndCounts),
+        Scenario("F2", "actual selection and Jump scroll", cefOnly: "renderer selection", FindScenarios.selectionAndJump),
+        Scenario("F3", "input and textarea Unicode replacements, input events and undo", cefOnly: "renderer editing", FindScenarios.controlsAndUndo),
+        Scenario("F4", "contenteditable replacements preserve markup and undo", cefOnly: "renderer editing", FindScenarios.contentEditable),
+        Scenario("F5", "protected, stale, cross-origin and IME refusal", cefOnly: "renderer editing", FindScenarios.refusals),
+        Scenario("F6", "later find updates, DOM, subframes and main navigation", cefOnly: "native find", FindScenarios.dynamicDocuments),
+        Scenario("F7", "partial edits, cancellation and timeout ambiguity", cefOnly: "renderer editing", FindScenarios.partialAndAmbiguous),
+        Scenario("F10", "frame document invalidation and renderer mutation idempotence", cefOnly: "renderer editing", FindScenarios.frameLifetimeAndIdempotence),
+        Scenario("F9", "stale editable elements, protected changes, persistence and native focus", cefOnly: "native find", FindScenarios.staleScopesAndFocus),
+        Scenario("F8", "independent windows, Peek, split and private find", cefOnly: "native find", FindScenarios.windowsPeekAndPrivate),
         Scenario("0", "launch smoke: socket answers, one window, sidebar and one card", PlanScenarios.launchSmoke),
         Scenario("1", "launch: one page in one card, inset 10 and radius 6; corner shows the background", PlanScenarios.oneCard),
         Scenario("2", "Cmd+T opens the centered command bar; Enter on a URL adds a Today tab that loads it", PlanScenarios.newTab),

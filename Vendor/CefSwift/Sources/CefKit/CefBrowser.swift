@@ -49,6 +49,7 @@ public final class CefBrowser: Identifiable {
     public private(set) var canGoForward: Bool = false
 
     /// Owned +1 reference to the underlying cef_browser_t; nil after close.
+    var rendererDocuments: [String: String] = [:]
     private var raw: UnsafeMutablePointer<cef_browser_t>?
     let client: BrowserClient?
 
@@ -159,13 +160,15 @@ public final class CefBrowser: Identifiable {
     }
 
     /// Searches the page for `text`.
-    public func find(_ text: String, forward: Bool, matchCase: Bool) {
+    public func find(_ text: String, forward: Bool, matchCase: Bool, findNext: Bool = false) {
         withHost { host in
             CefStringUtil.withCefString(text) { cefText in
-                host.pointee.find?(host, cefText, forward ? 1 : 0, matchCase ? 1 : 0, 0)
+                host.pointee.find?(host, cefText, forward ? 1 : 0, matchCase ? 1 : 0, findNext ? 1 : 0)
             }
         }
     }
+
+    public func stopFinding() { withHost { $0.pointee.stop_finding?($0, 1) } }
 
     /// Requests that the browser close. With `force: false` JavaScript
     /// `onbeforeunload` handlers may cancel the close; ``CefBrowserDelegate/browserDidClose(_:)``
@@ -260,6 +263,7 @@ public final class CefBrowser: Identifiable {
             cefRelease(UnsafeMutableRawPointer(raw))
         }
         raw = nil
+        rendererDocuments.removeAll()
         CefRuntime.shared.unregisterBrowser(id: id)
     }
 }

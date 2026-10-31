@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>Find Frame</title>
+<style>body{margin:0}#inside{position:absolute;left:20px;top:20px;width:180px;height:26px}</style>
+<input id="inside" value="frameword frameword"><p>frameword</p>
+<script>
+inside.addEventListener('focus',()=>parent.postMessage({kind:'fixture-frame-focus'},'*'));
+window.addEventListener('message',e=>{parent.postMessage({kind:'fixture-state',phase:'received',fromParent:e.source===parent,data:e.data,active:document.activeElement.id},'*');if(e.source===parent&&e.data==='fixture-focus'){inside.focus();inside.setSelectionRange(0,9);parent.postMessage({kind:'fixture-state',phase:'after-focus',active:document.activeElement.id,focused:document.hasFocus()},'*')}});
+document.addEventListener('keydown',e=>{if(e.code==='KeyX')parent.postMessage({kind:'fixture-frame-key'},'*')});
+</script>

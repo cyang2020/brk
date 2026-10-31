@@ -31,6 +31,7 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     /// content card. Nil unless the Library is open.
     public var library: LibraryFrames?
     /// The Peek card over the content area (Metrics.peek), nil unless a Peek is open.
+    public var find: FindFrames? = nil
     public var peek: CGRect?
 
     public init(contentSize: CGSize, sidebar: SidebarFrames?, sidebarFloats: Bool, resizeHandle: CGRect?,
@@ -124,6 +125,7 @@ public enum ViewID: Hashable, Sendable, Codable {
     case dock, dockSpace(SpaceID), dockLibrary, dockPlus
     case resizeHandle, revealStrip
     case card(Int), divider(Int)
+    case findBar, findQuery, findReplacement, findStatus, findNext, findPrevious, findClose, findReplace, findReplaceAll, findCapture
     case commandBar, commandBarInput, commandBarResult(Int)
     case archive, archiveGroup(ArchiveBucket), archiveEntry(ArchiveID), archiveRestore(ArchiveID), archiveClear, archiveThreshold
     case spaceDialog
@@ -162,6 +164,16 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .revealStrip: "reveal-strip"
         case .card(let i): "card-\(i)"
         case .divider(let i): "split-divider-\(i)"
+        case .findBar: "find-bar"
+        case .findQuery: "find-query"
+        case .findReplacement: "find-replacement"
+        case .findStatus: "find-status"
+        case .findNext: "find-next"
+        case .findPrevious: "find-previous"
+        case .findClose: "find-close"
+        case .findReplace: "find-replace"
+        case .findReplaceAll: "find-replace-all"
+        case .findCapture: "find-capture"
         case .commandBar: "command-bar"
         case .commandBarInput: "command-bar-input"
         case .commandBarResult(let i): "command-bar-result-\(i)"
@@ -216,6 +228,8 @@ extension WindowFrames {
         case .revealStrip: return revealStrip
         case .card(let i): return i < cards.count ? cards[i].rect : nil
         case .divider(let i): return i < dividers.count ? dividers[i] : nil
+        case .findBar: return find?.bar
+        case .findQuery, .findReplacement, .findStatus, .findNext, .findPrevious, .findClose, .findReplace, .findReplaceAll, .findCapture: return nil
         case .commandBar: return commandBar
         case .library: return library?.frame
         case .libraryPage(let page): return library?.pageCells[page]

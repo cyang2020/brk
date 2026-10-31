@@ -78,7 +78,7 @@ final class ActionsTests: XCTestCase {
             .union(ActionID.placeholderRows).union(ActionID.droppedRows)
         XCTAssertEqual(covered, Set(1...189), "missing rows: \(Set(1...189).subtracting(covered).sorted())")
         XCTAssertEqual(ActionID.allCases.count, 122)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 65)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 71)
     }
 
     /// Every action the bar can run has a listing, except the two that open the bar itself (New Tab…, Open Command

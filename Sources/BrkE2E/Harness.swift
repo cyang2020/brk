@@ -158,7 +158,11 @@ final class AppUnderTest {
         client = ControlClient(path: dataDirectory.appendingPathComponent("control.sock").path)
     }
 
-    var window: WindowID? { hello?.windows.first }
+    private var targetWindow: WindowID?
+    var window: WindowID? {
+        get { targetWindow ?? hello?.windows.first }
+        set { targetWindow = newValue }
+    }
     var productPrefix: String { executable.lastPathComponent }
     var isRunning: Bool { process?.isRunning ?? false }
 
@@ -175,6 +179,7 @@ final class AppUnderTest {
         environment["BRK_DATA_DIR"] = dataDirectory.path
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_START_URL"] = site.url("index.html").absoluteString
+        if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")

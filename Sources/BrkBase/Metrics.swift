@@ -66,6 +66,7 @@ public struct MetricsTable: MetricGroup {
     public let settings = SettingsMetrics()
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
+    public let find = FindMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -319,4 +320,12 @@ public struct KeyMetrics: MetricGroup {
     public let pressTwiceWindow = Metric(1.0, .guess("promptAfterConsumedByWebView second-press window"))
     /// How long a `beforePage` press identity is kept for its `afterPage` partner (PressCorrelator).
     public let correlationWindow = Metric(2.0, .guess("longest the renderer may take to answer OnPreKeyEvent before OnKeyEvent is treated as a new press"))
+}
+
+public struct FindMetrics: MetricGroup {
+    public let width = Metric(540.0, .guess("Native find controls sized for one page card; Arc pixel parity remains unmeasured"))
+    public let padding = Metric(8.0, .guess("Native find bar inset"))
+    public let row = Metric(28.0, .guess("Native small text controls plus vertical breathing room"))
+    public let gap = Metric(4.0, .guess("Find control spacing"))
+    public let button = Metric(28.0, .guess("Find navigation and close button width"))
 }

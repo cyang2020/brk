@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Find Fixture</title>
+<style>body{font:18px system-ui;padding:28px}input,textarea,[contenteditable]{display:block;margin:12px 0;width:460px;font:18px system-ui} #far{margin-top:1800px}</style>
+<p id="words">needle needle needle</p>
+<input id="text" value="apple apple"><textarea id="area">apple apple</textarea>
+<div id="editor" contenteditable="true"><b>apple</b> middle <i>apple</i> <span id="keep">untouched</span></div>
+<input id="password" type="password" value="protected-secret"><input id="readonly" readonly value="read-only-secret">
+<input id="disabled" disabled value="disabled-secret"><div id="rich" contenteditable="true" role="textbox">unsupported editor</div>
+<div id="far">jump-target</div>
+<script>
+window.events=[];window.swallow=false;window.behavior='normal';window.reportUndo=false;window.undoCount=0;
+document.addEventListener('keydown',e=>{if(e.metaKey){const key=e.code.startsWith('Key')?e.code.slice(3).toLowerCase():e.key.toLowerCase();window.lastKey=key;if(window.swallow){e.preventDefault();document.title='swallowed:'+key}}});
+document.addEventListener('beforeinput',e=>{events.push(['beforeinput',e.inputType,e.data,e.isTrusted]);if(behavior==='cancel')e.preventDefault();});
+document.addEventListener('input',e=>{events.push(['input',e.inputType,e.data,e.isTrusted]);if(reportUndo&&e.inputType==='historyUndo')document.title='native-undo:'+(++undoCount);
+ if(behavior==='rewrite'){e.target.value+=' changed';}
+ if(behavior==='delay'){behavior='normal';const end=performance.now()+3800;while(performance.now()<end){}}
+});
+window.selectField=(id,start=0,end=5)=>{const el=document.getElementById(id);el.focus();if(el.setSelectionRange)el.setSelectionRange(start,end);else{const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);}document.title='selected:'+id;};
+window.check=(expr)=>{document.title='check:'+JSON.stringify(eval(expr));};
+</script>

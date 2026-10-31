@@ -223,14 +223,14 @@ extension ActionID {
         case .copyCurrentURLAsQuote:
             entry(47, "Copy URL as Quote", .edit, 1, [key([ctrl, shift, cmd], .c, .app)], .page(.copyURL(.quote)),
                   bar: listing("quote.bubble", "Copy URL as Quote", "Copy Quote", "Copy Link to Highlight"))
-        case .find: entry(53, "Find…", .edit, 0, [key(cmd, .f, .page)], .later(.findInPage), in: .find, bar: listing("magnifyingglass", "Find in Page"))
-        case .findAndReplace: entry(54, "Find and Replace", .edit, 0, [key([opt, cmd], .f, .page)], .later(.findInPage), in: .find, bar: listing("magnifyingglass"))
-        case .findNext: entry(55, "Find Next", .edit, 0, [key(cmd, .g, .page)], .later(.findInPage), in: .find, bar: listing("arrow.right", "Next"))
-        case .findPrevious: entry(56, "Find Previous", .edit, 0, [key([shift, cmd], .g, .page)], .later(.findInPage), in: .find, bar: listing("arrow.left", "Previous"))
+        case .find: entry(53, "Find…", .edit, 0, [key(cmd, .f, .page)], .find(.open(replace: false)), in: .find, bar: listing("magnifyingglass", "Find in Page"))
+        case .findAndReplace: entry(54, "Find and Replace", .edit, 0, [key([opt, cmd], .f, .page)], .find(.open(replace: true)), in: .find, bar: listing("magnifyingglass"))
+        case .findNext: entry(55, "Find Next", .edit, 0, [key(cmd, .g, .page)], .find(.step(.next)), in: .find, bar: listing("arrow.right", "Next"))
+        case .findPrevious: entry(56, "Find Previous", .edit, 0, [key([shift, cmd], .g, .page)], .find(.step(.previous)), in: .find, bar: listing("arrow.left", "Previous"))
         case .useSelectionForFind:
-            entry(57, "Use Selection to Find", .edit, 0, [], .later(.findInPage), in: .find, bar: listing("magnifyingglass", "Find Selection", "Find Selected"))
+            entry(57, "Use Selection to Find", .edit, 0, [], .find(.useSelection), in: .find, bar: listing("magnifyingglass", "Find Selection", "Find Selected"))
         case .jumpToSelection:
-            entry(58, "Jump to Selection", .edit, 0, [key(cmd, .j, .page)], .later(.findInPage), in: .find,
+            entry(58, "Jump to Selection", .edit, 0, [key(cmd, .j, .page)], .find(.jumpToSelection), in: .find,
                   bar: listing("arrow.turn.right.down", "Jump to Selected", "Selection"))
 
         // MARK: View (groups: Appearance | Sidebar | Loading | Split | Zoom | Cast | Developer | Full Screen, Exit)

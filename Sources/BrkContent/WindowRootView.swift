@@ -20,6 +20,7 @@ public final class WindowRootView: NSView {
     public let content: ContentAreaView
     public let library: LibraryView
     public let peek: PeekCardView
+    public let findBar: FindBarView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
     private var lastTheme: ResolvedTheme?
@@ -30,11 +31,12 @@ public final class WindowRootView: NSView {
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
         peek = PeekCardView(dispatch: dispatch)
+        findBar = FindBarView(dispatch: dispatch)
         commandBar = CommandBarView(dispatch: dispatch)
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, library, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, library, peek, findBar, commandBar, spaceDialog] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
     }
 
@@ -48,6 +50,7 @@ public final class WindowRootView: NSView {
     /// only way BrkApp reaches a view's focus: the fields themselves are internal to their targets.
     public func focus(_ target: FocusTarget) -> Bool {
         switch target {
+        case .findInput: findBar.focusInput()
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
         case .spaceDialog: spaceDialog.focusForm()
@@ -83,6 +86,8 @@ public final class WindowRootView: NSView {
         }
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
         peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
+        peek.setFindVisible(snapshot.find != nil)
+        findBar.render(snapshot.find, frames: frames.find, palette: palette)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
@@ -163,6 +168,8 @@ public final class PeekCardView: NSView {
         hint.frame = CGRect(x: 8, y: 0, width: max(0, openIn.frame.minX - 16), height: hintHeight)
         last = peek
     }
+
+    func setFindVisible(_ visible: Bool) { close.keyEquivalent = visible ? "" : "\u{1b}" }
 
     @objc private func closeClicked() { dispatch(.peek(.close)) }
     @objc private func openInClicked() { dispatch(.window(.openIn(.current))) }

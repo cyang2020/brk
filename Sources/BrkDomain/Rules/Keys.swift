@@ -14,9 +14,12 @@ extension Work {
         // The map is the table plus the user's overrides (F4); a conflicting chord routes to no one.
         let map = state.doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: state.doc.keyOverrides)
         let decision = KeyRouting.decide(key, map: map, memory: &memory, now: ctx.now)
+        if key.press.phase == .down, let (action, _) = map.lookup(key.press.chord), !key.press.isRepeat || action.spec.repeats {
+            keyShortcut = true
+        }
         let remembered = memory != state.session.windows[window]!.keyRouting
         if remembered { state.session.windows[window]!.keyRouting = memory }
-        guard case .dispatch(let action) = decision else { return remembered }
+        guard case .dispatch(let action) = decision else { return remembered || keyShortcut }
         run(action.spec.command, in: window)
         keyHandled = true
         return true
