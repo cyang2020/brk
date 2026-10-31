@@ -164,7 +164,7 @@ final class EventInjector {
                         if view.acceptsFirstResponder, window.makeFirstResponder(view) { break }
                         candidate = view.superview
                     }
-                    print("[control] page-click target=\(NSStringFromClass(type(of: target))) responder=\(window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil")")
+                    print("[control] page-click target=\(NSStringFromClass(Swift.type(of: target))) responder=\(window.firstResponder.map { NSStringFromClass(Swift.type(of: $0)) } ?? "nil")")
                 }
                 target.mouseDown(with: event)
             }
