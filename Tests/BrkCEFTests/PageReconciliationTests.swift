@@ -14,6 +14,7 @@ import XCTest
         var presented = false
         var applied: [[PageID]] = []
         func apply(_ pages: [PageSpec]) {
+            XCTAssertTrue(driver.isApplying, "Context disposal and runtime shutdown must wait for the factory to return")
             applied.append(pages.map(\.id))
             passes += 1
             XCTAssertFalse(creating, "A nested native run loop must not enter the browser factory again")
@@ -32,5 +33,6 @@ import XCTest
         XCTAssertEqual(passes, 2, "Coalesce reentrant renders to their latest demand")
         XCTAssertFalse(presented, "A source removed during creation must retire after the factory returns")
         XCTAssertEqual(applied, [[first.id], []], "Obsolete nested demand must never reach the native factory")
+        XCTAssertFalse(driver.isApplying, "The drain barrier must release after the final demand is applied")
     }
 }

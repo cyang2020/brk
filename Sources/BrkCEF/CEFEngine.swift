@@ -223,14 +223,23 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages {
+            guard phase == .running, contexts.permitsWork(spec.context),
+                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else { continue }
             if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
+            let context = contexts.epoch(for: spec.context)
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
-            resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
+            resources.insert(page, browser: incarnation, context: context)
             record(.created, page)
+            guard phase == .running, contexts.permitsWork(spec.context),
+                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context && $0.initialURL == spec.initialURL }) else {
+                retire(page)
+                continue
+            }
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
         }
+        guard phase == .running else { return }
         if audioLoop == nil {
             audioLoop = Task { @MainActor [weak self] in
                 while !Task.isCancelled {
@@ -367,7 +376,7 @@ public final class CEFEngine: WebEngine {
         for page in live.values where page.context == request.context { retire(page) }
         Task { @MainActor in
             let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-                !self.resources.entries.values.contains { $0.context.context == request.context }
+                !self.reconciliation.isApplying && !self.resources.entries.values.contains { $0.context.context == request.context }
                     && !self.outputs.contains(context: request.context)
                     && !self.transfers.contains(context: request.context)
                     && self.contexts.isDrained(request.context)
@@ -481,7 +490,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained)
         }
         guard drained else {
