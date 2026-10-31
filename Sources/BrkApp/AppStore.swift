@@ -157,6 +157,10 @@ public final class AppStore {
         return spacePanels.chooseFixtureDirectory(directory, owner: owner)
     }
 
+    func selectLinkExportFixture(_ destination: URL, owner: WindowID) -> Bool {
+        exports.selectFixture(destination, owner: owner)
+    }
+
     public func windowController(_ id: WindowID?) -> WindowController? {
         if let id { return windows[id] }
         return windows.values.first { $0.window.isKeyWindow }
@@ -385,8 +389,7 @@ public final class AppStore {
                 popupTarget.clear()
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }
-                let fixture = outputSheets.fixtureDestinations.removeValue(forKey: owner)
-                exports.present(document, owner: owner, in: window, fixtureDestination: fixture, reply: { [weak self] outcome in
+                exports.present(document, owner: owner, in: window, reply: { [weak self] outcome in
                     self?.dispatch(.system(.exportFinished(owner, outcome)))
                 })
             case .sidebarData(let effect): runSidebarData(effect)

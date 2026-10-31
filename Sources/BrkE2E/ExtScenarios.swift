@@ -285,11 +285,17 @@ enum ExtScenarios {
             return facts.sheetClass == nil && !facts.appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible }
         }
         let destination = app.dataDirectory.appendingPathComponent("Ext-link-export.json")
-        try app.perform(.configureSavePanel(window: app.window, path: destination.path))
         try control(app, "siteExportLink", .press)
         try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
-        try app.perform(.sheetButton(title: "Save"))
+        guard case .failed = try app.send(.selectLinkExportFixture(window: WindowID("Ext-wrong-owner"), path: destination.path)) else {
+            throw Check(description: "another owner selected the link export destination")
+        }
+        try expect(!FileManager.default.fileExists(atPath: destination.path), "rejected owner wrote export bytes")
+        try app.perform(.selectLinkExportFixture(window: app.window!, path: destination.path))
         try app.waitUntil("actual link export bytes") { FileManager.default.fileExists(atPath: destination.path) }
+        guard case .failed = try app.send(.selectLinkExportFixture(window: app.window!, path: destination.path)) else {
+            throw Check(description: "a completed export accepted another selection")
+        }
         let data = try Data(contentsOf: destination)
         let exported = try JSONDecoder().decode(ExportDocument.self, from: data)
         try expect(exported.entries == [.link(title: "Site policy fixture", url: app.site.url("site-policy.html"))], "export bytes do not describe the active page")
@@ -299,6 +305,6 @@ enum ExtScenarios {
         try app.dispatch(.profile(.assign(.current, to: other)))
         try app.waitUntil("site controls rebind to profile") { try SitePolicyScenarios.controls(app).profileName == "Ext Profile" && SitePolicyScenarios.controls(app).target?.context == .profile(other) }
         _ = try app.screenshotSiteControls("origin-profile-os-readback")
-        app.note("Actual OS status readback did not request authorization. Copy, export cancellation and selected-destination JSON bytes describe the active page. Destination selection used the owned fixture bridge and the real save panel; a physical folder-selection gesture is not claimed. Boost/capture actions await their owning slices.")
+        app.note("Actual OS status readback did not request authorization. Copy, export cancellation and selected-destination JSON bytes describe the active page. The real save panel was shown/cancelled; output used an explicit owner-bound post-selection fixture and the production writer. Remote chooser confirmation and physical folder selection are not claimed. Boost/capture actions await their owning slices.")
     }
 }

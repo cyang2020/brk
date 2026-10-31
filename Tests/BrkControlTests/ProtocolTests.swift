@@ -11,7 +11,7 @@ final class ProtocolTests: XCTestCase {
     /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
-        case chooseOutputFixture, cancelCurrentOutput, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
+        case chooseOutputFixture, cancelCurrentOutput, selectLinkExportFixture, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput
@@ -25,6 +25,7 @@ final class ProtocolTests: XCTestCase {
         case .sidebarPanel: .sidebarPanel
         case .chooseOutputFixture: .chooseOutputFixture
         case .cancelCurrentOutput: .cancelCurrentOutput
+        case .selectLinkExportFixture: .selectLinkExportFixture
         case .configureSavePanel: .configureSavePanel
         case .answerSavePanel: .answerSavePanel
         case .cancelPrintPanel: .cancelPrintPanel
@@ -78,6 +79,7 @@ final class ProtocolTests: XCTestCase {
         case .sidebarPanel: return [.sidebarPanel(window: nil, action: .inspect), .sidebarPanel(window: WindowID("w"), action: .save(directory: "/tmp/owned", filename: "tabs.html")), .sidebarPanel(window: nil, action: .open(path: "/tmp/selected.html"))]
         case .chooseOutputFixture: return [.chooseOutputFixture(window: nil, path: "/tmp/fixture.pdf")]
         case .cancelCurrentOutput: return [.cancelCurrentOutput(window: nil)]
+        case .selectLinkExportFixture: return [.selectLinkExportFixture(window: WindowID("w"), path: "/tmp/owned/link.json")]
         case .configureSavePanel: return [.configureSavePanel(window: nil, path: "/tmp/fixture.pdf")]
         case .answerSavePanel: return [.answerSavePanel(window: nil, path: "/tmp/fixture.pdf"), .answerSavePanel(window: nil, path: nil)]
         case .cancelPrintPanel: return [.cancelPrintPanel(window: nil)]

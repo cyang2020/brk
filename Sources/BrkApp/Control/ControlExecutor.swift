@@ -124,6 +124,16 @@ final class ControlExecutor {
             guard let output = try controller(window).lastSnapshot?.output else { throw Failure(message: "No current output") }
             engine.cancelOutput(output.id)
             return .ok
+        case .selectLinkExportFixture(let owner, let path):
+            let selected = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            var directory: ObjCBool = false
+            guard selected.path.hasPrefix(root),
+                  FileManager.default.fileExists(atPath: selected.deletingLastPathComponent().path, isDirectory: &directory), directory.boolValue,
+                  store.selectLinkExportFixture(selected, owner: owner) else {
+                throw Failure(message: "No owned link export accepts this fixture destination")
+            }
+            return .ok
         case .configureSavePanel(let window, let path):
             let owner = try controller(window).id
             let selected = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
@@ -242,7 +252,6 @@ final class ControlExecutor {
         case .sheetButton(let title):
             guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
             if let panel = sheet as? NSSavePanel, title == "Cancel" { panel.cancel(nil); return .ok }
-            if let panel = sheet as? NSSavePanel, title == "Save" { panel.ok(nil); return .ok }
             var selected: NSButton?
             ViewTree.walk(content) { view in
                 if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }

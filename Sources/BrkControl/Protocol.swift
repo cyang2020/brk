@@ -33,6 +33,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Operate actual app-owned UI; available only on the opt-in control socket.
     case chooseOutputFixture(window: WindowID?, path: String)
     case cancelCurrentOutput(window: WindowID?)
+    /// Explicit post-selection fixture; does not drive the remote save chooser.
+    case selectLinkExportFixture(window: WindowID, path: String)
     case configureSavePanel(window: WindowID?, path: String)
     case answerSavePanel(window: WindowID?, path: String?)
     case cancelPrintPanel(window: WindowID?)

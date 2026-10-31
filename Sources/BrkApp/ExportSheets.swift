@@ -6,21 +6,22 @@ import BrkDomain
 @MainActor
 final class ExportSheets {
     private final class Pending {
+        let document: ExportDocument
         weak var window: NSWindow?
         var sheet: NSWindow?
         var reply: (@MainActor (ExportOutcome) -> Void)?
-        init(window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) { self.window = window; self.reply = reply }
+        init(document: ExportDocument, window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) { self.document = document; self.window = window; self.reply = reply }
     }
     private var pending: [WindowID: Pending] = [:]
     private var stopped = false
 
-    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, fixtureDestination: URL? = nil, reply: @escaping @MainActor (ExportOutcome) -> Void) {
+    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
         guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
             reply(.failed("Finish the open sheet first.")); return
         }
-        let entry = Pending(window: window, reply: reply)
+        let entry = Pending(document: document, window: window, reply: reply)
         pending[owner] = entry
-        let panel = ShareExport.run(document, in: window, fixtureDestination: fixtureDestination, isValid: { [weak self, weak entry] in
+        let panel = ShareExport.run(document, in: window, isValid: { [weak self, weak entry] in
             guard let self, let entry else { return false }
             return !self.stopped && self.pending[owner] === entry && entry.window?.isVisible == true
         }, completion: { [weak self, weak entry] result in
@@ -42,6 +43,16 @@ final class ExportSheets {
             }
         })
         if pending[owner] === entry, entry.sheet == nil { entry.sheet = panel }
+    }
+
+    /// Explicit post-selection fixture bridge; it does not prove the remote chooser gesture.
+    func selectFixture(_ destination: URL, owner: WindowID) -> Bool {
+        guard !stopped, let entry = pending[owner], let window = entry.window, window.isVisible,
+              let panel = entry.sheet as? NSSavePanel, window.attachedSheet === panel else { return false }
+        let reply = entry.reply
+        finish(owner, entry, outcome: nil)
+        reply?(ShareExport.writeSelected(entry.document, to: destination))
+        return true
     }
 
     func ownerGone(_ owner: WindowID) {
