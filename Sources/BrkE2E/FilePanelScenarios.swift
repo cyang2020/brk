@@ -139,7 +139,7 @@ enum FilePanelScenarios {
         try app.waitUntil("AX sheet ready") { (try? NativePickerInput.sheet(app)) != nil }
         let sheet = try NativePickerInput.sheet(app)
         try app.waitUntil("owned row loaded") { NativePickerInput.findFile(sheet, name: fixture.lastPathComponent) != nil }
-        let differentSelection = try NativePickerInput.selectRow(sheet, name: fixture.lastPathComponent)
+        let differentSelection = try NativePickerInput.selectRow(app, panel: sheet, file: fixture)
         do {
             try NativePickerInput.drive(app, file: app.dataDirectory.appendingPathComponent("absent-owned.html"))
             throw Check(description: "Missing fixture unexpectedly confirmed")

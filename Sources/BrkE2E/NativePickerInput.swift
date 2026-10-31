@@ -85,18 +85,37 @@ enum NativePickerInput {
         guard AXUIElementIsAttributeSettable(node, name as CFString, &settable) == .success, settable.boolValue else { return false }
         return AXUIElementSetAttributeValue(node, name as CFString, value) == .success
     }
-    static func selectRow(_ panel: AXUIElement, name: String) throws -> Selection {
-        guard let hit = findFile(panel, name: name) else { throw Check(description: "Owned fixture row absent: \(name); no confirm sent") }
+    static func observedSelection(_ name: AXUIElement) -> Selection? {
+        var node = name
+        for _ in 0..<7 {
+            if isSelected(node) { return Selection(row: node, name: name) }
+            guard let next = parent(node) else { break }
+            node = next
+        }
+        return nil
+    }
+    static func selectRow(_ app: AppUnderTest, panel: AXUIElement, file: URL) throws -> Selection {
+        guard let hit = findFile(panel, name: file.lastPathComponent) else { throw Check(description: "Owned fixture row absent: \(file.lastPathComponent); no confirm sent") }
+        func selected() throws -> Selection? {
+            guard try actualSelection(app, equals: file) else { return nil }
+            return observedSelection(hit)
+        }
         var node = hit
         for _ in 0..<7 {
-            if set(node, kAXSelectedAttribute, kCFBooleanTrue) { return Selection(row: node, name: hit) }
+            if set(node, kAXSelectedAttribute, kCFBooleanTrue) {
+                Thread.sleep(forTimeInterval: 0.15)
+                if let selection = try selected() { return selection }
+            }
             guard let parent = parent(node) else { break }
-            if set(parent, kAXSelectedChildrenAttribute, [node] as CFArray) || set(parent, kAXSelectedRowsAttribute, [node] as CFArray) {
-                return Selection(row: node, name: hit)
+            for attribute in [kAXSelectedChildrenAttribute, kAXSelectedRowsAttribute] {
+                if set(parent, attribute, [node] as CFArray) {
+                    Thread.sleep(forTimeInterval: 0.15)
+                    if let selection = try selected() { return selection }
+                }
             }
             node = parent
         }
-        throw Check(description: "AX could not select fixture row \(name); no confirm sent")
+        throw Check(description: "AX could not select fixture row \(file.lastPathComponent); no confirm sent")
     }
     static func button(_ panel: AXUIElement, title: String) -> AXUIElement? {
         find(panel) { node, role in role == kAXButtonRole && string(node, kAXTitleAttribute) == title }
@@ -142,7 +161,7 @@ enum NativePickerInput {
                 filename = field; selection = nil
             } else {
                 try app.waitUntil("fixture row available in AX") { try findFile(sheet(app), name: file.lastPathComponent) != nil }
-                selection = try selectRow(panel, name: file.lastPathComponent); filename = nil
+                selection = try selectRow(app, panel: panel, file: file); filename = nil
                 try app.waitUntil("known AX row selected") { selection.map { isSelected($0.row) && names($0.name, file.lastPathComponent) } == true }
             }
             try app.waitUntil("real panel selection equals owned fixture") { try actualSelection(app, equals: file) }
