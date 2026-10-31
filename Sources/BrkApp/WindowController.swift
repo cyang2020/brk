@@ -82,11 +82,20 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
 
     func setPageFullScreen(_ on: Bool) {
+        tracePageFullscreen("page \(on)")
         pageFullscreen.pageChanged(on, nativeFullscreen: window.styleMask.contains(.fullScreen))
         applyPageFullscreen()
     }
     private func applyPageFullscreen() {
-        if pageFullscreen.needsToggle(nativeFullscreen: window.styleMask.contains(.fullScreen)) { window.toggleFullScreen(nil) }
+        if pageFullscreen.needsToggle(nativeFullscreen: window.styleMask.contains(.fullScreen)) {
+            tracePageFullscreen("toggle")
+            window.toggleFullScreen(nil)
+        }
+    }
+    private func tracePageFullscreen(_ event: String) {
+        guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
+        let line = "fullscreen \(ProcessInfo.processInfo.systemUptime) \(event) native=\(window.styleMask.contains(.fullScreen)) state=\(pageFullscreen)\n"
+        FileHandle.standardError.write(Data(line.utf8))
     }
 
     /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
@@ -166,12 +175,18 @@ public class WindowController: NSObject, NSWindowDelegate {
         if let last = lastSnapshot { applyFocus(last.focus) }
     }
 
-    public func windowWillEnterFullScreen(_ notification: Notification) { pageFullscreen.nativeWillChange(to: true) }
-    public func windowWillExitFullScreen(_ notification: Notification) { pageFullscreen.nativeWillChange(to: false) }
+    public func windowWillEnterFullScreen(_ notification: Notification) {
+        tracePageFullscreen("will enter"); pageFullscreen.nativeWillChange(to: true)
+    }
+    public func windowWillExitFullScreen(_ notification: Notification) {
+        tracePageFullscreen("will exit"); pageFullscreen.nativeWillChange(to: false)
+    }
     public func windowDidEnterFullScreen(_ notification: Notification) {
+        tracePageFullscreen("did enter")
         pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen()
     }
     public func windowDidExitFullScreen(_ notification: Notification) {
+        tracePageFullscreen("did exit")
         if pageFullscreen.nativeExited() {
             for pane in lastSnapshot?.content.presentedPanes ?? [] {
                 if case .page(let page) = pane.content { engine.perform(.exitFullscreen, on: page) }

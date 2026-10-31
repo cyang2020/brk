@@ -6,7 +6,10 @@ struct PageFullscreenTransition {
 
     mutating func pageChanged(_ on: Bool, nativeFullscreen: Bool) {
         if on {
-            if restoreNative == nil { restoreNative = pending ?? transitionTarget ?? nativeFullscreen }
+            if restoreNative == nil {
+                // Chrome can begin native entry before its DOM callback; the transition is not a prior native session.
+                restoreNative = pending ?? (transitionTarget == nil ? nativeFullscreen : false)
+            }
             pending = true
         } else if let original = restoreNative {
             restoreNative = nil

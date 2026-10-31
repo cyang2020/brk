@@ -2,6 +2,16 @@ import XCTest
 @testable import BrkApp
 
 final class PageFullscreenTransitionTests: XCTestCase {
+    func testChromeNativeEntryBeforeDisplayCallbackDoesNotBecomeTheRestoredState() {
+        var state = PageFullscreenTransition()
+        state.nativeWillChange(to: true)
+        state.pageChanged(true, nativeFullscreen: true)
+        XCTAssertFalse(state.needsToggle(nativeFullscreen: true))
+        state.nativeDidChange()
+        XCTAssertFalse(state.needsToggle(nativeFullscreen: true))
+        state.pageChanged(false, nativeFullscreen: true)
+        XCTAssertTrue(state.needsToggle(nativeFullscreen: true), "The in-flight native entry belongs to DOM fullscreen, not a preexisting native session")
+    }
     func testNewVideoRequestDuringPriorNativeExitIsNotCancelledByTheOldExitCallback() {
         var state = PageFullscreenTransition()
         state.pageChanged(true, nativeFullscreen: false)
