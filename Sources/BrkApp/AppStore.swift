@@ -175,6 +175,10 @@ public final class AppStore {
         return spacePanels.chooseFixtureDirectory(directory, owner: owner)
     }
 
+    func selectLinkExportFixture(_ destination: URL, owner: WindowID) -> Bool {
+        exports.selectFixture(destination, owner: owner)
+    }
+
     public func windowController(_ id: WindowID?) -> WindowController? {
         if let id { return windows[id] }
         return windows.values.first { $0.window.isKeyWindow }

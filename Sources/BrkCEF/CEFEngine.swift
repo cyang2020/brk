@@ -375,6 +375,7 @@ public final class CEFEngine: WebEngine {
         facts.nativeContextIsGlobal = native?.global
         return facts
     }
+    public func isPageHostWindow(_ window: NSWindow) -> Bool { HostWindows.isHost(window) }
 
     public func find(_ request: FindRequest) {
         guard phase == .running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }

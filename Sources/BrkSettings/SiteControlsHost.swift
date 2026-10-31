@@ -42,7 +42,9 @@ private struct SiteControlsView: View {
                 ForEach(value.extensions.sorted { (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name) }) { item in
                     VStack(alignment: .leading) {
                     HStack {
-                        Toggle("Pin \(item.name)", isOn: Binding(get: { value.pinnedExtensions.contains(item.id) }, set: { dispatch(.site(.pinExtension(item.id, $0))) }))
+                        SettingsCheckbox(title: "Pin \(item.name)", field: "extension-pin-" + item.id, isOn: value.pinnedExtensions.contains(item.id)) {
+                            dispatch(.site(.pinExtension(item.id, $0)))
+                        }.disabled(privateSession)
                         Button("Open action") { dispatch(.site(.invokeExtension(item.id))) }.disabled(!item.enabled || !item.supportsNativeAction || value.target == nil)
                         Button("Remove") { dispatch(.site(.removeExtension(item.id))) }.disabled(privateSession)
                     }

@@ -62,6 +62,8 @@ extension ChromePage {
         policyRevision += 1
         let revision = policyRevision
         let policy = websitePolicy
+        let trace = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil
+        if trace { print("[site-lifecycle] refresh page=\(id) revision=\(revision) visible=\(policy.visible) cachedFrozen=\(frozen)") }
         let rule = policy.preferences.rule(for: origin)
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
@@ -72,8 +74,30 @@ extension ChromePage {
         let literal = Self.jsString(content)
         if websiteStyleOwner?.document != document { websiteStyleOwner = (document, UUID().uuidString) }
         let owner = Self.jsString(websiteStyleOwner!.id)
+        let mediaMarker = Self.jsString("data-brk-media-" + websiteStyleOwner!.id)
         let script = """
-        (()=>{if(location.origin!==\(Self.jsString(origin.value)))return false;const owner=\(owner);let s=document.querySelector('style[data-brk-policy-owner="'+owner+'"]');if(!s){s=document.createElement('style');s.setAttribute('data-brk-policy-owner',owner);(document.head||document.documentElement).append(s);}s.textContent=\(literal);if(!s.textContent||s.textContent===':root{}')s.remove();return true;})();
+        (()=>{
+          if(location.origin!==\(Self.jsString(origin.value)))return false;
+          const owner=\(owner);let s=document.querySelector('style[data-brk-policy-owner="'+owner+'"]');
+          if(!s){s=document.createElement('style');s.setAttribute('data-brk-policy-owner',owner);(document.head||document.documentElement).append(s);}
+          s.textContent=\(literal);if(!s.textContent||s.textContent===':root{}')s.remove();
+          const marker=\(mediaMarker), installed=marker+'-observed';
+          const reconcile=()=>{for(const media of document.querySelectorAll('audio,video')){
+            if(!media.paused&&!media.ended)media.setAttribute(marker,'');else media.removeAttribute(marker);
+          }};
+          if(!document.documentElement.hasAttribute(installed)){
+            const changed=event=>{
+              const media=event.target;if(!(media instanceof HTMLMediaElement))return;
+              if(event.type==='play')media.setAttribute(marker,'');
+              else if(event.type==='ended'||!document.hidden)media.removeAttribute(marker);
+            };
+            for(const event of ['play','pause','ended'])document.addEventListener(event,changed,true);
+            document.addEventListener('visibilitychange',()=>{if(!document.hidden)reconcile();},true);
+            document.documentElement.setAttribute(installed,'');reconcile();
+          }
+          if(!document.hidden)reconcile();
+          return true;
+        })();
         """
         Task { @MainActor [weak self] in
             guard let self, self.engine.isLive(self), self.policyRevision == revision, self.mainDocument.availability == .ready(document) else { return }
@@ -101,11 +125,16 @@ extension ChromePage {
                     && !self.websiteOperationProtected()
                 var media = false
                 if shouldFreeze {
-                    let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.paused&&!x.ended)", "returnByValue": true, "contextId": contextID])
+                    // Chromium automatically pauses muted media on hide. Preserve the document's playing
+                    // intent until a visible pause, end, removal, or visible reconciliation clears it.
+                    let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||x.hasAttribute(\(mediaMarker))))"
+                    let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true, "contextId": contextID])
                     media = (result["result"] as? [String: Any])?["value"] as? Bool ?? true
+                    if trace { print("[site-media] page=\(self.id) revision=\(revision) protected=\(media)") }
                 }
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 let freeze = shouldFreeze && !media && !self.websiteOperationProtected()
+                if trace { print("[site-lifecycle] apply page=\(self.id) revision=\(revision) frozen=\(freeze)") }
                 _ = try await self.browser.protocolSession.call("Page.setWebLifecycleState", ["state": freeze ? "frozen" : "active"])
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 self.frozen = freeze

@@ -33,6 +33,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Operate actual app-owned UI; available only on the opt-in control socket.
     case chooseOutputFixture(window: WindowID?, path: String)
     case cancelCurrentOutput(window: WindowID?)
+    /// Explicit post-selection fixture; does not drive the remote save chooser.
+    case selectLinkExportFixture(window: WindowID, path: String)
     case configureSavePanel(window: WindowID?, path: String)
     case answerSavePanel(window: WindowID?, path: String?)
     case cancelPrintPanel(window: WindowID?)
@@ -89,6 +91,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case nativeDialogKey(number: Int, chord: String)
     case setAppAppearance(Scheme?)
     case siteControlsScreenshot(window: WindowID, path: String)
+    /// Native semantic input in this owner's visible site-controls panel; typing still uses normal key events.
+    case siteControlInput(window: WindowID, field: String, action: SiteControlAction)
     case siteControls
     case mediaSounds
     case mediaWindowScreenshot(number: Int, path: String)
@@ -112,6 +116,7 @@ public enum ControlOp: Codable, Sendable, Equatable {
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
 public enum PointerPhase: String, Codable, Sendable, Equatable { case down, dragged, up }
+public enum SiteControlAction: String, Codable, Sendable, Equatable { case focus, press }
 
 public struct ControlReply: Codable, Sendable, Equatable {
     public var id: Int
@@ -227,11 +232,13 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
     public var className: String
     public var isKey: Bool
     public var isVisible: Bool
-    public init(number: Int, className: String, isKey: Bool, isVisible: Bool) {
+    public var isPageHost: Bool?
+    public init(number: Int, className: String, isKey: Bool, isVisible: Bool, isPageHost: Bool? = nil) {
         self.number = number
         self.className = className
         self.isKey = isKey
         self.isVisible = isVisible
+        self.isPageHost = isPageHost
     }
 }
 

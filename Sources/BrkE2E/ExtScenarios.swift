@@ -19,13 +19,25 @@ enum ExtScenarios {
     static func catalogValue(_ app: AppUnderTest, _ id: String) throws -> BrowserExtension? {
         try SitePolicyScenarios.controls(app).extensions.first { $0.id == id }
     }
+    static func control(_ app: AppUnderTest, _ field: String, _ action: SiteControlAction) throws {
+        guard let owner = app.window else { throw Check(description: "site-controls owner missing") }
+        try app.perform(.siteControlInput(window: owner, field: field, action: action))
+    }
     @Sendable static func catalog(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
-        try app.dispatch(.site(.pinExtension(fixture.id, true)))
+        defer {
+            _ = try? app.screenshotSiteControls("catalog-final")
+            if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-catalog-controls.json"))
+            }
+        }
+        try control(app, "extension-pin-" + fixture.id, .press)
         try expect(try SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id), "public profile pin missing")
         try expect(fixture.canChangeIncognito == true, "fixture incognito permission is not editable")
         for allowed in [false, true, false] {
-            try app.dispatch(.site(.extensionIncognito(fixture.id, allowed)))
+            if try catalogValue(app, fixture.id)?.incognitoAllowed != allowed {
+                try control(app, "extension-incognito-" + fixture.id, .press)
+            } else { try app.dispatch(.site(.extensionIncognito(fixture.id, allowed))) }
             try app.waitUntil("Chromium incognito readback \(allowed)") {
                 if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
                 return try catalogValue(app, fixture.id)?.incognitoAllowed == allowed
@@ -65,20 +77,30 @@ enum ExtScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
+        defer {
+            _ = try? app.screenshotSiteControls("shortcut-final")
+            if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-shortcuts-controls.json"))
+            }
+        }
         // Drive the native text editor and its Save action, not the manager's mutation API directly.
-        try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
         try app.press("cmd+a"); try app.type("cmd+shift+u")
-        try app.click(.settingsField("extension-shortcut-save-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
         try app.waitUntil("edited Chromium shortcut readback") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
             return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
         }
-        try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
         try app.press("cmd+shift+u"); app.sleep(0.5)
         try expect(try tab(item, in: app.view())?.title == "Site policy fixture", "native editor leaked the extension command to the page")
-        try app.dispatch(.site(.extensionShortcut(fixture.id, "_execute_action", "cmd+shift+u")))
+        try control(app, "extension-shortcut-" + fixture.id + "-_execute_action", .focus)
+        try app.type("cmd+shift+u")
+        try control(app, "extension-shortcut-save-" + fixture.id + "-_execute_action", .press)
         try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("already assigned") == true, "duplicate shortcut did not report a conflict")
-        try app.dispatch(.site(.extensionShortcut(fixture.id, command, "cmd+t")))
+        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
+        try app.type("cmd+t")
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
         try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("reserved") == true, "reserved shortcut did not report a conflict")
         _ = try app.screenshotSiteControls("shortcut-editor")
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
@@ -86,14 +108,21 @@ enum ExtScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
         try app.flush(); try app.restart()
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
+        try app.waitUntil("extension listener ready after restart") {
+            try SitePolicyScenarios.evaluate(app, item, "document.title='shortcut-ready:'+document.documentElement.getAttribute('data-brk-extension')")
+            return try tab(item, in: app.view())?.title == "shortcut-ready:installed"
+        }
         try app.press("cmd+shift+u")
         try waitForTitle(app, item, "extension-command:fixture-command")
         try app.dispatch(.settings(.shortcuts(.setChord(.newTab, KeyChord([.command, .shift], .u)))))
         try app.press("cmd+shift+u")
         try app.waitUntil("Brk app-priority remap opens command bar") { isCommandBar(try app.view().overlay) }
         try app.press("escape")
+        app.sleep(0.5)
+        try SitePolicyScenarios.evaluate(app, item, "document.title='extension-count:'+document.documentElement.getAttribute('data-brk-extension-commands')")
+        try waitForTitle(app, item, "extension-count:1")
         try app.dispatch(.settings(.shortcuts(.reset(.newTab))))
-        app.note("Native editing, duplicate/reserved errors, persisted command execution, and a later Brk app-priority remap were exercised. Native editor/page-first routing also has reducer tests using the one key table.")
+        app.note("Owned AppKit focus/press actions plus real key input edited the actual fields and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap. Synthetic physical utility-panel clicks remain a separate verification limitation.")
     }
 
     @Sendable static func loading(_ app: AppUnderTest) throws {
@@ -187,7 +216,7 @@ enum ExtScenarios {
             try app.dispatch(.tab(.focus(item)))
             let marker = "matrix:" + name + ":"
             let readback = "JSON.stringify(Array.from(document.querySelectorAll('audio,video')).map(x=>({tag:x.tagName,paused:x.paused,ended:x.ended,muted:x.muted,ready:x.readyState,time:x.currentTime})))"
-            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";document.title=" + js(marker) + "+" + readback + "})().catch(e=>document.title='matrix-error:'+e.message)")
+            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(document.hidden)await new Promise(resolve=>document.addEventListener('visibilitychange',()=>{if(!document.hidden)resolve()},{once:true}));if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";await new Promise(resolve=>setTimeout(resolve,0));document.title=" + js(marker) + "+" + readback + "})().catch(e=>document.title='matrix-error:'+e.message)")
             var proof = ""
             try app.waitUntil("actual DOM media state before hiding " + name) {
                 guard let title = try tab(item, in: app.view())?.title, title.hasPrefix(marker) else { return false }
@@ -208,9 +237,18 @@ enum ExtScenarios {
                 } catch {
                     var policy: WebsitePolicyStatus?
                     if case .pageObservations(let observations) = try app.send(.pageObservations) { policy = observations[PageID(window: app.window!, item: item)]?.websitePolicyStatus }
-                    throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy))
+                    try app.dispatch(.tab(.focus(item)))
+                    try SitePolicyScenarios.evaluate(app, item, "document.title=" + js("after:" + name + ":") + "+" + readback)
+                    app.sleep(0.5)
+                    let after = try tab(item, in: app.view())?.title ?? "missing"
+                    throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy) + "; DOM after showing=" + after)
                 }
             } else {
+                try app.waitUntil("native frozen policy for " + name, timeout: 8) {
+                    guard case .pageObservations(let observations) = try app.send(.pageObservations) else { return false }
+                    return observations[PageID(window: app.window!, item: item)]?.websitePolicyStatus?.frozen == true
+                }
+                let baseline = app.site.requestCount("/ext-media-tick")
                 app.sleep(1.4)
                 try expect(app.site.requestCount("/ext-media-tick") == baseline, name + " incorrectly kept a hidden page active")
             }
@@ -222,29 +260,51 @@ enum ExtScenarios {
         window.extElement=new Audio('data:audio/wav;base64,'+btoa(String.fromCharCode(...bytes)));extElement.muted=true;extElement.loop=true;document.body.append(extElement);await extElement.play()
         """
         try matrix("muted-html-audio", setup: wav, active: true)
-        try matrix("paused-html-audio", setup: "extElement.pause()", active: false)
-        try matrix("muted-html-video", setup: "const canvas=document.createElement('canvas');window.extElement=document.createElement('video');extElement.muted=true;extElement.srcObject=canvas.captureStream(10);document.body.append(extElement);await extElement.play()", active: true)
-        try matrix("paused-html-video", setup: "extElement.pause()", active: false)
-        try matrix("running-silent-webaudio", setup: "await start(true)", active: false)
-        app.note("Real audible WebAudio, muted playing HTML audio and muted playing HTML video protected hidden scheduling. Suspended WebAudio, paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
+        try matrix("paused-html-audio", setup: "document.body.append(extElement);extElement.pause()", active: false)
+        try matrix("muted-html-video", setup: "window.extElement=document.createElement('video');extElement.muted=true;extElement.loop=true;extElement.src='/ext-policy-video.webm';document.body.append(extElement);await extElement.play()", active: true)
+        try matrix("paused-html-video", setup: "document.body.append(extElement);extElement.pause()", active: false)
+        try matrix("running-silent-webaudio", setup: "await start(true);clearInterval(timer)", active: false)
+        app.note("Audible WebAudio and playback intent for muted HTML audio/video protected hidden scheduling, including Chromium's automatic hidden-media pause. Suspended WebAudio, visibly paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
     }
 
     @Sendable static func controls(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
         try app.dispatch(.site(.controls))
         try app.waitUntil("native policy and OS readback") { try SitePolicyScenarios.controls(app).applied?.osAuthorization?.count == 4 }
-        try app.click(.settingsField("siteCopyURL"))
-        guard case .text(let copied) = try app.send(.readPasteboard) else { throw Check(description: "clipboard readback missing") }
-        try expect(copied == app.site.url("site-policy.html").absoluteString, "site control copied a different page")
-        try app.click(.settingsField("siteExportLink"))
+        try app.perform(.pasteboard("Ext-copy-pending"))
+        try control(app, "siteCopyURL", .press)
+        try app.waitUntil("actual copied page URL") {
+            guard case .text(let copied) = try app.send(.readPasteboard) else { return false }
+            return copied == app.site.url("site-policy.html").absoluteString
+        }
+        try control(app, "siteExportLink", .press)
         try app.waitUntil("real link export save panel") { try app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
-        try app.perform(.answerSavePanel(window: app.window, path: nil))
-        try app.waitUntil("link export cancellation") { try !app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
+        try app.perform(.sheetButton(title: "Cancel"))
+        try app.waitUntil("link export cancellation") {
+            let facts = try app.native()
+            return facts.sheetClass == nil && !facts.appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible }
+        }
+        let destination = app.dataDirectory.appendingPathComponent("Ext-link-export.json")
+        try control(app, "siteExportLink", .press)
+        try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
+        guard case .failed = try app.send(.selectLinkExportFixture(window: WindowID("Ext-wrong-owner"), path: destination.path)) else {
+            throw Check(description: "another owner selected the link export destination")
+        }
+        try expect(!FileManager.default.fileExists(atPath: destination.path), "rejected owner wrote export bytes")
+        try app.perform(.selectLinkExportFixture(window: app.window!, path: destination.path))
+        try app.waitUntil("actual link export bytes") { FileManager.default.fileExists(atPath: destination.path) }
+        guard case .failed = try app.send(.selectLinkExportFixture(window: app.window!, path: destination.path)) else {
+            throw Check(description: "a completed export accepted another selection")
+        }
+        let data = try Data(contentsOf: destination)
+        let exported = try JSONDecoder().decode(ExportDocument.self, from: data)
+        try expect(exported.entries == [.link(title: "Site policy fixture", url: app.site.url("site-policy.html"))], "export bytes do not describe the active page")
+        try data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-controls-link-export.json"))
         try app.dispatch(.profile(.create(name: "Ext Profile", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings), let other = settings.profiles.first(where: { $0.profile.name == "Ext Profile" })?.profile.id else { throw Check(description: "profile missing") }
         try app.dispatch(.profile(.assign(.current, to: other)))
         try app.waitUntil("site controls rebind to profile") { try SitePolicyScenarios.controls(app).profileName == "Ext Profile" && SitePolicyScenarios.controls(app).target?.context == .profile(other) }
         _ = try app.screenshotSiteControls("origin-profile-os-readback")
-        app.note("Actual OS status readback did not request authorization. Copy and export-panel cancellation used the active page snapshot. Actual selected-destination file output waits for file-panels. Boost/capture actions await their owning slices.")
+        app.note("Actual OS status readback did not request authorization. Copy, export cancellation and selected-destination JSON bytes describe the active page. The real save panel was shown/cancelled; output used an explicit owner-bound post-selection fixture and the production writer. Remote chooser confirmation and physical folder selection are not claimed. Boost/capture actions await their owning slices.")
     }
 }

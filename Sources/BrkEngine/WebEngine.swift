@@ -45,6 +45,7 @@ public protocol WebEngine: AnyObject {
 
     /// Diagnostics for the control socket. Never used for app behavior.
     func facts(for page: PageID) -> PageFacts?
+    func isPageHostWindow(_ window: NSWindow) -> Bool
 
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
@@ -120,6 +121,7 @@ extension WebEngine {
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }
     public func captureProbe(_ page: PageID, directory: URL) async throws -> String { "unsupported" }
+    public func isPageHostWindow(_ window: NSWindow) -> Bool { false }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}
 }

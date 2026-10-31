@@ -6,10 +6,10 @@ import BrkDomain
 @MainActor
 final class ExportSheets {
     private final class Pending {
+        let document: ExportDocument
         weak var window: NSWindow?
         var sheet: NSWindow?
         var reply: (@MainActor (ExportOutcome) -> Void)?
-        let document: ExportDocument
         init(document: ExportDocument, window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
             self.document = document; self.window = window; self.reply = reply
         }
@@ -45,6 +45,16 @@ final class ExportSheets {
             }
         })
         if pending[owner] === entry, entry.sheet == nil { entry.sheet = panel }
+    }
+
+    /// Explicit post-selection fixture bridge; it does not prove the remote chooser gesture.
+    func selectFixture(_ destination: URL, owner: WindowID) -> Bool {
+        guard !stopped, let entry = pending[owner], let window = entry.window, window.isVisible,
+              let panel = entry.sheet as? NSSavePanel, window.attachedSheet === panel else { return false }
+        let reply = entry.reply
+        finish(owner, entry, outcome: nil)
+        reply?(ShareExport.writeSelected(entry.document, to: destination))
+        return true
     }
 
     func ownerGone(_ owner: WindowID) {

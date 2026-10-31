@@ -58,6 +58,29 @@ final class ControlExecutor {
         case .sidebarPanel(let owner, let action):
             let window = try controller(owner).window
             return try await SidebarPanelControl.run(action, in: window)
+        case .siteControlInput(let owner, let field, let action):
+            guard let panel = store.sitePanels.window(for: owner), panel.isVisible,
+                  let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel) as? NSControl,
+                  !control.isHiddenOrHasHiddenAncestor, !control.visibleRect.intersection(control.bounds).isEmpty,
+                  control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+            store.inputWindow = panel
+            switch action {
+            case .focus:
+                guard let text = control as? NSTextField, text.isEditable, panel.makeFirstResponder(text) else {
+                    throw Failure(message: "The site control is not an editable text field")
+                }
+                text.selectText(nil)
+                guard let editor = text.currentEditor(), panel.firstResponder === editor else {
+                    throw Failure(message: "The native field editor did not accept focus")
+                }
+            case .press:
+                guard let button = control as? NSButton else { throw Failure(message: "The site control is not a button") }
+                button.performClick(nil)
+            }
+            print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
+            return .ok
         case .nativeDialogKey(let number, let text):
             guard let window = NSApp.windows.first(where: { $0.windowNumber == number && $0.isVisible && NSStringFromClass(type(of: $0)) == "NativeWidgetMacNSWindow" }) else {
                 throw Failure(message: "The requested native dialog does not belong to this app")
@@ -101,13 +124,33 @@ final class ControlExecutor {
             guard let output = try controller(window).lastSnapshot?.output else { throw Failure(message: "No current output") }
             engine.cancelOutput(output.id)
             return .ok
+        case .selectLinkExportFixture(let owner, let path):
+            let selected = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            var directory: ObjCBool = false
+            guard selected.path.hasPrefix(root),
+                  FileManager.default.fileExists(atPath: selected.deletingLastPathComponent().path, isDirectory: &directory), directory.boolValue,
+                  store.selectLinkExportFixture(selected, owner: owner) else {
+                throw Failure(message: "No owned link export accepts this fixture destination")
+            }
+            return .ok
         case .configureSavePanel(let window, let path):
             let owner = try controller(window).id
-            store.outputSheets.fixtureDestinations[owner] = URL(fileURLWithPath: path)
+            let selected = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            guard selected.path.hasPrefix(root) else { throw Failure(message: "Save destination is outside the owned fixture directory") }
+            store.outputSheets.fixtureDestinations[owner] = selected
             return .ok
         case .answerSavePanel(let window, let path):
             let owner = try controller(window).window
             guard let panel = owner.attachedSheet as? NSSavePanel else { throw Failure(message: "No save panel belongs to this window") }
+            let selected = path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL }
+            if let selected {
+                let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+                guard selected.path.hasPrefix(root), FileManager.default.fileExists(atPath: selected.deletingLastPathComponent().path) else {
+                    throw Failure(message: "Save destination is outside the owned fixture directory")
+                }
+            }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             try await Task.sleep(for: .milliseconds(700))
@@ -212,7 +255,7 @@ final class ControlExecutor {
             return .ok
         case .sheetButton(let title):
             guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
-            if let panel = sheet as? NSOpenPanel, title == "Cancel" { panel.cancel(nil); return .ok }
+            if let panel = sheet as? NSSavePanel, title == "Cancel" { panel.cancel(nil); return .ok }
             var selected: NSButton?
             ViewTree.walk(content) { view in
                 if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }
@@ -221,7 +264,9 @@ final class ControlExecutor {
             selected.performClick(nil)
             return .ok
         case .type(let text):
-            try events.type(text, in: keyTarget())
+            let target = try keyTarget()
+            print("[control] type count=\(text.count) window=\(target.windowNumber) responder=\(ViewTree.describe(target.firstResponder)) active=\(NSApp.isActive)")
+            try events.type(text, in: target)
             return .ok
 
         case .click(let viewID, let point, let modifierText, let count):
@@ -236,12 +281,15 @@ final class ControlExecutor {
             if let viewID {
                 // The browser window first, then any other app window (the settings window, wave 2).
                 let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
-                    ?? NSApp.windows.lazy.compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
-                guard let (view, window) = found else {
+                    ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
+                guard let (view, window) = found, !view.isHiddenOrHasHiddenAncestor else {
                     throw Failure(message: "no visible view \(viewID.identifier) in any window")
                 }
                 target = window
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+                let hit = (window.contentView?.superview ?? window.contentView)?.hitTest(at)
+                print("[control] click id=\(viewID.identifier) window=\(window.windowNumber) view=\(NSStringFromClass(type(of: view))) frame=\(view.frame) visible=\(view.visibleRect) point=\(at) hit=\(hit.map { NSStringFromClass(type(of: $0)) } ?? "nil") key=\(window.isKeyWindow) active=\(NSApp.isActive)")
+                if let control = view as? NSControl { print("[control] native enabled=\(control.isEnabled) target=\(control.target.map { NSStringFromClass(type(of: $0)) } ?? "nil") action=\(control.action.map(NSStringFromSelector) ?? "nil")") }
             } else if let point {
                 at = c.root.convert(point, to: nil)
             } else {
@@ -249,6 +297,7 @@ final class ControlExecutor {
             }
             store.inputWindow = target
             try events.click(at: at, modifiers: flags, count: max(1, count), in: target)
+            print("[control] click complete window=\(target.windowNumber) key=\(NSApp.keyWindow?.windowNumber ?? -1) responder=\(ViewTree.describe(target.firstResponder))")
             return .ok
 
         case .pointer(let window, let phase, let point):
@@ -426,7 +475,7 @@ final class ControlExecutor {
         var focusedPage = ViewTree.page(containing: responder)
         if focusedPage == nil { focusedPage = pages.first(where: { $0.value.hasKeyboardFocus })?.key }
         let windows = NSApp.windows.map {
-            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible)
+            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible, isPageHost: engine.isPageHostWindow($0))
         }
         var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,

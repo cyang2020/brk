@@ -151,6 +151,9 @@ struct SettingsCheckbox: NSViewRepresentable {
 
         @objc func clicked(_ sender: NSButton) {
             let wanted = sender.state == .on
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, sender.accessibilityIdentifier().contains("extension-") {
+                print("[extension-control] checkbox id=\(sender.accessibilityIdentifier()) wanted=\(wanted) snapshot=\(isOn)")
+            }
             sender.state = isOn ? .on : .off
             if wanted != isOn { toggle?(wanted) }
         }
@@ -273,7 +276,12 @@ struct SettingsButton: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject {
         var action: (@MainActor () -> Void)?
-        @objc func clicked(_ sender: NSButton) { action?() }
+        @objc func clicked(_ sender: NSButton) {
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                print("[settings-control] button id=\(sender.accessibilityIdentifier())")
+            }
+            action?()
+        }
     }
 }
 
@@ -328,6 +336,9 @@ struct SettingsTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, field.accessibilityIdentifier().contains("extension-shortcut-") {
+                print("[extension-control] text edit id=\(field.accessibilityIdentifier()) count=\(field.stringValue.count)")
+            }
             edit?(field.stringValue)
         }
 
