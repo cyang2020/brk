@@ -46,7 +46,7 @@ def acquire(paths, timeout):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--lock', action='append', required=True)
-    parser.add_argument('--timeout', type=float, default=55)
+    parser.add_argument('--timeout', type=float, default=3600)
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command

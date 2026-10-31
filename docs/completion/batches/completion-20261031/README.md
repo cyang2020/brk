@@ -34,19 +34,19 @@ All production code builds in Swift 6 and obeys the import boundaries. Prefer be
 
 ## Shared Mac, locks and tools
 
-Create the CEF link once in a new checkout: `ln -s /Users/administrator/.cache/arc-spike-swift/.cef .cef`. Full signed builds take both locks:
+Create the CEF link once in a new checkout: `ln -s /Users/administrator/.cache/arc-spike-swift/.cef .cef`. Full signed builds take both locks and wait up to an hour for them:
 
 ```sh
-python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh
+python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 3600 -- scripts/build.sh
 ```
 
-Native runs record source and binary identity and take the native lock:
+Native runs record source and binary identity and take the native lock, also waiting up to an hour:
 
 ```sh
-python3 verify/completion/browser-basic-parent/run-native.py <unique-name> --only <scenarios> --run-timeout 600
+python3 verify/completion/browser-basic-parent/run-native.py <unique-name> --only <scenarios> --wait 3600 --run-timeout 600
 ```
 
-Focused `swift build` and `swift test --filter` work need no lock. Never run a native suite without the lock; never change source while your native run is active; terminate only your own PIDs. Lock contention is an infrastructure condition: do non-GUI work, then retry bounded acquisition. T3 creates your checkout; do not create worktrees in the shell. Follow a running delegate's `next` instruction and never poll it.
+Eight slices build on this Mac at once, so one signed build at a time is the throughput and a wait of up to an hour is normal. A lock timeout (exit 75) is not a blocker and not evidence; never report BLOCKED for lock contention. If your shell tool limits command duration, start the locked command in the background with its output in a log under your evidence directory and read the log; do not edit source while it runs. Focused `swift build` and `swift test --filter` work need no lock. Never run a native suite without the lock; never change source while your native run is active; terminate only your own PIDs. T3 creates your checkout; do not create worktrees in the shell. Follow a running delegate's `next` instruction and never poll it.
 
 If you must return before everything works, commit the real progress and return ISSUES or BLOCKED with the exact remaining list and reproduction evidence. Do not claim the slice complete.
 
