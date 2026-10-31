@@ -168,12 +168,10 @@ final class EventInjector {
     /// handled, so a control that runs its own tracking loop inside `mouseDown` (NSButton) finds it; if nothing
     /// consumed it, it is dequeued and handled here, so the click is complete when this returns.
     ///
-    /// In a key window the events go through `NSApp.sendEvent`. A window that is not key (inactive app, locked
-    /// display) would take the press as a first click that only activates it, so the events go to the view AppKit's
-    /// hit test picks, the way a key window delivers them: a control through `NSWindow.sendEvent` (controls accept
-    /// the first click and run their tracking there; called directly, NSButton does not track), any other view by a
-    /// direct `mouseDown`/`mouseUp` (AppKit forwards what the view does not handle to the view below, as it does for
-    /// a real click).
+    /// Native controls use `NSWindow.sendEvent` after activation. NSApplication can consume the first press in a
+    /// newly ordered panel even when isKeyWindow already reports true. Window delivery preserves the native
+    /// responder handoff and button tracking (direct NSButton.mouseDown does not track). CEF views retain the
+    /// NSApplication route while key, and direct view delivery while inactive.
     func click(at point: CGPoint, modifiers: Modifiers, count: Int, in window: NSWindow) throws {
         if !window.isKeyWindow {
             NSApp.activate(ignoringOtherApps: true)
@@ -184,8 +182,8 @@ final class EventInjector {
             throw InjectionError("nothing under \(point) in window \(window.windowNumber)")
         }
         func handle(_ event: NSEvent) {
-            if key { NSApp.sendEvent(event) }
-            else if target is NSControl { window.sendEvent(event) }
+            if target is NSControl { window.sendEvent(event) }
+            else if key { NSApp.sendEvent(event) }
             else if event.type == .leftMouseDown {
                 // What a key window's sendEvent does first: report the click's modifiers (a Shift+click opens a Peek).
                 _ = (window as? any HostWindow)?.hostEvent(event)

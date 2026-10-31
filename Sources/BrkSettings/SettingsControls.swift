@@ -277,8 +277,8 @@ struct SettingsButton: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject {
         var action: (@MainActor () -> Void)?
         @objc func clicked(_ sender: NSButton) {
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, sender.accessibilityIdentifier().contains("extension-") {
-                print("[extension-control] button id=\(sender.accessibilityIdentifier())")
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                print("[settings-control] button id=\(sender.accessibilityIdentifier())")
             }
             action?()
         }

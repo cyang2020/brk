@@ -249,15 +249,8 @@ final class ControlExecutor {
                 // The browser window first, then any other app window (the settings window, wave 2).
                 let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
                     ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
-                guard let (_, window) = found else {
+                guard let (view, window) = found, !view.isHiddenOrHasHiddenAncestor else {
                     throw Failure(message: "no visible view \(viewID.identifier) in any window")
-                }
-                // Physical input follows a committed native frame. The control socket can arrive before
-                // SwiftUI commits a newly assigned rootView; resolve the control again after that commit.
-                window.contentView?.layoutSubtreeIfNeeded()
-                window.displayIfNeeded()
-                guard let view = ViewTree.find(viewID.identifier, in: window), !view.isHiddenOrHasHiddenAncestor else {
-                    throw Failure(message: "view disappeared before input: \(viewID.identifier)")
                 }
                 target = window
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
