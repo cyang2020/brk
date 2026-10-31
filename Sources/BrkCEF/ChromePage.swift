@@ -156,7 +156,7 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
-        audio.invalidate()
+        audio.navigationRequested()
         engine.pageDidEmit(self, .audioChanged(false))
         contextMenu.cancel()
         mainDocument.prepareNavigation()

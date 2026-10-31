@@ -13,10 +13,9 @@ import Foundation
     private var registration: UnsafeMutablePointer<cef_registration_t>?
     private let messageID: Int
     private var completion: ((Result<Data, Error>) -> Void)?
-    private static var nextID = 0
 
     fileprivate init(completion: @escaping (Result<Data, Error>) -> Void) {
-        Self.nextID += 1; messageID = Self.nextID; self.completion = completion
+        messageID = CefDevToolsRequestIDs.next(); self.completion = completion
     }
 
     fileprivate func receive(_ data: Data) -> Bool {

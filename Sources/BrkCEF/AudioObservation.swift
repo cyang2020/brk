@@ -27,6 +27,10 @@ struct AudioObservation {
         case .unavailable: available = false; audible = false
         }
     }
+    mutating func navigationRequested() {
+        revision += 1
+        audible = false
+    }
     mutating func invalidate(retire: Bool = false) {
         revision += 1; available = false; audible = false
         if retire { retired = true; target = nil; tab = nil }

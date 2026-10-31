@@ -9,7 +9,6 @@ public final class CefDevTools {
     private weak var browser: CefBrowser?
     private var registration: UnsafeMutablePointer<cef_registration_t>?
     private var pending: [Int: (CheckedContinuation<Data, any Error>, Task<Void, Never>)] = [:]
-    private static var nextID = 1
 
     private final class Owner {
         weak var session: CefDevTools?
@@ -51,9 +50,7 @@ public final class CefDevTools {
 
     public func call(_ method: String, parameters: [String: Any] = [:]) async throws -> Data {
         guard registration != nil, let browser else { throw Failure.unavailable }
-        let id = Self.nextID
-        precondition(id < Int(Int32.max))
-        Self.nextID += 1
+        let id = CefDevToolsRequestIDs.next()
         let message = try JSONSerialization.data(withJSONObject: ["id": id, "method": method, "params": parameters])
         return try await withCheckedThrowingContinuation { continuation in
             let timeout = Task { @MainActor [weak self] in

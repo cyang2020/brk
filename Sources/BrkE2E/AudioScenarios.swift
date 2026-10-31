@@ -10,6 +10,7 @@ enum AudioScenarios {
         Scenario("Audio2", "two profiles, two private windows and a replacement private epoch", cefOnly: "Chrome context isolation", profiles),
         Scenario("Audio3", "foreign-frame tone, silent source, stop and no web-callable observer", cefOnly: "Chrome foreign-frame audibility", foreignFrame),
         Scenario("Audio4", "audible while loading and close during an unfinished response", cefOnly: "Chrome live document lifetime", loading),
+        Scenario("Audio5", "playing document stays observable after fragment history and attachment navigation", cefOnly: "Chrome surviving document", survivingDocument),
     ]
     private static func audioTab(_ id: ItemID, in view: WindowSnapshot) -> TabRow? {
         tab(id, in: view) ?? tabRows(view.scratch?.rows ?? []).first { $0.id == id }
@@ -55,6 +56,52 @@ enum AudioScenarios {
         app.window = new
         _ = try app.send(.activate(window: new))
         return new
+    }
+
+    @Sendable static func survivingDocument(_ app: AppUnderTest) throws {
+        let item = try open(app)
+        let page = PageID(window: app.window!, item: item)
+        try play(app, item)
+        let original = try facts(app, item)
+        func observation() throws -> PageObservation {
+            guard case .pageObservations(let values) = try app.send(.pageObservations), let value = values[page] else {
+                throw Check(description: "Missing surviving document")
+            }
+            return value
+        }
+        let document = try observation().document
+        let first = URL(string: app.site.url("tab-tools-audio.html").absoluteString + "#first")!
+        let second = URL(string: app.site.url("tab-tools-audio.html").absoluteString + "#second")!
+        for address in [first, second] {
+            try app.dispatch(.commandBar(.open(.editCurrent)))
+            try app.dispatch(.commandBar(.submit(address.absoluteString)))
+            try app.waitUntil("fragment commits without replacing its playing document") {
+                try observation().committedURL == address && observation().document == document
+            }
+            try app.waitUntil("fresh audible observation after explicit fragment navigation") {
+                try audioTab(item, in: app.view())?.audible == true && facts(app, item).audioError == nil
+            }
+        }
+        try app.dispatch(.page(.back(.focused)))
+        try app.waitUntil("same-document Back preserves active audibility") {
+            try observation().committedURL == first && observation().document == document
+                && audioTab(item, in: app.view())?.audible == true
+        }
+        let directory = app.dataDirectory.appendingPathComponent("owned-audio-download")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
+        try app.dispatch(.settings(.profile(.default, .promptForDownloadLocation(false))))
+        try app.dispatch(.commandBar(.open(.editCurrent)))
+        try app.dispatch(.commandBar(.submit(app.site.url("download").absoluteString)))
+        let file = directory.appendingPathComponent("fixture.txt")
+        try app.waitUntil("attachment completes while the original document keeps playing") {
+            guard (try? Data(contentsOf: file)) == Data("fixture download\n".utf8) else { return false }
+            return try audioTab(item, in: app.view())?.audible == true
+        }
+        try expect(try observation().document == document, "Attachment replaced the surviving document")
+        try expect(try facts(app, item).browserID == original.browserID, "Surviving audio was observed on a replacement browser")
+        try app.recordWindows("audio-after-fragments-and-attachment")
+        _ = try app.screenshot("audio-after-fragments-and-attachment")
     }
 
     @Sendable static func windows(_ app: AppUnderTest) throws {
