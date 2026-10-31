@@ -6,7 +6,7 @@ import BrkUIKit
 
 /// Owner: W3. Dragging rows and favorites with plain pointer events (no NSDraggingSession: nothing leaves the
 /// window). A press becomes a drag after `Draw.dragThreshold`; the item's image follows the pointer on a card like
-/// the selected row; the target under the pointer shows where it lands; release dispatches one `.item(.move)`.
+/// the selected row; the target under the pointer shows where it lands; release dispatches one move or split command.
 ///
 /// Targets, in the order they are tested:
 /// - the favorites tray: an index among the other tiles, if `Placement.canPlace(kind, .favorites, .section)`;
@@ -34,10 +34,11 @@ final class DragController {
         case favorites(index: Int)
         case list(Destination, point: CGPoint)
         case dock(SpaceID)
+        case content(Command)
 
         var destination: Destination? {
             switch self {
-            case .favorites: nil
+            case .favorites, .content: nil
             case .list(let destination, _): destination
             case .dock(let space): .space(space)
             }
@@ -57,6 +58,8 @@ final class DragController {
     var context: Context?
     private var pressed: (item: Item, source: NSView, start: CGPoint)?
     private var session: Session?
+    private var escapeMonitor: Any?
+    private var cancelledPress = false
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -66,6 +69,7 @@ final class DragController {
 
     /// Mouse down on a row or tile: remember it; it becomes a drag once the pointer travels far enough.
     func press(_ item: Item, source: NSView, event: NSEvent) {
+        cancelledPress = false
         pressed = (item, source, event.locationInWindow)
         session = nil
     }
@@ -79,7 +83,7 @@ final class DragController {
             begin(pressed.item, source: pressed.source, event: event)
         }
         guard var session, let sidebar, let context else { return session != nil }
-        let local = sidebar.convert(event.locationInWindow, from: nil)
+        let local = session.preview.superview?.convert(event.locationInWindow, from: nil) ?? sidebar.convert(event.locationInWindow, from: nil)
         session.preview.setFrameOrigin(CGPoint(x: local.x - session.grab.x, y: local.y - session.grab.y))
         let root = sidebar.rootPoint(fromWindow: event.locationInWindow)
         if context.frames.tablistViewport.contains(root) { sidebar.tablist.autoScroll(at: root, frames: context.frames) }
@@ -92,9 +96,14 @@ final class DragController {
     /// Mouse up. True when a drag ended here (the caller must not treat the release as a click).
     func release(_ event: NSEvent) -> Bool {
         pressed = nil
-        guard let session else { return false }
+        if cancelledPress { cancelledPress = false; return true }
+        guard var session else { return false }
+        if let sidebar, let context {
+            session.target = target(at: sidebar.rootPoint(fromWindow: event.locationInWindow), item: session.item, context: context)
+        }
         finish(session)
         switch session.target {
+        case .content(let command)?: dispatch(command)
         case .favorites(let index)?:
             if let root = context?.favorites.root { dispatch(.item(.move(session.item.id, to: .into(parent: root, index: index)))) }
         case let target?:
@@ -107,6 +116,7 @@ final class DragController {
 
     /// Ends a drag without moving anything (the sidebar went away under it).
     func cancel() {
+        if pressed != nil || session != nil { cancelledPress = true }
         pressed = nil
         if let session { finish(session) }
     }
@@ -115,13 +125,15 @@ final class DragController {
 
     private func begin(_ item: Item, source: NSView, event: NSEvent) {
         guard let sidebar, let palette = sidebar.currentPalette else { return }
+        sidebar.beginContentDrop?(item.id)
         // Lifted on the selected-row card (TabCellBackgroundCurrent), whatever it was dragged from.
         let card = (source as? RowView).map { RowGeometry(bounds: $0.bounds, depth: 0).selection } ?? source.bounds
         let fill = palette.color(palette.tokens.tabCurrent)
         // The image is the item at rest: no hover button, no pressed fill.
         (source as? HoverView)?.setHovered(false)
         (source as? HoverView)?.isPressed = false
-        let preview = NSView(frame: sidebar.convert(card, from: source))
+        let host = sidebar.superview ?? sidebar
+        let preview = NSView(frame: host.convert(card, from: source))
         preview.wantsLayer = true
         preview.alphaValue = Draw.dragPreviewAlpha.value
         if let layer = preview.layer {
@@ -142,14 +154,21 @@ final class DragController {
             content.imageScaling = .scaleNone
             preview.addSubview(content)
         }
-        sidebar.addSubview(preview)
-        let local = sidebar.convert(event.locationInWindow, from: nil)
+        host.addSubview(preview)
+        let local = host.convert(event.locationInWindow, from: nil)
         session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY))
         (source as? RowView)?.dragSource = true
         if !(source is RowView) { source.alphaValue = Draw.dragSourceAlpha.value }
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == Key.escape.code, self?.isActive == true else { return event }
+            self?.cancel()
+            return nil
+        }
     }
 
     private func finish(_ session: Session) {
+        if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor); self.escapeMonitor = nil }
+        sidebar?.endContentDrop?()
         session.preview.removeFromSuperview()
         (session.source as? RowView)?.dragSource = false
         session.source.alphaValue = 1
@@ -161,6 +180,7 @@ final class DragController {
 
     private func target(at root: CGPoint, item: Item, context: Context) -> Target? {
         guard let sidebar else { return nil }
+        if item.kind == .tab, let command = sidebar.contentDrop?(item.id, root) { return .content(command) }
         let f = context.frames
         if f.favoritesTray.contains(root) {
             guard Placement.canPlace(item.kind, inSection: .favorites, parentKind: .section) else { return nil }

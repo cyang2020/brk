@@ -117,6 +117,9 @@ private func repairSessionTargets(_ state: inout AppState) {
         guard let window = state.doc.windows[id], var session = state.session.windows[id] else { continue }
         let tree = state.tree(window.container)
         let before = session
+        if let split = session.expandedSplit, state.shownItem(in: id) != split || tree?[split]?.kind != .split {
+            session.expandedSplit = nil
+        }
         if let renaming = session.renaming, tree?[renaming] == nil { session.renaming = nil }
         switch session.overlay {
         case .commandBar(_, .navigate(let tab, _)), .commandBar(_, .fillPane(let tab)):

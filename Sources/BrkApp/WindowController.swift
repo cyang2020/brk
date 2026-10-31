@@ -54,7 +54,13 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.contentView = root
         window.delegate = self
         if kind == .incognito { window.appearance = NSAppearance(named: .darkAqua) }
-        window.onKeyEquivalent = { event in
+        window.onPagePointerDown = { [weak self] page in
+            guard let self, page.window == self.id,
+                  self.lastSnapshot?.content.presentedPanes.contains(where: { $0.content == .page(page) }) == true else { return }
+            self.send(.user(self.id, .tab(.focus(page.item))))
+        }
+        window.onKeyEquivalent = { [weak self] event in
+            if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
@@ -118,11 +124,17 @@ public class WindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    func cancelSplitDrag() -> Bool { root.cancelDrag() }
+
     // MARK: NSWindowDelegate -> WindowEvent
 
     public func windowDidResize(_ notification: Notification) { reportGeometry() }
     public func windowDidMove(_ notification: Notification) { reportGeometry() }
-    public func windowWillClose(_ notification: Notification) { send(.system(.window(id, .closed))) }
+    public func windowWillClose(_ notification: Notification) {
+        root.cancelDrag()
+        send(.system(.window(id, .closed)))
+    }
+    public func windowDidResignKey(_ notification: Notification) { root.cancelDrag() }
 
     /// Becoming key again (app switch, a closed overlay panel) re-applies the snapshot's focus, so a page gets its
     /// Chromium view back as first responder and a native field keeps its own.
@@ -157,6 +169,7 @@ public protocol HostWindow: NSWindow {
     /// A key equivalent the window's views did not take (a native view has focus, or none): the shortcut table
     /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
     var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
+    var onPagePointerDown: ((PageID) -> Void)? { get set }
     /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
     func placeTrafficLights(origin: CGPoint?)
 }
@@ -179,6 +192,11 @@ extension HostWindow {
             // Control stays the keyboard's report alone: a click while Control is held mid Ctrl+Tab walk would otherwise
             // read as a repeated report, which the reducer takes for a missed release and commits the walk.
             if !event.modifierFlags.contains(.control) { onFlagsChanged?(event.modifierFlags) }
+            if event.type == .leftMouseDown,
+               let hit = contentView?.superview?.hitTest(event.locationInWindow) ?? contentView?.hitTest(event.locationInWindow),
+               let surface = Self.surface(containing: hit), surface.window === self, !surface.isHiddenOrHasHiddenAncestor {
+                onPagePointerDown?(surface.page)
+            }
         default: break
         }
         if event.type == .keyDown, !event.modifierFlags.intersection([.command, .control]).isEmpty {
@@ -243,6 +261,7 @@ extension HostWindow {
 public final class BrowserWindow: NSWindow, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
+    public var onPagePointerDown: ((PageID) -> Void)?
 
     public override func sendEvent(_ event: NSEvent) {
         if hostEvent(event) { return }

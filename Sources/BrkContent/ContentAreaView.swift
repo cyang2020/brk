@@ -14,10 +14,23 @@ public final class ContentAreaView: NSView {
     private var cards: [CardView] = []
     private var shadows: [ShadowView] = []
     private var dividers: [DividerView] = []
+    private let tools: SplitToolsView
+    private let dropPreview = SplitDropPreview(frame: .zero)
+    private var drop: SplitDropSnapshot?
+    private var dropArea = CGRect.zero
+    private var dragOffer: SplitDropOffer?
+    var isDropEnabled = true
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
+        tools = SplitToolsView(dispatch: dispatch)
         super.init(frame: .zero)
+        addSubview(tools)
+        dropPreview.wantsLayer = true
+        dropPreview.layer?.cornerRadius = Metrics.content.cornerRadius.value
+        dropPreview.identify(.splitDropPreview)
+        dropPreview.isHidden = true
+        addSubview(dropPreview)
     }
 
     @available(*, unavailable)
@@ -37,6 +50,9 @@ public final class ContentAreaView: NSView {
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
     func render(_ content: ContentSnapshot, frames: WindowFrames, palette: Palette, surface: (PageID) -> NSView?) {
         frame = CGRect(origin: .zero, size: frames.contentSize)
+        drop = content.drop
+        dropArea = frames.contentArea
+        clearDrop()
         while cards.count < frames.cards.count {
             let shadow = ShadowView(frame: .zero)
             shadows.append(shadow)
@@ -79,7 +95,28 @@ public final class ContentAreaView: NSView {
             divider.area = frames.contentArea
             divider.orientation = content.orientation
         }
+        tools.render(content, in: frames.contentArea, palette: palette)
+        addSubview(tools, positioned: .above, relativeTo: cards.last)
+        dropPreview.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).withAlphaComponent(0.22).cgColor
+        dropPreview.layer?.borderColor = palette.color(palette.tokens.dragHintStrong).cgColor
+        dropPreview.layer?.borderWidth = 2
+        addSubview(dropPreview, positioned: .above, relativeTo: tools)
     }
+
+    func dropCommand(_ source: ItemID, at point: CGPoint) -> Command? {
+        guard isDropEnabled, let offer = dragOffer, offer.source == source, drop?.offers[source] == offer,
+              let edge = SplitToolsLayout.edge(at: point, in: dropArea) else {
+            clearDrop()
+            return nil
+        }
+        dropPreview.frame = SplitToolsLayout.preview(edge, in: dropArea)
+        dropPreview.isHidden = false
+        return .split(.dropTab(offer, edge: edge))
+    }
+
+    func clearDrop() { dropPreview.isHidden = true }
+    func beginDrop(_ source: ItemID) { dragOffer = drop?.offers[source] }
+    func endDrop() { clearDrop(); dragOffer = nil }
 }
 
 /// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the
@@ -129,7 +166,7 @@ final class CardView: NSView {
     func host(_ surface: NSView?, placeholder text: String?) {
         if let surface {
             if surface.superview !== self {
-                hosted?.removeFromSuperview()
+                if hosted?.superview === self { hosted?.removeFromSuperview() }
                 surface.removeFromSuperview()
                 addSubview(surface)
             }
@@ -137,7 +174,7 @@ final class CardView: NSView {
             surface.frame = bounds
             surface.autoresizingMask = [.width, .height]
         } else {
-            hosted?.removeFromSuperview()
+            if hosted?.superview === self { hosted?.removeFromSuperview() }
             hosted = nil
         }
         placeholder.stringValue = text ?? ""
@@ -148,7 +185,7 @@ final class CardView: NSView {
 
     override func layout() {
         super.layout()
-        hosted?.frame = bounds
+        if hosted?.superview === self { hosted?.frame = bounds }
     }
 }
 
@@ -178,6 +215,8 @@ final class DividerView: NSView {
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: orientation == .horizontal ? .resizeLeftRight : .resizeUpDown)
     }
+
+    override func mouseDown(with event: NSEvent) {}
 
     override func mouseDragged(with event: NSEvent) {
         guard let split, let superview else { return }

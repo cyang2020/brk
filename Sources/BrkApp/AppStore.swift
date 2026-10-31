@@ -101,7 +101,7 @@ public final class AppStore {
     /// the peeked page (Esc, Cmd+W) routes to that window instead of being passed to the page.
     public func window(showing page: PageID) -> WindowID? {
         guard let window = snapshot.windows[page.window] else { return nil }
-        let visible = window.content.panes.contains { $0.content == .page(page) }
+        let visible = window.content.presentedPanes.contains { $0.content == .page(page) }
             || { if case .peek(let peek)? = window.overlay { return peek.page == page }; return false }()
         return visible ? page.window : nil
     }

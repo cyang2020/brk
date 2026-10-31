@@ -34,6 +34,8 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case showSidebar, toggleToolbar, expandPinnedSection, collapsePinnedSection, focusSidebar
     case stopLoading, reloadPage, forceReloadPage, clearCookies, clearCache
     case addSplitView, removeSplitView, separateTabFromSplitView, maximizeSplitPane
+    case splitHorizontal, splitVertical, restoreSplit, separateAllSplit, nextSplitPane, previousSplitPane
+    case splitPane1, splitPane2, splitPane3, splitPane4
     case resetZoom, zoomIn, zoomOut, cast
     case viewSource, developerTools, inspectElements, javaScriptConsole, networkInspector, allowJavaScriptFromAppleEvents, toggleDeveloperMode
     case fullscreen, exit
@@ -274,9 +276,9 @@ extension ActionID {
             entry(102, "Close this Split Pane", .view, 3, [key([ctrl, shift], .minus, .pageThenApp)], .split(.closePane),
                   bar: listing("xmark.square", "Close Split View"))
         case .separateTabFromSplitView:
-            entry(103, "Separate Page from Split View", .view, 3, [], .later(.splitTools), bar: listing("scissors", "Separate from split view", "separate tab"))
+            entry(103, "Separate Page from Split View", .view, 3, [], .split(.separatePane(.focused)), bar: listing("scissors", "Separate from split view", "separate tab"))
         case .maximizeSplitPane:
-            entry(104, "Expand Current Split", .view, 3, [], .later(.splitTools),
+            entry(104, "Expand Current Split", .view, 3, [], .split(.toggleExpanded),
                   bar: listing("arrow.up.left.and.arrow.down.right", "Expand", "Expand Split View", "Maximize"))
         case .resetZoom: entry(105, "Zoom to Actual Size", .view, 4, [key(cmd, .zero, .page)], .page(.zoom(.reset)), bar: listing("magnifyingglass", "Reset Zoom"))
         case .zoomIn:
@@ -307,6 +309,18 @@ extension ActionID {
             entry(121, "Enter/Exit Full Screen", .view, 7, [key([ctrl, cmd], .f, .pageThenApp)], .app(.toggleFullScreen),
                   bar: listing("arrow.up.left.and.arrow.down.right", "Enter Full Screen", "Exit Full Screen", "Full Screen", "Toggle Full Screen"))
         case .exit: entry(122, "Exit", .view, 7, [key([], .escape, .pageThenApp)], .app(.exit), bar: listing("escape", "Exit", "Exit Modal", "Exit Full Screen"))
+
+        // Brk split controls have distinct rows after the extracted Arc inventory.
+        case .splitHorizontal: entry(190, "Split Side by Side", .view, 8, [], .split(.orientCurrent(.horizontal)), bar: listing("rectangle.split.2x1", "Horizontal Split"))
+        case .splitVertical: entry(191, "Split Top and Bottom", .view, 8, [], .split(.orientCurrent(.vertical)), bar: listing("rectangle.split.1x2", "Vertical Split"))
+        case .restoreSplit: entry(192, "Restore Split Panes", .view, 8, [], .split(.restore), bar: listing("rectangle.split.2x1"))
+        case .separateAllSplit: entry(193, "Separate All Split Panes", .view, 8, [], .split(.separateAll), bar: listing("square.split.2x2", "Separate All"))
+        case .nextSplitPane: entry(194, "Next Split Pane", .view, 8, [key([ctrl, opt], .rightArrow, .app)], .split(.stepPane(.next)), bar: listing("arrow.right"), repeats: true)
+        case .previousSplitPane: entry(195, "Previous Split Pane", .view, 8, [key([ctrl, opt], .leftArrow, .app)], .split(.stepPane(.previous)), bar: listing("arrow.left"), repeats: true)
+        case .splitPane1: entry(196, "Focus Split Pane 1", .view, 8, [key([ctrl, opt], .one, .app)], .split(.focusPane(1)), bar: listing("1.square"))
+        case .splitPane2: entry(197, "Focus Split Pane 2", .view, 8, [key([ctrl, opt], .two, .app)], .split(.focusPane(2)), bar: listing("2.square"))
+        case .splitPane3: entry(198, "Focus Split Pane 3", .view, 8, [key([ctrl, opt], .three, .app)], .split(.focusPane(3)), bar: listing("3.square"))
+        case .splitPane4: entry(199, "Focus Split Pane 4", .view, 8, [key([ctrl, opt], .four, .app)], .split(.focusPane(4)), bar: listing("4.square"))
 
         // MARK: Spaces (groups: New Space… to Change Profile | Next, Previous | Manage Spaces…)
         case .newSpace: entry(124, "New Space…", .spaces, 0, [], .sidebar(.openDialog(.newSpace)), bar: listing("plus.rectangle.portrait", "Create New Space"))

@@ -56,7 +56,7 @@ public enum Command: Hashable, Sendable, Codable {
 /// replaces every `.later(x)` in the table with real commands and deletes the case.
 public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
     case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, findInPage, toolbar
-    case sidebarKeyboardFocus, siteData, splitTools, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
+    case sidebarKeyboardFocus, siteData, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
     case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding, help, restoreData
     case troubleshooting
 }
@@ -189,6 +189,17 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     case resize(ItemID, fractions: [ItemID: Double])
     /// Context menu on a split (Arc: `layoutOrientation`). Saved with the split; v1's layout draws both.
     case setOrientation(ItemID, SplitOrientation)
+    case orientCurrent(SplitOrientation)
+    /// One-based pane number. Missing panes and next/previous at the ends are no-ops.
+    case focusPane(Int)
+    case stepPane(Step)
+    /// Keeps the pane's section, window slots, live browser, and position immediately after its split.
+    case separatePane(ItemRef)
+    case separateAll
+    /// Transient presentation in this window. The split and hidden pages remain intact.
+    case toggleExpanded
+    case restore
+    case dropTab(SplitDropOffer, edge: SplitEdge)
 }
 
 public enum SidebarCommand: Hashable, Sendable, Codable {
@@ -409,7 +420,7 @@ extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
         switch self {
-        case .commandBar, .sidebar(.peek), .sidebar(.resize): true
+        case .commandBar, .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
         default: false
         }
     }
@@ -418,7 +429,7 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
+        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
         default: false
         }
     }
@@ -428,7 +439,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
+        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
         default: false
         }
     }

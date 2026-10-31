@@ -175,12 +175,15 @@ public struct DockItem: Sendable, Equatable, Codable {
 
 /// The content card(s). Frames come from BrkLayout; this says what goes in them.
 public struct ContentSnapshot: Sendable, Equatable, Codable {
+    public var expanded: Bool = false
+    public var drop: SplitDropSnapshot? = nil
     /// Left to right. Empty: the space shows an empty card.
     public var panes: [Pane]
     /// Set when the shown item is a split; divider drags dispatch `.split(.resize)` for it.
     public var split: ItemID?
     /// How the panes are laid out (`.horizontal` for a single pane).
     public var orientation: SplitOrientation
+    public var presentedPanes: [Pane] { panes.filter { !expanded || $0.focused } }
 }
 
 public struct Pane: Sendable, Equatable, Codable {

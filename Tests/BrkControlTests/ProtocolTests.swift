@@ -12,7 +12,7 @@ final class ProtocolTests: XCTestCase {
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL
+        case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
     }
 
     static func tag(of op: ControlOp) -> Tag {
@@ -29,6 +29,7 @@ final class ProtocolTests: XCTestCase {
         case .click: .click
         case .captureContextMenu: .captureContextMenu
         case .hover: .hover
+        case .pointer: .pointer
         case .screenshot: .screenshot
         case .pixel: .pixel
         case .advanceClock: .advanceClock
@@ -66,6 +67,9 @@ final class ProtocolTests: XCTestCase {
             return [.click(view: .dockSpace(SpaceID("s1")), point: nil, modifiers: nil, count: 1),
                     .click(view: nil, point: CGPoint(x: 400, y: 120), modifiers: "cmd", count: 2)]
         case .hover: return [.hover(point: CGPoint(x: 5, y: 388))]
+        case .pointer: return [.pointer(window: nil, phase: .down, point: CGPoint(x: 50, y: 60)),
+                              .pointer(window: WindowID("w"), phase: .dragged, point: CGPoint(x: 600, y: 300)),
+                              .pointer(window: WindowID("w"), phase: .up, point: CGPoint(x: 600, y: 300))]
         case .screenshot: return [.screenshot(window: nil, path: "/tmp/shots/0-launch.png")]
         case .pixel: return [.pixel(window: nil, point: CGPoint(x: 4, y: 200))]
         case .advanceClock: return [.advanceClock(seconds: 46_800), .advanceClock(seconds: -1)]

@@ -10,6 +10,9 @@ enum CommandInventory {
     static let item = ItemID("ghost-item"), space = SpaceID("ghost-space"), profile = ProfileID("ghost-profile")
     static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route")
     static let example = URL(string: "https://example.com/")!
+    static let splitOffer = SplitDropOffer(window: WindowID("ghost"), source: item, target: ItemID("target"),
+        sourceParent: ItemID("parent"), targetParent: ItemID("parent"), panes: [ItemID("target")],
+        orientation: .horizontal, context: .profile(.default))
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
@@ -26,6 +29,8 @@ enum CommandInventory {
         .space(.delete(space)), .space(.move(space, index: 0)), .space(.focus(space)), .space(.step(.previous)),
         .space(.togglePinnedSection(.current)),
         .split(.addPane), .split(.closePane), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
+        .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
+        .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)),
         .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
@@ -131,7 +136,12 @@ enum CommandInventory {
             case .step: "step"
             case .togglePinnedSection: "togglePinnedSection"
             }
-        case .split(let c): switch c { case .addPane: "addPane"; case .closePane: "closePane"; case .resize: "resize"; case .setOrientation: "setOrientation" }
+        case .split(let c): switch c {
+            case .addPane: "addPane"; case .closePane: "closePane"; case .resize: "resize"; case .setOrientation: "setOrientation"
+            case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
+            case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
+            case .restore: "restore"; case .dropTab: "dropTab"
+            }
         case .sidebar(let c):
             switch c {
             case .toggle: "toggle"

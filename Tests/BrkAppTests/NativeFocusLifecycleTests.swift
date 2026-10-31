@@ -7,6 +7,23 @@ import XCTest
 
 @MainActor
 final class NativeFocusLifecycleTests: XCTestCase {
+    func testPointerDownSelectsTheActualPresentedPaneBeforeItsPageReceivesInput() throws {
+        let h = FocusHarness()
+        defer { h.close() }
+        for n in 2...3 {
+            h.store.dispatch(.user(h.window, .split(.addPane)))
+            h.store.dispatch(.user(h.window, .commandBar(.submit("https://example.test/\(n)"))))
+        }
+        let controller = try h.controller()
+        let card = try XCTUnwrap(controller.lastFrames?.cards.first)
+        let point = controller.root.convert(CGPoint(x: card.rect.midX, y: card.rect.midY), to: nil)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 1,
+                                                   windowNumber: controller.window.windowNumber, context: nil,
+                                                   eventNumber: 1, clickCount: 1, pressure: 1))
+        _ = controller.window.hostEvent(event)
+        XCTAssertEqual(h.store.snapshot.windows[h.window]?.content.panes.first(where: \.focused)?.tab, h.page.item)
+        XCTAssertTrue(controller.window.firstResponder === h.engine.surface(for: h.page))
+    }
     func testWindowUpdateRepairsLostPageResponderWithoutAKeyWindow() throws {
         let h = FocusHarness()
         defer { h.close() }
