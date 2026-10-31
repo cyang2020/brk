@@ -55,6 +55,7 @@ extension ChromePage {
     }
 
     func refreshWebsitePolicy() {
+        refreshBoosts()
         if case .profile = context { browser.setWebsiteColorScheme(websitePolicy.appearance.rawValue) }
         guard case .ready(let document) = mainDocument.availability, let origin = browser.url.flatMap(SiteOrigin.init) else { return }
         policyRevision += 1

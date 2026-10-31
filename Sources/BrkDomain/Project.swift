@@ -58,6 +58,7 @@ func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec
         let requested = live?.requestContext == context ? live?.requestedURL : nil
         var spec = PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
         spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
+        spec.boostPolicy = state.boostPolicy(for: page)
         return spec
     }
 }
@@ -288,6 +289,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
                 HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
             } : [],
+            boosts: page == .boosts ? listed.flatMap { state.session.boosts[$0]?.boosts } ?? [] : [],
+            boostMessage: session.boostMessage ?? listed.flatMap { state.session.boostErrors[$0] },
+            canManageBoosts: listed != nil,
             spaces: page == .spaces && doc.kind == .standard ? state.doc.spaceOrder.compactMap { sid in
                 state.doc.spaces[sid].map { value in
                     SpaceManagerRow(id: sid, title: state.displayTitle(of: sid), icon: value.icon,
@@ -324,6 +328,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if session.pendingSpaceDeletion != nil { focus = .none }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
+    else if session.boostEditor != nil { focus = .none }
     else if session.sidebarFocused { focus = .sidebar }
     else if case .library? = session.overlay { focus = .none }
     else if let peekPage { focus = .page(peekPage) }
@@ -360,7 +365,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                          message: $0.message, scope: $0.replacement ? "Only the captured editable field" : "This page", focusRequest: $0.focusRequest)
         }, overlay: overlay, focus: focus,
         enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } }),
-        tabTools: projectTabTools(state, window: id, now: ctx.now)
+        tabTools: projectTabTools(state, window: id, now: ctx.now),
+        boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil
     )
 }
 
@@ -393,6 +399,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
     if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
+    if state.boostProfile(in: window) == nil { enabled.subtract([.newBoost, .editBoost, .newLegacyBoost, .boostGallery]) }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }

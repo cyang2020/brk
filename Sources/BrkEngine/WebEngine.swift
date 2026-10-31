@@ -53,6 +53,8 @@ public protocol WebEngine: AnyObject {
     func output(_ request: OutputRequest)
     func cancelOutput(_ id: OutputID)
 
+    func cancelBoostPick(_ target: SiteTarget)
+    func pickBoostElement(_ target: SiteTarget) async throws -> String?
     func cancelSiteData(_ id: String)
     func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult
     func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog
@@ -104,6 +106,8 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func cancelBoostPick(_ target: SiteTarget) {}
+    public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}
 }

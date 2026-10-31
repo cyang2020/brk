@@ -196,6 +196,10 @@ extension Work {
             live.loading = false
             live.document = .unavailable
         case .audioChanged(let audible): live.audible = audible
+        case .boostFailed(let document, let message):
+            guard live.document == .ready(document), document.browser == token else { return }
+            state.session.windows[window]?.boostMessage = message
+            state.session.windows[window]?.boostEditor?.message = message
         case .websitePolicyApplied(let status):
             guard live.document == .ready(status.document), status.document.browser == token else { return }
             live.websitePolicyStatus = status

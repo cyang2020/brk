@@ -80,6 +80,7 @@ public struct PageSpec: Hashable, Sendable, Codable {
 
     public let muted: Bool
     public var websitePolicy: WebsitePolicy = WebsitePolicy()
+    public var boostPolicy = BoostPolicy()
     public let downloadPolicy: DownloadPolicy
 
     public init(id: PageID, initialURL: URL?, context: BrowsingContext, downloadPolicy: DownloadPolicy = .default, muted: Bool = false) {
@@ -155,6 +156,7 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case loadFailed(code: Int, description: String, url: String)
     /// The renderer process crashed or was killed. The page object stays; see `PageAction.recover`.
     case websitePolicyApplied(WebsitePolicyStatus)
+    case boostFailed(DocumentToken, String)
     case rendererGone
     /// The page closed itself (`window.close()`); the engine has already started closing the browser.
     case closedByPage
@@ -208,6 +210,7 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var extensionFileDialogCallbacks: Int? = nil
     public var websiteFrozen: Bool? = nil
     public var websitePolicyError: String? = nil
+    public var boostError: String? = nil
     /// The page surface's frame in its window, top-left origin, points. Nil when the surface is in no window.
     public var surfaceFrame: CGRect?
     /// Class names of the Chromium views currently inside the surface (embed mode: ViewsCompositorSuperview,

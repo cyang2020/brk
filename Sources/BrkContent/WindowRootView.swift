@@ -26,11 +26,15 @@ public final class WindowRootView: NSView {
     public let findBar: FindBarView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
+    private let zapOverlay: BoostZapOverlayView
+    private let boostEditor: BoostEditorView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
 
     public init(dispatch: @escaping Dispatch) {
+        zapOverlay = BoostZapOverlayView(dispatch: dispatch)
+        boostEditor = BoostEditorView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
         toolbar = AddressToolbarView(dispatch: dispatch)
@@ -43,7 +47,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, toolbar, library, peek, findBar, commandBar, spaceDialog, tabTools] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, toolbar, library, peek, findBar, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
@@ -109,6 +113,8 @@ public final class WindowRootView: NSView {
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome)
+        boostEditor.render(snapshot.boostEditor, in: frames.contentArea, scheme: palette.scheme)
+        zapOverlay.render(snapshot.boostEditor, in: frames.contentArea)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
         lastTheme = snapshot.theme
     }

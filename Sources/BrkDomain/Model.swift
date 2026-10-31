@@ -236,6 +236,8 @@ struct HistoryEntry: Sendable, Equatable {
 // MARK: - Session
 
 struct Session: Sendable, Equatable {
+    var boosts: [ProfileID: BoostCatalog] = [:]
+    var boostErrors: [ProfileID: String] = [:]
     var sidebarDataStatus = "Not connected."
     var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
@@ -270,6 +272,8 @@ struct Session: Sendable, Equatable {
 }
 
 struct WindowSession: Sendable, Equatable {
+    var boostEditor: BoostEditor? = nil
+    var boostMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
     var expandedSplit: ItemID? = nil

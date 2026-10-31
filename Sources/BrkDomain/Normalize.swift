@@ -29,6 +29,11 @@ func normalize(_ state: inout AppState) -> [String] {
     repairTabTools(&state)
     closeEmptyLittleWindows(&state)
     repairLoaded(&state)
+    for (window, session) in state.session.windows {
+        if let editor = session.boostEditor, state.boostProfile(in: window) != editor.profile { state.session.windows[window]?.boostEditor = nil }
+    }
+    state.session.boosts = state.session.boosts.filter { state.doc.profiles[$0.key] != nil }
+    state.session.boostErrors = state.session.boostErrors.filter { state.doc.profiles[$0.key] != nil }
     applyCaps(&state, &repairs)
     return repairs
 }

@@ -30,6 +30,9 @@ public final class AppStore {
     private let clock: any Clock
     private let engine: any WebEngine
     private let stateFile: StateFile
+    private let boostFiles: BoostFiles
+    private var loadedBoostProfiles: Set<ProfileID> = []
+    private var boostPicks: [WindowID: (editor: String, target: SiteTarget)] = [:]
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
@@ -69,7 +72,15 @@ public final class AppStore {
         self.clock = clock
         self.engine = engine
         self.stateFile = stateFile
+        self.boostFiles = BoostFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
+        for row in snapshot.settings.profiles {
+            let id = row.profile.id
+            let (catalog, error) = boostFiles.read(id)
+            state = reduce(state, .system(.boost(.loaded(id, catalog, error: error))), Context(now: clock.now(), newID: { UUID().uuidString })).state
+            loadedBoostProfiles.insert(id)
+        }
+        snapshot = project(state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
     }
 
     /// The first render after launch: windows and pages from the restored snapshot, no transition. Runs as a
@@ -210,6 +221,20 @@ public final class AppStore {
     /// into a Chromium view only sticks in a key window.
     private func publish(docChanged: Bool) {
         snapshot = projected()
+        let profiles = Set(snapshot.settings.profiles.map { $0.profile.id })
+        for profile in profiles.subtracting(loadedBoostProfiles) {
+            let (catalog, error) = boostFiles.read(profile)
+            queue.append(.system(.boost(.loaded(profile, catalog, error: error))))
+        }
+        for profile in loadedBoostProfiles.subtracting(profiles) {
+            do { try boostFiles.remove(profile) } catch { log.error("Could not remove Boost files: \(error.localizedDescription)") }
+        }
+        loadedBoostProfiles = profiles
+        for (window, pick) in boostPicks {
+            if snapshot.windows[window]?.boostEditor?.pickID != pick.editor || snapshot.windows[window]?.boostEditor?.picking != true {
+                engine.cancelBoostPick(pick.target); boostPicks[window] = nil
+            }
+        }
         suggestions.reconcile(snapshot)
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
@@ -330,6 +355,7 @@ public final class AppStore {
         for effect in effects {
             switch effect {
             case .find(let request): engine.find(request)
+            case .boost(let request): runBoost(request)
             case .siteRequest(let request):
                 if let window = windows[request.window]?.window { siteTools.run(request, in: window) }
             case .iconPicker(let window, let item):
@@ -543,5 +569,64 @@ final class PopupTarget: NSObject {
 
     @objc private func fire(_ sender: NSMenuItem) {
         if let command = commands[sender.tag] { choose?(command) }
+    }
+}
+
+extension AppStore {
+    private func runBoost(_ effect: BoostEffect) {
+        func failure(_ window: WindowID, _ error: any Error) { dispatch(.system(.boost(.failed(window, error.localizedDescription)))) }
+        switch effect {
+        case .write(let window, let profile, let catalog, let editor):
+            guard state.boostProfileForIO(window) == profile else { return }
+            do {
+                try boostFiles.write(catalog, profile: profile)
+                dispatch(.system(.boost(.written(window, profile, catalog, editor: editor))))
+            } catch { failure(window, error) }
+        case .confirm(let id, let editor, let boost):
+            guard let owner = windows[id]?.window, owner.attachedSheet == nil else { return }
+            let alert = NSAlert()
+            alert.messageText = "Allow JavaScript in “\(boost.name)”?"
+            alert.informativeText = "This code can read and change matching pages: \(boost.scope.label). Only allow code you trust.\n\nChanging the code, scope or private-window permission requires confirmation again."
+            alert.addButton(withTitle: "Allow JavaScript & Save"); alert.addButton(withTitle: "Cancel")
+            alert.buttons[0].setAccessibilityIdentifier(ViewID.boostControl("confirm-javascript").identifier)
+            alert.beginSheetModal(for: owner) { [weak self] result in
+                guard result == .alertFirstButtonReturn else { return }
+                self?.dispatch(.system(.boost(.approved(id, editor, boost))))
+            }
+        case .pick(let window, let editor, let target):
+            boostPicks[window] = (editor, target)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let selector = try? await self.engine.pickBoostElement(target)
+                self.dispatch(.system(.boost(.picked(window, editor, target, selector))))
+            }
+        case .importFile(let window, let profile, let selected):
+            let read: (URL) -> Void = { [weak self] file in
+                guard let self, self.state.boostProfileForIO(window) == profile else { return }
+                do {
+                    let values = try BoostCodec.imported(Data(contentsOf: file), newID: { UUID().uuidString })
+                    self.dispatch(.system(.boost(.imported(window, profile, values))))
+                } catch { self.dispatch(.system(.boost(.failed(window, "Cannot install Boost: " + error.localizedDescription)))) }
+            }
+            if let selected { read(selected) }
+            else if let owner = windows[window]?.window, owner.attachedSheet == nil {
+                let panel = NSOpenPanel(); panel.title = "Install Boost from File"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+                panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { read(url) } }
+            }
+        case .exportFile(let window, let boost, let selected):
+            guard let profile = state.boostProfileForIO(window) else { return }
+            let write: (URL) -> Void = { [weak self] file in
+                guard let self, self.state.boostProfileForIO(window) == profile else { return }
+                do {
+                    try BoostCodec.export(boost).write(to: file, options: .atomic)
+                    self.dispatch(.system(.boost(.failed(window, "Exported “\(file.lastPathComponent)”. JavaScript approval and private permission are not exported."))))
+                } catch { self.dispatch(.system(.boost(.failed(window, "Cannot export Boost: " + error.localizedDescription)))) }
+            }
+            if let selected { write(selected) }
+            else if let owner = windows[window]?.window, owner.attachedSheet == nil {
+                let panel = NSSavePanel(); panel.title = "Export Boost"; panel.nameFieldStringValue = "Boost.brkboost.json"
+                panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { write(url) } }
+            }
+        }
     }
 }

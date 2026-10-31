@@ -37,6 +37,14 @@ final class ChromePage: CefBrowserDelegate {
     var approvedExtensionDirectory: (document: DocumentToken, directory: URL)?
     var websiteStyleOwner: (document: DocumentToken, id: String)?
     var websitePolicy = WebsitePolicy()
+    var boostPolicy = BoostPolicy()
+    var boostRevision: UInt64 = 0
+    var boostDocument: DocumentToken?
+    var boostOwner = UUID().uuidString
+    var boostExecuted: Set<String> = []
+    var boostError: String?
+    var boostPickerGeneration: UInt64 = 0
+    var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
     var permissionRequests: [String: PagePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
     var policyRevision: UInt64 = 0
     var websiteError: String?
@@ -97,6 +105,7 @@ final class ChromePage: CefBrowserDelegate {
         }
         surface.adopt(chrome)
         applyWebsitePolicy(spec.websitePolicy)
+        applyBoostPolicy(spec.boostPolicy)
     }
 
     func resolveAudioTarget() async {
@@ -145,6 +154,7 @@ final class ChromePage: CefBrowserDelegate {
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
         facts.websiteFrozen = frozen
         facts.websitePolicyError = websiteError
+        facts.boostError = boostError
         return facts
     }
 
