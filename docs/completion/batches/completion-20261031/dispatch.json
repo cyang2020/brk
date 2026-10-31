@@ -115,7 +115,19 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered PASS (A099 implemented)",
+      "delivered_commit": "08586d4eccc230619b1dc4b16dbfda9ac0aee078",
+      "branch": "t3/implement-boosts-slice",
+      "reviews": [
+        {
+          "model": "claude-fable-5-1",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A849ffe75-c1ea-453d-a0d2-3c18370bda5a"
+        },
+        {
+          "model": "claude-opus-5-5",
+          "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3A55548974-ec49-4d09-9479-abcca64d5fa1"
+        }
+      ]
     },
     {
       "slice": "captures-media",
@@ -132,5 +144,9 @@
     "at": "2026-10-31T14:50:00Z",
     "change": "--timeout 3600 / --wait 3600; steer messages sent to the seven running wave-1 workers",
     "commit": "6260eb3"
+  },
+  "integration_branch": {
+    "name": "integration/completion-20261031",
+    "purpose": "one unified build and full regression per delivery; wave-1 heads merged by the parent; fast-forwards main after acceptance"
   }
 }
