@@ -23,7 +23,7 @@ public enum SidebarLayout {
         return space
     }
 
-    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem]) -> SidebarFrames {
+    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true) -> SidebarFrames {
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
         let lights = CGPoint(x: frame.minX + w.trafficLightLeft.value, y: frame.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
@@ -37,7 +37,7 @@ public enum SidebarLayout {
         let cells = DockLayout.cells(count: dock.count, in: dockRect)
         var dockSpaces: [SpaceID: CGRect] = [:]
         for (item, rect) in zip(dock, cells.spaces) { dockSpaces[item.id] = rect }
-        let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: Metrics.tablist.spaceHeaderHeight.value)
+        let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: headerVisible ? Metrics.tablist.spaceHeaderHeight.value : 0)
         let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, dockRect.minY - header.maxY))
         return SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
                              favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width),

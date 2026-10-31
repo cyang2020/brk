@@ -146,6 +146,8 @@ struct WindowDoc: Sendable, Equatable {
     var splitFocus: [ItemID: ItemID] = [:]
     var sidebarVisible: Bool
     var sidebarWidth: Double
+    var toolbarVisible: Bool = false
+    var spaceHeaderVisible: Bool = true
 
     /// The container this window's sidebar shows. Exhaustive over `kind`, so a new window kind has to say where
     /// its items live before it compiles.
@@ -255,6 +257,9 @@ struct WindowSession: Sendable, Equatable {
     var overlayOpens: Int
     var peek: Bool
     var renaming: ItemID?
+    var pendingSpaceDeletion: SpaceDeletionRequest? = nil
+    var spaceExport: SpaceExportOperation? = nil
+    var spaceExportMessage: String? = nil
     var dialog: SpaceDialog?
     /// Arc: `ProfilesUI` dialogs (create, change the space's profile, delete). F2 owns the rules.
     var profileDialog: ProfileDialog?

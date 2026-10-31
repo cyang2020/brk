@@ -28,7 +28,10 @@ public final class SidebarView: NSView {
     let resizeHandle: ResizeHandleView
     let revealStrip: RevealStripView
     private var last: Slice?
-    private var floatingWatch: Task<Void, Never>?
+    private var floatingWatch: FloatingSidebarTracking?
+    private var swipe = SpaceSwipe()
+    private var swallowMomentum = false
+    private var canSwipe = false
 
     /// Everything `render` reads. Equal slices change nothing, so render returns before touching a view.
     struct Slice: Equatable {
@@ -76,12 +79,21 @@ public final class SidebarView: NSView {
         superview.addSubview(resizeHandle, positioned: .above, relativeTo: self)
     }
 
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil {
+            stopFloatingWatch()
+            resetSwipe()
+        }
+    }
+
     /// The root hides this view while the sidebar is hidden; the resize handle beside it goes with it.
     public override var isHidden: Bool {
         didSet { resizeHandle.sidebarHidden = isHidden }
     }
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
+        canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
         let slice = Slice(sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
@@ -89,6 +101,7 @@ public final class SidebarView: NSView {
         guard slice != last else { return }
         let previous = last
         last = slice
+        resizeHandle.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         resizeHandle.render(frames.resizeHandle, width: snapshot.sidebar.width, palette: palette)
         revealStrip.render(frames.revealStrip)
         guard let f = frames.sidebar else {
@@ -110,14 +123,59 @@ public final class SidebarView: NSView {
         urlPill.render(snapshot.urlPill, palette: palette)
         favorites.frame = local(f.favoritesTray)
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
+        spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette)
         dock.frame = local(f.dock)
+        dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(snapshot.dock, frames: f, palette: palette)
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
+    }
+
+    public func handleScrollWheel(_ event: NSEvent) -> Bool {
+        // The native window's callback already scopes this invocation. CG-backed in-process events have no window.
+        let ownsEvent = event.window == nil || event.window === window
+        guard ownsEvent, canSwipe, !isHiddenOrHasHiddenAncestor, window?.isVisible == true, window?.attachedSheet == nil else {
+            resetSwipe(); return false
+        }
+        if !event.momentumPhase.isEmpty {
+            let consumed = swallowMomentum
+            if event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) { swallowMomentum = false }
+            return consumed
+        }
+        let phase: SpaceSwipe.Phase
+        if event.phase.contains(.began) { phase = .began; swallowMomentum = false }
+        else if event.phase.contains(.cancelled) { phase = .cancelled }
+        else if event.phase.contains(.ended) { phase = .ended }
+        else if event.phase.contains(.changed) { phase = .changed }
+        else { return false }
+        let point = convert(event.locationInWindow, from: nil)
+        let result = swipe.update(horizontal: event.scrollingDeltaX, vertical: event.scrollingDeltaY, phase: phase,
+                                  startsInSidebar: bounds.contains(point), precise: event.hasPreciseScrollingDeltas)
+        let offset = min(max(swipe.translation, -bounds.width * 0.65), bounds.width * 0.65)
+        tablist.layer?.transform = CATransform3DMakeTranslation(offset, 0, 0)
+        tablist.alphaValue = 1 - min(abs(offset) / max(bounds.width, 1), 0.65)
+        if phase == .ended || phase == .cancelled {
+            swallowMomentum = result.consumed
+            resetSwipe()
+            if let step = result.step {
+                let order = last?.dock ?? []
+                if let current = order.firstIndex(where: \.active), order.indices.contains(current + step) {
+                    if last?.sidebar.hapticsEnabled == true { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+                    dispatch(.space(.step(step > 0 ? .next : .previous)))
+                }
+            }
+        }
+        return result.consumed
+    }
+
+    private func resetSwipe() {
+        swipe = SpaceSwipe()
+        tablist.layer?.transform = CATransform3DIdentity
+        tablist.alphaValue = 1
     }
 
     /// The palette of the last render (the drag preview's card color).
@@ -150,32 +208,21 @@ public final class SidebarView: NSView {
         }
     }
 
-    // MARK: Floating sidebar: stays open while the pointer is within width + 80 of the window's left edge.
-    // The pointer is polled while floating rather than waiting for an exit event: the floating sidebar appears under
-    // a pointer that never "entered" it, so AppKit would not report it leaving.
-
     private func watchFloatingExit() {
-        guard floatingWatch == nil else { return }
-        floatingWatch = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Draw.floatingDismissPoll.value))
-                guard let self, let window = self.window, let slice = self.last, slice.floats, let f = slice.frames else { return }
-                if self.drag.isActive || self.tablist.isRenaming || self.favorites.isRenaming { continue }
-                let pointer = self.rootPoint(fromWindow: window.mouseLocationOutsideOfEventStream)
-                let m = Metrics.sidebar
-                if pointer.x > f.frame.width + m.floatingStayOpenSlack.value || pointer.x < -m.outsideHoverZoneWidth.value {
-                    self.floatingWatch = nil
-                    self.dispatch(.sidebar(.peek(false)))
-                    return
-                }
-            }
-        }
+        guard floatingWatch == nil, let root = superview else { return }
+        floatingWatch = FloatingSidebarTracking(root: root, staysOpen: { [weak self] in
+            guard let self else { return false }
+            return self.drag.isActive || self.tablist.isRenaming || self.favorites.isRenaming || self.window?.attachedSheet != nil
+        }, boundary: { [weak self] in
+            (self?.last?.frames?.frame.maxX ?? 0) + Metrics.sidebar.floatingStayOpenSlack.value
+        }, dismiss: { [weak self] in self?.dispatch(.sidebar(.peek(false))) })
     }
 
     private func stopFloatingWatch() {
-        floatingWatch?.cancel()
+        floatingWatch?.stop()
         floatingWatch = nil
     }
+
 }
 
 /// The title row: sidebar toggle after the traffic lights, then back, forward and reload (stop while loading)
@@ -546,6 +593,7 @@ final class ResizeHandleView: NSView {
     private let dispatch: Dispatch
     private let indicator = NSView()
     private var drag: SidebarResizeDrag?
+    var hapticsEnabled = true
     private var startX = 0.0
     private var lastSample: (x: Double, time: TimeInterval) = (0, 0)
     private var width = Metrics.sidebar.defaultWidth.value
@@ -609,13 +657,13 @@ final class ResizeHandleView: NSView {
         lastSample = (x, event.timestamp)
         let wasSnapped = drag.snappedAt != nil
         let next = drag.update(translation: x - startX, velocity: velocity, time: event.timestamp)
-        if !wasSnapped, drag.snappedAt != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+        if hapticsEnabled, !wasSnapped, drag.snappedAt != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
         self.drag = drag
         dispatch(.sidebar(.resize(width: next)))
     }
 
     override func mouseUp(with event: NSEvent) {
-        if drag?.snappedAt != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+        if hapticsEnabled, drag?.snappedAt != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
         drag = nil
         indicator.isHidden = true
         syncHidden()
@@ -633,6 +681,7 @@ final class RevealStripView: NSView {
         self.dispatch = dispatch
         super.init(frame: .zero)
         isHidden = true
+        clipsToBounds = true
         identify(.revealStrip)
     }
 
@@ -657,7 +706,7 @@ final class RevealStripView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        guard !isHidden else { return }
+        guard !isHidden, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         dispatch(.sidebar(.peek(true)))
     }
 }

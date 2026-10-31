@@ -168,6 +168,41 @@ final class EventInjector {
         }
     }
 
+    func drag(from: CGPoint, to: CGPoint, cancel: Bool, in window: NSWindow) throws {
+        NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+        guard let target = window.contentView?.superview?.hitTest(from) ?? window.contentView?.hitTest(from) else { throw InjectionError("no drag source") }
+        let down = try mouse(.leftMouseDown, at: from, modifiers: [], clickCount: 1, in: window)
+        target.mouseDown(with: Self.dequeue(down))
+        for i in 1...12 {
+            let t = Double(i) / 12
+            let point = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+            target.mouseDragged(with: try mouse(.leftMouseDragged, at: point, modifiers: [], clickCount: 1, in: window))
+        }
+        if cancel { NSApp.sendEvent(Self.dequeue(try event(code: 53, down: true, flags: []))) }
+        target.mouseUp(with: try mouse(.leftMouseUp, at: to, modifiers: [], clickCount: 1, in: window))
+    }
+
+    func scroll(at point: CGPoint, horizontal: Double, vertical: Double, cancel: Bool, in window: NSWindow) throws {
+        NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+        for index in 0...7 {
+            let phase: CGScrollPhase = index == 0 ? .began : (index == 7 ? (cancel ? .cancelled : .ended) : .changed)
+            guard let cg = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2,
+                                   wheel1: index == 0 || index == 7 ? 0 : Int32(vertical / 6),
+                                   wheel2: index == 0 || index == 7 ? 0 : Int32(horizontal / 6), wheel3: 0) else { throw InjectionError("scroll CGEvent") }
+            cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+            cg.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+            cg.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(window.windowNumber))
+            // A CG-backed event has no AppKit window. Rebase it into the explicit target's window coordinates,
+            // then use the same window delivery as the existing inactive-window key/mouse adapter.
+            cg.location = CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - point.y)
+            cg.timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            guard let event = NSEvent(cgEvent: cg) else { throw InjectionError("scroll NSEvent") }
+            let current = Self.dequeue(event)
+            print("[SpaceTools scroll] window=\(window.windowNumber) eventWindow=\(event.windowNumber) point=\(event.locationInWindow) phase=\(event.phase.rawValue) dx=\(event.scrollingDeltaX) precise=\(event.hasPreciseScrollingDeltas)")
+            window.sendEvent(current)
+        }
+    }
+
     func rightClick(at point: CGPoint, in window: NSWindow) throws {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)

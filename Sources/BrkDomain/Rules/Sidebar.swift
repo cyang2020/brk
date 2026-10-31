@@ -85,14 +85,18 @@ extension Work {
 
     mutating func spaces(_ command: SpaceCommand, in window: WindowID) {
         switch command {
-        case .create(let title, let icon, let theme):
+        case .requestDelete(let id): requestSpaceDeletion(id, in: window)
+        case .confirmDelete(let id, let token, let confirmed): confirmSpaceDeletion(id, token: token, confirmed: confirmed, in: window)
+        case .exportIntoFolder(let id): exportSpace(id, in: window)
+        case .create(let title, let icon, let theme, let profile):
+            guard state.doc.windows[window]?.kind == .standard, state.doc.profiles[profile] != nil else { return }
             // Fresh Pinned and Today roots; a blank title is stored "" and shown as "Space N" by dock position. The
             // dispatching window switches to it (nothing shown) and the dialog closes.
             let space = SpaceID(ctx.newID()), pinned = ItemID(ctx.newID()), today = ItemID(ctx.newID())
             guard state.doc.tree.makeRoot(pinned, .pinned(space), createdAt: ctx.now),
                   state.doc.tree.makeRoot(today, .today(space), createdAt: ctx.now) else { return }
             state.doc.spaces[space] = Space(id: space, title: title.trimmingCharacters(in: .whitespacesAndNewlines), icon: icon,
-                                            theme: clamped(theme), profile: .default, pinnedRoot: pinned, todayRoot: today, pinnedCollapsed: false)
+                                            theme: clamped(theme), profile: profile, pinnedRoot: pinned, todayRoot: today, pinnedCollapsed: false)
             state.doc.spaceOrder.append(space)
             showSpace(space, in: window)
             if state.session.windows[window]?.dialog != nil { state.session.windows[window]!.dialog = nil }
@@ -144,6 +148,10 @@ extension Work {
 
     mutating func sidebar(_ command: SidebarCommand, in window: WindowID) {
         switch command {
+        case .toggleToolbar:
+            state.doc.windows[window]!.toolbarVisible.toggle()
+        case .toggleSpaceHeader:
+            state.doc.windows[window]!.spaceHeaderVisible.toggle()
         case .toggle:
             state.doc.windows[window]!.sidebarVisible.toggle()
             if state.session.windows[window]?.peek == true { state.session.windows[window]!.peek = false }
@@ -204,6 +212,20 @@ extension Work {
                 entry("New Folder", .item(.newFolder)),
                 entry("New Space", .sidebar(.openDialog(.newSpace))),
             ])
+        case .spaceControls(let id):
+            var model = menuModel(for: .space(id), in: window)
+            guard !model.entries.isEmpty else { return model }
+            model.entries = model.entries.map { entry in
+                if case .action(let title, .space(.delete(let id)), let enabled) = entry {
+                    return .action(title: title, command: .space(.requestDelete(id)), enabled: enabled)
+                }
+                return entry
+            }
+            model.entries.insert(contentsOf: [
+                entry(state.doc.windows[window]?.spaceHeaderVisible == true ? "Hide Space Header" : "Show Space Header", .sidebar(.toggleSpaceHeader)),
+                entry("Manage Spaces…", .library(.open(.spaces))),
+            ], at: model.entries.count - 1)
+            return model
         case .space(let id):
             guard state.doc.spaces[id] != nil else { return MenuModel(entries: []) }
             let edit = Command.sidebar(.openDialog(.editSpace(.space(id))))
@@ -303,6 +325,8 @@ extension Work {
             let missedRelease = held == was && held.contains(.control)
             if controlChanged || missedRelease { commitCycle(in: window) }
         case .closed:
+            state.session.windows[window]?.pendingSpaceDeletion = nil
+            state.session.windows[window]?.spaceExport = nil
             // A standard window keeps its WindowDoc when it is the last one (the next launch restores it; quitting
             // after the last window closes is AppKit's applicationShouldTerminateAfterLastWindowClosed) and is
             // removed otherwise; an ephemeral window goes with its tree (`WindowCommand.close` does the archiving).
@@ -360,7 +384,14 @@ extension Work {
 /// A theme as the reducer stores it: 1 to 3 colors (the default primary when none), noise and intensity in 0...1.
 func clamped(_ theme: SpaceTheme) -> SpaceTheme {
     var t = theme
-    t.colors = t.colors.isEmpty ? SpaceTheme.default.colors : Array(t.colors.prefix(3))
+    t.colors = (t.colors.isEmpty ? SpaceTheme.default.colors : Array(t.colors.prefix(3))).map {
+        RGBA(finite($0.red, fallback: 0, range: 0...1), finite($0.green, fallback: 0, range: 0...1),
+             finite($0.blue, fallback: 0, range: 0...1), finite($0.alpha, fallback: 1, range: 0...1))
+    }
+    if var variants = t.variants {
+        variants.light = variants.light.normalized; variants.dark = variants.dark.normalized
+        t.variants = variants
+    }
     t.noise = t.noise.isFinite ? min(max(t.noise, 0), 1) : SpaceTheme.default.noise
     t.intensity = t.intensity.isFinite ? min(max(t.intensity, 0), 1) : SpaceTheme.default.intensity
     return t

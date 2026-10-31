@@ -14,7 +14,7 @@ extension Work {
             // typed query survives); anything else is a new opening, replacing an open archive.
             var target = CommandBarTarget.newTab
             if mode == .editCurrent, let tab = state.focusedPane(in: window) {
-                target = .navigate(tab: tab, overPill: state.doc.windows[window]?.sidebarVisible ?? false)
+                target = .navigate(tab: tab, overPill: state.doc.windows[window].map { $0.sidebarVisible || $0.toolbarVisible } ?? false)
             }
             if case .commandBar(_, let open)? = state.session.windows[window]?.overlay, open == target { return }
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)

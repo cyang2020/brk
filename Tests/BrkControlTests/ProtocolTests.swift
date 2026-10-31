@@ -12,6 +12,7 @@ final class ProtocolTests: XCTestCase {
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL
     }
 
@@ -28,6 +29,10 @@ final class ProtocolTests: XCTestCase {
         case .type: .type
         case .click: .click
         case .captureContextMenu: .captureContextMenu
+        case .pointerDrag: .pointerDrag
+        case .scrollGesture: .scrollGesture
+        case .sheetButton: .sheetButton
+        case .selectSheetDirectory: .selectSheetDirectory
         case .hover: .hover
         case .screenshot: .screenshot
         case .pixel: .pixel
@@ -65,6 +70,10 @@ final class ProtocolTests: XCTestCase {
         case .click:
             return [.click(view: .dockSpace(SpaceID("s1")), point: nil, modifiers: nil, count: 1),
                     .click(view: nil, point: CGPoint(x: 400, y: 120), modifiers: "cmd", count: 2)]
+        case .pointerDrag: return [.pointerDrag(from: .zero, to: CGPoint(x: 80, y: 50), cancel: false)]
+        case .scrollGesture: return [.scrollGesture(at: .zero, horizontal: -120, vertical: 0, cancel: true)]
+        case .sheetButton: return [.sheetButton(title: "Cancel")]
+        case .selectSheetDirectory: return [.selectSheetDirectory(path: "/tmp/owned-fixture")]
         case .hover: return [.hover(point: CGPoint(x: 5, y: 388))]
         case .screenshot: return [.screenshot(window: nil, path: "/tmp/shots/0-launch.png")]
         case .pixel: return [.pixel(window: nil, point: CGPoint(x: 4, y: 200))]

@@ -1,0 +1,4 @@
+<!doctype html><meta charset="utf-8"><title>Space scroll fixture</title>
+<style>html,body{margin:0}body{width:3200px;height:2200px;background:linear-gradient(100deg,#fff,#ddd)}p{position:fixed;left:30px;top:30px;font:20px system-ui}</style>
+<p>Scroll this public fixture. Page scrolling must keep the active Space.</p>
+<script>addEventListener('scroll',()=>{document.title='page-scroll:'+Math.round(scrollX)+':'+Math.round(scrollY)});</script>

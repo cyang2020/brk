@@ -15,7 +15,10 @@ import BrkUIKit
 /// Native views above Chromium's moved views draw and take focus normally (spike unknown 2, embed mode).
 @MainActor
 public final class WindowRootView: NSView {
+    private let deleteConfirmation = SpaceDeleteConfirmation()
+    private let dispatch: Dispatch
     public let background = ThemeBackgroundView(frame: .zero)
+    public let toolbar: AddressToolbarView
     public let sidebar: SidebarView
     public let content: ContentAreaView
     public let library: LibraryView
@@ -26,6 +29,8 @@ public final class WindowRootView: NSView {
     private var sidebarFloats = false
 
     public init(dispatch: @escaping Dispatch) {
+        self.dispatch = dispatch
+        toolbar = AddressToolbarView(dispatch: dispatch)
         sidebar = SidebarView(dispatch: dispatch)
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
@@ -34,7 +39,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, library, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, toolbar, library, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
     }
 
@@ -57,6 +62,8 @@ public final class WindowRootView: NSView {
         }
     }
 
+    public func handleScrollWheel(_ event: NSEvent) -> Bool { sidebar.handleScrollWheel(event) }
+
     /// Applies one snapshot. `surface` looks up the engine's view for a page (nil until the page exists).
     ///
     /// Order: background (crossfade when the theme changed and this is not the first render), sidebar (anchored or
@@ -74,6 +81,7 @@ public final class WindowRootView: NSView {
         }
         sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
         content.render(snapshot.content, frames: frames, palette: palette, surface: surface)
+        toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         var librarySnapshot: LibrarySnapshot?, barSnapshot: CommandBarSnapshot?, peekSnapshot: PeekSnapshot?
         switch snapshot.overlay {
         case .library(let l)?: librarySnapshot = l
@@ -84,8 +92,10 @@ public final class WindowRootView: NSView {
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
         peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
+        spaceDialog.profiles = snapshot.spaceProfiles
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
+        deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
         lastTheme = snapshot.theme
     }
 }

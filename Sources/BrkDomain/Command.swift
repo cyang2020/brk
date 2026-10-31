@@ -167,9 +167,12 @@ public enum ItemCommand: Hashable, Sendable, Codable {
 }
 
 public enum SpaceCommand: Hashable, Sendable, Codable {
-    case create(title: String, icon: SpaceIcon, theme: SpaceTheme)
+    case create(title: String, icon: SpaceIcon, theme: SpaceTheme, profile: ProfileID = .default)
     case update(SpaceID, title: String?, icon: SpaceIcon?, theme: SpaceTheme?)
     /// Archives every tab in the space. Refused for the last space.
+    case requestDelete(SpaceID)
+    case confirmDelete(SpaceID, token: String, confirmed: Bool)
+    case exportIntoFolder(SpaceID)
     case delete(SpaceID)
     case move(SpaceID, index: Int)
     /// Dock icon click.
@@ -198,6 +201,8 @@ public enum SidebarCommand: Hashable, Sendable, Codable {
     case resize(width: Double)
     /// Hidden sidebar: pointer reached the left edge (true) or left the floating sidebar (false).
     case peek(Bool)
+    case toggleToolbar
+    case toggleSpaceHeader
     case openDialog(SpaceDialogRequest?)
     /// Right-click a row or a space, or the "+" button. `at` is in window coordinates.
     case popupMenu(PopupMenuRequest, at: CGPoint)
@@ -211,6 +216,8 @@ public enum SpaceDialogRequest: Hashable, Sendable, Codable {
 public enum PopupMenuRequest: Hashable, Sendable, Codable {
     case item(ItemID)
     case space(SpaceID)
+    /// Product controls include confirmation and view preferences; `.space` retains the existing model-query contract.
+    case spaceControls(SpaceID)
     case plusButton
 }
 
@@ -381,6 +388,7 @@ public enum SystemEvent: Sendable, Equatable {
     case contextDisposed(ContextDisposalResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
+    case spaceExportFinished(WindowID, token: String, SpaceExportOutcome)
     case window(WindowID, WindowEvent)
     /// A link from another app (Apple Event GetURL, BrkApp/Lifecycle.swift). Routed by `Doc.linkRoutes`, else
     /// `LinkSettings.defaultRoute` and `externalLinksInLittleArc`. F3.
@@ -418,7 +426,8 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
+        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize), .sidebar(.openDialog),
+             .space(.requestDelete), .space(.confirmDelete), .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         default: false
         }
     }

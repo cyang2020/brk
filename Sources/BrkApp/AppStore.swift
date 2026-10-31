@@ -41,6 +41,8 @@ public final class AppStore {
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
     let destinations = DownloadSheets()
+    private let spacePanels = SpaceToolsPanels()
+    private var appearanceObservation: NSKeyValueObservation?
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -54,6 +56,9 @@ public final class AppStore {
     /// dispatch cycle: placing a window reports its geometry (`windowDidResize`), and that input must queue behind
     /// this publish like any other re-entrant one, not run in the middle of it.
     public func start() {
+        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            Task { @MainActor in self?.refresh() }
+        }
         dispatching = true
         for request in state.pendingContextDisposals { engine.disposeContext(request) }
         publish(docChanged: false)
@@ -89,6 +94,8 @@ public final class AppStore {
 
     /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down. A failure is
     /// logged and reported; the quit goes on (the debounced copy on disk is the fallback).
+    public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll() }
+
     @discardableResult
     public func flush() -> Bool {
         do { try stateFile.writeNow(StateCodec.encode(state)); return true } catch {
@@ -104,6 +111,11 @@ public final class AppStore {
         let visible = window.content.panes.contains { $0.content == .page(page) }
             || { if case .peek(let peek)? = window.overlay { return peek.page == page }; return false }()
         return visible ? page.window : nil
+    }
+
+    func selectSpaceExportFixtureDirectory(_ directory: URL, owner: WindowID) -> Bool {
+        guard snapshot.windows[owner]?.kind == .standard else { return false }
+        return spacePanels.chooseFixtureDirectory(directory, owner: owner)
     }
 
     public func windowController(_ id: WindowID?) -> WindowController? {
@@ -122,6 +134,7 @@ public final class AppStore {
     }
 
     private func apply(_ input: Input) -> Bool {
+        if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         // Revocation must happen before reconcile sees the new demand, including synchronous engine callbacks.
         for effect in t.effects { if case .disposeContext(let request) = effect { engine.disposeContext(request) } }
@@ -142,6 +155,7 @@ public final class AppStore {
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             destinations.ownerGone(id)
+            spacePanels.ownerGone(id)
             windows[id]?.window.orderOut(nil)
             windows[id] = nil
         }
@@ -175,7 +189,8 @@ public final class AppStore {
     }
 
     private func projected() -> AppSnapshot {
-        project(state, ProjectionContext(now: clock.now(), calendar: calendar))
+        project(state, ProjectionContext(now: clock.now(), calendar: calendar,
+                                         systemScheme: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light))
     }
 
     private func renderWindows() {
@@ -203,7 +218,7 @@ public final class AppStore {
                 }
             case .app(let effect):
                 switch effect {
-                case .quit: Quit.request()
+                case .quit: spacePanels.cancelAll(); Quit.request()
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
@@ -218,6 +233,13 @@ public final class AppStore {
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 menu.popUp(positioning: nil, at: at, in: controller.root)
+            case .exportSpaceFolder(let owner, let token, let document):
+                guard let window = windows[owner]?.window else {
+                    dispatch(.system(.spaceExportFinished(owner, token: token, .cancelled))); continue
+                }
+                spacePanels.export(document, owner: owner, token: token, window: window) { [weak self] outcome in
+                    self?.dispatch(.system(.spaceExportFinished(owner, token: token, outcome)))
+                }
             case .export(let document):
                 ShareExport.run(document, in: windowController(nil)?.window)
             case .ai(let id, let task, let choice):

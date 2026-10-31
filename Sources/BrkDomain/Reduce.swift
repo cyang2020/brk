@@ -115,7 +115,7 @@ struct Work {
             for window in state.doc.windows.keys.sorted() { commitCycle(in: window) }
         }
         switch event {
-        case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
+        case .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
         case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
@@ -129,6 +129,7 @@ struct Work {
                 if state.doc.deletingProfiles[profile]?.id == id { state.doc.deletingProfiles[profile]?.failure = reason }
             default: break
             }
+        case .spaceExportFinished(let window, let token, let outcome): spaceExportFinished(window, token: token, outcome: outcome)
         case .clockTick: sweepAutoArchive()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)

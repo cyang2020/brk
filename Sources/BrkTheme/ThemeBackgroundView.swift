@@ -20,6 +20,7 @@ import QuartzCore
 public final class ThemeBackgroundView: NSView {
     private let renderer: ThemeRenderer?
     private var link: CADisplayLink?
+    private var fallbackTheme: ResolvedTheme?
 
     public override init(frame: NSRect) {
         renderer = ThemeRenderer(device: MTLCreateSystemDefaultDevice())
@@ -52,10 +53,37 @@ public final class ThemeBackgroundView: NSView {
     /// configuration is `single` or `transitioning`); otherwise it switches at once (launch, restore). A new theme
     /// during a crossfade fades on from what is on screen.
     public func show(_ theme: ResolvedTheme, animated: Bool) {
-        guard let renderer, theme != renderer.target else { return }
+        guard let renderer else {
+            guard fallbackTheme != theme else { return }
+            fallbackTheme = theme
+            let image = Self.fallbackImage(theme)
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(animated ? Metrics.motion.themeCrossfade.value : 0)
+            layer?.contents = image
+            CATransaction.commit()
+            return
+        }
+        guard theme != renderer.target else { return }
         let duration = animated ? Metrics.motion.themeCrossfade.value : 0
         renderer.transition(to: theme, duration: duration, at: CACurrentMediaTime())
         if duration > 0 { animate() } else { needsDisplay = true }
+    }
+
+    /// The no-Metal path preserves the positioned gradient and wash. Procedural texture remains a GPU approximation.
+    static func fallbackImage(_ theme: ResolvedTheme) -> CGImage? {
+        let side = 64
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(side * side * 4)
+        for y in 0..<side {
+            for x in 0..<side {
+                let color = themeSample(theme, at: ThemePoint(x: (Double(x) + 0.5) / Double(side), y: (Double(y) + 0.5) / Double(side)))
+                bytes += [UInt8((color.red * 255).rounded()), UInt8((color.green * 255).rounded()), UInt8((color.blue * 255).rounded()), 255]
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
+                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
     }
 
     public override var wantsUpdateLayer: Bool { true }
