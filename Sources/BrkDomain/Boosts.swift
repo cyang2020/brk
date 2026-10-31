@@ -31,11 +31,13 @@ public struct BoostEditor: Equatable, Sendable, Codable {
     public var picking = false
     public var pickID: String? = nil
     public var message: String? = nil
+    /// Set by the first Escape on a dirty draft; the next Escape closes.
+    public var confirmDiscard = false
 }
 
 public enum BoostCommand: Hashable, Sendable, Codable {
     case create, legacy, editCurrent, edit(String), gallery, preset(String)
-    case update(Boost), save, cancel, zap
+    case update(Boost), save, cancel, discard, zap
     case enable(String, Bool), remove(String), export(String), importFile
     /// Selected-file commands also serve automation; both are restricted to the invoking public profile.
     case importSelected(URL), exportSelected(String, URL)

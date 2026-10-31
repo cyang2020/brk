@@ -47,7 +47,10 @@ extension Work {
             }
             state.session.windows[window]?.boostEditor = BoostEditor(id: ctx.newID(), profile: profile, target: target, draft: draft)
         case .editCurrent:
-            if let target = state.siteTarget(in: window), let boost = catalog.boosts.first(where: { $0.scope.matches(target.origin.url) }) {
+            // Most specific scope first: an origin Boost beats a host Boost beats an all-sites Boost (review F6).
+            func rank(_ scope: BoostScope) -> Int { switch scope { case .origin: 0; case .host: 1; case .allSites: 2 } }
+            if let target = state.siteTarget(in: window),
+               let boost = catalog.boosts.filter({ $0.scope.matches(target.origin.url) }).min(by: { rank($0.scope) < rank($1.scope) }) {
                 boosts(.edit(boost.id), in: window)
             } else { boosts(.create, in: window) }
         case .edit(let id):
@@ -73,6 +76,14 @@ extension Work {
                 effects.append(.boost(.confirm(window, editor.id, editor.draft)))
             } else { writeBoost(editor.draft, profile: profile, window: window, editor: editor.id) }
         case .cancel:
+            // Escape with unsaved changes asks once; the Cancel button sends .discard (review F11/#13).
+            if let editor = state.session.windows[window]?.boostEditor, editor.draft != find(editor.draft.id), !editor.confirmDiscard {
+                state.session.windows[window]?.boostEditor?.confirmDiscard = true
+                state.session.windows[window]?.boostEditor?.message = "Unsaved changes. Press Escape again or Cancel to discard them."
+                return
+            }
+            state.session.windows[window]?.boostEditor = nil
+        case .discard:
             state.session.windows[window]?.boostEditor = nil
         case .zap:
             if state.session.windows[window]?.boostEditor?.picking == true {
@@ -89,7 +100,7 @@ extension Work {
             state.session.windows[window]?.boostEditor?.pickID = pickID
             effects.append(.boost(.pick(window, pickID, target)))
         case .enable(let id, let enabled):
-            if state.session.windows[window]?.boostEditor?.draft.id == id { state.session.windows[window]?.boostEditor = nil }
+            // Toggling from the Library keeps an open editor's draft (review F7).
             guard var boost = find(id) else { return }; boost.enabled = enabled
             writeBoost(boost, profile: profile, window: window, editor: nil)
         case .remove(let id):
@@ -109,7 +120,8 @@ extension Work {
 
     mutating func writeBoost(_ boost: Boost, profile: ProfileID, window: WindowID, editor: String?) {
         var next = state.session.boosts[profile] ?? BoostCatalog()
-        next.boosts.removeAll { $0.id == boost.id }; next.boosts.append(boost)
+        // Replace in place so a save, enable or disable does not move the Boost and change which CSS wins (review #17).
+        if let index = next.boosts.firstIndex(where: { $0.id == boost.id }) { next.boosts[index] = boost } else { next.boosts.append(boost) }
         effects.append(.boost(.write(window, profile, next, editor: editor)))
     }
 
@@ -148,7 +160,8 @@ extension Work {
             state.session.windows[window]?.boostEditor?.draft.css += "\n" + selector + " { display: none !important; }\n"
         case .imported(let window, let profile, let values):
             guard state.boostProfile(in: window) == profile else { return }
-            var next = state.session.boosts[profile] ?? BoostCatalog(); next.boosts += values
+            // Imported Boosts arrive disabled so nothing runs before the user has looked at them (review #11).
+            var next = state.session.boosts[profile] ?? BoostCatalog(); next.boosts += values.map { var b = $0; b.enabled = false; return b }
             effects.append(.boost(.write(window, profile, next, editor: nil)))
         }
     }

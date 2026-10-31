@@ -2,6 +2,7 @@ import BrkBase
 import Foundation
 
 public enum BoostCodec {
+    public static let maxBytes = 10_000_000
     public static func validate(_ catalog: BoostCatalog) throws {
         guard catalog.version == 1, catalog.boosts.count <= 200, Set(catalog.boosts.map(\.id)).count == catalog.boosts.count else {
             throw invalid("Unsupported Boost version, duplicate IDs or too many Boosts.")
@@ -21,11 +22,11 @@ public enum BoostCodec {
         try validate(catalog)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(catalog)
-        guard data.count <= 10_000_000 else { throw invalid("Boost file exceeds 10 MB.") }
+        guard data.count <= maxBytes else { throw invalid("Boost file exceeds 10 MB.") }
         return data
     }
     public static func decode(_ data: Data) throws -> BoostCatalog {
-        guard data.count <= 10_000_000 else { throw invalid("Boost file exceeds 10 MB.") }
+        guard data.count <= maxBytes else { throw invalid("Boost file exceeds 10 MB.") }
         let value = try JSONDecoder().decode(BoostCatalog.self, from: data); try validate(value); return value
     }
     public static func export(_ boost: Boost) throws -> Data {

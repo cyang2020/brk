@@ -338,6 +338,7 @@ final class ChromePage: CefBrowserDelegate {
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         closeDocumentPiP()
         emit(mainDocument.started(url))
+        refreshBoosts()
         if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
 

@@ -65,7 +65,23 @@ final class BoostTests: XCTestCase {
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, draft.css)
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "")
         d.user(.boost(.cancel))
+        XCTAssertEqual(d.view.boostEditor?.confirmDiscard, true, "the first Escape on a dirty draft only warns")
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, draft.css, "the draft and its preview survive the warning")
+        d.user(.boost(.cancel))
+        XCTAssertNil(d.view.boostEditor)
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, boost().css)
+    }
+    func testDiscardClosesADirtyDraftAtOnceAndACleanDraftCancelsAtOnce() throws {
+        let d = readyDriver(); d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
+        d.user(.boost(.edit("fixture-boost")))
+        var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.css = "body { color: blue }"
+        d.user(.boost(.update(draft)))
+        d.user(.boost(.discard))
+        XCTAssertNil(d.view.boostEditor, "the Cancel button discards without asking")
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, boost().css)
+        d.user(.boost(.edit("fixture-boost")))
+        d.user(.boost(.cancel))
+        XCTAssertNil(d.view.boostEditor, "Escape on an unchanged draft closes at once")
     }
     func testTrustCannotBeGrantedByAnEditorUpdateAndConfirmationRejectsChangedDraft() throws {
         let d = readyDriver(); d.user(.boost(.create))
@@ -219,6 +235,8 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.picking, false)
         XCTAssertNil(d.view.boostEditor?.pickID)
         XCTAssertEqual(d.view.boostEditor?.draft, draft)
+        d.user(.app(.exit))
+        XCTAssertEqual(d.view.boostEditor?.confirmDiscard, true, "a never-saved draft counts as unsaved: the first Exit warns")
         d.user(.app(.exit))
         XCTAssertNil(d.view.boostEditor)
     }

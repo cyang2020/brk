@@ -75,7 +75,7 @@ enum CommandInventory {
         .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
         .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
         .boost(.create), .boost(.legacy), .boost(.editCurrent), .boost(.edit("ghost")), .boost(.gallery), .boost(.preset("reader")),
-        .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.cancel), .boost(.zap),
+        .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.cancel), .boost(.discard), .boost(.zap),
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
@@ -163,6 +163,7 @@ enum CommandInventory {
             case .update: "update"
             case .save: "save"
             case .cancel: "cancel"
+            case .discard: "discard"
             case .zap: "zap"
             case .enable: "enable"
             case .remove: "remove"

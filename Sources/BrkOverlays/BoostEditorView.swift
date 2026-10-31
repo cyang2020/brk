@@ -42,7 +42,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
             button.target = self; button.action = action; button.identify(.boostControl(id)); button.bezelStyle = .rounded
         }
         for (text, scroll, id) in [(css, cssScroll, "css"), (javascript, jsScroll, "javascript")] {
-            text.isRichText = false; text.isAutomaticQuoteSubstitutionEnabled = false; text.isAutomaticDashSubstitutionEnabled = false
+            text.isRichText = false; text.allowsUndo = true; text.isAutomaticQuoteSubstitutionEnabled = false; text.isAutomaticDashSubstitutionEnabled = false
             text.isAutomaticTextReplacementEnabled = false; text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
             text.delegate = self; text.identify(.boostControl(id)); text.textContainerInset = NSSize(width: 6, height: 6)
             text.isVerticallyResizable = true; text.isHorizontallyResizable = false; text.autoresizingMask = [.width]
@@ -125,7 +125,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     }
     @objc private func beginZap() { dispatch(.boost(.zap)) }
     @objc private func saveBoost() { if updateDraft() { dispatch(.boost(.save)) } }
-    @objc private func cancelBoost() { dispatch(.boost(.cancel)) }
+    @objc private func cancelBoost() { dispatch(.boost(.discard)) }
 }
 
 @MainActor

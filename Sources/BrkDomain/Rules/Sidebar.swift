@@ -351,7 +351,14 @@ extension Work {
             guard !closedOverlay, var session = state.session.windows[window] else { return }
             if let editor = session.boostEditor {
                 if editor.picking { session.boostEditor?.picking = false; session.boostEditor?.pickID = nil }
-                else { session.boostEditor = nil }
+                else {
+                    // Escape on unsaved changes warns once; the next Escape or the Cancel button discards (Boost review).
+                    let saved = state.session.boosts[editor.profile]?.boosts.first { $0.id == editor.draft.id }
+                    if editor.draft != saved, !editor.confirmDiscard {
+                        session.boostEditor?.confirmDiscard = true
+                        session.boostEditor?.message = "Unsaved changes. Press Escape again or Cancel to discard them."
+                    } else { session.boostEditor = nil }
+                }
             }
             else if session.overlay != nil { session.overlay = nil }
             else if session.renaming != nil { session.renaming = nil }

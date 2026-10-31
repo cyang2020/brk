@@ -12,8 +12,18 @@ struct BoostFiles {
     func read(_ profile: ProfileID) -> (BoostCatalog, String?) {
         let file = directory(profile).appendingPathComponent("boosts.json")
         guard FileManager.default.fileExists(atPath: file.path) else { return (BoostCatalog(), nil) }
+        if let size = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int, size > BoostCodec.maxBytes {
+            return quarantine(file, "Boost file exceeds 10 MB.")
+        }
         do { return (try BoostCodec.decode(Data(contentsOf: file)), nil) }
-        catch { return (BoostCatalog(), "Cannot read Boosts: " + error.localizedDescription) }
+        catch { return quarantine(file, error.localizedDescription) }
+    }
+    /// An unreadable file is moved beside itself (review: a save after a failed read used to overwrite it).
+    private func quarantine(_ file: URL, _ reason: String) -> (BoostCatalog, String?) {
+        let target = file.deletingLastPathComponent().appendingPathComponent("boosts.rejected-\(Int(Date().timeIntervalSince1970 * 1000)).json")
+        do { try FileManager.default.moveItem(at: file, to: target) }
+        catch { return (BoostCatalog(), "Cannot read Boosts: \(reason) The file could not be set aside either; nothing will be saved until it is moved.") }
+        return (BoostCatalog(), "Cannot read Boosts: \(reason) The file was set aside as \(target.lastPathComponent).")
     }
     func write(_ catalog: BoostCatalog, profile: ProfileID) throws {
         let data = try BoostCodec.encode(catalog), dir = directory(profile)

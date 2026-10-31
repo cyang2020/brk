@@ -10,8 +10,10 @@ extension ChromePage {
     }
 
     func boostTarget() -> SiteTarget? {
-        guard engine.isLive(self), case .ready(let document) = mainDocument.availability,
-              let origin = browser.url.flatMap(SiteOrigin.init) else { return nil }
+        // Committed documents count (review F1/16): a page whose load event is late or never comes still gets its Boosts.
+        let document: DocumentToken
+        switch mainDocument.availability { case .ready(let value), .loading(let value): document = value; case .unavailable: return nil }
+        guard engine.isLive(self), let origin = browser.url.flatMap(SiteOrigin.init) else { return nil }
         return SiteTarget(document: document, context: context, origin: origin)
     }
 
@@ -45,7 +47,8 @@ extension ChromePage {
                 let css = injections.map { $0.css }.joined(separator: "\n")
                 let script = """
                 (()=>{if(location.origin!==\(Self.jsString(target.origin.value)))return false;
-                const owner=\(Self.jsString(owner));let s=document.querySelector('style[data-brk-boost-owner="'+owner+'"]');
+                const owner=\(Self.jsString(owner));for(const old of document.querySelectorAll('style[data-brk-boost-owner]'))if(old.getAttribute('data-brk-boost-owner')!==owner)old.remove();
+                let s=document.querySelector('style[data-brk-boost-owner="'+owner+'"]');
                 if(!s){s=document.createElement('style');s.setAttribute('data-brk-boost-owner',owner);(document.head||document.documentElement).append(s);}
                 s.textContent=\(Self.jsString(css));if(!s.textContent)s.remove();return true;})()
                 """
@@ -57,7 +60,8 @@ extension ChromePage {
                     // Reserve before awaiting so an incidental reconcile cannot execute the same program twice.
                     self.boostExecuted.insert(key)
                     let expression = """
-                    (()=>{if(location.origin!==\(Self.jsString(target.origin.value)))return;
+                    (()=>{if(location.origin!==\(Self.jsString(target.origin.value)))return 'ok';
+                    globalThis.__brkBoostRan=globalThis.__brkBoostRan||new Set();const key=\(Self.jsString(key));if(globalThis.__brkBoostRan.has(key))return 'ok';globalThis.__brkBoostRan.add(key);
                     try{(new Function(\(Self.jsString(boost.javascript))))();return 'ok';}catch(e){return 'Boost JavaScript: '+String(e);}})()
                     """
                     let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "contextId": world, "returnByValue": true])
@@ -88,21 +92,21 @@ extension ChromePage {
           if(globalThis.__brkZapCancel)globalThis.__brkZapCancel();
           let timer;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:3px solid #860eff;box-sizing:border-box;display:none';document.documentElement.append(highlight);
           const restore=()=>highlight.remove();
-          const finish=value=>{restore();clearTimeout(timer);document.removeEventListener('mouseover',over,true);document.removeEventListener('click',click,true);document.removeEventListener('keydown',key,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
+          const finish=value=>{restore();clearTimeout(timer);window.removeEventListener('mouseover',over,true);window.removeEventListener('click',click,true);window.removeEventListener('keydown',key,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
           const over=e=>{if(e.target instanceof Element){const r=e.target.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});}};
           const selector=el=>{const parts=[];while(el&&el.nodeType===1){
             if(el.id){const id='#'+CSS.escape(el.id);if(document.querySelectorAll(id).length===1){parts.unshift(id);break;}}
             const tag=el.localName;const siblings=el.parentElement?Array.from(el.parentElement.children).filter(x=>x.localName===tag):[el];
-            parts.unshift(tag+':nth-of-type('+(siblings.indexOf(el)+1)+')');el=el.parentElement;
+            parts.unshift(CSS.escape(tag)+':nth-of-type('+(siblings.indexOf(el)+1)+')');el=el.parentElement;
           }return parts.join(' > ');};
-          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();finish(e.target instanceof Element?selector(e.target):null);};
+          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();const t=e.target instanceof Element?e.target:null;if(!t||t===document.documentElement||t===document.body){finish(null);return;}finish(selector(t));};
           const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(null);}};
           globalThis.__brkZapToken=\(Self.jsString(pickToken));globalThis.__brkZapCancel=()=>finish(null);
-          document.addEventListener('mouseover',over,true);document.addEventListener('click',click,true);document.addEventListener('keydown',key,true);
+          window.addEventListener('mouseover',over,true);window.addEventListener('click',click,true);window.addEventListener('keydown',key,true);
           timer=setTimeout(()=>finish(null),30000);
         })
         """
-        let result = try await browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true, "awaitPromise": true])
+        let result = try await browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true, "awaitPromise": true], timeout: 31)
         guard matches(target), engine.isLive(self) else { throw CocoaError(.userCancelled) }
         return (result["result"] as? [String: Any])?["value"] as? String
     }

@@ -669,6 +669,9 @@ extension AppStore {
             let read: (URL) -> Void = { [weak self] file in
                 guard let self, self.state.boostProfileForIO(window) == profile else { return }
                 do {
+                    if let size = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int, size > BoostCodec.maxBytes {
+                        throw CocoaError(.fileReadTooLarge, userInfo: [NSLocalizedDescriptionKey: "Boost file exceeds 10 MB."])
+                    }
                     let values = try BoostCodec.imported(Data(contentsOf: file), newID: { UUID().uuidString })
                     self.dispatch(.system(.boost(.imported(window, profile, values))))
                 } catch { self.dispatch(.system(.boost(.failed(window, "Cannot install Boost: " + error.localizedDescription)))) }
