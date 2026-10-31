@@ -36,6 +36,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case addSplitView, removeSplitView, separateTabFromSplitView, maximizeSplitPane
     case splitHorizontal, splitVertical, restoreSplit, separateAllSplit, nextSplitPane, previousSplitPane
     case splitPane1, splitPane2, splitPane3, splitPane4
+    case videoPictureInPicture, documentPictureInPicture, closePictureInPicture
     case resetZoom, zoomIn, zoomOut, cast
     case viewSource, developerTools, inspectElements, javaScriptConsole, networkInspector, allowJavaScriptFromAppleEvents, toggleDeveloperMode
     case fullscreen, exit
@@ -219,13 +220,16 @@ extension ActionID {
         case .share:
             // Arc titles the result "Share URL"; Brk's Share… exports to a file, so the menu title stays and "Export" is ours.
             entry(33, "Share…", .file, 4, [], .app(.export(.focusedTab)), bar: listing("square.and.arrow.up", "Share", "Export"))
+        case .videoPictureInPicture: entry(220, "Video Picture in Picture", .view, 9, [], .page(.pictureInPicture(.video)), bar: listing("pip", "Picture in Picture", "Video PiP"))
+        case .documentPictureInPicture: entry(221, "Page Picture in Picture", .view, 9, [], .page(.pictureInPicture(.document)), bar: listing("pip", "Page Picture in Picture", "Meet PiP"))
+        case .closePictureInPicture: entry(222, "Close Picture in Picture", .view, 9, [], .page(.pictureInPicture(.close)), bar: listing("pip.exit", "Close Picture in Picture"))
         case .capturePage:
-            entry(35, "Capture…", .file, 4, [key([shift, cmd], .two, .page)], .later(.captures), bar: listing("camera", "Capture", "Screenshot", "Snapshot", "Cut Out"))
+            entry(35, "Capture…", .file, 4, [key([shift, cmd], .two, .page)], .capture(.begin(.area)), bar: listing("camera", "Capture", "Screenshot", "Snapshot", "Cut Out"))
         case .captureFullPage:
-            entry(36, "Capture Full Page", .file, 4, [], .later(.captures),
+            entry(36, "Capture Full Page", .file, 4, [], .capture(.begin(.fullPage)),
                   bar: listing("newspaper", "Full Page Capture", "Capture Entire Page", "Screenshot Full Page", "Capture Full Page", "Screenshot"))
         case .capturePrettyScreenshot:
-            entry(37, "Capture in Portrait Mode", .file, 4, [], .later(.captures),
+            entry(37, "Capture in Portrait Mode", .file, 4, [], .capture(.begin(.portrait)),
                   bar: listing("camera.macro", "Screenshot in Portrait Mode", "Capture Portrait", "Portrait Mode", "Screenshot"))
         case .savePageAs: entry(38, "Save Page As", .file, 4, [key([shift, cmd], .s, .page)], .page(.output(.mhtml)), bar: listing("square.and.arrow.down", "Save Page", "Save File"))
         case .printPage: entry(39, "Print", .file, 4, [key(cmd, .p, .pageThenApp)], .page(.output(.print)), bar: listing("printer", "Print Page"))

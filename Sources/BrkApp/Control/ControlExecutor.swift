@@ -336,6 +336,19 @@ final class ControlExecutor {
             }
             return .ok
 
+        case .mediaWindowScreenshot(let number, let path):
+            guard let window = NSApp.windows.first(where: { $0.windowNumber == number && $0.isVisible }) else { throw Failure(message:"No visible owned window") }
+            try await Task.sleep(for:.milliseconds(180))
+            let image = try capture(window)
+            guard let png = NSBitmapImageRep(cgImage:image).representation(using:.png,properties:[:]) else { throw Failure(message:"PNG encoding failed") }
+            try png.write(to:URL(fileURLWithPath:path),options:.atomic)
+            return .screenshot(path:path,pixelWidth:image.width,pixelHeight:image.height)
+        case .mediaSounds:
+            return .text(String(decoding: try JSONSerialization.data(withJSONObject: store.sounds.submissions.map { ["event": $0.event.rawValue, "accepted": $0.accepted] as [String: Any] }), as: UTF8.self))
+        case .captureProbe(let page, let directory):
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            guard directory.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(root) else { throw Failure(message: "Probe path outside owned data") }
+            return .text(try await engine.captureProbe(page, directory: directory))
         case .pageObservations:
             return .pageObservations(store.snapshot.observations)
 
@@ -425,6 +438,7 @@ final class ControlExecutor {
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
+        facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts
     }
 

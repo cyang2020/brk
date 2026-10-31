@@ -353,6 +353,7 @@ final class RowView: HoverView {
     private let background = NSView()
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    private lazy var media = MediaRowControls(dispatch: dispatch)
     private let audio = GlyphButton()
     private let button = GlyphButton()
     private var segments: [SplitSegmentView] = []
@@ -380,7 +381,7 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, audio, button] as [NSView] { addSubview(view) }
+        for view in [background, icon, title, audio, media, button] as [NSView] { addSubview(view) }
         audio.action = { [weak self] _ in self?.toggleMute() }
         audio.isHidden = true
         button.action = { [weak self] _ in self?.closeTapped() }
@@ -397,8 +398,10 @@ final class RowView: HoverView {
         identify(.row(row.id))
         button.identify(.rowClose(row.id))
         var dimmed = false
+        media.isHidden = true
         switch row {
         case .tab(let tab):
+            media.render(tab)
             audio.isHidden = !tab.audible && !tab.muted
             audio.render(tab.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
                          radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
@@ -468,8 +471,9 @@ final class RowView: HoverView {
         icon.frame = g.icon
         button.frame = g.button
         audio.frame = g.button.offsetBy(dx: -g.button.width, dy: 0)
+        media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
-        let trailing = !audio.isHidden ? audio.frame.minX : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
+        let trailing = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
@@ -619,6 +623,7 @@ final class SplitSegmentView: HoverView {
     private(set) var pane: TabRow?
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    private lazy var media = MediaRowControls(dispatch: dispatch)
     private let audio = GlyphButton()
     private let close = GlyphButton()
     private var palette: Palette?
@@ -632,7 +637,7 @@ final class SplitSegmentView: HoverView {
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
         audio.action = { [weak self] _ in self?.toggleMute() }
-        for view in [icon, title, audio, close] as [NSView] { addSubview(view) }
+        for view in [icon, title, audio, media, close] as [NSView] { addSubview(view) }
         close.action = { [weak self] _ in
             guard let id = self?.pane?.id else { return }
             dispatch(.split(.closePaneAt(id)))
@@ -642,6 +647,7 @@ final class SplitSegmentView: HoverView {
 
     func render(_ pane: TabRow, palette: Palette) {
         self.pane = pane
+        media.render(pane)
         identify(.splitSegment(pane.id))
         toolTip = pane.title
         self.palette = palette
@@ -667,9 +673,10 @@ final class SplitSegmentView: HoverView {
         icon.frame = CGRect(x: Draw.faviconLeading.value / 2, y: (bounds.height - side) / 2, width: side, height: side)
         close.frame = CGRect(x: bounds.width - size, y: (bounds.height - size) / 2, width: size, height: size)
         audio.frame = close.frame.offsetBy(dx: -size, dy: 0)
+        media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
         let start = icon.frame.maxX + Draw.faviconLeading.value / 2
-        let end = !audio.isHidden ? audio.frame.minX : close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
+        let end = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
         title.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, end - start), height: height)
     }
 

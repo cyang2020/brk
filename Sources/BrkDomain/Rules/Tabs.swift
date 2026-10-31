@@ -107,6 +107,13 @@ extension Work {
                 state.session.live[PageID(window: window, item: tab)]?.loadProgress = 0
             }
         case .zoom(let step): emit(.focused, .zoom(step))
+        case .pictureInPicture(let intent): pictureInPicture(intent, in: window)
+        case .media(let ref, let player, let operation):
+            guard let tab = state.resolveTab(ref, in: window) else { return }
+            let page = PageID(window: window, item: tab)
+            guard let live = state.session.live[page], case .ready(let document) = live.document,
+                  live.mediaPlayers.contains(where: { $0.id == player }) else { return }
+            effects.append(.page(page, .media(MediaControl(document: document, player: player, operation: operation))))
         case .output(let intent):
             guard let tab = state.resolveTab(.focused, in: window),
                   case .ready(let document) = state.session.live[PageID(window: window, item: tab)]?.document else { return }
@@ -169,6 +176,8 @@ extension Work {
             case .unavailable: break
             }
             live.document = document
+            live.documentPictureInPicture = false; live.automaticPiPPlayer = nil
+            live.mediaPlayers = []; live.mediaError = nil
         case .navigationRequested(let url):
             live.loadProgress = 0
             live.requestedURL = url
@@ -214,6 +223,12 @@ extension Work {
             live.loading = false
             live.loadProgress = 0
             live.document = .unavailable
+        case .documentPictureInPictureChanged(let document, let active, let error):
+            guard live.document == .ready(document) else { return }
+            live.documentPictureInPicture = active; live.mediaError = error
+        case .mediaChanged(let document, let players, let error):
+            guard live.document == .ready(document) else { return }
+            live.mediaPlayers = players; live.mediaError = error
         case .audioChanged(let audible): live.audible = audible
         case .boostFailed(let document, let message):
             guard live.document == .ready(document), document.browser == token else { return }

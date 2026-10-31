@@ -50,7 +50,13 @@ final class ChromePage: CefBrowserDelegate {
     private(set) var audio: AudioObservation
     private var audioTargetTransport: CefDevTools?
     var audioObserverID: Int?
+    private(set) var mediaPlayers: [MediaPlayer] = []
+    private var mediaError: String?
+    private var mediaOperationError: String?
     var audioError: String?
+    var documentPiPSource: DocumentToken?
+    var documentPiPActive = false
+    private(set) var captureRevision: UInt64 = 0
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
@@ -80,6 +86,7 @@ final class ChromePage: CefBrowserDelegate {
     private func emit(_ events: [PageEvent]) {
         for event in events {
             if case .documentChanged(let document) = event {
+                mediaPlayers = []; mediaError = nil; mediaOperationError = nil
                 audio.document(document)
                 if !audio.audible { engine.pageDidEmit(self, .audioChanged(false)) }
             }
@@ -121,6 +128,7 @@ final class ChromePage: CefBrowserDelegate {
         // context, or the shared incognito one (W2-2 and W2-3 prove the isolation on the real engine).
         options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
+        if let host = chrome.nsWindow { HostWindows.adopt(host,parent:nil) }
         chrome.browser.delegate = self
         chrome.onWindowDestroyed = { [weak self] in
             guard let self else { return }
@@ -155,12 +163,29 @@ final class ChromePage: CefBrowserDelegate {
     func applyAudio(_ reading: ChromeAudibility.Reading, ticket: AudioObservation.Ticket, observer: Int) {
         let changed = audio.audible != reading.audible
         guard engine.isLive(self), reading.target == ticket.target, audio.accept(reading.audible, tab: reading.tab, for: ticket) else { return }
+        if let document = readyDocument {
+            let error = reading.mediaError ?? mediaOperationError
+            if mediaPlayers != reading.players || mediaError != error {
+                mediaPlayers = reading.players; mediaError = error
+                engine.pageDidEmit(self, .mediaChanged(document, mediaPlayers, error: error))
+            }
+        }
         audioObserverID = observer
         audioError = nil
         if changed { emit([.audioChanged(reading.audible)]); refreshWebsitePolicy() }
     }
 
+    func mediaControlFinished(_ error: String?) {
+        mediaOperationError = error
+        mediaError = error
+        if let document = readyDocument { engine.pageDidEmit(self, .mediaChanged(document, mediaPlayers, error: error)) }
+    }
+
     func audioUnavailable(_ error: String) {
+        if !mediaPlayers.isEmpty {
+            mediaPlayers = []
+            if let document = readyDocument { engine.pageDidEmit(self, .mediaChanged(document, [], error: error)) }
+        }
         audioError = error
         if let ticket = audio.ticket, let tab = audio.tab, audio.audible,
            audio.accept(false, tab: tab, for: ticket) { emit([.audioChanged(false)]) }
@@ -210,6 +235,8 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        captureRevision &+= 1
+        closeDocumentPiP()
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
@@ -225,7 +252,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { linkPreviews.stop(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); surface.park() }
+    func park() { captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); browser.closeNativeAuxiliaries(); linkPreviews.stop(); closeDeveloperWindows(); stopCasting(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -253,6 +280,7 @@ final class ChromePage: CefBrowserDelegate {
         currentLoadProgress = 0
         pictureInPictureDocument = nil
         stopCasting()
+        captureRevision &+= 1
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()
@@ -307,6 +335,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
+        closeDocumentPiP()
         emit(mainDocument.started(url))
         if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
@@ -368,6 +397,10 @@ final class ChromePage: CefBrowserDelegate {
     /// Keep the actual Chromium browsing context so empty window.open/document.write and opener survive.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
         guard engine.isLive(self) else { return .deny }
+        if request.disposition == .newPictureInPicture {
+            guard let document = readyDocument else { return .deny }
+            documentPiPSource = document
+        }
         popupRequests.append(openMetadata(request))
         if popupRequests.count > 16 { popupRequests.removeFirst() }
         let namedWindow = !request.frameName.isEmpty && !["_blank", "_self", "_parent", "_top"].contains(request.frameName.lowercased())
@@ -380,10 +413,14 @@ final class ChromePage: CefBrowserDelegate {
         return .allowNativePopup
     }
 
-    func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) { engine.auxiliaryCountChanged(self, count: count) }
+    func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {
+        engine.auxiliaryCountChanged(self, count: count)
+        observePictureInPictureAuxiliaries()
+    }
     func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {
         guard engine.isLive(self) else { auxiliary.close(force: true); return }
         if case .devTools = kind { toolsBrowser = auxiliary; selectDeveloperPanel() }
+        observePictureInPictureAuxiliary(auxiliary, kind: kind)
     }
 
     /// A link opened with a modifier (Cmd+click) arrives here (CEF's OnOpenURLFromTab), not as a popup. Handled the

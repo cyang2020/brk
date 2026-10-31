@@ -22,6 +22,7 @@ public final class LibraryView: NSView {
     let history: HistoryPageView
     let boosts: BoostsPageView
     let spaces: SpacesPageView
+    let media: MediaPageView
     let later = LaterPageView(frame: .zero)
     private var last: Slice?
 
@@ -36,6 +37,7 @@ public final class LibraryView: NSView {
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         boosts = BoostsPageView(dispatch: dispatch)
+        media = MediaPageView(dispatch: dispatch)
         spaces = SpacesPageView(dispatch: dispatch)
         archive = ArchivePageView(dispatch: dispatch)
         downloads = DownloadsPageView(dispatch: dispatch)
@@ -58,7 +60,7 @@ public final class LibraryView: NSView {
         exit.action = #selector(exitClicked)
         exit.identify(.libraryClose)
         addSubview(exit)
-        for view in [archive, downloads, history, spaces, boosts, later] as [NSView] { addSubview(view) }
+        for view in [archive, downloads, history, spaces, boosts, media, later] as [NSView] { addSubview(view) }
         isHidden = true
     }
 
@@ -81,6 +83,7 @@ public final class LibraryView: NSView {
             archive.hide()
             downloads.hide()
             history.hide()
+            media.hide()
             later.hide()
             spaces.hide()
             boosts.hide()
@@ -104,9 +107,10 @@ public final class LibraryView: NSView {
         if library.page == .history { history.show(library.history, openID: library.openID, in: page, scheme: scheme, now: now) } else { history.hide() }
         if library.page == .spaces { spaces.show(library, in: page, scheme: scheme) } else { spaces.hide() }
         if library.page == .boosts { boosts.show(library, in: page, scheme: scheme) } else { boosts.hide() }
+        if library.page == .media { media.show(library, in: page, scheme: scheme) } else { media.hide() }
         switch library.page {
-        case .media, .easelsAndNotes: later.show(library.page, in: page, scheme: scheme)
-        case .downloads, .history, .archive, .spaces, .boosts: later.hide()
+        case .easelsAndNotes: later.show(library.page, in: page, scheme: scheme)
+        case .media, .downloads, .history, .archive, .spaces, .boosts: later.hide()
         }
     }
 

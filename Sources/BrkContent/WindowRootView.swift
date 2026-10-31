@@ -29,6 +29,7 @@ public final class WindowRootView: NSView {
     private let zapOverlay: BoostZapOverlayView
     private let boostEditor: BoostEditorView
     private let aiAnswer: AIAnswerDocumentView
+    private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
@@ -37,6 +38,7 @@ public final class WindowRootView: NSView {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
         boostEditor = BoostEditorView(dispatch: dispatch)
         aiAnswer = AIAnswerDocumentView(dispatch: dispatch)
+        captureOverlay = CaptureOverlayView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
         toolbar = AddressToolbarView(dispatch: dispatch)
@@ -49,7 +51,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, toolbar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, toolbar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
@@ -67,6 +69,7 @@ public final class WindowRootView: NSView {
     /// only way BrkApp reaches a view's focus: the fields themselves are internal to their targets.
     public func focus(_ target: FocusTarget) -> Bool {
         switch target {
+        case .capture: window?.makeFirstResponder(captureOverlay) ?? false
         case .findInput: findBar.focusInput()
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
@@ -119,6 +122,7 @@ public final class WindowRootView: NSView {
         boostEditor.render(snapshot.boostEditor, in: frames.contentArea, scheme: palette.scheme)
         zapOverlay.render(snapshot.boostEditor, in: frames.contentArea)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
+        captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
         lastTheme = snapshot.theme
     }
 }

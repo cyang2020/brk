@@ -107,6 +107,8 @@ public enum PageAction: Hashable, Sendable, Codable {
     case toggleDevTools
     case cast
     case developer(DeveloperOperation)
+    case documentPictureInPicture(DocumentPiPControl)
+    case media(MediaControl)
     case exitFullscreen
     /// Restart a renderer that died (`PageEvent.rendererGone`). The domain decides; the engine reloads.
     case recover
@@ -153,6 +155,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case titleChanged(String)
     case linkHovered(URL?)
     case faviconChanged(URL?)
+    case documentPictureInPictureChanged(DocumentToken, Bool, error: String?)
+    case mediaChanged(DocumentToken, [MediaPlayer], error: String?)
     case audioChanged(Bool)
     case zoomChanged(Int)
     case fullscreenChanged(Bool)

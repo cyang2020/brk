@@ -10,6 +10,7 @@ extension CefBrowser {
     public var nativeAuxiliaries: [(browser: CefBrowser, kind: CefAuxiliaryKind)] { client?.auxiliaryBrowsers ?? [] }
     public var nativeAuxiliaryCount: Int { client?.auxiliaryCount ?? 0 }
     public func closeNativeAuxiliaries() { client?.closeNativeAuxiliaries() }
+    public func closeNativeAuxiliaries(matching include: (CefAuxiliaryKind) -> Bool) { client?.closeNativeAuxiliaries(matching: include) }
 }
 
 extension BrowserClient {
@@ -57,11 +58,14 @@ extension BrowserClient {
         else if let browser { browser.delegate?.browser(browser, auxiliaryCountChanged: auxiliaryCount) }
     }
 
-    func closeNativeAuxiliaries() {
+    func closeNativeAuxiliaries() { closeNativeAuxiliaries(matching: { _ in true }) }
+    func closeNativeAuxiliaries(matching include: (CefAuxiliaryKind) -> Bool) {
         for child in Array(nativeAuxiliaries.values) {
-            child.auxiliaryCancelled = true
-            child.closeNativeAuxiliaries()
-            child.browser?.close(force: true)
+            if let kind = child.auxiliaryKind, include(kind) {
+                child.auxiliaryCancelled = true
+                child.closeNativeAuxiliaries()
+                child.browser?.close(force: true)
+            } else { child.closeNativeAuxiliaries(matching: include) }
         }
     }
 

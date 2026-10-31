@@ -52,6 +52,8 @@ public protocol WebEngine: AnyObject {
     func readAIPage(_ document: DocumentToken) async throws -> AIPageContent
     func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool
 
+    func capture(_ request: CaptureRequest) async throws -> CaptureImage
+    func captureProbe(_ page: PageID, directory: URL) async throws -> String
     func find(_ request: FindRequest)
     func output(_ request: OutputRequest)
     func cancelOutput(_ id: OutputID)
@@ -116,6 +118,8 @@ public protocol WebEngineDelegate: AnyObject {
 extension WebEngine {
     public func cancelBoostPick(_ target: SiteTarget) {}
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
+    public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }
+    public func captureProbe(_ page: PageID, directory: URL) async throws -> String { "unsupported" }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}
 }

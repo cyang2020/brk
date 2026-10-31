@@ -18,6 +18,9 @@ extension Work {
                 return
             }
             let page = requested ?? session.lastLibraryPage ?? .archive
+            if page == .media, case .profile(let profile) = state.libraryContext(in: window), !state.session.captures.loaded.contains(profile) {
+                state.session.captures.loaded.insert(profile); effects.append(.capture(.load(profile)))
+            }
             if open == page { return }
             openOverlay({ .library(openID: $0, page: page) }, in: window)
             state.session.windows[window]!.lastLibraryPage = page
@@ -94,6 +97,7 @@ extension Work {
             }
             switch end {
             case .completed(let receipt):
+                playSound(.downloadCompleted)
                 state.doc.downloads[index].state = .finished
                 state.doc.downloads[index].path = receipt.url.path
                 state.doc.downloads[index].filename = receipt.url.lastPathComponent

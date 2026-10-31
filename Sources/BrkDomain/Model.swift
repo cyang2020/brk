@@ -238,6 +238,8 @@ struct HistoryEntry: Sendable, Equatable {
 struct Session: Sendable, Equatable {
     var boosts: [ProfileID: BoostCatalog] = [:]
     var boostErrors: [ProfileID: String] = [:]
+    var automaticPiPCandidates: [PageID: DocumentToken] = [:]
+    var captures = CaptureLibrary()
     var sidebarDataStatus = "Not connected."
     var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
@@ -275,6 +277,9 @@ struct Session: Sendable, Equatable {
 struct WindowSession: Sendable, Equatable {
     var boostEditor: BoostEditor? = nil
     var boostMessage: String? = nil
+    var capture: CaptureSnapshot? = nil
+    var capturePreview: String? = nil
+    var captureMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
     var expandedSplit: ItemID? = nil
@@ -395,6 +400,10 @@ struct LivePage: Sendable, Equatable {
     var canGoForward: Bool = false
     var failure: LoadFailure? = nil
     var crashed: Bool = false
+    var documentPictureInPicture = false
+    var automaticPiPPlayer: MediaPlayerID? = nil
+    var mediaPlayers: [MediaPlayer] = []
+    var mediaError: String? = nil
     var audible: Bool = false
 }
 

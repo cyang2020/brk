@@ -102,6 +102,7 @@ struct Work {
             tabTools(.cancelRecent, in: window)
             return
         }
+        if command == .app(.exit), state.session.windows[window]?.capture != nil { captures(.cancel, in: window); return }
         if command == .app(.exit), state.session.windows[window]?.find != nil { closeFind(in: window); return }
         if case .settings(.openPane) = command { closeFind(in: window) }
         if case .tabTools(let intent) = command {
@@ -115,6 +116,7 @@ struct Work {
         applyOverlayRule(for: command, in: window)
         begin(window: window)
         switch command {
+        case .capture(let command): captures(command, in: window)
         case .find(let intent): find(intent, in: window)
         case .sidebarData(let command): sidebarData(command, in: window)
         case .commandBar(let c): commandBar(c, in: window)
@@ -148,13 +150,14 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .boost, .profileDataCleared, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
+        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
         case .sidebarData(let event): sidebarDataEvent(event)
         case .page(let page, let e): pageEvent(e, for: page)
         case .siteResult(let id, let outcome): siteResult(id, outcome)
+        case .capture(let event): captureEvent(event)
         case .exportFinished(let window, let outcome):
             state.session.windows[window]?.exportOutcome = outcome
             state.session.sidebarDataStatus = outcome.message
@@ -252,6 +255,9 @@ struct Work {
         normalize(&state)
         reconcileFind(from: input)
         reconcileAI(from: input)
+        reconcileCaptures(from: input)
+        reconcilePictureInPicture(from: input)
+        if let archived = state.doc.archive.first, !input.doc.archive.contains(where: { $0.id == archived.id }) { playSound(.tabsArchived) }
         captureSidebarChanges()
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {

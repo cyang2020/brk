@@ -30,6 +30,9 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
+    var pictureInPictureWindows: [CefBrowser] {
+        resources.entries.values.flatMap { $0.resource.pictureInPictureAuxiliaries }
+    }
     let resources = BrowserResources<ChromePage>()
     var live: [PageID: ChromePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
@@ -207,7 +210,26 @@ public final class CEFEngine: WebEngine {
         return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
+    private var reconciling = false
     public func reconcile(_ pages: [PageSpec]) {
+        guard phase == .running else { return }
+        wanted = pages.filter { contexts.permitsWork($0.context) }
+        // Native browser creation pumps callbacks, including profile readiness. Replay the latest demand after
+        // the current pass; a nested pass must never create the same window/page before its first insert.
+        guard !reconciling else {
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: deferred nested reconciliation\n".utf8)) }
+            return
+        }
+        reconciling = true
+        defer { reconciling = false }
+        var applied: [PageSpec]?
+        while applied != wanted {
+            let next = wanted
+            reconcilePages(next)
+            applied = next
+        }
+    }
+    private func reconcilePages(_ pages: [PageSpec]) {
         guard phase == .running else { return }
         let pages = pages.filter { contexts.permitsWork($0.context) }
         self.wanted = pages
@@ -308,6 +330,25 @@ public final class CEFEngine: WebEngine {
         case .toggleDevTools: browser.toggleDevTools()
         case .cast: live.showCast()
         case .developer(let operation): live.developer(operation)
+        case .documentPictureInPicture(let request):
+            live.controlDocumentPiP(request)
+        case .media(let request):
+            guard request.document == live.readyDocument, live.mediaPlayers.contains(where: { $0.id == request.player }),
+                  let target = live.audio.target, let tab = live.audio.tab,
+                  let observer = audioObservers[live.context], contexts.permitsWork(live.context) else { return }
+            Task { @MainActor [weak self, weak live] in
+                var error: String?
+                do {
+                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: request.userInitiated)
+                    if !request.userInitiated, request.operation == .enterPictureInPicture, let self, let live,
+                       !self.isLive(live) || live.readyDocument != request.document || live.websitePolicy.visible {
+                        try? await observer.control(target: target, tab: tab, player: request.player, operation: .exitPictureInPicture, userInitiated: false)
+                    }
+                }
+                catch let failure { error = String(describing: failure) }
+                guard let self, let live, self.isLive(live), live.readyDocument == request.document else { return }
+                live.mediaControlFinished(error)
+            }
         case .exitFullscreen: browser.exitFullscreen()
         case .recover: live.prepareNavigation(); browser.reload()
         }
@@ -516,7 +557,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            !self.reconciliation.isApplying && self.pictureInPictureWindows.isEmpty && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained) && self.clearingContexts.isEmpty
         }
         guard drained else {

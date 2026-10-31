@@ -28,7 +28,7 @@ public final class AppStore {
     public private(set) var snapshot: AppSnapshot
     private var state: AppState
     private let clock: any Clock
-    private let engine: any WebEngine
+    let engine: any WebEngine
     private let stateFile: StateFile
     private let boostFiles: BoostFiles
     private var loadedBoostProfiles: Set<ProfileID> = []
@@ -59,6 +59,10 @@ public final class AppStore {
     }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
+    let sounds = SoundEffects()
+    let captureSheets = CaptureSheets()
+    let captureFiles: CaptureFiles
+    public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
     let siteDialogs = SiteDialogs()
@@ -74,6 +78,7 @@ public final class AppStore {
         self.engine = engine
         self.stateFile = stateFile
         self.boostFiles = BoostFiles(root: stateFile.url.deletingLastPathComponent())
+        captureFiles = CaptureFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
         for row in snapshot.settings.profiles {
             let id = row.profile.id
@@ -129,13 +134,14 @@ public final class AppStore {
     /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right).
     public func refresh() {
         snapshot = projected()
+        reconcileCaptureSheets()
         engine.reconcile(snapshot.pages)
         renderWindows()
     }
 
     /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down. A failure is
     /// logged and reported; the quit goes on (the debounced copy on disk is the fallback).
-    public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll() }
+    public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll(); captureSheets.cancelAll() }
 
     @discardableResult
     public func flush() -> Bool {
@@ -239,7 +245,9 @@ public final class AppStore {
                 engine.cancelBoostPick(pick.target); boostPicks[window] = nil
             }
         }
+        sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
+        reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
@@ -360,10 +368,20 @@ public final class AppStore {
         if owner.isVisible, owner.attachedSheet == nil { alert.beginSheetModal(for: owner) }
     }
 
+    private func reconcileCaptureSheets() {
+        let captures = snapshot.windows.mapValues { window -> Set<String> in
+            if case .library(let library)? = window.overlay { return Set(library.captures.map(\.id)) }
+            return []
+        }
+        captureSheets.reconcile(Set(snapshot.windows.keys), captures:captures)
+    }
+    func captureWindow(_ id: WindowID) -> NSWindow? { windows[id]?.window }
+
     private func run(_ effects: [Effect]) {
         siteTools.reconcile(Set(snapshot.windows.values.compactMap { $0.tabTools.pendingSiteRequest }))
         for effect in effects {
             switch effect {
+            case .capture(let effect): runCapture(effect)
             case .find(let request): engine.find(request)
             case .boost(let request): runBoost(request)
             case .siteRequest(let request):
@@ -417,6 +435,7 @@ public final class AppStore {
             case .popupMenu(let id, let model, let at):
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
+                NotificationCenter.default.post(name:ContextMenuCapture.willPresent,object:menu)
                 menu.popUp(positioning: nil, at: at, in: controller.root)
                 popupTarget.clear()
             case .export(let document, let owner):
@@ -518,6 +537,9 @@ public final class AppStore {
             case .addLocalExtension(let window, let context):
                 chooseLocalExtension(window, context: context)
             case .cancelDownload(let id): engine.cancelDownload(id)
+            case .sound(let event):
+                sounds.setEnabled(snapshot.settings.advanced.soundEffects)
+                sounds.play(event)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }

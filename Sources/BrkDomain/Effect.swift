@@ -8,6 +8,8 @@ import Foundation
 /// Only imperative one-shots are effects. Anything that is a function of state (which pages are live, which windows
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
+    case capture(CaptureEffect)
+    case sound(MediaSoundEvent)
     case find(FindRequest)
     case boost(BoostEffect)
     case sidebarData(SidebarDataEffect)

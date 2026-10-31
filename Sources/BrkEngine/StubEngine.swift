@@ -48,7 +48,7 @@ public final class StubEngine: WebEngine {
         switch action {
         case .navigate(let url): load(url, in: surface)
         case .reload, .recover: if let url = surface.url { load(url, in: surface) }
-        case .goBack, .goForward, .stop, .zoom, .toggleDevTools, .cast, .developer, .exitFullscreen: break
+        case .goBack, .goForward, .stop, .zoom, .toggleDevTools, .cast, .developer, .documentPictureInPicture, .media, .exitFullscreen: break
         }
     }
 

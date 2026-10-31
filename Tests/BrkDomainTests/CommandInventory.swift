@@ -22,6 +22,9 @@ enum CommandInventory {
         .assist(.instant("query")), .assist(.translate("English")), .assist(.organizeToday), .assist(.undoOrganize),
         .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss), .assist(.searchFallback),
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
+        .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
+        .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
+        .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
@@ -75,6 +78,7 @@ enum CommandInventory {
         .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.cancel), .boost(.zap),
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
+        .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
         .later(.boosts),
         .window(.close),
     ]
@@ -83,6 +87,9 @@ enum CommandInventory {
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadProgress(0.5)),
         .boost(.loaded(profile, BoostCatalog(), error: nil)),
         .page(siteTarget.document.browser, .boostFailed(siteTarget.document, "fixture")),
+        .capture(.exported(WindowID("ghost"), "fixture")),
+        .page(siteTarget.document.browser, .documentPictureInPictureChanged(siteTarget.document, true, error: nil)),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .mediaChanged(DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), [], error: nil)),
         .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
@@ -120,6 +127,7 @@ enum CommandInventory {
         switch command {
         case .boost: "boost"
         case .assist: "assist"
+        case .capture: "capture"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -179,6 +187,17 @@ enum CommandInventory {
             case .searchFallback: "searchFallback"
             case .neverTranslateSite: "neverTranslateSite"
             case .neverTranslateLanguage: "neverTranslateLanguage"
+            }
+        case .capture(let c):
+            switch c {
+            case .open: "open"
+            case .begin: "begin"
+            case .select: "select"
+            case .cancel: "cancel"
+            case .preview: "preview"
+            case .export: "export"
+            case .remove: "remove"
+            case .insertInEasel: "insertInEasel"
             }
         case .find(let c):
             switch c {
@@ -259,6 +278,8 @@ enum CommandInventory {
             case .toggleDevTools: "toggleDevTools"
             case .cast: "cast"
             case .developer: "developer"
+            case .pictureInPicture: "pictureInPicture"
+            case .media: "media"
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"
@@ -393,6 +414,7 @@ enum CommandInventory {
     static func name(_ event: SystemEvent) -> String {
         switch event {
         case .boost: "boost"
+        case .capture: "capture"
         case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {
@@ -405,6 +427,8 @@ enum CommandInventory {
             case .titleChanged: "page.titleChanged"
             case .linkHovered: "page.linkHovered"
             case .faviconChanged: "page.faviconChanged"
+            case .documentPictureInPictureChanged: "page.documentPictureInPictureChanged"
+            case .mediaChanged: "page.mediaChanged"
             case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"

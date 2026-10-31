@@ -35,6 +35,7 @@ public enum Command: Hashable, Sendable, Codable {
     case archive(ArchiveCommand)
     case tab(TabCommand)
     case tabTools(TabToolsCommand)
+    case capture(CaptureCommand)
     case page(PageCommand)
     case item(ItemCommand)
     case space(SpaceCommand)
@@ -141,6 +142,8 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case zoom(ZoomStep)
     case toggleDevTools
     case cast
+    case pictureInPicture(PictureInPictureIntent)
+    case media(ItemRef, MediaPlayerID, MediaOperation)
     case output(OutputIntent)
     case cancelOutput
     case developer(DeveloperOperation)
@@ -422,6 +425,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 // MARK: - System events
 
 public enum SystemEvent: Sendable, Equatable {
+    case capture(CaptureEvent)
     case find(FindUpdate)
     case sidebarData(SidebarDataEvent)
     case page(BrowserToken, PageEvent)
@@ -476,7 +480,7 @@ extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
         switch self {
-        case .tabTools(.dismissToast), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
+        case .page(.media), .tabTools(.dismissToast), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
         default: false
         }
     }
@@ -485,7 +489,8 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .boost, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
+        case .capture(.begin): false
+        case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         default: false
         }
@@ -496,7 +501,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .tabTools(.dismissToast), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
+        case .capture, .tabTools(.dismissToast), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
         default: false
         }
     }
