@@ -87,9 +87,11 @@ public class WindowController: NSObject, NSWindowDelegate {
         applyPageFullscreen()
     }
     private func applyPageFullscreen() {
-        if pageFullscreen.needsToggle(nativeFullscreen: window.styleMask.contains(.fullScreen)) {
-            tracePageFullscreen("toggle")
-            window.toggleFullScreen(nil)
+        // AppKit finishes the transition after its delegate returns; toggling inside did-enter is ignored.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.pageFullscreen.needsToggle(nativeFullscreen: self.window.styleMask.contains(.fullScreen)) else { return }
+            self.tracePageFullscreen("toggle")
+            self.window.toggleFullScreen(nil)
         }
     }
     private func tracePageFullscreen(_ event: String) {
