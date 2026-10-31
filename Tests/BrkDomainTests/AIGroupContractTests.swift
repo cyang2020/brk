@@ -111,6 +111,7 @@ final class AIGroupContractTests: XCTestCase {
             if !pinned {
                 d.user(.archive(.restoreLast))
                 XCTAssertNotNil(d.state.tab(child))
+                XCTAssertEqual(d.state.doc.tree[child]?.parent, d.view.space.today.root, "individual-tab restore retains the existing top-of-Today behavior")
             }
         }
     }

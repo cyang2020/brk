@@ -370,7 +370,7 @@ extension Work {
         } catch { completeAI(id, text: "The plan could not be applied. No tabs were moved."); return }
         state.doc.tree = tree
         state.session.ai.undo[request.window] = AIOrganizeUndo(space: space, original: original, folders: folders)
-        completeAI(id, text: "Organized \(tabs.count) Today tabs into \(plan.count) groups.")
+        completeAI(id, text: "Organized \(tabs.count) Today tabs into \(plan.count) \(plan.count == 1 ? "group" : "groups").")
         state.session.ai.answers[request.window]?.canUndo = true
     }
     private mutating func undoAIOrganize(in window: WindowID) {
