@@ -6,7 +6,7 @@ import Foundation
 extension CEFEngine {
     /// Opt-in control-socket evidence. Uses the same embedded page and shared request allocator as production.
     public func captureProbe(_ id: PageID, directory: URL) async throws -> String {
-        guard let page = live[id], let document = page.readyDocument,
+        guard let page = live[id], case .profile = page.context, let document = page.readyDocument,
               let channel = CefDevTools(browser: page.browser) else { throw CefDevTools.Failure.unavailable }
         defer { channel.invalidate() }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

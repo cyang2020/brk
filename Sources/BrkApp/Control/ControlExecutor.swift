@@ -333,10 +333,10 @@ final class ControlExecutor {
             return .ok
 
         case .mediaSounds:
-            return .text(String(decoding: try JSONEncoder().encode(store.sounds.submissions), as: UTF8.self))
+            return .text(String(decoding: try JSONSerialization.data(withJSONObject: store.sounds.submissions.map { ["event": $0.event.rawValue, "accepted": $0.accepted] as [String: Any] }), as: UTF8.self))
         case .captureProbe(let page, let directory):
-            let root = Product.dataDirectory().standardizedFileURL.path + "/"
-            guard directory.standardizedFileURL.path.hasPrefix(root) else { throw Failure(message: "Probe path outside owned data") }
+            let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+            guard directory.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(root) else { throw Failure(message: "Probe path outside owned data") }
             return .text(try await engine.captureProbe(page, directory: directory))
         case .pageObservations:
             return .pageObservations(store.snapshot.observations)

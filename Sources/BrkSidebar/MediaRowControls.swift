@@ -42,13 +42,13 @@ final class MediaRowControls: NSView {
         for (index, player) in row.mediaPlayers.enumerated() {
             let verb = player.paused || player.ended ? "Play" : "Pause"
             let item = NSMenuItem(title: "\(verb) \(player.kind.rawValue) \(index + 1) · frame \(player.id.frame)", action: #selector(choose(_:)), keyEquivalent: "")
-            item.target = self; item.tag = index; menu.addItem(item)
+            item.target = self; item.representedObject = player; menu.addItem(item)
         }
         return menu
     }
     @objc private func choose(_ item: NSMenuItem) {
-        guard let row, row.mediaPlayers.indices.contains(item.tag) else { return }
-        let player = row.mediaPlayers[item.tag]
-        dispatch(.page(.media(.item(row.id), player.id, player.paused || player.ended ? .play : .pause)))
+        guard let row, let chosen = item.representedObject as? MediaPlayer,
+              let player = row.mediaPlayers.first(where: { $0.id == chosen.id }) else { return }
+        dispatch(.page(.media(.item(row.id), player.id, chosen.paused || chosen.ended ? .play : .pause)))
     }
 }

@@ -1,4 +1,3 @@
-import AppKit
 import BrkBase
 import BrkControl
 import BrkDomain
@@ -16,8 +15,9 @@ enum CaptureScenarios {
         app.note(report)
         for name in ["area", "full", "portrait"] {
             let data = try Data(contentsOf: directory.appendingPathComponent(name + ".png"))
-            guard let image = NSBitmapImageRep(data: data) else { throw Check(description: "invalid probe PNG") }
-            try expect(image.pixelsWide > 100 && image.pixelsHigh > 100, "empty capture")
+            try expect(data.count > 24 && Array(data.prefix(8)) == [137,80,78,71,13,10,26,10], "invalid probe PNG")
+            func dimension(_ offset: Int) -> Int { data[offset..<(offset + 4)].reduce(0) { $0 * 256 + Int($1) } }
+            try expect(dimension(16) > 100 && dimension(20) > 100, "empty capture")
             try data.write(to: app.shotsDirectory.appendingPathComponent("probe-" + name + ".png"))
         }
         try FileManager.default.copyItem(at: directory.appendingPathComponent("probe.json"), to: app.shotsDirectory.appendingPathComponent("probe.json"))
