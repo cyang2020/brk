@@ -141,7 +141,9 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(report.accessoryTooltips, ["Show in Finder", "Remove from List"])
         XCTAssertEqual(big.accessoryTooltips, ["Show in Finder", "Cancel Download"])
         XCTAssertEqual(broken.accessoryTooltips, ["Remove from List"])
-        XCTAssertEqual(report.contextMenu()?.items.map(\.title), ["Open", "Show in Finder", "Remove from List"])
+        XCTAssertEqual(report.contextMenu()?.items.map(\.title), ["Open", "Tidy Name with Max", "Show in Finder", "Remove from List"])
+        let tidy = try XCTUnwrap(report.contextMenu()?.items.first { $0.title == "Tidy Name with Max" })
+        _ = (tidy.target as? NSObject)?.perform(tidy.action!, with: tidy)
         report.click()
         moved.click()
         XCTAssertEqual(opened, [URL(fileURLWithPath: "/tmp/d/report.pdf")], "only a file still on disk opens")
@@ -149,7 +151,7 @@ final class LibraryViewTests: XCTestCase {
         big.pressAccessory("Cancel Download")
         broken.pressAccessory("Remove from List")
         view.downloads.actionButton.performClick(nil)
-        XCTAssertEqual(sent, [.library(.revealDownload(DownloadID("1"))), .library(.cancelDownload(DownloadID("3"))),
+        XCTAssertEqual(sent, [.assist(.renameDownload(DownloadID("1"))), .library(.revealDownload(DownloadID("1"))), .library(.cancelDownload(DownloadID("3"))),
                               .library(.removeDownload(DownloadID("5"))), .library(.clearDownloads)])
         view.downloads.searchField.stringValue = "ISO"
         view.downloads.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
