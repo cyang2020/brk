@@ -16,6 +16,8 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
+        .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
+        .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
         .find(.open(replace: false)), .find(.query(FindQuery(text: "x"))), .find(.step(.next)), .find(.close),
         .find(.useSelection), .find(.jumpToSelection), .find(.captureScope), .find(.replaceCurrent("y")), .find(.replaceAll("y")),
         .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.submitSearch(engine: SearchEngine.duckDuckGo.id, query: "x")),
@@ -56,6 +58,7 @@ enum CommandInventory {
     ]
 
     static let events: [SystemEvent] = [
+        .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .faviconChanged(nil)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)),

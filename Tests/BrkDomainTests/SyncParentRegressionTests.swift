@@ -4,6 +4,22 @@ import XCTest
 @testable import BrkDomain
 
 final class SyncParentRegressionTests: XCTestCase {
+    func testSidebarEntryPointsCaptureTheirOwnerAndSyncRequiresConnection() throws {
+        let d = Driver(startURL: nil)
+        XCTAssertEqual(d.user(.sidebarData(.welcome)).effects, [.sidebarData(.panel(d.window, .welcome))])
+        XCTAssertEqual(d.user(.sidebarData(.tour)).effects, [.sidebarData(.tour(d.window))])
+        XCTAssertEqual(d.user(.sidebarData(.importFile)).effects, [.sidebarData(.panel(d.window, .importFile))])
+        XCTAssertEqual(d.user(.sidebarData(.syncSettings)).effects, [.sidebarData(.panel(d.window, .syncSettings))])
+        XCTAssertTrue(d.user(.sidebarData(.syncNow)).effects.isEmpty)
+        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-sync-entry-points")))
+        let connected = try XCTUnwrap(d.state.doc.sidebarData.sync)
+        XCTAssertEqual(d.user(.sidebarData(.syncNow)).effects, [
+            .sidebarData(.exchange(epoch: connected.epoch, folder: "/tmp/owned-sync-entry-points",
+                                   replica: connected.replica, revision: connected.counter, connected.document)),
+        ])
+        d.user(.sidebarData(.disconnect))
+        XCTAssertTrue(d.user(.sidebarData(.syncNow)).effects.isEmpty)
+    }
     func testInvalidFolderPlacementRecoversInMappedProfile() throws {
         let d = Driver(startURL: nil)
         d.user(.profile(.create(name: "Mapped", icon: nil)))
@@ -21,7 +37,7 @@ final class SyncParentRegressionTests: XCTestCase {
         print("CONTROL invalid folder-under-Favorites stays in mapped profile; cross-profile suspicion disproved")
     }
 
-    func testPeerCanReplaceSharedRootAndDisplaceExcludedLocalTab() throws {
+    func testRejectsPeerRootReplacementAndKeepsExcludedLocalTab() throws {
         let d = Driver(startURL: nil)
         d.user(.profile(.create(name: "Mapped", icon: nil)))
         let mapped = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
@@ -42,7 +58,7 @@ final class SyncParentRegressionTests: XCTestCase {
         XCTAssertEqual(d.state.doc.spaces[d.view.space.id]?.pinnedRoot, pinned)
     }
 
-    func testLocalHostSpellingsArePublished() throws {
+    func testLocalHostSpellingsStayLocal() throws {
         let d = Driver(startURL: nil)
         let addresses = ["http://localhost./owned-local-path", "http://printer.local./owned-local-path", "http://2130706433/owned-local-path", "http://0x7f000001/owned-local-path"]
         let target = try XCTUnwrap(d.state.sidebarImportTarget(in: d.window))
@@ -55,7 +71,7 @@ final class SyncParentRegressionTests: XCTestCase {
         XCTAssertEqual(d.snapshot.sidebarData.excluded, addresses.count)
     }
 
-    func testAcceptedClockBoundaryMakesNextEditUnencodableAndReconnectDoesNotRecover() throws {
+    func testClockExhaustionKeepsValidOutboxAndFreshFolderRecovers() throws {
         let d = Driver(startURL: nil)
         d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-unused-clock-probe")))
         let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
@@ -80,7 +96,7 @@ final class SyncParentRegressionTests: XCTestCase {
         XCTAssertTrue(Driver(file: d.savedFile, startURL: nil).snapshot.sidebarData.connected)
     }
 
-    func testLivePeerRecordCanReplaceUnenrolledTodayTab() throws {
+    func testRejectsPeerCollisionWithUnenrolledTodayTab() throws {
         let d = Driver()
         let today = try XCTUnwrap(d.todayIDs.first)
         d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-unused-today-probe")))
@@ -96,7 +112,7 @@ final class SyncParentRegressionTests: XCTestCase {
         XCTAssertEqual(d.state.doc.sidebarData.sync?.document, local.document)
     }
 
-    func testConcurrentLocalEditMakesValidTransportResultExceedMergedLimit() throws {
+    func testRejectsOversizedMergeAfterConcurrentLocalEdit() throws {
         let d = Driver(startURL: nil)
         d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-unused-limit-probe")))
         let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
