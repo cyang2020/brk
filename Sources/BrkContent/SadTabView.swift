@@ -12,6 +12,7 @@ final class SadTabView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         identifier = NSUserInterfaceItemIdentifier("sad-tab")
+        setAccessibilityIdentifier("sad-tab")
         title.font = .systemFont(ofSize: 22, weight: .semibold)
         message.font = .systemFont(ofSize: 14)
         message.textColor = .secondaryLabelColor
@@ -21,6 +22,7 @@ final class SadTabView: NSView {
         reload.target = self
         reload.action = #selector(retry)
         reload.identifier = NSUserInterfaceItemIdentifier("sad-tab-reload")
+        reload.setAccessibilityIdentifier("sad-tab-reload")
         for view in [illustration, title, message, reload] { addSubview(view) }
     }
     @available(*, unavailable)

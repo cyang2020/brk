@@ -14,12 +14,14 @@ enum TabIconPicker {
         let picker = NSPopUpButton(frame: NSRect(x: 0, y: 76, width: 360, height: 26))
         picker.addItems(withTitles: NamedIcon.allCases.map(\.rawValue))
         picker.identifier = NSUserInterfaceItemIdentifier("tab-icon-named")
+        picker.setAccessibilityIdentifier("tab-icon-named")
         for (index, name) in NamedIcon.allCases.enumerated() {
             picker.item(at: index)?.image = NSImage(systemSymbolName: name.systemSymbolName, accessibilityDescription: name.rawValue)
         }
         let emoji = NSTextField(frame: NSRect(x: 0, y: 40, width: 360, height: 26))
         emoji.placeholderString = "Emoji or SF Symbol name"
         emoji.identifier = NSUserInterfaceItemIdentifier("tab-icon-custom")
+        emoji.setAccessibilityIdentifier("tab-icon-custom")
         switch initial {
         case .emoji(let text), .symbol(let text): emoji.stringValue = text
         case .named(let name): picker.selectItem(withTitle: name.rawValue)
@@ -42,7 +44,9 @@ enum TabIconPicker {
         // AppKit supplies arrow/type-to-select, Tab traversal, Return and Escape.
         alert.buttons[1].keyEquivalent = "\u{1b}"
         alert.buttons[0].identifier = NSUserInterfaceItemIdentifier("tab-icon-save")
+        alert.buttons[0].setAccessibilityIdentifier("tab-icon-save")
         alert.buttons[2].identifier = NSUserInterfaceItemIdentifier("tab-icon-clear")
+        alert.buttons[2].setAccessibilityIdentifier("tab-icon-clear")
         alert.beginSheetModal(for: window) { [input] response in
             _ = input
             if response == .alertThirdButtonReturn { choose(nil) }

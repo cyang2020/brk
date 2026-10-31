@@ -185,9 +185,12 @@ final class FavoriteTileView: HoverView {
         source.wantsLayer = true
         source.layer?.cornerRadius = Metrics.sidebarTools.sourceRadius.value
         source.identifier = NSUserInterfaceItemIdentifier("favorite-source-\(id.rawValue)")
+        source.setAccessibilityIdentifier("favorite-source-\(id.rawValue)")
         addSubview(source)
         badge.identifier = NSUserInterfaceItemIdentifier("favorite-badge-\(id.rawValue)")
+        badge.setAccessibilityIdentifier("favorite-badge-\(id.rawValue)")
         subtitle.identifier = NSUserInterfaceItemIdentifier("favorite-subtitle-\(id.rawValue)")
+        subtitle.setAccessibilityIdentifier("favorite-subtitle-\(id.rawValue)")
         badge.wantsLayer = true
         badge.layer?.backgroundColor = NSColor.black.cgColor
         badge.layer?.cornerRadius = Metrics.sidebarTools.unreadRadius.value

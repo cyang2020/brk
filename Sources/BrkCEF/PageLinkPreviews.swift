@@ -232,6 +232,7 @@ private final class LinkPreviewCard: NSView {
     init(title: String, url: URL, image: NSImage?, status: String) {
         super.init(frame: NSRect(origin: .zero, size: Metrics.sidebarTools.previewSize.value))
         identifier = NSUserInterfaceItemIdentifier("web-link-preview")
+        setAccessibilityIdentifier("web-link-preview")
         let icon = NSImageView(frame: NSRect(x: 14, y: 136, width: 24, height: 24))
         icon.image = image ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
         icon.imageScaling = .scaleProportionallyUpOrDown
