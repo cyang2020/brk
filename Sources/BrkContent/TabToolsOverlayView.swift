@@ -27,7 +27,7 @@ final class TabToolsOverlayView: NSView {
         outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         outputStatus.lineBreakMode = .byTruncatingMiddle
         outputStatus.wantsLayer = true
-        outputStatus.layer?.cornerRadius = 6
+        outputStatus.layer?.cornerRadius = Metrics.content.cornerRadius.value
         recent.identify(.tabTool("switcher"))
         toast.identify(.tabTool("toast"))
         education.identify(.tabTool("education"))
