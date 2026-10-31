@@ -95,7 +95,8 @@
       "wave": 1,
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Adb9bf908-e260-4019-b73d-f2bf87768090",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Adb9bf908-e260-4019-b73d-f2bf87768090",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "returned BLOCKED on lock contention only; branch t3/captures-media at ee28f93 kept",
+      "delivered_commit": "ee28f930930ac4a5f47ce8e8fc60792f14d78967"
     },
     {
       "slice": "boosts",
@@ -103,6 +104,21 @@
       "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
       "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
       "status_at_dispatch": "running"
+    },
+    {
+      "slice": "captures-media",
+      "wave": 1,
+      "attempt": 2,
+      "continues_from": "ee28f930930ac4a5f47ce8e8fc60792f14d78967",
+      "branch": "t3/captures-media-2",
+      "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae0af9f80-1244-4e59-868d-8b3c3b0b8d6e",
+      "thread_id": "thread:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae0af9f80-1244-4e59-868d-8b3c3b0b8d6e",
+      "status_at_dispatch": "running"
     }
-  ]
+  ],
+  "lock_wait_correction": {
+    "at": "2026-10-31T14:50:00Z",
+    "change": "--timeout 3600 / --wait 3600; steer messages sent to the seven running wave-1 workers",
+    "commit": "6260eb3"
+  }
 }
