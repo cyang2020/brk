@@ -18,6 +18,7 @@ final class ChromePage: CefBrowserDelegate {
     unowned let engine: CEFEngine
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
+    private var fullscreenTransition = ChromeFullscreenTransition()
     private var keyReceipts: [PageKeyReceipt] = []
     var sourceWindow: NSWindow?
     var sourceRequest: UInt64 = 0
@@ -61,6 +62,7 @@ final class ChromePage: CefBrowserDelegate {
     private func emit(_ events: [PageEvent]) {
         for event in events {
             if case .documentChanged(let document) = event {
+                fullscreenTransition.cancelPending()
                 audio.document(document)
                 if !audio.audible { engine.pageDidEmit(self, .audioChanged(false)) }
             }
@@ -102,6 +104,10 @@ final class ChromePage: CefBrowserDelegate {
         options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         chrome.browser.delegate = self
+        chrome.onFullscreenTransition = { [weak self] _, completed in
+            guard let self, let fullscreen = self.fullscreenTransition.nativeChanged(completed: completed) else { return }
+            self.emitFullscreen(fullscreen)
+        }
         chrome.onWindowDestroyed = { [weak self] in
             guard let self else { return }
             self.windowDestroyed = true
@@ -184,6 +190,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        fullscreenTransition.cancelPending()
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
@@ -198,7 +205,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); surface.park() }
+    func park() { fullscreenTransition.cancelPending(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -217,6 +224,7 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Explicit browser actions start a new attempt, even for URLs such as about:blank that can skip BeforeBrowse.
     func prepareNavigation() {
+        fullscreenTransition.cancelPending()
         expectedReloadBrowse = nil
         reloadSequence.cancel()
         prepareDocumentNavigation()
@@ -235,7 +243,11 @@ final class ChromePage: CefBrowserDelegate {
     func prepareStop() { reloadSequence.cancel(); emit(mainDocument.stopped()) }
     func reportZoom() { engine.pageDidEmit(self, .zoomChanged(BrowserZoom.percentage(level: browser.zoomLevel))) }
     func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool) {
-        engine.pageDidEmit(self, .fullscreenChanged(isFullscreen))
+        if let fullscreen = fullscreenTransition.pageChanged(isFullscreen) { emitFullscreen(fullscreen) }
+    }
+    private func emitFullscreen(_ fullscreen: Bool) {
+        guard surface.window?.isVisible == true, !surface.isHiddenOrHasHiddenAncestor else { return }
+        engine.pageDidEmit(self, .fullscreenChanged(fullscreen))
     }
 
     func browser(_ b: CefBrowser, findResult identifier: Int, count: Int, ordinal: Int, final: Bool) {

@@ -66,6 +66,9 @@ public final class CefChromeBrowser {
     /// teardown). The instance is unusable afterwards.
     public var onWindowDestroyed: (() -> Void)?
 
+    /// Chrome's actual native-window transition; DOM fullscreen can start this before its display callback.
+    public var onFullscreenTransition: ((_ isFullscreen: Bool, _ isCompleted: Bool) -> Void)?
+
     /// The AppKit window CEF created, once available. CEF owns this window —
     /// don't close or release it directly (use ``close()``); ordering,
     /// frame changes and child-window arrangements are fine.
@@ -443,14 +446,18 @@ final class ChromeWindowDelegate {
             }
         }
 
-        d.pointee.on_window_fullscreen_transition = { _, window, completed in
+        d.pointee.on_window_fullscreen_transition = { delegateSelf, window, completed in
             defer { cefRelease(window.map(UnsafeMutableRawPointer.init)) }
-            guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let window else { return }
+            guard let me = ChromeWindowDelegate.owner(delegateSelf.map(UnsafeMutableRawPointer.init)), let window else { return }
             MainActor.assumeIsolated {
-                let handle = window.pointee.get_window_handle?(window)
-                let native = handle.flatMap { Unmanaged<NSView>.fromOpaque($0).takeUnretainedValue().window }
-                let line = "cef fullscreen \(ProcessInfo.processInfo.systemUptime) window=\(native?.windowNumber ?? -1) completed=\(completed) full=\(window.pointee.is_fullscreen?(window) ?? -1)\n"
-                FileHandle.standardError.write(Data(line.utf8))
+                let fullscreen = window.pointee.is_fullscreen?(window) == 1
+                if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                    let handle = window.pointee.get_window_handle?(window)
+                    let native = handle.flatMap { Unmanaged<NSView>.fromOpaque($0).takeUnretainedValue().window }
+                    let line = "cef fullscreen \(ProcessInfo.processInfo.systemUptime) window=\(native?.windowNumber ?? -1) completed=\(completed) full=\(fullscreen)\n"
+                    FileHandle.standardError.write(Data(line.utf8))
+                }
+                me.chrome?.onFullscreenTransition?(fullscreen, completed != 0)
             }
         }
 
