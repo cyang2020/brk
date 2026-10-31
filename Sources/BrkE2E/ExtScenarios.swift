@@ -165,7 +165,32 @@ enum ExtScenarios {
         app.sleep(1)
         let stopped = app.site.requestCount("/ext-media-tick"); app.sleep(1.4)
         try expect(app.site.requestCount("/ext-media-tick") == stopped, "suspended WebAudio prevented suspension")
-        app.note("Real audible WebAudio protected hidden scheduling; suspended WebAudio allowed freezing. HTML media, silent running contexts and the typed PiP consumer have separate coverage limits.")
+        func matrix(_ name: String, setup: String, active: Bool) throws {
+            try app.dispatch(.tab(.focus(item)))
+            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";document.title='matrix:" + name + "'})().catch(e=>document.title='matrix-error:'+e.message)")
+            try waitForTitle(app, item, "matrix:" + name)
+            _ = try app.load(app.site.url("page2.html"))
+            app.sleep(0.9)
+            let baseline = app.site.requestCount("/ext-media-tick")
+            if active {
+                try app.waitUntil("hidden " + name + " keeps scheduling", timeout: 5) { app.site.requestCount("/ext-media-tick") > baseline + 1 }
+            } else {
+                app.sleep(1.4)
+                try expect(app.site.requestCount("/ext-media-tick") == baseline, name + " incorrectly kept a hidden page active")
+            }
+        }
+        let wav = """
+        const bytes=new Uint8Array(8044), d=new DataView(bytes.buffer);
+        const tag=(at,s)=>{for(let i=0;i<s.length;i++)bytes[at+i]=s.charCodeAt(i)};
+        tag(0,'RIFF');d.setUint32(4,8036,true);tag(8,'WAVE');tag(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,8000,true);d.setUint32(28,8000,true);d.setUint16(32,1,true);d.setUint16(34,8,true);tag(36,'data');d.setUint32(40,8000,true);bytes.fill(128,44);
+        window.extElement=new Audio('data:audio/wav;base64,'+btoa(String.fromCharCode(...bytes)));extElement.muted=true;extElement.loop=true;document.body.append(extElement);await extElement.play()
+        """
+        try matrix("muted-html-audio", setup: wav, active: true)
+        try matrix("paused-html-audio", setup: "extElement.pause()", active: false)
+        try matrix("muted-html-video", setup: "const canvas=document.createElement('canvas');window.extElement=document.createElement('video');extElement.muted=true;extElement.srcObject=canvas.captureStream(10);document.body.append(extElement);await extElement.play()", active: true)
+        try matrix("paused-html-video", setup: "extElement.pause()", active: false)
+        try matrix("running-silent-webaudio", setup: "await start(true)", active: false)
+        app.note("Real audible WebAudio, muted playing HTML audio and muted playing HTML video protected hidden scheduling. Suspended WebAudio, paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
     }
 
     @Sendable static func controls(_ app: AppUnderTest) throws {
