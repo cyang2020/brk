@@ -78,6 +78,8 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
+    func park() { contextMenu.cancel(); surface.park() }
+
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
     func takeFocus() {

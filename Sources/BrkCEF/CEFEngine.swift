@@ -414,8 +414,8 @@ public final class CEFEngine: WebEngine {
     private func retire(_ page: ChromePage) {
         guard ledger.retire(page.id) == page.incarnation else { return }
         resources.unpresent(page.incarnation)
+        page.park()
         transfers.sourceGone(page.incarnation)
-        page.surface.park()
         closeIfUnowned(page.incarnation)
     }
     private func closeIfUnowned(_ browser: BrowserToken) {
