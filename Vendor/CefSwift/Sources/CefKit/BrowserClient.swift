@@ -47,6 +47,10 @@ final class BrowserClient {
     /// The OSR browser wrapper awaiting its async-created raw cef_browser_t
     /// (adopted in on_after_created).
     var pendingOSRBrowser: CefBrowser?
+    private weak var popupOpener: CefBrowser?
+    private weak var popupParent: BrowserClient?
+    private var popupID: Int?
+    private var pendingPopups: [Int: BrowserClient] = [:]
 
     // The most recent context-menu params, captured in on_before_context_menu
     // and replayed to the command/dismiss callbacks (which also receive params,
@@ -115,6 +119,12 @@ final class BrowserClient {
                     cefAddRef(UnsafeMutableRawPointer(browser))  // adoptRaw takes a +1 it owns
                     pending.adoptRaw(browser)
                     client.pendingOSRBrowser = nil
+                    if let id = client.popupID {
+                        client.popupParent?.pendingPopups[id] = nil
+                        client.attach(pending)
+                        if let opener = client.popupOpener, let delegate = opener.delegate { delegate.browser(opener, didCreateNativePopup: pending) }
+                        else { pending.close(force: true) }
+                    }
                 }
             }
             cefRelease(UnsafeMutableRawPointer(browser))
@@ -127,13 +137,15 @@ final class BrowserClient {
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             MainActor.assumeIsolated {
+                for popup in client.pendingPopups.values { popup.pendingOSRBrowser = nil; popup.releaseHandlers() }
+                client.pendingPopups.removeAll()
                 client.browser?.handleBeforeClose()
                 client.releaseHandlers()
             }
         }
         lifeSpan.pointee.on_before_popup = {
             handlerSelf, browser, frame, popupID, targetURL, targetFrameName, targetDisposition,
-            userGesture, popupFeatures, _, _, _, _, _ in
+            userGesture, popupFeatures, _, popupClientPointer, _, _, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             let sourceFrame = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
             let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
@@ -167,13 +179,27 @@ final class BrowserClient {
                 // delegate returned `.allowNativePopup` for an OSR browser.
                 switch CefWindowOpenPolicy.resolve(raw, for: request) {
                 case .allowNativePopup:
-                    return 0  // let CEF create the native popup
+                    guard let popupClientPointer else { return 1 }
+                    let child = BrowserClient()
+                    let popup = CefBrowser(raw: nil, client: child, delegate: nil)
+                    child.pendingOSRBrowser = popup; child.popupOpener = cefBrowser
+                    child.popupParent = client; child.popupID = Int(popupID)
+                    client.pendingPopups[Int(popupID)] = child
+                    popupClientPointer.pointee = child.makeClient()
+                    return 0
                 case .openInCurrentBrowser:
                     if let url { cefBrowser.load(url) }
                     return 1
                 case .deny, .handled:
                     return 1  // app handled it (or denied); block CEF's popup
                 }
+            }
+        }
+        lifeSpan.pointee.on_before_popup_aborted = { raw, browser, id in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            MainActor.assumeIsolated {
+                guard let parent = BrowserClient.owner(raw.map(UnsafeMutableRawPointer.init)), let child = parent.pendingPopups.removeValue(forKey: Int(id)) else { return }
+                child.pendingOSRBrowser = nil; child.releaseHandlers()
             }
         }
         lifeSpanPointer = lifeSpan

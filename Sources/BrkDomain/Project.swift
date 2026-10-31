@@ -137,6 +137,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
+        row.documentPictureInPicture = state.session.live[PageID(window: id, item: tab)]?.documentPictureInPicture ?? false
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         if kind == .favorites, doc.kind == .standard {
@@ -281,6 +282,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
         let listed: ProfileID? = if case .profile(let p) = state.libraryContext(in: id) { p } else { nil }
         overlay = .library(LibrarySnapshot(
+            captures: page == .media ? state.session.captures.records.filter { $0.profile == listed }.sorted { $0.createdAt > $1.createdAt } : [],
+            captureFiles: page == .media ? state.session.captures.files.filter { key, _ in state.session.captures.records.contains { $0.id == key && $0.profile == listed } } : [:],
+            capturePreview: session.capturePreview, captureMessage: state.session.captureError,
             openID: openID, page: page,
             archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: archiveGroups(state, ctx), threshold: state.profileSettings(space.profile).autoArchive) : nil,
             downloads: page == .downloads ? state.doc.downloads.filter { $0.profile == listed }.map {
@@ -320,7 +324,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     // Focus.
     let focus: FocusTarget
-    if session.find?.focusInput == true { focus = .findInput }
+    if session.capture != nil { focus = .capture }
+    else if session.find?.focusInput == true { focus = .findInput }
     else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
     else if session.pendingSpaceDeletion != nil { focus = .none }
@@ -349,7 +354,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let theme = doc.kind == .incognito
         ? SpaceTheme(colors: [ThemePresets.greyscale[6]], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
         : space.theme
-    return WindowSnapshot(
+    return WindowSnapshot(capture: session.capture,
         id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme, systemScheme: ctx.systemScheme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
                                  toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
@@ -395,7 +400,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
     if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
-    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
+    let pageActions: [ActionID] = [.capturePage, .captureFullPage, .capturePrettyScreenshot, .videoPictureInPicture, .documentPictureInPicture, .closePictureInPicture, .stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }

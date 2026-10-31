@@ -99,6 +99,7 @@ extension Work {
         case .reload(let ref, let ignoringCache): emit(ref, .reload(ignoringCache: ignoringCache))
         case .stop(let ref): emit(ref, .stop)
         case .zoom(let step): emit(.focused, .zoom(step))
+        case .pictureInPicture(let intent): pictureInPicture(intent, in: window)
         case .media(let ref, let player, let operation):
             guard let tab = state.resolveTab(ref, in: window) else { return }
             let page = PageID(window: window, item: tab)
@@ -163,6 +164,7 @@ extension Work {
             case .unavailable: break
             }
             live.document = document
+            live.documentPictureInPicture = false; live.automaticPiPPlayer = nil
             live.mediaPlayers = []; live.mediaError = nil
         case .navigationRequested(let url): live.requestedURL = url
         case .committed(let url):
@@ -202,6 +204,9 @@ extension Work {
             live.failure = LoadFailure(code: code, description: description)
             live.loading = false
             live.document = .unavailable
+        case .documentPictureInPictureChanged(let document, let active, let error):
+            guard live.document == .ready(document) else { return }
+            live.documentPictureInPicture = active; live.mediaError = error
         case .mediaChanged(let document, let players, let error):
             guard live.document == .ready(document) else { return }
             live.mediaPlayers = players; live.mediaError = error

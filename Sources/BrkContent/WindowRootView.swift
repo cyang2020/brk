@@ -26,11 +26,13 @@ public final class WindowRootView: NSView {
     public let findBar: FindBarView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
+    private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
 
     public init(dispatch: @escaping Dispatch) {
+        captureOverlay = CaptureOverlayView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
         toolbar = AddressToolbarView(dispatch: dispatch)
@@ -43,7 +45,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, toolbar, library, peek, findBar, commandBar, spaceDialog, tabTools] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, toolbar, library, peek, findBar, commandBar, spaceDialog, tabTools, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
@@ -61,6 +63,7 @@ public final class WindowRootView: NSView {
     /// only way BrkApp reaches a view's focus: the fields themselves are internal to their targets.
     public func focus(_ target: FocusTarget) -> Bool {
         switch target {
+        case .capture: window?.makeFirstResponder(captureOverlay) ?? false
         case .findInput: findBar.focusInput()
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
@@ -110,6 +113,7 @@ public final class WindowRootView: NSView {
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
+        captureOverlay.render(snapshot.capture, frames: frames)
         lastTheme = snapshot.theme
     }
 }

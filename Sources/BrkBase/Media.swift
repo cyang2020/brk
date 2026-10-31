@@ -22,6 +22,15 @@ public enum MediaOperation: String, Hashable, Sendable, Codable { case play, pau
 public struct MediaControl: Hashable, Sendable, Codable {
     public let document: DocumentToken
     public let player: MediaPlayerID
+    public let userInitiated: Bool
     public let operation: MediaOperation
-    public init(document: DocumentToken, player: MediaPlayerID, operation: MediaOperation) { self.document = document; self.player = player; self.operation = operation }
+    public init(document: DocumentToken, player: MediaPlayerID, operation: MediaOperation, userInitiated: Bool = true) { self.document = document; self.player = player; self.operation = operation; self.userInitiated = userInitiated }
+}
+
+public enum PictureInPictureIntent: String, Hashable, Sendable, Codable { case video, document, close }
+public struct DocumentPiPControl: Hashable, Sendable, Codable {
+    public let document: DocumentToken
+    public let enter: Bool
+    public let userInitiated: Bool
+    public init(document: DocumentToken, enter: Bool, userInitiated: Bool = true) { self.document = document; self.enter = enter; self.userInitiated = userInitiated }
 }

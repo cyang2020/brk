@@ -31,6 +31,7 @@ public enum SiteCapability: String, Hashable, Sendable, Codable, CaseIterable { 
 public enum SitePermission: String, Hashable, Sendable, Codable, CaseIterable { case ask, allow, deny }
 
 public struct SiteRule: Hashable, Sendable, Codable {
+    public var pictureInPictureExempt: Bool? = nil
     public var blocking = true
     public var hideCookieBanners = false
     public var suspendWhenHidden = false

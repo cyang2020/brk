@@ -31,6 +31,7 @@ public struct PageObservation: Sendable, Equatable, Codable {
 }
 
 public struct WindowSnapshot: Sendable, Equatable, Codable {
+    public var capture: CaptureSnapshot? = nil
     public var id: WindowID
     public var rev: Int
     public var now: Instant
@@ -163,6 +164,7 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
     public var badge: Int? = nil
     public var subtitle: String? = nil
+    public var documentPictureInPicture = false
     public var mediaPlayers: [MediaPlayer] = []
     public var mediaError: String? = nil
     public var audible: Bool = false
@@ -258,6 +260,10 @@ public enum OverlaySnapshot: Sendable, Equatable, Codable {
 /// The Library host and its current page. Only the current page's data is projected; the archive keeps its own
 /// snapshot type (the archive page view is unchanged). Pages of later waves are empty placeholders.
 public struct LibrarySnapshot: Sendable, Equatable, Codable {
+    public var captures: [CaptureRecord] = []
+    public var captureFiles: [String: URL] = [:]
+    public var capturePreview: String? = nil
+    public var captureMessage: String? = nil
     public var openID: Int
     public var page: LibraryPage
     public var archive: ArchiveSnapshot?
@@ -399,6 +405,7 @@ public struct ArchiveEntry: Sendable, Equatable, Codable {
 }
 
 public enum FocusTarget: Sendable, Equatable, Codable {
+    case capture
     case page(PageID)
     case findInput
     case commandBarInput

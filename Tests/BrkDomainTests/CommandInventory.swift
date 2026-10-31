@@ -18,6 +18,9 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
+        .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
+        .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
+        .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
@@ -70,6 +73,8 @@ enum CommandInventory {
     ]
 
     static let events: [SystemEvent] = [
+        .capture(.exported(WindowID("ghost"), "fixture")),
+        .page(siteTarget.document.browser, .documentPictureInPictureChanged(siteTarget.document, true, error: nil)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .mediaChanged(DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), [], error: nil)),
         .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
@@ -101,6 +106,7 @@ enum CommandInventory {
 
     static func area(_ command: Command) -> String {
         switch command {
+        case .capture: "capture"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -125,6 +131,16 @@ enum CommandInventory {
 
     static func name(_ command: Command) -> String {
         let leaf: String = switch command {
+        case .capture(let c):
+            switch c {
+            case .begin: "begin"
+            case .select: "select"
+            case .cancel: "cancel"
+            case .preview: "preview"
+            case .export: "export"
+            case .remove: "remove"
+            case .insertInEasel: "insertInEasel"
+            }
         case .find(let c):
             switch c {
             case .open: "open"
@@ -199,6 +215,7 @@ enum CommandInventory {
             case .zoom: "zoom"
             case .toggleDevTools: "toggleDevTools"
             case .developer: "developer"
+            case .pictureInPicture: "pictureInPicture"
             case .media: "media"
             case .output: "output"
             case .cancelOutput: "cancelOutput"
@@ -330,6 +347,7 @@ enum CommandInventory {
 
     static func name(_ event: SystemEvent) -> String {
         switch event {
+        case .capture: "capture"
         case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {
@@ -341,6 +359,7 @@ enum CommandInventory {
             case .fullscreenChanged: "page.fullscreenChanged"
             case .titleChanged: "page.titleChanged"
             case .faviconChanged: "page.faviconChanged"
+            case .documentPictureInPictureChanged: "page.documentPictureInPictureChanged"
             case .mediaChanged: "page.mediaChanged"
             case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"

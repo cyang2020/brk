@@ -29,6 +29,7 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
+    var pictureInPictureWindows: [Int32: DocumentPiPHost] = [:]
     let resources = BrowserResources<ChromePage>()
     var live: [PageID: ChromePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
@@ -294,13 +295,21 @@ public final class CEFEngine: WebEngine {
             case .console: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_CONSOLE")
             case .network: _ = browser.executeChromeCommand(named: "IDC_DEV_TOOLS_NETWORK")
             }
+        case .documentPictureInPicture(let request):
+            live.controlDocumentPiP(request)
         case .media(let request):
             guard request.document == live.readyDocument, live.mediaPlayers.contains(where: { $0.id == request.player }),
                   let target = live.audio.target, let tab = live.audio.tab,
                   let observer = audioObservers[live.context], contexts.permitsWork(live.context) else { return }
             Task { @MainActor [weak self, weak live] in
                 var error: String?
-                do { try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation) }
+                do {
+                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: request.userInitiated)
+                    if !request.userInitiated, request.operation == .enterPictureInPicture, let self, let live,
+                       !self.isLive(live) || live.readyDocument != request.document || live.websitePolicy.visible {
+                        try? await observer.control(target: target, tab: tab, player: request.player, operation: .exitPictureInPicture, userInitiated: false)
+                    }
+                }
                 catch let failure { error = String(describing: failure) }
                 guard let self, let live, self.isLive(live), live.readyDocument == request.document else { return }
                 live.mediaControlFinished(error)
@@ -490,7 +499,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            self.pictureInPictureWindows.isEmpty && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained)
         }
         guard drained else {

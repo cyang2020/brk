@@ -28,7 +28,7 @@ public final class AppStore {
     public private(set) var snapshot: AppSnapshot
     private var state: AppState
     private let clock: any Clock
-    private let engine: any WebEngine
+    let engine: any WebEngine
     private let stateFile: StateFile
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
@@ -56,6 +56,8 @@ public final class AppStore {
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
     let sounds = SoundEffects()
+    let captureFiles: CaptureFiles
+    public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
     let siteDialogs = SiteDialogs()
@@ -70,6 +72,7 @@ public final class AppStore {
         self.clock = clock
         self.engine = engine
         self.stateFile = stateFile
+        captureFiles = CaptureFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
     }
 
@@ -327,10 +330,13 @@ public final class AppStore {
         if owner.isVisible, owner.attachedSheet == nil { alert.beginSheetModal(for: owner) }
     }
 
+    func captureWindow(_ id: WindowID) -> NSWindow? { windows[id]?.window }
+
     private func run(_ effects: [Effect]) {
         siteTools.reconcile(Set(snapshot.windows.values.compactMap { $0.tabTools.pendingSiteRequest }))
         for effect in effects {
             switch effect {
+            case .capture(let effect): runCapture(effect)
             case .find(let request): engine.find(request)
             case .siteRequest(let request):
                 if let window = windows[request.window]?.window { siteTools.run(request, in: window) }

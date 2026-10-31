@@ -34,6 +34,7 @@ public enum Command: Hashable, Sendable, Codable {
     case archive(ArchiveCommand)
     case tab(TabCommand)
     case tabTools(TabToolsCommand)
+    case capture(CaptureCommand)
     case page(PageCommand)
     case item(ItemCommand)
     case space(SpaceCommand)
@@ -138,6 +139,7 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case stop(ItemRef)
     case zoom(ZoomStep)
     case toggleDevTools
+    case pictureInPicture(PictureInPictureIntent)
     case media(ItemRef, MediaPlayerID, MediaOperation)
     case output(OutputIntent)
     case cancelOutput
@@ -418,6 +420,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 // MARK: - System events
 
 public enum SystemEvent: Sendable, Equatable {
+    case capture(CaptureEvent)
     case find(FindUpdate)
     case sidebarData(SidebarDataEvent)
     case page(BrowserToken, PageEvent)
@@ -473,7 +476,8 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
+        case .capture(.begin): false
+        case .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         default: false
         }

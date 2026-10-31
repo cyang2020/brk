@@ -755,3 +755,12 @@ extension StateCodec {
         } catch { return .failed("Cannot read this rule file: " + error.localizedDescription) }
     }
 }
+
+
+extension StateCodec {
+    public static func encodeCaptures(_ records: [CaptureRecord]) throws -> Data {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(records)
+    }
+    public static func decodeCaptures(_ bytes: Data) throws -> [CaptureRecord] { try JSONDecoder().decode([CaptureRecord].self, from: bytes) }
+}

@@ -172,6 +172,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        closeDocumentPiP()
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
@@ -183,7 +184,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -256,6 +257,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
+        closeDocumentPiP()
         emit(mainDocument.started(url))
     }
 
@@ -305,6 +307,7 @@ final class ChromePage: CefBrowserDelegate {
 
     /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
+        if request.disposition == .newPictureInPicture { return .allowNativePopup }
         if let url = request.targetURL {
             let disposition: OpenDisposition
             switch request.disposition {

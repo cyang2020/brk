@@ -49,6 +49,7 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func capture(_ request: CaptureRequest) async throws -> CaptureImage
     func captureProbe(_ page: PageID, directory: URL) async throws -> String
     func find(_ request: FindRequest)
     func output(_ request: OutputRequest)
@@ -105,6 +106,7 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }
     public func captureProbe(_ page: PageID, directory: URL) async throws -> String { "unsupported" }
     public func output(_ request: OutputRequest) {}
     public func cancelOutput(_ id: OutputID) {}

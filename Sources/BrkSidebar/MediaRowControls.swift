@@ -5,7 +5,7 @@ import BrkUIKit
 
 /// A row controls one concrete player. The context menu exposes each player's own state.
 @MainActor
-final class MediaRowControls: NSView {
+final class MediaRowControls: HoverView {
     private let dispatch: Dispatch
     private let button = NSButton()
     private var row: TabRow?
@@ -30,6 +30,15 @@ final class MediaRowControls: NSView {
         button.toolTip = row.mediaError ?? (paused ? "Play Media" : "Pause Media")
         button.identify(.tabTool("media-" + row.id.rawValue))
         button.setAccessibilityLabel(paused ? "Play Media" : "Pause Media")
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHidden, frame.contains(point) else { return nil }
+        return self
+    }
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { toggle() }
     }
     override func layout() { super.layout(); button.frame = bounds }
     @objc private func toggle() {

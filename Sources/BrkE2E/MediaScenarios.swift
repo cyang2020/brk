@@ -52,10 +52,25 @@ enum MediaScenarios {
         let played = try submissions(app)
         try expect(played.count == before + 1, "archive did not emit exactly one sound")
         try expect(played.last?["event"] as? String == "tabsArchived" && played.last?["accepted"] as? Bool == true, "NSSound rejected the bundled asset")
+        let captureURL = app.site.url("capture-media.html")
+        let captureItem = try app.load(captureURL)
+        try app.waitForPageInput(PageID(window:app.window!,item:captureItem),at:captureURL)
+        try app.dispatch(.capture(.begin(.fullPage)))
+        try app.waitUntil("capture completion submits its own cue") { try submissions(app).count == played.count + 1 }
+        try expect(try submissions(app).last?["event"] as? String == "captureCompleted", "capture completion used the wrong cue")
+        try app.dispatch(.library(.close))
+        let directory = app.dataDirectory.appendingPathComponent("sound-downloads")
+        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        try app.dispatch(.settings(.profile(.default,.downloadsDirectory(directory.path))))
+        try app.dispatch(.settings(.profile(.default,.promptForDownloadLocation(false))))
+        _ = try app.load(app.site.url("download"))
+        try app.waitUntil("download completion submits its own cue") { try submissions(app).count == played.count + 2 }
+        try expect(try submissions(app).last?["event"] as? String == "downloadCompleted", "download completion used the wrong cue")
+        let enabledCount = try submissions(app).count
         try app.dispatch(.settings(.advanced(.soundEffects(false))))
         _ = try app.load(app.site.url("page2.html"))
         try app.dispatch(.tab(.close(.focused)))
-        try expect(try submissions(app).count == played.count, "disabled sound still submitted to audio")
+        try expect(try submissions(app).count == enabledCount, "disabled sound still submitted to audio")
         try app.restart()
         guard case .settings(let settings) = try app.send(.settings) else { throw Check(description: "settings missing") }
         try expect(settings.advanced.soundEffects == false, "disabled setting did not survive restart")

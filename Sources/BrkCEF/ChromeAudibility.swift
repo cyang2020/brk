@@ -114,7 +114,7 @@ final class ChromeAudibility: CefBrowserDelegate {
             if (!tab || typeof tab.audible !== 'boolean' || tab.incognito !== chrome.extension.inIncognitoContext) continue;
             let players = [], mediaError = null;
             try {
-              const frames = await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
+              const frames = await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
               for (const frame of frames) for (const player of frame.result ?? []) players.push({...player,document:frame.documentId,frame:frame.frameId});
             } catch(e) { mediaError = String(e); }
             result.push({token: request.token, target: id, tab: tab.id, audible: tab.audible, incognito: tab.incognito, players, mediaError});
@@ -147,7 +147,7 @@ final class ChromeAudibility: CefBrowserDelegate {
         return readings.filter { $0.token == token && $0.incognito == isPrivate && targets.contains($0.target) }
     }
 
-    func control(target: String, tab: Int, player: MediaPlayerID, operation: MediaOperation) async throws {
+    func control(target: String, tab: Int, player: MediaPlayerID, operation: MediaOperation, userInitiated: Bool = true) async throws {
         guard ready, !stopping, let transport else { throw CefDevTools.Failure.unavailable }
         let args = String(decoding: try JSONSerialization.data(withJSONObject: ["target": target, "tab": tab, "document": player.document, "frame": player.frame, "element": player.element, "operation": operation.rawValue]), as: UTF8.self)
         let script = """
@@ -157,7 +157,7 @@ final class ChromeAudibility: CefBrowserDelegate {
           if (!targets.some(t=>t.id===r.target && t.tabId===r.tab && t.type==='page')) throw Error('Target changed');
           const tab=await chrome.tabs.get(r.tab);
           if (tab.incognito !== chrome.extension.inIncognitoContext) throw Error('Context changed');
-          const result=await chrome.scripting.executeScript({target:{tabId:r.tab,documentIds:[r.document]},args:[r.element,r.operation],func:async(id,op)=>{
+          const result=await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:r.tab,documentIds:[r.document]},args:[r.element,r.operation],func:async(id,op)=>{
             try { if (!globalThis.__brkMedia) throw Error('Player document unavailable'); return {value:await globalThis.__brkMedia.control(id,op)}; }
             catch(e) { return {error:e.name+': '+e.message}; }
           }});
@@ -166,7 +166,7 @@ final class ChromeAudibility: CefBrowserDelegate {
           return true;
         })()
         """
-        let data = try await transport.call("Runtime.evaluate", parameters: ["expression": script, "awaitPromise": true, "returnByValue": true])
+        let data = try await transport.call("Runtime.evaluate", parameters: ["expression": script, "awaitPromise": true, "returnByValue": true, "userGesture": userInitiated])
         guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any], value["exceptionDetails"] == nil,
               (value["result"] as? [String: Any])?["value"] as? Bool == true else {
             throw CefDevTools.Failure.protocolError(String(decoding: data, as: UTF8.self))

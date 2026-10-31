@@ -28,7 +28,7 @@
           if (!(player instanceof HTMLVideoElement)) throw Error('This player has no video');
           await HTMLVideoElement.prototype.requestPictureInPicture.call(player); break;
         case 'exitPictureInPicture':
-          if (document.pictureInPictureElement !== player) throw Error('This player does not own picture in picture');
+          if (document.pictureInPictureElement !== player) break;
           await document.exitPictureInPicture(); break;
         default: throw Error('Unknown media operation');
       }
