@@ -169,6 +169,16 @@
       "thread_id": "thread:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae0af9f80-1244-4e59-868d-8b3c3b0b8d6e",
       "status_at_dispatch": "delivered ISSUES (A102/A103/A105 implemented; A104/A106 partial); parent reviews",
       "delivered_commit": "69ccd75e685aa1696e406c8ba8c5b2f72466fe6d"
+    },
+    {
+      "slice": "file-panels",
+      "wave": 1,
+      "attempt": 2,
+      "continues_from": "3b48d6074cfd0c24ba40fc22aee1b56ab70f015a",
+      "branch": "t3/file-panels-fix",
+      "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae17cce6b-4494-48f5-b74f-7a804d798404",
+      "status_at_dispatch": "delivered PASS: real panels driven through accessibility; A143 verified, A122/A144 implemented",
+      "delivered_commit": "1f7d43f7b025ef45d9dd1c2f8220ee976a4bf735"
     }
   ],
   "lock_wait_correction": {
