@@ -42,9 +42,7 @@ struct MainDocumentState {
         let events = changed(failed ? .unavailable : .loading(DocumentToken(browser: browser, sequence: sequence)))
         guard !failed, let url else { return events }
         committedAddress = url
-        // A streamed document can expose its title before OnLoadEnd. Keep its request pending so those
-        // provisional titles cannot rewrite the preceding visit or its restoration address.
-        return events
+        return events + [.committed(url)]
     }
 
     mutating func finished(_ url: URL?) -> [PageEvent] {
