@@ -11,9 +11,11 @@ extension CEFEngine {
               let channel = CefDevTools(browser: page.browser) else { throw CefDevTools.Failure.unavailable }
         defer { channel.invalidate() }
         let revision = page.captureRevision
+        let zoomLevel = page.browser.zoomLevel
         func valid() throws {
             try Task.checkCancellation()
-            guard isLive(page), page.captureRevision == revision, page.readyDocument == request.document, contexts.permitsWork(request.context) else { throw CefDevTools.Failure.detached }
+            guard isLive(page), page.captureRevision == revision, page.browser.zoomLevel == zoomLevel,
+                  page.readyDocument == request.document, contexts.permitsWork(request.context) else { throw CefDevTools.Failure.detached }
         }
         try valid()
         let metricsData = try await channel.call("Page.getLayoutMetrics")
@@ -23,8 +25,10 @@ extension CEFEngine {
               let viewport = metrics["cssVisualViewport"] as? [String: Double],
               let physical = metrics["contentSize"] as? [String: Double],
               let width = content["width"], let height = content["height"], width > 0, height > 0,
-              let physicalWidth = physical["width"], let vw = viewport["clientWidth"], let vh = viewport["clientHeight"] else { throw CefDevTools.Failure.protocolError("Missing capture metrics") }
-        let scale = physicalWidth / width
+              let physicalWidth = physical["width"], let physicalHeight = physical["height"],
+              let vw = viewport["clientWidth"], let vh = viewport["clientHeight"] else { throw CefDevTools.Failure.protocolError("Missing capture metrics") }
+        let scale = height >= width ? physicalHeight / height : physicalWidth / width
+        let zoom = viewport["zoom"] ?? pow(1.2,zoomLevel)
         var x = 0.0, y = 0.0, w = width, h = height
         if request.mode != .fullPage {
             guard let region = request.region, region.valid else { throw CefDevTools.Failure.protocolError("Choose a capture area") }
@@ -33,22 +37,23 @@ extension CEFEngine {
             w = region.width * vw; h = region.height * vh
         }
         // Bound renderer allocation before requesting bytes. Never silently truncate a long page.
-        guard scale.isFinite, scale > 0, w >= 1, h >= 1, w * scale <= 32768, h * scale <= 32768,
+        guard scale.isFinite, scale > 0, zoom.isFinite, zoom > 0, w * scale >= 1, h * scale >= 1, w * scale <= 32768, h * scale <= 32768,
               w * h * scale * scale <= 80_000_000 else { throw CefDevTools.Failure.protocolError("Capture exceeds 80 million pixels or 32,768 pixels per side. Choose a smaller area.") }
-        // Fractional protocol clips can lose the embedded display profile in this runtime. The proven integer
-        // source preserves it; request an enclosing integer CSS rectangle, then crop exact native pixels.
-        let clipX = request.mode == .fullPage ? x : floor(x), clipY = request.mode == .fullPage ? y : floor(y)
-        let clipW = request.mode == .fullPage ? w : ceil(x+w)-clipX, clipH = request.mode == .fullPage ? h : ceil(y+h)-clipY
+        // Protocol clips use DIP, while these layout metrics use CSS pixels. Integer DIP bounds also preserve
+        // the runtime's embedded display profile; crop the enclosing result in native pixels afterwards.
+        let pixelsPerDIP = scale / zoom
+        let clipX = floor(x*zoom), clipY = floor(y*zoom)
+        let clipW = ceil((x+w)*zoom)-clipX, clipH = ceil((y+h)*zoom)-clipY
         let data = try await channel.call("Page.captureScreenshot", parameters: ["format":"png", "fromSurface":true,
             "captureBeyondViewport":true, "clip":["x":clipX,"y":clipY,"width":clipW,"height":clipH,"scale":1]])
         try valid()
         guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any], let encoded = body["data"] as? String,
               let png = Data(base64Encoded: encoded), let image = NSBitmapImageRep(data: png),
-              abs(Double(image.pixelsWide) - clipW * scale) <= 2, abs(Double(image.pixelsHigh) - clipH * scale) <= 2 else {
+              abs(Double(image.pixelsWide) - clipW * pixelsPerDIP) <= 2, abs(Double(image.pixelsHigh) - clipH * pixelsPerDIP) <= 2 else {
             throw CefDevTools.Failure.protocolError("Capture pixels do not match the selected dimensions")
         }
-        if request.mode == .fullPage { return CaptureImage(png:png,width:image.pixelsWide,height:image.pixelsHigh,scale:scale) }
-        let pixels = CGRect(x:((x-clipX)*scale).rounded(),y:((y-clipY)*scale).rounded(),width:(w*scale).rounded(),height:(h*scale).rounded())
+        let pixels = CGRect(x:((x*zoom-clipX)*pixelsPerDIP).rounded(),y:((y*zoom-clipY)*pixelsPerDIP).rounded(),width:(w*scale).rounded(),height:(h*scale).rounded())
+        if pixels == CGRect(x:0,y:0,width:image.pixelsWide,height:image.pixelsHigh) { return CaptureImage(png:png,width:image.pixelsWide,height:image.pixelsHigh,scale:scale) }
         return try CapturePixels.crop(png,pixels:pixels,scale:scale)
     }
 }

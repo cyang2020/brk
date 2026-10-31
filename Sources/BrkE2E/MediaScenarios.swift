@@ -58,6 +58,7 @@ enum MediaScenarios {
         try app.dispatch(.capture(.begin(.fullPage)))
         try app.waitUntil("capture completion submits its own cue") { try submissions(app).count == played.count + 1 }
         try expect(try submissions(app).last?["event"] as? String == "captureCompleted", "capture completion used the wrong cue")
+        try expect(try submissions(app).last?["accepted"] as? Bool == true,"NSSound rejected the capture cue")
         try app.dispatch(.library(.close))
         let directory = app.dataDirectory.appendingPathComponent("sound-downloads")
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
@@ -66,6 +67,8 @@ enum MediaScenarios {
         _ = try app.load(app.site.url("download"))
         try app.waitUntil("download completion submits its own cue") { try submissions(app).count == played.count + 2 }
         try expect(try submissions(app).last?["event"] as? String == "downloadCompleted", "download completion used the wrong cue")
+        try expect(try submissions(app).last?["accepted"] as? Bool == true,"NSSound rejected the download cue")
+        try JSONSerialization.data(withJSONObject:submissions(app),options:[.prettyPrinted,.sortedKeys]).write(to:app.shotsDirectory.appendingPathComponent("sound-submissions.json"))
         let enabledCount = try submissions(app).count
         try app.dispatch(.settings(.advanced(.soundEffects(false))))
         _ = try app.load(app.site.url("page2.html"))

@@ -42,7 +42,6 @@ public final class AppStore {
     private let calendar = Calendar.autoupdatingCurrent
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
-    var nativePopupMenu: NSMenu? { popupTarget.presentedMenu }
     let destinations = DownloadSheets()
     private let syncIO = SidebarSyncIO()
     private var syncTask: Task<Void, Never>?
@@ -400,6 +399,7 @@ public final class AppStore {
             case .popupMenu(let id, let model, let at):
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
+                NotificationCenter.default.post(name:ContextMenuCapture.willPresent,object:menu)
                 menu.popUp(positioning: nil, at: at, in: controller.root)
                 popupTarget.clear()
             case .export(let document, let owner):
@@ -537,7 +537,6 @@ public final class AppStore {
 /// Builds a native popup from a `MenuModel`; each item dispatches its entry's command when chosen.
 @MainActor
 final class PopupTarget: NSObject {
-    private(set) weak var presentedMenu: NSMenu?
     private var commands: [Int: Command] = [:]
     private var choose: ((Command) -> Void)?
 
@@ -545,7 +544,6 @@ final class PopupTarget: NSObject {
         self.choose = choose
         commands.removeAll()
         let menu = NSMenu()
-        presentedMenu = menu
         for (i, entry) in model.entries.enumerated() {
             switch entry {
             case .separator:
@@ -563,7 +561,7 @@ final class PopupTarget: NSObject {
         return menu
     }
 
-    func clear() { commands.removeAll(); choose = nil; presentedMenu = nil }
+    func clear() { commands.removeAll(); choose = nil }
 
     @objc private func fire(_ sender: NSMenuItem) {
         if let command = commands[sender.tag] { choose?(command) }

@@ -267,7 +267,7 @@ final class ControlExecutor {
             let c = try controller(window)
             store.inputWindow = c.window
             let capture = ContextMenuCapture()
-            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice, currentMenu:{ [weak store] in store?.nativePopupMenu }))
+            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice))
 
         case .screenshot(let window, let path):
             let c = try controller(window)

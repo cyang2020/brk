@@ -12,16 +12,19 @@ enum CaptureScenarios {
     static func library(_ app: AppUnderTest) throws -> LibrarySnapshot? { if case .library(let value)? = try app.view().overlay { value } else { nil } }
     static func pngSize(_ bytes: Data) -> [Int] { [16,20].map { offset in bytes[offset..<(offset+4)].reduce(0) { $0*256+Int($1) } } }
     static func captureRecord(_ app: AppUnderTest, mode: CaptureMode, previous: Int) throws -> CaptureRecord {
+        var failure: String?
         do { try app.waitUntil("capture reaches Media as a real indexed PNG", timeout:20) {
             if try library(app)?.captures.count == previous + 1 { return true }
             let view = try app.view()
-            if view.capture == nil, let toast = view.tabTools.toast { throw Check(description:toast.text) }
+            if view.capture == nil, let toast = view.tabTools.toast { failure = toast.text; return true }
             if view.capture == nil, view.overlay == nil {
                 try app.dispatch(.library(.open(.media)))
-                throw Check(description:try library(app)?.captureMessage ?? "Capture was cancelled while its source remained selected")
+                failure = try library(app)?.captureMessage ?? "Capture was cancelled while its source remained selected"; return true
             }
             return false
-        } } catch {
+        }
+            if let failure { throw Check(description:failure) }
+        } catch {
             try? JSONEncoder().encode(try app.view()).write(to:app.shotsDirectory.appendingPathComponent("capture-failed-view.json"))
             try? JSONEncoder().encode(try app.send(.pageObservations)).write(to:app.shotsDirectory.appendingPathComponent("capture-failed-observations.json"))
             throw error
@@ -72,6 +75,7 @@ enum CaptureScenarios {
         _ = try app.send(.sidebarPanel(window:app.window,action:.button("Export")))
         try app.waitUntil("native save panel exports actual PNG bytes",timeout:15) { FileManager.default.fileExists(atPath:exported.path) }
         try expect(try Data(contentsOf:exported) == Data(contentsOf:library(app)!.captureFiles[area.id]!),"export changed PNG bytes")
+        try Data(contentsOf:exported).write(to:app.shotsDirectory.appendingPathComponent("product-exported.png"))
         try app.restart()
         try app.dispatch(.library(.open(.media)))
         try app.waitUntil("capture index survives restart") { try library(app)?.captures.count == 3 }
@@ -154,7 +158,10 @@ enum CaptureScenarios {
         let record: CaptureRecord
         do { record = try captureRecord(app,mode:.fullPage,previous:0) }
         catch {
-            _ = try? app.send(.captureProbe(page:page,directory:app.shotsDirectory.appendingPathComponent("zoom-raw")))
+            try? app.dispatch(.library(.close)); try? app.waitForPageInput(page,at:url)
+            let raw = app.dataDirectory.appendingPathComponent("zoom-raw")
+            _ = try? app.send(.captureProbe(page:page,directory:raw))
+            try? FileManager.default.copyItem(at:raw,to:app.shotsDirectory.appendingPathComponent("zoom-raw"))
             throw error
         }
         try expect(abs(Double(record.width)-metrics["width"]!*metrics["dpr"]!)<=2 && abs(Double(record.height)-metrics["height"]!*metrics["dpr"]!)<=2,"zoomed pixels do not match actual DOM devicePixelRatio")

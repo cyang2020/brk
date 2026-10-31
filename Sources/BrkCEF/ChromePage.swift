@@ -314,7 +314,7 @@ final class ChromePage: CefBrowserDelegate {
                          y: request.features.y, width: request.features.width, height: request.features.height)
     }
 
-    /// Every open becomes a tab the domain creates (or refuses); CEF never makes its own popup window.
+    /// Tab links use domain routing; real popup and PiP windows share the native auxiliary owner.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
         guard engine.isLive(self) else { return .deny }
         if request.disposition == .newPictureInPicture {
