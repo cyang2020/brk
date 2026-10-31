@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Offline CLI fixture. Understands Claude/Codex argv; never opens the network."""
+import json, os, signal, sys, time
+prompt = sys.argv[2] if sys.argv[1] == '-p' else sys.argv[-1]
+if prompt.startswith('PID '):
+    path, prompt = prompt[4:].split('\n', 1)
+    open(path, 'w').write(str(os.getpid()))
+if prompt == 'hang':
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    while True: time.sleep(1)
+elif prompt == 'large':
+    for _ in range(128):
+        os.write(1, b'x' * 4096)
+        os.write(2, b'e' * 4096)
+elif prompt == 'stream':
+    print('first', flush=True)
+    time.sleep(.4)
+    print('second', flush=True)
+elif prompt == 'fail':
+    print('fixture account unavailable', file=sys.stderr)
+    sys.exit(23)
+else:
+    print('Fixture answer')
