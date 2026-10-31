@@ -21,6 +21,9 @@ enum HostWindows {
     /// Makes `host` a borderless, transparent, shadowless, click-through, never-key window and a child of `parent`
     /// (re-parenting when it already had one; `nil` detaches it). Idempotent.
     static func adopt(_ host: NSWindow, parent: NSWindow?) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[page-host] adopt window=\(host.windowNumber) new=\(!hosts.contains(host)) key=\(host.isKeyWindow) parent=\(parent?.windowNumber ?? -1)")
+        }
         guardClass(of: host)
         if !hosts.contains(host) {
             host.styleMask.remove([.titled, .resizable])

@@ -61,6 +61,8 @@ extension ChromePage {
         policyRevision += 1
         let revision = policyRevision
         let policy = websitePolicy
+        let trace = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil
+        if trace { print("[site-lifecycle] refresh page=\(id) revision=\(revision) visible=\(policy.visible) cachedFrozen=\(frozen)") }
         let rule = policy.preferences.rule(for: origin)
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
@@ -102,9 +104,17 @@ extension ChromePage {
                 if shouldFreeze {
                     let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.paused&&!x.ended)", "returnByValue": true, "contextId": contextID])
                     media = (result["result"] as? [String: Any])?["value"] as? Bool ?? true
+                    if trace {
+                        let expression = "({url:location.href,title:document.title,visibility:document.visibilityState,media:Array.from(document.querySelectorAll('audio,video')).map(x=>({tag:x.tagName,paused:x.paused,ended:x.ended,muted:x.muted,time:x.currentTime}))})"
+                        let isolated = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true, "contextId": contextID])
+                        let main = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true])
+                        let data = try JSONSerialization.data(withJSONObject: ["page": self.id.description, "revision": revision, "mediaActive": media, "isolated": isolated, "main": main], options: [.sortedKeys])
+                        print("[site-media] " + String(decoding: data, as: UTF8.self))
+                    }
                 }
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 let freeze = shouldFreeze && !media && !self.websiteOperationProtected()
+                if trace { print("[site-lifecycle] apply page=\(self.id) revision=\(revision) frozen=\(freeze)") }
                 _ = try await self.browser.protocolSession.call("Page.setWebLifecycleState", ["state": freeze ? "frozen" : "active"])
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 self.frozen = freeze

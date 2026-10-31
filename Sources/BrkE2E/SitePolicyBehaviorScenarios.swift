@@ -12,18 +12,35 @@ enum SitePolicyBehaviorScenarios {
     ]
     @Sendable static func permission(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
+        try app.dispatch(.site(.controls))
+        var osStatus: String?
+        try app.waitUntil("OS notification authorization readback") {
+            osStatus = try SitePolicyScenarios.controls(app).applied?.osAuthorization?[.notifications]
+            return osStatus != nil
+        }
+        guard let before = try SitePolicyScenarios.controls(app).target else { throw Check(description: "permission target missing") }
+        if osStatus != "authorized" && osStatus != "denied" && osStatus != "restricted" {
+            // This host cannot drive a real OS prompt. A remembered site denial never requests OS access.
+            var rule = SiteRule(); rule.permissions[.notifications] = .deny
+            try app.dispatch(.site(.rule(before, rule)))
+        }
+        try app.dispatch(.site(.closeControls))
         try SitePolicyScenarios.evaluate(app, item, "document.querySelector('button').style.cssText='position:fixed;left:20px;top:220px;width:200px;height:40px'")
         let card = try app.native().computed.cards[0].rect
         try app.click(at: CGPoint(x: card.minX + 80, y: card.minY + 240))
-        try app.click(.settingsField("sitePermissionDeny"))
+        if osStatus == "authorized" {
+            try app.waitUntil("Brk permission sheet after OS authorization") { try app.native().sheetClass != nil }
+            try app.click(.settingsField("sitePermissionDeny"))
+        }
         try waitForTitle(app, item, "permission:denied")
+        try expect(try app.native().sheetClass == nil, "a permission sheet outlived the denied request")
         try app.dispatch(.site(.controls))
         guard let target = try SitePolicyScenarios.controls(app).target else { throw Check(description: "permission target missing") }
         var rule = SiteRule(); rule.permissions[.notifications] = .deny
         try app.dispatch(.site(.rule(target, rule)))
         try expect(try SitePolicyScenarios.controls(app).rule.permissions[.notifications] == .deny, "permission readback missing")
         try app.dispatch(.site(.closeControls))
-        app.note("A real page click requested notifications; Brk's native Deny button resolved the page promise as denied. Camera/microphone/location OS allow paths remain unproven on this host.")
+        app.note("Real OS notification status: " + (osStatus ?? "unknown") + ". A real page click resolved denied; Brk's Deny button is exercised only when OS authorization permits a site prompt. Undetermined/unknown OS status uses a remembered denial without requesting host authorization. Real OS prompt and camera/microphone/location allow paths remain external gates.")
     }
     @Sendable static func scheduling(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")

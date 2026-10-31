@@ -108,10 +108,24 @@ final class ControlExecutor {
         case .answerSavePanel(let window, let path):
             let owner = try controller(window).window
             guard let panel = owner.attachedSheet as? NSSavePanel else { throw Failure(message: "No save panel belongs to this window") }
+            let selected = path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL }
+            if let selected {
+                let root = Product.dataDirectory().resolvingSymlinksInPath().standardizedFileURL.path + "/"
+                guard selected.path.hasPrefix(root), FileManager.default.fileExists(atPath: selected.deletingLastPathComponent().path) else {
+                    throw Failure(message: "Save destination is outside the owned fixture directory")
+                }
+                panel.directoryURL = selected.deletingLastPathComponent()
+                panel.nameFieldStringValue = selected.lastPathComponent
+            }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             try await Task.sleep(for: .milliseconds(700))
             guard owner.attachedSheet === panel else { throw Failure(message: "Save panel disappeared before the key input") }
+            if let selected {
+                guard panel.url?.resolvingSymlinksInPath().standardizedFileURL == selected else {
+                    throw Failure(message: "Save panel did not accept the selected fixture destination")
+                }
+            }
             try events.press(KeyChord([], path == nil ? .escape : .returnKey), in: panel)
             return .ok
         case .cancelPrintPanel(let window):
@@ -217,7 +231,9 @@ final class ControlExecutor {
             selected.performClick(nil)
             return .ok
         case .type(let text):
-            try events.type(text, in: keyTarget())
+            let target = try keyTarget()
+            print("[control] type count=\(text.count) window=\(target.windowNumber) responder=\(ViewTree.describe(target.firstResponder)) active=\(NSApp.isActive)")
+            try events.type(text, in: target)
             return .ok
 
         case .click(let viewID, let point, let modifierText, let count):
@@ -238,6 +254,8 @@ final class ControlExecutor {
                 }
                 target = window
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+                let hit = (window.contentView?.superview ?? window.contentView)?.hitTest(at)
+                print("[control] click id=\(viewID.identifier) window=\(window.windowNumber) view=\(NSStringFromClass(type(of: view))) frame=\(view.frame) visible=\(view.visibleRect) point=\(at) hit=\(hit.map { NSStringFromClass(type(of: $0)) } ?? "nil") key=\(window.isKeyWindow) active=\(NSApp.isActive)")
             } else if let point {
                 at = c.root.convert(point, to: nil)
             } else {
@@ -245,6 +263,7 @@ final class ControlExecutor {
             }
             store.inputWindow = target
             try events.click(at: at, modifiers: flags, count: max(1, count), in: target)
+            print("[control] click complete window=\(target.windowNumber) key=\(NSApp.keyWindow?.windowNumber ?? -1) responder=\(ViewTree.describe(target.firstResponder))")
             return .ok
 
         case .pointer(let window, let phase, let point):

@@ -21,6 +21,12 @@ enum ExtScenarios {
     }
     @Sendable static func catalog(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
+        defer {
+            _ = try? app.screenshotSiteControls("catalog-final")
+            if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-catalog-controls.json"))
+            }
+        }
         try app.click(.settingsField("extension-pin-" + fixture.id))
         try expect(try SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id), "public profile pin missing")
         try expect(fixture.canChangeIncognito == true, "fixture incognito permission is not editable")
@@ -67,6 +73,13 @@ enum ExtScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
+        _ = try app.screenshotSiteControls("shortcut-before-input")
+        defer {
+            _ = try? app.screenshotSiteControls("shortcut-final")
+            if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
+                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-shortcuts-controls.json"))
+            }
+        }
         // Drive the native text editor and its Save action, not the manager's mutation API directly.
         try app.click(.settingsField("extension-shortcut-" + fixture.id + "-" + command))
         try app.press("cmd+a"); try app.type("cmd+shift+u")
@@ -228,10 +241,10 @@ enum ExtScenarios {
         window.extElement=new Audio('data:audio/wav;base64,'+btoa(String.fromCharCode(...bytes)));extElement.muted=true;extElement.loop=true;document.body.append(extElement);await extElement.play()
         """
         try matrix("muted-html-audio", setup: wav, active: true)
-        try matrix("paused-html-audio", setup: "extElement.pause()", active: false)
+        try matrix("paused-html-audio", setup: "document.body.append(extElement);extElement.pause()", active: false)
         try matrix("muted-html-video", setup: "const canvas=document.createElement('canvas');window.extElement=document.createElement('video');extElement.muted=true;extElement.srcObject=canvas.captureStream(10);document.body.append(extElement);await extElement.play()", active: true)
-        try matrix("paused-html-video", setup: "extElement.pause()", active: false)
-        try matrix("running-silent-webaudio", setup: "await start(true)", active: false)
+        try matrix("paused-html-video", setup: "document.body.append(extElement);extElement.pause()", active: false)
+        try matrix("running-silent-webaudio", setup: "await start(true);clearInterval(timer)", active: false)
         app.note("Real audible WebAudio, muted playing HTML audio and muted playing HTML video protected hidden scheduling. Suspended WebAudio, paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
     }
 
@@ -246,11 +259,20 @@ enum ExtScenarios {
         try app.waitUntil("real link export save panel") { try app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
         try app.perform(.sheetButton(title: "Cancel"))
         try app.waitUntil("link export cancellation") { try !app.native().appWindows.contains { $0.className == "NSSavePanel" && $0.isVisible } }
+        try app.click(.settingsField("siteExportLink"))
+        try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
+        let destination = app.dataDirectory.appendingPathComponent("Ext-link-export.json")
+        try app.perform(.answerSavePanel(window: app.window, path: destination.path))
+        try app.waitUntil("actual link export bytes") { FileManager.default.fileExists(atPath: destination.path) }
+        let data = try Data(contentsOf: destination)
+        let exported = try JSONDecoder().decode(ExportDocument.self, from: data)
+        try expect(exported.entries == [.link(title: "Site policy fixture", url: app.site.url("site-policy.html"))], "export bytes do not describe the active page")
+        try data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-controls-link-export.json"))
         try app.dispatch(.profile(.create(name: "Ext Profile", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings), let other = settings.profiles.first(where: { $0.profile.name == "Ext Profile" })?.profile.id else { throw Check(description: "profile missing") }
         try app.dispatch(.profile(.assign(.current, to: other)))
         try app.waitUntil("site controls rebind to profile") { try SitePolicyScenarios.controls(app).profileName == "Ext Profile" && SitePolicyScenarios.controls(app).target?.context == .profile(other) }
         _ = try app.screenshotSiteControls("origin-profile-os-readback")
-        app.note("Actual OS status readback did not request authorization. Copy and export-panel cancellation used the active page snapshot. Actual selected-destination file output waits for file-panels. Boost/capture actions await their owning slices.")
+        app.note("Actual OS status readback did not request authorization. Copy, export cancellation and selected-destination JSON bytes describe the active page. Destination selection used the owned fixture bridge and the real save panel; a physical folder-selection gesture is not claimed. Boost/capture actions await their owning slices.")
     }
 }
