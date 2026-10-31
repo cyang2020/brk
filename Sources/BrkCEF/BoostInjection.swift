@@ -95,7 +95,7 @@ extension ChromePage {
             const tag=el.localName;const siblings=el.parentElement?Array.from(el.parentElement.children).filter(x=>x.localName===tag):[el];
             parts.unshift(tag+':nth-of-type('+(siblings.indexOf(el)+1)+')');el=el.parentElement;
           }return parts.join(' > ');};
-          const click=e=>{e.preventDefault();e.stopImmediatePropagation();finish(e.target instanceof Element?selector(e.target):null);};
+          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();finish(e.target instanceof Element?selector(e.target):null);};
           const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(null);}};
           globalThis.__brkZapToken=\(Self.jsString(pickToken));globalThis.__brkZapCancel=()=>finish(null);
           document.addEventListener('mouseover',over,true);document.addEventListener('click',click,true);document.addEventListener('keydown',key,true);

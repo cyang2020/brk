@@ -30,7 +30,13 @@ func normalize(_ state: inout AppState) -> [String] {
     closeEmptyLittleWindows(&state)
     repairLoaded(&state)
     for (window, session) in state.session.windows {
-        if let editor = session.boostEditor, state.boostProfile(in: window) != editor.profile { state.session.windows[window]?.boostEditor = nil }
+        guard let editor = session.boostEditor else { continue }
+        if state.boostProfile(in: window) != editor.profile { state.session.windows[window]?.boostEditor = nil }
+        else if editor.picking, state.boostPickingTarget(in: window) != editor.target {
+            state.session.windows[window]?.boostEditor?.picking = false
+            state.session.windows[window]?.boostEditor?.pickID = nil
+            state.session.windows[window]?.boostEditor?.message = "Zap cancelled because its page is no longer visible."
+        }
     }
     state.session.boosts = state.session.boosts.filter { state.doc.profiles[$0.key] != nil }
     state.session.boostErrors = state.session.boostErrors.filter { state.doc.profiles[$0.key] != nil }

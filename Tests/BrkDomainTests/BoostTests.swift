@@ -229,3 +229,24 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.picking, false)
     }
 }
+
+extension BoostTests {
+    func testLibraryCoverCancelsZapAndRejectsTheLateSelection() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.zap))
+        let editor = try XCTUnwrap(d.view.boostEditor), pick = try XCTUnwrap(editor.pickID), target = try XCTUnwrap(editor.target)
+        d.user(.library(.open(.boosts)))
+        XCTAssertEqual(d.view.boostEditor?.picking, false)
+        XCTAssertNil(d.view.boostEditor?.pickID)
+        XCTAssertTrue(d.user(.boost(.zap)).effects.isEmpty)
+        d.system(.boost(.picked(d.window, pick, target, "#hidden")))
+        XCTAssertEqual(d.view.boostEditor?.draft.css, "")
+    }
+    func testNavigationAwayCancelsAnActiveZapWithoutLosingItsDraft() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.zap))
+        let draft = try XCTUnwrap(d.view.boostEditor?.draft)
+        _ = d.open("https://another.example/")
+        XCTAssertEqual(d.view.boostEditor?.picking, false)
+        XCTAssertNil(d.view.boostEditor?.pickID)
+        XCTAssertEqual(d.view.boostEditor?.draft, draft)
+    }
+}

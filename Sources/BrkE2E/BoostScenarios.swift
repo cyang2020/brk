@@ -152,6 +152,9 @@ enum BoostScenarios {
             try app.evaluate(PageID(window: app.window!, item: item), "document.querySelector('#zap-target').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));document.title='zap-ready:'+!!document.querySelector('[data-brk-zap-highlight]')")
             return try tab(item, in: app.view())?.title == "zap-ready:true"
         }
+        try app.evaluate(PageID(window: app.window!, item: item), "document.querySelector('#zap-target').click();document.title='zap-synthetic-click'")
+        try waitForTitle(app, item, "zap-synthetic-click")
+        try expect(try app.view().boostEditor?.picking == true && app.view().boostEditor?.draft.css.isEmpty == true, "page-generated click completed Zap")
         try app.click(at: CGPoint(x: card.minX + 100, y: card.minY + 155))
         try app.waitUntil("Zap returned selector") { try app.view().boostEditor?.picking == false && app.view().boostEditor?.draft.css.contains("#zap-target") == true }
         try app.waitUntil("Zap CSS preview hides selected element") { try report(app, item)["display"] as? String == "none" }

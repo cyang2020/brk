@@ -7,6 +7,10 @@ extension AppState {
               doc.profiles[profile] != nil, doc.deletingProfiles[profile] == nil else { return nil }
         return profile
     }
+    func boostPickingTarget(in window: WindowID) -> SiteTarget? {
+        guard let target = siteTarget(in: window), visiblePages().contains(target.page) else { return nil }
+        return target
+    }
     func boostPolicy(for page: PageID) -> BoostPolicy {
         guard doc.settings.advanced.boostsEnabled else { return BoostPolicy() }
         guard let window = doc.windows[page.window], let profile = doc.spaces[window.space]?.profile else { return BoostPolicy() }
@@ -76,7 +80,7 @@ extension Work {
                 state.session.windows[window]?.boostEditor?.pickID = nil; return
             }
             guard let editor = state.session.windows[window]?.boostEditor, !editor.picking,
-                  let target = editor.target, state.validSiteTarget(target), state.siteTarget(in: window) == target else {
+                  let target = editor.target, state.validSiteTarget(target), state.boostPickingTarget(in: window) == target else {
                 state.session.windows[window]?.boostEditor?.message = "Open the Boost on a committed website to Zap an element."
                 return
             }
@@ -135,7 +139,7 @@ extension Work {
             guard let editor = state.session.windows[window]?.boostEditor, editor.picking, editor.pickID == id, editor.target == target else { return }
             state.session.windows[window]?.boostEditor?.picking = false
             state.session.windows[window]?.boostEditor?.pickID = nil
-            guard state.boostProfile(in: window) == editor.profile, state.validSiteTarget(target) else {
+            guard state.boostProfile(in: window) == editor.profile, state.validSiteTarget(target), state.boostPickingTarget(in: window) == target else {
                 state.session.windows[window]?.boostEditor?.message = "The page changed. Reopen the Boost before using Zap."; return
             }
             guard let selector, !selector.isEmpty, selector.count <= 4096, !selector.contains("{"), !selector.contains("}"), !selector.contains("\n") else {
