@@ -140,6 +140,8 @@ def main():
         for pointer in new["implementation"]:
             assert (ROOT / pointer.split(":")[0]).exists(), f"{ident}: missing source {pointer}"
         verification = list(row.get("verification", []))
+        # A recorded failure of a scenario that passes in this run is superseded by the new passing entry below.
+        verification = [v for v in verification if not (v.get("result") == "fail" and any(s in v.get("scope", "") for s in rely.get(ident, [])))]
         seen = {(v.get("kind"), v.get("artifact"), v.get("command")) for v in verification}
         for v in prop.get("verification", []):
             key = (v.get("kind"), v.get("artifact"), v.get("command"))
