@@ -5,8 +5,8 @@ import Foundation
 
 enum ImportSyncScenarios {
     static let all = [
-        Scenario("ImportSync-Onboarding", "first-run native choices seed once, restart without duplicates, complete the local tour", onboarding),
-        Scenario("ImportSync-Import", "native file selection previews bookmarks, cancellation changes nothing, accepted import keeps source bytes", bookmarks),
+        Scenario("ImportSync-Onboarding", "first-run native choices seed once, restart without duplicates, complete the local tour", cefOnly: "local tour DOM execution", onboarding),
+        Scenario("ImportSync-Import", "native file selection previews bookmarks, cancellation changes nothing, accepted import keeps source bytes", cefOnly: "imported fixture DOM execution", bookmarks),
         Scenario("ImportSync-Export", "native save panels export a Space, folder and selected tabs; cancellation writes nothing", exports),
         Scenario("ImportSync-Sync", "native folder selection publishes only whitelisted sidebar bytes and disconnect stops publication", sync),
     ]
