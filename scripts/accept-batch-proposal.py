@@ -38,6 +38,7 @@ IDENTITY = ("id", "section", "feature", "arc_evidence", "description", "historic
 
 
 def lower_or_equal(status, ceiling):
+    if status == ceiling: return True  # blocked, excluded and deferred compare only to themselves
     return status in ORDER and ceiling in ORDER and ORDER.index(status) <= ORDER.index(ceiling)
 
 
