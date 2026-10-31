@@ -222,8 +222,10 @@ enum TransferScenarios {
         try app.waitUntil("native cancellation") { try rows(app).contains { $0.id == first.id && $0.state == .cancelled } }
         try stopped(app, "/transfer-one")
         try expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("transfer-one.bin").path), "cancelled destination remains")
+        try app.screenshot("cancelled-and-active")
         try complete(app, name: "shared (1).bin", at: dir.appendingPathComponent("shared (1).bin"))
         try expect(try String(contentsOf: dir.appendingPathComponent("shared.bin"), encoding: .utf8) == "preexisting", "collision overwritten")
+        try app.screenshot("completed-and-cancelled")
     }
     private static func postClose(_ app: AppUnderTest) throws {
         let dir = try folder(app); let page = try home(app)
