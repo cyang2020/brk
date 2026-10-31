@@ -101,6 +101,8 @@ public enum PageAction: Hashable, Sendable, Codable {
     case stop
     case zoom(ZoomStep)
     case toggleDevTools
+    case developer(DeveloperOperation)
+    case exitFullscreen
     /// Restart a renderer that died (`PageEvent.rendererGone`). The domain decides; the engine reloads.
     case recover
 }
@@ -112,6 +114,25 @@ public enum OpenDisposition: String, Hashable, Sendable, Codable {
     case backgroundTab
     /// `window.open` with features. v1 opens it as a foreground tab; Peek and real popups plug in here later.
     case popup
+    case newWindow
+}
+
+/// Raw open intent retained at the browser boundary, even when the current domain policy opens a tab.
+public struct PageOpenMetadata: Hashable, Sendable, Codable {
+    public var rawDisposition: Int?
+    public var userGesture: Bool
+    public var sourceFrame: String?
+    public var sourceIsMainFrame: Bool
+    public var targetFrame: String?
+    public var popupID: Int?
+    public var x: Int?, y: Int?, width: Int?, height: Int?
+    public init(rawDisposition: Int? = nil, userGesture: Bool = false, sourceFrame: String? = nil,
+                sourceIsMainFrame: Bool = true, targetFrame: String? = nil, popupID: Int? = nil,
+                x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) {
+        self.rawDisposition = rawDisposition; self.userGesture = userGesture; self.sourceFrame = sourceFrame
+        self.sourceIsMainFrame = sourceIsMainFrame; self.targetFrame = targetFrame; self.popupID = popupID
+        self.x = x; self.y = y; self.width = width; self.height = height
+    }
 }
 
 /// What a live page reports. Delivered as `SystemEvent.page(browser, event)`; never written to the page's tab by
@@ -127,6 +148,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case titleChanged(String)
     case faviconChanged(URL?)
     case audioChanged(Bool)
+    case zoomChanged(Int)
+    case fullscreenChanged(Bool)
     case loadingChanged(isLoading: Bool, canGoBack: Bool, canGoForward: Bool)
     case loadFailed(code: Int, description: String, url: String)
     /// The renderer process crashed or was killed. The page object stays; see `PageAction.recover`.
@@ -135,7 +158,7 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case closedByPage
     /// The page took keyboard focus (the user clicked into it, e.g. into another split pane).
     case gainedFocus
-    case openRequested(URL, OpenDisposition)
+    case openRequested(URL, OpenDisposition, metadata: PageOpenMetadata = .init())
     /// The browser finished closing (`OnBeforeClose`). The id may be reused by a new page right after.
     case closed
 }

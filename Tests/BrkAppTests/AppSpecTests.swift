@@ -340,7 +340,7 @@ final class MenuTests: XCTestCase {
         let target = MenuTarget()
         target.isEnabled = { _ in true }
         let main = MainMenu.build(target: target)
-        let print = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "Print" })
+        let print = try XCTUnwrap(main.items[3].submenu!.items.first { $0.title == "Cast" })
         let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
         XCTAssertFalse(target.validateMenuItem(print))
         XCTAssertTrue(target.validateMenuItem(newWindow))

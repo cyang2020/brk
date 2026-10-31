@@ -25,6 +25,7 @@ public final class LittleWindowController: WindowController {
     let openIn = NSPopUpButton(frame: .zero, pullsDown: true)
     private let popupTarget = PopupTarget()
     private var menuKey: [DockItem] = []
+    private var folderKey: [FolderDestinationCandidate] = []
     private var titledFor: String?
 
     init(id: WindowID, engine: any WebEngine, send: @escaping @MainActor (Input) -> Void,
@@ -37,7 +38,8 @@ public final class LittleWindowController: WindowController {
             backing: .buffered, defer: false
         )
         panel.hidesOnDeactivate = false
-        panel.isFloatingPanel = false
+        panel.isFloatingPanel = true
+        panel.level = .floating
         panel.becomesKeyOnlyIfNeeded = false
         panel.title = LittleArcCopy.title(page: nil)
         super.init(id: id, kind: .little, engine: engine, send: send, routeKey: routeKey, window: panel)
@@ -89,9 +91,10 @@ public final class LittleWindowController: WindowController {
             titledFor = title
             window.title = title
         }
-        if menuKey != snapshot.dock || openIn.menu?.items.isEmpty ?? true {
+        if folderKey != snapshot.openInFolders || menuKey != snapshot.dock || openIn.menu?.items.isEmpty ?? true {
             menuKey = snapshot.dock
-            let menu = popupTarget.menu(for: OpenInMenu.model(spaces: snapshot.dock)) { [send, id] command in send(.user(id, command)) }
+            folderKey = snapshot.openInFolders
+            let menu = popupTarget.menu(for: OpenInMenu.model(spaces: snapshot.dock, folders: snapshot.openInFolders)) { [send, id] command in send(.user(id, command)) }
             // A pull-down shows its first item as the button's title.
             menu.insertItem(NSMenuItem(title: OpenInMenu.buttonTitle(space: snapshot.space.title), action: nil, keyEquivalent: ""), at: 0)
             openIn.menu = menu
@@ -118,6 +121,7 @@ public enum LittleArcCopy {
 /// and command bar take keyboard focus) and keeps AppKit's own traffic lights (no sidebar to place them over).
 @MainActor
 public final class BrowserPanel: NSPanel, HostWindow {
+    public var onActivity: (() -> Void)?
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?

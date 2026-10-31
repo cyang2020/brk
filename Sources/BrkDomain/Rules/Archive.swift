@@ -46,7 +46,11 @@ extension Work {
         if let threshold = state.doc.settings.links.littleArcAutoArchive.interval {
             for id in state.doc.windows.keys.sorted() where state.doc.windows[id]?.kind == .little {
                 let tabs = state.session.scratch[id]?.allTabs() ?? []
-                guard !tabs.isEmpty, tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
+                let session = state.session.windows[id]
+                let activeDownload = state.session.activeDownloadOwners.values.contains { $0.window == id }
+                guard session?.isKey != true, !activeDownload,
+                      session?.lastInteraction.map({ ctx.now.since($0) >= threshold }) ?? true,
+                      !tabs.isEmpty, tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
                 archiveTabs(tabs, reason: .auto, in: id)
                 removeWindow(id)
             }

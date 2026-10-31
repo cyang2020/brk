@@ -353,7 +353,9 @@ extension Work {
             else if session.renaming != nil { session.renaming = nil }
             else if session.dialog != nil { session.dialog = nil }
             else if session.profileDialog != nil { session.profileDialog = nil }
-            else { effects.append(.window(window, .leaveFullScreen)) }
+            else if let tab = state.resolveTab(.focused, in: window), state.session.live[PageID(window: window, item: tab)]?.fullscreen == true {
+                effects.append(.page(PageID(window: window, item: tab), .exitFullscreen))
+            } else { effects.append(.window(window, .leaveFullScreen)) }
             state.session.windows[window] = session
         }
     }
@@ -361,6 +363,18 @@ extension Work {
     mutating func windowEvent(_ event: WindowEvent, in window: WindowID) {
         guard state.doc.windows[window] != nil, var session = state.session.windows[window] else { return }
         switch event {
+        case .becameKey:
+            session.isKey = true
+            session.lastInteraction = ctx.now
+            session.activationOrder = (state.session.windows.values.map(\.activationOrder).max() ?? 0) + 1
+            state.session.windows[window] = session
+        case .resignedKey:
+            session.isKey = false
+            session.lastInteraction = ctx.now
+            state.session.windows[window] = session
+        case .activity:
+            session.lastInteraction = ctx.now
+            state.session.windows[window] = session
         case .geometry(let bounds, let contentSize):
             if state.doc.windows[window]!.bounds != bounds { state.doc.windows[window]!.bounds = bounds }
             session.contentSize = contentSize
@@ -386,7 +400,7 @@ extension Work {
             switch doc.kind {
             case .standard:
                 if state.doc.windows.values.contains(where: { $0.kind == .standard && $0.id != window }) { removeWindow(window) }
-            case .little, .incognito:
+            case .little, .incognito, .blank:
                 windows(.close, in: window)
             }
         }

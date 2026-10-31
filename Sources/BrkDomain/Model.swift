@@ -66,7 +66,7 @@ struct Doc: Sendable, Equatable {
     var favorites: [ProfileID: ItemID]
     /// Newest first, capped at Metrics.persistence.archiveCap.
     var archive: [ArchivedTab]
-    /// Newest first, deduplicated by URL, capped at Metrics.persistence.historyCap. Per profile through
+    /// Every committed public main-document visit, newest first, retained until explicitly removed. Per profile through
     /// `HistoryEntry.profile` (the History page lists the current space's profile).
     var history: [HistoryEntry]
     /// Every window, ephemeral ones included (`WindowKind`); the codec writes only `.standard` windows.
@@ -146,6 +146,7 @@ struct WindowDoc: Sendable, Equatable {
     var slots: [ItemID: SavedSlot] = [:]
     var splitFocus: [ItemID: ItemID] = [:]
     var folderExpansion: [ItemID: Bool] = [:]
+    var stayOnTop: Bool = false
     var sidebarVisible: Bool
     var sidebarWidth: Double
     var toolbarVisible: Bool = false
@@ -156,7 +157,7 @@ struct WindowDoc: Sendable, Equatable {
     var container: ContainerScope {
         switch kind {
         case .standard: .global
-        case .incognito, .little: .window(id)
+        case .incognito, .little, .blank: .window(id)
         }
     }
 
@@ -171,6 +172,8 @@ struct WindowDoc: Sendable, Equatable {
 /// (`WindowCommand.openIn`) and closes the window. F3 owns the rules.
 public enum WindowKind: String, Hashable, Sendable, Codable, CaseIterable {
     case standard
+    /// Public scratch sidebar, no inherited items and no session restoration.
+    case blank
     /// Session-only window whose pages browse in `BrowsingContext.incognito`; its tabs live in its scratch tree.
     case incognito
     /// Little Arc (Arc: `LittleBrowser`): one tab, no sidebar, a small floating panel.
@@ -221,6 +224,7 @@ struct ArchivedTab: Sendable, Equatable {
 }
 
 struct HistoryEntry: Sendable, Equatable {
+    let id: HistoryVisitID
     let url: URL
     var title: String
     var visitedAt: Instant
@@ -242,6 +246,7 @@ struct Session: Sendable, Equatable {
     var live: [PageID: LivePage]
     var generations: [PageID: UInt64] = [:]
     var privateSession: PrivateSessionID?
+    var activeDownloadOwners: [DownloadID: PageID] = [:]
     var terminalDownloads: Set<DownloadID> = []
     var downloadRevisions: [DownloadID: UInt64] = [:]
     /// Ephemeral containers by window (`ContainerScope.window`): Little Arc, Peek and incognito trees. Never
@@ -266,6 +271,16 @@ struct WindowSession: Sendable, Equatable {
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
     var expandedSplit: ItemID? = nil
+    var exportOutcome: ExportOutcome? = nil
+    var outputUpdates: [OutputID: OutputUpdate] = [:]
+    var outputOrder: [OutputID] = []
+    var output: OutputUpdate? {
+        outputOrder.compactMap { outputUpdates[$0] }.first { if case .terminal = $0.stage { false } else { true } }
+            ?? outputOrder.last.flatMap { outputUpdates[$0] }
+    }
+    var isKey: Bool = false
+    var lastInteraction: Instant? = nil
+    var activationOrder: UInt64 = 0
     var contentSize: CGSize
     var overlay: Overlay?
     /// Incremented every time an overlay opens or is replaced; becomes the new overlay's `openID`.
@@ -358,6 +373,12 @@ struct LivePage: Sendable, Equatable {
     var documentSequence: UInt64 = 0
     var observedTitle: String? = nil
 
+    var recordedVisit: DocumentToken? = nil
+    var recordedVisitID: HistoryVisitID? = nil
+    var lastHistoryAddress: URL? = nil
+    var lastOpenRequest: PageOpenMetadata? = nil
+    var zoomPercent: Int = 100
+    var fullscreen: Bool = false
     var loading: Bool = false
     var canGoBack: Bool = false
     var canGoForward: Bool = false

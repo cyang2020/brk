@@ -22,6 +22,7 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
 }
 
 public struct PageObservation: Sendable, Equatable, Codable {
+    public var lastOpenRequest: PageOpenMetadata? = nil
     public let browser: BrowserToken?
     public let document: DocumentAvailability
     public let requestedURL: URL?
@@ -36,6 +37,10 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     /// the sidebar shows (`scratch` for the ephemeral kinds).
     public var kind: WindowKind
     /// Saved outer frame (screen coordinates) to restore; nil for a new window.
+    public var openInFolders: [FolderDestinationCandidate] = []
+    public var exportOutcome: ExportOutcome? = nil
+    public var output: OutputUpdate? = nil
+    public var stayOnTop: Bool = false
     public var bounds: CGRect?
     /// The current space's theme. A change crossfades (Metrics.motion.themeCrossfade).
     public var theme: ResolvedTheme
@@ -80,6 +85,7 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var loading: Bool
     public var canGoBack: Bool
     public var canGoForward: Bool
+    public var zoomPercent: Int = 100
     /// Arc's `ProfileIndicatorView`: shown when the space's profile is not the default one, or the window is
     /// incognito. F2.
     public var profile: ProfileBadge?
@@ -275,6 +281,7 @@ public struct DownloadRow: Sendable, Equatable, Codable {
 }
 
 public struct HistoryRow: Sendable, Equatable, Codable {
+    public var id: HistoryVisitID? = nil
     public var url: URL
     public var title: String
     public var visitedAt: Instant
@@ -282,6 +289,8 @@ public struct HistoryRow: Sendable, Equatable, Codable {
 
 /// Peek: the held scratch tab and its page (nil until the page exists), drawn in `WindowFrames.peek`.
 public struct PeekSnapshot: Sendable, Equatable, Codable {
+    public var spaces: [DockItem] = []
+    public var folders: [FolderDestinationCandidate] = []
     public var openID: Int
     public var tab: TabRow
     public var page: PageID?
@@ -295,6 +304,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var initialQuery: String
     public var tabs: [SwitchCandidate]
     public var history: [HistoryCandidate]
+    /// Saved Pinned and Favorites addresses in this profile.
+    public var bookmarks: [HistoryCandidate] = []
+    public var folders: [FolderDestinationCandidate] = []
     /// Actions listed in the bar, in table order: every action with a `CommandBarListing` that does something in
     /// this window now (`WindowSnapshot.enabledActions`, so never a `.later` row; Arc indexes the menu with each
     /// item's enabled state). F4's type-travel index ranks them by title and triggers.
@@ -311,6 +323,12 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// drops them when its text has moved on. Empty until they arrive. F4.
     public var suggestions: [String]
     public var suggestedFor: String?
+    public var suggestionsEnabled: Bool = true
+}
+
+public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
+    public var id: ItemID
+    public var title: String
 }
 
 public struct SpaceCandidate: Sendable, Equatable, Codable {
@@ -321,6 +339,7 @@ public struct SpaceCandidate: Sendable, Equatable, Codable {
 }
 
 public struct SearchEngineCandidate: Sendable, Equatable, Codable {
+    public var template: String? = nil
     public var id: SearchEngineID
     public var name: String
     public var keyword: String

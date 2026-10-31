@@ -35,12 +35,25 @@ final class KeyRouter: WebEngineDelegate {
         return store.dispatchKeyHandling(page.window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
-    func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { store.windowController(id)?.window }
     func engine(_ engine: any WebEngine, find update: FindUpdate) { store.dispatch(.system(.find(update))) }
+    func engine(_ engine: any WebEngine, output update: OutputUpdate) { store.dispatch(.system(.output(update))) }
+    func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) {
+        guard !store.isTerminating else { reply(.ownerGone); return }
+        let window = prompt.request.document.browser.page.window
+        store.outputSheets.destination(prompt, in: store.windowController(window)?.window, reply: reply)
+    }
+    func engine(_ engine: any WebEngine, printOutput request: OutputRequest, pdf: URL, reply: @escaping @MainActor (PrintAnswer) -> Void) {
+        guard !store.isTerminating else { reply(.ownerGone); return }
+        store.outputSheets.print(request, pdf: pdf, in: store.windowController(request.document.browser.page.window)?.window, reply: reply)
+    }
+    func engine(_ engine: any WebEngine, dismissOutput id: OutputID) { store.outputSheets.dismiss(id) }
+
+    func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { store.isTerminating ? nil : store.windowController(id)?.window }
     func engine(_ engine: any WebEngine, download update: DownloadUpdate) {
         store.dispatch(.system(.download(update)))
     }
     func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) {
+        guard !store.isTerminating else { reply(.ownerGone); return }
         store.destinations.present(prompt, in: store.windowController(prompt.window)?.window, reply: reply)
     }
     func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) { store.destinations.dismiss(ticket) }

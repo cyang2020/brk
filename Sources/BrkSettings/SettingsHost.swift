@@ -163,8 +163,10 @@ public final class SettingsHost: NSView {
     // MARK: System
 
     static func appIsDefaultBrowser() -> Bool {
-        guard let probe = URL(string: "https://example.com"), let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
-        return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
+        ["http", "https"].allSatisfy { scheme in
+            guard let probe = URL(string: scheme + "://example.com/"), let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
+            return handler.standardizedFileURL.resolvingSymlinksInPath() == Bundle.main.bundleURL.standardizedFileURL.resolvingSymlinksInPath()
+        }
     }
 
     static func runFolderPanel(_ current: String?) -> String? {

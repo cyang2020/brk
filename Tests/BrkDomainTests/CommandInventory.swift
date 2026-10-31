@@ -16,6 +16,7 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
+        .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
         .find(.open(replace: false)), .find(.query(FindQuery(text: "x"))), .find(.step(.next)), .find(.close),
@@ -31,7 +32,7 @@ enum CommandInventory {
         .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
         .tabTools(.preferences(includeFavorites: true, previews: false)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
-        .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL(.plain)),
+        .page(.developer(.source)), .page(.output(.pdf)), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
@@ -48,9 +49,9 @@ enum CommandInventory {
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
         .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
-        .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
-        .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
-        .peek(.open(example)), .peek(.close),
+        .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
+        .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
+        .peek(.email), .peek(.open(example)), .peek(.close),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
         .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
         .later(.boosts),
@@ -70,6 +71,11 @@ enum CommandInventory {
         .contextDisposed(.completed(DisposalID("ghost"), .profile(profile), .deletionScheduledForNextLaunch)),
         .siteResult("ghost", .cancelled), .clockTick,
         .spaceExportFinished(WindowID("ghost"), token: "ghost", .cancelled),
+        .exportFinished(WindowID("ghost"), .cancelled),
+        .output(OutputUpdate(id: OutputID("ghost-output"), document: DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), stage: .rendering)),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .zoomChanged(125)),
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .fullscreenChanged(true)),
+        .window(WindowID("ghost"), .becameKey), .window(WindowID("ghost"), .resignedKey), .window(WindowID("ghost"), .activity),
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
@@ -125,6 +131,8 @@ enum CommandInventory {
             }
         case .commandBar(let c):
             switch c {
+            case .queryChangedForSite: "queryChangedForSite"
+            case .calculate: "calculate"
             case .open: "open"
             case .submit: "submit"
             case .submitSearch: "submitSearch"
@@ -172,6 +180,8 @@ enum CommandInventory {
             case .stop: "stop"
             case .zoom: "zoom"
             case .toggleDevTools: "toggleDevTools"
+            case .developer: "developer"
+            case .output: "output"
             case .copyURL: "copyURL"
             }
         case .item(let c):
@@ -246,18 +256,22 @@ enum CommandInventory {
             case .revealDownload: "revealDownload"
             case .removeDownload: "removeDownload"
             case .clearDownloads: "clearDownloads"
+            case .removeHistoryVisit: "removeHistoryVisit"
             case .removeHistory: "removeHistory"
             case .clearHistory: "clearHistory"
             }
         case .window(let c):
             switch c {
+            case .newBlank: "newBlank"
+            case .toggleStayOnTop: "toggleStayOnTop"
             case .new: "new"
             case .newIncognito: "newIncognito"
             case .newLittle: "newLittle"
             case .close: "close"
             case .openIn: "openIn"
+            case .openInFolder: "openInFolder"
             }
-        case .peek(let c): switch c { case .open: "open"; case .close: "close" }
+        case .peek(let c): switch c { case .email: "email"; case .open: "open"; case .close: "close" }
         case .profile(let c):
             switch c {
             case .create: "create"
@@ -280,6 +294,8 @@ enum CommandInventory {
             case .documentChanged: "page.documentChanged"
             case .navigationRequested: "page.navigationRequested"
             case .committed: "page.committed"
+            case .zoomChanged: "page.zoomChanged"
+            case .fullscreenChanged: "page.fullscreenChanged"
             case .titleChanged: "page.titleChanged"
             case .faviconChanged: "page.faviconChanged"
             case .audioChanged: "page.audioChanged"
@@ -292,6 +308,8 @@ enum CommandInventory {
             case .closed: "page.closed"
             }
         case .find: "find"
+        case .exportFinished: "exportFinished"
+        case .output: "output"
         case .download: "download"
         case .contextDisposed: "contextDisposed"
         case .siteResult: "siteResult"
@@ -299,6 +317,9 @@ enum CommandInventory {
         case .spaceExportFinished: "spaceExportFinished"
         case .window(_, let e):
             switch e {
+            case .becameKey: "window.becameKey"
+            case .resignedKey: "window.resignedKey"
+            case .activity: "window.activity"
             case .geometry: "window.geometry"
             case .modifiersChanged: "window.modifiersChanged"
             case .closed: "window.closed"
@@ -317,8 +338,9 @@ enum CommandInventory {
         let parts = name.split(separator: ".").map(String.init)
         switch name {
         case "page.closed": return #"page\([^\n]*\.closed\)"#
+        case "window.becameKey", "window.resignedKey", "window.activity": return #"\."# + parts[1] + #"\b"#
         case "window.closed": return #"\.window\([^\n]*\.closed\)"#
-        case "download", "contextDisposed", "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
+        case "exportFinished", "output", "download", "contextDisposed", "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
         default:
             if parts.count == 1 { return #"\."# + parts[0] + #"\b"# }
             if name.hasPrefix("later.") { return #"\.later\(\s*\."# + parts[1] + #"\b"# }

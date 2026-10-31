@@ -70,8 +70,68 @@ final class ControlExecutor {
         case .activate(let window):
             let c = try controller(window)
             store.inputWindow = c.window
+            if c.window.isMiniaturized { c.window.deminiaturize(nil) }
             c.window.makeKeyAndOrderFront(nil)
             return .ok
+
+        case .chooseOutputFixture(let window, let path):
+            let owner = try controller(window).id
+            store.outputSheets.chosenFixtures[owner] = URL(fileURLWithPath: path)
+            return .ok
+        case .cancelCurrentOutput(let window):
+            guard let output = try controller(window).lastSnapshot?.output else { throw Failure(message: "No current output") }
+            engine.cancelOutput(output.id)
+            return .ok
+        case .configureSavePanel(let window, let path):
+            let owner = try controller(window).id
+            store.outputSheets.fixtureDestinations[owner] = URL(fileURLWithPath: path)
+            return .ok
+        case .answerSavePanel(let window, let path):
+            let owner = try controller(window).window
+            guard let panel = owner.attachedSheet as? NSSavePanel else { throw Failure(message: "No save panel belongs to this window") }
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+            try await Task.sleep(for: .milliseconds(700))
+            guard owner.attachedSheet === panel else { throw Failure(message: "Save panel disappeared before the key input") }
+            try events.press(KeyChord([], path == nil ? .escape : .returnKey), in: panel)
+            return .ok
+        case .cancelPrintPanel(let window):
+            let owner = try controller(window).window
+            guard let sheet = owner.attachedSheet, !(sheet is NSSavePanel) else { throw Failure(message: "No print panel belongs to this window") }
+            guard let cancel = OutputSheets.button("Cancel", in: sheet.contentView) else { throw Failure(message: "Print Cancel button unavailable") }
+            cancel.performClick(nil)
+            return .ok
+        case .screenshotSheet(let window, let path):
+            try await Task.sleep(for: .milliseconds(700))
+            guard let sheet = try controller(window).window.attachedSheet, let image = WindowCapture.image(of: sheet) else { throw Failure(message: "No capturable sheet") }
+            let rep = NSBitmapImageRep(cgImage: image)
+            guard let data = rep.representation(using: .png, properties: [:]) else { throw Failure(message: "Sheet PNG encoding failed") }
+            try data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
+        case .menuAction(let name):
+            func find(_ menu: NSMenu) -> NSMenuItem? {
+                for item in menu.items {
+                    if let sub = item.submenu, let found = find(sub) { return found }
+                    if item.title == name || item.representedObject as? String == name { menu.update(); return item }
+                }
+                return nil
+            }
+            guard let menu = NSApp.mainMenu, let item = find(menu), let action = item.action else { throw Failure(message: "Menu item unavailable: " + name) }
+            if let target = item.target {
+                guard item.isEnabled, NSApp.sendAction(action, to: target, from: item) else { throw Failure(message: "Menu action unavailable: " + name) }
+            } else {
+                var responder: NSResponder? = try controller(nil).window.firstResponder
+                while let current = responder, !current.responds(to: action) { responder = current.nextResponder }
+                guard let responder else { throw Failure(message: "No native responder supports menu item: " + name) }
+                if let validator = responder as? any NSMenuItemValidation, !validator.validateMenuItem(item) { throw Failure(message: "Native responder disabled menu item: " + name) }
+                guard NSApp.sendAction(action, to: responder, from: item) else { throw Failure(message: "Native menu action failed: " + name) }
+            }
+            return .ok
+        case .pasteboard(let text):
+            NSPasteboard.general.clearContents()
+            if let text { NSPasteboard.general.setString(text, forType: .string) }
+            return .ok
+        case .readPasteboard: return .text(NSPasteboard.general.string(forType: .string) ?? "")
 
         case .native(let window):
             return .native(try nativeFacts(try controller(window)))
@@ -332,6 +392,11 @@ final class ControlExecutor {
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,
                            actual: ViewTree.identified(in: window, relativeTo: c.root), pages: pages,
                            firstResponder: ViewTree.describe(responder), focusedPage: focusedPage, appWindows: windows)
+        facts.windowLevel = window.level.rawValue
+        facts.miniaturized = window.isMiniaturized
+        facts.fullscreen = window.styleMask.contains(.fullScreen)
+        facts.appHidden = NSApp.isHidden
+        facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         return facts
     }

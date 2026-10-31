@@ -13,6 +13,7 @@ public enum Effect: Hashable, Sendable {
     case page(PageID, PageAction)
     case iconPicker(WindowID, ItemID)
     case siteRequest(SiteRequest)
+    case output(OutputRequest)
     case copyToPasteboard(String)
     case window(WindowID, WindowEffect)
     case app(AppEffect)
@@ -52,9 +53,21 @@ public enum ExportEntry: Hashable, Sendable, Codable {
 
 public enum ExportFormat: String, Hashable, Sendable, Codable, CaseIterable { case json, html }
 
+public enum ExportOutcome: Hashable, Sendable, Codable {
+    case saved(URL), cancelled, failed(String)
+    public var message: String {
+        switch self {
+        case .saved(let url): "Exported \(url.lastPathComponent)"
+        case .cancelled: "Export cancelled"
+        case .failed(let reason): "Export failed: \(reason)"
+        }
+    }
+}
+
 public enum WindowEffect: Hashable, Sendable {
     case requestArchiveClear
     case toggleFullScreen
+    case pageFullScreen(Bool)
     /// Esc with nothing to close: leave full screen if the window is in it, else nothing (the reducer does not
     /// track full-screen state; the window does).
     case leaveFullScreen

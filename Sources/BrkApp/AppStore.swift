@@ -37,6 +37,7 @@ public final class AppStore {
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
     private var queue: [Input] = []
     private var dispatching = false
+    private(set) var isTerminating = false
     private let calendar = Calendar.autoupdatingCurrent
     private let log = Logger(subsystem: "brk", category: "store")
     private let popupTarget = PopupTarget()
@@ -53,6 +54,8 @@ public final class AppStore {
     }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
+    let outputSheets = OutputSheets()
+    var didPublish: ((AppSnapshot) -> Void)?
 
     public init(restored: Restored, clock: any Clock, engine: any WebEngine, stateFile: StateFile) {
         state = restored.state
@@ -81,6 +84,7 @@ public final class AppStore {
 
     /// Every user command, system event and page event enters here.
     public func dispatch(_ input: Input) {
+        if isTerminating, case .user = input { return }
         queue.append(input)
         guard !dispatching else { return }
         drain()
@@ -90,6 +94,7 @@ public final class AppStore {
     public func dispatchKey(_ window: WindowID, _ key: KeyInput) -> Bool { dispatchKeyHandling(window, key).handled }
 
     func dispatchKeyHandling(_ window: WindowID, _ key: KeyInput) -> KeyHandling {
+        if isTerminating { return KeyHandling(handled: true, shortcut: true) }
         if dispatching {
             log.notice("key \(key.press.chord.description) arrived during a dispatch; passed to the page")
             return KeyHandling(handled: false, shortcut: false)
@@ -149,6 +154,17 @@ public final class AppStore {
             ?? windows.values.first { $0.window === inputWindow } ?? windows.values.first
     }
 
+    func prepareForTermination() {
+        guard !isTerminating else { return }
+        isTerminating = true
+        cancelExports()
+        for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
+        let active = snapshot.windows.values.compactMap(\.output).filter { if case .terminal = $0.stage { false } else { true } }
+        for output in active { engine.cancelOutput(output.id) }
+    }
+
+    func cancelExports() { exports.cancelAll() }
+
     // MARK: Private
 
     private func drain() {
@@ -160,6 +176,10 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> KeyHandling {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
+        if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
+        if case .user(let window, .commandBar(let command)) = input {
+            switch command { case .queryChanged, .queryChangedForSite, .dismiss: suggestions.cancel(window); default: break }
+        }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false
         if t.docChanged, let failure = t.checkpointFailure {
@@ -181,9 +201,12 @@ public final class AppStore {
     /// into a Chromium view only sticks in a key window.
     private func publish(docChanged: Bool) {
         snapshot = projected()
+        suggestions.reconcile(snapshot)
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
+            exports.ownerGone(id)
+            outputSheets.ownerGone(id)
             destinations.ownerGone(id)
             spacePanels.ownerGone(id)
             sidebarPanels.ownerGone(id)
@@ -211,6 +234,7 @@ public final class AppStore {
         renderWindows()
         renderSettings()
         if !snapshot.sidebarData.connected { syncTask?.cancel(); syncTask = nil; syncTaskID = nil }
+        didPublish?(snapshot)
     }
 
     /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens).
@@ -252,6 +276,7 @@ public final class AppStore {
                     guard owner?.isVisible == true else { return }
                     self?.dispatch(.user(window, .item(.setIcon(item, icon))))
                 }
+            case .output(let request): engine.output(request)
             case .page(let page, let action):
                 engine.perform(action, on: page)
             case .copyToPasteboard(let text):
@@ -261,6 +286,7 @@ public final class AppStore {
                 guard let window = windows[id]?.window else { continue }
                 switch effect {
                 case .toggleFullScreen: window.toggleFullScreen(nil)
+                case .pageFullScreen(let on): windows[id]?.setPageFullScreen(on)
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
                 case .miniaturize: window.miniaturize(nil)
                 case .close: window.performClose(nil)
@@ -281,7 +307,12 @@ public final class AppStore {
                 case .showSettings:
                     settingsWindow?.present()
                     inputWindow = settingsWindow?.window
-                case .registerAsDefaultBrowser: DefaultBrowser.register()
+                case .registerAsDefaultBrowser:
+                    DefaultBrowser.register { [weak self] message in
+                        guard let owner = self?.windowController(nil)?.window else { return }
+                        let alert = NSAlert(); alert.messageText = "Default browser could not be changed"; alert.informativeText = message
+                        alert.beginSheetModal(for: owner)
+                    }
                 case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
                 }
             case .popupMenu(let id, let model, let at):
@@ -291,8 +322,8 @@ public final class AppStore {
                 popupTarget.clear()
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }
-                exports.present(document, owner: owner, in: window, reply: { [weak self] message in
-                    self?.dispatch(.system(.sidebarData(.exportFinished(message))))
+                exports.present(document, owner: owner, in: window, reply: { [weak self] outcome in
+                    self?.dispatch(.system(.exportFinished(owner, outcome)))
                 })
             case .sidebarData(let effect): runSidebarData(effect)
             case .exportSpaceFolder(let owner, let token, let document):

@@ -79,6 +79,14 @@ private func repairProfiles(_ state: inout AppState, _ repairs: inout [String]) 
     for id in state.doc.profiles.keys where state.doc.settings.profiles[id] == nil {
         state.doc.settings.profiles[id] = .default
     }
+    for id in state.doc.settings.profiles.keys {
+        if let engines = state.doc.settings.profiles[id]?.siteSearchEngines {
+            var ids = Set(SearchEngine.builtIn.map(\.id)), keywords = Set(SearchEngine.builtIn.map(\.keyword))
+            state.doc.settings.profiles[id]?.siteSearchEngines = engines.filter { $0.isValidSiteSearch && ids.insert($0.id).inserted && keywords.insert($0.keyword).inserted }
+        }
+        let settings = state.doc.settings.profiles[id]!
+        if !(SearchEngine.builtIn + (settings.siteSearchEngines ?? [])).contains(where: { $0.id == settings.searchEngine }) { state.doc.settings.profiles[id]?.searchEngine = SearchEngine.google.id }
+    }
     for id in state.doc.settings.profiles.keys where state.doc.profiles[id] == nil {
         state.doc.settings.profiles[id] = nil
     }
@@ -194,9 +202,8 @@ private func repairLoaded(_ state: inout AppState) {
 }
 
 private func applyCaps(_ state: inout AppState, _ repairs: inout [String]) {
-    let archiveCap = Metrics.persistence.archiveCap.value, historyCap = Metrics.persistence.historyCap.value
+    let archiveCap = Metrics.persistence.archiveCap.value
     if state.doc.archive.count > archiveCap { state.doc.archive.removeLast(state.doc.archive.count - archiveCap) }
-    if state.doc.history.count > historyCap { state.doc.history.removeLast(state.doc.history.count - historyCap) }
     for id in state.doc.windows.keys.sorted() {
         let width = state.doc.windows[id]!.sidebarWidth
         let clamped = width.isFinite ? min(max(width, Metrics.sidebar.minWidth.value), Metrics.sidebar.maxWidth.value) : Metrics.sidebar.defaultWidth.value

@@ -23,6 +23,10 @@ public class WindowController: NSObject, NSWindowDelegate {
     private(set) var lastFrames: WindowFrames?
     private var pendingFocus: FocusTarget?
     private var placed = false
+    private var pageFullscreenWasNative: Bool?
+    private let topButton = NSButton(checkboxWithTitle: "Stay on Top", target: nil, action: nil)
+    private let outputButton = NSPopUpButton(frame: .zero, pullsDown: true)
+    private let outputStatus = NSTextField(labelWithString: "")
 
     /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
     /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
@@ -53,6 +57,27 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .right
+        let controls = NSStackView(views: [outputStatus, outputButton, topButton])
+        controls.orientation = .horizontal
+        controls.spacing = 8
+        outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        outputStatus.lineBreakMode = .byTruncatingMiddle
+        outputStatus.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        outputStatus.widthAnchor.constraint(lessThanOrEqualToConstant: 230).isActive = true
+        accessory.view = controls
+        outputButton.addItems(withTitles: ["Page Output", "Save Offline Page…", "Export PDF…", "Print…", "Cancel Output"])
+        outputButton.target = self; outputButton.action = #selector(outputAction)
+        outputButton.controlSize = .small
+        controls.frame = CGRect(x: 0, y: 0, width: 470, height: 24)
+        topButton.frame = CGRect(x: 0, y: 0, width: 110, height: 24)
+        topButton.target = self
+        topButton.action = #selector(toggleTop)
+        window.addTitlebarAccessoryViewController(accessory)
+        window.onActivity = { [weak self] in
+            guard let self else { return }; self.send(.system(.window(self.id, .activity)))
+        }
         if kind == .incognito { window.appearance = NSAppearance(named: .darkAqua) }
         window.onPagePointerDown = { [weak self] page in
             guard let self, page.window == self.id,
@@ -72,6 +97,28 @@ public class WindowController: NSObject, NSWindowDelegate {
             self.send(.system(.window(self.id, .modifiersChanged(held: held))))
         }
     }
+
+    func setPageFullScreen(_ on: Bool) {
+        if on {
+            if pageFullscreenWasNative == nil { pageFullscreenWasNative = window.styleMask.contains(.fullScreen) }
+            if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+        } else if let original = pageFullscreenWasNative {
+            pageFullscreenWasNative = nil
+            if !original && window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+        }
+    }
+
+    @objc private func outputAction() {
+        switch outputButton.indexOfSelectedItem {
+        case 1: send(.user(id, .page(.output(.mhtml))))
+        case 2: send(.user(id, .page(.output(.pdf))))
+        case 3: send(.user(id, .page(.output(.print))))
+        case 4:
+            if let output = lastSnapshot?.output { engine.cancelOutput(output.id) }
+        default: break
+        }
+    }
+    @objc private func toggleTop() { send(.user(id, .window(.toggleStayOnTop))) }
 
     /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
     /// reports the fitted frame to the store, which queues it behind the current dispatch.
@@ -95,6 +142,11 @@ public class WindowController: NSObject, NSWindowDelegate {
     /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
         place(snapshot)
+        outputStatus.stringValue = snapshot.exportOutcome?.message ?? snapshot.output?.message ?? ""
+        outputStatus.toolTip = snapshot.exportOutcome?.message ?? snapshot.output?.message
+        outputButton.isEnabled = snapshot.content.panes.contains { if case .page = $0.content { true } else { false } } || { if case .peek? = snapshot.overlay { true } else { false } }()
+        topButton.state = snapshot.stayOnTop ? .on : .off
+        window.level = window.styleMask.contains(.fullScreen) ? .normal : (snapshot.stayOnTop ? .floating : .normal)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
         root.render(snapshot, frames: frames, surface: { [engine, id] page in page.window == id ? engine.surface(for: page) : nil })
         window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
@@ -142,7 +194,15 @@ public class WindowController: NSObject, NSWindowDelegate {
     /// Becoming key again (app switch, a closed overlay panel) re-applies the snapshot's focus, so a page gets its
     /// Chromium view back as first responder and a native field keeps its own.
     public func windowDidBecomeKey(_ notification: Notification) {
+        send(.system(.window(id, .becameKey)))
         if let last = lastSnapshot { applyFocus(last.focus) }
+    }
+
+    public func windowDidResignKey(_ notification: Notification) { send(.system(.window(id, .resignedKey))) }
+    public func windowDidEnterFullScreen(_ notification: Notification) { window.level = .normal }
+    public func windowDidExitFullScreen(_ notification: Notification) {
+        if case .page(let page)? = lastSnapshot?.focus { engine.perform(.exitFullscreen, on: page) }
+        window.level = lastSnapshot?.stayOnTop == true ? .floating : .normal
     }
 
     /// Deferred native layout can clear Chromium's responder after the last page callback. Repair only the
@@ -166,6 +226,7 @@ public class WindowController: NSObject, NSWindowDelegate {
 /// extension, so both classes' `sendEvent` and `performKeyEquivalent` overrides are one line each.
 @MainActor
 public protocol HostWindow: NSWindow {
+    var onActivity: (() -> Void)? { get set }
     /// Called for every `flagsChanged` (and every mouse-down, which carries the modifiers held at that moment), so
     /// Control going up or down and a Shift held for a click reach the reducer whoever has focus.
     var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)? { get set }
@@ -190,6 +251,7 @@ extension HostWindow {
     /// unbound key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium
     /// gets the event and CEF's key handler routes it (before and after the page). Returns true when consumed.
     func hostEvent(_ event: NSEvent) -> Bool {
+        if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(event.type) { onActivity?() }
         if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
         switch event.type {
         case .flagsChanged: onFlagsChanged?(event.modifierFlags)
@@ -264,6 +326,7 @@ extension HostWindow {
 /// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
 @MainActor
 public final class BrowserWindow: NSWindow, HostWindow {
+    public var onActivity: (() -> Void)?
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?

@@ -127,9 +127,11 @@ final class BrowserClient {
             }
         }
         lifeSpan.pointee.on_before_popup = {
-            handlerSelf, browser, frame, _, targetURL, targetFrameName, targetDisposition,
+            handlerSelf, browser, frame, popupID, targetURL, targetFrameName, targetDisposition,
             userGesture, popupFeatures, _, _, _, _, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            let sourceFrame = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
+            let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return 0 }
             let url = URL(string: CefStringUtil.string(from: targetURL))
@@ -144,7 +146,7 @@ final class BrowserClient {
             return MainActor.assumeIsolated {
                 guard let cefBrowser = client.browser else { return 0 }
                 let isOSR = client.osrHost != nil
-                let request = CefWindowOpenRequest(
+                var request = CefWindowOpenRequest(
                     targetURL: url,
                     frameName: frameName,
                     disposition: disposition,
@@ -152,6 +154,8 @@ final class BrowserClient {
                     features: features,
                     isSourceOffscreen: isOSR
                 )
+                request.rawDisposition = Int(targetDisposition.rawValue)
+                request.sourceFrame = sourceFrame; request.sourceIsMainFrame = sourceIsMain; request.popupID = Int(popupID)
                 let raw = cefBrowser.delegate?.browser(cefBrowser, decideWindowOpenFor: request)
                     ?? CefWindowOpenPolicy.defaultAction(for: request)
                 // Defense in depth: re-apply the OSR downgrade even if a
@@ -789,12 +793,18 @@ extension BrowserClient {
                 return decision == .cancel ? 1 : 0
             }
         }
-        handler.pointee.on_open_urlfrom_tab = { handlerSelf, browser, frame, targetURL, _, _ in
+        handler.pointee.on_open_urlfrom_tab = { handlerSelf, browser, frame, targetURL, disposition, userGesture in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            let sourceFrame = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
+            let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
             let url = URL(string: CefStringUtil.string(from: targetURL))
             return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                (cefBrowser.delegate?.browser(cefBrowser, didRequestNewTab: url) ?? false) ? 1 : 0
+                var request = CefWindowOpenRequest(targetURL: url, disposition: CefWindowOpenDisposition(cefValue: disposition), userGesture: userGesture != 0,
+                                                   isSourceOffscreen: cefBrowser.isOffscreen)
+                request.rawDisposition = Int(disposition.rawValue)
+                request.sourceFrame = sourceFrame; request.sourceIsMainFrame = sourceIsMain
+                return (cefBrowser.delegate?.browser(cefBrowser, openURLFromTab: request) ?? false) ? 1 : 0
             }
         }
         handler.pointee.on_certificate_error = { handlerSelf, browser, certError, requestURL, sslInfo, callback in

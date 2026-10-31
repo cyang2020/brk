@@ -8,13 +8,14 @@ import UniformTypeIdentifiers
 /// reads the tree or the state.
 @MainActor
 public enum ShareExport {
+    public typealias Result = ExportOutcome
     /// Shows the save panel for the key window and writes the file. `write` is injectable for tests; the default
     /// writes atomically.
     @discardableResult
     public static func run(_ document: ExportDocument, in window: NSWindow?,
                            write: @escaping @MainActor (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) },
                            isValid: @escaping @MainActor () -> Bool = { true },
-                           completion: @escaping @MainActor (ExportFileResult) -> Void = { _ in }) -> NSSavePanel? {
+                           completion: @escaping @MainActor (ExportOutcome) -> Void = { _ in }) -> NSSavePanel? {
         guard let window, window.isVisible, window.attachedSheet == nil else { completion(.failed("Finish the open sheet first.")); return nil }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json, .html]
@@ -32,10 +33,4 @@ public enum ShareExport {
         panel.beginSheetModal(for: window, completionHandler: finish)
         return panel
     }
-}
-
-public enum ExportFileResult: Sendable {
-    case saved(URL)
-    case cancelled
-    case failed(String)
 }

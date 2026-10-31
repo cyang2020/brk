@@ -173,7 +173,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
            !text.dropLast().contains(where: \.isWhitespace) {
             return enterSiteSearch(engine)
         }
-        dispatch(.commandBar(.queryChanged(text)))
+        if let siteSearch { dispatch(.commandBar(.queryChangedForSite(siteSearch.id, text))) }
+        else { dispatch(.commandBar(.queryChanged(text))) }
         rerank(keepHighlight: false)
     }
 

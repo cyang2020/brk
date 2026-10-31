@@ -1,0 +1,3 @@
+<!doctype html><meta charset="utf-8"><input id="frame-input" aria-label="Frame input" value="Frame fixture">
+
+<script>document.querySelector('input').addEventListener('input',e=>parent.postMessage({kind:'frame-input',value:e.target.value},location.origin))</script>

@@ -8,15 +8,15 @@ final class ExportSheets {
     private final class Pending {
         weak var window: NSWindow?
         var sheet: NSWindow?
-        var reply: (@MainActor (String) -> Void)?
-        init(window: NSWindow, reply: @escaping @MainActor (String) -> Void) { self.window = window; self.reply = reply }
+        var reply: (@MainActor (ExportOutcome) -> Void)?
+        init(window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) { self.window = window; self.reply = reply }
     }
     private var pending: [WindowID: Pending] = [:]
     private var stopped = false
 
-    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (String) -> Void) {
+    func present(_ document: ExportDocument, owner: WindowID, in window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
         guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
-            reply("Export unavailable: finish the open sheet first."); return
+            reply(.failed("Finish the open sheet first.")); return
         }
         let entry = Pending(window: window, reply: reply)
         pending[owner] = entry
@@ -27,17 +27,17 @@ final class ExportSheets {
             guard let self, let entry, self.pending[owner] === entry else { return }
             entry.sheet = nil
             switch result {
-            case .saved(let url): self.finish(owner, entry, message: "Exported \(url.lastPathComponent).")
-            case .cancelled: self.finish(owner, entry, message: "Export cancelled. No file written.")
+            case .saved(let url): self.finish(owner, entry, outcome: .saved(url))
+            case .cancelled: self.finish(owner, entry, outcome: .cancelled)
             case .failed(let reason):
                 let reply = entry.reply; entry.reply = nil
-                reply?("Export failed: \(reason)")
+                reply?(.failed(reason))
                 guard !self.stopped, self.pending[owner] === entry, let window = entry.window, window.isVisible else { return }
                 let alert = NSAlert(); alert.messageText = "Export failed"; alert.informativeText = reason
                 entry.sheet = alert.window
                 alert.beginSheetModal(for: window) { [weak self, weak entry] _ in
                     guard let self, let entry, self.pending[owner] === entry else { return }
-                    self.finish(owner, entry, message: nil)
+                    self.finish(owner, entry, outcome: nil)
                 }
             }
         })
@@ -45,7 +45,7 @@ final class ExportSheets {
     }
 
     func ownerGone(_ owner: WindowID) {
-        if let entry = pending[owner] { finish(owner, entry, message: "Export cancelled. No file written.") }
+        if let entry = pending[owner] { finish(owner, entry, outcome: .cancelled) }
     }
 
     func shutdown() {
@@ -57,7 +57,7 @@ final class ExportSheets {
         for owner in Array(pending.keys) { ownerGone(owner) }
     }
 
-    private func finish(_ owner: WindowID, _ entry: Pending, message: String?) {
+    private func finish(_ owner: WindowID, _ entry: Pending, outcome: ExportOutcome?) {
         guard pending[owner] === entry else { return }
         pending[owner] = nil
         let reply = entry.reply; entry.reply = nil
@@ -66,6 +66,6 @@ final class ExportSheets {
             sheet.sheetParent?.endSheet(sheet, returnCode: .cancel)
             sheet.orderOut(nil)
         }
-        if let message { reply?(message) }
+        if let outcome { reply?(outcome) }
     }
 }

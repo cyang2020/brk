@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Browser Basic [Fixture]</title>
+<style>body{font:18px system-ui;margin:30px;background:white;color:#18212b}input,textarea,[contenteditable]{display:block;margin:16px 0;padding:10px;font:18px system-ui;border:1px solid #789}img{display:block}iframe{height:90px;width:400px}</style>
+<h1>Browser basic output fixture</h1>
+<p>This local page tests real document output, navigation, zoom, editing, and fullscreen.</p>
+<img id="image" src="browser-basic.svg" width="64" height="40" alt="Fixture rectangle">
+<input id="input" aria-label="Input" value="">
+<textarea id="textarea" aria-label="Textarea"></textarea>
+<div id="editable" contenteditable="true" aria-label="Rich editor">Editable fixture</div>
+<iframe src="browser-basic-frame.html"></iframe>
+<a id="next" href="page2.html">Next page</a>
+<button id="fullscreen" onclick="document.documentElement.requestFullscreen()">Fullscreen</button>
+<script>
+window.events=[];
+window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===document.querySelector('iframe').contentWindow&&e.data.kind==='frame-input')document.title='value:'+e.data.value});
+document.addEventListener('input',e=>{if('value' in e.target)document.title='value:'+e.target.value;else if(e.target.isContentEditable)document.title='value:'+e.target.textContent});
+document.addEventListener('keydown',e=>{events.push({key:e.key,meta:e.metaKey,shift:e.shiftKey});if(location.search.includes('swallow')&&e.metaKey)e.preventDefault()});
+</script>

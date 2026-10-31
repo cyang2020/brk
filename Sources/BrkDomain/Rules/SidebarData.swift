@@ -43,19 +43,16 @@ extension Work {
             // Credential writes have already succeeded (or were cancelled) before this event is dispatched.
             let root = favorites ? state.doc.favorites[space.profile] ?? space.pinnedRoot : space.pinnedRoot
             let imported = insertImported(preview.entries, root: root)
-            let previousHistory = Set(state.doc.history.filter { $0.profile == space.profile }.map(\.url))
+            let existingVisits = state.doc.history.filter { $0.profile == space.profile }
+            let previousHistory = Set(existingVisits.map(\.url))
+            var known = Dictionary(grouping: existingVisits, by: \.url).mapValues { Set($0.map(\.visitedAt)) }
             for visit in preview.visits.sorted(by: { $0.visitedAt < $1.visitedAt }) where SidebarImport.publicURL(visit.url) && Instant.supported.contains(visit.visitedAt) {
-                if let index = state.doc.history.firstIndex(where: { $0.profile == space.profile && $0.url == visit.url }) {
-                    if state.doc.history[index].visitedAt < visit.visitedAt {
-                        state.doc.history[index] = HistoryEntry(url: visit.url, title: visit.title, visitedAt: visit.visitedAt, profile: space.profile)
-                    }
-                } else {
-                    state.doc.history.append(HistoryEntry(url: visit.url, title: visit.title, visitedAt: visit.visitedAt, profile: space.profile))
-                }
+                guard known[visit.url, default: []].insert(visit.visitedAt).inserted else { continue }
+                state.doc.history.append(HistoryEntry(id: HistoryVisitID(ctx.newID()), url: visit.url, title: visit.title,
+                                                     visitedAt: visit.visitedAt, profile: space.profile))
             }
             state.doc.history.sort { $0.visitedAt == $1.visitedAt ? $0.url.absoluteString < $1.url.absoluteString : $0.visitedAt > $1.visitedAt }
-            state.doc.history = Array(state.doc.history.prefix(Metrics.persistence.historyCap.value))
-            let addedHistory = state.doc.history.filter { $0.profile == space.profile && !previousHistory.contains($0.url) }.count
+            let addedHistory = Set(state.doc.history.filter { $0.profile == space.profile }.map(\.url)).subtracting(previousHistory).count
             state.session.sidebarDataStatus = "Imported \(imported) bookmarks, \(addedHistory) new history URLs, \(preview.passwords) passwords. Skipped \(preview.rejected) invalid entries and \(preview.bookmarkCount - imported) duplicate or unplaced bookmarks."
         case .connected(let window, let folder):
             guard let w = state.doc.windows[window], w.kind == .standard, let profile = state.doc.spaces[w.space]?.profile,
@@ -94,7 +91,6 @@ extension Work {
         case .failed(let epoch, let message):
             if let epoch, state.doc.sidebarData.sync?.epoch != epoch { return }
             state.session.sidebarDataStatus = message
-        case .exportFinished(let message): state.session.sidebarDataStatus = message
         }
     }
 

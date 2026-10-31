@@ -160,7 +160,6 @@ public enum SidebarDataEvent: Sendable, Equatable {
     case syncRead(epoch: String, SidebarSyncDocument)
     case syncWritten(epoch: String, revision: UInt64, published: SidebarSyncDocument)
     case failed(epoch: String?, String)
-    case exportFinished(String)
 }
 
 public enum SidebarDataEffect: Hashable, Sendable {

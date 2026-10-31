@@ -7,7 +7,7 @@ import Foundation
 /// the bar turns into its site-search mode (Arc: Tab or Space on an engine's name).
 public struct Suggestion: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
-        case openTyped, switchToTab, history, action
+        case openTyped, switchToTab, history, action, calculator, bookmark
         /// One of the default engine's suggestions for the query (Arc: `chromium` "Search Suggestion").
         case searchSuggestion
         /// A site from Arc's top domains list (Arc: `topDomains`).
@@ -71,13 +71,20 @@ public enum Suggest {
             return Array((tabs.prefix(emptyTabCap).map(switchRow) + history.map(historyRow)).prefix(limit))
         }
 
-        let resolve = resolve ?? { resolveTypedInput($0, engine: SearchEngine.builtIn(bar.engine.id) ?? .google) }
+        let selectedEngine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+        let resolve = resolve ?? { resolveTypedInput($0, engine: selectedEngine) }
         let needle = fold(text)
+        if let result = BrowserCalculator.result(text) {
+            return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
+                               command: .commandBar(.calculate(text)))]
+        }
         var typed: Suggestion?
         var isAddress = false
         let resolvedURL = resolve(text)
         if let url = resolvedURL {
-            let search = isSearch(url, for: text)
+            let search = url == selectedEngine.searchURL(text) || isSearch(url, for: text)
             isAddress = !search
             if !search { taken.insert(url.absoluteString) }
             typed = Suggestion(kind: .openTyped, title: search ? "\(OverlayCopy.searchVerb) \(text)" : "\(OverlayCopy.openVerb) \(displayURL(url))",
@@ -114,7 +121,11 @@ public enum Suggest {
             top = [best.suggestion]
             travel.removeFirst()
         }
-        let rows: [Suggestion] = top + switches + (typed.map { [$0] } ?? []) + related + (site.map { [$0] } ?? []) + domains + suggestions + history
+        let bookmarks = matching(bar.bookmarks.filter { !taken.contains($0.url.absoluteString) }, needle) { [$0.title, $0.url.absoluteString] }.prefix(2).map { entry in
+            Suggestion(kind: .bookmark, title: entry.title, subtitle: displayURL(entry.url), symbol: "bookmark", favicon: nil, hint: "Bookmark",
+                       command: .commandBar(.submit(entry.url.absoluteString)))
+        }
+        let rows: [Suggestion] = top + switches + (typed.map { [$0] } ?? []) + related + (site.map { [$0] } ?? []) + domains + bookmarks + suggestions + history
             + travel.prefix(actionCap).map(\.suggestion)
         return Array(rows.prefix(limit))
     }
@@ -197,12 +208,21 @@ public enum Suggest {
                 candidates.append(("\(OverlayCopy.moveToSpace) \(space.title)", [], "arrow.right.square", nil, .item(.move(focused, to: .space(space.id)))))
             }
         }
+        if let focused {
+            for folder in bar.folders {
+                candidates.append(("Move to \(folder.title)", [], "folder", nil, .item(.move(focused, to: .into(parent: folder.id, index: Int.max)))))
+            }
+        }
         let scored = candidates.enumerated().compactMap { index, c -> (Int, Int, Scored)? in
             guard let score = score(needle, title: c.title, triggers: c.triggers) else { return nil }
             return (score, index, Scored(score: score, suggestion: Suggestion(kind: .action, title: c.title, subtitle: nil, symbol: c.symbol,
                                                                               favicon: nil, hint: c.hint, command: c.command)))
         }
-        return scored.sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1 < $1.1 }.map(\.2)
+        return scored.sorted {
+            if $0.0 != $1.0 { return $0.0 > $1.0 }
+            let a = $0.2.suggestion.hint?.count ?? Int.max, b = $1.2.suggestion.hint?.count ?? Int.max
+            return a != b ? a < b : $0.1 < $1.1
+        }.map(\.2)
     }
 
     private static func score(_ needle: String, title: String, triggers: [String]) -> Int? {
@@ -214,7 +234,8 @@ public enum Suggest {
             let next = text.dropFirst(needle.count).first
             return next.map { !($0.isLetter || $0.isNumber) } ?? true
         }) { return 3 }
-        return matchRank(needle, in: texts).map { 2 - $0 }
+        if let rank = matchRank(needle, in: [title]) { return 2 - rank }
+        return matchRank(needle, in: triggers).map { 1 - $0 }
     }
 
     // MARK: Matching

@@ -50,6 +50,8 @@ public protocol WebEngine: AnyObject {
     var pageLog: [PageLogEntry] { get }
 
     func find(_ request: FindRequest)
+    func output(_ request: OutputRequest)
+    func cancelOutput(_ id: OutputID)
 
     func cancelDownload(_ id: DownloadID)
     /// Revokes synchronously. Final drain results arrive through the delegate.
@@ -76,6 +78,10 @@ public protocol WebEngineDelegate: AnyObject {
 
     func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow?
     func engine(_ engine: any WebEngine, find update: FindUpdate)
+    func engine(_ engine: any WebEngine, output update: OutputUpdate)
+    func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void)
+    func engine(_ engine: any WebEngine, printOutput request: OutputRequest, pdf: URL, reply: @escaping @MainActor (PrintAnswer) -> Void)
+    func engine(_ engine: any WebEngine, dismissOutput id: OutputID)
     func engine(_ engine: any WebEngine, download update: DownloadUpdate)
     func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt,
                 reply: @escaping @MainActor (DestinationAnswer) -> Void)
@@ -88,10 +94,19 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool
 }
 
+extension WebEngine {
+    public func output(_ request: OutputRequest) {}
+    public func cancelOutput(_ id: OutputID) {}
+}
+
 extension WebEngineDelegate {
     public func engine(_ engine: any WebEngine, page: PageID, keyHandling key: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling {
         KeyHandling(handled: self.engine(engine, page: page, key: key, stage: stage, pressID: pressID), shortcut: false)
     }
+    public func engine(_ engine: any WebEngine, output update: OutputUpdate) {}
+    public func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
+    public func engine(_ engine: any WebEngine, printOutput request: OutputRequest, pdf: URL, reply: @escaping @MainActor (PrintAnswer) -> Void) { reply(.ownerGone) }
+    public func engine(_ engine: any WebEngine, dismissOutput id: OutputID) {}
     public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
     public func engine(_ engine: any WebEngine, find update: FindUpdate) {}
     public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}

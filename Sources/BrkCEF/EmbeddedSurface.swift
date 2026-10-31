@@ -31,6 +31,10 @@ final class EmbeddedSurface: PageSurfaceView {
     private static let pollInterval: TimeInterval = 0.05
     private static let maxAttempts = 200   // 10 s
 
+    var editingBrowser: CefBrowser? {
+        guard !retired, window?.isVisible == true, containsFirstResponder, !isHiddenOrHasHiddenAncestor else { return nil }
+        return chrome?.browser
+    }
     var isEmbedded: Bool { !borrowed.isEmpty }
     var isReadyForFocus: Bool { isEmbedded && Self.find("RenderWidgetHostViewCocoa", in: self) != nil }
 

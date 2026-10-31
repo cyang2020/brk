@@ -41,11 +41,14 @@ public final class GetURLHandler: NSObject {
 public enum DefaultBrowser {
     /// Asks macOS to make this app the handler for http and https. The result arrives later; macOS confirms with
     /// the user. Idempotent: asking while already the handler changes nothing.
-    public static func register() {
+    public static func register(failed: @escaping @MainActor @Sendable (String) -> Void = { _ in }) {
         guard let bundle = Bundle.main.bundleURL as URL? else { return }
         for scheme in ["http", "https"] {
             NSWorkspace.shared.setDefaultApplication(at: bundle, toOpenURLsWithScheme: scheme) { error in
-                if let error { Logger(subsystem: "brk", category: "links").notice("default browser (\(scheme, privacy: .public)): \(error)") }
+                if let error {
+                    let message = "\(scheme): " + error.localizedDescription
+                    Task { @MainActor in failed(message) }
+                }
             }
         }
     }
@@ -54,7 +57,9 @@ public enum DefaultBrowser {
     /// Browser" notice; `SettingsSnapshot` has no field for it yet, so BrkApp reads it and the pane shows the button
     /// regardless). False from a SwiftPM test executable, which is not a bundle macOS knows.
     public static func isDefault() -> Bool {
-        guard let probe = URL(string: "https://example.com/"), let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
-        return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
+        ["http", "https"].allSatisfy { scheme in
+            guard let probe = URL(string: scheme + "://example.com/"), let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
+            return handler.standardizedFileURL.resolvingSymlinksInPath() == Bundle.main.bundleURL.standardizedFileURL.resolvingSymlinksInPath()
+        }
     }
 }

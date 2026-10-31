@@ -8,6 +8,10 @@ import Foundation
 extension Work {
     mutating func commandBar(_ command: CommandBarCommand, in window: WindowID) {
         switch command {
+        case .calculate(let expression):
+            guard let result = BrowserCalculator.result(expression) else { return }
+            effects.append(.copyToPasteboard(result))
+            state.session.windows[window]?.overlay = nil
         case .open(let mode):
             // Cmd+L edits the focused tab (over the URL pill while the sidebar shows it, else centered); with
             // nothing shown it behaves as Cmd+T. The same target already open is a no-op that keeps its openID (the
@@ -27,8 +31,16 @@ extension Work {
         case .submitSearch(let engine, let query):
             // Site search: Tab or Space on a known engine's name, then the query (F4 ranks the hint rows).
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, let engine = SearchEngine.builtIn(engine), let url = engine.searchURL(trimmed) else { return }
+            guard !trimmed.isEmpty, let engine = (SearchEngine.builtIn + (state.profileSettings(in: window).siteSearchEngines ?? [])).first(where: { $0.id == engine }), let url = engine.searchURL(trimmed) else { return }
             apply(url, in: window)
+        case .queryChangedForSite(let id, let query):
+            guard state.doc.windows[window]?.kind != .incognito,
+                  state.profileSettings(in: window).searchSuggestions,
+                  let engine = (SearchEngine.builtIn + (state.profileSettings(in: window).siteSearchEngines ?? [])).first(where: { $0.id == id }),
+                  let url = engine.suggestURL(query), !query.isEmpty else {
+                state.session.windows[window]?.suggestions = nil; return
+            }
+            effects.append(.fetchSuggestions(window, query: query, url: url))
         case .queryChanged(let query):
             // Ask the profile's engine for suggestions when the profile allows them; the answer arrives as
             // `SystemEvent.suggestions`. A blank query, or a profile that does not allow them (any more), clears
@@ -37,7 +49,7 @@ extension Work {
             guard case .commandBar? = state.session.windows[window]?.overlay else { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
-            guard !trimmed.isEmpty, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
+            guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, BrowserCalculator.result(trimmed) == nil, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
             }

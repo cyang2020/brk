@@ -20,9 +20,17 @@ extension Work {
             }
         case .profile(let profile, let setting):
             guard state.doc.profiles[profile] != nil else { return }
+            let newSearchID = SearchEngineID("site-" + ctx.newID())
             setProfileSetting(profile) { s in
                 switch setting {
-                case .searchEngine(let engine): if SearchEngine.builtIn(engine) != nil { s.searchEngine = engine }
+                case .addSiteSearch(let name, let keyword, let template):
+                    let engine = SearchEngine(id: newSearchID, name: name.trimmingCharacters(in: .whitespacesAndNewlines), keyword: keyword.lowercased().trimmingCharacters(in: .whitespacesAndNewlines), template: template.trimmingCharacters(in: .whitespacesAndNewlines), suggestTemplate: nil)
+                    guard engine.isValidSiteSearch, !(SearchEngine.builtIn + (s.siteSearchEngines ?? [])).contains(where: { $0.keyword == engine.keyword }) else { return }
+                    s.siteSearchEngines = (s.siteSearchEngines ?? []) + [engine]
+                case .removeSiteSearch(let id):
+                    s.siteSearchEngines?.removeAll { $0.id == id }
+                    if s.searchEngine == id { s.searchEngine = SearchEngine.google.id }
+                case .searchEngine(let engine): if (SearchEngine.builtIn + (s.siteSearchEngines ?? [])).contains(where: { $0.id == engine }) { s.searchEngine = engine }
                 case .searchSuggestions(let on): s.searchSuggestions = on
                 case .autoArchive(let threshold): s.autoArchive = threshold
                 case .downloadsDirectory(let path):
@@ -124,6 +132,7 @@ extension AppState {
 
     /// The default search engine of the current space's profile in a window.
     func searchEngine(in window: WindowID) -> SearchEngine {
-        SearchEngine.builtIn(profileSettings(in: window).searchEngine) ?? .google
+        let settings = profileSettings(in: window)
+        return (SearchEngine.builtIn + (settings.siteSearchEngines ?? [])).first { $0.id == settings.searchEngine } ?? .google
     }
 }

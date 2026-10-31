@@ -171,7 +171,7 @@ extension ActionID {
         case .newTab: entry(16, "New Tab…", .file, 0, [key(cmd, .t, .app)], .commandBar(.open(.newTab)))
         case .newWindow:
             entry(17, "New Window", .file, 0, [key(cmd, .n, .app)], .window(.new), bar: listing("plus.rectangle", "Create Window", "Copy Window", "Duplicate Window"))
-        case .newBlankWindow: entry(18, "Blank Window", .file, 0, [key([ctrl, cmd], .n, .page)], .later(.blankWindow), bar: listing("macwindow.on.rectangle", "Create Window"))
+        case .newBlankWindow: entry(18, "Blank Window", .file, 0, [key([ctrl, cmd], .n, .page)], .window(.newBlank), bar: listing("macwindow.on.rectangle", "Create Window"))
         case .newIncognitoWindow:
             entry(19, "New Incognito Window", .file, 0, [key([shift, cmd], .n, .app)], .window(.newIncognito),
                   bar: listing("macwindow.on.rectangle", "Create Incognito Window", "New Private Window", "Incognito"))
@@ -215,8 +215,8 @@ extension ActionID {
         case .capturePrettyScreenshot:
             entry(37, "Capture in Portrait Mode", .file, 4, [], .later(.captures),
                   bar: listing("camera.macro", "Screenshot in Portrait Mode", "Capture Portrait", "Portrait Mode", "Screenshot"))
-        case .savePageAs: entry(38, "Save Page As", .file, 4, [key([shift, cmd], .s, .page)], .later(.savePage), bar: listing("square.and.arrow.down", "Save Page", "Save File"))
-        case .printPage: entry(39, "Print", .file, 4, [key(cmd, .p, .pageThenApp)], .later(.print), bar: listing("printer", "Print Page"))
+        case .savePageAs: entry(38, "Save Page As", .file, 4, [key([shift, cmd], .s, .page)], .page(.output(.mhtml)), bar: listing("square.and.arrow.down", "Save Page", "Save File"))
+        case .printPage: entry(39, "Print", .file, 4, [key(cmd, .p, .pageThenApp)], .page(.output(.print)), bar: listing("printer", "Print Page"))
 
         // MARK: Edit (groups: Undo, Redo | Cut to Select All | the submenus, Find first)
         case .copyCurrentURL:
@@ -291,15 +291,15 @@ extension ActionID {
                   bar: listing("minus.magnifyingglass"), repeats: true)
         case .cast: entry(111, "Cast", .view, 5, [], .later(.cast), bar: listing("rectangle.portrait.and.arrow.right.fill"))
         case .viewSource:
-            entry(113, "View Source", .view, 0, [key([opt, cmd], .u, .pageThenApp)], .later(.developerMenu), in: .developer, bar: listing("curlybraces", "View Source"))
+            entry(113, "View Source", .view, 0, [key([opt, cmd], .u, .pageThenApp)], .page(.developer(.source)), in: .developer, bar: listing("curlybraces", "View Source"))
         case .developerTools:
             entry(114, "Developer Tools", .view, 0, [key([opt, cmd], .i, .pageThenApp), key([], .f12, .pageThenApp)],
                   .page(.toggleDevTools), in: .developer, bar: listing("hammer.fill", "Developer Tools", "Debug Tools", "Devtools"))
         case .inspectElements:
-            entry(116, "Inspect Elements", .view, 0, [key([opt, cmd], .c, .pageThenApp)], .later(.developerMenu), in: .developer,
+            entry(116, "Inspect Elements", .view, 0, [key([opt, cmd], .c, .pageThenApp)], .page(.developer(.inspect)), in: .developer,
                   bar: listing("scope", "Inspect Element"))
         case .javaScriptConsole:
-            entry(117, "JavaScript Console", .view, 0, [key([opt, cmd], .j, .page)], .later(.developerMenu), in: .developer,
+            entry(117, "JavaScript Console", .view, 0, [key([opt, cmd], .j, .page)], .page(.developer(.console)), in: .developer,
                   bar: listing("terminal", "Toggle console", "Console", "Javascript Console", "JS console"))
         case .networkInspector:
             entry(118, "Network Inspector", .view, 0, [], .later(.developerMenu), in: .developer, bar: listing("wifi", "Network Inspector"))
@@ -345,7 +345,7 @@ extension ActionID {
         // placeholder submenu between the last two is a separator item)
         case .gptMessage: entry(133, "New ChatGPT Message…", .tabs, 0, [key([opt, cmd], .g, .page)], .later(.aiCommandBar), hidden: true)
         case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .tabTools(.site(.joinMeeting)), bar: listing("calendar", "Join Meeting"), hidden: true)
-        case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .later(.peekEmail), hidden: true)
+        case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .peek(.email), bar: listing("envelope", "Peek Email", "Gmail"), hidden: true)
         case .pinTab: entry(136, "Pin/Unpin Tab", .tabs, 0, [key(cmd, .d, .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "save"))
         case .openTabIn:
             entry(137, "Open Little {app} or Peek in…", .tabs, 0, [key(cmd, .o, .pageThenApp)], .window(.openIn(.current)),

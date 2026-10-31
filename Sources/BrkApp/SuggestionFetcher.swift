@@ -10,7 +10,20 @@ import os
 @MainActor
 public final class SuggestionFetcher {
     private let send: @MainActor (Input) -> Void
-    private var pending: [WindowID: Task<Void, Never>] = [:]
+    private struct Eligibility: Equatable {
+        let profileRoot: ItemID
+        let opening: Int
+        let engine: SearchEngineCandidate
+    }
+    private struct Pending {
+        let id: UUID
+        let query: String
+        let endpoint: URL
+        let eligibility: Eligibility?
+        let task: Task<Void, Never>
+    }
+    private var pending: [WindowID: Pending] = [:]
+    private var eligible: [WindowID: Eligibility] = [:]
     private let session: URLSession
     /// `LaunchOptions.suggestOverride`: the e2e fixture's endpoint instead of the engine's.
     private let override: URL?
@@ -22,27 +35,49 @@ public final class SuggestionFetcher {
         self.override = override
     }
 
+    public func cancel(_ window: WindowID) { pending.removeValue(forKey: window)?.task.cancel() }
+
+    public func reconcile(_ snapshot: AppSnapshot) {
+        eligible = snapshot.windows.compactMapValues { window in
+            guard case .commandBar(let bar)? = window.overlay, bar.suggestionsEnabled else { return nil }
+            return Eligibility(profileRoot: window.favorites.root, opening: bar.openID, engine: bar.engine)
+        }
+        for window in Array(pending.keys) {
+            guard let request = pending[window], let current = eligible[window] else { cancel(window); continue }
+            if let captured = request.eligibility {
+                if captured != current { cancel(window) }
+            } else if SearchEngine.builtIn(current.engine.id)?.suggestURL(request.query) != request.endpoint {
+                cancel(window)
+            }
+        }
+    }
+
     public func fetch(_ window: WindowID, query: String, url engineURL: URL) {
-        pending[window]?.cancel()
+        cancel(window)
+        let id = UUID(), eligibility = eligible[window]
         var url = engineURL
         if let override, var components = URLComponents(url: override, resolvingAgainstBaseURL: false) {
             components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "q", value: query)]
             url = components.url ?? engineURL
         }
         let session = session, send = send
-        pending[window] = Task { @MainActor in
+        let task = Task { @MainActor in
             try? await Task.sleep(for: .seconds(Metrics.commandBar.suggestionDebounce.value))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self.pending[window]?.id == id else { return }
             do {
                 let (data, _) = try await session.data(from: url)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self.pending[window]?.id == id,
+                      eligibility == nil || self.eligible[window] == eligibility else { return }
                 let results = Self.parse(data)
+                self.pending[window] = nil
                 send(.system(.suggestions(window, query: query, results)))
             } catch {
-                guard !Task.isCancelled else { return }
-                self.log.notice("suggestions for \"\(query, privacy: .public)\" failed: \(error)")
+                guard !Task.isCancelled, self.pending[window]?.id == id else { return }
+                self.pending[window] = nil
+                self.log.notice("suggestions failed: \(error)")
             }
         }
+        pending[window] = Pending(id: id, query: query, endpoint: engineURL, eligibility: eligibility, task: task)
     }
 
     /// `["q", ["a", "b"]]` -> ["a", "b"]; anything else -> [].

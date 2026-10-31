@@ -19,6 +19,12 @@ import Foundation
 extension Work {
     mutating func windows(_ command: WindowCommand, in window: WindowID) {
         switch command {
+        case .toggleStayOnTop:
+            state.doc.windows[window]?.stayOnTop.toggle()
+        case .newBlank:
+            guard let doc = state.doc.windows[window] else { return }
+            let id = newWindow(kind: .blank, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
+            openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .new:
             // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It opens with
             // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
@@ -49,7 +55,7 @@ extension Work {
             // unless it is the last one (then AppKit's close-and-quit path takes over through `WindowEffect.close`).
             guard let doc = state.doc.windows[window] else { return }
             switch doc.kind {
-            case .little:
+            case .little, .blank:
                 if let tree = state.session.scratch[window], let root = tree.root(for: .scratch(window)) {
                     archiveTabs(tree[root]?.children ?? [], reason: .manual, in: window)
                 }
@@ -66,27 +72,34 @@ extension Work {
                 if others.isEmpty { effects.append(.window(window, .close)) } else { removeWindow(window) }
             }
         case .openIn(let ref):
-            // Cmd+O ("Open Little Arc or Peek in…", Arc's `openInCurrentSpace:`) and the "Open in" menu: the held
-            // tab (a Little Arc's, or the window's peeked tab) moves to the top of the target space's Today and a
-            // standard window on that space shows it; the Little Arc window or the Peek closes.
-            guard let doc = state.doc.windows[window], let held = heldTab(in: window) else { return }
             let target: SpaceID? = switch ref {
-            case .current: mostRecentStandardWindow().map { state.doc.windows[$0]!.space } ?? doc.space
+            case .current: mostRecentStandardWindow().flatMap { state.doc.windows[$0]?.space } ?? state.doc.windows[window]?.space
             case .space(let id): id
             }
             guard let target, let today = state.doc.spaces[target]?.todayRoot else { return }
-            let source = state.displayedTab(held, in: window, for: .savedDocument)
-            let address = state.address(of: held, in: window, for: .visible)
-            let removed = removeItem(held)
-            guard !removed.isEmpty, let tab = source else { return }
-            let id = ItemID(ctx.newID())
-            do { try state.doc.tree.insert(id, .tab(tab), at: .into(parent: today, index: 0), createdAt: ctx.now) } catch { return }
-            let standard = mostRecentStandardWindow() ?? newWindow(kind: .standard, space: target, sidebar: (true, doc.sidebarWidth))
-            if case .peek? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
-            if doc.kind == .little { removeWindow(window) }
-            focus(id, in: standard)
-            if let address, address != tab.url { request(address, for: PageID(window: standard, item: id)) }
+            promoteHeld(in: window, targetSpace: target, position: .into(parent: today, index: 0))
+        case .openInFolder(let folder):
+            guard case .folder? = state.doc.tree[folder]?.body,
+                  case .pinned(let space)? = state.doc.tree.role(of: folder) else { return }
+            promoteHeld(in: window, targetSpace: space, position: .into(parent: folder, index: Int.max))
         }
+    }
+
+    /// Open In explicitly opens the committed address in a new destination context. Form/session history resets;
+    /// accepted downloads keep their original browser under the transfer owner's lease.
+    private mutating func promoteHeld(in window: WindowID, targetSpace: SpaceID, position: TreePosition) {
+        guard let doc = state.doc.windows[window], let held = heldTab(in: window),
+              var tab = state.displayedTab(held, in: window, for: .savedDocument), state.doc.spaces[targetSpace] != nil else { return }
+        let address = state.address(of: held, in: window, for: .visible)
+        tab.url = state.address(of: held, in: window, for: .savedDocument)
+        let id = ItemID(ctx.newID())
+        do { try state.doc.tree.insert(id, .tab(tab), at: position, createdAt: ctx.now) } catch { return }
+        _ = removeItem(held)
+        let standard = mostRecentStandardWindow() ?? newWindow(kind: .standard, space: targetSpace, sidebar: (true, doc.sidebarWidth))
+        if case .peek? = state.session.windows[window]?.overlay { state.session.windows[window]?.overlay = nil }
+        if doc.kind == .little { removeWindow(window) }
+        focus(id, in: standard)
+        if let address, address != tab.url { request(address, for: PageID(window: standard, item: id)) }
     }
 
     /// Links from other apps (Apple Event GetURL). The first matching route wins (Air Traffic Control, in the
@@ -133,7 +146,7 @@ extension Work {
             bounds = last.offsetBy(dx: step, dy: -step)
         }
         state.doc.windows[id] = WindowDoc(id: id, kind: kind, bounds: bounds, space: space, activeBySpace: [:],
-                                          sidebarVisible: sidebar.visible, sidebarWidth: sidebar.width)
+                                          stayOnTop: kind == .little, sidebarVisible: sidebar.visible, sidebarWidth: sidebar.width)
         ensureSession(id)
         return id
     }
@@ -188,9 +201,12 @@ extension Work {
     func mostRecentStandardWindow() -> WindowID? {
         state.doc.windows.values.filter { $0.kind == .standard }
             .sorted { a, b in
-                let (x, y) = (a.activeBySpace[a.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0),
-                              b.activeBySpace[b.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0))
-                return x != y ? x > y : a.id < b.id
+                let (x, y) = (state.session.windows[a.id]?.activationOrder ?? 0,
+                              state.session.windows[b.id]?.activationOrder ?? 0)
+                if x != y { return x > y }
+                let ta = a.activeBySpace[a.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0)
+                let tb = b.activeBySpace[b.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0)
+                return ta != tb ? ta > tb : a.id < b.id
             }
             .first?.id
     }
@@ -236,8 +252,9 @@ extension LinkRoute {
 public enum OpenInMenu {
     public static let currentSpaceTitle = "Open in current Space"
 
-    public static func model(spaces: [DockItem]) -> MenuModel {
+    public static func model(spaces: [DockItem], folders: [FolderDestinationCandidate] = []) -> MenuModel {
         var entries: [MenuEntry] = spaces.map { .action(title: $0.title, command: .window(.openIn(.space($0.id))), enabled: true) }
+        entries += folders.map { .action(title: "Folder: " + $0.title, command: .window(.openInFolder($0.id)), enabled: true) }
         if !entries.isEmpty { entries.append(.separator) }
         entries.append(.action(title: currentSpaceTitle, command: .window(.openIn(.current)), enabled: true))
         return MenuModel(entries: entries)
