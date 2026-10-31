@@ -120,7 +120,10 @@ enum BoostScenarios {
         try app.dispatch(.tab(.focus(item)))
         try app.waitForPageInput(PageID(window: publicWindow, item: item), at: document)
         try app.dispatch(.boost(.edit(id)))
-        try app.click(.boostControl("private")); try app.click(.boostControl("save"))
+        let privateToggle = try visible(app.native(), .boostControl("private")).frame
+        try app.click(at: CGPoint(x: privateToggle.minX + 8, y: privateToggle.midY))
+        try expect(try editor(app).draft.allowPrivate && !editor(app).draft.javascriptApproved, "native private checkbox did not revoke JavaScript approval")
+        try app.click(.boostControl("save"))
         try app.waitUntil("private permission change re-confirms JavaScript") { try app.native().sheetClass != nil }
         try app.perform(.sheetButton(title: "Allow JavaScript & Save"))
         try app.waitUntil("editor saved") { try app.view().boostEditor == nil }
