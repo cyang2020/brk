@@ -31,9 +31,9 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.ai = state.session.ai.answers[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
-    return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme), settings: projectSettings(state),
+    return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
                            (page, PageObservation(lastOpenRequest: state.session.live[page]?.lastOpenRequest, browser: state.session.live[page]?.browser,
@@ -248,7 +248,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) }
         let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
         overlay = .commandBar(CommandBarSnapshot(
-            openID: openID, placement: placement, initialQuery: initialQuery,
+            openID: openID, aiMode: { if case .ai(let mode) = target { mode } else { nil } }(), placement: placement, initialQuery: initialQuery,
             tabs: switchCandidates(state, window: id, tree: tree, space: space, focused: focusedPane),
             history: historyIndex(state.doc.history.filter { doc.kind != .incognito && $0.profile == profile }).map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
             bookmarks: doc.kind == .incognito ? [] : state.doc.tree.allTabs().compactMap { tab in
@@ -380,6 +380,7 @@ private func profileRows(_ state: AppState) -> [ProfileRow] {
 /// in…" when the window holds no Little Arc tab or Peek; in an ephemeral window, what needs a space's sidebar.
 private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
     var enabled = Set(ActionID.allCases.filter { $0.spec.later == nil })
+    enabled.insert(.gptMessage)
     let activeOutput = state.session.windows[window]?.output.map { if case .terminal = $0.stage { false } else { true } } ?? false
     if !activeOutput { enabled.remove(.cancelPageOutput) }
     if state.findPage(in: window) == nil {

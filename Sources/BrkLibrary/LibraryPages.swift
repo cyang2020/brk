@@ -49,6 +49,7 @@ final class DownloadsPageView: LibraryListPage {
         var menu: [(String, () -> Void)] = []
         if onDisk, let file {
             menu.append((LibraryCopy.open, { [weak self] in self?.openFile(file) }))
+            menu.append(("Tidy Name with Max", { [weak self] in self?.dispatch(.assist(.renameDownload(id))) }))
         }
         if download.path != nil {
             let reveal: () -> Void = { [weak self] in self?.dispatch(.library(.revealDownload(id))) }

@@ -94,10 +94,19 @@ final class AssistAndExportSpecTests: XCTestCase {
     // MARK: later-wave stubs
 
     func test_tidyTodayAppliesTheProvidersPlan() throws {
-        throw XCTSkip("later wave (Max stand-ins): 'Organize Today Tabs' sends AITask.tidyToday and the reducer turns the JSON plan into folders")
+        let d = Driver()
+        d.user(.settings(.max(.tidyTabs(true))))
+        _ = d.open("https://example.com/b")
+        let transition = d.user(.assist(.organizeToday))
+        XCTAssertTrue(transition.effects.contains { if case .ai(_, .tidyToday, _) = $0 { true } else { false } })
     }
 
     func test_askArcShowsAnAnswerPage() throws {
-        throw XCTSkip("later wave (Max stand-ins): Opt+Cmd+G in the command bar sends AITask.ask and shows the answer")
+        let d = Driver()
+        d.user(.settings(.max(.feature(.commandBar, true))))
+        let transition = d.user(.assist(.ask("Why?")))
+        let id = try XCTUnwrap(transition.effects.compactMap { if case .ai(let id, _, _) = $0 { id } else { nil } }.first)
+        d.system(.aiResult(id, .text("Because.")))
+        XCTAssertEqual(d.view.ai?.text, "Because.")
     }
 }

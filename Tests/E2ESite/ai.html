@@ -1,0 +1,9 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>AI Fixture</title>
+<style>body{font:18px system-ui;padding:25px}#preview{display:block;position:absolute;left:40px;top:40px}main{margin-top:70px}.hidden{display:none}</style>
+<a id="preview" href="/ai-source.html">Preview source</a>
+<main><h1 id="greeting">Bonjour Monde</h1><p id="fact">The fixture river is blue.</p>
+<p class="hidden">HIDDEN_SENTINEL</p><p data-private>PRIVATE_MARKER</p>
+<input id="field" value="FORM_SECRET"><textarea>TEXTAREA_SECRET</textarea>
+<button id="button" onclick="this.dataset.clicked='yes'">Fixture Button</button>
+<iframe src="/ai-frame.html"></iframe></main>
+<script>window.fixtureIdentity={value:17};document.querySelector('#field').addEventListener('input',()=>window.inputEvents=(window.inputEvents||0)+1);</script></html>

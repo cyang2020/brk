@@ -640,14 +640,15 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.item(.move(outer, to: .into(parent: outer, index: 0)))))
     }
 
-    /// .item(.move) refuses what canPlace forbids: a folder into Today, anything into a split
-    func test_itemMoveRefusesWhatCanPlaceForbidsAFolderIntoTodayAnythingIntoASplit() throws {
+    /// Today accepts topic folders; Favorites stays flat and ordinary moves cannot insert into a split.
+    func test_itemMoveAllowsTodayFoldersAndRefusesFavoritesAndSplitPlacement() throws {
         let d = Driver()
         let a = d.todayIDs[0]
         d.user(.item(.newFolder))
         let folder = d.pinnedIDs[0]
         let today = d.view.space.today.root
-        assertUnchanged(d.state, d.user(.item(.move(folder, to: .into(parent: today, index: 0)))))
+        XCTAssertTrue(d.user(.item(.move(folder, to: .into(parent: today, index: 0)))).docChanged)
+        XCTAssertEqual(d.state.doc.tree[folder]?.parent, today)
         assertUnchanged(d.state, d.user(.item(.move(folder, to: .into(parent: d.view.favorites.root, index: 0)))))
         let b = d.open("example.com")
         d.user(.split(.addPane))
@@ -1530,8 +1531,8 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(Driver(file: r.savedFile).outcome, .restored(repairs: []))
     }
 
-    /// StateCodec.restore repairs a missing section root and a folder that sits in Today
-    func test_statecodecRestoreRepairsAMissingSectionRootAndAFolderThatSitsInToday() throws {
+    /// StateCodec repairs a missing root while preserving the newly supported Today group.
+    func test_statecodecRestoreRepairsMissingRootAndPreservesTodayGroup() throws {
         let d = Driver()
         d.user(.item(.newFolder))
         let folder = d.pinnedIDs[0]
@@ -1552,9 +1553,9 @@ final class ReduceSpecTests: XCTestCase {
         file["doc"] = doc
         let r = Driver(file: jsonData(file))
         guard case .restored(let repairs) = r.outcome else { return XCTFail("\(r.outcome)") }
-        XCTAssertGreaterThanOrEqual(repairs.count, 3, "\(repairs)")
-        XCTAssertEqual(r.pinnedIDs, [folder])
-        XCTAssertEqual(r.todayIDs.count, 1)
+        XCTAssertGreaterThanOrEqual(repairs.count, 2, "\(repairs)")
+        XCTAssertEqual(r.pinnedIDs, [])
+        XCTAssertEqual(r.todayIDs, d.todayIDs + [folder])
         XCTAssertEqual(r.view.favorites.tiles.count, 0)
         XCTAssertNotEqual(r.view.favorites.root, ItemID("missing-root"))
         XCTAssertEqual(Driver(file: r.savedFile).outcome, .restored(repairs: []))
@@ -1730,8 +1731,8 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 165, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 36, "a SystemEvent case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 179, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.events.count, 43, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
             .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }

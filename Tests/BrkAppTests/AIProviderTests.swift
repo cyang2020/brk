@@ -49,4 +49,10 @@ final class AIProviderTests: XCTestCase {
         XCTAssertEqual(kill(pid, 0), -1)
         XCTAssertEqual(errno, ESRCH)
     }
+    func testTimeoutKillsDescendantAfterLeaderExited() async throws {
+        let p = provider(); p.timeout = .milliseconds(400)
+        do { _ = try await p.run("detached"); XCTFail("descendant held pipes past leader exit") }
+        catch { XCTAssertTrue(String(describing: error).contains("timed out")) }
+    }
+
 }

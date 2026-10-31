@@ -124,6 +124,7 @@ extension Work {
     /// Page reports. Ignored for archived, unknown or unloaded tabs (a late event after close must not resurrect it);
     /// the same event twice changes nothing the second time.
     mutating func pageEvent(_ event: PageEvent, for token: BrowserToken) {
+        if aiHiddenEvent(event, token: token) { return }
         let page = token.page, tab = token.page.item, window = token.page.window
         guard state.session.loaded.contains(page), state.owns(page), let scope = state.locate(tab),
               let current = state.tab(tab) else { return }
@@ -145,6 +146,7 @@ extension Work {
         }
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
+        case .linkHovered(let url): aiHover(url, in: window)
         case .browserCreated: break
         case .documentChanged(let document):
             switch document {

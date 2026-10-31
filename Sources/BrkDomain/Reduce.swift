@@ -135,6 +135,8 @@ struct Work {
         case .peek(let c): peek(c, in: window)
         case .site(let c): sites(c, in: window)
         case .profile(let c): profiles(c, in: window)
+        case .assist(let intent): assist(intent, in: window)
+        case .later(.aiCommandBar): assist(.open(.question), in: window)
         case .later: break   // a greyed-out row of a later wave: nothing happens yet
         }
     }
@@ -145,7 +147,7 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -186,6 +188,12 @@ struct Work {
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
         case .aiResult(let id, let outcome): aiResult(id, outcome)
+        case .aiPartial(let id, let text): aiPartial(id, text)
+        case .aiPageRead(let id, let page, let content): aiReadResult(id, page: page, content: content)
+        case .aiDeadline(let id): aiDeadline(id)
+        case .aiHoverReady(let window, let url): aiHoverReady(window, url: url)
+        case .aiTranslated(let id, let success): aiTranslated(id, success: success)
+        case .aiDownloadRenamed(let id, let original, let new, let error): aiDownloadRenamed(id, original: original, new: new, error: error)
         }
     }
 
@@ -240,6 +248,7 @@ struct Work {
     mutating func finish(from input: AppState) -> Transition {
         normalize(&state)
         reconcileFind(from: input)
+        reconcileAI(from: input)
         captureSidebarChanges()
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {

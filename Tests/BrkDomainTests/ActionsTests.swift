@@ -79,10 +79,10 @@ final class ActionsTests: XCTestCase {
             .union(ActionID.placeholderRows).union(ActionID.droppedRows)
         XCTAssertEqual(covered, Set(1...189), "missing rows: \(Set(1...189).subtracting(covered).sorted())")
         XCTAssertEqual(referenceActions.count, 122)
-        XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 97)
-        XCTAssertEqual(ActionID.allCases.count, 153)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.row > 189 }.count, 31)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 128)
+        XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 98)
+        XCTAssertEqual(ActionID.allCases.count, 159)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.row > 189 }.count, 37)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 135)
         XCTAssertEqual(Set(ActionID.allCases.map(\.spec.row)).count, ActionID.allCases.count)
     }
 

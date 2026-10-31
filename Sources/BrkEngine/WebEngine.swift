@@ -49,6 +49,9 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func readAIPage(_ document: DocumentToken) async throws -> AIPageContent
+    func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool
+
     func find(_ request: FindRequest)
     func output(_ request: OutputRequest)
     func cancelOutput(_ id: OutputID)
@@ -165,4 +168,9 @@ extension WebEngine {
     public func invokeExtension(_ id: String, target: SiteTarget) async -> String? { "This engine has no extension actions" }
     public func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String? { "This engine has no extensions" }
     public func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String? { "This engine cannot install extensions" }
+}
+
+extension WebEngine {
+    public func readAIPage(_ document: DocumentToken) async throws -> AIPageContent { throw AIPageFailure.unavailable }
+    public func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool { throw AIPageFailure.unavailable }
 }

@@ -42,6 +42,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // Spaces (124 to 130)
     case newSpace, editSpaceTheme, renameSpace, changeProfile, focusNextSpace, focusPreviousSpace, openSpaceManager
     // Tabs (133 to 155). Row 132 is a second New Tab… (same action); rows 150 to 152 are nib placeholders.
+    case askOnPage, aiInstantLink, aiBrowse, aiTranslate, aiOrganizeToday, aiUndoOrganize
     case gptMessage, joinLiveMeeting, peekEmail, pinTab, openTabIn, newFolder, duplicate, rename, collapseAllFolders, expandAllFolders
     case selectNextTab, selectPreviousTab, cycleNextTab, cyclePreviousTab, cycleTabForward, cycleTabBackward, revealTabInSidebar
     case clearExplore, resetSpace, resetTab
@@ -345,7 +346,13 @@ extension ActionID {
 
         // MARK: Tabs (groups: New Tab… to Expand All Folders | Next Tab to Reveal Tab | Clear to Reset Tab; Arc's
         // placeholder submenu between the last two is a separator item)
-        case .gptMessage: entry(133, "New ChatGPT Message…", .tabs, 0, [key([opt, cmd], .g, .page)], .later(.aiCommandBar), hidden: true)
+        case .gptMessage: entry(133, "New ChatGPT Message…", .tabs, 0, [key([opt, cmd], .g, .page)], .assist(.open(.question)), bar: listing("sparkles", "Ask Max", "Ask AI", "Ask a question"), hidden: true)
+        case .askOnPage: entry(240, "Ask on Page…", .tabs, 0, [], .assist(.open(.page)), bar: listing("sparkles", "Ask on Page", "Ask page"))
+        case .aiInstantLink: entry(241, "Instant Links…", .tabs, 0, [], .assist(.open(.instant)), bar: listing("link", "Instant Links"))
+        case .aiBrowse: entry(242, "Browse for Me…", .tabs, 0, [], .assist(.open(.browse)), bar: listing("sparkles", "Browse for Me", "Ask Arc"))
+        case .aiTranslate: entry(243, "Translate Page…", .tabs, 0, [], .assist(.open(.translate)), bar: listing("globe", "Translate Page"))
+        case .aiOrganizeToday: entry(244, "Organize Today Tabs", .tabs, 0, [], .assist(.organizeToday), bar: listing("folder", "Organize Today Tabs", "Tidy Tabs"))
+        case .aiUndoOrganize: entry(245, "Undo Organize Today", .tabs, 0, [], .assist(.undoOrganize), bar: listing("arrow.uturn.backward", "Undo Organize Today"))
         case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .tabTools(.site(.joinMeeting)), bar: listing("calendar", "Join Meeting"), hidden: true)
         case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .peek(.email), bar: listing("envelope", "Peek Email", "Gmail"), hidden: true)
         case .pinTab: entry(136, "Pin/Unpin Tab", .tabs, 0, [key(cmd, .d, .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "save"))

@@ -108,8 +108,8 @@ final class TreeTests: XCTestCase {
         var tree = makeTree()
         let folder = ItemBody.folder(Folder(title: "F", collapsed: false))
         var thrown: TreeError?
-        do { try tree.insert(ItemID("f"), folder, at: .into(parent: today, index: 0), createdAt: t0) } catch { thrown = error }
-        XCTAssertEqual(thrown, .forbiddenPlacement, "no folders in Today")
+        try tree.insert(ItemID("today-group"), folder, at: .into(parent: today, index: 0), createdAt: t0)
+        XCTAssertEqual(tree[ItemID("today-group")]?.parent, today, "Today supports organized groups")
         thrown = nil
         do { try tree.insert(ItemID("f"), folder, at: .into(parent: favorites, index: 0), createdAt: t0) } catch { thrown = error }
         XCTAssertEqual(thrown, .forbiddenPlacement, "Favorites is flat")

@@ -205,20 +205,20 @@ public enum ItemKind: String, Hashable, Sendable, Codable { case tab, folder, sp
 /// Where an item may be placed. The one rule table: the reducer refuses a move it forbids, and the sidebar's drag
 /// feedback calls the same function with the row kinds from its snapshot instead of re-deriving the rules.
 public enum Placement {
-    /// Favorites: tabs only, flat. Pinned: tabs, splits and nested folders. Today: tabs and splits, never folders.
+    /// Favorites: tabs only, flat. Pinned: tabs, splits and nested folders. Today: tabs, splits and topic groups.
     /// Scratch: tabs and private splits. Nothing goes inside a tab or split except through split rules.
     public static func canPlace(_ kind: ItemKind, inSection section: SectionKind, parentKind: ItemKind) -> Bool {
         guard kind != .section else { return false }
         switch parentKind {
         case .tab, .split: return false
-        case .folder: return section == .pinned && (kind == .tab || kind == .folder || kind == .split)
+        case .folder: return (section == .pinned || section == .today) && (kind == .tab || kind == .folder || kind == .split)
         case .section: break
         }
         switch section {
         case .favorites: return kind == .tab
         case .scratch: return kind == .tab || kind == .split
         case .pinned: return kind == .tab || kind == .folder || kind == .split
-        case .today: return kind == .tab || kind == .split
+        case .today: return kind == .tab || kind == .split || kind == .folder
         }
     }
 }

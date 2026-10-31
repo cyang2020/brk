@@ -103,12 +103,12 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertFalse(Placement.canPlace(.section, inSection: .pinned, parentKind: .section))
     }
 
-    /// lets Today hold tabs and splits, never folders
-    func test_letsTodayHoldTabsAndSplitsNeverFolders() throws {
+    /// Today holds tabs, splits and topic folders.
+    func test_letsTodayHoldTabsSplitsAndTopicFolders() throws {
         XCTAssertTrue(Placement.canPlace(.tab, inSection: .today, parentKind: .section))
         XCTAssertTrue(Placement.canPlace(.split, inSection: .today, parentKind: .section))
-        XCTAssertFalse(Placement.canPlace(.folder, inSection: .today, parentKind: .section))
-        XCTAssertFalse(Placement.canPlace(.tab, inSection: .today, parentKind: .folder))
+        XCTAssertTrue(Placement.canPlace(.folder, inSection: .today, parentKind: .section))
+        XCTAssertTrue(Placement.canPlace(.tab, inSection: .today, parentKind: .folder))
     }
 
     // MARK: - electron-v1:src/shared/theme.test.ts

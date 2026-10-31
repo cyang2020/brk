@@ -267,6 +267,7 @@ struct Session: Sendable, Equatable {
     var favoriteFeeds: [ItemID: SiteFeed] = [:]
     var calendars: [ProfileID: CalendarFeed] = [:]
     var pendingAI: [AIRequestID: AITask]
+    var ai = AISession()
 }
 
 struct WindowSession: Sendable, Equatable {
@@ -337,6 +338,7 @@ struct Suggestions: Sendable, Equatable {
 
 /// Arc: `CommandBarDestinationType` createNewTab | overrideCurrentTab.
 enum CommandBarTarget: Sendable, Equatable {
+    case ai(AIMode)
     case newTab
     /// `placement` is where the bar draws: over the URL pill (Cmd+L with the sidebar shown) or centered.
     case navigate(tab: ItemID, overPill: Bool)

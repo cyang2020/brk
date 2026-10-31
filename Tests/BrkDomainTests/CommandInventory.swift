@@ -18,6 +18,10 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
+        .assist(.open(.question)), .assist(.ask("why")), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
+        .assist(.instant("query")), .assist(.translate("English")), .assist(.organizeToday), .assist(.undoOrganize),
+        .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss), .assist(.searchFallback),
+        .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
@@ -95,10 +99,15 @@ enum CommandInventory {
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
         .aiResult(AIRequestID("ghost"), .unavailable),
+        .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
+        .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example), .aiTranslated(AIRequestID("ghost"), false),
+        .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
+        .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
     static func area(_ command: Command) -> String {
         switch command {
+        case .assist: "assist"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -123,6 +132,23 @@ enum CommandInventory {
 
     static func name(_ command: Command) -> String {
         let leaf: String = switch command {
+        case .assist(let intent):
+            switch intent {
+            case .open: "open"
+            case .ask: "ask"
+            case .askPage: "askPage"
+            case .browse: "browse"
+            case .instant: "instant"
+            case .translate: "translate"
+            case .organizeToday: "organizeToday"
+            case .undoOrganize: "undoOrganize"
+            case .renameDownload: "renameDownload"
+            case .cancel: "cancel"
+            case .dismiss: "dismiss"
+            case .searchFallback: "searchFallback"
+            case .neverTranslateSite: "neverTranslateSite"
+            case .neverTranslateLanguage: "neverTranslateLanguage"
+            }
         case .find(let c):
             switch c {
             case .open: "open"
@@ -337,6 +363,7 @@ enum CommandInventory {
             case .zoomChanged: "page.zoomChanged"
             case .fullscreenChanged: "page.fullscreenChanged"
             case .titleChanged: "page.titleChanged"
+            case .linkHovered: "page.linkHovered"
             case .faviconChanged: "page.faviconChanged"
             case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"
@@ -373,6 +400,12 @@ enum CommandInventory {
         case .suggestions: "suggestions"
         case .aiProvidersDetected: "aiProvidersDetected"
         case .aiResult: "aiResult"
+        case .aiPartial: "aiPartial"
+        case .aiPageRead: "aiPageRead"
+        case .aiDeadline: "aiDeadline"
+        case .aiHoverReady: "aiHoverReady"
+        case .aiTranslated: "aiTranslated"
+        case .aiDownloadRenamed: "aiDownloadRenamed"
         }
     }
 
