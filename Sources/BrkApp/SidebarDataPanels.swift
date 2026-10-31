@@ -131,8 +131,7 @@ final class SidebarDataPanels {
         panel.title = "Choose an exported browser file"
         panel.prompt = "Preview"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.json, .html, .commaSeparatedText]
-        if let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
-           ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { panel.directoryURL = URL(fileURLWithPath: path) }
+        SidebarPanelControl.configureTestDirectory(panel)
         let format = NSPopUpButton()
         format.identifier = NSUserInterfaceItemIdentifier("import-format")
         format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV (local Keychain)"])
@@ -249,8 +248,7 @@ final class SidebarDataPanels {
         panel.title = "Choose sidebar sync folder"; panel.prompt = "Connect this profile"
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
         panel.message = "This folder's shared profile maps only to the current local profile. No credentials or browsing settings are copied."
-        if let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
-           ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { panel.directoryURL = URL(fileURLWithPath: path) }
+        SidebarPanelControl.configureTestDirectory(panel)
         let ticket = UUID()
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in

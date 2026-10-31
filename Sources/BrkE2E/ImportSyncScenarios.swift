@@ -209,6 +209,8 @@ enum ImportSyncScenarios {
         try second.dispatch(.sidebarData(.importFile)); try waitPanel(second, "Preview")
         try FilePanelScenarios.selectImport(second, seed); try waitPanel(second, "1 bookmarks"); try panel(second, .button("Import"))
         try waitPanel(second, "Imported 1 bookmarks"); try panel(second, .button("Close"))
+        // This chooser starts outside replica-b; configure directoryURL before its remote view is presented.
+        try second.perform(.sidebarPanel(window: nil, action: .directory(path: sharedFolder.deletingLastPathComponent().path)))
         try second.dispatch(.sidebarData(.syncSettings)); try waitPanel(second, "Choose sync folder")
         try panel(second, .button("Choose sync folder…")); try waitPanel(second, "Connect this profile")
         try FilePanelScenarios.selectSyncFolder(second, sharedFolder)

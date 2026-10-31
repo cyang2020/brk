@@ -6,7 +6,24 @@ import Foundation
 @MainActor
 enum SidebarPanelControl {
     struct Invalid: Error { let message: String }
+    private static var testDirectory: URL?
+
+    /// Remote panels consume the starting directory before presentation; no user preference is written.
+    static func configureTestDirectory(_ panel: NSSavePanel) {
+        guard let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
+              ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
+        panel.directoryURL = testDirectory ?? URL(fileURLWithPath: path)
+    }
+
     static func run(_ action: SidebarPanelControlAction, in owner: NSWindow) async throws -> ControlResult {
+        if case .directory(let path) = action {
+            guard ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"] != nil else {
+                throw Invalid(message: "Starting-directory configuration requires an owned panel test run")
+            }
+            testDirectory = URL(fileURLWithPath: path)
+            (owner.attachedSheet as? NSSavePanel)?.directoryURL = testDirectory
+            return .ok
+        }
         guard let sheet = owner.attachedSheet, let root = sheet.contentView else { throw Invalid(message: "No attached native sheet") }
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         let views = walk(root) + ((sheet as? NSSavePanel)?.accessoryView.map(walk) ?? [])
@@ -16,9 +33,8 @@ enum SidebarPanelControl {
             try events.press(parsed, in: window)
         }
         switch action {
-        case .directory(let path):
-            guard let panel = sheet as? NSSavePanel else { throw Invalid(message: "No native file panel") }
-            panel.directoryURL = URL(fileURLWithPath: path)
+        case .directory:
+            break // Handled before the attached-sheet check so tests can configure the next panel.
         case .selection:
             guard let panel = sheet as? NSSavePanel else { throw Invalid(message: "No native file panel") }
             let urls = (panel as? NSOpenPanel)?.urls ?? panel.url.map { [$0] } ?? []

@@ -18,8 +18,7 @@ public enum ShareExport {
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = ExportCodec.filename(document, as: .json)
         panel.title = "Export"
-        if let path = ProcessInfo.processInfo.environment["BRK_TEST_FILE_PANEL_DIRECTORY"],
-           ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { panel.directoryURL = URL(fileURLWithPath: path) }
+        SidebarPanelControl.configureTestDirectory(panel)
         panel.beginSheetModal(for: window) { response in
             let url = response == .OK ? panel.url : nil
             // Completion precedes AppKit's sheet detachment.
