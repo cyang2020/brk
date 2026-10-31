@@ -46,9 +46,11 @@ extension CEFEngine {
     }
     private func aiWorld(_ transport: CefDevTools) async throws -> Int {
         let data = try await transport.call("Page.getFrameTree")
+        try Task.checkCancellation()
         guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any], let tree = response["frameTree"] as? [String: Any],
               let frame = tree["frame"] as? [String: Any], let id = frame["id"] as? String else { throw AIPageFailure.unavailable }
         let world = try await transport.call("Page.createIsolatedWorld", parameters: ["frameId": id, "worldName": "brk-ai-text"])
+        try Task.checkCancellation()
         guard let response = try JSONSerialization.jsonObject(with: world) as? [String: Any], let context = response["executionContextId"] as? Int else { throw AIPageFailure.unavailable }
         return context
     }

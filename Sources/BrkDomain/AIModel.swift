@@ -49,6 +49,7 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var busy: Bool
     public var sources: [AISource]
     public var searchQuery: String?
+    public var isPreview: Bool = false
     public var canUndo: Bool = false
     public var language: String? = nil
     public var site: String? = nil
@@ -75,6 +76,7 @@ struct AIOrganizeUndo: Equatable, Sendable {
 }
 struct AISession: Equatable, Sendable {
     var requests: [AIRequestID: AIRequest] = [:]
+    var backgroundContexts: [AIRequestID: BrowsingContext] = [:]
     var answers: [WindowID: AIAnswerSnapshot] = [:]
     var answerContexts: [WindowID: BrowsingContext] = [:]
     var undo: [WindowID: AIOrganizeUndo] = [:]
@@ -93,6 +95,14 @@ public enum AIValidation {
               let host = c.host, !host.isEmpty, c.user == nil, c.password == nil,
               let url = c.url else { return nil }
         return url
+    }
+    public static func citations(_ text: String, sourceCount: Int) -> Bool {
+        guard sourceCount > 0, let pattern = try? NSRegularExpression(pattern: #"\[(\d+)\]"#) else { return false }
+        let matches = pattern.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        return !matches.isEmpty && matches.allSatisfy { match in
+            guard let range = Range(match.range(at: 1), in: text), let number = Int(text[range]) else { return false }
+            return (1...sourceCount).contains(number)
+        }
     }
     public static func plan(_ text: String, eligible: [AITab]) -> [AIGroupPlan]? {
         guard text.utf8.count <= 32_768, let groups = AIReplyCodec.groups(text),

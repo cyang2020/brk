@@ -93,6 +93,7 @@ extension Work {
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [], searchQuery: nil)
         state.session.windows[window]?.overlay = nil
+        state.session.ai.answers[window]?.isPreview = purpose.isPreview
         effects.append(.aiWatch(id, seconds: 120))
         if run { sendAI(id, task: task) }
         return id
@@ -193,6 +194,7 @@ extension Work {
 
     mutating func aiResult(_ id: AIRequestID, _ outcome: AIOutcome) {
         guard let task = state.session.pendingAI.removeValue(forKey: id) else { return }
+        if let context = state.session.ai.backgroundContexts.removeValue(forKey: id), backgroundAIContext(task) != context { return }
         guard case .text(let text) = outcome else {
             switch outcome {
             case .unavailable: completeAI(id, text: "No selected local AI tool is available. Choose an installed provider in Settings → Max and sign in to it in Terminal.")
@@ -225,7 +227,13 @@ extension Work {
                   Set(nodes.map(\.id)) == Set(content.nodes.map(\.id)), nodes.allSatisfy({ $0.text.count <= 4000 }),
                   state.session.ai.requests[id] != nil else { completeAI(id, text: "The tool returned an invalid translation. The page was left unchanged."); return }
             effects.append(.aiTranslate(id, content, nodes))
-        case .ask, .pageQuestion, .browse:
+        case .browse(_, let pages):
+            let answer = String(text.prefix(60_000))
+            guard AIValidation.citations(answer, sourceCount: pages.count) else {
+                completeAI(id, text: "The tool did not cite the selected sources correctly. Retry Browse for Me or open the sources below."); return
+            }
+            completeAI(id, text: answer)
+        case .ask, .pageQuestion:
             completeAI(id, text: String(text.prefix(60_000)))
         case .summarize: completeAI(id, text: String(text.prefix(700)))
         }
@@ -263,11 +271,11 @@ extension Work {
         for (id, task) in state.session.pendingAI where state.session.ai.requests[id] == nil {
             let valid: Bool
             switch task {
-            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.renamePinnedTabs && state.tab(tab)?.url == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
-            case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
+            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.renamePinnedTabs && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.url == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
+            case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
             default: valid = true
             }
-            if !valid || providerChanged { state.session.pendingAI[id] = nil; effects.append(.aiCancel(id)) }
+            if !valid || providerChanged { state.session.pendingAI[id] = nil; state.session.ai.backgroundContexts[id] = nil; effects.append(.aiCancel(id)) }
         }
         for (id, request) in state.session.ai.requests {
             let ownerExists = state.doc.windows[request.window] != nil
@@ -286,9 +294,9 @@ extension Work {
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
         }
-        for window in state.session.ai.answers.keys where state.doc.windows[window] == nil || state.session.ai.answerContexts[window] != state.libraryContext(in: window) {
+        for window in Set(state.session.ai.answers.keys).union(state.session.ai.undo.keys).union(state.session.ai.hover.keys).union(state.session.ai.answerContexts.keys) where state.doc.windows[window] == nil || (state.session.ai.answerContexts[window] != nil && state.session.ai.answerContexts[window] != state.libraryContext(in: window)) {
             state.session.ai.answerContexts[window] = nil
-            state.session.ai.answers[window] = nil; state.session.ai.undo[window] = nil; state.session.ai.hover[window] = nil
+            state.session.ai.answers[window] = nil; state.session.ai.undo[window] = nil; state.session.ai.hover[window] = nil; state.session.ai.hoverDocuments[window] = nil
         }
     }
 
@@ -296,8 +304,17 @@ extension Work {
     mutating func requestAI(_ task: AITask) -> AIRequestID {
         let id = AIRequestID(ctx.newID())
         state.session.pendingAI[id] = task
+        state.session.ai.backgroundContexts[id] = backgroundAIContext(task)
         effects.append(.ai(id, task, choice: state.doc.settings.max.provider))
         return id
+    }
+
+    private func backgroundAIContext(_ task: AITask) -> BrowsingContext? {
+        switch task {
+        case .renameTab(let tab, _, _): state.locate(tab).map { _ in state.browsingContext(of: tab) }
+        case .renameDownload(let id, _): state.doc.downloads.first { $0.id == id }.map { .profile($0.profile) }
+        default: nil
+        }
     }
 
     mutating func aiHover(_ url: URL?, in window: WindowID) {
@@ -309,6 +326,7 @@ extension Work {
             if case .ready(let document) = state.session.live[page]?.document { document } else { nil }
         }
         for (id, request) in state.session.ai.requests where request.window == window && request.purpose.isPreview { completeAI(id, text: "Preview cancelled.") }
+        if state.session.ai.answers[window]?.isPreview == true { state.session.ai.answers[window] = nil }
         effects.append(.aiHover(window, url))
     }
     mutating func aiHoverReady(_ window: WindowID, url: URL) {
@@ -317,7 +335,8 @@ extension Work {
               state.findPage(in: window) == document.browser.page,
               state.session.live[document.browser.page]?.document == .ready(document),
               state.session.live[document.browser.page]?.requestContext == state.libraryContext(in: window),
-              !state.session.ai.requests.values.contains(where: { $0.window == window && !$0.purpose.isPreview }) else { return }
+              !state.session.ai.requests.values.contains(where: { $0.window == window && !$0.purpose.isPreview }),
+              state.session.ai.answers[window] == nil || state.session.ai.answers[window]?.isPreview == true else { return }
         let id = startAI(.ask("Summarize link"), purpose: .preview(url), title: "Link Preview", window: window, run: false)
         makeAIHidden(id, urls: [url])
     }

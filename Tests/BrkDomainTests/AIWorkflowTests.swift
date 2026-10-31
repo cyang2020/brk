@@ -226,4 +226,23 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertTrue(d.snapshot.pages.filter(\.isAIReader).isEmpty)
     }
 
+    func testPinnedTitleRequestCancelsWhenTabChangesProfile() throws {
+        let d = enabled(), tab = try XCTUnwrap(d.current?.id)
+        d.user(.settings(.max(.renamePinnedTabs(true))))
+        let (id, _) = try request(d.user(.tab(.togglePin(.item(tab)))))
+        d.user(.profile(.create(name: "Other", icon: nil)))
+        let other = try XCTUnwrap(d.snapshot.settings.profiles.first { $0.profile.id != .default }?.profile.id)
+        let changed = d.user(.profile(.assign(.current, to: other)))
+        XCTAssertTrue(changed.effects.contains(.aiCancel(id)))
+        d.system(.aiResult(id, .text("Old profile title")))
+        XCTAssertNotEqual(d.row(tab)?.title, "Old profile title")
+    }
+
+    func testBrowseCitationsRejectMissingOrUnknownSources() {
+        XCTAssertTrue(AIValidation.citations("Answer [1] and [2]", sourceCount: 2))
+        XCTAssertFalse(AIValidation.citations("Unsupported [3]", sourceCount: 2))
+        XCTAssertFalse(AIValidation.citations("No sources", sourceCount: 2))
+        XCTAssertFalse(AIValidation.citations("Invalid [0]", sourceCount: 2))
+    }
+
 }
