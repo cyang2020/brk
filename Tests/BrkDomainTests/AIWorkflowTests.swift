@@ -245,4 +245,17 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(AIValidation.citations("Invalid [0]", sourceCount: 2))
     }
 
+    func testPinAfterNavigationRenamesThePinnedHomeRatherThanOriginalSeed() throws {
+        let d = enabled(), tab = try XCTUnwrap(d.current?.id), destination = url("https://example.com/navigated")
+        d.user(.commandBar(.open(.editCurrent)))
+        d.user(.commandBar(.submit(destination.absoluteString)))
+        d.page(tab, .committed(destination))
+        d.user(.settings(.max(.renamePinnedTabs(true))))
+        let transition = d.user(.tab(.togglePin(.item(tab))))
+        let (id, _) = try request(transition)
+        XCTAssertFalse(transition.effects.contains(.aiCancel(id)))
+        d.system(.aiResult(id, .text("Navigated Home")))
+        XCTAssertEqual(d.row(tab)?.title, "Navigated Home")
+    }
+
 }

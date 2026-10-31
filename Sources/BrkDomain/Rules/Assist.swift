@@ -206,7 +206,7 @@ extension Work {
         switch task {
         case .renameTab(let tab, _, let url):
             let title = String(text.split(whereSeparator: \.isNewline).first ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)
-            guard !title.isEmpty, let scope = state.locate(tab), state.tab(tab)?.url == url, state.tab(tab)?.customTitle == nil else { return }
+            guard !title.isEmpty, let scope = state.locate(tab), state.tab(tab)?.pinnedURL == url, state.tab(tab)?.customTitle == nil else { return }
             state.withTree(scope) { $0.updateTab(tab) { $0.customTitle = String(title) } }
         case .renameDownload(let download, let original):
             guard let value = state.doc.downloads.first(where: { $0.id == download }), value.state == .finished,
@@ -271,7 +271,7 @@ extension Work {
         for (id, task) in state.session.pendingAI where state.session.ai.requests[id] == nil {
             let valid: Bool
             switch task {
-            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.renamePinnedTabs && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.url == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
+            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.renamePinnedTabs && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.pinnedURL == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
             case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
             default: valid = true
             }

@@ -110,6 +110,13 @@ enum AIScenarios {
     }
     private static func download(_ app: AppUnderTest) throws {
         try enable(app)
+        try app.dispatch(.settings(.max(.renamePinnedTabs(true))))
+        let home = try currentTab(app.view())!.id
+        try app.dispatch(.commandBar(.open(.editCurrent)))
+        try app.dispatch(.commandBar(.submit(app.site.url("ai-source.html").absoluteString)))
+        try waitForTitle(app, home, "AI Source")
+        try app.dispatch(.tab(.togglePin(.item(home))))
+        try waitForTitle(app, home, "Fixture Tab")
         let directory = app.dataDirectory.appendingPathComponent("ai-downloads")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let existing = directory.appendingPathComponent("Reading.txt")
