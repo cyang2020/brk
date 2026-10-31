@@ -6,13 +6,19 @@ import AppKit
     private var items: [String] = []
     private var ended = false
     private var choice: String?
+    private var currentMenu: (() -> NSMenu?)?
 
-    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
+    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil, currentMenu: @escaping () -> NSMenu? = { nil }) async throws -> [String] {
         choice = choose
+        self.currentMenu = currentMenu
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
-        defer { center.removeObserver(self); menu?.cancelTracking() }
+        let timer = Timer(timeInterval:0.1,target:self,selector:#selector(cancelMenu),userInfo:nil,repeats:true)
+        RunLoop.main.add(timer,forMode:.common)
+        RunLoop.main.add(timer,forMode:.eventTracking)
+        RunLoop.main.add(timer,forMode:.modalPanel)
+        defer { timer.invalidate(); center.removeObserver(self); menu?.cancelTracking(); self.currentMenu = nil }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(100))
@@ -27,8 +33,6 @@ import AppKit
         guard menu == nil, let current = note.object as? NSMenu else { return }
         menu = current
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
-        let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)
-        RunLoop.main.add(timer, forMode: .common)
     }
 
     @objc private func finished(_ note: Notification) {
@@ -38,6 +42,11 @@ import AppKit
     }
 
     @objc private func cancelMenu() {
+        guard !ended else { return }
+        if menu == nil, let current = currentMenu?() {
+            menu = current
+            items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
+        }
         if let choice, let menu, let index = menu.items.firstIndex(where: { $0.title == choice && $0.isEnabled }) {
             self.choice = nil
             menu.performActionForItem(at: index)

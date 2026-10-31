@@ -16,6 +16,10 @@ enum CaptureScenarios {
             if try library(app)?.captures.count == previous + 1 { return true }
             let view = try app.view()
             if view.capture == nil, let toast = view.tabTools.toast { throw Check(description:toast.text) }
+            if view.capture == nil, view.overlay == nil {
+                try app.dispatch(.library(.open(.media)))
+                throw Check(description:try library(app)?.captureMessage ?? "Capture was cancelled while its source remained selected")
+            }
             return false
         } } catch {
             try? JSONEncoder().encode(try app.view()).write(to:app.shotsDirectory.appendingPathComponent("capture-failed-view.json"))
@@ -147,7 +151,12 @@ enum CaptureScenarios {
         try app.dispatch(.capture(.begin(.fullPage)))
         let observation = try app.send(.pageObservations)
         try expect(try app.view().capture != nil,"Capture begin was not admitted after zoom: \(observation)")
-        let record=try captureRecord(app,mode:.fullPage,previous:0)
+        let record: CaptureRecord
+        do { record = try captureRecord(app,mode:.fullPage,previous:0) }
+        catch {
+            _ = try? app.send(.captureProbe(page:page,directory:app.shotsDirectory.appendingPathComponent("zoom-raw")))
+            throw error
+        }
         try expect(abs(Double(record.width)-metrics["width"]!*metrics["dpr"]!)<=2 && abs(Double(record.height)-metrics["height"]!*metrics["dpr"]!)<=2,"zoomed pixels do not match actual DOM devicePixelRatio")
         try Data(text.utf8).write(to:app.shotsDirectory.appendingPathComponent("zoom-metrics.json"))
         if let file=try library(app)?.captureFiles[record.id] { try Data(contentsOf:file).write(to:app.shotsDirectory.appendingPathComponent("zoomed-full.png")) }

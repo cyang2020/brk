@@ -167,6 +167,8 @@ public struct Hello: Codable, Sendable, Equatable {
 
 /// What the window really looks like, next to what layout computed.
 public struct NativeFacts: Codable, Sendable, Equatable {
+    /// Registered native auxiliaries across every window, matching appWindows' process-wide scope.
+    public var auxiliaryWindows: [Int]? = nil
     public var windowLevel: Int = 0
     public var miniaturized: Bool = false
     public var fullscreen: Bool = false

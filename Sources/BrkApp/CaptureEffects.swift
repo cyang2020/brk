@@ -7,16 +7,29 @@ extension AppStore {
     func runCapture(_ effect: CaptureEffect) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            @MainActor func fail(_ window: WindowID, _ id: String, _ error: Error) { self.dispatch(.system(.capture(.failed(window, id, error.localizedDescription)))) }
+            func trace(_ value: String) {
+                if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { fputs("[capture] \(value)\n",stderr) }
+            }
+            @MainActor func fail(_ window: WindowID, _ id: String, _ error: Error) {
+                trace("failed \(id): \(error)")
+                self.dispatch(.system(.capture(.failed(window, id, error.localizedDescription))))
+            }
             switch effect {
             case .load(let profile):
                 do { let (rows, files) = try await captureFiles.load(profile); dispatch(.system(.capture(.loaded(profile, rows, files, error: nil)))) }
                 catch { dispatch(.system(.capture(.loaded(profile, [], [:], error: "Cannot read captures: " + error.localizedDescription)))) }
             case .render(let request):
-                do { let pixels = try await engine.capture(request); dispatch(.system(.capture(.rendered(request, pixels)))) }
+                trace("render \(request.id) \(request.mode)")
+                do {
+                    let pixels = try await engine.capture(request)
+                    trace("pixels \(pixels.width)x\(pixels.height) scale \(pixels.scale); pending \(snapshot.windows[request.document.browser.page.window]?.capture?.request == request)")
+                    dispatch(.system(.capture(.rendered(request, pixels))))
+                    trace("render accepted: pending \(snapshot.windows[request.document.browser.page.window]?.capture?.request == request)")
+                }
                 catch { fail(request.document.browser.page.window, request.id, error) }
             case .store(let request, let image):
                 let window = request.document.browser.page.window
+                trace("store \(request.id); pending \(snapshot.windows[window]?.capture?.request == request)")
                 guard snapshot.windows[window]?.capture?.request == request else { return }
                 do {
                     let (record, file) = try await captureFiles.store(request, image: image)

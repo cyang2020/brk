@@ -267,7 +267,7 @@ final class ControlExecutor {
             let c = try controller(window)
             store.inputWindow = c.window
             let capture = ContextMenuCapture()
-            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice))
+            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice, currentMenu:{ [weak store] in store?.nativePopupMenu }))
 
         case .screenshot(let window, let path):
             let c = try controller(window)
@@ -434,6 +434,7 @@ final class ControlExecutor {
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
+        facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts
     }
 
