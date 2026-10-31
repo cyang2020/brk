@@ -1,4 +1,3 @@
-import ApplicationServices
 import BrkBase
 import BrkControl
 import BrkDomain
@@ -17,7 +16,7 @@ enum FilePanelScenarios {
     ]
 
     @discardableResult
-    static func recordPanel(_ app: AppUnderTest, verifiedSelection: URL? = nil, selection: NativePickerInput.Selection? = nil, filename: AXUIElement? = nil) throws -> URL {
+    static func recordPanel(_ app: AppUnderTest, verifiedSelection: URL? = nil, observation: NativePickerInput.Observation? = nil) throws -> URL {
         guard let hello = app.hello else { throw Check(description: "No launched panel owner") }
         let facts = try app.native()
         let panels = facts.appWindows.filter { $0.isVisible && ($0.className == "NSOpenPanel" || $0.className == "NSSavePanel") }
@@ -42,7 +41,7 @@ enum FilePanelScenarios {
         let directory = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("panels")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let receipt = directory.appendingPathComponent(stem + ".json")
-        let ax = try NativePickerInput.receipt(app, selection: selection, filename: filename, prompt: controls[1])
+        let ax = try NativePickerInput.receipt(app, observation: observation, prompt: controls[1])
         guard case .menuItems(let selection) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { throw Check(description: "Cannot read actual picker selection") }
         try JSONSerialization.data(withJSONObject: ["accessibility": ax, "panelSelection": selection, "pid": hello.pid, "class": panel.className, "number": panel.number,
             "windowServer": window, "controls": controls, "screenshot": "shots/" + screenshot.lastPathComponent,
@@ -147,7 +146,7 @@ enum FilePanelScenarios {
             try expect(error.description.contains("fixture row available"), "Unexpected selection refusal: \(error)")
         }
         try expect(try app.native().sheetClass == "NSOpenPanel", "Unverified selection dismissed the picker")
-        _ = try recordPanel(app, selection: differentSelection)
+        _ = try recordPanel(app, observation: .init(selection: differentSelection, filename: nil))
         try ImportSyncScenarios.panel(app, .button("Cancel"))
         try expect(!(try ImportSyncScenarios.data(app).status.contains("Import failed")), "The other selected file was read")
         app.note("Missing requested fixture refused before AXPress; the different owned selection was never confirmed or imported.")

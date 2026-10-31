@@ -68,6 +68,13 @@ final class ImportRulesTests: XCTestCase {
         XCTAssertEqual(Self.importViolations(target: "BrkSidebar", path: "BrkSidebar/X.swift", text: "// import BrkApp\nimport AppKit\n"), [])
     }
 
+    func testAXAccessStaysInTheExternalPickerVerifier() {
+        XCTAssertEqual(Self.importViolations(target: "BrkE2E", path: "BrkE2E/NativePickerInput.swift", text: "import ApplicationServices\n"), [])
+        XCTAssertEqual(Self.importViolations(target: "BrkE2E", path: "BrkE2E/FilePanelScenarios.swift", text: "import ApplicationServices\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkE2E", path: "BrkE2E/NativePickerInput.swift", text: "import AppKit\n").count, 1)
+        XCTAssertEqual(Self.importViolations(target: "BrkDomain", path: "BrkDomain/X.swift", text: "import ApplicationServices\n").count, 1)
+    }
+
     /// Swift allows any whitespace around an import's tokens, several statements on a line, comments before it and
     /// attributes with arguments; the scanner sees all of them (the review's probe was a tab-indented AppKit import).
     func testRejectsAnImportWhateverItsLayout() {
@@ -110,7 +117,8 @@ final class ImportRulesTests: XCTestCase {
     // MARK: Scanner
 
     static func importViolations(target: String, path: String, text: String) -> [String] {
-        let allowed = allowedImports[target] ?? []
+        var allowed = allowedImports[target] ?? []
+        if target == "BrkE2E", path == "BrkE2E/NativePickerInput.swift" { allowed.insert("ApplicationServices") }
         return imports(in: text).filter { !allowed.contains($0) }.map { "\(path): imports \($0), not allowed in \(target)" }
     }
 

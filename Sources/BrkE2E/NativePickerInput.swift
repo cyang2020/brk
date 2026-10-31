@@ -1,4 +1,3 @@
-import AppKit
 import ApplicationServices
 import BrkBase
 import BrkControl
@@ -8,6 +7,7 @@ import Foundation
 /// Adapted from the Opus review's axdrive.swift. Reads stay on the sheet and stop at the requested control.
 enum NativePickerInput {
     struct Selection { let row: AXUIElement; let name: AXUIElement }
+    struct Observation { let selection: Selection?; let filename: AXUIElement? }
     static var available: Bool { AXIsProcessTrusted() }
 
     static func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -20,22 +20,25 @@ enum NativePickerInput {
     static func find(_ root: AXUIElement, _ matches: (AXUIElement, String) -> Bool) -> AXUIElement? {
         var queue = [root], visited: [CFHashCode: [AXUIElement]] = [:], count = 0
         let searchDeadline = ProcessInfo.processInfo.systemUptime + 3
-        let leaves = [kAXTextFieldRole, kAXStaticTextRole, kAXImageRole, kAXButtonRole, kAXCheckBoxRole,
-                      kAXRadioButtonRole, kAXMenuItemRole, kAXPopUpButtonRole, kAXComboBoxRole]
         while !queue.isEmpty, count < 2500, ProcessInfo.processInfo.systemUptime < searchDeadline {
             let node = queue.removeFirst(), hash = CFHash(node)
             guard !(visited[hash] ?? []).contains(where: { CFEqual($0, node) }) else { continue }
             visited[hash, default: []].append(node); count += 1
             let role = string(node, kAXRoleAttribute)
             if matches(node, role) { return node }
-            if !leaves.contains(role) { queue += attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? [] }
+            queue += attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
         }
         return nil
+    }
+    static func executable(_ pid: Int32) -> URL? {
+        var bytes = [CChar](repeating: 0, count: Int(PROC_PIDPATHINFO_MAXSIZE))
+        guard proc_pidpath(pid, &bytes, UInt32(bytes.count)) > 0 else { return nil }
+        return URL(fileURLWithPath: String(cString: bytes))
     }
     static func sheet(_ app: AppUnderTest) throws -> AXUIElement {
         guard let process = app.process, process.isRunning, let hello = app.hello,
               hello.pid == process.process.processIdentifier,
-              NSRunningApplication(processIdentifier: hello.pid)?.executableURL?.resolvingSymlinksInPath() == app.executable.resolvingSymlinksInPath() else {
+              executable(hello.pid)?.resolvingSymlinksInPath() == app.executable.resolvingSymlinksInPath() else {
             throw Check(description: "AX picker needs the exact live owned executable and PID")
         }
         let root = AXUIElementCreateApplication(hello.pid)
@@ -73,8 +76,7 @@ enum NativePickerInput {
     }
     static func findFile(_ panel: AXUIElement, name: String) -> AXUIElement? {
         find(panel) { node, role in
-            [kAXTextFieldRole, kAXStaticTextRole, kAXCellRole, kAXRowRole].contains(role) &&
-                [string(node, kAXTitleAttribute), string(node, kAXValueAttribute), string(node, kAXDescriptionAttribute)].contains(name)
+            [string(node, kAXTitleAttribute), string(node, kAXValueAttribute), string(node, kAXDescriptionAttribute)].contains(name)
         }
     }
     static func names(_ node: AXUIElement, _ name: String) -> Bool {
@@ -128,16 +130,28 @@ enum NativePickerInput {
         let result = AXUIElementPerformAction(button, kAXPressAction as CFString)
         guard result == .success else { throw Check(description: "AXPress \(title) failed: \(result.rawValue)") }
     }
-    static func receipt(_ app: AppUnderTest, selection: Selection?, filename: AXUIElement?, prompt: String) throws -> [String: Any] {
+    static func selectionRoles(_ node: AXUIElement) -> [String] {
+        var result: [String] = [], current = node
+        for _ in 0..<8 {
+            let role = string(current, kAXRoleAttribute); result.append(role)
+            if role == kAXSheetRole { break }
+            guard let next = parent(current) else { break }
+            current = next
+        }
+        return result
+    }
+    static func receipt(_ app: AppUnderTest, observation: Observation?, prompt: String) throws -> [String: Any] {
         guard available else { return ["available": false, "reason": "AXIsProcessTrusted is false; no permission requested"] }
         try app.waitUntil("AX Where popup ready") { try wherePopup(sheet(app)) != nil }
         let panel = try sheet(app)
+        let selection = observation?.selection, filename = observation?.filename
         let selectedRows: [[String: Any]] = selection.map {
             [["row": fields($0.row), "contents": [fields($0.name)], "selectionObserved": isSelected($0.row)]]
         } ?? []
         return ["available": true, "sheet": fields(panel),
                 "wherePopups": wherePopup(panel).map { [fields($0)] } ?? [], "selectedRows": selectedRows,
                 "selectedRowsInspected": selection != nil,
+                "selectionAncestors": selection.map { selectionRoles($0.name) } ?? [],
                 "filenameField": filename.map(fields) ?? [:],
                 "buttons": ["Cancel", prompt].compactMap { button(panel, title: $0).map(fields) }]
     }
@@ -145,28 +159,47 @@ enum NativePickerInput {
         guard case .menuItems(let paths) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { return false }
         return paths == [file.resolvingSymlinksInPath().path]
     }
+    static func filenameMatches(_ field: AXUIElement, _ file: URL) -> Bool {
+        let value = string(field, kAXValueAttribute)
+        return value == file.lastPathComponent || value == file.deletingPathExtension().lastPathComponent
+    }
     static func drive(_ app: AppUnderTest, file: URL?, save: Bool = false) throws {
         if let file {
             try FilePanelScenarios.requireOwnedFixture(app, file)
             let directory = file.deletingLastPathComponent()
-            try app.perform(.sidebarPanel(window: nil, action: .directory(path: directory.path)))
+            // The app set its initial directory before presenting. Avoid restarting its remote view for the same path.
+            if directory.resolvingSymlinksInPath() != app.dataDirectory.resolvingSymlinksInPath() {
+                try app.perform(.sidebarPanel(window: nil, action: .directory(path: directory.path)))
+            }
             try app.waitUntil("AX Where popup names owned directory") { try whereMatches(sheet(app), directory) }
-            let panel = try sheet(app)
-            let selection: Selection?, filename: AXUIElement?
+            var panel = try sheet(app)
+            let selection: Selection?
+            var filename: AXUIElement?
             if save {
-                guard let field = find(panel, { node, role in
-                    role == kAXTextFieldRole && (string(node, kAXIdentifierAttribute) == "saveAsNameTextField" || string(node, kAXTitleAttribute).contains("Save As"))
-                }), set(field, kAXValueAttribute, file.lastPathComponent as CFString) else {
-                    throw Check(description: "AX could not set the save filename; no confirm sent")
+                selection = nil
+                try app.waitUntil("real panel selection equals owned fixture") {
+                    panel = try sheet(app)
+                    guard let field = find(panel, { node, role in
+                        role == kAXTextFieldRole && (string(node, kAXIdentifierAttribute) == "saveAsNameTextField" || string(node, kAXTitleAttribute).contains("Save As"))
+                    }) else { throw Check(description: "Save filename field is not ready; no confirm sent") }
+                    filename = field
+                    if try actualSelection(app, equals: file), filenameMatches(field, file) { return true }
+                    _ = set(field, kAXFocusedAttribute, kCFBooleanTrue)
+                    guard set(field, kAXValueAttribute, file.lastPathComponent as CFString) else { throw Check(description: "AX filename setter refused; no confirm sent") }
+                    if try actualSelection(app, equals: file), filenameMatches(field, file) { return true }
+                    _ = set(field, kAXFocusedAttribute, kCFBooleanFalse)
+                    let actual = try app.send(.sidebarPanel(window: nil, action: .selection))
+                    throw Check(description: "Save selection not ready: field=\(string(field, kAXValueAttribute)), panel=\(actual); no confirm sent")
                 }
-                filename = field; selection = nil
             } else {
                 try app.waitUntil("fixture row available in AX") { try findFile(sheet(app), name: file.lastPathComponent) != nil }
-                selection = try selectRow(app, panel: panel, file: file); filename = nil
+                panel = try sheet(app)
+                selection = try selectRow(app, panel: panel, file: file)
                 try app.waitUntil("known AX row selected") { selection.map { isSelected($0.row) && names($0.name, file.lastPathComponent) } == true }
+                try app.waitUntil("real panel selection equals owned fixture") { try actualSelection(app, equals: file) }
             }
-            try app.waitUntil("real panel selection equals owned fixture") { try actualSelection(app, equals: file) }
-            let receipt = try FilePanelScenarios.recordPanel(app, verifiedSelection: file, selection: selection, filename: filename)
+            let observation = Observation(selection: selection, filename: filename)
+            let receipt = try FilePanelScenarios.recordPanel(app, verifiedSelection: file, observation: observation)
             guard case .menuItems(let controls) = try app.send(.sidebarPanel(window: nil, action: .inspect)), controls.count > 1 else {
                 throw Check(description: "Picker prompt missing")
             }
@@ -174,7 +207,7 @@ enum NativePickerInput {
             try app.waitUntil("AX confirm enabled") { button(panel, title: title).map { attribute($0, kAXEnabledAttribute) as? Bool == true } == true }
             try expect(try actualSelection(app, equals: file) && whereMatches(panel, directory), "Selection changed before confirm; no press sent")
             if let selection { try expect(isSelected(selection.row) && names(selection.name, file.lastPathComponent), "AX selected row changed; no press sent") }
-            if let filename { try expect(string(filename, kAXValueAttribute) == file.lastPathComponent, "AX filename changed; no press sent") }
+            if let filename { try expect(filenameMatches(filename, file), "AX filename changed; no press sent") }
             app.note("AX verified selection \(file.path) before confirm; receipt \(receipt.lastPathComponent).")
             try press(panel, title: title)
             app.note("REAL PANEL: AX selection and AXPress \(title); no posted mouse or key events.")
