@@ -70,7 +70,7 @@ enum ItemBody: Sendable, Equatable {
 }
 
 /// Arc: `SidebarTab`.
-struct Tab: Sendable, Equatable {
+struct Tab: Sendable, Equatable, Codable {
     /// Current location: set by the user (submit, reset) and by committed navigations. Nil only for an empty split
     /// pane waiting for the command bar. A failed load never changes it.
     var url: URL?
@@ -87,6 +87,7 @@ struct Tab: Sendable, Equatable {
     var lastActiveAt: Instant
     /// User-chosen icon shown instead of the favicon (Arc: `SidebarCustomIcon`).
     var icon: CustomIcon?
+    var muted: Bool = false
 
     init(url: URL?, title: String, customTitle: String? = nil, favicon: URL? = nil, pinnedURL: URL? = nil,
          lastActiveAt: Instant, icon: CustomIcon? = nil) {
@@ -100,9 +101,11 @@ struct Tab: Sendable, Equatable {
     }
 }
 
-/// Arc: `SidebarList`. Lives in Pinned (and Favorites later). `collapsed` is global; Arc keeps it per window.
+/// A pinned folder or group. collapsed is the legacy restore default; live openness belongs to WindowDoc.
 struct Folder: Sendable, Equatable {
     var title: String
+    var isGroup: Bool = false
+    var liveRepository: String? = nil
     var collapsed: Bool
     var icon: CustomIcon?
     fileprivate(set) var children: [ItemID]
@@ -121,6 +124,7 @@ struct Split: Sendable, Equatable {
     fileprivate(set) var panes: SplitPanes
     /// Relative widths keyed by pane (Arc: `itemWidthFactors`), so removing a pane cannot misalign an array.
     /// A missing key counts as 1. Normalized on read.
+    var title: String? = nil
     var widths: [ItemID: Double]
     /// Arc: `layoutOrientation`. v1 lays out `.horizontal`; the value is saved either way.
     var orientation: SplitOrientation
@@ -706,5 +710,59 @@ struct SidebarTree: Sendable, Equatable {
                 }
             }
         }
+    }
+}
+
+extension SidebarTree {
+    /// Build on a copy. Any invalid descendant leaves the original tree untouched.
+    mutating func insertArchived(_ node: ArchivedNode, at position: TreePosition, now: Instant,
+                                 freshIDs: Bool, reservedIDs: Set<ItemID> = [], newID: () -> String) throws -> (root: ItemID, tabs: [(ItemID, Tab)]) {
+        guard node.isValid() else { throw TreeError.invalidHierarchy }
+        var draft = self
+        var inserted: [(ItemID, Tab)] = []
+        var used: Set<ItemID> = []
+        func identity(_ old: ItemID) throws -> ItemID {
+            guard used.insert(old).inserted else { throw TreeError.invalidHierarchy }
+            let id = freshIDs || draft[old] != nil || reservedIDs.contains(old) ? ItemID(newID()) : old
+            guard draft[id] == nil, !reservedIDs.contains(id) else { throw TreeError.invalidHierarchy }
+            return id
+        }
+        func build(_ node: ArchivedNode, at position: TreePosition) throws -> ItemID {
+            let id = try identity(node.id)
+            switch node {
+            case .tab(_, var tab):
+                tab.lastActiveAt = now
+                try draft.insert(id, .tab(tab), at: position, createdAt: now)
+                inserted.append((id, tab))
+            case .folder(_, let title, let icon, let group, let repository, let children):
+                var folder = Folder(title: title, collapsed: false, icon: icon)
+                folder.isGroup = group
+                folder.liveRepository = repository
+                try draft.insert(id, .folder(folder), at: position, createdAt: now)
+                for child in children { _ = try build(child, at: .into(parent: id, index: Int.max)) }
+            case .split(_, let title, let icon, let orientation, let fractions, let children):
+                let (parent, index) = try draft.resolve(position, detaching: nil)
+                try draft.checkPlacement(.split, under: parent)
+                var panes: [ItemID] = []
+                for child in children {
+                    guard case .tab(_, var tab) = child else { throw TreeError.invalidHierarchy }
+                    let pane = try identity(child.id)
+                    tab.lastActiveAt = now
+                    panes.append(pane)
+                    draft.items[pane] = Item(id: pane, createdAt: now, parent: id, body: .tab(tab))
+                    inserted.append((pane, tab))
+                }
+                guard let validated = SplitPanes(panes) else { throw TreeError.invalidHierarchy }
+                let split = Split(panes: validated, title: title, widths: Dictionary(uniqueKeysWithValues: zip(panes, fractions)),
+                                  orientation: orientation, lastActiveAt: now, icon: icon)
+                draft.items[id] = Item(id: id, createdAt: now, parent: parent, body: .split(split))
+                draft.attach(id, to: parent, at: index)
+                draft.stampPinnedURLs(under: id)
+            }
+            return id
+        }
+        let root = try build(node, at: position)
+        self = draft
+        return (root, inserted)
     }
 }

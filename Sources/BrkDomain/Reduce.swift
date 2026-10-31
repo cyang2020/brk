@@ -71,6 +71,7 @@ struct Work {
     let ctx: Context
     var effects: [Effect] = []
     var keyHandled = false
+    var suppressActivityStamp = false
     /// Tabs on screen right before the first rule of this input ran (after the cycle commit and the overlay rule).
     /// Nil until a command or event starts; `finish` stamps the difference.
     private var screenBefore: Set<ItemID>?
@@ -94,7 +95,10 @@ struct Work {
         switch command {
         case .commandBar(let c): commandBar(c, in: window)
         case .archive(let c): archive(c, in: window)
-        case .tab(let c): tabs(c, in: window)
+        case .tab(let c):
+            state.session.windows[window]?.sidebarFocused = false
+            tabs(c, in: window)
+        case .tabTools(let c): tabTools(c, in: window)
         case .page(let c): pages(c, in: window)
         case .item(let c): items(c, in: window)
         case .space(let c): spaces(c, in: window)
@@ -116,10 +120,11 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
+        case .siteResult(let id, let outcome): siteResult(id, outcome)
         case .download(let update): downloadEvent(update)
         case .contextDisposed(let result):
             switch result {
@@ -129,7 +134,11 @@ struct Work {
                 if state.doc.deletingProfiles[profile]?.id == id { state.doc.deletingProfiles[profile]?.failure = reason }
             default: break
             }
-        case .clockTick: sweepAutoArchive()
+        case .clockTick:
+            sweepAutoArchive()
+            for window in state.session.windows.keys {
+                if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now { state.session.windows[window]?.toast = nil }
+            }
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
@@ -148,6 +157,9 @@ struct Work {
     /// Any command other than `.tab(.cycleRecent)` commits a pending Ctrl+Tab cycle first.
     mutating func commitPendingCycle(unless command: Command, in window: WindowID) {
         if case .tab(.cycleRecent) = command { return }
+        if case .tabTools(.cancelRecent) = command { return }
+        if case .tabTools(.dismissToast) = command { return }
+        if command == .app(.exit), state.session.windows[window]?.recentCycle != nil { return }
         commitCycle(in: window)
     }
 
@@ -187,7 +199,7 @@ struct Work {
         normalize(&state)
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
-            if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }
+            if !walking && !suppressActivityStamp { stamp(before.symmetricDifference(state.onScreenTabs())) }
         }
         let changed = state != input
         if changed { state.session.rev += 1 }

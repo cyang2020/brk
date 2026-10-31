@@ -24,6 +24,7 @@ final class ChromePage: CefBrowserDelegate {
     private func emit(_ events: [PageEvent]) { for event in events { engine.pageDidEmit(self, event) } }
     /// Latest projected policy; each operation freezes its own copy on its first callback.
     var downloadPolicy: DownloadPolicy
+    private var desiredMuted: Bool
     /// CEF destroyed the host window (after OnBeforeClose); nothing of this page is left on screen.
     private(set) var windowDestroyed = false
     private let log = Logger(subsystem: "brk", category: "page")
@@ -36,6 +37,7 @@ final class ChromePage: CefBrowserDelegate {
         id = spec.id
         context = spec.context
         downloadPolicy = spec.downloadPolicy
+        desiredMuted = spec.muted
         self.incarnation = incarnation
         mainDocument = MainDocumentState(browser: incarnation)
         self.engine = engine
@@ -57,9 +59,17 @@ final class ChromePage: CefBrowserDelegate {
         }
         surface.onReadyForFocus = { [weak self] in
             guard let self else { return }
+            self.setMuted(self.desiredMuted)
             self.engine.pageReadyForFocus(self)
         }
         surface.adopt(chrome)
+    }
+
+    func browser(_ b: CefBrowser, didChangeAudio audible: Bool) { emit([.audioChanged(audible)]) }
+
+    func setMuted(_ value: Bool) {
+        desiredMuted = value
+        if chrome.browser.isAudioMuted != value { chrome.browser.isAudioMuted = value }
     }
 
     var browser: CefBrowser { chrome.browser }
@@ -67,7 +77,7 @@ final class ChromePage: CefBrowserDelegate {
     var facts: PageFacts {
         PageFacts(surfaceFrame: surface.frameInWindow, embeddedViews: surface.embeddedViewClasses,
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
-                  hasKeyboardFocus: surface.containsFirstResponder)
+                  hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted)
     }
 
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
@@ -123,6 +133,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {
+        setMuted(desiredMuted)
         emit(mainDocument.finished(url))
     }
 

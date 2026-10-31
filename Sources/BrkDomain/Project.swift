@@ -53,7 +53,7 @@ func projectPages(_ state: AppState) -> [PageSpec] {
         let directory = settings.downloadsDirectory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? DownloadPolicy.defaultDirectory
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
-        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy)
+        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
     }
 }
 
@@ -100,7 +100,8 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
         shortcuts: shortcuts,
         max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active),
-        advanced: doc.settings.advanced
+        advanced: doc.settings.advanced,
+        tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews)
     )
 }
 
@@ -126,9 +127,21 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     func tabRow(_ tab: ItemID, _ original: Tab, _ kind: SectionKind) -> TabRow {
         let t = state.displayedTab(tab, in: id) ?? original
-        return TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
+        var row = TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
                loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
+               audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
+        if kind == .favorites, doc.kind == .standard {
+            if let feed = state.session.favoriteFeeds[tab], ctx.now.since(feed.fetchedAt) < .seconds(300) {
+                row.badge = feed.badge
+                row.subtitle = feed.subtitle
+            }
+            if ["calendar.google.com", "outlook.office.com"].contains(t.url?.host ?? ""),
+               let feed = state.session.calendars[space.profile], ctx.now.since(feed.fetchedAt) < .seconds(300) {
+                row.subtitle = feed.meetings.filter { $0.end > ctx.now }.sorted { $0.start < $1.start }.first?.title ?? "No upcoming meetings"
+            }
+        }
+        return row
     }
 
     func rows(under parent: ItemID, _ kind: SectionKind) -> [Row] {
@@ -138,7 +151,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             case .tab(let t):
                 return .tab(tabRow(child, t, kind))
             case .folder(let f):
-                return .folder(FolderRow(id: child, section: kind, title: f.title, collapsed: f.collapsed, icon: f.icon, children: rows(under: child, kind)))
+                var liveStatus = state.session.liveFolderStatus[child]
+                if let updated = state.session.liveFolderUpdated[child], ctx.now.since(updated) >= .seconds(300) { liveStatus = "Refresh to update" }
+                return .folder(FolderRow(group: f.isGroup, id: child, section: kind, title: liveStatus.map { f.title + " · " + $0 } ?? f.title, collapsed: !state.folderIsExpanded(child, in: id), icon: f.icon, children: rows(under: child, kind)))
             case .split(let s):
                 let paneRows = s.panes.ids.compactMap { p -> TabRow? in
                     guard case .tab(let t)? = tree[p]?.body else { return nil }
@@ -157,11 +172,16 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         guard case .tab(let t)? = tree[tab]?.body else { return nil }
         return tabRow(tab, t, .favorites)
     })
-    let spaceSnapshot = SpaceSnapshot(
+    var spaceSnapshot = SpaceSnapshot(
         id: space.id, title: state.displayTitle(of: space.id), icon: space.icon,
         pinned: SectionSnapshot(root: space.pinnedRoot, kind: .pinned, collapsed: space.pinnedCollapsed, rows: rows(under: space.pinnedRoot, .pinned)),
         today: SectionSnapshot(root: space.todayRoot, kind: .today, collapsed: false, rows: rows(under: space.todayRoot, .today))
     )
+    if space.pinnedCollapsed, let shown, tree.role(of: shown.id)?.kind == .pinned,
+       let row = rows(under: space.pinnedRoot, .pinned).flatMap({ flattenRows($0) }).first(where: { $0.id == shown.id }) {
+        spaceSnapshot.pinned.rows = [row]
+        spaceSnapshot.pinned.peeked = true
+    }
     let dock = state.doc.spaceOrder.compactMap { sid -> DockItem? in
         guard let s = state.doc.spaces[sid] else { return nil }
         return DockItem(id: sid, title: state.displayTitle(of: sid), icon: s.icon, active: sid == space.id,
@@ -266,6 +286,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if let renaming = session.renaming { focus = .renameField(renaming) }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
+    else if session.sidebarFocused { focus = .sidebar }
     else if case .library? = session.overlay { focus = .none }
     else if let peekPage { focus = .page(peekPage) }
     else if let focusedPane, case .page(let page)? = contentPanes.first(where: { $0.tab == focusedPane })?.content { focus = .page(page) }
@@ -293,7 +314,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
         renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, overlay: overlay, focus: focus,
-        enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
+        enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } }),
+        tabTools: projectTabTools(state, window: id, now: ctx.now)
     )
 }
 
@@ -316,7 +338,8 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
         enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
-                          .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection])
+                          .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
+        enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
     if let (id, tab) = focused {
@@ -373,7 +396,7 @@ private func archiveGroups(_ state: AppState, _ ctx: ProjectionContext) -> [Arch
     for (index, entry) in state.doc.archive.enumerated() {
         let bucket = archiveBucket(of: entry.archivedAt, now: ctx.now, calendar: ctx.calendar)
         let from = entry.fromSpace.flatMap { state.doc.spaces[$0] != nil ? state.displayTitle(of: $0) : nil }
-        byBucket[bucket, default: []].append((ArchiveEntry(id: entry.id, title: entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
+        byBucket[bucket, default: []].append((ArchiveEntry(id: entry.id, title: entry.structure?.title ?? entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
                                                            archivedAt: entry.archivedAt, reason: entry.reason, fromSpaceTitle: from), index))
     }
     return ArchiveBucket.allCases.compactMap { bucket in
@@ -399,4 +422,35 @@ public func archiveBucket(of archivedAt: Instant, now: Instant, calendar: Calend
     if when >= daysBack(sinceMonday) { return .pastWeek }
     if when >= daysBack(30) { return .pastMonth }
     return .beyond
+}
+
+private func flattenRows(_ row: Row) -> [Row] {
+    if case .folder(let folder) = row { return [row] + folder.children.flatMap(flattenRows) }
+    return [row]
+}
+private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) -> TabToolsSnapshot {
+    guard let session = state.session.windows[window] else { return TabToolsSnapshot() }
+    var result = TabToolsSnapshot()
+    result.pendingSiteRequest = state.session.siteRequests.values.first {
+        $0.request.window == window && state.doc.windows[window].flatMap { state.doc.spaces[$0.space]?.profile } == $0.request.profile
+    }?.request.id
+    result.selected = session.tabSelection.items.filter { state.tree(of: window)?[$0] != nil }
+    result.reveal = session.revealItem
+    result.revealGeneration = session.revealGeneration
+    result.toast = session.toast.flatMap { $0.expiresAt > now ? $0 : nil }
+    result.hoverPreviews = state.doc.tabPreferences.hoverPreviews
+    result.includeFavoritesInNumbers = state.doc.tabPreferences.includeFavoritesInNumbers
+    if let cycle = session.recentCycle, cycle.order.indices.contains(cycle.index) {
+        let rows = cycle.order.map { item -> RecentTabRow in
+            let tab = state.panes(of: item).first.flatMap { state.displayedTab($0, in: window) }
+            return RecentTabRow(id: item, title: state.detached(item, in: window)?.title ?? "Tab", url: tab?.url)
+        }
+        result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
+    }
+    if !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
+       let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) {
+        let threshold = state.profileSettings(space.profile).autoArchive
+        result.archiveEducation = threshold == .never ? "Auto-archive is off. Change it in Archive." : "Idle Today tabs archive after " + threshold.tabToolsLabel + ". Tabs on screen stay open."
+    }
+    return result
 }

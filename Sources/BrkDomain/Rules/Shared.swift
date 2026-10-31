@@ -17,7 +17,8 @@ extension Work {
         let shown = split ?? item
         let space = tree.role(of: shown)?.space ?? doc.space
         guard state.doc.spaces[space] != nil else { return }
-        if doc.space != space { state.doc.windows[window]!.space = space }
+        if doc.space != space { state.doc.windows[window]!.space = space; state.session.windows[window]?.tabSelection = TabSelection() }
+        state.session.windows[window]?.sidebarFocused = false
         select(shown, in: window, space: space)
         if let split { state.doc.windows[window]!.splitFocus[split] = item }
         for pane in state.panes(of: shown) { state.demand(PageID(window: window, item: pane)) }
@@ -27,7 +28,7 @@ extension Work {
     mutating func showSpace(_ space: SpaceID, in window: WindowID) {
         guard state.doc.spaces[space] != nil, state.doc.windows[window] != nil else { return }
         if state.session.windows[window]?.peek == true { state.session.windows[window]!.peek = false }
-        if state.doc.windows[window]!.space != space { state.doc.windows[window]!.space = space }
+        if state.doc.windows[window]!.space != space { state.doc.windows[window]!.space = space; state.session.windows[window]?.tabSelection = TabSelection() }
     }
 
     /// A new tab at the top of `space`'s Today. Focused in `window` when `focus`; otherwise only marked loaded (a

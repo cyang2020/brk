@@ -25,6 +25,7 @@ func normalize(_ state: inout AppState) -> [String] {
     repairSpaces(&state, &repairs)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
+    repairTabTools(&state)
     closeEmptyLittleWindows(&state)
     repairLoaded(&state)
     applyCaps(&state, &repairs)
@@ -199,4 +200,25 @@ private func applyCaps(_ state: inout AppState, _ repairs: inout [String]) {
             state.doc.windows[id]!.sidebarWidth = clamped
         }
     }
+}
+
+private func repairTabTools(_ state: inout AppState) {
+    for window in state.session.windows.keys {
+        let visible = Set(state.visibleRows(in: window))
+        state.session.windows[window]?.tabSelection.items.removeAll { !visible.contains($0) }
+        if let anchor = state.session.windows[window]?.tabSelection.anchor, !visible.contains(anchor) {
+            state.session.windows[window]?.tabSelection.anchor = nil
+        }
+        if let item = state.session.windows[window]?.revealItem, state.tree(of: window)?[item] == nil {
+            state.session.windows[window]?.revealItem = nil
+        }
+    }
+    state.session.siteRequests = state.session.siteRequests.filter { _, pending in
+        guard let window = state.doc.windows[pending.request.window], window.kind == .standard else { return false }
+        return state.doc.spaces[window.space]?.profile == pending.request.profile
+            && (pending.folder.map { state.doc.tree[$0] != nil } ?? true)
+    }
+    state.session.calendars = state.session.calendars.filter { state.doc.profiles[$0.key] != nil }
+    state.session.favoriteFeeds = state.session.favoriteFeeds.filter { state.doc.tree[$0.key] != nil }
+    state.session.liveFolderStatus = state.session.liveFolderStatus.filter { state.doc.tree[$0.key] != nil }
 }

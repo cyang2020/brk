@@ -60,8 +60,9 @@ public final class ContentAreaView: NSView {
                 card.host(surface(page), placeholder: nil)
             case .blank:
                 card.host(nil, placeholder: nil)
-            case .crashed:
-                card.host(nil, placeholder: "The page crashed. Reloading…")   // TODO(W2): Arc's sad-tab placeholder
+            case .crashed(let page):
+                card.host(nil, placeholder: "☹\nThis page stopped responding.\nBrk is trying to recover the page. You can also retry.")
+                card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
             }
         }
         while dividers.count < frames.dividers.count {
@@ -105,6 +106,8 @@ final class ShadowView: NSView {
 @MainActor
 final class CardView: NSView {
     private let placeholder = NSTextField(labelWithString: "")
+    var retryAction: (() -> Void)?
+    private let retry = NSButton(title: "Retry", target: nil, action: nil)
     private weak var hosted: NSView?
 
     override init(frame: NSRect) {
@@ -118,6 +121,11 @@ final class CardView: NSView {
         placeholder.textColor = .secondaryLabelColor
         placeholder.isHidden = true
         addSubview(placeholder)
+        placeholder.maximumNumberOfLines = 4
+        retry.target = self
+        retry.action = #selector(retryPage)
+        retry.isHidden = true
+        addSubview(retry)
     }
 
     @available(*, unavailable)
@@ -142,9 +150,14 @@ final class CardView: NSView {
         }
         placeholder.stringValue = text ?? ""
         placeholder.isHidden = text == nil
+        retry.isHidden = text == nil
+        retry.sizeToFit()
+        retry.frame.origin = NSPoint(x: bounds.midX - retry.frame.width / 2, y: bounds.midY + 50)
         placeholder.sizeToFit()
         placeholder.frame.origin = CGPoint(x: bounds.midX - placeholder.frame.width / 2, y: bounds.midY - placeholder.frame.height / 2)
     }
+
+    @objc private func retryPage() { retryAction?() }
 
     override func layout() {
         super.layout()

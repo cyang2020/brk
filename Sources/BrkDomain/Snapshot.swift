@@ -56,6 +56,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var focus: FocusTarget
     /// Shortcut-table actions that apply right now (menu validation greys out the others).
     public var enabledActions: Set<ActionID>
+    public var tabTools = TabToolsSnapshot()
 }
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {
@@ -101,6 +102,7 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
     /// Pinned only; Today never collapses.
     public var collapsed: Bool
     public var rows: [Row]
+    public var peeked: Bool = false
 }
 
 public enum Row: Sendable, Equatable, Codable {
@@ -143,10 +145,15 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// Has a live page. Unloaded Pinned and Favorites tabs draw dimmer.
     public var loaded: Bool
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
+    public var badge: Int? = nil
+    public var subtitle: String? = nil
+    public var audible: Bool = false
+    public var muted: Bool = false
     public var canReset: Bool
 }
 
 public struct FolderRow: Sendable, Equatable, Codable {
+    public var group: Bool = false
     public var id: ItemID
     public var section: SectionKind
     public var title: String
@@ -384,6 +391,7 @@ public struct SettingsSnapshot: Sendable, Equatable, Codable {
     public var shortcuts: [ShortcutRow]
     public var max: MaxSnapshot
     public var advanced: AdvancedSettings
+    public var tabPreferences: TabPreferenceSnapshot = TabPreferenceSnapshot()
 }
 
 public struct ProfileSettingsRow: Sendable, Equatable, Codable {
@@ -419,4 +427,14 @@ public struct ProfileDeletionRow: Sendable, Equatable, Codable {
     public let profile: ProfileID
     public let name: String
     public let failure: String?
+}
+
+public struct TabPreferenceSnapshot: Equatable, Sendable, Codable {
+    public var includeFavoritesInNumbers = true
+    public var hoverPreviews = true
+    public init() {}
+    public init(includeFavoritesInNumbers: Bool, hoverPreviews: Bool) {
+        self.includeFavoritesInNumbers = includeFavoritesInNumbers
+        self.hoverPreviews = hoverPreviews
+    }
 }

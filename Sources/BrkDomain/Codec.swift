@@ -215,6 +215,7 @@ struct StoredDocV3: Codable {
     var windows: [WindowID: StoredWindow]
     var settings: StoredSettings
     var profiles: [ProfileID: StoredProfile]
+    var tabPreferences: TabPreferences?
     var deletingProfiles: [ProfileID: ProfileDeletion]?
     var downloads: [StoredDownload]
     var linkRoutes: [LinkRoute]
@@ -274,9 +275,11 @@ struct StoredDocV3: Codable {
         var pinnedURL: URL?
         var lastActiveAt: Instant
         var icon: CustomIcon?
+        var muted: Bool?
     }
-    struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon? }
+    struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon?; var group: Bool?; var liveRepository: String? }
     struct StoredSplit: Codable {
+        var title: String?
         var widths: [ItemID: Double], focused: ItemID?, orientation: SplitOrientation, lastActiveAt: Instant
         var icon: CustomIcon?
     }
@@ -289,6 +292,10 @@ struct StoredDocV3: Codable {
     struct StoredArchived: Codable {
         var id: ArchiveID, tabID: ItemID, tab: StoredTab, archivedAt: Instant, reason: ArchiveReason
         var fromSpace: SpaceID?, fromSection: SectionKind
+        var fromParent: ItemID?
+        var fromIndex: Int?
+        var fromProfile: ProfileID?
+        var structure: ArchivedNode?
     }
     struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID }
     struct StoredWindow: Codable {
@@ -300,6 +307,7 @@ struct StoredDocV3: Codable {
         var slots: [ItemID: SavedSlot]?
         var splitFocus: [ItemID: ItemID]?
         var emptySelections: [SpaceID]?
+        var folderExpansion: [ItemID: Bool]?
     }
 
     /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
@@ -310,9 +318,9 @@ struct StoredDocV3: Codable {
                                     tab: nil, folder: nil, split: nil, section: nil)
             switch item.body {
             case .tab(let t): stored.tab = StoredTab(t)
-            case .folder(let f): stored.folder = StoredFolder(title: f.title, collapsed: f.collapsed, icon: f.icon)
+            case .folder(let f): stored.folder = StoredFolder(title: f.title, collapsed: f.collapsed, icon: f.icon, group: f.isGroup, liveRepository: f.liveRepository)
             case .split(let s):
-                stored.split = StoredSplit(widths: s.widths, focused: nil, orientation: s.orientation, lastActiveAt: s.lastActiveAt, icon: s.icon)
+                stored.split = StoredSplit(title: s.title, widths: s.widths, focused: nil, orientation: s.orientation, lastActiveAt: s.lastActiveAt, icon: s.icon)
             case .section(let s):
                 switch s.role {
                 case .favorites(let profile): stored.section = StoredSection(kind: .favorites, space: nil, profile: profile)
@@ -331,15 +339,16 @@ struct StoredDocV3: Codable {
         favorites = doc.favorites
         archive = doc.archive.map {
             StoredArchived(id: $0.id, tabID: $0.tabID, tab: StoredTab($0.tab), archivedAt: $0.archivedAt, reason: $0.reason,
-                           fromSpace: $0.fromSpace, fromSection: $0.fromSection)
+                           fromSpace: $0.fromSpace, fromSection: $0.fromSection, fromParent: $0.fromParent, fromIndex: $0.fromIndex, fromProfile: $0.fromProfile, structure: $0.structure)
         }
         history = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile) }
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
-                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted())
+                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted(), folderExpansion: $0.folderExpansion)
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
+        tabPreferences = doc.tabPreferences
         deletingProfiles = doc.deletingProfiles
         profiles = doc.profiles.mapValues { StoredProfile(name: $0.name, icon: $0.icon) }
         downloads = doc.downloads.map {
@@ -479,7 +488,9 @@ struct StoredDocV3: Codable {
             docWindows[id] = WindowDoc(id: id, kind: .standard, bounds: w.bounds, space: space, activeBySpace: shown,
                                        emptySelections: Set(w.emptySelections ?? []),
                                        slots: (w.slots ?? [:]).filter { tree[$0.key]?.kind == .tab && opens($0.value.committedURL, "slot \(id)/\($0.key)") },
-                                       splitFocus: w.splitFocus ?? [:], sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
+                                       splitFocus: w.splitFocus ?? [:], folderExpansion: w.folderExpansion ?? tree.items.reduce(into: [:]) { result, pair in
+                                           if case .folder(let f) = pair.value.body { result[pair.key] = !f.collapsed }
+                                       }, sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth)
         }
         if docWindows.isEmpty {
             let id = WindowID(ctx.newID())
@@ -488,15 +499,15 @@ struct StoredDocV3: Codable {
                                        sidebarWidth: Metrics.sidebar.defaultWidth.value)
         }
 
-        let doc = Doc(
+        var doc = Doc(
             tree: tree,
             spaces: docSpaces,
             spaceOrder: order,
             favorites: favoriteRoots,
-            archive: archive.filter { opens($0.tab.url, "archive \($0.id)") }.map {
+            archive: archive.filter { ($0.structure?.isValid() ?? true) && opens($0.tab.url, "archive \($0.id)") }.map {
                 ArchivedTab(id: $0.id, tabID: $0.tabID, tab: tab($0.tab, "archive \($0.id)"),
                             archivedAt: usable($0.archivedAt, "archive \($0.id): archivedAt"), reason: $0.reason,
-                            fromSpace: $0.fromSpace, fromSection: $0.fromSection)
+                            fromSpace: $0.fromSpace, fromSection: $0.fromSection, fromParent: $0.fromParent, fromIndex: $0.fromIndex, fromProfile: $0.fromProfile, structure: $0.structure.flatMap { $0.isValid() ? $0 : nil })
             },
             history: history.filter { opens($0.url, "a history entry") }.map {
                 HistoryEntry(url: $0.url, title: $0.title, visitedAt: usable($0.visitedAt, "history \($0.url): visitedAt"), profile: $0.profile)
@@ -516,6 +527,12 @@ struct StoredDocV3: Codable {
             linkRoutes: linkRoutes,
             keyOverrides: keyOverrides
         )
+        doc.tabPreferences = tabPreferences ?? TabPreferences()
+        for (id, value) in items {
+            if let repository = value.folder?.liveRepository { doc.tree.updateFolder(id) { $0.liveRepository = repository } }
+            if let group = value.folder?.group { doc.tree.updateFolder(id) { $0.isGroup = group } }
+            if let title = value.split?.title { doc.tree.updateSplit(id) { $0.title = title } }
+        }
         return (doc, repairs)
     }
 }
@@ -523,7 +540,7 @@ struct StoredDocV3: Codable {
 extension StoredDocV3.StoredTab {
     init(_ tab: Tab) {
         self.init(url: tab.url, title: tab.title, customTitle: tab.customTitle, favicon: tab.favicon, pinnedURL: tab.pinnedURL,
-                  lastActiveAt: tab.lastActiveAt, icon: tab.icon)
+                  lastActiveAt: tab.lastActiveAt, icon: tab.icon, muted: tab.muted)
     }
 }
 
@@ -531,6 +548,7 @@ extension Tab {
     init(_ stored: StoredDocV3.StoredTab) {
         self.init(url: stored.url, title: stored.title, customTitle: stored.customTitle, favicon: stored.favicon,
                   pinnedURL: stored.pinnedURL, lastActiveAt: stored.lastActiveAt, icon: stored.icon)
+        muted = stored.muted ?? false
     }
 }
 
@@ -579,3 +597,17 @@ public enum ExportCodec {
     }
 }
 
+
+/// Selected-source adapters use the same boundary-only JSON policy as persistence.
+public enum SiteCodec {
+    public static func unreadNotifications(_ data: Data) throws -> Int {
+        struct Notification: Decodable { let unread: Bool }
+        guard data.count <= 2_000_000 else { throw CocoaError(.fileReadTooLarge) }
+        return try JSONDecoder().decode([Notification].self, from: data).prefix(50).filter(\.unread).count
+    }
+    public static func pullRequests(_ data: Data) throws -> [PullRequestLink] {
+        struct Pull: Decodable { let title: String; let html_url: URL }
+        guard data.count <= 2_000_000 else { throw CocoaError(.fileReadTooLarge) }
+        return try JSONDecoder().decode([Pull].self, from: data).prefix(100).map { PullRequestLink(title: $0.title, url: $0.html_url) }
+    }
+}

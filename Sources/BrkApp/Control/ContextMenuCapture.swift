@@ -5,8 +5,10 @@ import AppKit
     private weak var menu: NSMenu?
     private var items: [String] = []
     private var ended = false
+    private var choice: String?
 
-    func run(at point: CGPoint, in window: NSWindow, events: EventInjector) async throws -> [String] {
+    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
+        choice = choose
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
@@ -35,5 +37,11 @@ import AppKit
         ended = true
     }
 
-    @objc private func cancelMenu() { menu?.cancelTracking() }
+    @objc private func cancelMenu() {
+        if let choice, let menu, let index = menu.items.firstIndex(where: { $0.title == choice && $0.isEnabled }) {
+            self.choice = nil
+            menu.performActionForItem(at: index)
+        }
+        menu?.cancelTracking()
+    }
 }

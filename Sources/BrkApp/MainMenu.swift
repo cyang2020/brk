@@ -90,7 +90,7 @@ enum MainMenu {
 
     private static func slots(in name: MenuName, submenu: Submenu?, target: MenuTarget, bindings: [ActionID: ResolvedBinding]) -> [Slot] {
         var slots: [Slot] = []
-        for action in ActionID.allCases where action.spec.menu == name && action.spec.submenu == submenu {
+        for action in ActionID.allCases where action.spec.row <= 189 && action.spec.menu == name && action.spec.submenu == submenu {
             slots.append(Slot(row: action.spec.row, group: action.spec.group) {
                 item(action, binding: 0, title: nil, hidden: action.spec.hidden, target: target, bindings: bindings)
             })

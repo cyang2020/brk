@@ -238,9 +238,9 @@ struct SpaceDialogForm: View {
 
     private var iconPicker: some View {
         let side = m.iconButtonSize.value
-        let perRow = (NamedIcon.allCases.count + 1) / 2
+        let perRow = 8
         let rows = stride(from: 0, to: NamedIcon.allCases.count, by: perRow).map { Array(NamedIcon.allCases[$0..<min($0 + perRow, NamedIcon.allCases.count)]) }
-        return VStack(alignment: .leading, spacing: m.padding.value / 4) {
+        return ScrollView(.vertical) { VStack(alignment: .leading, spacing: m.padding.value / 4) {
             HStack(spacing: m.padding.value / 4) {
                 TextField(OverlayCopy.emojiPlaceholder, text: Binding(get: { draft.emoji }, set: { draft.setEmoji($0) }))
                     .textFieldStyle(.roundedBorder)
@@ -259,6 +259,7 @@ struct SpaceDialogForm: View {
                 }
             }
         }
+            }.frame(maxHeight: side * 4)
     }
 
     private func choice<Label: View>(selected: Bool, help: String, @ViewBuilder label: () -> Label, action: @escaping () -> Void) -> some View {

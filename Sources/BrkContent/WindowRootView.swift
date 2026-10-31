@@ -22,10 +22,12 @@ public final class WindowRootView: NSView {
     public let peek: PeekCardView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
+    private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
 
     public init(dispatch: @escaping Dispatch) {
+        tabTools = TabToolsOverlayView(dispatch: dispatch)
         sidebar = SidebarView(dispatch: dispatch)
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
@@ -34,7 +36,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, library, peek, commandBar, spaceDialog] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, library, peek, commandBar, spaceDialog, tabTools] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
     }
 
@@ -86,6 +88,8 @@ public final class WindowRootView: NSView {
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
+        tabTools.frame = bounds
+        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette)
         lastTheme = snapshot.theme
     }
 }

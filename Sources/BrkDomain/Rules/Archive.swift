@@ -5,6 +5,7 @@ import Foundation
 
 extension Work {
     mutating func archive(_ command: ArchiveCommand, in window: WindowID) {
+        guard state.doc.windows[window]?.kind == .standard else { return }
         switch command {
         case .restore(let id):
             if let tab = restoreEntry(id, in: window) { focus(tab, in: window) }
@@ -48,11 +49,10 @@ extension Work {
         }
     }
 
-    /// The single archiving primitive. Tabs, splits and folders in `ids` are flattened to their tabs, which are
-    /// snapshotted into the archive with their source space and section (one call's tabs in sidebar order, ahead of
-    /// older entries) and removed from the tree, `loaded` and `live`. Section roots and unknown ids are skipped.
-    /// Empty panes (no URL) are removed without an entry: there is nothing to restore. Normalize applies the cap.
-    mutating func archiveTabs(_ ids: [ItemID], reason: ArchiveReason, in window: WindowID? = nil) {
+    /// Explicit archive preserves each folder or split as one detached structural unit, including blank panes.
+    /// Deletion callers opt into the legacy descendant-tab behavior. Roots and unknown IDs are skipped. Private
+    /// items are removed without saved records. A standalone blank tab has no archive entry. Normalize caps entries.
+    mutating func archiveTabs(_ ids: [ItemID], reason: ArchiveReason, in window: WindowID? = nil, preservingStructure: Bool = true) {
         var batch: [ArchivedTab] = []
         for id in ids {
             guard let role = state.role(of: id), state.locate(id).flatMap({ state.tree($0)?[id]?.kind }) != .section else { continue }
@@ -62,7 +62,24 @@ extension Work {
             let snapshots = Dictionary(uniqueKeysWithValues: (state.locate(id).flatMap { state.tree($0)?.tabs(under: id) } ?? []).map { tab in
                 (tab, archiveTab(tab, in: window))
             })
-            for (tabID, original) in removeItem(id) {
+            let detached = !incognito ? state.detached(id, in: window) : nil
+            let structural = preservingStructure && state.locate(id).flatMap { state.tree($0)?[id]?.kind } != .tab
+            if structural, !incognito, detached?.isValid() != true {
+                if let window { toast("This structure exceeds the saved archive limits. The original was kept.", in: window) }
+                continue
+            }
+            let parent = state.locate(id).flatMap { state.tree($0)?[id]?.parent }
+            let index = parent.flatMap { p in state.locate(id).flatMap { state.tree($0)?[p]?.children.firstIndex(of: id) } }
+            let profile = role.space.flatMap { state.doc.spaces[$0]?.profile } ?? state.doc.windows[window ?? WindowID("")] .flatMap { state.doc.spaces[$0.space]?.profile }
+            let removed = removeItem(id)
+            if structural, let detached {
+                for (tab, _) in removed { unload(tab) }
+                let representative = detached.tabs.first?.1 ?? Tab(url: nil, title: detached.title, lastActiveAt: ctx.now)
+                batch.append(ArchivedTab(id: ArchiveID(ctx.newID()), tabID: id, tab: representative, archivedAt: ctx.now,
+                                         reason: reason, fromSpace: role.space, fromSection: role.kind, fromParent: parent, fromIndex: index, fromProfile: profile, structure: detached))
+                continue
+            }
+            for (tabID, original) in removed {
                 let tab = snapshots[tabID] ?? original
                 unload(tabID)
                 guard !incognito, tab.url != nil else { continue }
@@ -96,9 +113,14 @@ extension Work {
     mutating func restoreEntry(_ id: ArchiveID, in window: WindowID) -> ItemID? {
         guard let index = state.doc.archive.firstIndex(where: { $0.id == id }) else { return nil }
         let entry = state.doc.archive[index]
-        let current = state.doc.windows[window].flatMap { state.doc.spaces[$0.space] }
-        let source = entry.fromSpace.flatMap { state.doc.spaces[$0] }
-        let position: TreePosition
+        let windowSpace = state.doc.windows[window].flatMap { state.doc.spaces[$0.space] }
+        let current = entry.fromProfile.flatMap { profile in
+            windowSpace?.profile == profile ? windowSpace : state.doc.spaceOrder.compactMap { state.doc.spaces[$0] }.first { $0.profile == profile }
+        } ?? (entry.fromProfile == nil ? windowSpace : nil)
+        let source = entry.fromSpace.flatMap { state.doc.spaces[$0] }.flatMap { source in
+            (entry.fromProfile.map { $0 == source.profile } ?? true) ? source : nil
+        }
+        var position: TreePosition
         switch (entry.fromSection, source) {
         case (.favorites, _):
             guard let root = current.flatMap(state.favoritesRoot(for:)) ?? state.doc.favorites[.default] else { return nil }
@@ -108,6 +130,24 @@ extension Work {
         case (.pinned, nil), (.today, nil), (.scratch, _):
             guard let space = current else { return nil }
             position = .into(parent: space.todayRoot, index: 0)
+        }
+        if let parent = entry.fromParent, let index = entry.fromIndex, let node = state.doc.tree[parent],
+           node.kind == .folder || node.kind == .section, state.doc.tree.role(of: parent)?.space == source?.id, source != nil {
+            position = .into(parent: parent, index: index)
+        }
+        guard state.doc.windows[window]?.kind == .standard else { return nil }
+        if let structure = entry.structure {
+            let restorePosition: TreePosition
+            if case .folder = structure, source == nil, let current { restorePosition = .into(parent: current.pinnedRoot, index: Int.max) }
+            else { restorePosition = position }
+            do {
+                let result = try state.doc.tree.insertArchived(structure, at: restorePosition, now: ctx.now, freshIDs: false, reservedIDs: Set(state.session.scratch.values.flatMap { $0.items.keys }), newID: ctx.newID)
+                for (tab, value) in result.tabs { state.doc.windows[window]?.slots[tab] = SavedSlot(committedURL: value.url, observedTitle: value.title, favicon: value.favicon) }
+                state.doc.archive.remove(at: index)
+                if let destination = state.doc.tree.role(of: result.root)?.space { showSpace(destination, in: window) }
+                reveal(result.root, in: window)
+                return result.tabs.first?.0 ?? result.root
+            } catch { return nil }
         }
         let tabID = state.locate(entry.tabID) == nil ? entry.tabID : ItemID(ctx.newID())
         var tab = entry.tab

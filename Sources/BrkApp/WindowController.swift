@@ -93,7 +93,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)
-        if snapshot.focus != lastSnapshot?.focus || pendingFocus != nil {
+        if snapshot.focus != lastSnapshot?.focus || pendingFocus != nil
+            || (snapshot.focus == .sidebar && snapshot.tabTools.revealGeneration != lastSnapshot?.tabTools.revealGeneration) {
             pendingFocus = nil
             applyFocus(snapshot.focus)
         }

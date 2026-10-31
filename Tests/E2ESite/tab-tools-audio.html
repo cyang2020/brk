@@ -1,0 +1,6 @@
+<!doctype html><html><meta charset="utf-8"><title>Audio fixture ready</title>
+<body style="margin:0"><button style="width:200px;height:100px" onclick="start()">Play fixture tone</button><script>
+let context, oscillator;
+function start(){context=new AudioContext();oscillator=context.createOscillator();let gain=context.createGain();gain.gain.value=0.001;oscillator.connect(gain).connect(context.destination);oscillator.start();document.title='Audio fixture playing';}
+function stop(){oscillator.stop();context.close();document.title='Audio fixture stopped';}
+</script></body></html>

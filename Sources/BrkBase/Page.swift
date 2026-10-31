@@ -78,13 +78,15 @@ public struct PageSpec: Hashable, Sendable, Codable {
     /// the previous profile's cookies and storage.
     public let context: BrowsingContext
 
+    public let muted: Bool
     public let downloadPolicy: DownloadPolicy
 
-    public init(id: PageID, initialURL: URL?, context: BrowsingContext, downloadPolicy: DownloadPolicy = .default) {
+    public init(id: PageID, initialURL: URL?, context: BrowsingContext, downloadPolicy: DownloadPolicy = .default, muted: Bool = false) {
         self.id = id
         self.initialURL = initialURL
         self.context = context
         self.downloadPolicy = downloadPolicy
+        self.muted = muted
     }
 }
 
@@ -124,6 +126,7 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case committed(URL)
     case titleChanged(String)
     case faviconChanged(URL?)
+    case audioChanged(Bool)
     case loadingChanged(isLoading: Bool, canGoBack: Bool, canGoForward: Bool)
     case loadFailed(code: Int, description: String, url: String)
     /// The renderer process crashed or was killed. The page object stays; see `PageAction.recover`.
@@ -184,13 +187,15 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var browserID: Int?
     /// The window number of the CEF-owned host window, which must never be key.
     public var hostWindowNumber: Int?
+    public var audioMuted: Bool? = nil
     public var hasKeyboardFocus: Bool
 
-    public init(surfaceFrame: CGRect?, embeddedViews: [String], browserID: Int?, hostWindowNumber: Int?, hasKeyboardFocus: Bool) {
+    public init(surfaceFrame: CGRect?, embeddedViews: [String], browserID: Int?, hostWindowNumber: Int?, hasKeyboardFocus: Bool, audioMuted: Bool? = nil) {
         self.surfaceFrame = surfaceFrame
         self.embeddedViews = embeddedViews
         self.browserID = browserID
         self.hostWindowNumber = hostWindowNumber
         self.hasKeyboardFocus = hasKeyboardFocus
+        self.audioMuted = audioMuted
     }
 }

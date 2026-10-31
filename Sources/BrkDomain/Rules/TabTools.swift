@@ -1,0 +1,246 @@
+import BrkBase
+import Foundation
+
+extension AppState {
+    func folderIsExpanded(_ id: ItemID, in window: WindowID) -> Bool {
+        if let value = doc.windows[window]?.folderExpansion[id] { return value }
+        guard let tree = tree(of: window), case .folder(let f)? = tree[id]?.body else { return false }
+        return !f.collapsed
+    }
+    func visibleUnits(in window: WindowID, space: SpaceID) -> [ItemID] {
+        guard let tree = tree(of: window), let s = doc.spaces[space] else { return [] }
+        func walk(_ root: ItemID) -> [ItemID] {
+            (tree[root]?.children ?? []).flatMap { child -> [ItemID] in
+                switch tree[child]?.body {
+                case .folder?: return folderIsExpanded(child, in: window) ? walk(child) : []
+                case .tab?, .split?: return [child]
+                default: return []
+                }
+            }
+        }
+        return (favoritesRoot(for: s).map(walk) ?? []) + (s.pinnedCollapsed ? [] : walk(s.pinnedRoot)) + walk(s.todayRoot)
+    }
+    func visibleRows(in window: WindowID) -> [ItemID] {
+        guard let w = doc.windows[window], let tree = tree(of: window), let s = doc.spaces[w.space] else { return [] }
+        func walk(_ root: ItemID) -> [ItemID] {
+            (tree[root]?.children ?? []).flatMap { child -> [ItemID] in
+                if tree[child]?.kind == .folder, folderIsExpanded(child, in: window) { return [child] + walk(child) }
+                return [child]
+            }
+        }
+        if w.kind != .standard { return tree.root(for: .scratch(window)).map(walk) ?? [] }
+        return (s.pinnedCollapsed ? [] : walk(s.pinnedRoot)) + walk(s.todayRoot)
+    }
+}
+
+extension Work {
+    mutating func toast(_ text: String, in window: WindowID) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(4)))
+    }
+    mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {
+        guard let tree = state.tree(of: window), tree[id] != nil else { return }
+        var parent = tree[id]?.parent
+        while let p = parent {
+            if tree[p]?.kind == .folder { state.doc.windows[window]?.folderExpansion[p] = true }
+            parent = tree[p]?.parent
+        }
+        if let space = tree.role(of: id)?.space { state.doc.spaces[space]?.pinnedCollapsed = false }
+        state.session.windows[window]?.revealItem = tree.splitContaining(id) ?? id
+        state.session.windows[window]?.revealGeneration &+= 1
+        state.session.windows[window]?.sidebarFocused = focusSidebar
+        peekIfHidden(window)
+    }
+    mutating func tabTools(_ command: TabToolsCommand, in window: WindowID) {
+        guard let w = state.doc.windows[window], let tree = state.tree(of: window) else { return }
+        switch command {
+        case .site(let command): siteTools(command, in: window)
+        case .resetPinned:
+            guard w.kind == .standard, let root = state.doc.spaces[w.space]?.pinnedRoot else { return }
+            for tab in tree.tabs(under: root) {
+                guard let home = state.tab(tab)?.pinnedURL else { continue }
+                let page = PageID(window: window, item: tab)
+                if state.session.loaded.contains(page) { request(home, for: page) }
+                else { state.doc.windows[window]?.slots[tab] = SavedSlot(committedURL: home, observedTitle: nil) }
+            }
+            toast("Pinned tabs reset", in: window)
+        case .cycleLinear(let step):
+            let order = state.units(in: window)
+            guard !order.isEmpty else { return }
+            let at = state.shownItem(in: window).flatMap { order.firstIndex(of: $0) }
+            let index = at.map { ($0 + (step == .next ? 1 : -1) + order.count) % order.count } ?? (step == .next ? 0 : order.count - 1)
+            focus(order[index], in: window)
+            state.session.windows[window]?.sidebarFocused = false
+        case .jumpItem(let n):
+            guard (1...9).contains(n) else { return }
+            var order = state.units(in: window)
+            if !state.doc.tabPreferences.includeFavoritesInNumbers { order.removeAll { state.role(of: $0)?.kind == .favorites } }
+            let index = n == 9 ? order.count - 1 : n - 1
+            guard order.indices.contains(index) else { return }
+            focus(order[index], in: window)
+            state.session.windows[window]?.sidebarFocused = false
+        case .jumpSpace(let n):
+            guard w.kind == .standard, (1...9).contains(n), state.doc.spaceOrder.indices.contains(n - 1) else { return }
+            showSpace(state.doc.spaceOrder[n - 1], in: window)
+        case .select(let id, let gesture):
+            let rows = state.visibleRows(in: window)
+            guard rows.contains(id) else { return }
+            var selection = state.session.windows[window]?.tabSelection ?? TabSelection()
+            switch gesture {
+            case .replace: selection = TabSelection(items: [id], anchor: id)
+            case .toggle:
+                if selection.items.contains(id) { selection.items.removeAll { $0 == id } } else { selection.items.append(id) }
+                selection.anchor = id
+            case .range:
+                if let anchor = selection.anchor, let a = rows.firstIndex(of: anchor), let b = rows.firstIndex(of: id) {
+                    selection.items = Array(rows[min(a, b)...max(a, b)])
+                } else { selection = TabSelection(items: [id], anchor: id) }
+            }
+            state.session.windows[window]?.tabSelection = selection
+        case .bulk(let targets, let action): bulkTabs(targets, action, in: window)
+        case .reveal:
+            if let id = state.focusedPane(in: window) { reveal(id, in: window, focusSidebar: true) }
+        case .sidebarStep(let step):
+            let rows = state.visibleRows(in: window)
+            guard !rows.isEmpty else { return }
+            let at = state.session.windows[window]?.revealItem.flatMap { rows.firstIndex(of: $0) } ?? 0
+            let next = rows[min(max(at + (step == .next ? 1 : -1), 0), rows.count - 1)]
+            state.session.windows[window]?.revealItem = next
+            state.session.windows[window]?.revealGeneration &+= 1
+            if tree[next]?.kind != .folder { focus(next, in: window) }
+            state.session.windows[window]?.sidebarFocused = true
+        case .leaveSidebar: state.session.windows[window]?.sidebarFocused = false
+        case .folders(let expanded):
+            guard w.kind == .standard, let s = state.doc.spaces[w.space] else { return }
+            for (id, item) in tree.items where item.kind == .folder && tree.role(of: id)?.space == s.id {
+                state.doc.windows[window]?.folderExpansion[id] = expanded
+            }
+            if expanded { state.doc.spaces[s.id]?.pinnedCollapsed = false }
+        case .cancelRecent:
+            suppressActivityStamp = true
+            guard let cycle = state.session.windows[window]?.recentCycle else { return }
+            state.session.windows[window]?.recentCycle = nil
+            if let original = cycle.original { focus(original, in: window) }
+            else { select(nil, in: window, space: w.space) }
+        case .chooseIcon(let id):
+            guard tree[id] != nil, tree[id]?.kind != .section else { return }
+            effects.append(.iconPicker(window, id))
+        case .iconPickerClosed: break
+        case .mute(let ref):
+            guard let id = state.resolveTab(ref, in: window), let scope = state.locate(id), let t = state.tab(id) else { return }
+            let muted = !t.muted
+            state.withTree(scope) { $0.updateTab(id) { $0.muted = muted } }
+        case .dismissToast: state.session.windows[window]?.toast = nil
+        case .dismissArchiveEducation:
+            if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
+        case .preferences(let favorites, let previews):
+            guard w.kind == .standard else { return }
+            state.doc.tabPreferences.includeFavoritesInNumbers = favorites
+            state.doc.tabPreferences.hoverPreviews = previews
+        }
+    }
+
+    private mutating func bulkTabs(_ target: TabTargets, _ action: BulkTabAction, in window: WindowID) {
+        guard let w = state.doc.windows[window], let tree = state.tree(of: window) else { return }
+        let requested: [ItemID]
+        switch target {
+        case .items(let ids): requested = ids
+        case .selected:
+            requested = state.session.windows[window]?.tabSelection.items.isEmpty == false
+                ? state.session.windows[window]!.tabSelection.items : state.shownItem(in: window).map { [$0] } ?? []
+        case .other(let id):
+            requested = tree[id]?.parent.flatMap { tree[$0]?.children.filter { $0 != id } } ?? []
+        case .below(let id):
+            let siblings = tree[id]?.parent.flatMap { tree[$0]?.children } ?? []
+            requested = siblings.firstIndex(of: id).map { Array(siblings.dropFirst($0 + 1)) } ?? []
+        }
+        guard !requested.isEmpty, Set(requested).count == requested.count,
+              requested.allSatisfy({ tree[$0] != nil && tree[$0]?.kind != .section }) else { return }
+        func walk(_ id: ItemID) -> [ItemID] { [id] + (tree[id]?.children ?? []).flatMap(walk) }
+        let roots = tree.items.values.filter { $0.parent == nil }.map(\.id).sorted()
+        let order = roots.flatMap(walk)
+        let ids = requested.filter { id in !requested.contains { $0 != id && tree.isDescendant(id, of: $0) } }
+            .sorted { (order.firstIndex(of: $0) ?? Int.max) < (order.firstIndex(of: $1) ?? Int.max) }
+        var draft = self
+        switch action {
+        case .archive:
+            guard ids.allSatisfy({ state.detached($0, in: window)?.isValid() == true }) else {
+                toast("The selection exceeds the saved archive limits. No items were archived.", in: window)
+                return
+            }
+            draft.archiveTabs(ids, reason: .manual, in: window)
+        case .close:
+            for id in ids {
+                if tree[id]?.kind == .tab { draft.closeTab(id, in: window) }
+                else if tree.role(of: id)?.kind == .pinned {
+                    for tab in tree.tabs(under: id) { draft.unload(tab); draft.replaceShown(tab) }
+                } else { draft.archiveTabs([id], reason: .manual, in: window) }
+            }
+        case .duplicate(let destination):
+            var copies: [ItemID] = []
+            for (offset, id) in ids.enumerated() {
+                guard let node = state.detached(id, in: window), let parent = tree[id]?.parent else { return }
+                let position: TreePosition
+                if let destination { guard let p = bulkPosition(destination, offset: offset, source: id, in: window) else { return }; position = p }
+                else { position = .after(id) }
+                var result: (root: ItemID, tabs: [(ItemID, Tab)])?
+                do {
+                    try draft.state.withTreeThrowing(w.container) { t in
+                        result = try t.insertArchived(node, at: position, now: ctx.now, freshIDs: true, newID: ctx.newID)
+                    }
+                } catch { return }
+                guard let result, tree[parent] != nil else { return }
+                for (tab, value) in result.tabs { draft.state.doc.windows[window]?.slots[tab] = SavedSlot(committedURL: value.url, observedTitle: value.title, favicon: value.favicon) }
+                copies.append(result.root)
+            }
+            if let first = copies.first { draft.focus(first, in: window) }
+        case .move(let destination):
+            var positions: [(ItemID, ItemID, Int)] = []
+            for (offset, id) in ids.enumerated() {
+                guard case .into(let parent, let index)? = bulkPosition(destination, offset: offset, source: id, in: window),
+                      !ids.contains(parent), !ids.contains(where: { tree.isDescendant(parent, of: $0) }) else { return }
+                positions.append((id, parent, index))
+            }
+            // Stage selected roots at the end first, so destination indices count the unselected siblings.
+            for (id, parent, _) in positions { guard draft.moveItem(id, to: .into(parent: parent, index: Int.max)) else { return } }
+            for (id, parent, index) in positions {
+                guard draft.moveItem(id, to: .into(parent: parent, index: index)) else { return }
+                if draft.state.role(of: id)?.kind == .pinned || draft.state.role(of: id)?.kind == .favorites { draft.setPinnedAddresses(under: id, in: window) }
+            }
+        case .newFolder(let group):
+            guard w.kind == .standard, let space = state.doc.spaces[w.space] else { return }
+            let folder = ItemID(ctx.newID())
+            var payload = Folder(title: group ? "New Group" : "New Folder", collapsed: false)
+            payload.isGroup = group
+            do { try draft.state.doc.tree.insert(folder, .folder(payload), at: .into(parent: space.pinnedRoot, index: 0), createdAt: ctx.now) } catch { return }
+            for id in ids {
+                guard draft.moveItem(id, to: .into(parent: folder, index: Int.max)) else { return }
+                draft.setPinnedAddresses(under: id, in: window)
+            }
+            draft.state.session.windows[window]?.renaming = folder
+            draft.reveal(folder, in: window)
+        }
+        draft.state.session.windows[window]?.tabSelection = TabSelection()
+        draft.toast("Updated \(ids.count) item\(ids.count == 1 ? "" : "s")", in: window)
+        self = draft
+    }
+
+    private func bulkPosition(_ destination: Destination, offset: Int, source: ItemID, in window: WindowID) -> TreePosition? {
+        switch destination {
+        case .into(let parent, let index):
+            guard state.tree(of: window)?[parent] != nil else { return nil }
+            return .into(parent: parent, index: index > Int.max - offset ? Int.max : index + offset)
+        case .space(let target):
+            guard state.doc.windows[window]?.kind == .standard, let space = state.doc.spaces[target] else { return nil }
+            return .into(parent: state.role(of: source)?.kind == .pinned ? space.pinnedRoot : space.todayRoot, index: offset)
+        }
+    }
+}
+
+extension AppState {
+    mutating func withTreeThrowing(_ scope: ContainerScope, _ body: (inout SidebarTree) throws -> Void) rethrows {
+        switch scope {
+        case .global: try body(&doc.tree)
+        case .window(let id): if session.scratch[id] != nil { try body(&session.scratch[id]!) }
+        }
+    }
+}

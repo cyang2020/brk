@@ -31,6 +31,7 @@ public enum Command: Hashable, Sendable, Codable {
     case commandBar(CommandBarCommand)
     case archive(ArchiveCommand)
     case tab(TabCommand)
+    case tabTools(TabToolsCommand)
     case page(PageCommand)
     case item(ItemCommand)
     case space(SpaceCommand)
@@ -381,6 +382,7 @@ public enum SystemEvent: Sendable, Equatable {
     case contextDisposed(ContextDisposalResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
+    case siteResult(String, SiteOutcome)
     case window(WindowID, WindowEvent)
     /// A link from another app (Apple Event GetURL, BrkApp/Lifecycle.swift). Routed by `Doc.linkRoutes`, else
     /// `LinkSettings.defaultRoute` and `externalLinksInLittleArc`. F3.
@@ -409,7 +411,7 @@ extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
         switch self {
-        case .commandBar, .sidebar(.peek), .sidebar(.resize): true
+        case .tabTools(.dismissToast), .commandBar, .sidebar(.peek), .sidebar(.resize): true
         default: false
         }
     }
@@ -418,7 +420,7 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
+        case .tabTools(.dismissToast), .library, .archive, .settings, .sidebar(.peek), .sidebar(.resize): true
         default: false
         }
     }
@@ -428,7 +430,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
+        case .tabTools(.dismissToast), .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
         default: false
         }
     }

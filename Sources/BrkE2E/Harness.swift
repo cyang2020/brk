@@ -176,6 +176,7 @@ final class AppUnderTest {
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_START_URL"] = site.url("index.html").absoluteString
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
+        if scenarioID.hasPrefix("TabTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)

@@ -11,7 +11,7 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case globe, chevronDown, chevronRight
+    case globe, chevronDown, chevronRight, speaker, speakerMuted
 
     var symbol: String {
         switch self {
@@ -29,6 +29,8 @@ enum Glyph {
         case .globe: "globe"
         case .chevronDown: "chevron.down"
         case .chevronRight: "chevron.right"
+        case .speaker: "speaker.wave.2.fill"
+        case .speakerMuted: "speaker.slash.fill"
         }
     }
 
@@ -45,28 +47,7 @@ func symbolImage(_ name: String, size: Double, weight: NSFont.Weight = .medium) 
 }
 
 /// Arc's built-in icon names (`SidebarIconType`) drawn with the nearest SF Symbol.
-extension NamedIcon {
-    var symbol: String {
-        switch self {
-        case .star: "star.fill"
-        case .bookmark: "bookmark.fill"
-        case .heart: "heart.fill"
-        case .flag: "flag.fill"
-        case .folder: "folder.fill"
-        case .calendar: "calendar"
-        case .mail: "envelope.fill"
-        case .terminal: "terminal.fill"
-        case .egg: "oval.portrait.fill"
-        case .home: "house.fill"
-        case .briefcase: "briefcase.fill"
-        case .book: "book.fill"
-        case .camera: "camera.fill"
-        case .music: "music.note"
-        case .globe: "globe"
-        case .code: "chevron.left.forwardslash.chevron.right"
-        }
-    }
-}
+extension NamedIcon { var symbol: String { systemSymbolName } }
 
 /// What an icon slot shows.
 enum IconContent: Equatable {

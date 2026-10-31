@@ -18,6 +18,11 @@ enum CommandInventory {
         .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.clear),
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
         .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday),
+        .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
+        .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
+        .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
+        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
+        .tabTools(.preferences(includeFavorites: true, previews: false)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
@@ -52,7 +57,7 @@ enum CommandInventory {
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closed),
         .download(DownloadUpdate(id: download, owner: DownloadOwner(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), context: ContextEpoch(context: .profile(profile), generation: 1), policy: .default), details: DownloadDetails(url: example, suggestedName: "x.zip"), revision: 1, stage: .choosingDestination)),
         .contextDisposed(.completed(DisposalID("ghost"), .profile(profile), .deletionScheduledForNextLaunch)),
-        .clockTick,
+        .siteResult("ghost", .cancelled), .clockTick,
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
@@ -64,6 +69,7 @@ enum CommandInventory {
         case .commandBar: "commandBar"
         case .archive: "archive"
         case .tab: "tab"
+        case .tabTools: "tabTools"
         case .page: "page"
         case .item: "item"
         case .space: "space"
@@ -100,6 +106,27 @@ enum CommandInventory {
             case .togglePin: "togglePin"
             case .reset: "reset"
             case .clearToday: "clearToday"
+            }
+        case .tabTools(let c):
+            switch c {
+            case .site: "site"
+            case .resetPinned: "resetPinned"
+            case .cycleLinear: "cycleLinear"
+            case .jumpItem: "jumpItem"
+            case .jumpSpace: "jumpSpace"
+            case .select: "select"
+            case .bulk: "bulk"
+            case .reveal: "reveal"
+            case .sidebarStep: "sidebarStep"
+            case .leaveSidebar: "leaveSidebar"
+            case .folders: "folders"
+            case .cancelRecent: "cancelRecent"
+            case .chooseIcon: "chooseIcon"
+            case .iconPickerClosed: "iconPickerClosed"
+            case .mute: "mute"
+            case .dismissToast: "dismissToast"
+            case .dismissArchiveEducation: "dismissArchiveEducation"
+            case .preferences: "preferences"
             }
         case .page(let c):
             switch c {
@@ -208,6 +235,7 @@ enum CommandInventory {
             case .committed: "page.committed"
             case .titleChanged: "page.titleChanged"
             case .faviconChanged: "page.faviconChanged"
+            case .audioChanged: "page.audioChanged"
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"
             case .rendererGone: "page.rendererGone"
@@ -218,6 +246,7 @@ enum CommandInventory {
             }
         case .download: "download"
         case .contextDisposed: "contextDisposed"
+        case .siteResult: "siteResult"
         case .clockTick: "clockTick"
         case .window(_, let e):
             switch e {
