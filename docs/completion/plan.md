@@ -85,3 +85,7 @@ The parent accepted all seven split rows after review repairs and combined nativ
 ## Handoff
 
 The parent paused on 2026-10-31 with main at `a485d69`. [The handoff](handoff-20261031.md) records the current build and native results, the five open native failures, the stale ledger counts that still need reconciliation, every remaining feature group, the blocked Arc reference gate, open branches and the exact commands and rules for continuing.
+
+## Ledger reconciliation
+
+On 2026-10-31 the parent reconciled the 61 unmerged batch-proposal rows with main-source evidence: the 735-test build and the 129-scenario combined native run at `a485d69`, plus parent inspection of the combined-run captures. [The reconciliation record](../../verify/completion/ledger-reconciliation-20261031/REPORT.md) lists every decision. The inventory now reads 30 verified, 50 implemented, 43 partial, 19 missing, 3 excluded, 2 deferred, 1 blocked. A042 stays partial on the parent review's restart-evidence finding; A048 drops to implemented while T13 fails on main. These counts describe acceptance and evidence, not effort.
