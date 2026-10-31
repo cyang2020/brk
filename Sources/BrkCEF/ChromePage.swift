@@ -21,7 +21,7 @@ final class ChromePage: CefBrowserDelegate {
     private let contextMenu = PageContextMenu()
     private(set) lazy var linkPreviews = PageLinkPreviews(browser: browser, surface: surface, available: { [weak self] in
         guard let self else { return false }
-        return self.engine.isLive(self) && self.surface.window?.isVisible == true && !self.surface.isHiddenOrHasHiddenAncestor
+        return self.engine.isLive(self) && self.surface.window?.isVisible == true && self.surface.window?.attachedSheet == nil && !self.surface.isHiddenOrHasHiddenAncestor
     }, summarize: { [weak self] request, reply in
         guard let self, self.engine.isLive(self), self.readyDocument == request.document else { reply(nil); return }
         self.engine.delegate?.engine(self.engine, summarizeLink: request, reply: reply)

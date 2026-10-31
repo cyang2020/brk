@@ -11,6 +11,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private let available: () -> Bool
     private let summarize: (LinkPreviewRequest, @escaping @MainActor (String?) -> Void) -> Void
     private var enabled = true
+    private var suspended = false
     private var document: DocumentToken?
     private var session: CefDevTools?
     private var poll: Task<Void, Never>?
@@ -60,13 +61,23 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private func start(_ document: DocumentToken) {
         guard poll == nil, let transport = CefDevTools(browser: browser) else { return }
         session = transport
-        activityObservers = [NSWindow.didResignKeyNotification, NSApplication.didResignActiveNotification].map { name in
+        activityObservers = [NSWindow.didResignKeyNotification, NSWindow.didBecomeKeyNotification, NSApplication.didResignActiveNotification, NSApplication.didBecomeActiveNotification].map { name in
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                 let owner = (note.object as? NSWindow).map { ObjectIdentifier($0) }
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    if name == NSWindow.didResignKeyNotification, owner != self.surface?.window.map({ ObjectIdentifier($0) }) { return }
+                    let ownWindow = self.surface?.window.map { ObjectIdentifier($0) }
+                    if name == NSWindow.didBecomeKeyNotification {
+                        if owner == ownWindow { self.suspended = false }
+                        return
+                    }
+                    if name == NSApplication.didBecomeActiveNotification {
+                        if self.surface?.window?.isKeyWindow == true { self.suspended = false }
+                        return
+                    }
+                    if name == NSWindow.didResignKeyNotification, owner != ownWindow { return }
                     if name == NSWindow.didResignKeyNotification, self.pointerInCard() { return }
+                    self.suspended = true
                     self.dismissed = self.current; self.fetch?.cancel(); self.closeCard()
                 }
             }
@@ -79,7 +90,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                 while !Task.isCancelled, self.document == document, self.enabled {
                     if ticks % 12 == 0 { try await self.refreshFrames() }
                     ticks += 1
-                    if self.available() {
+                    if self.suspended, self.surface?.window?.isKeyWindow == true { self.suspended = false }
+                    if self.available(), !self.suspended {
                         var candidate: (FrameWorld, [String: Any])?
                         for frame in self.frameWorlds {
                             if let value = try? await self.evaluate("globalThis.__brkPreview.read()", context: frame.context) as? [String: Any], value["href"] is String {
@@ -95,7 +107,11 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                         } else if !self.pointerInCard() {
                             self.fetch?.cancel(); self.fetch = nil; self.current = nil; self.dismissed = nil; self.closeCard()
                         }
-                    } else { self.fetch?.cancel(); self.current = nil; self.closeCard() }
+                    } else {
+                        self.fetch?.cancel()
+                        if let current = self.current { self.dismissed = current }
+                        self.current = nil; self.closeCard()
+                    }
                     try await Task.sleep(for: .milliseconds(150))
                 }
             } catch { if self.document == document { self.lastFailure = String(describing: error); self.closeCard() } }
@@ -222,18 +238,19 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private static let tracker = #"""
     (() => {
       if(globalThis.__brkPreview) return;
-      let candidate=null,since=0,suppressed=null;
-      const clear=()=>{candidate=null;since=0};
+      let candidate=null,since=0,suppressed=null,lastHref='';
+      const clear=()=>{candidate=null;since=0;lastHref=''};
       addEventListener('pointerover',e=>{
         const a=e.composedPath().find(n=>n instanceof HTMLAnchorElement);
-        if(a!==candidate){candidate=a||null;since=performance.now();suppressed=null;}
+        if(a!==candidate){candidate=a||null;since=performance.now();suppressed=null;lastHref=a?.href||'';}
       },true);
       addEventListener('pointerout',e=>{if(!e.relatedTarget||!candidate?.contains(e.relatedTarget))clear()},true);
       addEventListener('pointerdown',clear,true);addEventListener('scroll',clear,true);
       addEventListener('keydown',e=>{if(e.key==='Escape'){suppressed=candidate;clear()}},true);
       globalThis.__brkPreview={read(){
         if(!candidate?.isConnected)clear();
-        if(!candidate){const a=document.querySelector('a:hover');if(a&&a!==suppressed){candidate=a;since=performance.now()}}
+        if(!candidate){const a=document.querySelector('a:hover');if(a&&a!==suppressed){candidate=a;since=performance.now();lastHref=a.href}}
+        if(candidate&&candidate.href!==lastHref){lastHref=candidate.href;since=performance.now()}
         if(!candidate?.isConnected||candidate===suppressed||performance.now()-since<650||document.hidden)return null;
         const r=candidate.getBoundingClientRect();return {href:candidate.href,text:candidate.textContent.trim(),x:r.x,y:r.y,w:r.width,h:r.height};
       }};

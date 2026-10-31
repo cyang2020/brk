@@ -162,6 +162,10 @@ enum SidebarToolsScenarios {
         try app.waitUntil("isolated hover observer") { try (app.native().pages[id]?.linkPreviewFrameCount ?? 0) > 0 }
         let frame = try app.native().pages[id]!.surfaceFrame!
         let point = CGPoint(x: frame.minX + 100, y: frame.minY + 100)
+        let before = app.site.requestCount("/sidebar-preview-target")
+        try app.hover(point); app.sleep(0.2)
+        try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); app.sleep(0.7)
+        try expect(app.site.requestCount("/sidebar-preview-target") == before, "brief hover fetched a preview")
         try app.hover(point)
         try app.waitUntil("fetched \(label) preview in originating cookie context", timeout: 12) { try app.native().pages[id]?.linkPreviewTitle == "\(label) preview destination" }
         return id
@@ -173,8 +177,8 @@ enum SidebarToolsScenarios {
         try app.press("escape")
         try app.waitUntil("Escape dismisses preview") { try app.native().pages[publicPage]?.linkPreviewTitle == nil }
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: false)))
-        try app.hover(CGPoint(x: 40, y: 200))
         let frame = try app.native().pages[publicPage]!.surfaceFrame!
+        try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10))
         try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100)); app.sleep(1)
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "disabled previews still appeared")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
@@ -184,7 +188,7 @@ enum SidebarToolsScenarios {
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)
         try app.evaluate(publicPage, "document.body.innerHTML=\(literal)")
         try app.waitUntil("isolated iframe hover world") { try (app.native().pages[publicPage]?.linkPreviewFrameCount ?? 0) > 1 }
-        try app.hover(CGPoint(x: 30, y: 200)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
+        try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
         try app.waitUntil("fetched iframe link preview") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" }
         _ = try app.panelScreenshot("iframe-link-card")
         try app.dispatch(.window(.newIncognito))
@@ -196,8 +200,11 @@ enum SidebarToolsScenarios {
         app.window = publicPage.window
         _ = try app.send(.activate(window: publicPage.window))
         // Re-enter in the public window after the private epoch has been revoked.
-        try app.hover(CGPoint(x: 30, y: 200)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
+        try app.hover(CGPoint(x: frame.minX + 10, y: frame.minY + 10)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
         try app.waitUntil("public cookies remain separate") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" }
+        try app.dispatch(.commandBar(.open(.editCurrent))); try app.dispatch(.commandBar(.submit(app.site.url("page2.html").absoluteString)))
+        try app.waitForPageInput(publicPage, at: app.site.url("page2.html"))
+        try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "navigation retained stale preview metadata")
     }
     @Sendable static func crash(_ app: AppUnderTest) throws {
         let item = try currentTab(app.view())!.id, url = app.site.url("index.html")
