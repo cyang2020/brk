@@ -402,11 +402,18 @@ final class AppUnderTest {
     /// Fixture setup must finish before synthetic page input. A load command or title alone is not a ready document.
     func waitForPageInput(_ page: PageID, at url: URL) throws {
         _ = try send(.activate(window: page.window))
-        try waitUntil("ready document and native focus for \(page)") {
-            guard case .pageObservations(let values) = try send(.pageObservations),
-                  let state = values[page], case .ready = state.document, state.committedURL == url else { return false }
-            let facts = try native(page.window)
-            return facts.focusedPage == page && facts.pages[page]?.hasKeyboardFocus == true
+        do {
+            try waitUntil("ready document and native focus for \(page)") {
+                guard case .pageObservations(let values) = try send(.pageObservations),
+                      let state = values[page], case .ready = state.document, state.committedURL == url else { return false }
+                let facts = try native(page.window)
+                return facts.focusedPage == page && facts.pages[page]?.hasKeyboardFocus == true
+            }
+        } catch {
+            // Say what held focus instead, so a timeout here can be attributed without a rerun.
+            let facts = try? native(page.window)
+            let keyWindows = facts?.appWindows.filter(\.isKey).map { "\($0.number) (\($0.className))" }.joined(separator: ", ") ?? "?"
+            throw Check(description: "\(error): focusedPage=\(facts?.focusedPage.map { "\($0)" } ?? "nil") firstResponder=\(facts?.firstResponder ?? "nil") keyWindows=[\(keyWindows)] documentReady=\((try? send(.pageObservations)).map { if case .pageObservations(let v) = $0, case .ready? = v[page]?.document { return true } else { return false } } ?? false)")
         }
     }
 
