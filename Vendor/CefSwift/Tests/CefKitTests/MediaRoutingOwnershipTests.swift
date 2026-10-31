@@ -104,11 +104,21 @@ import Testing
         callback.pointee.on_media_route_create_finished?(callback, CEF_MRCR_OK, nil, owned)
         cefRelease(UnsafeMutableRawPointer(callback)); native.callback = nil
         let observer = native.observer!
+        cefAddRef(UnsafeMutableRawPointer(observer))
+        defer { cefRelease(UnsafeMutableRawPointer(observer)) }
         cefAddRef(UnsafeMutableRawPointer(owned)); cefAddRef(UnsafeMutableRawPointer(foreign))
         let routes: [UnsafeMutablePointer<cef_media_route_t>?] = [owned, foreign]
         routes.withUnsafeBufferPointer { observer.pointee.on_routes?(observer, routes.count, $0.baseAddress) }
+        #expect(router.hasPendingRoutes, "An active route owns its source until actual termination")
         router.stop(); router.stop()
         #expect(native.terminations == ["owned"])
+        #expect(router.hasPendingRoutes, "Terminate is a request, not a completion callback")
+        cefAddRef(UnsafeMutableRawPointer(owned))
+        observer.pointee.on_route_state_changed?(observer, owned, CEF_MRCS_CLOSED)
+        #expect(router.hasPendingRoutes, "Connection closure does not prove receiver termination")
+        cefAddRef(UnsafeMutableRawPointer(owned))
+        observer.pointee.on_route_state_changed?(observer, owned, CEF_MRCS_TERMINATED)
+        #expect(!router.hasPendingRoutes)
         cefRelease(UnsafeMutableRawPointer(owned)); cefRelease(UnsafeMutableRawPointer(foreign))
         cefRelease(UnsafeMutableRawPointer(sink))
     }
@@ -117,11 +127,17 @@ import Testing
         try Self.loadStrings()
         let native = Native(), router = Self.router(native)
         let sink = Self.installSink(native)
+        let observer = native.observer!
+        cefAddRef(UnsafeMutableRawPointer(observer))
+        defer { cefRelease(UnsafeMutableRawPointer(observer)) }
         router.connect(sourceURN: "cast:ABI-fixture", sinkID: "abi-sink"); router.stop()
         let owned = Self.route("late", native), callback = native.callback!
         cefAddRef(UnsafeMutableRawPointer(owned))
         callback.pointee.on_media_route_create_finished?(callback, CEF_MRCR_OK, nil, owned)
         #expect(native.terminations == ["late"])
+        #expect(router.hasPendingRoutes, "A late success still waits for native termination")
+        observer.pointee.on_routes?(observer, 0, nil)
+        #expect(!router.hasPendingRoutes)
         cefRelease(UnsafeMutableRawPointer(callback)); native.callback = nil
         cefRelease(UnsafeMutableRawPointer(owned))
         cefRelease(UnsafeMutableRawPointer(sink))

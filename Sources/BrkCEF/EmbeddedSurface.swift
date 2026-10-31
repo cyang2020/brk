@@ -21,6 +21,10 @@ final class EmbeddedSurface: PageSurfaceView {
     private var attempts = 0
     private var retired = false
     private var observedWindow: NSWindow?
+    var editableSelection = false
+    var editingMenuTransport: CefDevTools?
+    override var editingMenuResponder: NSResponder? { editingBrowser == nil ? nil : self }
+    override func prepareEditingMenu() async { await refreshEditingSupport() }
     private let log = Logger(subsystem: "brk", category: "embed")
     /// Called once Chromium's input view (`RenderWidgetHostViewCocoa`) exists inside the surface, so the page can
     /// take keyboard focus. The renderer creates it a little after the two views are embedded; a focus applied
@@ -89,6 +93,7 @@ final class EmbeddedSurface: PageSurfaceView {
 
     /// Hide an unpresented browser while its operations keep its borrowed views and host alive.
     func park() {
+        invalidateEditingMenu()
         onReadyForFocus = nil
         removeFromSuperview()
         chrome?.browser.setFocus(false)
@@ -100,6 +105,7 @@ final class EmbeddedSurface: PageSurfaceView {
     /// Gives the borrowed views back to where they came from and detaches the host window from ours. Idempotent;
     /// also stops a pending embed. Must run before the browser closes (shutdown phase 1, and every page close).
     func returnViews() {
+        invalidateEditingMenu()
         retired = true
         for (view, home) in borrowed {
             if let home {

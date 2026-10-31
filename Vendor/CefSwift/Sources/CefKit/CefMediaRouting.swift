@@ -13,13 +13,14 @@ import Foundation
     public private(set) var sourceSupported: Bool?
     public var onChange: (() -> Void)?
     public var onPendingChange: ((Bool) -> Void)?
-    public var hasPendingRoutes: Bool { pendingCreates > 0 }
+    public var hasPendingRoutes: Bool { pendingCreates > 0 || !ownedRoutes.isEmpty }
     public var ownedRouteCount: Int { ownedRoutes.count }
     private var raw: UnsafeMutablePointer<cef_media_router_t>?
     private var registration: UnsafeMutablePointer<cef_registration_t>?
     private var nativeSinks: [String: UnsafeMutablePointer<cef_media_sink_t>] = [:]
     private var nativeRoutes: [String: UnsafeMutablePointer<cef_media_route_t>] = [:]
     private var ownedRoutes: Set<String> = []
+    private var terminatingRoutes: Set<String> = []
     private var stopped = false
     private var pendingCreates = 0
     private final class Observer { weak var owner: CefMediaRouting?; init(_ owner: CefMediaRouting) { self.owner = owner } }
@@ -58,7 +59,7 @@ import Foundation
         observer.pointee.on_routes = { raw, count, pointers in
             let incoming = (0..<count).compactMap { pointers?[$0] }
             MainActor.assumeIsolated {
-                guard let owner = cefOwner(Observer.self, raw.map(UnsafeMutableRawPointer.init))?.owner, !owner.stopped else {
+                guard let owner = cefOwner(Observer.self, raw.map(UnsafeMutableRawPointer.init))?.owner else {
                     incoming.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; return
                 }
                 owner.nativeRoutes.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; owner.nativeRoutes.removeAll()
@@ -68,10 +69,23 @@ import Foundation
                     return id
                 }
                 owner.ownedRoutes.formIntersection(owner.routes)
+                owner.terminatingRoutes.formIntersection(owner.ownedRoutes)
                 owner.routeNotifications += 1; owner.onChange?()
+                owner.drainIfFinished()
             }
         }
-        observer.pointee.on_route_state_changed = { _, route, _ in cefRelease(route.map(UnsafeMutableRawPointer.init)) }
+        observer.pointee.on_route_state_changed = { raw, route, state in
+            defer { cefRelease(route.map(UnsafeMutableRawPointer.init)) }
+            MainActor.assumeIsolated {
+                guard state == CEF_MRCS_TERMINATED, let route,
+                      let owner = cefOwner(Observer.self, raw.map(UnsafeMutableRawPointer.init))?.owner else { return }
+                let id = CefStringUtil.takingUserFree(route.pointee.get_id?(route)) ?? ""
+                owner.ownedRoutes.remove(id); owner.terminatingRoutes.remove(id)
+                if let held = owner.nativeRoutes.removeValue(forKey: id) { cefRelease(UnsafeMutableRawPointer(held)) }
+                owner.routes.removeAll { $0 == id }
+                owner.onChange?(); owner.drainIfFinished()
+            }
+        }
         observer.pointee.on_route_message_received = { _, route, _, _ in cefRelease(route.map(UnsafeMutableRawPointer.init)) }
         if let add = raw.pointee.add_observer { registration = add(raw, observer) }
         else { cefRelease(UnsafeMutableRawPointer(observer)) }
@@ -125,16 +139,13 @@ import Foundation
                 }
                 creation.owner = nil
                 defer { owner.routeCreationDrained() }
-                guard !owner.stopped else {
-                    route?.pointee.terminate?(route)
-                    cefRelease(route.map(UnsafeMutableRawPointer.init)); return
-                }
                 owner.lastResult = Int(result.rawValue); owner.lastError = message.isEmpty ? nil : message
                 if let route {
                     let id = CefStringUtil.takingUserFree(route.pointee.get_id?(route)) ?? ""
                     owner.ownedRoutes.insert(id)
                     if let previous = owner.nativeRoutes.updateValue(route, forKey: id) { cefRelease(UnsafeMutableRawPointer(previous)) }
                 }
+                if owner.stopped { owner.terminateOwnedRoutes() }
                 owner.onChange?()
             }
         }
@@ -142,26 +153,34 @@ import Foundation
     }
 
     public func terminateOwnedRoutes() {
-        for id in ownedRoutes { if let route = nativeRoutes[id] { route.pointee.terminate?(route) } }
-        ownedRoutes.removeAll()
+        for id in ownedRoutes where !terminatingRoutes.contains(id) {
+            guard let route = nativeRoutes[id] else { continue }
+            terminatingRoutes.insert(id)
+            route.pointee.terminate?(route)
+        }
     }
 
     private func routeCreationDrained() {
         pendingCreates -= 1
-        if pendingCreates == 0 {
-            if stopped, let raw { self.raw = nil; cefRelease(UnsafeMutableRawPointer(raw)) }
-            onPendingChange?(false)
-            if stopped { onPendingChange = nil }
+        drainIfFinished()
+    }
+
+    private func drainIfFinished() {
+        guard !hasPendingRoutes else { return }
+        if stopped {
+            if let registration { self.registration = nil; cefRelease(UnsafeMutableRawPointer(registration)) }
+            nativeSinks.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; nativeSinks.removeAll()
+            nativeRoutes.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; nativeRoutes.removeAll()
+            if let raw { self.raw = nil; cefRelease(UnsafeMutableRawPointer(raw)) }
         }
+        onPendingChange?(false)
+        if stopped { onPendingChange = nil }
     }
 
     public func stop() {
         guard !stopped else { return }
         stopped = true; onChange = nil
         terminateOwnedRoutes()
-        if let registration { self.registration = nil; cefRelease(UnsafeMutableRawPointer(registration)) }
-        nativeSinks.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; nativeSinks.removeAll()
-        nativeRoutes.values.forEach { cefRelease(UnsafeMutableRawPointer($0)) }; nativeRoutes.removeAll()
-        if pendingCreates == 0, let raw { self.raw = nil; cefRelease(UnsafeMutableRawPointer(raw)); onPendingChange = nil }
+        drainIfFinished()
     }
 }

@@ -52,6 +52,7 @@ public final class CEFEngine: WebEngine {
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
     var wanted: [PageSpec] = []
+    private let reconciliation = PageReconciliation()
     var phase: ShutdownPhase = .running
     private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
@@ -208,6 +209,12 @@ public final class CEFEngine: WebEngine {
         guard phase == .running else { return }
         let pages = pages.filter { contexts.permitsWork($0.context) }
         self.wanted = pages
+        reconciliation.submit(pages) { self.applyDemand($0) }
+    }
+
+    private func applyDemand(_ pages: [PageSpec]) {
+        guard phase == .running else { return }
+        let pages = pages.filter { contexts.permitsWork($0.context) }
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.

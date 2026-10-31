@@ -25,6 +25,9 @@ import AppKit
     @objc private func began(_ note: Notification) {
         precondition(Thread.isMainThread)
         guard menu == nil, let current = note.object as? NSMenu else { return }
+        // Activating an embedded Chrome view can begin tracking the menu bar before the popup's notification.
+        // It is not the web menu we injected the right click to inspect.
+        guard current !== NSApp.mainMenu else { return }
         menu = current
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)

@@ -128,6 +128,10 @@ final class ControlExecutor {
             try data.write(to: URL(fileURLWithPath: path), options: .atomic)
             return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
         case .menuAction(let name):
+            if let window = try? controller(nil).window,
+               let page = (window as? any HostWindow).map({ type(of: $0).surface(containing: window.firstResponder) }) ?? nil {
+                await page.prepareEditingMenu()
+            }
             func find(_ menu: NSMenu) -> NSMenuItem? {
                 for item in menu.items {
                     if let sub = item.submenu, let found = find(sub) { return found }

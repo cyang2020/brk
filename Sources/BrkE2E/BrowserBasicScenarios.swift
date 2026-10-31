@@ -108,6 +108,9 @@ enum BrowserBasicScenarios {
     }
 
     @Sendable static func outputs(_ app: AppUnderTest) throws {
+        let port = try BrowserBasicInspection.unusedPort()
+        app.remoteDebuggingPort = port
+        try app.restart()
         let server = FixtureServer(root: app.site.root)
         try server.start(); defer { server.stop() }
         let source = server.url("browser-basic.html")
@@ -147,8 +150,14 @@ enum BrowserBasicScenarios {
               case .loaded(let item) = try app.send(.load(window: privateWindow, url: archive)) else { throw Check(description: "Offline private window missing") }
         let offline = PageID(window: privateWindow, item: item)
         try app.waitForPageInput(offline, at: archive)
-        try app.evaluate(offline, "document.title='offline:'+document.body.textContent.includes('Browser basic output fixture')+':'+document.querySelector('img').naturalWidth")
-        try waitTitle(app, offline, "offline:true:64")
+        // Chromium refuses the public ExecuteJavaScript API for MHTML. Read this actual archive target through
+        // the opt-in inspection port, as BB6 does, rather than waiting for a script that cannot execute.
+        let observed = try BrowserBasicInspection.evaluate(port: port, document: archive,
+            expression: "({url:location.href,text:document.body.innerText,imageWidth:document.querySelector('img')?.naturalWidth ?? -1})")
+        try observed.write(to: evidence.appendingPathComponent("offline-dom.json"))
+        let dom = try JSONSerialization.jsonObject(with: observed) as? [String: Any] ?? [:]
+        try expect(dom["url"] as? String == archive.absoluteString && (dom["text"] as? String)?.contains("Browser basic output fixture") == true && dom["imageWidth"] as? Int == 64,
+                   "Offline archive text/image differs: \(dom)")
         try expect(server.requestCount("/browser-basic.svg") == resourceRequests, "Offline reopen made a network image request")
         try app.screenshot("offline-mhtml", window: privateWindow)
         app.note("MHTML reopened with its fixture server stopped in a fresh private context: fixture text and image width 64. PDFKit parsed \(document.pageCount) page(s). Native print Cancel was observed; printer submission is a separate gate.")

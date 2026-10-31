@@ -121,8 +121,12 @@ enum BrowserOpsScenarios {
     @Sendable static func fullscreen(_ app: AppUnderTest) throws {
         let page = try load(app, "browser-basic.html?fullscreen")
         for video in [false, true] {
-            try clickedScript(app, page, "{let el=document.documentElement;\(video ? "el=document.createElement('video');el.controls=true;document.body.append(el);" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
+            try clickedScript(app, page, "{let el=document.documentElement;\(video ? "let canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;canvas.getContext('2d').fillRect(0,0,64,64);el=document.createElement('video');el.controls=true;el.muted=true;el.srcObject=canvas.captureStream(5);document.body.append(el);el.play();window.boVideo=el;" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
             try app.waitUntil("DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
+            if video {
+                try app.evaluate(page, "boVideo.play().then(()=>document.title='video-playing:'+(!boVideo.paused&&boVideo.readyState>=2))")
+                try app.waitUntil("actual captured video playback") { try title(app, page) == "video-playing:true" }
+            }
             try app.dispatch(.library(.open(.history)))
             try app.press("escape")
             try app.waitUntil("overlay closes before fullscreen") { try app.view().overlay == nil }

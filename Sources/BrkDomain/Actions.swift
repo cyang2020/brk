@@ -90,7 +90,7 @@ extension ActionID {
     public var unsupportedReason: String? {
         switch self {
         case .allowJavaScriptFromAppleEvents:
-            "JavaScript Apple Events are unavailable until Brk's authenticated scripting adapter is integrated. No inert permission switch is exposed."
+            "Brk's Apple Events scripting bridge is not integrated. Chromium's native permission alone cannot execute JavaScript on a Brk page."
         case .toggleDeveloperMode:
             "Arc's Developer Mode behavior has no verified Brk implementation. DevTools and element inspection are available separately."
         default: nil

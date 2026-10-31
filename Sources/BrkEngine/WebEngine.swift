@@ -151,6 +151,9 @@ open class PageSurfaceView: NSView {
     /// routes it before and after the page. True for a surface that consumes no keys (the stub), so app shortcuts
     /// work on it the way they do with a native view focused.
     open var routesKeysThroughWindow: Bool { false }
+    /// Extended Edit menu commands use the actual page adapter, rather than inherited no-op Cocoa selectors.
+    open var editingMenuResponder: NSResponder? { nil }
+    open func prepareEditingMenu() async {}
 }
 
 extension WebEngine {
