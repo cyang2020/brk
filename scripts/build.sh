@@ -4,6 +4,7 @@
 #
 #   scripts/build.sh            # release
 #   CONFIG=debug scripts/build.sh
+#   SKIP_TESTS=1 scripts/build.sh   # iteration build: compile, bundle and sign without the unit-test step
 #
 # Steps (each fails the script):
 # 1. Read the product name from Package.swift (the only place it is written) via `swift package dump-package`.
@@ -27,7 +28,11 @@ BUNDLE_ID="dev.$(echo "$PRODUCT" | tr '[:upper:]' '[:lower:]').${PRODUCT}"
 echo "[build] product $PRODUCT ($BUNDLE_ID), configuration $CONFIG"
 
 swift build -c "$CONFIG" --explicit-target-dependency-import-check error
-swift test
+if [ "${SKIP_TESTS:-0}" = "1" ]; then
+  echo "[build] SKIP_TESTS=1: unit tests not run; this bundle is for iteration, not delivery"
+else
+  swift test
+fi
 
 swift package --allow-writing-to-package-directory --allow-network-connections all \
   cef bundle --product "$PRODUCT" --configuration "$CONFIG" --bundle-id "$BUNDLE_ID" --sign -
@@ -36,7 +41,6 @@ APP="dist/$PRODUCT.app"
 # 5. Declare http and https in the bundle (CFBundleURLTypes; F3) after the plugin wrote Info.plist, then sign again,
 #    because the plugin signed before the edit.
 mkdir -p "$APP/Contents/Resources/BrkAudibility"
-cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website-rules.json"
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"
