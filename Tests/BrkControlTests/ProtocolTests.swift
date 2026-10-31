@@ -11,7 +11,7 @@ final class ProtocolTests: XCTestCase {
     /// One tag per `ControlOp` case. `tag(of:)` is an exhaustive switch over the op and `sample(_:)` one over the tags,
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
-        case hello, view, activate, native, dispatch, load, press, hold, type, click, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL
     }
 
@@ -27,6 +27,7 @@ final class ProtocolTests: XCTestCase {
         case .hold: .hold
         case .type: .type
         case .click: .click
+        case .captureContextMenu: .captureContextMenu
         case .hover: .hover
         case .screenshot: .screenshot
         case .pixel: .pixel
@@ -52,6 +53,7 @@ final class ProtocolTests: XCTestCase {
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
         case .activate: return [.activate(window: WindowID("w"))]
         case .native: return [.native(window: WindowID("w1"))]
+        case .captureContextMenu: return [.captureContextMenu(window: WindowID("w1"), point: CGPoint(x: 40, y: 60))]
         case .dispatch:
             return [.dispatch(window: nil, command: .space(.focus(SpaceID("s2")))),
                     .dispatch(window: WindowID("w1"), command: .space(.create(title: "Work", icon: .none, theme: .default))),
@@ -100,6 +102,7 @@ final class ProtocolTests: XCTestCase {
 
     func testRepliesRoundTrip() throws {
         let results: [ControlResult] = [
+            .menuItems(["Back", "Reload"]),
             .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
             .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),

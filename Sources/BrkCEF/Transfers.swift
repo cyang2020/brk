@@ -24,6 +24,7 @@ extension CefDownloadControl: TransferControl {}
         var cancelling = false
         var failure: String?
         var terminal: DownloadEnd?
+        var terminalPublished = false
         var files: TransferFiles?
         init(owner: DownloadOwner, sourceAvailable: @escaping () -> Bool) {
             self.owner = owner; self.sourceAvailable = sourceAvailable
@@ -42,6 +43,11 @@ extension CefDownloadControl: TransferControl {}
 
     var isEmpty: Bool { operations.isEmpty }
     func contains(context: BrowsingContext) -> Bool { operations.values.contains { $0.owner.context.context == context } }
+
+    private func installed(_ op: Operation) -> Bool {
+        guard let key = ids[op.id] else { return false }
+        return operations[key] === op
+    }
 
     private func operation(_ key: Key, owner: DownloadOwner, sourceAvailable: @escaping () -> Bool) -> Operation? {
         if let existing = operations[key] { return existing }
@@ -74,6 +80,7 @@ extension CefDownloadControl: TransferControl {}
         guard op.details != nil else { cancel(op.id); return }
         if item.isComplete || item.isCanceled || item.isInterrupted { terminal(item, key: key, op: op); return }
         emit(op)
+        guard installed(op), !op.cancelling, op.terminal == nil else { return }
         switch op.owner.policy {
         case .directory(let folder):
             accept(op, destination: folder.appendingPathComponent(op.details!.suggestedName), chooseUnused: true)
@@ -91,7 +98,9 @@ extension CefDownloadControl: TransferControl {}
         let key = Key(browser: owner.browser, native: item.id)
         if tombstones.contains(key) { control?.release(); return }
         guard let op = operation(key, owner: owner, sourceAvailable: available) else { control?.cancel(); control?.release(); return }
-        op.control?.release()
+        let oldControl = op.control; op.control = nil
+        oldControl?.release()
+        guard installed(op) else { control?.release(); return }
         op.control = control
         capture(item, in: op)
         if item.isComplete || item.isCanceled || item.isInterrupted {
@@ -115,7 +124,8 @@ extension CefDownloadControl: TransferControl {}
     }
 
     private func accept(_ op: Operation, destination: URL, chooseUnused: Bool) {
-        guard running, !revoked.contains(op.owner.context.context), op.sourceAvailable(), !op.cancelling else {
+        guard installed(op) else { return }
+        guard running, !revoked.contains(op.owner.context.context), op.sourceAvailable(), !op.cancelling, op.terminal == nil else {
             cancel(op.id); return
         }
         do {
@@ -135,6 +145,7 @@ extension CefDownloadControl: TransferControl {}
         guard let key = ids[id], let op = operations[key], op.terminal == nil, !op.cancelling else { return }
         op.cancelling = true
         emit(op)
+        guard installed(op) else { return }
         let decision = op.decision; op.decision = nil
         if let ticket = op.ticket { op.ticket = nil; dismiss(ticket) }
         decision?.resolve(nil)
@@ -182,7 +193,7 @@ extension CefDownloadControl: TransferControl {}
     }
 
     private func finish(_ key: Key, op: Operation, end: DownloadEnd) {
-        let alreadyReported = op.terminal != nil
+        guard operations[key] === op else { return }
         op.terminal = end
         // Set the tombstone before resolving/releasing callbacks, which may synchronously reenter.
         tombstones.insert(key)
@@ -190,13 +201,17 @@ extension CefDownloadControl: TransferControl {}
         if let ticket = op.ticket { op.ticket = nil; dismiss(ticket) }
         let decision = op.decision; op.decision = nil; decision?.resolve(nil)
         let control = op.control; op.control = nil; control?.release()
-        if !alreadyReported { emit(op) }
+        emit(op)
         release(op.id, key.browser)
     }
 
     func browserClosed(_ browser: BrowserToken) {
         for (key, op) in Array(operations) where key.browser == browser {
-            finish(key, op: op, end: op.terminal ?? .failed(reason: "Browser closed without a terminal download callback", op.files?.cleanup() ?? .absent))
+            if op.terminal == nil { cancel(op.id) }
+            // Mandatory native closure is not proof that a download writer has acknowledged termination.
+            // A synchronous terminal callback may have already finished this operation during cancel.
+            let recovery = op.files.map { PartialFile.retained($0.directory, reason: "Native termination was not acknowledged") } ?? .absent
+            finish(key, op: op, end: op.terminal ?? .failed(reason: "Browser closed without a terminal download callback", recovery))
         }
         tombstones = tombstones.filter { $0.browser != browser }
     }
@@ -213,6 +228,12 @@ extension CefDownloadControl: TransferControl {}
 
     private func emit(_ op: Operation) {
         guard let details = op.details else { return }
+        if op.terminal != nil {
+            guard !op.terminalPublished else { return }
+            op.terminalPublished = true
+        } else {
+            guard installed(op) else { return }
+        }
         op.revision += 1
         let stage: DownloadStage = if let end = op.terminal { .terminal(end) }
             else if op.cancelling { .cancelling(op.progress) }

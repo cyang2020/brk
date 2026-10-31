@@ -117,7 +117,13 @@ extension CefDownload {
 @MainActor public final class CefDownloadControl {
     nonisolated(unsafe) private var raw: UnsafeMutablePointer<cef_download_item_callback_t>?
     init(taking raw: UnsafeMutablePointer<cef_download_item_callback_t>) { self.raw = raw }
-    public func cancel() { if let raw { raw.pointee.cancel?(raw) } }
+    public func cancel() {
+        guard let raw else { return }
+        // A synchronous terminal callback may release the stored reference while cancel is still on the stack.
+        cefAddRef(UnsafeMutableRawPointer(raw))
+        defer { cefRelease(UnsafeMutableRawPointer(raw)) }
+        raw.pointee.cancel?(raw)
+    }
     public func release() {
         guard let raw else { return }; self.raw = nil
         cefRelease(UnsafeMutableRawPointer(raw))

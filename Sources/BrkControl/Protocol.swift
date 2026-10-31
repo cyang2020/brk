@@ -45,6 +45,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Injects a left click at the centre of a view (by `ViewID`, located in the live view tree) or at a window point
     /// (top-left origin). `modifiers` like "cmd" for Cmd+click on a page link.
     case click(view: ViewID?, point: CGPoint?, modifiers: String?, count: Int)
+    /// Opens a real page context menu, records its native items, and cancels tracking without selecting an action.
+    case captureContextMenu(window: WindowID?, point: CGPoint)
     /// Moves the pointer (hover: peek the hidden sidebar).
     case hover(point: CGPoint)
     /// CGWindowListCreateImage of the window (works without screen recording permission, spike unknown 8), PNG.
@@ -96,6 +98,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case hello(Hello)
     case view(WindowSnapshot)
     case native(NativeFacts)
+    case menuItems([String])
     case dispatched(rev: Int)
     case loaded(tab: ItemID)
     case pixel(red: Int, green: Int, blue: Int, alpha: Int)

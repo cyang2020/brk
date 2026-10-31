@@ -139,6 +139,12 @@ final class ControlExecutor {
             events.hover(at: c.root.convert(point, to: nil), in: c.window)
             return .ok
 
+        case .captureContextMenu(let window, let point):
+            let c = try controller(window)
+            store.inputWindow = c.window
+            let capture = ContextMenuCapture()
+            return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events))
+
         case .screenshot(let window, let path):
             let c = try controller(window)
             let image = try capture(c.window)

@@ -168,6 +168,20 @@ final class EventInjector {
         }
     }
 
+    func rightClick(at point: CGPoint, in window: NSWindow) throws {
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        guard let target = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point) else {
+            throw InjectionError("nothing under context-menu point")
+        }
+        let down = Self.dequeue(try mouse(.rightMouseDown, at: point, modifiers: [], clickCount: 1, in: window))
+        NSApp.postEvent(try mouse(.rightMouseUp, at: point, modifiers: [], clickCount: 1, in: window), atStart: false)
+        if window.isKeyWindow { NSApp.sendEvent(down) } else { target.rightMouseDown(with: down) }
+        if let up = NSApp.nextEvent(matching: .rightMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) {
+            if window.isKeyWindow { NSApp.sendEvent(up) } else { target.rightMouseUp(with: up) }
+        }
+    }
+
     /// Moves the injected pointer: a mouse-moved event for the window, then what AppKit's tracking would send for the
     /// new position (exits, entries, moves to the owners of the tracking areas that contain it), because synthetic
     /// events do not drive the window server's tracking-area bookkeeping.

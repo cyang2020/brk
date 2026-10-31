@@ -11,6 +11,8 @@ final class FixtureServer: @unchecked Sendable {
     private(set) var port: UInt16 = 0
     private let countLock = NSLock()
     private var counts: [String: Int] = [:]
+    private let heldDocument = DispatchSemaphore(value: 0)
+    func releaseHeldDocument() { heldDocument.signal() }
     func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
     private var listener: Int32 = -1
 
@@ -108,6 +110,17 @@ final class FixtureServer: @unchecked Sendable {
             return
         }
         if path == "/fail" { return }   // drop the connection: no status line, no body
+        if path == "/held-document" {
+            let prefix = Data("<html><title>Held document</title><body>pending".utf8)
+            let suffix = Data("</body></html>".utf8)
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(prefix.count + suffix.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+            for data in [header, prefix] {
+                if data.withUnsafeBytes({ write(fd, $0.baseAddress!, $0.count) }) != data.count { return }
+            }
+            _ = heldDocument.wait(timeout: .now() + 8)
+            _ = suffix.withUnsafeBytes { write(fd, $0.baseAddress!, $0.count) }
+            return
+        }
         if path == "/slow-document" {
             let prefix = Data("<html><title>Slow document</title><body>pending".utf8)
             let padding = Data(repeating: 32, count: 4096)

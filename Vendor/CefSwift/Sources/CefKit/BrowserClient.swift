@@ -604,7 +604,7 @@ extension BrowserClient {
             }
             if !isOSR {
                 cefRelease(UnsafeMutableRawPointer(callback))
-                return 1
+                return 0
             }
             let menu = CefMenuModel(raw: model)
             let viewPoint = params.map { CGPoint(x: CGFloat($0.pointee.get_xcoord?($0) ?? 0), y: CGFloat($0.pointee.get_ycoord?($0) ?? 0)) } ?? .zero

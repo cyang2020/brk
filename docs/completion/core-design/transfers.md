@@ -32,6 +32,8 @@ Each transfer record owns its decision/control references, destination reservati
 
 When an accepted public download loses its source tab/window or the tab changes profile, stop page observations but retain the exact initiating browser and context until the transfer ends. Never reconstruct its URL, POST, blob or authentication request in another browser. Multiple transfers retain the browser until the last one finishes. A pending destination decision instead cancels when its source or native owner disappears. Park the surface without restoring borrowed views early or making the CEF host key. Return those views exactly once during final close.
 
+That retention policy applies to Brk's presentation close/reassignment commands. A mandatory native browser close, including a page's `window.close()`, has already begun destruction and cannot be vetoed once CEF reports it ready to close. Publish the page closure before any reentrant download result, request native transfer cancellation, and report the actual terminal result or an explicit failure with retained recovery files. Do not recreate the closed page, reconstruct its request, or infer writer termination from browser closure alone. The parent native census and T15 document this distinction.
+
 Profile deletion and private expiry cancel their pending/active operations, then drain callbacks, browsers, native hosts, context-readiness callbacks and context handles. A late readiness or panel callback cannot recreate a revoked context. Quit revokes new work and drains all these records before the existing ordered CEF shutdown. A timeout is an explicit nonclean result, never permission to shut down beneath live callbacks.
 
 ## Decisions, cancellation and files

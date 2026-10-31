@@ -16,8 +16,130 @@ enum TransferScenarios {
         Scenario("T9", "simultaneous transfers in two profiles keep independent context and files", cefOnly: "CEF contexts", twoProfiles),
         Scenario("T10", "profile disposal during readiness cannot recreate revoked browser demand", cefOnly: "CEF profile loader", loaderRace),
         Scenario("T11", "closing the native sheet owner denies the pending download", cefOnly: "native owner teardown", pendingWindowSheet),
+        Scenario("T12", "right click opens the native web context menu", cefOnly: "native menu tracking", webContextMenu),
+        Scenario("T13", "old download progress preserves a pending document and its prior history title", cefOnly: "download/navigation overlap", navigationDuringTransfer),
+        Scenario("T14", "private attachment admission clears page demand without public metadata", cefOnly: "private attachment response", privateAttachment),
+        Scenario("T15", "mandatory page closure does not recreate the page and reports its download outcome", cefOnly: "native closure with an active transfer", scriptClose),
     ]
     static let size = 4_194_304
+
+    private static func webContextMenu(_ app: AppUnderTest) throws {
+        let page = try home(app)
+        guard let frame = try app.native().pages[page]?.surfaceFrame else { throw Check(description: "page surface missing") }
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: page.window, point: point)) else {
+            throw Check(description: "context menu capture failed")
+        }
+        try expect(titles.contains("Reload") && titles.count >= 3, "native web menu missing: \(titles)")
+        app.note("Native NSMenu tracking recorded: \(titles.joined(separator: ", ")); tracking cancelled without choosing an action.")
+    }
+
+    private static func navigationDuringTransfer(_ app: AppUnderTest) throws {
+        _ = try folder(app); let page = try home(app)
+        try start(app, "transfer-navigation", in: page); try library(app)
+        let first = try receiving(app, name: "transfer-navigation.bin")
+        let pending = app.site.url("held-document")
+        var released = false
+        defer { if !released { app.site.releaseHeldDocument() } }
+        try app.dispatch(.commandBar(.open(.editCurrent)))
+        try app.dispatch(.commandBar(.submit(pending.absoluteString)))
+        try app.waitUntil("held document parsed") { try tab(page.item, in: app.view())?.title == "Held document" }
+        try library(app)
+        try app.waitUntil("old transfer progresses while the main document remains pending") {
+            try rows(app).contains { $0.id == first.id && $0.received > first.received }
+        }
+        guard case .pageObservations(let observations) = try app.send(.pageObservations) else { throw Check(description: "no observations") }
+        try expect(observations[page]?.requestedURL == pending, "old progress erased the newer navigation")
+        try app.evaluate(page, "document.title='Provisional transfer title'")
+        try app.waitUntil("provisional title") { try tab(page.item, in: app.view())?.title == "Provisional transfer title" }
+        try app.dispatch(.library(.open(.history)))
+        guard case .library(let history)? = try app.view().overlay else { throw Check(description: "no history") }
+        try expect(history.history.first { $0.url == app.site.url("index.html") }?.title == "Fixture Home", "provisional title rewrote the prior History record")
+        try app.recordWindows("navigation-history")
+        app.site.releaseHeldDocument()
+        released = true
+        try library(app); try app.dispatch(.library(.cancelDownload(first.id)))
+        try app.waitUntil("transfer cancellation") { try rows(app).contains { $0.id == first.id && $0.state == .cancelled } }
+        try stopped(app, "/transfer-navigation")
+    }
+
+    private static func privateAttachment(_ app: AppUnderTest) throws {
+        let dir = try folder(app)
+        try app.dispatch(.window(.newIncognito))
+        guard case .hello(let hello) = try app.send(.hello),
+              let window = hello.windows.first(where: { (try? app.view($0).kind) == .incognito }) else { throw Check(description: "private window missing") }
+        _ = try app.send(.load(window: window, url: app.site.url("transfer-private-direct")))
+        let item = try app.view(window).content.panes[0].tab
+        let page = PageID(window: window, item: item)
+        try app.waitUntil("private attachment has actual staged bytes") {
+            let files = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey])
+            return files?.allObjects.compactMap { $0 as? URL }.contains {
+                guard let values = try? $0.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]) else { return false }
+                return values.isRegularFile == true && (values.fileSize ?? 0) > 0
+            } == true
+        }
+        guard case .pageObservations(let observations) = try app.send(.pageObservations) else { throw Check(description: "no observations") }
+        try expect(observations[page]?.requestedURL == nil && observations[page]?.committedURL == nil, "private attachment retained navigation intent")
+        try expect(try app.view(window).content.panes[0].content == .blank, "private attachment retained page content")
+        try library(app, in: window)
+        try expect(try rows(app, in: window).isEmpty, "private download metadata became visible")
+        try app.flush()
+        let saved = try String(contentsOf: app.dataDirectory.appendingPathComponent("state.json"), encoding: .utf8)
+        try expect(!saved.contains("transfer-private-direct"), "private attachment metadata persisted")
+        try dispatch(app, window: window, .window(.close))
+        try stopped(app, "/transfer-private-direct")
+    }
+
+    private static func scriptClose(_ app: AppUnderTest) throws {
+        struct Census: Codable {
+            var pages: [PageLogEntry]
+            var downloads: [DownloadRow]
+            var serverBytes: Int
+            var serverStopped: Int
+        }
+        defer {
+            try? library(app)
+            let census = Census(pages: (try? app.pageLog()) ?? [], downloads: (try? rows(app)) ?? [],
+                                serverBytes: app.site.requestCount("/transfer-script-bytes"),
+                                serverStopped: app.site.requestCount("/transfer-script-stopped"))
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try? encoder.encode(census).write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/T15-census.json"))
+            try? app.recordWindows("script-close")
+        }
+        let dir = try folder(app)
+        let source = app.site.url("index.html?script-source")
+        let item = try app.load(source)
+        let page = PageID(window: app.window!, item: item)
+        try app.waitForPageInput(page, at: source)
+        try start(app, "transfer-script", in: page, post: true); try library(app)
+        _ = try receiving(app, name: "transfer-script.bin")
+        try app.dispatch(.library(.close))
+        _ = try app.send(.activate(window: page.window))
+        try app.evaluate(page, "(()=>{let b=document.createElement('button');b.textContent='Close source';b.style='position:fixed;left:20px;top:100px;width:180px;height:60px';b.onclick=()=>window.close();document.body.append(b);document.title='Close source ready:'+history.length})()")
+        try app.waitUntil("close button ready") { try tab(page.item, in: app.view())?.title.hasPrefix("Close source ready:") == true }
+        app.note(try tab(page.item, in: app.view())?.title ?? "missing close setup")
+        guard let frame = try app.native().pages[page]?.surfaceFrame else { throw Check(description: "source surface missing") }
+        try app.click(at: CGPoint(x: frame.minX + 50, y: frame.minY + 130))
+        try app.waitUntil("script closed its page") {
+            guard case .pageObservations(let values) = try app.send(.pageObservations) else { return false }
+            return values[page] == nil
+        }
+        try library(app)
+        var result: DownloadRow?
+        try app.waitUntil("native closure reports a terminal transfer") {
+            result = try rows(app).first { $0.filename == "transfer-script.bin" }
+            return result != nil && result?.state.isActive == false
+        }
+        if result?.state == .finished {
+            try complete(app, name: "transfer-script.bin", at: dir.appendingPathComponent("transfer-script.bin"))
+        } else {
+            try stopped(app, "/transfer-script")
+            try expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("transfer-script.bin").path), "failed transfer reported a completed file")
+            try expect(result?.end != nil, "missing native closure failure/cancellation details")
+            app.note("Mandatory browser closure reported \(result!.state); recovery disposition \(String(describing: result!.end)).")
+        }
+        try expect(try app.pageLog().filter { $0.page == page && $0.kind == .created }.count == 1, "download publication recreated the closed page")
+    }
     private static func folder(_ app: AppUnderTest, profile: ProfileID = .default, name: String = "downloads") throws -> URL {
         let directory = app.dataDirectory.appendingPathComponent(name, isDirectory: true)
         try app.dispatch(.settings(.profile(profile, .downloadsDirectory(directory.path))))

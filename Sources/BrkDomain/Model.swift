@@ -323,6 +323,8 @@ struct SavedSlot: Sendable, Equatable, Codable {
 }
 
 struct LivePage: Sendable, Equatable {
+    /// Admission is handled once per originating browser, independently of the public download ledger.
+    var admittedDownloads: Set<DownloadID> = []
     var requestedURL: URL? = nil
     var requestContext: BrowsingContext? = nil
     var browser: BrowserToken? = nil

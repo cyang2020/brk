@@ -393,7 +393,6 @@ public final class CEFEngine: WebEngine {
         let effect = ledger.closed(page.incarnation)
         resources.unpresent(page.incarnation)
         resources.browserClosed(page.incarnation)
-        transfers.browserClosed(page.incarnation)
         switch effect {
         case .retiredClosed(let liveAgain):
             if !liveAgain, phase == .running { delegate?.engine(self, page: page.incarnation, didEmit: .closed) }
@@ -406,6 +405,8 @@ public final class CEFEngine: WebEngine {
             }
         case .stale: break
         }
+        // A transfer result can synchronously publish/reconcile. Remove page demand before publishing it.
+        transfers.browserClosed(page.incarnation)
     }
 
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }

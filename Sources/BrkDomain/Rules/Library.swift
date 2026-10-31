@@ -48,12 +48,19 @@ extension Work {
     }
 
     mutating func downloadEvent(_ update: DownloadUpdate) {
+        let page = update.owner.browser.page
+        if state.session.live[page]?.browser == update.owner.browser,
+           state.session.live[page]?.admittedDownloads.insert(update.id).inserted == true {
+            switch update.stage {
+            case .choosingDestination, .receiving:
+                if state.session.live[page]?.requestedURL == update.details.url { state.session.live[page]?.requestedURL = nil }
+            case .cancelling, .terminal: break
+            }
+        }
         // Provenance is the original browser, independent of current presentation or profile assignment.
         guard case .profile(let profile) = update.owner.context.context,
               state.doc.profiles[profile] != nil, !state.session.terminalDownloads.contains(update.id),
               update.revision > (state.session.downloadRevisions[update.id] ?? 0) else { return }
-        let page = update.owner.browser.page
-        if state.session.live[page]?.browser == update.owner.browser { state.session.live[page]?.requestedURL = nil }
         let index: Int
         if let existing = state.doc.downloads.firstIndex(where: { $0.id == update.id }) {
             guard state.doc.downloads[existing].profile == profile, state.doc.downloads[existing].state.isActive else { return }
