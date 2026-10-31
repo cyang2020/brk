@@ -53,7 +53,7 @@ public final class CEFEngine: WebEngine {
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
     var wanted: [PageSpec] = []
-    private var reconcilingPages = false
+    private let reconciliation = PageReconciliation()
     var phase: ShutdownPhase = .running
     private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
@@ -209,36 +209,30 @@ public final class CEFEngine: WebEngine {
     public func reconcile(_ pages: [PageSpec]) {
         guard phase == .running else { return }
         wanted = pages.filter { contexts.permitsWork($0.context) }
-        // Chrome browser construction pumps AppKit. A loader or page callback can reenter with
-        // newer demand before the first ChromePage has been installed in resources.
-        let reentered = reconcilingPages
-        reconcilingPages = true
-        // Revoke old presentation synchronously, even while construction is deferred. Input must
-        // not reach the previous profile after the reducer has accepted a reassignment.
-        for page in Array(live.values) where !wanted.contains(where: { $0.id == page.id && $0.context == page.context }) {
-            retire(page)
-        }
-        guard !reentered else { return }
-        defer { reconcilingPages = false }
-        while phase == .running {
-            let demand = wanted
-            reconcilePages(demand)
-            if wanted == demand { break }
-        }
+        reconciliation.submit(wanted, invalidate: {
+            for page in Array(self.live.values) where !self.wanted.contains(where: { $0.id == page.id && $0.context == page.context }) {
+                self.retire(page)
+            }
+        }) { self.applyDemand($0) }
     }
 
-    private func reconcilePages(_ pages: [PageSpec]) {
+    private func applyDemand(_ pages: [PageSpec]) {
+        guard phase == .running else { return }
+        let pages = pages.filter { contexts.permitsWork($0.context) }
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         focusRequests = focusRequests.filter { $0.value.window != nil && wanted[$0.value.page] != nil }
         for spec in pages {
+            guard phase == .running, contexts.permitsWork(spec.context),
+                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else { continue }
             if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
+            let context = contexts.epoch(for: spec.context)
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
-            resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
+            resources.insert(page, browser: incarnation, context: context)
             record(.created, page)
             guard phase == .running, contexts.permitsWork(spec.context),
-                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else {
+                  self.wanted.contains(where: { $0.id == spec.id && $0.context == spec.context && $0.initialURL == spec.initialURL }) else {
                 retire(page)
                 continue
             }
@@ -385,7 +379,7 @@ public final class CEFEngine: WebEngine {
         for page in live.values where page.context == request.context { retire(page) }
         Task { @MainActor in
             let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-                !self.reconcilingPages && !self.resources.entries.values.contains { $0.context.context == request.context }
+                !self.reconciliation.isApplying && !self.resources.entries.values.contains { $0.context.context == request.context }
                     && !self.outputs.contains(context: request.context)
                     && !self.transfers.contains(context: request.context)
                     && self.clearingContexts[request.context] == nil
@@ -522,7 +516,7 @@ public final class CEFEngine: WebEngine {
         transfers.stop()
         for page in live.values { retire(page) }
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            !self.reconcilingPages && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
+            !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained) && self.clearingContexts.isEmpty
         }
         guard drained else {
