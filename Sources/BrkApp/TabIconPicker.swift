@@ -32,6 +32,8 @@ enum TabIconPicker {
         view.addSubview(picker)
         view.addSubview(emoji)
         let input = TabIconInput(custom: emoji, save: alert.buttons[0])
+        characters.target = input
+        characters.action = #selector(TabIconInput.showEmoji(_:))
         emoji.delegate = input
         picker.target = input
         picker.action = #selector(TabIconInput.choseNamed(_:))
@@ -58,6 +60,10 @@ private final class TabIconInput: NSObject, NSTextFieldDelegate {
     let custom: NSTextField
     let save: NSButton
     init(custom: NSTextField, save: NSButton) { self.custom = custom; self.save = save }
+    @objc func showEmoji(_ sender: NSButton) {
+        custom.window?.makeFirstResponder(custom)
+        NSApp.orderFrontCharacterPalette(nil)
+    }
     @objc func choseNamed(_ sender: NSPopUpButton) { custom.stringValue = ""; save.isEnabled = true; save.toolTip = nil }
     func controlTextDidChange(_ notification: Notification) {
         let text = custom.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)

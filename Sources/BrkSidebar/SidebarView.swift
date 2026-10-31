@@ -304,7 +304,7 @@ final class TitleRowView: NSView {
     }
 }
 
-/// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…", a shimmer
+/// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…", a progress glow
 /// while the page loads, and on hover a copy-link accessory. A click opens the command bar to edit the current tab.
 /// The profile badge (F2) sits at the trailing end while the space's profile is not the default, or the window is
 /// incognito; an incognito pill has Arc's CommandBarPlaceholderIncognitoBackground.

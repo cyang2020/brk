@@ -19,7 +19,9 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private var current: String?
     private var dismissed: String?
     private var world: Int?
-    private var frameID: String?
+    private struct FrameWorld { let frame: String; let context: Int; let main: Bool }
+    private var frameWorlds: [FrameWorld] = []
+    private var currentFrame: String?
     private(set) var title: String?
     private(set) var destination: URL?
     private var escape: Any?
@@ -47,7 +49,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     func stop(keepDocument: Bool = false) {
         poll?.cancel(); poll = nil; fetch?.cancel(); fetch = nil
         closeCard(); session?.invalidate(); session = nil
-        world = nil; frameID = nil; current = nil; dismissed = nil
+        world = nil; frameWorlds = []; currentFrame = nil; current = nil; dismissed = nil
         if !keepDocument { document = nil }
     }
     private func start(_ document: DocumentToken) {
@@ -56,22 +58,23 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
         poll = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let tree = try await self.call("Page.getFrameTree")
-                guard self.document == document,
-                      let frame = (tree["frameTree"] as? [String: Any])?["frame"] as? [String: Any], let id = frame["id"] as? String else { return }
-                self.frameID = id
-                let world = try await self.call("Page.createIsolatedWorld", ["frameId": id, "worldName": "Brk link previews"])
-                guard self.document == document, let context = world["executionContextId"] as? Int else { return }
-                self.world = context
-                _ = try await self.evaluate(Self.tracker)
+                try await self.refreshFrames()
+                var ticks = 0
                 while !Task.isCancelled, self.document == document, self.enabled {
+                    if ticks % 12 == 0 { try await self.refreshFrames() }
+                    ticks += 1
                     if self.available(), self.surface?.window?.isKeyWindow == true || self.pointerInCard() {
-                        let value = try await self.evaluate("globalThis.__brkPreview.read()")
-                        if let hover = value as? [String: Any], let href = hover["href"] as? String,
+                        var candidate: (FrameWorld, [String: Any])?
+                        for frame in self.frameWorlds {
+                            if let value = try? await self.evaluate("globalThis.__brkPreview.read()", context: frame.context) as? [String: Any], value["href"] is String {
+                                candidate = (frame, value); break
+                            }
+                        }
+                        if let (frame, hover) = candidate, let href = hover["href"] as? String,
                            let url = URL(string: href), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                            if self.current != href {
-                                self.closeCard(); self.fetch?.cancel(); self.current = href
-                                if self.dismissed != href { self.fetchPreview(url, hover: hover, document: document) }
+                            if self.current != href || self.currentFrame != frame.frame {
+                                self.closeCard(); self.fetch?.cancel(); self.current = href; self.currentFrame = frame.frame
+                                if self.dismissed != href { self.fetchPreview(url, hover: hover, document: document, frame: frame) }
                             }
                         } else if !self.pointerInCard() {
                             self.fetch?.cancel(); self.fetch = nil; self.current = nil; self.dismissed = nil; self.closeCard()
@@ -82,18 +85,39 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
             } catch { if self.document == document { self.closeCard() } }
         }
     }
+    private func refreshFrames() async throws {
+        let tree = try await call("Page.getFrameTree")
+        guard let root = tree["frameTree"] as? [String: Any] else { return }
+        func flatten(_ node: [String: Any]) -> [String] {
+            let own = (node["frame"] as? [String: Any])?["id"] as? String
+            return (own.map { [$0] } ?? []) + (node["childFrames"] as? [[String: Any]] ?? []).flatMap(flatten)
+        }
+        // Bound work on pages with very many frames. Every refresh reuses Chrome's existing isolated worlds.
+        let ids = Array(flatten(root).prefix(64))
+        var frames: [FrameWorld] = []
+        for id in ids {
+            let result = try? await call("Page.createIsolatedWorld", ["frameId": id, "worldName": "Brk link previews"])
+            guard let context = result?["executionContextId"] as? Int else { continue }
+            let frame = FrameWorld(frame: id, context: context, main: id == ids.first)
+            frames.append(frame)
+            _ = try? await evaluate(Self.tracker, context: context)
+        }
+        frameWorlds = frames
+        world = frames.first?.context
+    }
+
     private func call(_ method: String, _ params: [String: Any] = [:]) async throws -> [String: Any] {
         try Task.checkCancellation()
         guard let session else { throw CancellationError() }
         return (try JSONSerialization.jsonObject(with: await session.call(method, parameters: params))) as? [String: Any] ?? [:]
     }
-    private func evaluate(_ expression: String) async throws -> Any? {
-        guard let world else { throw CancellationError() }
+    private func evaluate(_ expression: String, context: Int? = nil) async throws -> Any? {
+        guard let world = context ?? world else { throw CancellationError() }
         let result = try await call("Runtime.evaluate", ["expression": expression, "contextId": world, "returnByValue": true])
         return (result["result"] as? [String: Any])?["value"]
     }
-    private func resource(_ url: URL, limit: Int) async throws -> Data {
-        guard let transport = session, let frameID, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { throw CancellationError() }
+    private func resource(_ url: URL, limit: Int, frameID: String) async throws -> Data {
+        guard let transport = session, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { throw CancellationError() }
         let result = try await call("Network.loadNetworkResource", ["frameId": frameID, "url": url.absoluteString,
             "options": ["disableCache": false, "includeCredentials": true]])
         guard let resource = result["resource"] as? [String: Any], resource["success"] as? Bool == true,
@@ -113,14 +137,14 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
             _ = try? await transport.call("IO.close", parameters: ["handle": handle]); throw error
         }
     }
-    private func fetchPreview(_ url: URL, hover: [String: Any], document: DocumentToken) {
+    private func fetchPreview(_ url: URL, hover: [String: Any], document: DocumentToken, frame: FrameWorld) {
         fetch = Task { @MainActor [weak self] in
             guard let self else { return }
             let fallback = String((hover["text"] as? String ?? url.host ?? "Link preview").prefix(200))
             var title = fallback, text = "", image: NSImage?
             var status = ""
             do {
-                let data = try await self.resource(url, limit: 262_144)
+                let data = try await self.resource(url, limit: 262_144, frameID: frame.frame)
                 try Task.checkCancellation()
                 let html = String(decoding: data, as: UTF8.self)
                 let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)
@@ -129,19 +153,19 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                 if let value = parsed?["title"] as? String, !value.isEmpty { title = value }
                 text = parsed?["text"] as? String ?? ""
                 if let icon = parsed?["icon"] as? String, let iconURL = URL(string: icon),
-                   let bytes = try? await self.resource(iconURL, limit: 131_072) { image = NSImage(data: bytes) }
+                   let bytes = try? await self.resource(iconURL, limit: 131_072, frameID: frame.frame) { image = NSImage(data: bytes) }
             } catch { status = "Preview unavailable. You can still open this link." }
-            guard !Task.isCancelled, self.document == document, self.current == url.absoluteString,
+            guard !Task.isCancelled, self.document == document, self.current == url.absoluteString, self.currentFrame == frame.frame,
                   self.dismissed != url.absoluteString, self.available(), let surface = self.surface else { return }
             // Recheck the DOM after transport; leaving or replacing the link cancels its result.
-            guard let latest = try? await self.evaluate("globalThis.__brkPreview.read()") as? [String: Any],
+            guard let latest = try? await self.evaluate("globalThis.__brkPreview.read()", context: frame.context) as? [String: Any],
                   latest["href"] as? String == url.absoluteString else { return }
             let request = LinkPreviewRequest(document: document, url: url, title: title, text: text)
             let card = LinkPreviewCard(title: title, url: url, image: image, status: status)
             card.dismiss = { [weak self] in self?.dismissed = url.absoluteString; self?.closeCard() }
             card.summary = { [weak self, weak card] in
                 self?.summarize(request) { [weak self, weak card] result in
-                    guard self?.document == document, self?.current == url.absoluteString else { return }
+                    guard self?.document == document, self?.current == url.absoluteString, self?.currentFrame == frame.frame else { return }
                     card?.feedback(result ?? "No summary provider is enabled.")
                 }
             }
@@ -150,7 +174,16 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
             popover.delegate = self; popover.contentViewController = controller
             self.popover = popover; self.title = title; self.destination = url
             let zoom = Double(BrowserZoom.percentage(level: self.browser.zoomLevel)) / 100
-            let x = (latest["x"] as? Double ?? 0) * zoom, y = (latest["y"] as? Double ?? 0) * zoom
+            var origin = CGPoint.zero
+            if !frame.main {
+                guard let owner = try? await self.call("DOM.getFrameOwner", ["frameId": frame.frame]),
+                      let node = owner["backendNodeId"] as? Int,
+                      let box = try? await self.call("DOM.getBoxModel", ["backendNodeId": node]),
+                      let content = (box["model"] as? [String: Any])?["content"] as? [Double], content.count == 8 else { self.closeCard(); return }
+                origin = CGPoint(x: content[0], y: content[1])
+            }
+            guard !Task.isCancelled, self.document == document, self.available() else { self.closeCard(); return }
+            let x = (origin.x + (latest["x"] as? Double ?? 0)) * zoom, y = (origin.y + (latest["y"] as? Double ?? 0)) * zoom
             let anchor = NSRect(x: x, y: y, width: max(1, (latest["w"] as? Double ?? 1) * zoom), height: max(1, (latest["h"] as? Double ?? 1) * zoom))
             popover.show(relativeTo: anchor, of: surface, preferredEdge: .maxY)
             self.escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
