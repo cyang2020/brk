@@ -8,6 +8,21 @@ final class MainDocumentStateTests: XCTestCase {
     private let first = URL(string: "https://example.com/first")!
     private let next = URL(string: "https://example.com/next")!
 
+    func testHeldDocumentDoesNotCommitWhileAnOlderTransferProgresses() {
+        var state = MainDocumentState(browser: token)
+        _ = state.allowed(first, redirect: false)
+        _ = state.started(first)
+        _ = state.finished(first)
+        state.prepareNavigation()
+        XCTAssertEqual(state.allowed(next, redirect: false), [.navigationRequested(next)])
+        let started = state.started(next)
+        XCTAssertFalse(started.contains(.committed(next)),
+                       "A held document must retain navigation intent and the prior History title until completion")
+        XCTAssertTrue(state.addressChanged(next, loading: true).isEmpty)
+        XCTAssertTrue(state.loadingChanged(true).isEmpty)
+        XCTAssertEqual(state.finished(next), [.committed(next), .documentChanged(.ready(DocumentToken(browser: token, sequence: 2)))])
+    }
+
     func testOlderAbortCannotFailReplacementBeforeOrAfterItStarts() {
         for abortAfterStart in [false, true] {
             var state = MainDocumentState(browser: token)
