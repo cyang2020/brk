@@ -41,6 +41,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var pendingExternalURLs: [Input] = []
     private let menuTarget = MenuTarget()
     private var quitting = false
+    private var overlayEscapeMonitor: Any?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
     public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
@@ -115,6 +116,14 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         littleEntryPoints = entryPoints
         store.didPublish = { [weak entryPoints] in entryPoints?.update($0) }
         store.start()
+        // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
+        overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let handled = MainActor.assumeIsolated {
+                guard event.keyCode == Key.escape.code, let window = NSApp.keyWindow as? any HostWindow else { return false }
+                return window.onEscapeBeforePage?(event) == true
+            }
+            return handled ? nil : event
+        }
 
         // Links from other apps (F3) and the local AI tools on PATH (the Max pane, `.auto`).
         installURLHandler()
@@ -144,6 +153,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         Quit.fixtureTrace("delegate entered")
         guard !quitting else { return .terminateLater }
         quitting = true
+        if let overlayEscapeMonitor { NSEvent.removeMonitor(overlayEscapeMonitor); self.overlayEscapeMonitor = nil }
         store?.prepareForTermination()
         littleEntryPoints?.stop()
         sweep?.invalidate()

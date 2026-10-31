@@ -25,6 +25,8 @@ public protocol CefBrowserDelegate: AnyObject {
     func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition
     func browser(_ b: CefBrowser, chromeCommand id: Int, disposition: CefWindowOpenDisposition) -> Bool
     func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind)
+    /// The auxiliary has closed; its identity and kind remain available, but native browser operations have ended.
+    func browser(_ b: CefBrowser, didCloseAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind)
     func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int)
     func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage)
     /// The page title changed.
@@ -194,6 +196,7 @@ extension CefBrowserDelegate {
     }
     public func browser(_ b: CefBrowser, chromeCommand id: Int, disposition: CefWindowOpenDisposition) -> Bool { false }
     public func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {}
+    public func browser(_ b: CefBrowser, didCloseAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {}
     public func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {}
     public func browser(_ b: CefBrowser, rendererMessage: CefRendererMessage) {}
     public func browser(_ b: CefBrowser, didChangeAudio audible: Bool) {}

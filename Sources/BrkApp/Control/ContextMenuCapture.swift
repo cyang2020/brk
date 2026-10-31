@@ -7,6 +7,7 @@ import BrkEngine
     private var items: [String] = []
     private var ended = false
     private var choice: String?
+    private var hasDelegateMenu = false
 
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
@@ -28,9 +29,10 @@ import BrkEngine
     @objc private func began(_ note: Notification) {
         precondition(Thread.isMainThread)
         guard let current = note.object as? NSMenu else { return }
-        // Sidebar menus use AppKit's notification. The embedded web menu supplies its actual delegate callback;
-        // prefer that object if AppKit first reported the menu bar as the root of the tracking session.
-        guard menu == nil || (note.name == PageSurfaceView.contextMenuWillOpen && menu === NSApp.mainMenu) else { return }
+        // Actual popup delegates identify the menu; AppKit may report a distinct menu-bar object first.
+        let fromDelegate = note.name == PageSurfaceView.contextMenuWillOpen
+        guard fromDelegate || !hasDelegateMenu else { return }
+        if fromDelegate { hasDelegateMenu = true }
         menu = current
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)
