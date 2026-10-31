@@ -28,7 +28,7 @@ public struct CefChromeBrowserOptions {
     public var profile: CefProfile?
     public var requestRules: CefRequestRules? = nil
     /// Configure an embedded native host before CEF first shows or activates it. Standalone windows leave this nil.
-    public var beforeShow: ((NSWindow) -> Void)? = nil
+    public var prepareNativeWindow: (@MainActor (NSWindow) -> Void)? = nil
 
     public init() {}
 }
@@ -248,10 +248,6 @@ public final class CefChromeBrowser {
             var size = cef_size_t(width: 1100, height: 760)
             window.pointee.center_window?(window, &size)
         }
-        if let handle = window.pointee.get_window_handle?(window),
-           let native = Unmanaged<NSView>.fromOpaque(handle).takeUnretainedValue().window {
-            options.beforeShow?(native)
-        }
         window.pointee.show?(window)
     }
 
@@ -429,6 +425,11 @@ final class ChromeWindowDelegate {
                 return
             }
             MainActor.assumeIsolated {
+                if let prepare = me.options.prepareNativeWindow,
+                   let handle = window.pointee.get_window_handle?(window),
+                   let native = Unmanaged<NSView>.fromOpaque(handle).takeUnretainedValue().window {
+                    prepare(native)
+                }
                 me.chrome?.handleWindowCreated(window)
             }
             cefRelease(UnsafeMutableRawPointer(window))
