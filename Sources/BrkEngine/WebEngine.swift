@@ -6,7 +6,7 @@ import BrkBase
 /// The engine is a page factory and an event source. It knows nothing of tabs, spaces, sidebars or commands:
 /// the app tells it which pages should exist (`reconcile`), asks it for a page's view (`surface`), sends one-shot
 /// actions (`perform`), moves keyboard focus (`focus`), and receives events and key presses through its delegate.
-/// Everything Chromium-specific is hidden behind these six calls: CEF initialization, the Chrome-runtime host window
+/// Everything Chromium-specific is hidden behind this interface: CEF initialization, the Chrome-runtime host window
 /// per page, moving Chromium's views into our card, keeping host windows from becoming key, renderer crashes, and
 /// the shutdown order.
 ///
@@ -49,6 +49,12 @@ public protocol WebEngine: AnyObject {
     /// Page lifecycle since launch: created, close requested, closed (OnBeforeClose), with generations, in order.
     var pageLog: [PageLogEntry] { get }
 
+    func cancelSiteData(_ id: String)
+    func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult
+    func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog
+    func invokeExtension(_ id: String, target: SiteTarget) async -> String?
+    func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String?
+    func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String?
     func cancelDownload(_ id: DownloadID)
     /// Revokes synchronously. Final drain results arrive through the delegate.
     func disposeContext(_ request: ContextDisposal)
@@ -77,6 +83,9 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket)
     func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult)
 
+    func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void)
+    func engine(_ engine: any WebEngine, dismissPermission id: String)
+
     /// A page's main frame is about to navigate (CEF's OnBeforeBrowse, synchronous). False cancels it; the app
     /// uses this for Arc's "Open a Peek window when clicking on links to other sites" on Pinned and Favorites tabs
     /// (the Peek opens instead). Redirects are never asked about. F3.
@@ -84,6 +93,8 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngineDelegate {
+    public func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void) { reply(.deny) }
+    public func engine(_ engine: any WebEngine, dismissPermission id: String) {}
     public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
     public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}
     public func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
@@ -116,4 +127,15 @@ open class PageSurfaceView: NSView {
     /// routes it before and after the page. True for a surface that consumes no keys (the stub), so app shortcuts
     /// work on it the way they do with a native view focused.
     open var routesKeysThroughWindow: Bool { false }
+}
+
+extension WebEngine {
+    public func cancelSiteData(_ id: String) {}
+    public func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult {
+        ClearSiteDataResult(request: request, completed: [], error: "This engine has no website storage")
+    }
+    public func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog { ExtensionCatalog(context: context, extensions: [], error: "This engine has no extensions") }
+    public func invokeExtension(_ id: String, target: SiteTarget) async -> String? { "This engine has no extension actions" }
+    public func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String? { "This engine has no extensions" }
+    public func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String? { "This engine cannot install extensions" }
 }

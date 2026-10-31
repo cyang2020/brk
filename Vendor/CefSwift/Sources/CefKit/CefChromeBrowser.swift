@@ -26,6 +26,7 @@ public struct CefChromeBrowserOptions {
     /// The request context (cookies, cache, storage) the browser runs in; `nil` is the runtime's global context.
     /// Brk wave-2 addition: per-profile and incognito contexts for Chrome-runtime browsers.
     public var profile: CefProfile?
+    public var requestRules: CefRequestRules? = nil
 
     public init() {}
 }
@@ -124,6 +125,7 @@ public final class CefChromeBrowser {
         )
 
         let client = BrowserClient()
+        if let rules = options.requestRules { client.requestFilter.configure(enabled: rules.enabled, hosts: rules.hosts, paths: rules.paths) }
         let clientPointer = client.makeClient()
 
         // Same wrapper as embedded browsers: all existing functionality

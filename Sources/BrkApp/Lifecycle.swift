@@ -117,6 +117,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Quit.fixtureTrace("delegate entered")
         guard !quitting else { return .terminateLater }
         quitting = true
         sweep?.invalidate()
@@ -142,6 +143,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     /// `shutdown-incomplete.log` naming each unclosed page. The caller turns the outcome into the exit status.
     static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
         store?.flush()
+        Quit.fixtureTrace("engine shutdown starting")
         let outcome = await engine.shutdown()
         store?.flush()
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
@@ -173,7 +175,15 @@ public enum Quit {
 
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
     /// without terminating the test process.
-    public static var perform: @MainActor () -> Void = { RunLoop.main.perform { NSApp.terminate(nil) } }
+    public static var perform: @MainActor () -> Void = { enqueue { NSApp.terminate(nil) } }
+
+    static func fixtureTrace(_ message: String) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data(("fixture quit: " + message + "\n").utf8)) }
+    }
+
+    static func enqueue(_ action: @escaping @MainActor () -> Void) {
+        RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { MainActor.assumeIsolated { fixtureTrace("run-loop block entered"); action() } }
+    }
 }
 
 /// A fatal signal in the browser process writes a backtrace to stderr before the default action, so an e2e log

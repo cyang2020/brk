@@ -1726,8 +1726,8 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 86, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 20, "a SystemEvent case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 106, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.events.count, 25, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
             .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }
@@ -1800,7 +1800,9 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.paneIDs, [opener])
         XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: opener)))
         // The engine is told to create its page, with its url.
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: bg) }, PageSpec(id: PageID(window: d.window, item: bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default)))
+        var expected = PageSpec(id: PageID(window: d.window, item: bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default))
+        expected.websitePolicy.visible = false
+        XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: bg) }, expected)
     }
 
     /// a foreground .openRequested still focuses the new tab and loads it

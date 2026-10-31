@@ -45,6 +45,7 @@ public enum Command: Hashable, Sendable, Codable {
     /// Peek: a link previewed in a card over the content. F3.
     case peek(PeekCommand)
     /// Profiles: create, rename, delete, assign to a space, the dialogs. F2.
+    case site(SiteCommand)
     case profile(ProfileCommand)
     /// A menu row whose feature is a later wave: the reducer ignores it, `enabledActions` greys it out and the
     /// command bar does not list it. Every Arc menu row exists in `ActionID` with its key, so remapping, the
@@ -379,6 +380,10 @@ public enum SystemEvent: Sendable, Equatable {
     case page(BrowserToken, PageEvent)
     case download(DownloadUpdate)
     case contextDisposed(ContextDisposalResult)
+    case websiteRulesLoaded(BrowsingContext, WebsiteRulesUpdate)
+    case extensionOperationFailed(BrowsingContext, String)
+    case extensionsRead(ExtensionCatalog)
+    case siteDataCleared(ClearSiteDataResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
     case window(WindowID, WindowEvent)
@@ -428,7 +433,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .peek, .page, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
+        case .peek, .page, .site, .settings, .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)): true
         default: false
         }
     }

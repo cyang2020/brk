@@ -54,6 +54,25 @@ final class ControlExecutor {
 
     private func execute(_ op: ControlOp) async throws -> ControlResult {
         switch op {
+        case .nativeDialogKey(let number, let text):
+            guard let window = NSApp.windows.first(where: { $0.windowNumber == number && $0.isVisible && NSStringFromClass(type(of: $0)) == "NativeWidgetMacNSWindow" }) else {
+                throw Failure(message: "The requested native dialog does not belong to this app")
+            }
+            guard let chord = KeyChord(parsing: text), chord == KeyChord([], .returnKey) || chord == KeyChord([], .escape) else {
+                throw Failure(message: "Only native dialog confirmation/cancellation keys are allowed")
+            }
+            try events.press(chord, in: window)
+            return .ok
+        case .setAppAppearance(let scheme):
+            NSApp.appearance = scheme.map { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua)! }
+            return .ok
+        case .siteControlsScreenshot(let id, let path):
+            guard let window = store.sitePanels.window(for: id) else { throw Failure(message: "Site controls are closed") }
+            let image = try capture(window)
+            guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { throw Failure(message: "PNG encoding failed") }
+            try png.write(to: URL(fileURLWithPath: path))
+            return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
+        case .siteControls: return .siteControls(store.snapshot.sites)
         case .hello:
             return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))
@@ -242,10 +261,19 @@ final class ControlExecutor {
     /// Without a key window, continue in the last presented or clicked window, including Settings.
     private func keyTarget() throws -> NSWindow {
         if let key = NSApp.keyWindow { return key }
-        if let target = store.inputWindow, target.isVisible { return target }
-        let window = try controller(nil).window
-        window.makeKeyAndOrderFront(nil)
-        return window
+        if let modal = NSApp.modalWindow, modal.isVisible { return modal }
+        let target: NSWindow
+        if let input = store.inputWindow, input.isVisible { target = input } else { target = try controller(nil).window }
+        func sheet(in owner: NSWindow) -> NSWindow? {
+            if let attached = owner.attachedSheet { return sheet(in: attached) ?? attached }
+            for child in (owner.childWindows ?? []).reversed() {
+                if let nested = sheet(in: child) { return nested }
+                if child is NSPanel, child.isVisible { return child }
+            }
+            return nil
+        }
+        if let sheet = sheet(in: target) { return sheet }
+        return target
     }
 
     private func allTabIDs(_ snapshot: WindowSnapshot) -> [ItemID] {

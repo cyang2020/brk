@@ -6,6 +6,8 @@ struct MainDocumentState {
     let browser: BrowserToken
     private var sequence: UInt64 = 0
     private var document: DocumentAvailability = .unavailable
+    var availability: DocumentAvailability { document }
+    var lastSequence: UInt64 { sequence }
     private var failed = false
     private var acceptedURLs: Set<String> = []
     private var pendingAddress: URL?

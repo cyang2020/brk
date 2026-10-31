@@ -29,12 +29,14 @@ public final class CEFEngine: WebEngine {
     public private(set) var pageLog: [PageLogEntry] = []
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
-    private let resources = BrowserResources<ChromePage>()
-    private var live: [PageID: ChromePage] {
+    let resources = BrowserResources<ChromePage>()
+    var live: [PageID: ChromePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
-    private let transfers = Transfers()
-    private var contexts = ContextLifetimes()
+    let transfers = Transfers()
+    var contexts = ContextLifetimes()
+    var cancelledSiteClears: Set<String> = []
+    var clearingContexts: [BrowsingContext: String] = [:]
     private var disposals: [DisposalID: ContextDisposal] = [:]
     private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
     private var ledger = PageLedger()
@@ -44,8 +46,9 @@ public final class CEFEngine: WebEngine {
     /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
     private var loaders: [ProfileID: ProfileLoader] = [:]
     /// The last `reconcile` input, replayed when a profile finishes loading.
-    private var wanted: [PageSpec] = []
-    private var phase: ShutdownPhase = .running
+    var wanted: [PageSpec] = []
+    var phase: ShutdownPhase = .running
+    private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Each native window keeps its own page intent, including while a profile or input view is being created.
     /// A native editor in another window must not cancel this request. Weak ownership permits window teardown.
@@ -81,18 +84,29 @@ public final class CEFEngine: WebEngine {
         config.cachePath = root.appendingPathComponent("Default", isDirectory: true)
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            config.safeStorage = .mockKeychain
+            config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1"
+        }
         config.defaultRuntimeStyle = .chrome
         try CefRuntime.shared.initialize(configuration: config)
         // CefSwift's terminate handler closes browsers while their views are still moved into our window, which
-        // segfaulted on quit in every spike run. Remove it: -terminate: then reaches the app delegate's
-        // applicationShouldTerminate, which returns .terminateLater and runs Lifecycle's ordered quit, which ends in
-        // `shutdown()` below.
-        CEFApplication.setTerminateHandler(nil)
+        // segfaulted on quit in every spike run. Replace it with auxiliary-dialog cancellation only. Once those
+        // choices are dismissed, -terminate: reaches applicationShouldTerminate and Lifecycle's ordered shutdown.
+        CEFApplication.setTerminateHandler { () -> ObjCBool in
+            ObjCBool(MainActor.assumeIsolated { HostWindows.prepareForApplicationTermination() })
+        }
         HostWindows.installKeyGuard()
         return CEFEngine()
     }
 
     private init() {
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.phase == .running else { return }
+                for page in self.live.values where page.websitePolicy.appearance == .automatic { page.refreshWebsitePolicy() }
+            }
+        }
         transfers.publish = { [weak self] update in
             guard let self else { return }
             self.delegate?.engine(self, download: update)
@@ -131,7 +145,7 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages {
-            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; continue }
+            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.applyWebsitePolicy(spec.websitePolicy); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
@@ -150,7 +164,7 @@ public final class CEFEngine: WebEngine {
         case .navigate(let url): live.prepareNavigation(); browser.load(url)
         case .goBack: live.prepareNavigation(); browser.goBack()
         case .goForward: live.prepareNavigation(); browser.goForward()
-        case .reload(let ignoringCache): live.prepareNavigation(); browser.reload(ignoreCache: ignoringCache)
+        case .reload(let ignoringCache): live.requestReload(ignoringCache: ignoringCache)
         case .stop: live.prepareStop(); browser.stopLoading()
         case .zoom(let step):
             // TODO(W2): Chrome's zoom presets instead of fixed 0.5 steps.
@@ -310,6 +324,8 @@ public final class CEFEngine: WebEngine {
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: shutdown started\n".utf8)) }
+        appearanceObservation = nil
         phase = .restoringViews
         focusRequests.removeAll()
         wanted = []
@@ -418,7 +434,7 @@ public final class CEFEngine: WebEngine {
         transfers.sourceGone(page.incarnation)
         closeIfUnowned(page.incarnation)
     }
-    private func closeIfUnowned(_ browser: BrowserToken) {
+    func closeIfUnowned(_ browser: BrowserToken) {
         guard resources.beginClose(browser), let page = resources.entries[browser]?.resource else { return }
         record(.closeRequested, page)
         page.close()

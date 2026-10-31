@@ -115,6 +115,7 @@ public struct RowFrame: Sendable, Equatable, Codable {
 /// Every view the harness can address. `identifier` is the view's NSAccessibility identifier (set by BrkUI from
 /// this enum, never typed by hand), and `WindowFrames.frame(of:)` is its computed frame when layout owns it.
 public enum ViewID: Hashable, Sendable, Codable {
+    case siteInfo
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
     case section(SectionKind)
@@ -145,6 +146,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .sidebar: "sidebar"
         case .floatingSidebar: "floating-sidebar"
         case .titleRow: "title-row"
+        case .siteInfo: "site-info"
         case .urlPill: "url-pill"
         case .favoritesTray: "favorites"
         case .favorite(let id): "favorite-\(id)"
@@ -221,7 +223,7 @@ extension WindowFrames {
         case .libraryPage(let page): return library?.pageCells[page]
         case .archive: return library?.page   // the archive page fills the Library's page area while it is the open page
         case .peek: return peek
-        case .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+        case .siteInfo, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
              .settingsField:

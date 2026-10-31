@@ -24,6 +24,17 @@ public enum Effect: Hashable, Sendable {
     case fetchSuggestions(WindowID, query: String, url: URL)
     /// Drop a request context's data: incognito when its last window closed, a profile when it was deleted.
     case disposeContext(ContextDisposal)
+    case loadWebsiteRules(URL, BrowsingContext)
+    case chooseWebsiteRules(WindowID, BrowsingContext)
+    case queryExtensions(BrowsingContext)
+    case invokeExtension(String, SiteTarget)
+    case removeExtension(String, BrowsingContext, PageID)
+    case cancelSiteData(String)
+    case clearSiteData(ClearSiteData)
+    case confirmSiteData(ClearSiteData)
+    case confirmLocalExtension(WindowID, BrowsingContext, URL)
+    case installLocalExtension(PageID, BrowsingContext, URL)
+    case addLocalExtension(WindowID, BrowsingContext)
     case cancelDownload(DownloadID)
     /// Reveal a downloaded file in the Finder.
     case revealFile(String)

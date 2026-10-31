@@ -235,13 +235,13 @@ extension ActionID {
 
         // MARK: View (groups: Appearance | Sidebar | Loading | Split | Zoom | Cast | Developer | Full Screen, Exit)
         case .appearanceAutomatic:
-            entry(88, "Automatic", .view, 0, [], .settings(.general(.webAppearance(.automatic))), in: .appearance,
+            entry(88, "Automatic", .view, 0, [], .site(.appearance(.automatic)), in: .appearance,
                   bar: listing("sparkles", title: "Switch to Automatic Appearance", "Switch to Automatic Appearance", "Switch Automatic Mode", "Automatic Mode"))
         case .appearanceLight:
-            entry(89, "Light", .view, 0, [], .settings(.general(.webAppearance(.light))), in: .appearance,
+            entry(89, "Light", .view, 0, [], .site(.appearance(.light)), in: .appearance,
                   bar: listing("sun.max", title: "Switch to Light Mode", "Switch to Light Mode", "Switch Light Mode", "Light Mode"))
         case .appearanceDark:
-            entry(90, "Dark", .view, 0, [], .settings(.general(.webAppearance(.dark))), in: .appearance,
+            entry(90, "Dark", .view, 0, [], .site(.appearance(.dark)), in: .appearance,
                   bar: listing("moon.stars.fill", title: "Switch to Dark Mode", "Switch to Dark Mode", "Switch Dark Mode", "Dark Mode", "Night Mode"))
         case .showSidebar:
             entry(91, "Show/Hide Sidebar", .view, 1, [key(cmd, .s, .pageThenApp)], .sidebar(.toggle), bar: listing("sidebar.left", "Toggle Sidebar"))
@@ -265,8 +265,8 @@ extension ActionID {
         case .forceReloadPage:
             entry(98, "Force Refresh the Page", .view, 2, [key([shift, cmd], .r, .page)], .page(.reload(.focused, ignoringCache: true)),
                   bar: listing("arrow.clockwise", "Force Reload", "Force Refresh"), alternate: true)
-        case .clearCookies: entry(99, "Clear Cookies and Refresh", .view, 2, [], .later(.siteData), bar: listing("trash", "Clear Cookies"))
-        case .clearCache: entry(100, "Clear Cache and Refresh", .view, 2, [], .later(.siteData), bar: listing("trash", "Clear Cache"))
+        case .clearCookies: entry(99, "Clear Cookies and Refresh", .view, 2, [], .site(.clear(kinds: [.cookies], scope: .site, reload: true)), bar: listing("trash", "Clear Cookies"))
+        case .clearCache: entry(100, "Clear Cache and Refresh", .view, 2, [], .site(.clear(kinds: [.cache], scope: .profile, reload: true)), bar: listing("trash", "Clear Cache"))
         case .addSplitView:
             entry(101, "Add Split View", .view, 3, [key([ctrl, shift], .equals, .pageThenApp)], .split(.addPane),
                   bar: listing("square.split.2x1", "Add Split View", "Split View", "Create Split View Pane", "New Split View", "Split"))
@@ -378,10 +378,10 @@ extension ActionID {
 
         // MARK: Extensions
         case .addExtension:
-            entry(165, "Add Extension…", .extensions, 0, [], .later(.extensions),
+            entry(165, "Add Extension…", .extensions, 0, [], .site(.addExtension),
                   bar: listing("plus.circle", "Install Extensions", "Extension Store", "Plugins", "Chrome Extensions", "Chrome Store"))
         case .manageExtensions:
-            entry(166, "Manage Extensions…", .extensions, 0, [], .later(.extensions),
+            entry(166, "Manage Extensions…", .extensions, 0, [], .site(.extensions),
                   bar: listing("puzzlepiece", "Manage Extensions", "Extensions", "Plugins", "Chrome Extensions"))
 
         // MARK: Window (groups: Minimize, Zoom | the Library pages | Bring All to Front)

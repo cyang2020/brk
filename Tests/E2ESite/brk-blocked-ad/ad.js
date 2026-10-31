@@ -1,0 +1,1 @@
+window.fixtureAdExecuted=true;

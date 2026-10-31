@@ -70,6 +70,8 @@ public struct CefPermissionKind: OptionSet, Sendable, Hashable {
         if value & UInt32(CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE.rawValue) != 0 { kinds.insert(.camera) }
         if value & UInt32(CEF_MEDIA_PERMISSION_DESKTOP_AUDIO_CAPTURE.rawValue) != 0 { kinds.insert(.microphone) }
         if value & UInt32(CEF_MEDIA_PERMISSION_DESKTOP_VIDEO_CAPTURE.rawValue) != 0 { kinds.insert(.camera) }
+        let known = UInt32(CEF_MEDIA_PERMISSION_DEVICE_AUDIO_CAPTURE.rawValue | CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE.rawValue | CEF_MEDIA_PERMISSION_DESKTOP_AUDIO_CAPTURE.rawValue | CEF_MEDIA_PERMISSION_DESKTOP_VIDEO_CAPTURE.rawValue)
+        if value & ~known != 0 { kinds.insert(.other) }
         return kinds
     }
 
@@ -107,8 +109,16 @@ public struct CefPermissionRequest: Sendable, Equatable {
     public var kinds: CefPermissionKind
     /// The origin (scheme + host) requesting permission.
     public var origin: String
+    public var frameIdentifier: String?
+    public var promptID: UInt64?
+    public var requestedMask: UInt32
+    public var desktopCapture: Bool
 
-    public init(kinds: CefPermissionKind, origin: String) {
+    public init(kinds: CefPermissionKind, origin: String, frameIdentifier: String? = nil, promptID: UInt64? = nil, requestedMask: UInt32 = 0, desktopCapture: Bool = false) {
+        self.frameIdentifier = frameIdentifier
+        self.promptID = promptID
+        self.requestedMask = requestedMask
+        self.desktopCapture = desktopCapture
         self.kinds = kinds
         self.origin = origin
     }
@@ -121,6 +131,46 @@ extension CefPermissionDecision {
         case .allow: return CEF_PERMISSION_RESULT_ACCEPT
         case .deny: return CEF_PERMISSION_RESULT_DENY
         case .dismiss: return CEF_PERMISSION_RESULT_DISMISS
+        }
+    }
+}
+
+/// Owns the incoming CEF reference. Resolves and releases exactly once, including synchronous reentry.
+@MainActor
+public final class CefPermissionCallback {
+    nonisolated(unsafe) private var prompt: UnsafeMutablePointer<cef_permission_prompt_callback_t>?
+    nonisolated(unsafe) private var media: UnsafeMutablePointer<cef_media_access_callback_t>?
+    private let mask: UInt32
+    private(set) public var resolved = false
+
+    init(prompt: UnsafeMutablePointer<cef_permission_prompt_callback_t>) { self.prompt = prompt; mask = 0 }
+    init(media: UnsafeMutablePointer<cef_media_access_callback_t>, mask: UInt32) { self.media = media; self.mask = mask }
+
+    deinit {
+        cefRelease(prompt.map(UnsafeMutableRawPointer.init))
+        cefRelease(media.map(UnsafeMutableRawPointer.init))
+    }
+
+    public func invalidate() {
+        guard !resolved else { return }
+        resolved = true
+        let prompt = self.prompt, media = self.media
+        self.prompt = nil; self.media = nil
+        cefRelease(prompt.map(UnsafeMutableRawPointer.init)); cefRelease(media.map(UnsafeMutableRawPointer.init))
+    }
+
+    public func resolve(_ decision: CefPermissionDecision) {
+        guard !resolved else { return }
+        resolved = true
+        let prompt = self.prompt, media = self.media
+        self.prompt = nil; self.media = nil
+        if let prompt {
+            prompt.pointee.cont?(prompt, decision.cefResult)
+            cefRelease(UnsafeMutableRawPointer(prompt))
+        }
+        if let media {
+            if decision == .allow { media.pointee.cont?(media, mask) } else { media.pointee.cancel?(media) }
+            cefRelease(UnsafeMutableRawPointer(media))
         }
     }
 }

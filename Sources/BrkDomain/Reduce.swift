@@ -105,6 +105,7 @@ struct Work {
         case .library(let c): library(c, in: window)
         case .window(let c): windows(c, in: window)
         case .peek(let c): peek(c, in: window)
+        case .site(let c): sites(c, in: window)
         case .profile(let c): profiles(c, in: window)
         case .later: break   // a greyed-out row of a later wave: nothing happens yet
         }
@@ -116,11 +117,15 @@ struct Work {
         }
         switch event {
         case .window(let window, _), .suggestions(let window, _, _): begin(window: window)
-        case .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .page(let page, let e): pageEvent(e, for: page)
         case .download(let update): downloadEvent(update)
+        case .websiteRulesLoaded(let context, let update): websiteRulesLoaded(context, update)
+        case .extensionOperationFailed(let context, let error): extensionOperationFailed(context, error)
+        case .extensionsRead(let catalog): extensionsRead(catalog)
+        case .siteDataCleared(let result): siteDataCleared(result)
         case .contextDisposed(let result):
             switch result {
             case .completed(let id, .profile(let profile), _):

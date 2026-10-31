@@ -1,4 +1,5 @@
 import AppKit
+import BrkBase
 import ObjectiveC
 
 /// The CEF-owned host windows whose page views were moved out. Chromium activates its own window when the page
@@ -44,10 +45,37 @@ enum HostWindows {
 
     static func isHost(_ window: NSWindow) -> Bool { hosts.contains(window) }
 
-    /// Chromium's download animation and bubble use native widgets outside CefChromeBrowser's page hosts.
-    /// They can outlive OnBeforeClose and onWindowDestroyed. AppKit would close them during terminate, after
-    /// cef_shutdown has destroyed their Chromium observers. Close them synchronously while CEF is still alive.
-    /// CefNSWindow page hosts keep their CEF close path; this private class name is pinned by the download e2e tests.
+    private static var terminationRetryPending = false
+    private static var terminationChoiceDeadline: TimeInterval?
+
+    /// Chrome can veto NSApplication termination while one of its confirmations is open.
+    /// Dismiss only its app-owned auxiliary widgets; page hosts still use Lifecycle's ordered shutdown.
+    static func prepareForApplicationTermination() -> Bool {
+        let widgets = NSApp.windows.filter { $0.isVisible && NSStringFromClass(type(of: $0)) == "NativeWidgetMacNSWindow" }
+        guard !widgets.isEmpty else { terminationChoiceDeadline = nil; return true }
+        let now = ProcessInfo.processInfo.systemUptime
+        let deadline = terminationChoiceDeadline ?? now + 3
+        terminationChoiceDeadline = deadline
+        guard now < deadline else { terminationChoiceDeadline = nil; return true }
+        for widget in widgets {
+            // Deliver the native dialog's standard cancellation input, not a fabricated continuation.
+            if let cancel = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: now,
+                windowNumber: widget.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: Key.escape.code) {
+                if !widget.performKeyEquivalent(with: cancel) { widget.sendEvent(cancel) }
+            }
+        }
+        if !terminationRetryPending {
+            terminationRetryPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                terminationRetryPending = false
+                RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+            }
+        }
+        return false
+    }
+
+    /// Chromium's download animation and bubble can outlive their page hosts. Close these native widgets while
+    /// CEF's observers are still alive. Page hosts keep Lifecycle's CEF close path.
     static func closeAuxiliaryWindows() {
         autoreleasepool {
             for window in NSApp.windows where NSStringFromClass(type(of: window)) == "NativeWidgetMacNSWindow" {

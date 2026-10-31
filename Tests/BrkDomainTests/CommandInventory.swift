@@ -11,6 +11,8 @@ enum CommandInventory {
     static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route")
     static let example = URL(string: "https://example.com/")!
 
+    static let siteTarget = SiteTarget(document: DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), context: .profile(profile), origin: SiteOrigin(example)!)
+
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
         .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.submitSearch(engine: SearchEngine.duckDuckGo.id, query: "x")),
@@ -39,6 +41,14 @@ enum CommandInventory {
         .peek(.open(example)), .peek(.close),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
         .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
+        .site(.loadBlockingRules), .site(.selectedBlockingRules(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))), .site(.resetBlockingRules),
+        .site(.nativeExtensions), .site(.pinExtension("ghost", true)), .site(.invokeExtension("ghost")), .site(.removeExtension("ghost")),
+        .site(.controls), .site(.closeControls), .site(.rule(siteTarget, SiteRule())),
+        .site(.permission(siteTarget, SiteOrigin(example)!, [.notifications], .deny)), .site(.appearance(.dark)),
+        .site(.cancelClearing),
+        .site(.clear(kinds: [.cookies], scope: .site, reload: true)), .site(.confirmClear("ghost", false)),
+        .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
+        .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
         .later(.boosts),
         .window(.close),
     ]
@@ -52,6 +62,11 @@ enum CommandInventory {
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .closed),
         .download(DownloadUpdate(id: download, owner: DownloadOwner(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), context: ContextEpoch(context: .profile(profile), generation: 1), policy: .default), details: DownloadDetails(url: example, suggestedName: "x.zip"), revision: 1, stage: .choosingDestination)),
         .contextDisposed(.completed(DisposalID("ghost"), .profile(profile), .deletionScheduledForNextLaunch)),
+        .page(siteTarget.document.browser, .websitePolicyApplied(WebsitePolicyStatus(document: siteTarget.document, appearance: .automatic, themeApplied: false, frozen: false, error: nil))),
+        .websiteRulesLoaded(.profile(profile), .failed("fixture")),
+        .extensionOperationFailed(.profile(profile), "fixture"),
+        .extensionsRead(ExtensionCatalog(context: .profile(profile), extensions: [], error: "fixture")),
+        .siteDataCleared(ClearSiteDataResult(request: ClearSiteData(id: "ghost", target: siteTarget, kinds: [.cookies]), completed: [], error: "fixture")),
         .clockTick,
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
@@ -74,6 +89,7 @@ enum CommandInventory {
         case .library: "library"
         case .window: "window"
         case .peek: "peek"
+        case .site: "site"
         case .profile: "profile"
         case .later: "later"
         }
@@ -193,6 +209,29 @@ enum CommandInventory {
             case .assign: "assign"
             case .openDialog: "openDialog"
             }
+        case .site(let c):
+            switch c {
+            case .loadBlockingRules: "loadBlockingRules"
+            case .selectedBlockingRules: "selectedBlockingRules"
+            case .resetBlockingRules: "resetBlockingRules"
+            case .nativeExtensions: "nativeExtensions"
+            case .pinExtension: "pinExtension"
+            case .invokeExtension: "invokeExtension"
+            case .removeExtension: "removeExtension"
+            case .controls: "controls"
+            case .closeControls: "closeControls"
+            case .rule: "rule"
+            case .permission: "permission"
+            case .appearance: "appearance"
+            case .clear: "clear"
+            case .cancelClearing: "cancelClearing"
+            case .confirmClear: "confirmClear"
+            case .extensions: "extensions"
+            case .extensionShortcuts: "extensionShortcuts"
+            case .installSelectedExtension: "installSelectedExtension"
+            case .executeExtensionInstall: "executeExtensionInstall"
+            case .addExtension: "addExtension"
+            }
         case .later(let feature): feature.rawValue
         }
         return "\(area(command)).\(leaf)"
@@ -210,6 +249,7 @@ enum CommandInventory {
             case .faviconChanged: "page.faviconChanged"
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"
+            case .websitePolicyApplied: "page.websitePolicyApplied"
             case .rendererGone: "page.rendererGone"
             case .closedByPage: "page.closedByPage"
             case .gainedFocus: "page.gainedFocus"
@@ -217,6 +257,10 @@ enum CommandInventory {
             case .closed: "page.closed"
             }
         case .download: "download"
+        case .websiteRulesLoaded: "websiteRulesLoaded"
+        case .extensionOperationFailed: "extensionOperationFailed"
+        case .extensionsRead: "extensionsRead"
+        case .siteDataCleared: "siteDataCleared"
         case .contextDisposed: "contextDisposed"
         case .clockTick: "clockTick"
         case .window(_, let e):

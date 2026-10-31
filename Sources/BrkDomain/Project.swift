@@ -32,6 +32,7 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
         if let window = projectWindow(id, state, ctx) { windows[id] = window }
     }
     return AppSnapshot(rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state), settings: projectSettings(state),
+                       sites: state.siteSnapshots(),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
                            (page, PageObservation(browser: state.session.live[page]?.browser,
                                                   document: state.session.live[page]?.document ?? .unavailable,
@@ -53,7 +54,9 @@ func projectPages(_ state: AppState) -> [PageSpec] {
         let directory = settings.downloadsDirectory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? DownloadPolicy.defaultDirectory
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
-        return PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy)
+        var spec = PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy)
+        spec.websitePolicy = state.websitePolicy(for: page)
+        return spec
     }
 }
 
@@ -318,6 +321,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         enabled.subtract([.newFolder, .pinTab, .addSplitView, .removeSplitView, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection])
     }
+    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
     let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }

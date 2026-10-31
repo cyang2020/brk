@@ -426,6 +426,19 @@ final class AppUnderTest {
     }
 
     @discardableResult
+    func screenshotSiteControls(_ name: String) throws -> URL {
+        guard let window else { throw Check(description: "no screenshot owner") }
+        let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
+        try waitUntil("the real native site controls capture") {
+            let result = try self.send(.siteControlsScreenshot(window: window, path: url.path))
+            guard case .screenshot = result else { throw Check(description: "site capture answered \(result)") }
+            return true
+        }
+        if !screenshots.contains(url) { screenshots.append(url) }
+        return url
+    }
+
+    @discardableResult
     func advanceClock(seconds: Double) throws -> Instant {
         let result = try send(.advanceClock(seconds: seconds))
         guard case .clock(let now) = result else { throw Check(description: "advanceClock(\(seconds)) answered \(Self.describe(result))") }

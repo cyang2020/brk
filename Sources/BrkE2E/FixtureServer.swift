@@ -141,7 +141,9 @@ final class FixtureServer: @unchecked Sendable {
         }
         if path == "/" { path = "/index.html" }
         let response: Data
-        if path.hasPrefix("/suggest") {
+        if let siteResponse = SitePolicyFixture.response(path, request: request) {
+            response = siteResponse
+        } else if path.hasPrefix("/suggest") {
             let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
             guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

@@ -65,6 +65,10 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// `WebEngine.pageLog`: created, close requested and closed (OnBeforeClose) pages with generations, in order.
     case pageLog
     /// Reducer-accepted browser and document observations, including hidden demanded slots.
+    case nativeDialogKey(number: Int, chord: String)
+    case setAppAppearance(Scheme?)
+    case siteControlsScreenshot(window: WindowID, path: String)
+    case siteControls
     case pageObservations
     /// Writes state.json now (skips the debounce).
     case flush
@@ -105,6 +109,7 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case screenshot(path: String, pixelWidth: Int, pixelHeight: Int)
     case clock(now: Instant)
     case pageLog([PageLogEntry])
+    case siteControls([WindowID: SiteControlSnapshot])
     case pageObservations([PageID: PageObservation])
     case settings(SettingsSnapshot)
     case failed(String)

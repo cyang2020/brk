@@ -12,6 +12,7 @@ import Foundation
 @MainActor
 final class BrowserClient {
     private(set) weak var browser: CefBrowser?
+    nonisolated let requestFilter = CefRequestFilter()
 
     // Buffered early state (pre-attach).
     private var pendingTitle: String?
@@ -28,6 +29,8 @@ final class BrowserClient {
     nonisolated(unsafe) private var downloadPointer: UnsafeMutablePointer<cef_download_handler_t>?
     nonisolated(unsafe) var jsDialogPointer: UnsafeMutablePointer<cef_jsdialog_handler_t>?
     nonisolated(unsafe) var contextMenuPointer: UnsafeMutablePointer<cef_context_menu_handler_t>?
+    nonisolated(unsafe) var fileDialogPointer: UnsafeMutablePointer<cef_dialog_handler_t>?
+    nonisolated(unsafe) var framePointer: UnsafeMutablePointer<cef_frame_handler_t>?
     nonisolated(unsafe) var permissionPointer: UnsafeMutablePointer<cef_permission_handler_t>?
     nonisolated(unsafe) var requestPointer: UnsafeMutablePointer<cef_request_handler_t>?
     nonisolated(unsafe) var keyboardPointer: UnsafeMutablePointer<cef_keyboard_handler_t>?
@@ -78,6 +81,8 @@ final class BrowserClient {
         if let pointer = downloadPointer { downloadPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = jsDialogPointer { jsDialogPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = contextMenuPointer { contextMenuPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = fileDialogPointer { fileDialogPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
+        if let pointer = framePointer { framePointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = permissionPointer { permissionPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = requestPointer { requestPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
         if let pointer = keyboardPointer { keyboardPointer = nil; cefRelease(UnsafeMutableRawPointer(pointer)) }
@@ -192,6 +197,9 @@ final class BrowserClient {
         load.pointee.on_load_error = { handlerSelf, browser, frame, errorCode, errorText, failedURL in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             defer { cefRelease(frame.map(UnsafeMutableRawPointer.init)) }
+            if let frame, let identifier = CefStringUtil.takingUserFree(frame.pointee.get_identifier?(frame)) {
+                BrowserClientCallbacks.run(handlerSelf, default: ()) { _, browser in browser.delegate?.browser(browser, willNavigateFrame: identifier) }
+            }
             guard let frame, frame.pointee.is_main?(frame) != 0 else { return }
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
             let text = CefStringUtil.string(from: errorText)
@@ -425,6 +433,14 @@ final class BrowserClient {
             cefAddRef(UnsafeMutableRawPointer(handler))
             return handler
         }
+        client.pointee.get_dialog_handler = { pointer in
+            guard let owner = BrowserClient.owner(pointer.map(UnsafeMutableRawPointer.init)), let handler = owner.fileDialogPointer else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler)); return handler
+        }
+        client.pointee.get_frame_handler = { pointer in
+            guard let owner = BrowserClient.owner(pointer.map(UnsafeMutableRawPointer.init)), let handler = owner.framePointer else { return nil }
+            cefAddRef(UnsafeMutableRawPointer(handler)); return handler
+        }
         client.pointee.get_permission_handler = { clientSelf in
             guard let me = BrowserClient.owner(clientSelf.map(UnsafeMutableRawPointer.init)),
                   let handler = me.permissionPointer else { return nil }
@@ -512,6 +528,8 @@ extension BrowserClient {
     func makeExtendedHandlers() {
         makeJSDialogHandler()
         makeContextMenuHandler()
+        makeFileDialogHandler()
+        makeFrameHandler()
         makePermissionHandler()
         makeRequestHandler()
         makeKeyboardHandler()
@@ -655,44 +673,75 @@ extension BrowserClient {
 
     // MARK: Permissions
 
+    private func makeFileDialogHandler() {
+        let handler = cefAllocate(cef_dialog_handler_t.self, owner: self)
+        handler.pointee.on_file_dialog = { pointer, browser, mode, title, path, _, _, _, callback in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            guard let callback else { return 0 }
+            let request = CefFileDialogRequest(rawMode: UInt32(mode.rawValue), folder: mode == FILE_DIALOG_OPEN_FOLDER, title: CefStringUtil.string(from: title), defaultPath: CefStringUtil.string(from: path))
+            return MainActor.assumeIsolated {
+                let wrapper = CefFileDialogCallback(taking: callback)
+                guard let owner = cefOwner(BrowserClient.self, pointer.map(UnsafeMutableRawPointer.init)), let browser = owner.browser else {
+                    wrapper.cancel(); return 1
+                }
+                if browser.delegate?.browser(browser, fileDialog: request, callback: wrapper) == true { return 1 }
+                wrapper.leaveToDefault(); return 0
+            }
+        }
+        fileDialogPointer = handler
+    }
+
+    private func makeFrameHandler() {
+        let handler = cefAllocate(cef_frame_handler_t.self, owner: self)
+        let invalidate: @convention(c) (UnsafeMutablePointer<cef_frame_handler_t>?, UnsafeMutablePointer<cef_browser_t>?, UnsafeMutablePointer<cef_frame_t>?) -> Void = { pointer, browser, frame in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            let identifier = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
+            cefRelease(frame.map(UnsafeMutableRawPointer.init))
+            guard let identifier else { return }
+            BrowserClientCallbacks.run(pointer, default: ()) { _, browser in browser.delegate?.browser(browser, willNavigateFrame: identifier) }
+        }
+        handler.pointee.on_frame_detached = invalidate
+        handler.pointee.on_frame_destroyed = invalidate
+        framePointer = handler
+    }
+
     private func makePermissionHandler() {
         let handler = cefAllocate(cef_permission_handler_t.self, owner: self)
         handler.pointee.on_request_media_access_permission = {
             handlerSelf, browser, frame, requestingOrigin, requestedPermissions, callback in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            let frameID = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
             guard let callback else { return 0 }
-            let origin = CefStringUtil.string(from: requestingOrigin)
-            let kinds = CefPermissionKind.fromMediaTypes(requestedPermissions)
-            let request = CefPermissionRequest(kinds: kinds, origin: origin)
-            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                let decision = cefBrowser.delegate?.browser(cefBrowser, requestsPermission: request) ?? .deny
-                switch decision {
-                case .allow:
-                    callback.pointee.cont?(callback, kinds.mediaMask(within: requestedPermissions))
-                case .deny, .dismiss:
-                    callback.pointee.cancel?(callback)
-                }
-                cefRelease(UnsafeMutableRawPointer(callback))
-                return 1
+            let request = CefPermissionRequest(kinds: .fromMediaTypes(requestedPermissions),
+                origin: CefStringUtil.string(from: requestingOrigin), frameIdentifier: frameID,
+                requestedMask: requestedPermissions,
+                desktopCapture: requestedPermissions & UInt32(CEF_MEDIA_PERMISSION_DESKTOP_VIDEO_CAPTURE.rawValue | CEF_MEDIA_PERMISSION_DESKTOP_AUDIO_CAPTURE.rawValue) != 0)
+            MainActor.assumeIsolated {
+                let owner = cefOwner(BrowserClient.self, handlerSelf.map(UnsafeMutableRawPointer.init))
+                let wrapper = CefPermissionCallback(media: callback, mask: requestedPermissions)
+                if let browser = owner?.browser { browser.delegate?.browser(browser, permission: request, callback: wrapper) ?? wrapper.resolve(.deny) }
+                else { wrapper.resolve(.deny) }
             }
+            return 1
         }
         handler.pointee.on_show_permission_prompt = {
-            handlerSelf, browser, _, requestingOrigin, requestedPermissions, callback in
+            handlerSelf, browser, promptID, requestingOrigin, requestedPermissions, callback in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let callback else { return 0 }
-            let origin = CefStringUtil.string(from: requestingOrigin)
-            let kinds = CefPermissionKind.fromRequestTypes(requestedPermissions)
-            let request = CefPermissionRequest(kinds: kinds, origin: origin)
-            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                let decision = cefBrowser.delegate?.browser(cefBrowser, requestsPermission: request) ?? .deny
-                callback.pointee.cont?(callback, decision.cefResult)
-                cefRelease(UnsafeMutableRawPointer(callback))
-                return 1
+            let request = CefPermissionRequest(kinds: .fromRequestTypes(requestedPermissions),
+                origin: CefStringUtil.string(from: requestingOrigin), promptID: promptID, requestedMask: requestedPermissions)
+            MainActor.assumeIsolated {
+                let owner = cefOwner(BrowserClient.self, handlerSelf.map(UnsafeMutableRawPointer.init))
+                let wrapper = CefPermissionCallback(prompt: callback)
+                if let browser = owner?.browser { browser.delegate?.browser(browser, permission: request, callback: wrapper) ?? wrapper.resolve(.deny) }
+                else { wrapper.resolve(.deny) }
             }
+            return 1
         }
-        handler.pointee.on_dismiss_permission_prompt = { _, browser, _, _ in
+        handler.pointee.on_dismiss_permission_prompt = { handlerSelf, browser, promptID, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            BrowserClientCallbacks.run(handlerSelf, default: ()) { _, browser in browser.delegate?.browser(browser, dismissedPermission: promptID) }
         }
         permissionPointer = handler
     }
@@ -786,9 +835,14 @@ extension BrowserClient {
                 cefBrowser.delegate?.browser(cefBrowser, renderProcessDidTerminate: reason, errorCode: code)
             }
         }
-        // get_resource_request_handler left unset (returns NULL by default) —
-        // the custom-scheme path already covers app-served content; per-response
-        // interception is intentionally out of scope.
+        handler.pointee.get_resource_request_handler = { pointer, browser, frame, request, _, download, _, _ in
+            defer {
+                cefRelease(browser.map(UnsafeMutableRawPointer.init)); cefRelease(frame.map(UnsafeMutableRawPointer.init))
+                cefRelease(request.map(UnsafeMutableRawPointer.init))
+            }
+            guard download == 0, let owner = cefOwner(BrowserClient.self, pointer.map(UnsafeMutableRawPointer.init)) else { return nil }
+            return owner.requestFilter.makeHandler()
+        }
         requestPointer = handler
     }
 
