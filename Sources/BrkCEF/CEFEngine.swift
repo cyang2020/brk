@@ -43,6 +43,7 @@ public final class CEFEngine: WebEngine {
     private var disposals: [DisposalID: ContextDisposal] = [:]
     private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
     private var ledger = PageLedger()
+    private let pageReconciliation = PageReconciliation()
     /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
     /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profile-<id>`; incognito is in memory.
     private var profiles: [BrowsingContext: CefProfile] = [:]
@@ -208,6 +209,11 @@ public final class CEFEngine: WebEngine {
         guard phase == .running else { return }
         let pages = pages.filter { contexts.permitsWork($0.context) }
         self.wanted = pages
+        pageReconciliation.submit(pages) { [self] in reconcilePages($0) }
+    }
+
+    private func reconcilePages(_ pages: [PageSpec]) {
+        guard phase == .running else { return }
         let wanted = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // A page whose spec names another browsing context (its space changed profile) is replaced: Chromium binds a
         // page to its request context for life. The new incarnation inherits its window's request.
@@ -580,7 +586,7 @@ public final class CEFEngine: WebEngine {
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
 
     private func retire(_ page: ChromePage) {
-        guard ledger.retire(page.id) == page.incarnation else { return }
+        guard ledger.isLive(page.incarnation), ledger.retire(page.id) == page.incarnation else { return }
         resources.unpresent(page.incarnation)
         page.park()
         outputs.sourceGone(page.incarnation)
