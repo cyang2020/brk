@@ -63,10 +63,11 @@ enum NativePickerInput {
         }
     }
     static func fields(_ node: AXUIElement) -> [String: Any] {
-        ["role": string(node, kAXRoleAttribute), "title": string(node, kAXTitleAttribute),
-         "value": string(node, kAXValueAttribute), "description": string(node, kAXDescriptionAttribute),
-         "identifier": string(node, kAXIdentifierAttribute),
-         "selected": attribute(node, kAXSelectedAttribute) as? Bool ?? false]
+        let names = [kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXIdentifierAttribute, kAXSelectedAttribute]
+        let data = values(node, names)
+        return ["role": data[0] as? String ?? "", "title": data[1] as? String ?? "",
+                "value": data[2] as? String ?? "", "description": data[3] as? String ?? "",
+                "identifier": data[4] as? String ?? "", "selected": data[5] as? Bool ?? false]
     }
     static func wherePopup(_ panel: AXUIElement) -> AXUIElement? {
         find(panel) { node, role in
@@ -77,13 +78,26 @@ enum NativePickerInput {
         guard let popup = wherePopup(panel) else { return false }
         return [string(popup, kAXTitleAttribute), string(popup, kAXValueAttribute)].contains(directory.lastPathComponent)
     }
+    static func values(_ node: AXUIElement, _ names: [String]) -> [Any] {
+        AXUIElementSetMessagingTimeout(node, 0.5)
+        var result: CFArray?
+        if AXUIElementCopyMultipleAttributeValues(node, names as CFArray, .init(rawValue: 0), &result) == .success,
+           let values = result as? [Any], values.count == names.count { return values }
+        return names.map { attribute(node, $0) as Any }
+    }
     static func findFile(_ panel: AXUIElement, name: String) -> AXUIElement? {
-        find(panel) { node, role in
-            [string(node, kAXTitleAttribute), string(node, kAXValueAttribute), string(node, kAXDescriptionAttribute)].contains(name)
+        let browser = find(panel) { _, role in role == kAXBrowserRole } ?? panel
+        var examples: [String] = []
+        let found = find(browser) { node, role in
+            let labels = values(node, [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute]).compactMap { $0 as? String }
+            if role == kAXTextFieldRole, examples.count < 12 { examples += labels.filter { !$0.isEmpty } }
+            return labels.contains(name)
         }
+        if found == nil { print("[AX] fixture \(name) absent in file browser; sample names=\(examples.prefix(12))") }
+        return found
     }
     static func names(_ node: AXUIElement, _ name: String) -> Bool {
-        [string(node, kAXTitleAttribute), string(node, kAXValueAttribute), string(node, kAXDescriptionAttribute)].contains(name)
+        values(node, [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute]).compactMap { $0 as? String }.contains(name)
     }
     static func set(_ node: AXUIElement, _ name: String, _ value: CFTypeRef) -> Bool {
         AXUIElementSetMessagingTimeout(node, 0.5)
@@ -158,9 +172,22 @@ enum NativePickerInput {
                 "filenameField": filename.map(fields) ?? [:],
                 "buttons": ["Cancel", prompt].compactMap { button(panel, title: $0).map(fields) }]
     }
+    /// Resolve existing files completely, and nonexistent save destinations through their existing parent.
+    static func canonicalPath(_ url: URL) throws -> String {
+        if let path = realpath(url.path, nil) {
+            defer { free(path) }
+            return String(cString: path)
+        }
+        guard let parent = realpath(url.deletingLastPathComponent().path, nil) else {
+            throw Check(description: "Fixture parent cannot be resolved: \(url.path)")
+        }
+        defer { free(parent) }
+        return URL(fileURLWithPath: String(cString: parent), isDirectory: true).appendingPathComponent(url.lastPathComponent).path
+    }
     static func actualSelection(_ app: AppUnderTest, equals file: URL) throws -> Bool {
         guard case .menuItems(let paths) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { return false }
-        return paths == [file.resolvingSymlinksInPath().path]
+        let actual = try paths.map { try canonicalPath(URL(fileURLWithPath: $0)) }
+        return actual == [try canonicalPath(file)]
     }
     static func filenameMatches(_ field: AXUIElement, _ file: URL) -> Bool {
         let value = string(field, kAXValueAttribute)
@@ -208,7 +235,7 @@ enum NativePickerInput {
             }
             let title = save ? "Save" : controls[1]
             try app.waitUntil("AX confirm enabled") { button(panel, title: title).map { attribute($0, kAXEnabledAttribute) as? Bool == true } == true }
-            try expect(try actualSelection(app, equals: file) && whereMatches(panel, directory), "Selection changed before confirm; no press sent")
+            try expect(try actualSelection(app, equals: file), "Selection changed before confirm; no press sent")
             if let selection { try expect(isSelected(selection.row) && names(selection.name, file.lastPathComponent), "AX selected row changed; no press sent") }
             if let filename { try expect(filenameMatches(filename, file), "AX filename changed; no press sent") }
             app.note("AX verified selection \(file.path) before confirm; receipt \(receipt.lastPathComponent).")

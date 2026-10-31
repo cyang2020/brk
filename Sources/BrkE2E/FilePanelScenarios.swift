@@ -43,9 +43,12 @@ enum FilePanelScenarios {
         let receipt = directory.appendingPathComponent(stem + ".json")
         let ax = try NativePickerInput.receipt(app, observation: observation, prompt: controls[1])
         guard case .menuItems(let selection) = try app.send(.sidebarPanel(window: nil, action: .selection)) else { throw Check(description: "Cannot read actual picker selection") }
-        try JSONSerialization.data(withJSONObject: ["accessibility": ax, "panelSelection": selection, "pid": hello.pid, "class": panel.className, "number": panel.number,
+        let canonicalSelection = try selection.map { try NativePickerInput.canonicalPath(URL(fileURLWithPath: $0)) }
+        let expected = try verifiedSelection.map { try NativePickerInput.canonicalPath($0) }
+        try JSONSerialization.data(withJSONObject: ["accessibility": ax, "panelSelection": selection,
+            "canonicalPanelSelection": canonicalSelection, "canonicalExpectedFixture": expected ?? "", "pid": hello.pid, "class": panel.className, "number": panel.number,
             "windowServer": window, "controls": controls, "screenshot": "shots/" + screenshot.lastPathComponent,
-            "selectionVerifiedBeforeConfirm": verifiedSelection.map { selection == [$0.resolvingSymlinksInPath().path] } ?? false], options: [.prettyPrinted, .sortedKeys]).write(to: receipt)
+            "selectionVerifiedBeforeConfirm": expected.map { canonicalSelection == [$0] } ?? false], options: [.prettyPrinted, .sortedKeys]).write(to: receipt)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(facts).write(to: directory.appendingPathComponent(stem + "-native.json"))
         app.note("Recorded actual \(panel.className) #\(panel.number), PID \(hello.pid), bounds and screenshot: \(receipt.path). Window census and AX observations are retained; white PNGs are not rendered-content evidence.")
@@ -61,7 +64,7 @@ enum FilePanelScenarios {
     static func requireOwnedFixture(_ app: AppUnderTest, _ url: URL) throws {
         let root = ProcessInfo.processInfo.environment["BRK_E2E_DATA_ROOT"].map { URL(fileURLWithPath: $0) }
             ?? (app.scenarioID == "ImportSync-Second" ? app.dataDirectory.deletingLastPathComponent() : app.dataDirectory)
-        try expect(url.resolvingSymlinksInPath().path.hasPrefix(root.resolvingSymlinksInPath().path + "/"), "Selected fixture must stay inside the owned temporary root")
+        try expect(try NativePickerInput.canonicalPath(url).hasPrefix(NativePickerInput.canonicalPath(root) + "/"), "Selected fixture must stay inside the owned temporary root")
     }
 
     static func selectImport(_ app: AppUnderTest, _ file: URL) throws {
