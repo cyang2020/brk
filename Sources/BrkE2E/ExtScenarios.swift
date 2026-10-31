@@ -21,11 +21,13 @@ enum ExtScenarios {
     }
     @Sendable static func catalog(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
-        try app.dispatch(.site(.pinExtension(fixture.id, true)))
+        try app.click(.settingsField("extension-pin-" + fixture.id))
         try expect(try SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id), "public profile pin missing")
         try expect(fixture.canChangeIncognito == true, "fixture incognito permission is not editable")
         for allowed in [false, true, false] {
-            try app.dispatch(.site(.extensionIncognito(fixture.id, allowed)))
+            if try catalogValue(app, fixture.id)?.incognitoAllowed != allowed {
+                try app.click(.settingsField("extension-incognito-" + fixture.id))
+            } else { try app.dispatch(.site(.extensionIncognito(fixture.id, allowed))) }
             try app.waitUntil("Chromium incognito readback \(allowed)") {
                 if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
                 return try catalogValue(app, fixture.id)?.incognitoAllowed == allowed
