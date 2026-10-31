@@ -34,7 +34,15 @@ All production code builds in Swift 6 and obeys the import boundaries. Prefer be
 
 ## Shared Mac, locks and tools
 
-Create the CEF link once in a new checkout: `ln -s /Users/administrator/.cache/arc-spike-swift/.cef .cef`. Full signed builds take both locks:
+Create the CEF link once in a new checkout: `ln -s /Users/administrator/.cache/arc-spike-swift/.cef .cef`.
+
+Two kinds of build. An iteration build compiles, bundles and signs without the unit-test step and takes only the build lock, so native runs of other slices overlap with it:
+
+```sh
+SKIP_TESTS=1 python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- scripts/build.sh
+```
+
+The delivery build, run once before the final report, takes both locks and runs the full unit suite:
 
 ```sh
 python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh
@@ -46,9 +54,11 @@ Native runs record source and binary identity and take the native lock:
 python3 verify/completion/browser-basic-parent/run-native.py <unique-name> --only <scenarios> --run-timeout 600
 ```
 
-The lock wrapper waits in a fair first-come, first-served queue (`/tmp/brk-lock-queue`), starts your command the moment the locks are free and it is your turn, and prints every 30 seconds your position and who holds the locks. It has no give-up time unless you pass `--timeout`; `python3 scripts/with-batch-locks.py --status` shows the holders and the queue. Eight slices build on this Mac at once, so one signed build at a time is the throughput and waiting behind two or three builds is normal. A wait is never a blocker and never evidence; do not report BLOCKED for lock contention. If your shell tool limits command duration, start the locked command in the background with its output in a log under your evidence directory and read the log; do not edit source while it waits or runs. Focused `swift build` and `swift test --filter` work need no lock. Never run a native suite without the lock; never change source while your native run is active; terminate only your own PIDs. T3 creates your checkout; do not create worktrees in the shell. Follow a running delegate's `next` instruction and never poll it.
+Run only your own scenarios plus the existing ones your change touches. Do not run the full native suite: the parent runs one unified full build and the full regression on the integration branch after each delivery and sends failures back to their owners. Focused `swift test --filter` runs need no lock.
 
-If you must return before everything works, commit the real progress and return ISSUES or BLOCKED with the exact remaining list and reproduction evidence. Do not claim the slice complete.
+The lock wrapper waits in a fair first-come, first-served queue (`/tmp/brk-lock-queue`), starts your command the moment the locks are free and it is your turn, and prints every 30 seconds your position and who holds the locks. It has no give-up time unless you pass `--timeout`; `python3 scripts/with-batch-locks.py --status` shows the holders and the queue. A wait is never a blocker and never evidence; do not report BLOCKED for lock contention. If your shell tool limits command duration, start the locked command in the background with its output in a log under your evidence directory and read the log; do not edit source while it waits or runs. Never run a native suite without the lock; never change source while your native run is active; terminate only your own PIDs. T3 creates your checkout; do not create worktrees in the shell. Follow a running delegate's `next` instruction and never poll it.
+
+Deliver as soon as your own scenarios pass natively and the delivery build is green. Rows you could not finish stay partial with their exact remaining gate; the parent's unified regression and review decide the rest. If you must return before everything works, commit the real progress and return ISSUES or BLOCKED with the exact remaining list and reproduction evidence.
 
 ## Deliverable
 
