@@ -7,8 +7,10 @@ import BrkDomain
 final class TabHoverPreview {
     private var task: Task<Void, Never>?
     private var popover: NSPopover?
+    private var content: String?
     func update(hovered: Bool, text: String?, over view: NSView) {
         guard hovered, let text, view.window != nil else { cancel(); return }
+        if content != text { cancel(); content = text }
         guard task == nil, popover == nil else { return }
         task = Task { @MainActor [weak self, weak view] in
             try? await Task.sleep(for: .milliseconds(600))
@@ -28,5 +30,5 @@ final class TabHoverPreview {
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxX)
         }
     }
-    func cancel() { task?.cancel(); task = nil; popover?.close(); popover = nil }
+    func cancel() { content = nil; task?.cancel(); task = nil; popover?.close(); popover = nil }
 }

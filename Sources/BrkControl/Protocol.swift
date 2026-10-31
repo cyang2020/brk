@@ -143,6 +143,7 @@ public enum SidebarPanelControlAction: Codable, Sendable, Equatable {
     case capture(path: String)
     case inspect
     case button(String)
+    case focus(identifier: String)
     case text(identifier: String, value: String)
     case select(identifier: String, index: Int)
     case save(directory: String, filename: String)

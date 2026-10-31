@@ -83,3 +83,14 @@ extension AutoArchiveThreshold {
         }
     }
 }
+
+/// Row kind determines hover metadata. Today can contain folders as well as tabs and splits.
+extension Row {
+    public var hoverPreviewText: String {
+        switch self {
+        case .tab(let tab): tab.title + "\n" + (tab.url?.absoluteString ?? "")
+        case .folder(let folder): folder.title + "\n" + String(folder.children.count) + " items"
+        case .split(let split): split.panes.map(\.title).joined(separator: "\n")
+        }
+    }
+}

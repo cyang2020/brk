@@ -159,6 +159,19 @@ final class FixtureServer: @unchecked Sendable {
         let response: Data
         if let siteResponse = SitePolicyFixture.response(path, request: request) {
             response = siteResponse
+        } else if path == "/repos/fixture/repo/notifications" {
+            let round = requestCount(path)
+            let body = Data((round == 1 ? "[{\"unread\":true},{\"unread\":true},{\"unread\":false}]" : "[]").utf8)
+            let status = round > 2 ? "401 Unauthorized" : "200 OK"
+            response = Data("HTTP/1.1 \(status)\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/sidebar-preview-target" {
+            let headers = String(decoding: request, as: UTF8.self)
+            let profile = headers.contains("brkSidebarProfile=Private") ? "Private" : headers.contains("brkSidebarProfile=Public") ? "Public" : "No cookie"
+            let body = Data("<html><head><title>\(profile) preview destination</title><link rel='icon' href='/sidebar-preview-icon.png'></head><body>Context scoped preview text.</body></html>".utf8)
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/sidebar-preview-icon.png" {
+            let body = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=")!
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/repos/fixture/repo/pulls" {
             let round = requestCount(path)
             let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []

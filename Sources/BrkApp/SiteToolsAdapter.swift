@@ -10,6 +10,7 @@ final class SiteToolsAdapter {
     private var tasks: [WindowID: Task<Void, Never>] = [:]
     private var requests: [WindowID: String] = [:]
     private var panels: [WindowID: NSWindow] = [:]
+    var selectCalendar: ((WindowID, URL, Bool) -> Void)?
     private let send: @MainActor (SystemEvent) -> Void
     init(send: @escaping @MainActor (SystemEvent) -> Void) { self.send = send }
 
@@ -31,7 +32,13 @@ final class SiteToolsAdapter {
         case .github(let repository, _):
             if let repository { fetch(repository, token: "", request: request) }
             else { chooseRepository(request, in: window) }
-        case .calendar:
+        case .calendarFile(let file, _):
+            do {
+                let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= 2_000_000 else { throw CocoaError(.fileReadTooLarge) }
+                send(.siteResult(request.id, .calendar(try CalendarFile.meetings(Data(contentsOf: file)))))
+            } catch { send(.siteResult(request.id, .failed("Calendar could not be read. Select a nonrecurring .ics export with HTTPS meeting URLs."))) }
+        case .calendar(let join):
             let panel = NSOpenPanel()
             panel.title = "Select a Calendar Export"
             panel.message = "Read this selected .ics file for upcoming meetings. Data stays in memory and expires after five minutes. No account access is requested."
@@ -41,8 +48,7 @@ final class SiteToolsAdapter {
                 guard let self, window?.isVisible == true, self.requests[request.window] == request.id else { return }
                 self.panels[request.window] = nil
                 guard response == .OK, let url = panel.url else { self.send(.siteResult(request.id, .cancelled)); return }
-                do { self.send(.siteResult(request.id, .calendar(try CalendarFile.meetings(Data(contentsOf: url))))) }
-                catch { self.send(.siteResult(request.id, .failed("Calendar could not be read. Select a nonrecurring calendar with meeting URLs."))) }
+                self.selectCalendar?(request.window, url, join)
             }
         }
     }
@@ -61,7 +67,7 @@ final class SiteToolsAdapter {
         repository.placeholderString = "owner/repository"
         repository.identify(.tabTool("repository"))
         let token = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
-        token.placeholderString = "Optional token with Pull requests: read"
+        token.placeholderString = if case .github(_, .some) = request.kind { "Classic token with notifications scope (not saved)" } else { "Optional token with Pull requests: read" }
         accessory.addSubview(repository)
         accessory.addSubview(token)
         alert.buttons[0].identify(.tabTool("connect-repository"))
@@ -71,6 +77,7 @@ final class SiteToolsAdapter {
         alert.beginSheetModal(for: window) { [weak self, weak window] response in
             guard let self, window?.isVisible == true, self.requests[request.window] == request.id else { return }
             self.panels[request.window] = nil
+            alert.window.orderOut(nil)
             guard response == .alertFirstButtonReturn else { self.send(.siteResult(request.id, .cancelled)); return }
             self.fetch(repository.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), token: token.stringValue, request: request)
             token.stringValue = ""

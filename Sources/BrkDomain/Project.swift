@@ -57,6 +57,7 @@ func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
         var spec = PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
+        spec.hoverPreviews = state.doc.tabPreferences.hoverPreviews
         spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
         return spec
     }
@@ -138,13 +139,31 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
         if kind == .favorites, doc.kind == .standard {
-            if let feed = state.session.favoriteFeeds[tab], feed.profile == space.profile, ctx.now.since(feed.fetchedAt) < .seconds(300) {
-                row.badge = feed.badge
-                row.subtitle = feed.subtitle
-            }
-            if ["calendar.google.com", "outlook.office.com"].contains(t.url?.host ?? ""),
-               let feed = state.session.calendars[space.profile], ctx.now.since(feed.fetchedAt) < .seconds(300) {
-                row.subtitle = feed.meetings.filter { $0.end > ctx.now }.sorted { $0.start < $1.start }.first?.title ?? "No upcoming meetings"
+            let pending = state.session.siteRequests.values.contains { $0.target == .favorite(tab) }
+            if pending { row.sourceStatus = "Connecting…" }
+            else if let feed = state.session.favoriteFeeds[tab], feed.profile == space.profile {
+                switch feed.access {
+                case .ready:
+                    if ctx.now.since(feed.fetchedAt) < .seconds(300) {
+                        row.badge = feed.badge
+                        row.sourceStatus = "Updated · first 50 notifications · token used once"
+                        row.subtitle = "GitHub notifications"
+                    } else { row.sourceStatus = "Expired · reconnect" }
+                case .failed: row.sourceStatus = "Access failed · reconnect"; row.subtitle = feed.subtitle
+                case .cancelled: row.sourceStatus = "Connect notifications"
+                }
+            } else if t.url?.host == "github.com" { row.sourceStatus = "Connect notifications" }
+            if ["calendar.google.com", "outlook.office.com", "outlook.live.com", "calendar.notion.so"].contains(t.url?.host ?? "") {
+                if state.session.siteRequests.values.contains(where: { $0.target == .calendar(space.profile) }) {
+                    row.sourceStatus = "Selecting calendar…"
+                } else if let feed = state.session.calendars[space.profile] {
+                    if case .failed(let message) = feed.access { row.sourceStatus = "Calendar unavailable · select again"; row.subtitle = message }
+                    else if ctx.now.since(feed.fetchedAt) < .seconds(300) {
+                        let next = feed.meetings.filter { $0.end > ctx.now }.sorted { $0.start < $1.start }.first
+                        row.subtitle = next.map { $0.title } ?? "No upcoming meetings"
+                        row.sourceStatus = "Selected export · expires in \(max(1, (300_000 - (ctx.now.milliseconds - feed.fetchedAt.milliseconds)) / 60_000))m"
+                    } else { row.sourceStatus = "Calendar expired · select again" }
+                } else { row.sourceStatus = "Select calendar export" }
             }
         }
         return row
@@ -215,6 +234,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         pill.text = t.url.map(displayURL)
         pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : displayURL($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
+            pill.loadProgress = live.loadProgress
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
         }
     }

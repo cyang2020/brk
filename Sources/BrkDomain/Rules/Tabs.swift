@@ -96,8 +96,16 @@ extension Work {
         switch command {
         case .back(let ref): emit(ref, .goBack)
         case .forward(let ref): emit(ref, .goForward)
-        case .reload(let ref, let ignoringCache): emit(ref, .reload(ignoringCache: ignoringCache))
-        case .stop(let ref): emit(ref, .stop)
+        case .reload(let ref, let ignoringCache):
+            if let tab = state.resolveTab(ref, in: window), state.session.live[PageID(window: window, item: tab)]?.crashed == true {
+                effects.append(.page(PageID(window: window, item: tab), .recover))
+            } else { emit(ref, .reload(ignoringCache: ignoringCache)) }
+        case .stop(let ref):
+            emit(ref, .stop)
+            if let tab = state.resolveTab(ref, in: window) {
+                state.session.live[PageID(window: window, item: tab)]?.loading = false
+                state.session.live[PageID(window: window, item: tab)]?.loadProgress = 0
+            }
         case .zoom(let step): emit(.focused, .zoom(step))
         case .output(let intent):
             guard let tab = state.resolveTab(.focused, in: window),
@@ -151,13 +159,16 @@ extension Work {
             case .loading(let doc):
                 guard doc.browser == token, doc.sequence > live.documentSequence else { return }
                 live.documentSequence = doc.sequence
+                live.loadProgress = 0
             case .ready(let doc):
                 guard doc.browser == token, doc.sequence == live.documentSequence,
                       live.document == .loading(doc) || live.document == .ready(doc) else { return }
             case .unavailable: break
             }
             live.document = document
-        case .navigationRequested(let url): live.requestedURL = url
+        case .navigationRequested(let url):
+            live.loadProgress = 0
+            live.requestedURL = url
         case .committed(let url):
             state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: live.observedTitle, favicon: state.doc.windows[window]?.slots[tab]?.favicon)
             live.requestedURL = nil
@@ -187,13 +198,18 @@ extension Work {
             if live.fullscreen != full { effects.append(.window(window, .pageFullScreen(full))) }
             live.fullscreen = full
         case .faviconChanged(let url): state.doc.windows[window]!.slots[tab]?.favicon = url
+        case .loadProgress(let progress):
+            guard progress.isFinite, live.loading else { return }
+            live.loadProgress = min(1, max(live.loadProgress, progress))
         case .loadingChanged(let loading, let back, let forward):
+            if !loading || !live.loading { live.loadProgress = 0 }
             live.loading = loading
             live.canGoBack = back
             live.canGoForward = forward
         case .loadFailed(let code, let description, _):
             live.failure = LoadFailure(code: code, description: description)
             live.loading = false
+            live.loadProgress = 0
             live.document = .unavailable
         case .audioChanged(let audible): live.audible = audible
         case .websitePolicyApplied(let status):
@@ -202,9 +218,13 @@ extension Work {
         case .rendererGone:
             live.audible = false
             live.loading = false
+            live.loadProgress = 0
             live.crashed = true
             live.document = .unavailable
-            effects.append(.page(page, .recover))
+            if !live.recoveryAttempted {
+                live.recoveryAttempted = true
+                effects.append(.page(page, .recover))
+            }
         case .gainedFocus:
             if state.presentedPanes(in: window).contains(tab), let split = state.tree(scope)?.splitContaining(tab) {
                 state.doc.windows[window]!.splitFocus[split] = tab
@@ -222,6 +242,7 @@ extension Work {
             live.browser = nil
             live.document = .unavailable
             live.loading = false
+            live.loadProgress = 0
             live.canGoBack = false
             live.canGoForward = false
             live.failure = nil

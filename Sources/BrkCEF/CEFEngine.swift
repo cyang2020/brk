@@ -216,13 +216,14 @@ public final class CEFEngine: WebEngine {
             retire(page)
         }
         for spec in pages {
-            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); continue }
+            if let page = live[spec.id] { page.downloadPolicy = spec.downloadPolicy; page.setMuted(spec.muted); page.applyWebsitePolicy(spec.websitePolicy); page.linkPreviews.setEnabled(spec.hoverPreviews); continue }
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
             resources.insert(page, browser: incarnation, context: contexts.epoch(for: spec.context))
             record(.created, page)
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
+            page.reportInitialLoading()
         }
         if audioLoop == nil {
             audioLoop = Task { @MainActor [weak self] in
@@ -518,8 +519,17 @@ public final class CEFEngine: WebEngine {
         phase == .running && ledger.isLive(page.incarnation) && live[page.id] === page
     }
 
+    func pageLoadProgress(_ page: ChromePage, progress: Double) {
+        guard progress.isFinite else { return }
+        pageDidEmit(page, .loadProgress(min(1, max(0, progress))))
+    }
+
+    func pageRendererTerminated(_ page: ChromePage) { pageDidEmit(page, .rendererGone) }
+
     func pageDidEmit(_ page: ChromePage, _ event: PageEvent) {
         guard isLive(page) else { return }
+        page.linkPreviews.observe(event)
+        if case .committed = event, let document = page.readyDocument { page.linkPreviews.observe(.documentChanged(.ready(document))) }
         switch event {
         case .navigationRequested, .rendererGone: outputs.sourceGone(page.incarnation)
         default: break

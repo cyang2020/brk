@@ -19,6 +19,13 @@ final class ChromePage: CefBrowserDelegate {
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
     private let contextMenu = PageContextMenu()
+    private(set) lazy var linkPreviews = PageLinkPreviews(browser: browser, surface: surface, available: { [weak self] in
+        guard let self else { return false }
+        return self.engine.isLive(self) && self.surface.window?.isVisible == true && self.surface.window?.attachedSheet == nil && !self.surface.isHiddenOrHasHiddenAncestor
+    }, summarize: { [weak self] request, reply in
+        guard let self, self.engine.isLive(self), self.readyDocument == request.document else { reply(nil); return }
+        self.engine.delegate?.engine(self.engine, summarizeLink: request, reply: reply)
+    })
     private(set) lazy var find = PageFind(browser: browser) { [weak self] update in
         guard let self, self.engine.isLive(self) else { return }
         self.engine.findUpdated(update)
@@ -30,6 +37,8 @@ final class ChromePage: CefBrowserDelegate {
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
+    private var currentLoadProgress: Double = 0
+    private var progressSamples: [Double] = []
     var requestedReloads = 0
     var extensionDialogDecision: String?
     var extensionFileDialogCallbacks = 0
@@ -96,6 +105,7 @@ final class ChromePage: CefBrowserDelegate {
             self.engine.pageReadyForFocus(self)
         }
         surface.adopt(chrome)
+        linkPreviews.setEnabled(spec.hoverPreviews)
         applyWebsitePolicy(spec.websitePolicy)
     }
 
@@ -140,6 +150,11 @@ final class ChromePage: CefBrowserDelegate {
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.loadProgressSamples = progressSamples
+        facts.linkPreviewError = linkPreviews.lastFailure
+        facts.linkPreviewFrameCount = linkPreviews.frameCount
+        facts.linkPreviewTitle = linkPreviews.title
+        facts.linkPreviewURL = linkPreviews.destination
         facts.requestedReloads = requestedReloads
         facts.extensionDialogDecision = extensionDialogDecision
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
@@ -154,6 +169,7 @@ final class ChromePage: CefBrowserDelegate {
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
+        linkPreviews.stop()
         reloadSequence.cancel()
         cancelPermissions()
         contextMenu.cancel()
@@ -162,7 +178,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { linkPreviews.stop(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -187,12 +203,19 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     private func prepareDocumentNavigation() {
+        currentLoadProgress = 0
         approvedExtensionDirectory = nil
         cancelPermissions()
         audio.navigationRequested()
         engine.pageDidEmit(self, .audioChanged(false))
         contextMenu.cancel()
         mainDocument.prepareNavigation()
+    }
+
+    /// Construction can deliver CEF's first progress callback before the engine publishes browserCreated.
+    func reportInitialLoading() {
+        engine.pageDidEmit(self, .loadingChanged(isLoading: browser.isLoading, canGoBack: browser.canGoBack, canGoForward: browser.canGoForward))
+        if browser.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
 
     func prepareStop() { reloadSequence.cancel(); emit(mainDocument.stopped()) }
@@ -236,6 +259,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         emit(mainDocument.started(url))
+        if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
     }
 
     func browser(_ b: CefBrowser, didFinishMainDocument url: URL?) {
@@ -259,6 +283,16 @@ final class ChromePage: CefBrowserDelegate {
     func browser(_ b: CefBrowser, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
         emit(mainDocument.loadingChanged(isLoading))
+        if isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
+        else { currentLoadProgress = 0 }
+    }
+
+    func browser(_ b: CefBrowser, didChangeProgress progress: Double) {
+        guard progress.isFinite else { return }
+        currentLoadProgress = progress
+        progressSamples.append(progress)
+        if progressSamples.count > 24 { progressSamples.removeFirst() }
+        engine.pageLoadProgress(self, progress: progress)
     }
 
     func browser(_ b: CefBrowser, didFailLoad code: Int, errorText: String, failedURL: String) {
@@ -270,7 +304,7 @@ final class ChromePage: CefBrowserDelegate {
         reloadSequence.cancel()
         cancelPermissions()
         emit(mainDocument.rendererGone())
-        engine.pageDidEmit(self, .rendererGone)
+        engine.pageRendererTerminated(self)
     }
 
     func browserDidGainFocus(_ b: CefBrowser) { engine.pageDidEmit(self, .gainedFocus); reportZoom() }

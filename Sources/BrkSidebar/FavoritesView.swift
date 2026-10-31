@@ -13,7 +13,13 @@ final class FavoritesView: NSView {
     private let drag: DragController
     /// `section-favorites`: the tiles' container, so e2e can scope tiles to the section.
     private let section = FlippedView()
-    var previewsEnabled = true
+    var previewsEnabled = true {
+        didSet {
+            guard previewsEnabled != oldValue else { return }
+            for tile in tiles.values { tile.previewsEnabled = previewsEnabled }
+            last = nil
+        }
+    }
     private var tiles: [ItemID: FavoriteTileView] = [:]
     private let emptyBox = CAShapeLayer()
     private let emptyTitle = NSTextField(labelWithString: Copy.favoritesEmptyTitle)
@@ -153,8 +159,9 @@ final class FavoritesView: NSView {
 final class FavoriteTileView: HoverView {
     let id: ItemID
     private let preview = TabHoverPreview()
-    var previewsEnabled = true
+    var previewsEnabled = true { didSet { if previewsEnabled != oldValue { stateChanged() } } }
     private let badge = NSTextField(labelWithString: "")
+    private let source = NSView()
     private let subtitle = NSTextField(labelWithString: "")
     private let dispatch: Dispatch
     private let drag: DragController
@@ -175,18 +182,39 @@ final class FavoriteTileView: HoverView {
         layer?.addSublayer(ring)
         addSubview(icon)
         for label in [badge, subtitle] { label.font = .systemFont(ofSize: 10); label.alignment = .center; addSubview(label) }
+        source.wantsLayer = true
+        source.layer?.cornerRadius = Metrics.sidebarTools.sourceRadius.value
+        source.identifier = NSUserInterfaceItemIdentifier("favorite-source-\(id.rawValue)")
+        source.setAccessibilityIdentifier("favorite-source-\(id.rawValue)")
+        addSubview(source)
+        badge.identifier = NSUserInterfaceItemIdentifier("favorite-badge-\(id.rawValue)")
+        badge.setAccessibilityIdentifier("favorite-badge-\(id.rawValue)")
+        subtitle.identifier = NSUserInterfaceItemIdentifier("favorite-subtitle-\(id.rawValue)")
+        subtitle.setAccessibilityIdentifier("favorite-subtitle-\(id.rawValue)")
+        badge.wantsLayer = true
+        badge.layer?.backgroundColor = NSColor.black.cgColor
+        badge.layer?.cornerRadius = Metrics.sidebarTools.unreadRadius.value
+        badge.font = .systemFont(ofSize: 10, weight: .semibold)
         identify(.favorite(id))
     }
 
     func render(_ row: TabRow, renaming: Bool, palette: Palette) {
         self.row = row
         self.palette = palette
-        toolTip = row.title + (row.subtitle.map { "\n" + $0 } ?? "")
-        badge.stringValue = row.badge.map(String.init) ?? ""
-        badge.isHidden = row.badge == nil
-        subtitle.stringValue = row.subtitle ?? ""
-        subtitle.isHidden = row.subtitle == nil
-        badge.textColor = palette.ink.text
+        toolTip = [row.title, row.subtitle, row.sourceStatus].compactMap { $0 }.joined(separator: "\n")
+        source.isHidden = row.sourceStatus == nil
+        source.toolTip = row.sourceStatus
+        source.setAccessibilityLabel(row.sourceStatus)
+        source.layer?.backgroundColor = (row.sourceStatus?.hasPrefix("Updated") == true || row.sourceStatus?.hasPrefix("Selected export") == true ? NSColor.systemGreen : NSColor.systemOrange).cgColor
+        badge.stringValue = row.badge.map { $0 > 99 ? "99+" : String($0) } ?? ""
+        badge.isHidden = row.badge == nil || row.badge == 0
+        subtitle.stringValue = row.subtitle ?? row.sourceStatus ?? ""
+        subtitle.toolTip = toolTip
+        subtitle.isHidden = row.subtitle == nil && row.sourceStatus == nil
+        subtitle.lineBreakMode = .byTruncatingTail
+        if row.sourceStatus?.hasPrefix("Access failed") == true { subtitle.stringValue = "Access" }
+        if row.sourceStatus?.hasPrefix("Expired") == true || row.sourceStatus?.hasPrefix("Calendar expired") == true { subtitle.stringValue = "Expired" }
+        badge.textColor = .white
         subtitle.textColor = palette.ink.secondary
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, loading: row.loading)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
@@ -225,10 +253,11 @@ final class FavoriteTileView: HoverView {
 
     override func layout() {
         super.layout()
+        source.frame = NSRect(x: 4, y: 4, width: 6, height: 6)
         badge.frame = NSRect(x: bounds.width - 22, y: 2, width: 20, height: 16)
         subtitle.frame = NSRect(x: 2, y: bounds.height - 16, width: bounds.width - 4, height: 14)
         let side = Draw.tileFavicon.value
-        icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        icon.frame = CGRect(x: (bounds.width - side) / 2, y: subtitle.isHidden ? (bounds.height - side) / 2 : 5, width: side, height: side)
         if let field = renameField {
             let inset = Draw.tileRenameInset.value, height = field.intrinsicContentSize.height
             field.frame = CGRect(x: inset, y: (bounds.height - height) / 2, width: bounds.width - 2 * inset, height: height)

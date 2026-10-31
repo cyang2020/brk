@@ -50,6 +50,7 @@ public struct Metric<Value: Sendable>: Sendable, AnyMetric {
 public let Metrics = MetricsTable()
 
 public struct MetricsTable: MetricGroup {
+    public let sidebarTools = SidebarToolsMetrics()
     public let spaceTools = SpaceToolsMetrics()
     public let window = WindowMetrics()
     public let sidebar = SidebarMetrics()

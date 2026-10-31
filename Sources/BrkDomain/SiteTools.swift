@@ -4,6 +4,7 @@ import Foundation
 public enum SiteToolsCommand: Hashable, Sendable, Codable {
     case connectGitHub(favorite: ItemID?)
     case refreshFolder(ItemID)
+    case selectCalendar(URL, join: Bool)
     case connectCalendar
     case joinMeeting
 }
@@ -22,6 +23,7 @@ public struct CalendarMeeting: Hashable, Sendable, Codable {
 public enum SiteRequestKind: Hashable, Sendable {
     case github(repository: String?, favorite: ItemID?)
     case calendar(join: Bool)
+    case calendarFile(URL, join: Bool)
 }
 public struct SiteRequest: Hashable, Sendable {
     public let id: String
@@ -48,11 +50,14 @@ struct PendingSiteRequest: Equatable, Sendable {
         switch request.kind {
         case .github(_, let favorite?): return .favorite(favorite)
         case .github: return .newFolder(request.window)
-        case .calendar: return .calendar(request.profile)
+        case .calendar, .calendarFile: return .calendar(request.profile)
         }
     }
 }
+enum SourceAccess: Equatable, Sendable { case ready, failed(String), cancelled }
+
 struct SiteFeed: Equatable, Sendable {
+    var access: SourceAccess = .ready
     let profile: ProfileID
     var fetchedAt: Instant
     var badge: Int
@@ -66,7 +71,7 @@ extension Work {
         let kind: SiteRequestKind
         switch command {
         case .connectGitHub(let favorite):
-            if let favorite { guard state.role(of: favorite)?.kind == .favorites, state.doc.tree[favorite] != nil else { return } }
+            if let favorite { guard state.role(of: favorite) == .favorites(space.profile), state.doc.tree[favorite] != nil else { return } }
             kind = .github(repository: nil, favorite: favorite)
         case .refreshFolder(let id):
             guard case .folder(let f)? = state.doc.tree[id]?.body, let repository = f.liveRepository,
@@ -74,9 +79,18 @@ extension Work {
             folder = id
             state.session.liveFolderStatus[id] = "Refreshing…"
             kind = .github(repository: repository, favorite: nil)
+        case .selectCalendar(let file, let join):
+            guard file.isFileURL, file.pathExtension.lowercased() == "ics" else { toast("Select an iCalendar (.ics) file", in: window); return }
+            kind = .calendarFile(file, join: join)
         case .connectCalendar: kind = .calendar(join: false)
         case .joinMeeting:
-            if let feed = state.session.calendars[space.profile], ctx.now.since(feed.fetchedAt) < .seconds(300) {
+            if let feed = state.session.calendars[space.profile] {
+                guard feed.access == .ready else { kind = .calendar(join: true); break }
+                guard ctx.now.since(feed.fetchedAt) < .seconds(300) else {
+                    toast("Calendar expired. Select the export again to join a meeting.", in: window)
+                    kind = .calendar(join: true)
+                    break
+                }
                 joinNextMeeting(feed.meetings, in: window)
                 return
             }
@@ -90,7 +104,9 @@ extension Work {
         }
         state.session.siteRequests[request.id] = pending
         effects.append(.siteRequest(request))
-        toast("Loading selected source…", in: window)
+        if case .calendar(join: true) = kind, state.session.calendars[space.profile] != nil {
+            toast("Calendar expired. Select the export again.", in: window)
+        } else { toast("Loading selected source…", in: window) }
     }
     mutating func siteResult(_ id: String, _ outcome: SiteOutcome) {
         guard let pending = state.session.siteRequests.removeValue(forKey: id), state.siteRequestIsCurrent(pending),
@@ -99,9 +115,18 @@ extension Work {
         switch outcome {
         case .cancelled:
             if let folder = pending.folder { state.session.liveFolderStatus[folder] = "Refresh cancelled" }
+            if case .favorite(let favorite) = pending.target {
+                state.session.favoriteFeeds[favorite] = SiteFeed(access: .cancelled, profile: pending.request.profile, fetchedAt: ctx.now, badge: 0, subtitle: "Selection cancelled. Connect again.")
+            }
             toast("Source selection cancelled", in: window)
         case .failed(let message):
+            if case .calendar(let profile) = pending.target {
+                state.session.calendars[profile] = CalendarFeed(access: .failed(message), fetchedAt: ctx.now, meetings: [])
+            }
             if let folder = pending.folder { state.session.liveFolderStatus[folder] = "Could not refresh. " + message }
+            if case .favorite(let favorite) = pending.target {
+                state.session.favoriteFeeds[favorite] = SiteFeed(access: .failed(message), profile: pending.request.profile, fetchedAt: ctx.now, badge: 0, subtitle: message)
+            }
             toast(message, in: window)
         case .unread(_, let count):
             guard case .github(_, let favorite?) = pending.request.kind, state.role(of: favorite)?.kind == .favorites else { return }
@@ -109,7 +134,8 @@ extension Work {
             toast("Favorite updated", in: window)
         case .calendar(let meetings):
             state.session.calendars[pending.request.profile] = CalendarFeed(fetchedAt: ctx.now, meetings: meetings)
-            if case .calendar(join: true) = pending.request.kind { joinNextMeeting(meetings, in: window) }
+            let join: Bool = switch pending.request.kind { case .calendar(let value), .calendarFile(_, let value): value; default: false }
+            if join { joinNextMeeting(meetings, in: window) }
             else { toast("Calendar updated. Refresh by selecting the file again.", in: window) }
         case .pullRequests(let repository, let links):
             guard repository.split(separator: "/").count == 2, links.count <= 100,
@@ -155,6 +181,7 @@ extension Work {
     }
 }
 struct CalendarFeed: Equatable, Sendable {
+    var access: SourceAccess = .ready
     var fetchedAt: Instant
     var meetings: [CalendarMeeting]
 }
