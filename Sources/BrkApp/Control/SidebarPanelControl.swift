@@ -15,15 +15,6 @@ enum SidebarPanelControl {
             guard let parsed = KeyChord(parsing: chord) else { throw Invalid(message: "Invalid native panel key") }
             try events.press(parsed, in: window)
         }
-        func goTo(_ path: String, in panel: NSWindow) async throws {
-            try press("cmd+shift+g", in: panel)
-            try await Task.sleep(for: .milliseconds(300))
-            let destination = panel.attachedSheet ?? panel
-            try press("cmd+a", in: destination)
-            try events.type(path, in: destination)
-            try press("return", in: destination)
-            try await Task.sleep(for: .milliseconds(400))
-        }
         switch action {
         case .directory(let path):
             guard let panel = sheet as? NSSavePanel else { throw Invalid(message: "No native file panel") }
@@ -63,19 +54,8 @@ enum SidebarPanelControl {
                   index >= 0, index < popup.numberOfItems else { throw Invalid(message: "Native menu not found") }
             popup.selectItem(at: index)
             if let action = popup.action { NSApp.sendAction(action, to: popup.target, from: popup) }
-        case .save(let directory, let filename):
-            guard let panel = sheet as? NSSavePanel, !(panel is NSOpenPanel) else { throw Invalid(message: "No native save panel") }
-            NSApp.activate(ignoringOtherApps: true); panel.makeKeyAndOrderFront(nil)
-            try await Task.sleep(for: .milliseconds(250))
-            try press("cmd+a", in: panel)
-            try events.type(filename, in: panel)
-            try await goTo(directory, in: panel)
-            try press("return", in: panel)
-        case .open(let path):
-            guard let panel = sheet as? NSOpenPanel else { throw Invalid(message: "No native open panel") }
-            NSApp.activate(ignoringOtherApps: true); panel.makeKeyAndOrderFront(nil)
-            try await goTo(path, in: panel)
-            try press("return", in: panel)
+        case .save, .open:
+            throw Invalid(message: "File selection requires the external AX driver and verified selection. Use explicit selected-file commands only when AX is unavailable.")
         }
         return .ok
     }
