@@ -17,8 +17,8 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     private let privateAllowed = NSButton(checkboxWithTitle: "Also use in private windows", target: nil, action: nil)
     private let cssLabel = NSTextField(labelWithString: "CSS · live preview")
     private let jsLabel = NSTextField(labelWithString: "JavaScript · confirmation required on Save")
-    private let css = NSTextView()
-    private let javascript = NSTextView()
+    private let css = BoostCodeTextView()
+    private let javascript = BoostCodeTextView()
     private let cssScroll = NSScrollView()
     private let jsScroll = NSScrollView()
     private let feedback = NSTextField(wrappingLabelWithString: "")
@@ -151,4 +151,14 @@ public final class BoostZapOverlayView: NSView {
         cancel.frame = CGRect(x: bounds.width - 110, y: 6, width: 104, height: 30)
     }
     @objc private func cancelPick() { dispatch(.boost(.zap)) }
+}
+
+/// NSTextView normally relies on NSWindow's responder handoff. Also accept a direct first click when the
+/// shared display cannot activate this window, preserving the editor the user actually clicked.
+private final class BoostCodeTextView: NSTextView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
 }
