@@ -108,10 +108,21 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             input.stringValue = bar.initialQuery
             input.currentEditor()?.selectAll(nil)
             applySiteSearchLook()
+            if let mode = bar.aiMode { input.placeholderString = Self.aiPlaceholder(mode) }
         }
         rerank(keepHighlight: !reopened)
         installEventMonitor()
         if reopened { bounce() }
+    }
+
+    private static func aiPlaceholder(_ mode: AIMode) -> String {
+        switch mode {
+        case .question: "Ask Max a question…"
+        case .page: "Ask about this page…"
+        case .instant: "Find a website with Instant Links…"
+        case .translate: "Translate to language (e.g. English)…"
+        case .browse: "Question | https://source, https://source…"
+        }
     }
 
     private func hide() {
@@ -169,7 +180,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public func controlTextDidChange(_ notification: Notification) {
         let text = input.stringValue
-        if siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
+        if bar?.aiMode == nil, siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
            !text.dropLast().contains(where: \.isWhitespace) {
             return enterSiteSearch(engine)
         }

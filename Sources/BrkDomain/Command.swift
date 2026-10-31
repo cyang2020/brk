@@ -28,6 +28,7 @@ public enum Input: Sendable, Equatable {
 }
 
 public enum Command: Hashable, Sendable, Codable {
+    case assist(AIIntent)
     case find(FindIntent)
     case sidebarData(SidebarDataCommand)
     case commandBar(CommandBarCommand)
@@ -333,6 +334,8 @@ public enum ShortcutSetting: Hashable, Sendable, Codable {
 }
 
 public enum MaxSetting: Hashable, Sendable, Codable {
+    case feature(AIFeature, Bool)
+    case resetTranslationExclusions
     case provider(AIProviderChoice)
     case renamePinnedTabs(Bool)
     case tidyTabs(Bool)
@@ -446,6 +449,12 @@ public enum SystemEvent: Sendable, Equatable {
     case aiProvidersDetected([AIProviderKind])
     /// The provider answered (or could not) an `Effect.ai` request.
     case aiResult(AIRequestID, AIOutcome)
+    case aiPartial(AIRequestID, String)
+    case aiPageRead(AIRequestID, PageID, AIPageContent?)
+    case aiDeadline(AIRequestID)
+    case aiHoverReady(WindowID, URL)
+    case aiTranslated(AIRequestID, Bool)
+    case aiDownloadRenamed(DownloadID, originalPath: String, newPath: String?, error: String?)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

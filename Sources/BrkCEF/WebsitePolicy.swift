@@ -127,6 +127,7 @@ extension ChromePage {
     }
 
     func browser(_ b: CefBrowser, permission request: CefPermissionRequest, callback: CefPermissionCallback) {
+        guard !isAIReader else { callback.resolve(.deny); return }
         let document: DocumentToken
         switch mainDocument.availability { case .ready(let value), .loading(let value): document = value; case .unavailable: callback.resolve(.deny); return }
         guard engine.isLive(self), let origin = b.url.flatMap(SiteOrigin.init), let url = URL(string: request.origin), let requesting = SiteOrigin(url) else {

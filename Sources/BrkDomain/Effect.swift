@@ -27,6 +27,12 @@ public enum Effect: Hashable, Sendable {
     /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
     /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
+    case aiCancel(AIRequestID)
+    case aiRead(AIRequestID, DocumentToken)
+    case aiTranslate(AIRequestID, AIPageContent, [AITextNode])
+    case aiWatch(AIRequestID, seconds: Int)
+    case aiHover(WindowID, URL?)
+    case aiRenameDownload(DownloadID, originalPath: String, filename: String)
     /// Fetch the default engine's OpenSearch suggestions for `query` (BrkApp debounces by
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.
     case fetchSuggestions(WindowID, query: String, url: URL)

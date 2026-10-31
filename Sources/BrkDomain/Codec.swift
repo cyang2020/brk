@@ -782,3 +782,22 @@ extension StateCodec {
         return decodeWebsiteRules(try! JSONEncoder().encode(rules))
     }
 }
+
+/// The local CLI wire format shares the codec boundary; it is unrelated to persisted browser state.
+public enum AIReplyCodec {
+    public static func groups(_ text: String) -> [AIGroupPlan]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([AIGroupPlan].self, from: data)
+    }
+    public static func nodes(_ text: String) -> [AITextNode]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([AITextNode].self, from: data)
+    }
+    public static func nodesJSON(_ nodes: [AITextNode]) throws -> String {
+        String(decoding: try JSONEncoder().encode(nodes), as: UTF8.self)
+    }
+    public static func pageJSON(_ content: AIPageContent) -> String {
+        let value = ["url": content.url.absoluteString, "title": content.title, "text": String(content.text.prefix(6000))]
+        return String(decoding: (try? JSONEncoder().encode(value)) ?? Data(), as: UTF8.self)
+    }
+}

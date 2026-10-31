@@ -22,8 +22,8 @@ extension Work {
         }
     }
 
-    /// `SystemEvent.clockTick`. Archives (reason .auto) every Today item, a tab or a split as one unit, that is not
-    /// on screen in any window and whose `lastActiveAt` (a split: its most recent pane) is at least the threshold
+    /// `SystemEvent.clockTick`. Archives (reason .auto) every Today item, including a group as one unit, that has no
+    /// descendant on screen in any window and whose most recent descendant activity is at least the threshold
     /// old. Never Pinned or Favorites. Empty panes inside a swept split are removed without an archive entry
     /// (`archiveTabs`). Pending Ctrl+Tab cycles were committed first by `observe`, so a tab just left is stamped
     /// (regression finding 5). Idempotent: a second tick at the same `now` is a no-op.
@@ -34,7 +34,7 @@ extension Work {
             // The threshold is the space's profile's ("Archive tabs after", per profile: anatomy-m 4.3).
             guard let threshold = state.profileSettings(space.profile).autoArchive.interval else { continue }
             for unit in state.doc.tree[space.todayRoot]?.children ?? [] {
-                guard !state.panes(of: unit).contains(where: onScreen.contains) else { continue }
+                guard !state.doc.tree.tabs(under: unit).contains(where: onScreen.contains) else { continue }
                 if ctx.now.since(state.lastActiveOf(unit)) >= threshold { victims.append(unit) }
             }
         }
@@ -146,7 +146,7 @@ extension Work {
         guard state.doc.windows[window]?.kind == .standard else { return nil }
         if let structure = entry.structure {
             let restorePosition: TreePosition
-            if case .folder = structure, source == nil, let current { restorePosition = .into(parent: current.pinnedRoot, index: Int.max) }
+            if case .folder = structure, source == nil, entry.fromSection != .today, let current { restorePosition = .into(parent: current.pinnedRoot, index: Int.max) }
             else { restorePosition = position }
             do {
                 let result = try state.doc.tree.insertArchived(structure, at: restorePosition, now: ctx.now, freshIDs: false, reservedIDs: Set(state.session.scratch.values.flatMap { $0.items.keys }), newID: ctx.newID)

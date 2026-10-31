@@ -87,6 +87,10 @@ extension Work {
             }
         case .max(let setting):
             switch setting {
+            case .feature(let feature, let on):
+                if state.doc.settings.max.features == nil { state.doc.settings.max.features = [:] }
+                state.doc.settings.max.features?[feature] = on
+            case .resetTranslationExclusions: state.doc.settings.max.translationExclusions = nil
             case .provider(let choice): state.doc.settings.max.provider = choice
             case .renamePinnedTabs(let on): state.doc.settings.max.renamePinnedTabs = on
             case .tidyTabs(let on): state.doc.settings.max.tidyTabs = on

@@ -28,6 +28,7 @@ public final class WindowRootView: NSView {
     public let spaceDialog: SpaceDialogHost
     private let zapOverlay: BoostZapOverlayView
     private let boostEditor: BoostEditorView
+    private let aiAnswer: AIAnswerDocumentView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
@@ -35,6 +36,7 @@ public final class WindowRootView: NSView {
     public init(dispatch: @escaping Dispatch) {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
         boostEditor = BoostEditorView(dispatch: dispatch)
+        aiAnswer = AIAnswerDocumentView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
         toolbar = AddressToolbarView(dispatch: dispatch)
@@ -47,7 +49,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, toolbar, library, peek, findBar, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, toolbar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
@@ -107,6 +109,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
         peek.setFindVisible(snapshot.find != nil)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
+        aiAnswer.render(snapshot.ai, in: frames.contentArea)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.profiles = snapshot.spaceProfiles
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)

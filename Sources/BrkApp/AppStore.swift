@@ -39,6 +39,7 @@ public final class AppStore {
     /// Fallback for in-process input while the display is locked or the app has no key window.
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
+    private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
     private var queue: [Input] = []
     private var dispatching = false
     private(set) var isTerminating = false
@@ -177,11 +178,14 @@ public final class AppStore {
     func prepareForTermination() {
         guard !isTerminating else { return }
         isTerminating = true
+        aiServices.cancelAll()
         cancelExports()
         for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
         let active = snapshot.windows.values.compactMap(\.output).filter { if case .terminal = $0.stage { false } else { true } }
         for output in active { engine.cancelOutput(output.id) }
     }
+
+    func stopAI() async { await aiServices.stop() }
 
     func cancelExports() { exports.cancelAll() }
 
@@ -428,12 +432,13 @@ public final class AppStore {
                 spacePanels.export(document, owner: owner, token: token, window: window) { [weak self] outcome in
                     self?.dispatch(.system(.spaceExportFinished(owner, token: token, outcome)))
                 }
-            case .ai(let id, let task, let choice):
-                let detected = snapshot.settings.max.detected
-                Task { @MainActor [weak self] in
-                    let outcome = await AIProviderSeam.answer(task, choice: choice, detected: detected)
-                    self?.dispatch(.system(.aiResult(id, outcome)))
-                }
+            case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, detected: snapshot.settings.max.detected)
+            case .aiCancel(let id): aiServices.cancel(id)
+            case .aiRead(let id, let document): aiServices.read(id, document: document)
+            case .aiTranslate(let id, let content, let nodes): aiServices.translate(id, content: content, nodes: nodes)
+            case .aiWatch(let id, let seconds): aiServices.watch(id, seconds: seconds)
+            case .aiHover(let window, let url): aiServices.hover(window, url: url)
+            case .aiRenameDownload(let id, let path, let name): aiServices.rename(id, path: path, filename: name)
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
             case .disposeContext: break

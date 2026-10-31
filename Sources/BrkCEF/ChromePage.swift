@@ -11,6 +11,7 @@ import os
 final class ChromePage: CefBrowserDelegate {
     let id: PageID
     /// The request context it was created in; fixed for the page's life (a changed spec replaces the page).
+    let isAIReader: Bool
     let context: BrowsingContext
     let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
@@ -97,6 +98,7 @@ final class ChromePage: CefBrowserDelegate {
     static let offscreenBounds = CGRect(x: -20_000, y: -20_000, width: 1024, height: 768)
 
     init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation) {
+        isAIReader = spec.isAIReader
         id = spec.id
         context = spec.context
         downloadPolicy = spec.downloadPolicy
@@ -406,6 +408,7 @@ final class ChromePage: CefBrowserDelegate {
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
     func browser(_ b: CefBrowser, decidePolicyForNavigation url: URL?, isRedirect: Bool, userGesture: Bool) -> CefNavigationDecision {
         guard let url else { return .allow }
+        if isAIReader, !["http", "https"].contains(url.scheme?.lowercased()) { return .cancel }
         guard isRedirect || engine.pageShouldNavigate(self, to: url, userGesture: userGesture) else { return .cancel }
         if !isRedirect, reloadSequence.current != nil {
             if expectedReloadBrowse == url { expectedReloadBrowse = nil }
@@ -419,9 +422,11 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback) {
+        guard !isAIReader else { decision.resolve(nil); return }
         engine.download(self, item: download, name: suggestedName, decision: decision)
     }
     func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?) {
+        guard !isAIReader else { control?.cancel(); control?.release(); return }
         engine.download(self, item: download, control: control)
     }
 
@@ -464,3 +469,10 @@ final class ChromePage: CefBrowserDelegate {
     }
 }
 
+
+extension ChromePage {
+    func browser(_ b: CefBrowser, didChangeStatusMessage message: String) {
+        guard !isAIReader else { return }
+        engine.pageDidEmit(self, .linkHovered(URL(string: message)))
+    }
+}

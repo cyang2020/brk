@@ -182,6 +182,10 @@ final class AppUnderTest {
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
         if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
+        if scenarioID.hasPrefix("AI") {
+            environment["BRK_AI_FIXTURE_EXECUTABLE"] = site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/ai-provider").path
+            environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
+        }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }

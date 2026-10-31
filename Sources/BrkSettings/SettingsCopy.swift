@@ -198,7 +198,7 @@ public enum SettingsCopy {
     }
     /// Replaces Arc's "Max features require that we send data to our AI partners." (user decision: local tools).
     public static var maxPrivacy: String {
-        "Max runs the AI command-line tool installed on this Mac (claude or codex) with your own account. \(Product.name) sends nothing anywhere itself."
+        "Max runs claude or codex installed on this Mac with your own signed-in account. The selected tool may send your question and requested page text to its service. No API key is required."
     }
     public static let aiProvider = "AI provider:"
 

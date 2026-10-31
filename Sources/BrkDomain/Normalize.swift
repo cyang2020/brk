@@ -148,7 +148,7 @@ private func repairSessionTargets(_ state: inout AppState) {
             if tree?[tab]?.kind != .tab { session.overlay = nil }
         case .peek(_, let tab):
             if state.session.scratch[id]?[tab]?.kind != .tab { session.overlay = nil }
-        case .commandBar(_, .newTab), .library, nil:
+        case .commandBar(_, .ai), .commandBar(_, .newTab), .library, nil:
             break
         }
         if case .commandBar? = session.overlay {} else if session.suggestions != nil { session.suggestions = nil }

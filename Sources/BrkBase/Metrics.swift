@@ -60,6 +60,7 @@ public struct MetricsTable: MetricGroup {
     public let dock = DockMetrics()
     public let content = ContentMetrics()
     public let commandBar = CommandBarMetrics()
+    public let ai = AIMetrics()
     public let motion = MotionMetrics()
     public let theme = ThemeMetrics()
     public let littleArc = LittleArcMetrics()
@@ -339,4 +340,22 @@ public struct SplitToolsMetrics: MetricGroup {
     public let height = Metric(28.0, .guess("Native small split-toolbar control height"))
     public let inset = Metric(6.0, .guess("Split-toolbar inset within the content area"))
     public let overlayGap = Metric(4.0, .guess("Gap between Find and split controls"))
+}
+
+/// Local CLI answer document; these are Brk choices, not claimed Arc pixel measurements.
+public struct AIMetrics: MetricGroup {
+    public let width = Metric(420.0, .guess("readable answer column beside the source page"))
+    public let minimumWidth = Metric(260.0, .guess("minimum answer column width"))
+    public let minimumHeight = Metric(180.0, .guess("minimum answer panel height"))
+    public let inset = Metric(12.0, .guess("answer panel inset from content card"))
+    public let padding = Metric(18.0, .guess("answer document inner margin"))
+    public let gap = Metric(8.0, .guess("answer controls vertical spacing"))
+    public let buttonHeight = Metric(26.0, .guess("native answer control height"))
+    public let closeWidth = Metric(70.0, .guess("answer cancel and close button width"))
+    public let questionHeight = Metric(44.0, .guess("two-line question heading"))
+    public let headingFont = Metric(14.0, .guess("answer document header font"))
+    public let questionFont = Metric(15.0, .guess("answer question font"))
+    public let bodyFont = Metric(13.0, .guess("selectable answer body font"))
+    public let cornerRadius = Metric(12.0, .guess("answer document rounded corners"))
+    public let borderWidth = Metric(1.0, .guess("answer panel hairline"))
 }

@@ -63,6 +63,22 @@ public enum Suggest {
                             resolve: ((String) -> URL?)? = nil) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let mode = bar.aiMode {
+            guard !text.isEmpty else { return [] }
+            let intent: AIIntent
+            switch mode {
+            case .question: intent = .ask(text)
+            case .page: intent = .askPage(text)
+            case .instant: intent = .instant(text)
+            case .translate: intent = .translate(text)
+            case .browse:
+                let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
+                let sources = parts.count == 2 ? parts[1].split(separator: ",").compactMap { AIValidation.destination(String($0)) } : []
+                intent = .browse(question: parts[0], sources: sources)
+            }
+            return [Suggestion(kind: .action, title: mode == .translate ? "Translate to \(text)" : text,
+                               subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
+        }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })

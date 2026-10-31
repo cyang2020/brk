@@ -115,6 +115,8 @@ public struct MaxSettings: Hashable, Sendable, Codable {
     public var renamePinnedTabs: Bool
     /// Max `tidyTabs`: "Organize Today Tabs" groups Today into folders.
     public var tidyTabs: Bool
+    public var features: [AIFeature: Bool]? = nil
+    public var translationExclusions: [ProfileID: AITranslationExclusions]? = nil
 
     public static let `default` = MaxSettings(provider: .auto, renamePinnedTabs: false, tidyTabs: false)
 }
@@ -265,6 +267,12 @@ public enum AITask: Hashable, Sendable, Codable {
     case tidyToday(SpaceID, tabs: [AITab])
     /// Free text (Ask Arc, ChatGPT in the command bar).
     case ask(String)
+    case pageQuestion(String, AIPageContent)
+    case summarize(AIPageContent)
+    case renameDownload(DownloadID, original: String)
+    case instant(String)
+    case browse(String, [AIPageContent])
+    case translate(target: String, content: AIPageContent)
 }
 
 public struct AITab: Hashable, Sendable, Codable {

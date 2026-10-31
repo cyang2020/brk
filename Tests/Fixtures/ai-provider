@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Deterministic Claude/Codex CLI fixture. It never opens the network."""
+import json, os, re, signal, sys, time
+prompt = sys.argv[2] if sys.argv[1] == '-p' else sys.argv[-1]
+if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+    with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'prompt': prompt})+'\n')
+pid_path = None
+if prompt.startswith('PID '):
+    path, prompt = prompt[4:].split('\n', 1)
+    pid_path = path
+    open(path, 'w').write(str(os.getpid()))
+if prompt == 'background-no-pipes':
+    child = os.fork()
+    if child == 0:
+        os.close(1); os.close(2)
+        while True: time.sleep(1)
+    open(pid_path + '.child', 'w').write(str(child))
+    print('spawned')
+elif prompt == 'detached':
+    child = os.fork()
+    if child == 0:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        while True: time.sleep(1)
+    os._exit(0)
+elif prompt in ('hang', 'fixture:hang'):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    while True: time.sleep(1)
+elif prompt == 'large':
+    for _ in range(128):
+        os.write(1, b'x' * 4096)
+        os.write(2, b'e' * 4096)
+elif prompt in ('stream', 'fixture:stream'):
+    print('first', flush=True)
+    time.sleep(.4 if prompt == 'stream' else 2)
+    print('second', flush=True)
+elif prompt in ('empty', 'fixture:empty'):
+    pass
+elif prompt in ('fail', 'fixture:fail'):
+    print('fixture account unavailable', file=sys.stderr)
+    sys.exit(23)
+elif prompt.startswith('BRK_PAGE_QUESTION'):
+    data = json.loads(prompt.splitlines()[-1])
+    print('Fixture page answer: ' + data['text'][:400] + ' [1]')
+elif prompt.startswith('BRK_PREVIEW'):
+    data = json.loads(prompt.splitlines()[-1])
+    print('Fixture preview: ' + data['text'][:100])
+elif prompt.startswith('BRK_DOWNLOAD_NAME'):
+    print('Reading.' + prompt.splitlines()[-1].split('.')[-1])
+elif prompt.startswith('BRK_INSTANT_LINK'):
+    query = prompt.splitlines()[-1]
+    print(query if query.startswith('http') else 'javascript:alert(1)')
+elif prompt.startswith('BRK_BROWSE'):
+    pages = [json.loads(line) for line in prompt.splitlines() if line.startswith('{')]
+    print('Fixture comparison: ' + ' '.join(p['text'][:100] + ' [' + str(i+1) + ']' for i,p in enumerate(pages)))
+elif prompt.startswith('BRK_TRANSLATE'):
+    nodes = json.loads(prompt.splitlines()[-1])
+    for node in nodes: node['text'] = node['text'].replace('Bonjour', 'Hello').replace('Monde', 'World')
+    print(json.dumps(nodes))
+elif prompt.startswith('Group these browser tabs'):
+    ids = re.findall(r'^- ([^:]+): ', prompt, re.M)
+    print(json.dumps([{'folder': 'Reading', 'tabs': ids}]))
+elif prompt.startswith('Give a short, tidy title'):
+    print('Fixture Tab')
+else:
+    print('Fixture answer')

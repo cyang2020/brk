@@ -111,6 +111,13 @@ struct MaxPane: View {
                     context.dispatch(.settings(.max(.tidyTabs($0))))
                 }
                 SettingsNote(text: SettingsCopy.tidyTabsDescription, underCheckbox: true)
+                ForEach(AIFeature.allCases, id: \.self) { feature in
+                    SettingsCheckbox(title: feature.title, field: feature.rawValue, isOn: max.settings.enabled(feature)) {
+                        context.dispatch(.settings(.max(.feature(feature, $0))))
+                    }
+                }
+                SettingsNote(text: "Use the Tabs menu or Command Bar to ask, organize, find links, browse selected URLs or translate. Hover a link deliberately for a short preview. The tool receives requested page text from regular windows; private windows are excluded.")
+                SettingsButton(title: "Reset Never-Translate Choices", field: "resetTranslationExclusions") { context.dispatch(.settings(.max(.resetTranslationExclusions))) }
             }
         }
     }

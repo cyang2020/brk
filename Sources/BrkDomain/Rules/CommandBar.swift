@@ -47,6 +47,7 @@ extension Work {
             // what is shown. Top domains and the host dedup list are view-local (Suggest.swift); only the network
             // fetch goes through here.
             guard case .commandBar? = state.session.windows[window]?.overlay else { return }
+            if case .commandBar(_, .ai)? = state.session.windows[window]?.overlay { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
             guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, BrowserCalculator.result(trimmed) == nil, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
@@ -72,6 +73,7 @@ extension Work {
         case .navigate(let tab, _) where state.tab(tab) != nil, .fillPane(let tab) where state.tab(tab) != nil:
             request(url, for: PageID(window: window, item: tab))
             focus(tab, in: window)
+        case .ai: return
         case .newTab, .navigate, .fillPane:
             guard let doc = state.doc.windows[window] else { return }
             if doc.kind == .standard {

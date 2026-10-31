@@ -78,6 +78,7 @@ public struct PageSpec: Hashable, Sendable, Codable {
     /// the previous profile's cookies and storage.
     public let context: BrowsingContext
 
+    public var isAIReader: Bool = false
     public let muted: Bool
     public var websitePolicy: WebsitePolicy = WebsitePolicy()
     public var hoverPreviews = true
@@ -150,6 +151,7 @@ public enum PageEvent: Hashable, Sendable, Codable {
     /// A committed main-frame document confirmed usable, or a same-document address update. Never a failed load.
     case committed(URL)
     case titleChanged(String)
+    case linkHovered(URL?)
     case faviconChanged(URL?)
     case audioChanged(Bool)
     case zoomChanged(Int)

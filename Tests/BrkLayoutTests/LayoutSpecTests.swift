@@ -186,8 +186,8 @@ final class DropTargetTests: XCTestCase {
         XCTAssertEqual(drop(150), .into(parent: today, index: 0), "the New Tab row")
         XCTAssertEqual(drop(250), .into(parent: today, index: 2), "lower half of t1")
         XCTAssertEqual(drop(900), .into(parent: today, index: 2), "below every row: end of Today")
-        // Placement: no folders in Today; a folder never into itself.
-        XCTAssertNil(drop(190, .folder, item: folder))
+        // Today accepts topic groups; a folder still cannot move into itself.
+        XCTAssertEqual(drop(190, .folder, item: folder), .into(parent: today, index: 0))
         XCTAssertNil(drop(64, .folder, item: folder))
         XCTAssertEqual(drop(10, .folder, item: folder), .into(parent: pinned, index: 0))
         // The index counts after the dragged item is detached: t2 dropped below t1 is index 1 of a 2-item list.

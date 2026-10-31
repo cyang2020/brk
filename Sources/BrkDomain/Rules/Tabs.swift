@@ -81,7 +81,7 @@ extension Work {
             // Every Today item of the current space with no pane on screen in any window.
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let onScreen = state.onScreenTabs()
-            let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.panes(of: $0).contains(where: onScreen.contains) }
+            let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.doc.tree.tabs(under: $0).contains(where: onScreen.contains) }
             archiveTabs(idle, reason: .clearToday, in: window)
         }
     }
@@ -133,6 +133,7 @@ extension Work {
     /// Page reports. Ignored for archived, unknown or unloaded tabs (a late event after close must not resurrect it);
     /// the same event twice changes nothing the second time.
     mutating func pageEvent(_ event: PageEvent, for token: BrowserToken) {
+        if aiHiddenEvent(event, token: token) { return }
         let page = token.page, tab = token.page.item, window = token.page.window
         guard state.session.loaded.contains(page), state.owns(page), let scope = state.locate(tab),
               let current = state.tab(tab) else { return }
@@ -154,6 +155,7 @@ extension Work {
         }
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
+        case .linkHovered(let url): aiHover(url, in: window)
         case .browserCreated: break
         case .documentChanged(let document):
             switch document {

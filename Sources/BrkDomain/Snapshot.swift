@@ -73,6 +73,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var enabledActions: Set<ActionID>
     public var tabTools = TabToolsSnapshot()
     public var boostEditor: BoostEditor? = nil
+    public var ai: AIAnswerSnapshot? = nil
 }
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {
@@ -310,6 +311,7 @@ public struct PeekSnapshot: Sendable, Equatable, Codable {
 public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// Identity of this opening; the bar resets its typed query and refocuses when it changes, never on `rev`.
     public var openID: Int
+    public var aiMode: AIMode? = nil
     public var placement: CommandBarPlacement
     /// Cmd+L starts with the focused tab's URL selected; otherwise empty.
     public var initialQuery: String
