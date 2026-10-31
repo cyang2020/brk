@@ -168,7 +168,7 @@ public final class CefBrowser: Identifiable {
         }
     }
 
-    public func stopFinding() { withHost { $0.pointee.stop_finding?($0, 1) } }
+    public func stopFinding(clearSelection: Bool = true) { withHost { $0.pointee.stop_finding?($0, clearSelection ? 1 : 0) } }
 
     /// Requests that the browser close. With `force: false` JavaScript
     /// `onbeforeunload` handlers may cancel the close; ``CefBrowserDelegate/browserDidClose(_:)``

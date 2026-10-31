@@ -296,7 +296,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         renaming: session.renaming, dialog: dialog, profileDialog: profileDialog, find: session.find.map {
             FindSnapshot(page: $0.page, query: $0.query, replacement: $0.replacement, count: $0.count, ordinal: $0.ordinal,
                          searching: $0.searching, canReplace: $0.ticket != nil && $0.editable != nil && $0.operation == nil && !$0.query.text.isEmpty,
-                         message: $0.message, scope: $0.replacement ? "Only the captured editable field" : "This page")
+                         message: $0.message, scope: $0.replacement ? "Only the captured editable field" : "This page", focusRequest: $0.focusRequest)
         }, overlay: overlay, focus: focus,
         enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } })
     )

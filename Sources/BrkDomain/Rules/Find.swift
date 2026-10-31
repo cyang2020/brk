@@ -19,12 +19,13 @@ struct FindSession: Equatable, Sendable {
     var searching = false
     var message = ""
     var focusInput = true
+    var focusRequest: FindRequestID?
     static func == (a: Self, b: Self) -> Bool {
         a.page == b.page && a.context == b.context && a.document == b.document && a.query == b.query &&
         a.replacement == b.replacement && a.search == b.search && a.request == b.request &&
         a.capture?.id == b.capture?.id && a.capture?.purpose == b.capture?.purpose && a.operation == b.operation &&
         a.ticket == b.ticket && a.editable == b.editable && a.count == b.count && a.ordinal == b.ordinal &&
-        a.searching == b.searching && a.message == b.message && a.focusInput == b.focusInput
+        a.searching == b.searching && a.message == b.message && a.focusInput == b.focusInput && a.focusRequest == b.focusRequest
     }
 }
 
@@ -38,6 +39,7 @@ public struct FindSnapshot: Equatable, Sendable, Codable {
     public var canReplace: Bool
     public var message: String
     public var scope: String
+    public var focusRequest: FindRequestID?
 }
 
 extension AppState {
@@ -62,7 +64,7 @@ extension Work {
         f.message = ""
         switch intent {
         case .open(let replace):
-            f.replacement = replace; f.focusInput = true
+            f.replacement = replace; f.focusInput = true; f.focusRequest = FindRequestID(ctx.newID())
             if replace { captureFind(&f, purpose: .replace) }
             else if !f.query.text.isEmpty { startFind(&f) }
         case .query(let query): f.query = query; startFind(&f)
@@ -72,8 +74,8 @@ extension Work {
                 let id = FindRequestID(ctx.newID()); f.request = id; f.searching = true
                 effects.append(.find(.step(id, search, direction)))
             } else { startFind(&f) }
-        case .useSelection: captureFind(&f, purpose: .selection)
-        case .captureScope: f.replacement = true; captureFind(&f, purpose: .replace)
+        case .useSelection: f.focusInput = true; f.focusRequest = FindRequestID(ctx.newID()); captureFind(&f, purpose: .selection)
+        case .captureScope: f.replacement = true; f.focusInput = true; f.focusRequest = FindRequestID(ctx.newID()); captureFind(&f, purpose: .replace)
         case .jumpToSelection: captureFind(&f, purpose: .jump)
         case .replaceCurrent(let replacement), .replaceAll(let replacement):
             guard f.operation == nil, let ticket = f.ticket, f.editable != nil, f.replacement else {
@@ -90,7 +92,9 @@ extension Work {
 
     mutating func captureFind(_ f: inout FindSession, purpose: FindSession.Capture) {
         guard let doc = f.document else { f.message = "Wait for the page to finish loading."; return }
-        if let search = f.search { effects.append(.find(.stop(search))); f.search = nil }
+        guard f.operation == nil else { f.message = "Wait for replacement confirmation before capturing another field."; return }
+        // The adapter stops native Find without clearing the selection being captured.
+        f.search = nil; f.request = nil; f.count = nil; f.ordinal = nil; f.searching = false
         f.ticket = nil; f.editable = nil
         let id = FindRequestID(ctx.newID()); f.capture = (id, purpose)
         effects.append(.find(.captureSelection(id, doc)))

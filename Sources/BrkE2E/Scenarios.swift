@@ -33,6 +33,7 @@ struct Scenario: Sendable {
 
 enum Scenarios {
     static let all: [Scenario] = [
+        Scenario("F12", "repeated native Find reclaims the query after a page click", cefOnly: "native find", FindScenarios.repeatedFindFocus),
         Scenario("F11", "narrow split find controls, replacement and native clicks", cefOnly: "native find", FindScenarios.narrowPaneControls),
         Scenario("F1", "find native keys, remaps, counts and queued steps", cefOnly: "native find", FindScenarios.keysAndCounts),
         Scenario("F2", "actual selection and Jump scroll", cefOnly: "renderer selection", FindScenarios.selectionAndJump),
