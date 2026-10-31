@@ -52,10 +52,22 @@ final class SplitToolsTests: XCTestCase {
         let other = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window })
         d.user(.tab(.focus(d.paneIDs[0])), in: other)
         let pages = d.snapshot.pages, saved = d.savedFile
+        let observations = d.snapshot.observations
         d.user(.split(.toggleExpanded))
         XCTAssertTrue(d.view.content.expanded)
         XCTAssertFalse(d.view(of: other).content.expanded)
-        XCTAssertEqual(d.snapshot.pages, pages)
+        let visible = Set(d.snapshot.windows.values.flatMap { window in
+            window.content.presentedPanes.compactMap { pane -> PageID? in
+                if case .page(let id) = pane.content { return id }; return nil
+            }
+        })
+        let expected = pages.map { page -> PageSpec in
+            var page = page
+            page.websitePolicy.visible = visible.contains(page.id)
+            return page
+        }
+        XCTAssertEqual(d.snapshot.pages, expected, "Expansion changes visibility while preserving each native request")
+        XCTAssertEqual(d.snapshot.observations, observations)
         XCTAssertEqual(d.savedFile, saved)
         d.user(.split(.focusPane(1)))
         XCTAssertTrue(d.view.content.expanded)
