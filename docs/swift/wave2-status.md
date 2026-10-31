@@ -2,19 +2,19 @@
 
 The four interrupted workers continued with Codex. Their Settings, Windows, Command bar, and Library changes are merged with the completed Profiles implementation. The signed application is `dist/Brk.app`.
 
-Updated on 2026-10-31 after parent integration of the privacy, native-focus, History storage, and window-owned page fixes. All 79 current native scenarios pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
+Updated on 2026-10-31 after parent integration of the privacy, native-focus, History storage, and window-owned page fixes. All 87 current native scenarios pass on main. Full Arc feature coverage and pixel parity remain unfinished; their ongoing delivery is tracked in the [completion plan](../completion/plan.md) and [148-row inventory](../completion/features.json).
 
 ## Verification
 
-- `scripts/build.sh` passes: 537 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/completion/find-parent/build-complete.log).
-- The parent independently ran the merged CEF application through all 79 scenarios: 79 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/completion/find-parent/native-complete/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
+- `scripts/build.sh` passes: 568 tests, three existing skips, zero failures, explicit-import checks, CEF bundling, HTTP/HTTPS URL declarations, and signature verification. See the [parent build log](../../verify/completion/splits-parent/build-complete.log).
+- The parent independently ran the merged CEF application through all 87 scenarios: 87 PASS, 0 FAIL, 0 SKIPPED. See the [current report and captures](../../verify/completion/splits-parent/native-complete/REPORT.md). The earlier [43/45 run](../../verify/swift/wave2-privacy-fix/REPORT.md) remains recorded with its focus failures.
 - The three skipped tests cover two later Max features and the native file-export save panel. They are not counted as verified behavior.
-- The [source hashes](../../verify/completion/find-parent/manifest-complete.json) and [application hash](../../verify/completion/find-parent/manifest-complete.json) identify the current tested files.
+- The [source hashes](../../verify/completion/splits-parent/manifest-complete.json) and [application hash](../../verify/completion/splits-parent/manifest-complete.json) identify the current tested files.
 
 The native run used this command after the successful build:
 
 ```sh
-BRK_LOCK_WAIT=900 python3 verify/completion/find-parent/run.py suite
+BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite
 ```
 
 ## Implemented behavior
@@ -25,6 +25,7 @@ BRK_LOCK_WAIT=900 python3 verify/completion/find-parent/run.py suite
 | Profiles and incognito | Separate cookie stores, profile reassignment, deferred profile deletion, private scratch tabs, dark private chrome, and tested private history/download/archive isolation. Modifier links and hidden popups retain the source private window. | W2-2, W2-3, W2-11P, W2-P1/P1C/P2/P2C; profile, Library, and window tests |
 | Windows and links | Window-owned browsers for shared tabs, independent navigation/restoration, Little Arc, Open In, Shift-click Peek, and configured external-link routing. | W2-4 through W2-7, I1-I6 |
 | Command bar and menus | Exact URLs retain their destination. Exact existing-tab matches still switch tabs. Suggestions, site search, menu actions, and remapping work. The tests account for all 189 extracted menu rows; later-feature actions remain disabled. | W2-8 through W2-10a; menu and key-routing tests |
+| Split tools | Four panes, edge drops/dividers, orientation, per-window expansion, separation, pane keys, pinned closure and restart. Find remains usable; background close preserves lazy demand. | SplitTools1-6, SplitFind, SplitBackground; [parent receipt](../../verify/completion/splits-parent/REPORT.md) |
 | Find | Native Find, Replace in supported captured fields, Next/Previous, Use Selection and Jump; per-window/private/Peek/split ownership, Unicode input/undo, stale-result handling and narrow controls. | F1-F12; [parent receipt](../../verify/completion/find-parent/REPORT.md) |
 | Library | The 417 pt panel replaces the sidebar. Downloads reach disk with unique names, History is scoped by profile, and Archive restores tabs. Active and completed downloads permit immediate clean shutdown. | 7, R2, W2-11, W2-12, W2-11Q, W2-11A, W2-11P |
 

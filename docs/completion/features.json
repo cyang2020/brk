@@ -3300,9 +3300,9 @@
       "arc_evidence": "rows 101, 102; anatomy-v 3 \"Split view\"",
       "description": "Up to four panes, gap 10",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Add or close panes up to four with a 10 pt gap; preserve pin semantics and dissolve one-pane splits.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native"
@@ -3328,21 +3328,65 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools1, SplitTools4 and SplitTools6: four-pane creation, native pointer close, pinned/private behavior, singleton dissolution and restart."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
         }
       ],
-      "remaining": [
-        "CEF scenario 6 covers two panes; verify three or four panes, pointer focus, close and restart natively."
-      ],
+      "remaining": [],
       "implementation": [
+        "Sources/BrkContent/ContentAreaView.swift",
+        "Sources/BrkContent/SplitToolsView.swift",
         "Sources/BrkDomain/Rules/Split.swift",
         "Sources/BrkDomain/SidebarTree.swift",
-        "Sources/BrkContent/ContentAreaView.swift"
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkE2E/SplitToolsScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift",
+        "Sources/BrkSidebar/TablistView.swift"
       ],
-      "current_behavior": "Split rules and SidebarTree enforce the cap; a new pane opens the bar, and closing archives Today or unloads a pinned pane.",
+      "current_behavior": "Two-to-four panes, pointer focus, pin-preserving pane close, private scratch splits, and singleton dissolution. Close hit areas retain a selectable center at four panes. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3352,9 +3396,9 @@
       "arc_evidence": "`SplitViewDraggerHandleView`",
       "description": "Drag the divider",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Dragging a split divider changes adjacent pane fractions within bounds and retains them after restart.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native"
@@ -3373,21 +3417,64 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools1: actual divider drags in both orientations, exact saved fractions after each restart and another drag after window resizing."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
         }
       ],
-      "remaining": [
-        "Add native drag and restart checks in both orientations and after window resizing."
-      ],
+      "remaining": [],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
+        "Sources/BrkContent/SplitToolsView.swift",
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift",
         "Sources/BrkLayout/WindowLayout.swift",
-        "Sources/BrkDomain/Rules/Split.swift"
+        "Tests/BrkLayoutTests/SplitToolsGeometryTests.swift"
       ],
-      "current_behavior": "DividerView calls ContentLayout.fractions and split.resize; fractions are normalized and stored on the split.",
+      "current_behavior": "Adjacent fractions use the actual gap-subtracted card span. Horizontal/vertical drags clamp through existing domain rules and persist in v3. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3397,9 +3484,9 @@
       "arc_evidence": "`SplitViewCellView`",
       "description": "A split is one row showing its panes",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Represent each split as one sidebar row with individually selectable pane segments.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native",
@@ -3426,21 +3513,78 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools1 and SplitTools3: four native segment targets, real loading, overflow, pane close and same-split two-window selection."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "functions.view_image on the four final CEF PNGs listed in visual-review.md",
+          "artifact": "verify/completion/batch-splits/visual-review.md",
+          "scope": "Inspected real four-pane/loading/resized-stack/drop-feedback captures; readable opaque controls and bounded segment truncation. No authenticated Arc pixel parity claim."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "Parent inspection of real corrected-bundle captures; python3 verify/completion/splits-parent/check.py",
+          "artifact": "verify/completion/splits-parent/VISUAL.md",
+          "scope": "Integrated readable controls, no Find overlap, retained four-pane presentation and real stationary drag feedback. No Arc pixel-parity claim."
         }
       ],
-      "remaining": [
-        "Verify segment pointer targeting, loading, overflow and same-split selection in two windows."
-      ],
+      "remaining": [],
       "implementation": [
+        "Sources/BrkContent/SplitToolsView.swift",
         "Sources/BrkDomain/Project.swift",
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift",
         "Sources/BrkSidebar/TablistView.swift",
-        "Sources/BrkDomain/SidebarTree.swift"
+        "Tests/BrkContentTests/SplitToolsViewTests.swift"
       ],
-      "current_behavior": "Project emits SplitRow and ContentSnapshot; TablistView draws segments and dispatches focus for the hit pane.",
+      "current_behavior": "One split row has individually identified pointer segments, native loading indicators, truncated titles, full-title tooltips, and trailing close controls. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3450,9 +3594,9 @@
       "arc_evidence": "anatomy-v 3 \"Convert to Horizontal Split View\"",
       "description": "Side by side or stacked",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Let users switch a split between side-by-side and stacked layouts and persist the choice.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native"
@@ -3471,21 +3615,64 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools1 and SplitTools4: reachable native orientation controls, actual stacked geometry, persisted public orientation and private controls."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
         }
       ],
-      "remaining": [
-        "Add an orientation UI and native divider or focus checks for stacked panes."
-      ],
+      "remaining": [],
       "implementation": [
+        "Sources/BrkContent/SplitToolsView.swift",
+        "Sources/BrkDomain/Actions.swift",
+        "Sources/BrkDomain/Rules/Sidebar.swift",
         "Sources/BrkDomain/Rules/Split.swift",
-        "Sources/BrkLayout/WindowLayout.swift",
-        "Sources/BrkDomain/Rules/Sidebar.swift"
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift",
+        "Sources/BrkLayout/WindowLayout.swift"
       ],
-      "current_behavior": "setOrientation, codec and vertical geometry work, but no native control or menu issues the command.",
+      "current_behavior": "View menu, split controls, and sidebar menus expose both orientations. Orientation persists with unchanged Split metadata. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3495,9 +3682,9 @@
       "arc_evidence": "rows 103, 104; anatomy-v 3 \"Separate All Tabs\"",
       "description": "Take a pane out, or maximize the current pane",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Separate one pane, expand the current pane and separate all panes without losing their identities or URLs.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native"
@@ -3516,21 +3703,65 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools3 and SplitTools5: pinned Expand/Restore/Separate/Separate All, DOM preservation, stable browser identities, independent window URLs/focus, and one original 4,194,304-byte POST transfer."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
         }
       ],
-      "remaining": [
-        "Implement reachable separate, expand, restore and separate-all commands with explicit pin, order and window rules."
-      ],
+      "remaining": [],
       "implementation": [
+        "Sources/BrkApp/AppStore.swift",
+        "Sources/BrkContent/SplitToolsView.swift",
         "Sources/BrkDomain/Actions.swift",
         "Sources/BrkDomain/Rules/Split.swift",
-        "Sources/BrkDomain/SidebarTree.swift"
+        "Sources/BrkDomain/Rules/SplitPresentationRules.swift",
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift"
       ],
-      "current_behavior": "Generic item.move can separate a pane and dissolve the remaining split; dedicated menu actions are later(splitTools).",
+      "current_behavior": "Window-session expansion retains page demand, focused pane ownership, and live browsers. Separate and Separate All preserve pane identity, parent/section, order, pin homes, and each window address. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3540,9 +3771,9 @@
       "arc_evidence": "anatomy-v 3 \"Drag a tab from your sidebar into the middle of the screen…\"",
       "description": "Dropping a row on the content makes a split",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "verified",
       "acceptance": "Dropping a tab onto a content edge previews and creates or extends a split with a defined orientation.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native",
@@ -3555,21 +3786,79 @@
           "command": "python3 verify/completion/native-grounding/validate.py",
           "artifact": "verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools2: actual pointer drags through left/right/top/bottom, visible feedback, Escape/center/cap cancellation, unchanged original browser creation records. Stale/profile/private owner refusal has production domain tests."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "functions.view_image on the four final CEF PNGs listed in visual-review.md",
+          "artifact": "verify/completion/batch-splits/visual-review.md",
+          "scope": "Inspected real four-pane/loading/resized-stack/drop-feedback captures; readable opaque controls and bounded segment truncation. No authenticated Arc pixel parity claim."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "Parent inspection of real corrected-bundle captures; python3 verify/completion/splits-parent/check.py",
+          "artifact": "verify/completion/splits-parent/VISUAL.md",
+          "scope": "Integrated readable controls, no Find overlap, retained four-pane presentation and real stationary drag feedback. No Arc pixel-parity claim."
         }
       ],
-      "remaining": [
-        "Implement content hit zones, drop feedback, cancellation and split-cap or profile restrictions."
-      ],
+      "remaining": [],
       "implementation": [
-        "Sources/BrkSidebar/DragController.swift",
         "Sources/BrkContent/ContentAreaView.swift",
-        "Sources/BrkDomain/Rules/Split.swift"
+        "Sources/BrkContent/SplitToolsView.swift",
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkDomain/SidebarTree.swift",
+        "Sources/BrkDomain/SplitTools.swift",
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift",
+        "Sources/BrkSidebar/DragController.swift"
       ],
-      "current_behavior": "DragController accepts Favorites, list and dock destinations only; content cards have no drop target.",
+      "current_behavior": "One existing pointer controller previews and commits edge-specific grouping from a captured structural/context offer, rejects stale or foreign offers and fifth panes, and cancels Escape or teardown. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {
@@ -3579,9 +3868,9 @@
       "arc_evidence": "anatomy-m 2.5 `switchToNextWindowPane`",
       "description": "Keys for first to fourth, next and previous pane",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "verified",
       "acceptance": "Keyboard shortcuts select panes one through four and next or previous pane with defined boundaries.",
-      "owner": "native-grounding",
+      "owner": "parent-split-integration",
       "required_checks": [
         "unit",
         "native"
@@ -3593,21 +3882,65 @@
           "command": "python3 verify/completion/native-grounding/validate.py",
           "artifact": "verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/batch-splits/unit-final.log",
+          "scope": "Current source: 526 tests, 3 inherited skips, 0 failures. Includes production split rules, layout, focus, menus, wire format and hit testing."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py build",
+          "artifact": "verify/completion/batch-splits/build-last-gate.log",
+          "scope": "Final Swift 6 release build with explicit dependency checks, all 526 tests, ad-hoc signed CEF bundle and strict signature verification."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=55 python3 verify/completion/batch-splits/run.py suite",
+          "artifact": "verify/completion/batch-splits/native-final/REPORT.md",
+          "scope": "All 73 native scenarios pass with zero failures/skips, including all 67 inherited cases. SplitTools1, SplitTools3 and SplitTools4: numbered/next/previous boundaries, native focus and editing, expanded selection and private keys. Domain tests cover remaps."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=300 python3 verify/completion/splits-parent/run.py build-complete",
+          "artifact": "verify/completion/splits-parent/build-complete.log",
+          "scope": "568 tests, three inherited skips, zero failures; review reproductions and combined Find/split behavior included."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite",
+          "artifact": "verify/completion/splits-parent/native-complete/REPORT.md",
+          "scope": "87 native passes; all prior Find, transfer/privacy/identity assertions, six SplitTools cases, SplitFind and SplitBackground. Actual input works in both windows after Separate All."
         }
       ],
-      "remaining": [
-        "Add pane-specific commands and bindings without confusing tab cycling; test native focus and editing."
-      ],
+      "remaining": [],
       "implementation": [
+        "Sources/BrkApp/WindowController.swift",
+        "Sources/BrkBase/Keys.swift",
+        "Sources/BrkContent/SplitToolsView.swift",
         "Sources/BrkDomain/Actions.swift",
         "Sources/BrkDomain/Command.swift",
-        "Sources/BrkDomain/Rules/Split.swift"
+        "Sources/BrkDomain/Rules/Split.swift",
+        "Sources/BrkE2E/SplitParentScenarios.swift",
+        "Sources/BrkLayout/SplitToolsLayout.swift"
       ],
-      "current_behavior": "Pane selection works by clicking or page focus; no pane-jump action family exists.",
+      "current_behavior": "Control-Option-1 through 4 and Control-Option-Left/Right route pane selection through the existing action table, priorities, remaps, menus, and command bar, with no wrap. Parent integration preserves Find ownership, closes a background pane without selecting/loading it, and keeps valid stationary feedback through renders.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
-        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
+        "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
+        "parent_update": {
+          "commit": "a78a021724a9125743297586aed8fd63618d7084",
+          "artifact": "verify/completion/splits-parent/REPORT.md",
+          "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
+          "proposal_sha256": "88b1ba01840478e72f90856be7ac2ed9c482d912abc5a9b0eafa0c0b1b351b40"
+        }
       }
     },
     {

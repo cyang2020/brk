@@ -95,7 +95,9 @@
         "A092"
       ],
       "brief": "tabs.md",
-      "status": "framed"
+      "status": "delivered; review repairs pass in isolated copy; main integration pending",
+      "delivered_commit": "06656768e11dc854498e6e5cfb2dd9e64af53257",
+      "review": "verify/completion/tabs-parent/review/REPORT.md"
     },
     {
       "id": "spaces",
@@ -133,9 +135,11 @@
         "A077"
       ],
       "brief": "splits.md",
-      "status": "delivered; two independent review findings await parent repair",
+      "status": "verified after parent repairs and combined native acceptance",
       "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
-      "review": "verify/completion/splits-parent/review/REPORT.md"
+      "review": "verify/completion/splits-parent/review/REPORT.md",
+      "parent_commit": "a78a021724a9125743297586aed8fd63618d7084",
+      "evidence": "verify/completion/splits-parent/REPORT.md"
     },
     {
       "id": "sites-extensions",
@@ -170,7 +174,8 @@
         "A144"
       ],
       "brief": "import-sync.md",
-      "status": "framed"
+      "status": "delivered with three native picker failures; fresh independent review in progress",
+      "delivered_commit": "464881b882c610f5eabac92d70bd0a858129bac6"
     }
   ],
   "parent_integration_rows": [
