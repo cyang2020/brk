@@ -140,6 +140,12 @@ enum NativePickerInput {
             }
             node = parent
         }
+        // Remote setters can return without acknowledging a selection that the view has already published.
+        // Observe the real state regardless of setter return codes; both independent facts still have to match.
+        if let selection = try selected() {
+            app.note("AX selection published after setter attempts; selected row and full native panel URL verified before confirm.")
+            return selection
+        }
         let panelURLs = try app.send(.sidebarPanel(window: nil, action: .selection))
         var chain: [[String: Any]] = [], current = hit
         for _ in 0..<7 {
