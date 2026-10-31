@@ -345,7 +345,7 @@ final class RowView: HoverView {
     private let dispatch: Dispatch
     private let drag: DragController
     private let preview = TabHoverPreview()
-    var previewsEnabled = true
+    var previewsEnabled = true { didSet { if previewsEnabled != oldValue { stateChanged() } } }
     private(set) var row: Row?
     private var section: SectionKind = .today
     private var depth = 0

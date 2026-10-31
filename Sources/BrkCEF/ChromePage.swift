@@ -148,6 +148,7 @@ final class ChromePage: CefBrowserDelegate {
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.linkPreviewFrameCount = linkPreviews.frameCount
         facts.linkPreviewTitle = linkPreviews.title
         facts.linkPreviewURL = linkPreviews.destination
         facts.requestedReloads = requestedReloads

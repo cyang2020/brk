@@ -34,6 +34,10 @@ enum SidebarToolsScenarios {
         try expect(app.site.requestCount("/repos/fixture/repo/notifications") == 1, "notification endpoint not read")
         try expect(try app.native().actual["favorite-badge-" + item.rawValue]?.hidden == false, "native badge missing")
         _ = try app.screenshot("fresh-badge")
+        let tile = try app.native().actual[ViewID.favorite(item).identifier]!.frame
+        try app.hover(CGPoint(x: tile.midX, y: tile.midY)); app.sleep(0.9)
+        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: false)))
+        try expect(try !app.native().appWindows.contains { $0.isVisible && $0.className.contains("Popover") }, "disabled setting left a Favorite hover card open")
         _ = try app.advanceClock(seconds: 301)
         try expect(try app.view().favorites.tiles.first?.badge == nil, "expired count remained fresh")
         try expect(try app.view().favorites.tiles.first?.sourceStatus == "Expired · reconnect", "expiry not visible")
@@ -163,6 +167,15 @@ enum SidebarToolsScenarios {
         try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100)); app.sleep(1)
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "disabled previews still appeared")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
+        let target = app.site.url("sidebar-preview-target").absoluteString.replacingOccurrences(of: "127.0.0.1", with: "localhost")
+        let srcdoc = "<a href='\(target)' style='display:block;margin:80px;width:240px;height:40px'>Iframe preview</a>"
+        let html = "<iframe style='position:fixed;left:0;top:0;width:600px;height:300px;border:0' srcdoc=\"\(srcdoc)\"></iframe>"
+        let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)
+        try app.evaluate(publicPage, "document.body.innerHTML=\(literal)")
+        try app.waitUntil("isolated iframe hover world") { try (app.native().pages[publicPage]?.linkPreviewFrameCount ?? 0) > 1 }
+        try app.hover(CGPoint(x: 30, y: 200)); try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100))
+        try app.waitUntil("fetched iframe link preview") { try app.native().pages[publicPage]?.linkPreviewTitle == "Public preview destination" }
+        _ = try app.panelScreenshot("iframe-link-card")
         try app.dispatch(.window(.newIncognito))
         guard case .hello(let hello) = try app.send(.hello), let other = hello.windows.first(where: { $0 != publicPage.window }) else { throw Check(description: "private window missing") }
         app.window = other

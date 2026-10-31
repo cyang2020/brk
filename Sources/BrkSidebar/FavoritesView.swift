@@ -13,7 +13,13 @@ final class FavoritesView: NSView {
     private let drag: DragController
     /// `section-favorites`: the tiles' container, so e2e can scope tiles to the section.
     private let section = FlippedView()
-    var previewsEnabled = true
+    var previewsEnabled = true {
+        didSet {
+            guard previewsEnabled != oldValue else { return }
+            for tile in tiles.values { tile.previewsEnabled = previewsEnabled }
+            last = nil
+        }
+    }
     private var tiles: [ItemID: FavoriteTileView] = [:]
     private let emptyBox = CAShapeLayer()
     private let emptyTitle = NSTextField(labelWithString: Copy.favoritesEmptyTitle)
@@ -153,7 +159,7 @@ final class FavoritesView: NSView {
 final class FavoriteTileView: HoverView {
     let id: ItemID
     private let preview = TabHoverPreview()
-    var previewsEnabled = true
+    var previewsEnabled = true { didSet { if previewsEnabled != oldValue { stateChanged() } } }
     private let badge = NSTextField(labelWithString: "")
     private let source = NSView()
     private let subtitle = NSTextField(labelWithString: "")
@@ -198,7 +204,7 @@ final class FavoriteTileView: HoverView {
         source.setAccessibilityLabel(row.sourceStatus)
         source.layer?.backgroundColor = (row.sourceStatus?.hasPrefix("Updated") == true || row.sourceStatus?.hasPrefix("Selected export") == true ? NSColor.systemGreen : NSColor.systemOrange).cgColor
         badge.stringValue = row.badge.map { $0 > 99 ? "99+" : String($0) } ?? ""
-        badge.isHidden = row.badge == nil
+        badge.isHidden = row.badge == nil || row.badge == 0
         subtitle.stringValue = row.subtitle ?? row.sourceStatus ?? ""
         subtitle.toolTip = toolTip
         subtitle.isHidden = row.subtitle == nil && row.sourceStatus == nil

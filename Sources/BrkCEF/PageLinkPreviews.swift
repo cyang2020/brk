@@ -21,6 +21,7 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     private var world: Int?
     private struct FrameWorld { let frame: String; let context: Int; let main: Bool }
     private var frameWorlds: [FrameWorld] = []
+    var frameCount: Int { frameWorlds.count }
     private var currentFrame: String?
     private(set) var title: String?
     private(set) var destination: URL?
