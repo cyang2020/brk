@@ -121,9 +121,11 @@ public struct WebsitePolicyStatus: Hashable, Sendable, Codable {
     public let themeApplied: Bool
     public let frozen: Bool
     public let osAuthorization: [SiteCapability: String]?
+    public let htmlMediaActive: Bool?
     public let error: String?
-    public init(document: DocumentToken, appearance: WebsiteAppearance, themeApplied: Bool, frozen: Bool, error: String?, osAuthorization: [SiteCapability: String]? = nil) {
+    public init(document: DocumentToken, appearance: WebsiteAppearance, themeApplied: Bool, frozen: Bool, error: String?, osAuthorization: [SiteCapability: String]? = nil, htmlMediaActive: Bool? = nil) {
         self.osAuthorization = osAuthorization
+        self.htmlMediaActive = htmlMediaActive
         self.document = document; self.appearance = appearance; self.themeApplied = themeApplied; self.frozen = frozen; self.error = error
     }
 }

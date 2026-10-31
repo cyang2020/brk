@@ -39,7 +39,8 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
                            (page, PageObservation(lastOpenRequest: state.session.live[page]?.lastOpenRequest, browser: state.session.live[page]?.browser,
                                                   document: state.session.live[page]?.document ?? .unavailable,
                                                   requestedURL: state.session.live[page]?.requestedURL,
-                                                  committedURL: state.doc.windows[page.window]?.slots[page.item]?.committedURL))
+                                                  committedURL: state.doc.windows[page.window]?.slots[page.item]?.committedURL,
+                                                  websitePolicyStatus: state.session.live[page]?.websitePolicyStatus))
                        }))
 }
 

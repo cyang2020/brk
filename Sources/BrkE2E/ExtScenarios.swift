@@ -182,15 +182,34 @@ enum ExtScenarios {
         app.sleep(1)
         let stopped = app.site.requestCount("/ext-media-tick"); app.sleep(1.4)
         try expect(app.site.requestCount("/ext-media-tick") == stopped, "suspended WebAudio prevented suspension")
+        try SitePolicyScenarios.evaluate(app, item, "clearInterval(timer)")
         func matrix(_ name: String, setup: String, active: Bool) throws {
             try app.dispatch(.tab(.focus(item)))
-            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";document.title='matrix:" + name + "'})().catch(e=>document.title='matrix-error:'+e.message)")
-            try waitForTitle(app, item, "matrix:" + name)
+            let marker = "matrix:" + name + ":"
+            let readback = "JSON.stringify(Array.from(document.querySelectorAll('audio,video')).map(x=>({tag:x.tagName,paused:x.paused,ended:x.ended,muted:x.muted,ready:x.readyState,time:x.currentTime})))"
+            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";document.title=" + js(marker) + "+" + readback + "})().catch(e=>document.title='matrix-error:'+e.message)")
+            var proof = ""
+            try app.waitUntil("actual DOM media state before hiding " + name) {
+                guard let title = try tab(item, in: app.view())?.title, title.hasPrefix(marker) else { return false }
+                proof = String(title.dropFirst(marker.count))
+                if active {
+                    let values = try JSONSerialization.jsonObject(with: Data(proof.utf8)) as? [[String: Any]] ?? []
+                    try expect(values.contains { $0["paused"] as? Bool == false && $0["ended"] as? Bool == false }, "fixture is not playing: " + proof)
+                }
+                return true
+            }
+            app.note(name + " before hiding: " + proof)
             _ = try app.load(app.site.url("page2.html"))
             app.sleep(0.9)
             let baseline = app.site.requestCount("/ext-media-tick")
             if active {
-                try app.waitUntil("hidden " + name + " keeps scheduling", timeout: 5) { app.site.requestCount("/ext-media-tick") > baseline + 1 }
+                do {
+                    try app.waitUntil("hidden " + name + " keeps scheduling", timeout: 5) { app.site.requestCount("/ext-media-tick") > baseline + 1 }
+                } catch {
+                    var policy: WebsitePolicyStatus?
+                    if case .pageObservations(let observations) = try app.send(.pageObservations) { policy = observations[PageID(window: app.window!, item: item)]?.websitePolicyStatus }
+                    throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy))
+                }
             } else {
                 app.sleep(1.4)
                 try expect(app.site.requestCount("/ext-media-tick") == baseline, name + " incorrectly kept a hidden page active")

@@ -28,6 +28,7 @@ public struct PageObservation: Sendable, Equatable, Codable {
     public let document: DocumentAvailability
     public let requestedURL: URL?
     public let committedURL: URL?
+    public var websitePolicyStatus: WebsitePolicyStatus? = nil
 }
 
 public struct WindowSnapshot: Sendable, Equatable, Codable {
