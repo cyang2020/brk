@@ -382,6 +382,8 @@ struct LivePage: Sendable, Equatable {
     var lastOpenRequest: PageOpenMetadata? = nil
     var zoomPercent: Int = 100
     var fullscreen: Bool = false
+    var loadProgress: Double = 0
+    var recoveryAttempted = false
     var loading: Bool = false
     var canGoBack: Bool = false
     var canGoForward: Bool = false

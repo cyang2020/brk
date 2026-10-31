@@ -11,7 +11,7 @@ public enum Effect: Hashable, Sendable {
     case find(FindRequest)
     case sidebarData(SidebarDataEffect)
     case page(PageID, PageAction)
-    case iconPicker(WindowID, ItemID)
+    case iconPicker(WindowID, ItemID, initial: CustomIcon? = nil)
     case siteRequest(SiteRequest)
     case output(OutputRequest)
     case cancelOutput(OutputID)

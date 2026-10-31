@@ -69,6 +69,7 @@ enum CommandInventory {
     ]
 
     static let events: [SystemEvent] = [
+        .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .loadProgress(0.5)),
         .sidebarData(.syncPoll),
         .find(.failed(FindRequestID("ghost"), .unavailable)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .committed(URL(string: "https://example.com/")!)), .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .titleChanged("x")),
@@ -342,6 +343,7 @@ enum CommandInventory {
             case .loadingChanged: "page.loadingChanged"
             case .loadFailed: "page.loadFailed"
             case .websitePolicyApplied: "page.websitePolicyApplied"
+            case .loadProgress: "page.loadProgress"
             case .rendererGone: "page.rendererGone"
             case .closedByPage: "page.closedByPage"
             case .gainedFocus: "page.gainedFocus"

@@ -123,7 +123,13 @@ extension Work {
             else { select(nil, in: window, space: w.space) }
         case .chooseIcon(let id):
             guard tree[id] != nil, tree[id]?.kind != .section else { return }
-            effects.append(.iconPicker(window, id))
+            let icon: CustomIcon? = switch tree[id]?.body {
+            case .tab(let t): t.icon
+            case .folder(let f): f.icon
+            case .split(let s): s.icon
+            default: nil
+            }
+            effects.append(.iconPicker(window, id, initial: icon))
         case .iconPickerClosed: break
         case .mute(let ref):
             guard let id = state.resolveTab(ref, in: window), let scope = state.locate(id), let t = state.tab(id) else { return }

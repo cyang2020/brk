@@ -80,6 +80,7 @@ public struct PageSpec: Hashable, Sendable, Codable {
 
     public let muted: Bool
     public var websitePolicy: WebsitePolicy = WebsitePolicy()
+    public var hoverPreviews = true
     public let downloadPolicy: DownloadPolicy
 
     public init(id: PageID, initialURL: URL?, context: BrowsingContext, downloadPolicy: DownloadPolicy = .default, muted: Bool = false) {
@@ -152,6 +153,7 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case zoomChanged(Int)
     case fullscreenChanged(Bool)
     case loadingChanged(isLoading: Bool, canGoBack: Bool, canGoForward: Bool)
+    case loadProgress(Double)
     case loadFailed(code: Int, description: String, url: String)
     /// The renderer process crashed or was killed. The page object stays; see `PageAction.recover`.
     case websitePolicyApplied(WebsitePolicyStatus)
@@ -203,6 +205,8 @@ public enum ShutdownOutcome: Hashable, Sendable {
 
 /// What the engine can tell the e2e harness about one page. Diagnostic only: the app never branches on it.
 public struct PageFacts: Hashable, Sendable, Codable {
+    public var linkPreviewTitle: String? = nil
+    public var linkPreviewURL: URL? = nil
     public var requestedReloads: Int? = nil
     public var extensionDialogDecision: String? = nil
     public var extensionFileDialogCallbacks: Int? = nil

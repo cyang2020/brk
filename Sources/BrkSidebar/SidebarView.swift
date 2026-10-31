@@ -346,7 +346,6 @@ final class URLPillView: HoverView {
 
     func render(_ pill: URLPillSnapshot, palette: Palette) {
         if pill == self.pill, palette == self.palette { needsLayout = true; return }
-        let wasLoading = self.pill?.loading == true
         self.pill = pill
         self.palette = palette
         label.stringValue = (pill.text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
@@ -355,10 +354,12 @@ final class URLPillView: HoverView {
         copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
                         hoverFill: palette.tokens.itemHover)
         siteInfo.render(.siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
-        let accent = palette.ink.loading
-        shimmer.colors = [accent.withAlphaComponent(0).cgColor, accent.withAlphaComponent(Draw.pillShimmerAlpha.value).cgColor, accent.withAlphaComponent(0).cgColor]
+        shimmer.colors = [NSColor.systemPurple.withAlphaComponent(0.35).cgColor, NSColor.systemBlue.withAlphaComponent(0.7).cgColor, NSColor.systemOrange.withAlphaComponent(0.8).cgColor]
+        shimmer.shadowColor = palette.ink.loading.cgColor
+        shimmer.shadowOpacity = 0.85
+        shimmer.shadowRadius = Metrics.sidebarTools.glowBlur.value
+        shimmer.cornerRadius = Metrics.sidebarTools.glowRadius.value
         shimmer.isHidden = !pill.loading
-        if pill.loading, !wasLoading { startShimmer() }
         if !pill.loading { shimmer.removeAllAnimations() }
         badge.render(pill.profile, palette: palette)
         stateChanged()
@@ -381,18 +382,10 @@ final class URLPillView: HoverView {
         }
         let height = max(label.intrinsicContentSize.height, Metrics.urlPill.textMinHeight.value)
         label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
-        shimmer.frame = CGRect(x: 0, y: 0, width: bounds.width / 2, height: bounds.height)
-        if pill?.loading == true, shimmer.animation(forKey: "sweep") == nil { startShimmer() }
-    }
-
-    private func startShimmer() {
-        guard bounds.width > 0 else { return }
-        let sweep = CABasicAnimation(keyPath: "position.x")
-        sweep.fromValue = -bounds.width / 4
-        sweep.toValue = bounds.width * 1.25
-        sweep.duration = Draw.pillLoadingSweep.value
-        sweep.repeatCount = .infinity
-        shimmer.add(sweep, forKey: "sweep")
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(Metrics.sidebarTools.glowDuration.value)
+        shimmer.frame = CGRect(x: 0, y: bounds.height - Metrics.sidebarTools.glowHeight.value, width: bounds.width * max(0.03, pill?.loadProgress ?? 0), height: Metrics.sidebarTools.glowHeight.value)
+        CATransaction.commit()
     }
 
     override func stateChanged() {

@@ -77,7 +77,7 @@ public final class ContentAreaView: NSView {
             case .blank:
                 card.host(nil, placeholder: nil)
             case .crashed(let page):
-                card.host(nil, placeholder: "☹\nThis page stopped responding.\nBrk is trying to recover the page. You can also retry.")
+                card.host(nil, placeholder: "This tab has crashed")
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
             }
         }
@@ -145,9 +145,8 @@ final class ShadowView: NSView {
 
 @MainActor
 final class CardView: NSView {
-    private let placeholder = NSTextField(labelWithString: "")
-    var retryAction: (() -> Void)?
-    private let retry = NSButton(title: "Retry", target: nil, action: nil)
+    private let sad = SadTabView(frame: .zero)
+    var retryAction: (() -> Void)? { didSet { sad.reloadAction = retryAction } }
     private weak var hosted: NSView?
 
     override init(frame: NSRect) {
@@ -157,15 +156,8 @@ final class CardView: NSView {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.content.cornerRadius.value
         layer?.backgroundColor = NSColor.white.cgColor
-        placeholder.alignment = .center
-        placeholder.textColor = .secondaryLabelColor
-        placeholder.isHidden = true
-        addSubview(placeholder)
-        placeholder.maximumNumberOfLines = 4
-        retry.target = self
-        retry.action = #selector(retryPage)
-        retry.isHidden = true
-        addSubview(retry)
+        sad.isHidden = true
+        addSubview(sad)
     }
 
     @available(*, unavailable)
@@ -188,20 +180,15 @@ final class CardView: NSView {
             if hosted?.superview === self { hosted?.removeFromSuperview() }
             hosted = nil
         }
-        placeholder.stringValue = text ?? ""
-        placeholder.isHidden = text == nil
-        retry.isHidden = text == nil
-        retry.sizeToFit()
-        retry.frame.origin = NSPoint(x: bounds.midX - retry.frame.width / 2, y: bounds.midY + 50)
-        placeholder.sizeToFit()
-        placeholder.frame.origin = CGPoint(x: bounds.midX - placeholder.frame.width / 2, y: bounds.midY - placeholder.frame.height / 2)
+        sad.isHidden = text == nil
+        sad.frame = bounds
+        layer?.backgroundColor = (text == nil ? NSColor.white : NSColor.windowBackgroundColor).cgColor
     }
-
-    @objc private func retryPage() { retryAction?() }
 
     override func layout() {
         super.layout()
         if hosted?.superview === self { hosted?.frame = bounds }
+        sad.frame = bounds
     }
 }
 

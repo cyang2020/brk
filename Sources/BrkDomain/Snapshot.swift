@@ -86,6 +86,7 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var loading: Bool
     public var canGoBack: Bool
     public var canGoForward: Bool
+    public var loadProgress: Double = 0
     public var zoomPercent: Int = 100
     /// Arc's `ProfileIndicatorView`: shown when the space's profile is not the default one, or the window is
     /// incognito. F2.
@@ -161,6 +162,7 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// Has a live page. Unloaded Pinned and Favorites tabs draw dimmer.
     public var loaded: Bool
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
+    public var sourceStatus: String? = nil
     public var badge: Int? = nil
     public var subtitle: String? = nil
     public var audible: Bool = false

@@ -240,7 +240,7 @@ struct AdvancedPane: View {
             SettingsDivider()
             SettingsSection(.symbol(SettingsCopy.advancedWindowSymbol)) {
                 box(SettingsCopy.windowDraggingFromPages, "windowDraggingFromPages", a.windowDraggingFromPages) { .windowDraggingFromPages($0) }
-                SettingsCheckbox(title: "Show tab and folder hover previews", field: "tabHoverPreviews", isOn: context.settings.tabPreferences.hoverPreviews) {
+                SettingsCheckbox(title: "Show tab, folder and webpage link previews", field: "tabHoverPreviews", isOn: context.settings.tabPreferences.hoverPreviews) {
                     context.dispatch(.tabTools(.preferences(includeFavorites: context.settings.tabPreferences.includeFavoritesInNumbers, previews: $0)))
                 }
                 SettingsCheckbox(title: "Include Favorites in numbered tab shortcuts", field: "numberedFavorites", isOn: context.settings.tabPreferences.includeFavoritesInNumbers) {

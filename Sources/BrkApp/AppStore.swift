@@ -272,7 +272,13 @@ public final class AppStore {
         renderSettings()
     }
 
-    private lazy var siteTools = SiteToolsAdapter { [weak self] event in self?.dispatch(.system(event)) }
+    private lazy var siteTools: SiteToolsAdapter = {
+        let adapter = SiteToolsAdapter { [weak self] event in self?.dispatch(.system(event)) }
+        adapter.selectCalendar = { [weak self] window, file, join in
+            self?.dispatch(.user(window, .tabTools(.site(.selectCalendar(file, join: join)))))
+        }
+        return adapter
+    }()
     private func chooseLocalExtension(_ id: WindowID, context: BrowsingContext) {
         guard let owner = windows[id]?.window, owner.attachedSheet == nil else { return }
         let panel = NSOpenPanel()
@@ -332,9 +338,9 @@ public final class AppStore {
             case .find(let request): engine.find(request)
             case .siteRequest(let request):
                 if let window = windows[request.window]?.window { siteTools.run(request, in: window) }
-            case .iconPicker(let window, let item):
+            case .iconPicker(let window, let item, let initial):
                 guard let owner = windows[window]?.window else { continue }
-                TabIconPicker.present(in: owner) { [weak self, weak owner] icon in
+                TabIconPicker.present(in: owner, initial: initial) { [weak self, weak owner] icon in
                     guard owner?.isVisible == true else { return }
                     self?.dispatch(.user(window, .item(.setIcon(item, icon))))
                 }

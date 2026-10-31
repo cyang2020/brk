@@ -74,7 +74,7 @@ enum Scenarios {
         Scenario("N2", "focus goes to the command bar and back to the page; no CEF host window is ever key", NativeScenarios.focusRoundTrip),
         Scenario("N3", "pixel layout: title row, URL pill, favorites, rows, dock frames equal the constants", NativeScenarios.pixelLayout),
         Scenario("N4", "quit with three pages and a split exits 0 with no crash report", NativeScenarios.cleanQuit),
-    ] + Wave2Scenarios.all + CompletionScenarios.all + IdentityScenarios.all + TransferScenarios.all + SplitToolsScenarios.all + SplitParentScenarios.all + TabToolsScenarios.all + ImportSyncScenarios.all + SpaceToolsScenarios.all + BrowserBasicScenarios.all + AudioScenarios.all + SitePolicyScenarios.all + ExtensionScenarios.all + SitePolicyBehaviorScenarios.all + SiteStorageScenarios.all + SitePolicyDataScenarios.all
+    ] + Wave2Scenarios.all + CompletionScenarios.all + IdentityScenarios.all + TransferScenarios.all + SplitToolsScenarios.all + SplitParentScenarios.all + SidebarToolsScenarios.all + TabToolsScenarios.all + ImportSyncScenarios.all + SpaceToolsScenarios.all + BrowserBasicScenarios.all + AudioScenarios.all + SitePolicyScenarios.all + ExtensionScenarios.all + SitePolicyBehaviorScenarios.all + SiteStorageScenarios.all + SitePolicyDataScenarios.all
 }
 
 // MARK: - Shared reading helpers

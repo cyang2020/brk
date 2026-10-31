@@ -183,7 +183,7 @@ final class AppUnderTest {
         if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
-        if scenarioID.hasPrefix("TabTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
+        if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)

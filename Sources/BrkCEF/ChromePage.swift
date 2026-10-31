@@ -19,6 +19,13 @@ final class ChromePage: CefBrowserDelegate {
     /// Pairs OnKeyEvent with its OnPreKeyEvent so both carry one PressID (rule on `PressID`).
     private var presses = PressCorrelator()
     private let contextMenu = PageContextMenu()
+    private(set) lazy var linkPreviews = PageLinkPreviews(browser: browser, surface: surface, available: { [weak self] in
+        guard let self else { return false }
+        return self.engine.isLive(self) && self.surface.window?.isVisible == true && !self.surface.isHiddenOrHasHiddenAncestor
+    }, summarize: { [weak self] request, reply in
+        guard let self, self.engine.isLive(self), self.readyDocument == request.document else { reply(nil); return }
+        self.engine.delegate?.engine(self.engine, summarizeLink: request, reply: reply)
+    })
     private(set) lazy var find = PageFind(browser: browser) { [weak self] update in
         guard let self, self.engine.isLive(self) else { return }
         self.engine.findUpdated(update)
@@ -96,6 +103,7 @@ final class ChromePage: CefBrowserDelegate {
             self.engine.pageReadyForFocus(self)
         }
         surface.adopt(chrome)
+        linkPreviews.setEnabled(spec.hoverPreviews)
         applyWebsitePolicy(spec.websitePolicy)
     }
 
@@ -140,6 +148,8 @@ final class ChromePage: CefBrowserDelegate {
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.linkPreviewTitle = linkPreviews.title
+        facts.linkPreviewURL = linkPreviews.destination
         facts.requestedReloads = requestedReloads
         facts.extensionDialogDecision = extensionDialogDecision
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks
@@ -154,6 +164,7 @@ final class ChromePage: CefBrowserDelegate {
         audio.invalidate(retire: true)
         audioTargetTransport?.invalidate()
         find.invalidate()
+        linkPreviews.stop()
         reloadSequence.cancel()
         cancelPermissions()
         contextMenu.cancel()
@@ -162,7 +173,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
+    func park() { linkPreviews.stop(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -261,6 +272,10 @@ final class ChromePage: CefBrowserDelegate {
         emit(mainDocument.loadingChanged(isLoading))
     }
 
+    func browser(_ b: CefBrowser, didChangeProgress progress: Double) {
+        engine.pageLoadProgress(self, progress: progress)
+    }
+
     func browser(_ b: CefBrowser, didFailLoad code: Int, errorText: String, failedURL: String) {
         reloadSequence.cancel()
         emit(mainDocument.loadFailed(code: code, description: errorText, url: failedURL))
@@ -270,7 +285,7 @@ final class ChromePage: CefBrowserDelegate {
         reloadSequence.cancel()
         cancelPermissions()
         emit(mainDocument.rendererGone())
-        engine.pageDidEmit(self, .rendererGone)
+        engine.pageRendererTerminated(self)
     }
 
     func browserDidGainFocus(_ b: CefBrowser) { engine.pageDidEmit(self, .gainedFocus); reportZoom() }

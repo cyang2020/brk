@@ -180,10 +180,13 @@ struct SpaceDialogForm: View {
     let dispatch: Dispatch
     let profiles: [ProfileRow]
     @State private var stage = 0
+    @State private var symbolDraft: String
     @Environment(\.colorScheme) private var colorScheme
 
     init(draft: SpaceDraft, profiles: [ProfileRow] = [], dispatch: @escaping Dispatch) {
         _draft = State(initialValue: draft)
+        let symbol: String = if case .custom(.symbol(let value)) = draft.icon { value } else { "" }
+        _symbolDraft = State(initialValue: symbol)
         self.dispatch = dispatch
         self.profiles = profiles
     }
@@ -285,12 +288,20 @@ struct SpaceDialogForm: View {
                     Circle().fill(draft.theme.colors.first?.swiftUI ?? .gray).frame(width: side / 3, height: side / 3)
                 } action: { draft.icon = SpaceIcon.none }
             }
+            HStack {
+                TextField("SF Symbol name", text: $symbolDraft)
+                    .onChange(of: symbolDraft) { _, value in
+                        if value.isEmpty, case .custom(.symbol) = draft.icon { draft.icon = .none }
+                        else if NSImage(systemSymbolName: value, accessibilityDescription: nil) != nil { draft.icon = .custom(.symbol(value)) }
+                    }.textFieldStyle(.roundedBorder).spaceToolsID("symbol")
+                Button("Emoji & Symbols…") { NSApp.orderFrontCharacterPalette(nil) }
+            }
             ForEach(rows, id: \.self) { row in
                 HStack(spacing: m.padding.value / 4) {
                     ForEach(row, id: \.self) { name in
                         choice(selected: draft.icon == .custom(.named(name)), help: name.rawValue.capitalized) {
                             Image(systemName: NamedIconSymbol.of(name))
-                        } action: { draft.icon = .custom(.named(name)) }
+                        } action: { draft.icon = .custom(.named(name)); symbolDraft = "" }
                     }
                 }
             }
