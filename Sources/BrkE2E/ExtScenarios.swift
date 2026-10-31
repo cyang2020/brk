@@ -100,12 +100,19 @@ enum ExtScenarios {
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
         try app.flush(); try app.restart()
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
+        try app.waitUntil("extension listener ready after restart") {
+            try SitePolicyScenarios.evaluate(app, item, "document.title='shortcut-ready:'+document.documentElement.getAttribute('data-brk-extension')")
+            return try tab(item, in: app.view())?.title == "shortcut-ready:installed"
+        }
         try app.press("cmd+shift+u")
         try waitForTitle(app, item, "extension-command:fixture-command")
         try app.dispatch(.settings(.shortcuts(.setChord(.newTab, KeyChord([.command, .shift], .u)))))
         try app.press("cmd+shift+u")
         try app.waitUntil("Brk app-priority remap opens command bar") { isCommandBar(try app.view().overlay) }
         try app.press("escape")
+        app.sleep(0.5)
+        try SitePolicyScenarios.evaluate(app, item, "document.title='extension-count:'+document.documentElement.getAttribute('data-brk-extension-commands')")
+        try waitForTitle(app, item, "extension-count:1")
         try app.dispatch(.settings(.shortcuts(.reset(.newTab))))
         app.note("Native editing, duplicate/reserved errors, persisted command execution, and a later Brk app-priority remap were exercised. Native editor/page-first routing also has reducer tests using the one key table.")
     }
@@ -241,7 +248,7 @@ enum ExtScenarios {
         """
         try matrix("muted-html-audio", setup: wav, active: true)
         try matrix("paused-html-audio", setup: "document.body.append(extElement);extElement.pause()", active: false)
-        try matrix("muted-html-video", setup: "const canvas=document.createElement('canvas');window.extElement=document.createElement('video');extElement.muted=true;extElement.srcObject=canvas.captureStream(10);document.body.append(extElement);await extElement.play()", active: true)
+        try matrix("muted-html-video", setup: "window.extElement=document.createElement('video');extElement.muted=true;extElement.loop=true;extElement.src='/ext-policy-video.webm';document.body.append(extElement);await extElement.play()", active: true)
         try matrix("paused-html-video", setup: "document.body.append(extElement);extElement.pause()", active: false)
         try matrix("running-silent-webaudio", setup: "await start(true);clearInterval(timer)", active: false)
         app.note("Audible WebAudio and playback intent for muted HTML audio/video protected hidden scheduling, including Chromium's automatic hidden-media pause. Suspended WebAudio, visibly paused HTML media and a running silent WebAudio source allowed freezing. The typed PiP consumer still awaits captures-media integration.")
