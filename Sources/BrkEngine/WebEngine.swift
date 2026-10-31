@@ -142,6 +142,8 @@ extension WebEngineDelegate {
 /// A page's view. Engines subclass it; callers treat it as a plain NSView placed inside a card.
 @MainActor
 open class PageSurfaceView: NSView {
+    public static let contextMenuWillOpen = Notification.Name("brk.page-context-menu.will-open")
+    public static let contextMenuDidClose = Notification.Name("brk.page-context-menu.did-close")
     public let page: PageID
 
     public init(page: PageID) {
@@ -161,6 +163,9 @@ open class PageSurfaceView: NSView {
     /// routes it before and after the page. True for a surface that consumes no keys (the stub), so app shortcuts
     /// work on it the way they do with a native view focused.
     open var routesKeysThroughWindow: Bool { false }
+    /// Extended Edit menu commands use the actual page adapter, rather than inherited no-op Cocoa selectors.
+    open var editingMenuResponder: NSResponder? { nil }
+    open func prepareEditingMenu() async {}
 }
 
 extension WebEngine {

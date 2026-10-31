@@ -1,4 +1,5 @@
 import AppKit
+import BrkEngine
 
 /// Only instantiated for the explicit control-socket probe. No observer runs in ordinary browsing.
 @MainActor final class ContextMenuCapture: NSObject {
@@ -10,8 +11,8 @@ import AppKit
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(began(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
-        center.addObserver(self, selector: #selector(finished(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
+        center.addObserver(self, selector: #selector(began(_:)), name: PageSurfaceView.contextMenuWillOpen, object: nil)
+        center.addObserver(self, selector: #selector(finished(_:)), name: PageSurfaceView.contextMenuDidClose, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)

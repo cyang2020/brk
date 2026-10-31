@@ -28,6 +28,20 @@ public enum DeveloperOperation: String, Hashable, Sendable, Codable {
     case source, inspect, console, network
 }
 
+/// Bounded opt-in native verification receipts. Only shortcut chords are recorded, never typed text.
+public struct PageKeyReceipt: Hashable, Sendable, Codable {
+    public let stage: String
+    public let chord: String?
+    public let press: UInt64?
+    public let handled: Bool
+    public let shortcut: Bool?
+    public let chromeCommand: Int?
+    public init(stage: String, chord: String? = nil, press: UInt64? = nil, handled: Bool, shortcut: Bool? = nil, chromeCommand: Int? = nil) {
+        self.stage = stage; self.chord = chord; self.press = press; self.handled = handled
+        self.shortcut = shortcut; self.chromeCommand = chromeCommand
+    }
+}
+
 extension DocumentAvailability {
     public var token: DocumentToken? {
         switch self {

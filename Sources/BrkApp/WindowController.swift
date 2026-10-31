@@ -68,6 +68,10 @@ public class WindowController: NSObject, NSWindowDelegate {
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
+        window.onEscapeBeforePage = { [weak self] event in
+            guard self?.lastSnapshot?.overlay != nil, let input = KeyInput(menuEvent: event) else { return false }
+            return routeKey(input)
+        }
         window.onScrollWheel = { [weak root] event in root?.handleScrollWheel(event) ?? false }
         window.onFlagsChanged = { [weak self] flags in
             guard let self else { return }
@@ -199,6 +203,7 @@ public protocol HostWindow: NSWindow {
     /// A key equivalent the window's views did not take (a native view has focus, or none): the shortcut table
     /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
     var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
+    var onEscapeBeforePage: ((NSEvent) -> Bool)? { get set }
     var onPagePointerDown: ((PageID) -> Void)? { get set }
     /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
     func placeTrafficLights(origin: CGPoint?)
@@ -216,6 +221,9 @@ extension HostWindow {
     /// unbound key (typing in a field) is not consumed and takes the normal path. With a page view focused Chromium
     /// gets the event and CEF's key handler routes it (before and after the page). Returns true when consumed.
     func hostEvent(_ event: NSEvent) -> Bool {
+        // Chrome handles fullscreen Escape before CEF's pre-key callback. Give an open native overlay the
+        // table's menu path first, so Exit dismisses it before Chrome leaves the document's fullscreen.
+        if event.type == .keyDown, event.keyCode == Key.escape.code, onEscapeBeforePage?(event) == true { return true }
         if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(event.type) { onActivity?() }
         if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
         switch event.type {
@@ -295,6 +303,7 @@ public final class BrowserWindow: NSWindow, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
+    public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
 
     public override func sendEvent(_ event: NSEvent) {

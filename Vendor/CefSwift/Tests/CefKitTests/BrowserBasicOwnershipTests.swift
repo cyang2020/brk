@@ -22,7 +22,7 @@ import Testing
         let handler = raw.pointee.get_keyboard_handler!(raw)!
         var event = cef_key_event_t()
         event.type = KEYEVENT_RAWKEYDOWN
-        for (decision, consumed, out) in [(CefKeyDisposition(handled: true, shortcut: false), Int32(1), Int32(0)), (CefKeyDisposition(handled: false, shortcut: false), 0, 0), (CefKeyDisposition(handled: false, shortcut: true), 0, 1)] {
+        for (decision, consumed, out) in [(CefKeyDisposition(handled: true, shortcut: false), Int32(1), Int32(0)), (CefKeyDisposition(handled: false, shortcut: false), 0, 0), (CefKeyDisposition(handled: false, shortcut: true), 0, 1), (CefKeyDisposition(handled: true, shortcutIntent: .unchanged), 1, -1), (CefKeyDisposition(handled: false, shortcutIntent: .unchanged), 0, -1)] {
             delegate.decision = decision
             var shortcut: Int32 = -1
             #expect(handler.pointee.on_pre_key_event!(handler, nil, &event, nil, &shortcut) == consumed)

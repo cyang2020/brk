@@ -132,6 +132,7 @@ enum MainMenu {
         let item = NSMenuItem(title: title ?? action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
         item.target = target
         item.representedObject = action.rawValue
+        item.toolTip = action.unsupportedReason
         item.tag = binding
         item.isHidden = hidden
         item.isAlternate = binding == 0 && action.spec.alternate
@@ -177,6 +178,7 @@ enum MainMenu {
             item.keyEquivalentModifierMask = key.isEmpty ? [] : mask
             item.tag = tag
             if role == .font, action == #selector(NSFontManager.addFontTrait(_:)) { item.target = NSFontManager.shared }
+            if let action, EditMenuTarget.actions.contains(NSStringFromSelector(action)) { item.target = target.edits }
             if !children.isEmpty || role == .services {
                 let sub = NSMenu(title: title)
                 sub.autoenablesItems = true
@@ -249,6 +251,8 @@ enum MainMenu {
 /// `shortcuts`, so the menu follows `Doc.keyOverrides`.
 @MainActor
 final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
+    let edits = EditMenuTarget()
+    private var preparingEditingMenu = false
     var perform: ((ActionID, NSEvent?) -> Void)?
     var isEnabled: ((ActionID) -> Bool)?
     var isChecked: ((ActionID) -> Bool?)?
@@ -275,6 +279,15 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if !preparingEditingMenu, let window = edits.window(),
+           let page = (window as? any HostWindow).map({ type(of: $0).surface(containing: window.firstResponder) }) ?? nil {
+            preparingEditingMenu = true
+            Task { @MainActor [weak self, weak page, weak menu] in
+                defer { self?.preparingEditingMenu = false }
+                await page?.prepareEditingMenu()
+                menu?.update()
+            }
+        }
         let states = shortcuts() ?? KeyBindings.resolve(overrides: [:]).mapValues(\.state)
         for item in menu.items where item.tag == 0 {
             guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }

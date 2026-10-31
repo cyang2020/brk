@@ -108,20 +108,26 @@ enum BrowserBasicScenarios {
     }
 
     @Sendable static func outputs(_ app: AppUnderTest) throws {
+        let port = try BrowserBasicInspection.unusedPort()
+        app.remoteDebuggingPort = port
+        try app.restart()
         let server = FixtureServer(root: app.site.root)
         try server.start(); defer { server.stop() }
         let source = server.url("browser-basic.html")
         let page = try page(app, source)
         let archive = app.dataDirectory.appendingPathComponent("fixture.mhtml")
         let pdf = app.dataDirectory.appendingPathComponent("fixture.pdf")
-        let mhtml = try save(app, page, .mhtml, path: archive)
-        let exportedPDF = try save(app, page, .pdf, path: pdf)
+        // Native save-panel input is verified by the file-panels slice. Use the explicit destination for byte
+        // acceptance so a missing Return gesture cannot be mistaken for a lost renderer completion callback.
+        let mhtml = try fixtureSave(app, page, .mhtml, path: archive)
+        let exportedPDF = try fixtureSave(app, page, .pdf, path: pdf)
         guard let document = PDFDocument(url: pdf) else { throw Check(description: "Generated PDF failed to parse") }
         try expect(document.pageCount > 0 && document.string.map { $0.filter { !$0.isWhitespace }.contains("Browserbasicoutputfixture") } == true, "PDF missed actual fixture text")
         let evidence = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("artifacts/" + app.scenarioID, isDirectory: true)
         try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
         for file in [archive, pdf] { try Data(contentsOf: file).write(to: evidence.appendingPathComponent(file.lastPathComponent), options: .atomic) }
-        let receipt: [String: Any] = ["mhtmlBytes": mhtml.bytes, "pdfBytes": exportedPDF.bytes, "pdfPages": document.pageCount, "pdfContainsFixtureText": true]
+        let receipt: [String: Any] = ["mhtmlBytes": mhtml.bytes, "pdfBytes": exportedPDF.bytes, "pdfPages": document.pageCount, "pdfContainsFixtureText": true,
+                                      "destination": "explicit owned fixture answer; native save-panel gesture belongs to file-panels"]
         try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]).write(to: evidence.appendingPathComponent("output-receipts.json"))
 
         try dispatch(app, page.window, .page(.output(.print)))
@@ -144,8 +150,14 @@ enum BrowserBasicScenarios {
               case .loaded(let item) = try app.send(.load(window: privateWindow, url: archive)) else { throw Check(description: "Offline private window missing") }
         let offline = PageID(window: privateWindow, item: item)
         try app.waitForPageInput(offline, at: archive)
-        try app.evaluate(offline, "document.title='offline:'+document.body.textContent.includes('Browser basic output fixture')+':'+document.querySelector('img').naturalWidth")
-        try waitTitle(app, offline, "offline:true:64")
+        // Chromium refuses the public ExecuteJavaScript API for MHTML. Read this actual archive target through
+        // the opt-in inspection port, as BB6 does, rather than waiting for a script that cannot execute.
+        let observed = try BrowserBasicInspection.evaluate(port: port, document: archive,
+            expression: "({url:location.href,text:document.body.innerText,imageWidth:document.querySelector('img')?.naturalWidth ?? -1})")
+        try observed.write(to: evidence.appendingPathComponent("offline-dom.json"))
+        let dom = try JSONSerialization.jsonObject(with: observed) as? [String: Any] ?? [:]
+        try expect(dom["url"] as? String == archive.absoluteString && (dom["text"] as? String)?.contains("Browser basic output fixture") == true && dom["imageWidth"] as? Int == 64,
+                   "Offline archive text/image differs: \(dom)")
         try expect(server.requestCount("/browser-basic.svg") == resourceRequests, "Offline reopen made a network image request")
         try app.screenshot("offline-mhtml", window: privateWindow)
         app.note("MHTML reopened with its fixture server stopped in a fresh private context: fixture text and image width 64. PDFKit parsed \(document.pageCount) page(s). Native print Cancel was observed; printer submission is a separate gate.")

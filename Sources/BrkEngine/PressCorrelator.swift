@@ -20,14 +20,21 @@ public struct PressCorrelator: Sendable, Equatable {
     public mutating func beforePage(_ press: KeyPress, id: PressID, handled: Bool, at now: Instant) {
         expire(now)
         guard press.phase == .down, !handled else { return }
+        guard pending[press.chord]?.contains(where: { $0.id == id }) != true else { return }
         pending[press.chord, default: []].append(Pending(id: id, at: now))
     }
 
     /// The id of the before-page delivery this after-page key-down belongs to, or nil for a key-up and when there is
     /// none in the window (the caller then mints a fresh id and routing treats the press as new).
-    public mutating func afterPage(_ press: KeyPress, at now: Instant) -> PressID? {
+    public mutating func afterPage(_ press: KeyPress, nativeID: PressID? = nil, at now: Instant) -> PressID? {
         expire(now)
-        guard press.phase == .down, var queue = pending[press.chord], !queue.isEmpty else { return nil }
+        guard press.phase == .down else { return nil }
+        if let nativeID {
+            pending[press.chord]?.removeAll { $0.id == nativeID }
+            if pending[press.chord]?.isEmpty == true { pending[press.chord] = nil }
+            return nativeID
+        }
+        guard var queue = pending[press.chord], !queue.isEmpty else { return nil }
         let first = queue.removeFirst()
         pending[press.chord] = queue.isEmpty ? nil : queue
         return first.id

@@ -586,7 +586,7 @@ extension CefBrowser {
 
     /// Runs `body` with the focused frame if one exists, otherwise the main
     /// frame. The frame is a +1 reference released after `body` returns.
-    private func withEditingFrame(_ body: (UnsafeMutablePointer<cef_frame_t>) -> Void) {
+    func withEditingFrame(_ body: (UnsafeMutablePointer<cef_frame_t>) -> Void) {
         guard let frame = focusedOrMainFrame() else { return }
         defer { cefRelease(UnsafeMutableRawPointer(frame)) }
         body(frame)

@@ -4,6 +4,14 @@ import XCTest
 @testable import BrkDomain
 
 final class BrowserBasicTests: XCTestCase {
+    func testCastTargetsTheInvokingWindowsFocusedLivePage() {
+        let d = Driver()
+        let page = PageID(window: d.window, item: d.todayIDs[0])
+        XCTAssertEqual(d.user(.page(.cast)).effects, [.page(page, .cast)])
+        let empty = Driver(startURL: nil)
+        XCTAssertTrue(empty.user(.page(.cast)).effects.isEmpty)
+        XCTAssertFalse(empty.view.enabledActions.contains(.cast))
+    }
     func testPreKeyIntentIncludesAlternatesAndTracksOverrides() {
         let d = Driver()
         for (index, chord) in [KeyChord(.command, .equals), KeyChord(.command, .leftArrow), KeyChord([], .f12)].enumerated() {

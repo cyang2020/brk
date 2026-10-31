@@ -4,7 +4,7 @@ import BrkBase
 /// Presentation and operations are independent reasons to keep the original browser alive.
 @MainActor
 public final class BrowserResources<Resource: AnyObject> {
-    public enum Lease: Hashable { case transfer(DownloadID), documentOutput(String), siteData(String), extensionOperation(String) }
+    public enum Lease: Hashable { case transfer(DownloadID), documentOutput(String), siteData(String), extensionOperation(String), auxiliary(String) }
     public struct Entry {
         public let resource: Resource
         public let context: ContextEpoch

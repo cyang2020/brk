@@ -340,12 +340,13 @@ final class MenuTests: XCTestCase {
         let target = MenuTarget()
         target.isEnabled = { _ in true }
         let main = MainMenu.build(target: target)
-        let print = try XCTUnwrap(main.items[3].submenu!.items.first { $0.title == "Cast" })
+        let developer = try XCTUnwrap(main.items[3].submenu!.items.first { $0.title == "Developer" }?.submenu)
+        let unsupported = try XCTUnwrap(developer.items.first { $0.title == "Toggle Developer Mode" })
         let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
-        XCTAssertFalse(target.validateMenuItem(print))
+        XCTAssertFalse(target.validateMenuItem(unsupported))
         XCTAssertTrue(target.validateMenuItem(newWindow))
         target.isEnabled = nil
-        XCTAssertFalse(target.validateMenuItem(print))
+        XCTAssertFalse(target.validateMenuItem(unsupported))
     }
 
     /// a menu key equivalent is a .menu-stage key input minted from the event (so a duplicate is refused); a mouse

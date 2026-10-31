@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Local popup handshake</title>
+<p>Local cross-origin opener handshake fixture.</p>
+<script>
+const query = new URLSearchParams(location.search);
+if (opener) opener.postMessage({kind:'bo-auth', nonce:query.get('nonce')}, query.get('returnOrigin'));
+</script>

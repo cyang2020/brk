@@ -139,6 +139,7 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case stop(ItemRef)
     case zoom(ZoomStep)
     case toggleDevTools
+    case cast
     case output(OutputIntent)
     case cancelOutput
     case developer(DeveloperOperation)

@@ -36,7 +36,7 @@ enum CommandInventory {
         .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
         .tabTools(.preferences(includeFavorites: true, previews: false)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
-        .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.copyURL(.plain)),
+        .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
@@ -231,6 +231,7 @@ enum CommandInventory {
             case .stop: "stop"
             case .zoom: "zoom"
             case .toggleDevTools: "toggleDevTools"
+            case .cast: "cast"
             case .developer: "developer"
             case .output: "output"
             case .cancelOutput: "cancelOutput"
