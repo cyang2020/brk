@@ -137,7 +137,14 @@ enum NativePickerInput {
             }
             node = parent
         }
-        throw Check(description: "AX could not select fixture row \(file.lastPathComponent); no confirm sent")
+        let panelURLs = try app.send(.sidebarPanel(window: nil, action: .selection))
+        var chain: [[String: Any]] = [], current = hit
+        for _ in 0..<7 {
+            var item = fields(current); item["selectionObserved"] = isSelected(current); chain.append(item)
+            guard let next = parent(current) else { break }
+            current = next
+        }
+        throw Check(description: "AX could not select fixture row \(file.lastPathComponent); panel URLs=\(panelURLs); AX chain=\(chain); no confirm sent")
     }
     static func button(_ panel: AXUIElement, title: String) -> AXUIElement? {
         find(panel) { node, role in role == kAXButtonRole && string(node, kAXTitleAttribute) == title }
