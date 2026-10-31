@@ -70,7 +70,8 @@ public class WindowController: NSObject, NSWindowDelegate {
             return routeKey(input)
         }
         window.onEscapeBeforePage = { [weak self] event in
-            guard self?.lastSnapshot?.overlay != nil, let input = KeyInput(menuEvent: event) else { return false }
+            guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
+                  let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
         window.onScrollWheel = { [weak root] event in root?.handleScrollWheel(event) ?? false }

@@ -104,8 +104,8 @@ final class ChromePage: CefBrowserDelegate {
         options.profile = engine.profile(for: spec.context)
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         chrome.browser.delegate = self
-        chrome.onFullscreenTransition = { [weak self] _, completed in
-            guard let self, let fullscreen = self.fullscreenTransition.nativeChanged(completed: completed) else { return }
+        chrome.onFullscreenTransition = { [weak self] nativeFullscreen, completed in
+            guard let self, let fullscreen = self.fullscreenTransition.nativeChanged(fullscreen: nativeFullscreen, completed: completed) else { return }
             self.emitFullscreen(fullscreen)
         }
         chrome.onWindowDestroyed = { [weak self] in
@@ -163,6 +163,7 @@ final class ChromePage: CefBrowserDelegate {
                   browserID: Int(chrome.browser.id), hostWindowNumber: chrome.nsWindow?.windowNumber,
                   hasKeyboardFocus: surface.containsFirstResponder, audioMuted: chrome.browser.isAudioMuted,
                   audioTargetID: audio.target, audioTabID: audio.tab, audioObserverID: audioObserverID, audioError: audioError)
+        facts.nativeFullscreenTransitioning = fullscreenTransition.isTransitioning
         facts.requestedReloads = requestedReloads
         facts.extensionDialogDecision = extensionDialogDecision
         facts.extensionFileDialogCallbacks = extensionFileDialogCallbacks

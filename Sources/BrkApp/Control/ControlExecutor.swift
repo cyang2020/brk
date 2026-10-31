@@ -425,7 +425,7 @@ final class ControlExecutor {
         })
         facts.miniaturized = window.isMiniaturized
         facts.fullscreen = window.styleMask.contains(.fullScreen)
-        facts.fullscreenTransitioning = c.isFullscreenTransitioning
+        facts.fullscreenTransitioning = c.isFullscreenTransitioning || facts.ownedPages?.values.contains { $0.nativeFullscreenTransitioning == true } == true
         facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }

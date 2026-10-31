@@ -237,6 +237,7 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var audioTabID: Int? = nil
     public var audioObserverID: Int? = nil
     public var audioError: String? = nil
+    public var nativeFullscreenTransitioning: Bool? = nil
     public var hasKeyboardFocus: Bool
 
     public init(surfaceFrame: CGRect?, embeddedViews: [String], browserID: Int?, hostWindowNumber: Int?, hasKeyboardFocus: Bool, audioMuted: Bool? = nil,
