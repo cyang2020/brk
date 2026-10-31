@@ -149,6 +149,12 @@ public struct OnboardingChoices: Hashable, Sendable, Codable {
 public enum SidebarDataCommand: Hashable, Sendable, Codable {
     case welcome, tour, importFile, syncSettings, syncNow, disconnect
     case completeOnboarding(OnboardingChoices)
+    /// Post-selection intents, shared by the system picker and explicitly selected URLs.
+    case importSelected(URL, format: SidebarImportFormat)
+    case connectSelectedFolder(URL)
+    /// Completes the existing owner-bound export using its captured document.
+    case exportSelected(URL)
+    case cancelFilePanel
 }
 
 public enum SidebarPanel: Hashable, Sendable { case welcome, importFile, syncSettings }
@@ -165,6 +171,10 @@ public enum SidebarDataEvent: Sendable, Equatable {
 public enum SidebarDataEffect: Hashable, Sendable {
     case panel(WindowID, SidebarPanel)
     case tour(WindowID)
+    case importSelected(WindowID, URL, SidebarImportFormat, SidebarImportTarget)
+    case connectSelectedFolder(WindowID, URL, SidebarImportTarget)
+    case exportSelected(WindowID, URL)
+    case cancelFilePanel(WindowID)
     case exchange(epoch: String, folder: String, replica: String, revision: UInt64, SidebarSyncDocument)
 }
 

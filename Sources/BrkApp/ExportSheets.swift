@@ -9,7 +9,10 @@ final class ExportSheets {
         weak var window: NSWindow?
         var sheet: NSWindow?
         var reply: (@MainActor (ExportOutcome) -> Void)?
-        init(window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) { self.window = window; self.reply = reply }
+        let document: ExportDocument
+        init(document: ExportDocument, window: NSWindow, reply: @escaping @MainActor (ExportOutcome) -> Void) {
+            self.document = document; self.window = window; self.reply = reply
+        }
     }
     private var pending: [WindowID: Pending] = [:]
     private var stopped = false
@@ -18,7 +21,7 @@ final class ExportSheets {
         guard !stopped, pending[owner] == nil, window.isVisible, window.attachedSheet == nil else {
             reply(.failed("Finish the open sheet first.")); return
         }
-        let entry = Pending(window: window, reply: reply)
+        let entry = Pending(document: document, window: window, reply: reply)
         pending[owner] = entry
         let panel = ShareExport.run(document, in: window, isValid: { [weak self, weak entry] in
             guard let self, let entry else { return false }
@@ -46,6 +49,17 @@ final class ExportSheets {
 
     func ownerGone(_ owner: WindowID) {
         if let entry = pending[owner] { finish(owner, entry, outcome: .cancelled) }
+    }
+
+    /// Uses the document captured when the native save operation began, even if sidebar state has changed.
+    func saveSelected(_ url: URL, owner: WindowID) -> Bool {
+        guard !stopped, url.isFileURL, let entry = pending[owner], entry.window?.isVisible == true,
+              entry.sheet is NSSavePanel else { return false }
+        let reply = entry.reply
+        // Invalidate before endSheet, so the system's eventual cancellation cannot race this write or reply.
+        finish(owner, entry, outcome: nil)
+        reply?(ShareExport.writeSelected(entry.document, to: url))
+        return true
     }
 
     func shutdown() {

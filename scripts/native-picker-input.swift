@@ -86,7 +86,7 @@ struct NativePickerInput {
               let s = attr(element, kAXSizeAttribute), CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
         var origin = CGPoint.zero, size = CGSize.zero
         guard AXValueGetValue(p as! AXValue, .cgPoint, &origin), AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
-        return CGPoint(x: origin.x + size.width / 2, y: origin.y + min(12, size.height / 2))
+        return CGPoint(x: origin.x + min(24, size.width / 2), y: origin.y + min(12, size.height / 2))
     }
     static func pause(_ seconds: Double = 0.15) {
         let end = Date(timeIntervalSinceNow: seconds)
@@ -112,6 +112,7 @@ struct NativePickerInput {
                 throw Failure(description: "Cannot create owned click")
             }
             event.post(tap: .cghidEventTap)
+            log("posted-mouse", ["kind": kind.rawValue, "window": window, "x": location.x, "y": location.y])
         }
         pause()
     }
@@ -128,7 +129,7 @@ struct NativePickerInput {
             "ownedFocus": ownedFocus.map(summary) ?? [:], "systemFocus": systemFocus.map(summary) ?? [:]])
         // System AX is authoritative when the command-line client's NSWorkspace observation is unavailable.
         let systemApplicationPID = focusedApp.map(pid) ?? 0
-        try require(systemApplicationPID == target || members.contains { pid($0) == systemApplicationPID },
+        try require(systemApplicationPID > 0 && (systemApplicationPID == target || members.contains { pid($0) == systemApplicationPID }),
                     "System AX focused application is outside the owned picker; no key posted")
         try require(workspacePID == 0 || workspacePID == target || members.contains { pid($0) == workspacePID },
                     "Workspace focus disagrees with the owned picker; no key posted")
@@ -142,7 +143,7 @@ struct NativePickerInput {
         try require(string(focus, kAXSubroleAttribute) != kAXSecureTextFieldSubrole, "Secure field refused")
         if requireField { try require(string(focus, kAXRoleAttribute) == kAXTextFieldRole || string(focus, kAXRoleAttribute) == kAXComboBoxRole,
                                      "Path typing requires a focused picker text field") }
-        log("verifiedFocus", ["frontmostPID": target, "focused": summary(focus), "systemFocused": summary(systemFocus)])
+        log("verifiedFocus", ["targetPID": target, "focused": summary(focus), "systemFocused": summary(systemFocus)])
         return focus
     }
     static func key(_ code: CGKeyCode, flags: CGEventFlags = []) throws {
@@ -151,6 +152,7 @@ struct NativePickerInput {
             guard let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down) else { throw Failure(description: "No key event") }
             event.flags = flags
             event.post(tap: .cghidEventTap)
+            log("posted-key", ["code": code, "down": down, "flags": flags.rawValue])
         }
         pause()
     }
@@ -160,8 +162,10 @@ struct NativePickerInput {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true) else { throw Failure(description: "No text event") }
         units.withUnsafeBufferPointer { event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: $0.baseAddress!) }
         event.post(tap: .cghidEventTap)
+        log("posted-text", ["utf16Length": units.count])
         guard let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else { throw Failure(description: "No text key-up") }
         up.post(tap: .cghidEventTap)
+        log("posted-text-up")
         pause()
     }
     static func press(_ button: AXUIElement) throws {
