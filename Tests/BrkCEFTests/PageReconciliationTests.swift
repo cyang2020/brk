@@ -3,7 +3,7 @@ import BrkEngine
 import XCTest
 @testable import BrkCEF
 
-@MainActor final class PageReconciliationTests: XCTestCase {
+@MainActor final class ReconciliationBarrierTests: XCTestCase {
     func testNativeCreationReentryCannotCreateTheSamePageTwiceAndLatestDemandWins() {
         let driver = PageReconciliation()
         let first = PageSpec(id: PageID(window: WindowID("window"), item: ItemID("first")), initialURL: URL(string: "https://fixture.invalid/first"), context: .profile(.default))
