@@ -83,10 +83,10 @@ enum SidebarToolsScenarios {
         _ = try app.screenshot("joined-destination")
         _ = try app.advanceClock(seconds: 61)
         try app.press("ctrl+cmd+j")
-        try expect(try app.view().tabTools.toast?.text.contains("No available meeting") == true, "no meeting feedback missing")
+        try app.waitUntil("no meeting feedback") { try app.view().tabTools.toast?.text.contains("No available meeting") == true }
         _ = try app.advanceClock(seconds: 241)
         try app.press("ctrl+cmd+j")
-        try expect(try app.view().tabTools.toast?.text.contains("expired") == true, "expiry feedback missing")
+        try app.waitUntil("expiry feedback") { try app.view().tabTools.toast?.text.contains("expired") == true }
         // The actual file panel gesture is verified by the file-panels slice.
         try panel(app, .button("Cancel"))
         try app.flush(); try app.restart()
@@ -173,7 +173,8 @@ enum SidebarToolsScenarios {
         let item = try app.load(sourceURL), id = page(app, item)
         try app.waitForPageInput(id, at: sourceURL)
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: url.absoluteString, options: .fragmentsAllowed), as: UTF8.self)
-        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"position:absolute;left:80px;top:80px;margin:0;display:block;width:240px;height:40px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal)")
+        try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"position:absolute;left:40px;top:40px;margin:0;display:block;width:300px;height:150px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal);document.title='Hover fixture ready'")
+        try app.waitUntil("hover fixture DOM ready") { try tab(item, in: app.view())?.title == "Hover fixture ready" }
         try app.waitUntil("isolated hover observer") { try (app.native().pages[id]?.linkPreviewFrameCount ?? 0) > 0 }
         let frame = try app.native().pages[id]!.surfaceFrame!
         let point = CGPoint(x: frame.minX + 100, y: frame.minY + 100)
@@ -198,7 +199,7 @@ enum SidebarToolsScenarios {
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "disabled previews still appeared")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         let target = app.site.url("sidebar-preview-target").absoluteString.replacingOccurrences(of: "127.0.0.1", with: "preview.brk.test")
-        let srcdoc = "<a href='\(target)' style='position:absolute;left:80px;top:80px;margin:0;display:block;width:240px;height:40px'>Iframe preview</a>"
+        let srcdoc = "<a href='\(target)' style='position:absolute;left:40px;top:40px;margin:0;display:block;width:300px;height:150px'>Iframe preview</a>"
         let html = "<iframe style='position:fixed;left:0;top:0;width:600px;height:300px;border:0' srcdoc=\"\(srcdoc)\"></iframe>"
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)
         try app.evaluate(publicPage, "document.body.innerHTML=\(literal)")
