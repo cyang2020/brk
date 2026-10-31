@@ -1,6 +1,7 @@
 import BrkBase
 import BrkControl
 import BrkDomain
+import BrkLayout
 import Foundation
 
 /// Each scenario launches its own signed browser and owned temporary profile.
@@ -142,11 +143,14 @@ enum SidebarToolsScenarios {
     }
     private static func previewSetup(_ app: AppUnderTest, label: String) throws -> PageID {
         var url = app.site.url("sidebar-preview-target")
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!; components.host = "localhost"; url = components.url!
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!; components.host = "preview.brk.test"; url = components.url!
         let cookieTab = try app.load(url); try app.waitForPageInput(page(app, cookieTab), at: url)
         try app.evaluate(page(app, cookieTab), "document.cookie='brkSidebarProfile=\(label);path=/'")
-        let item = try app.load(app.site.url("index.html")), id = page(app, item)
-        try app.waitForPageInput(id, at: app.site.url("index.html"))
+        var source = URLComponents(url: app.site.url("index.html"), resolvingAgainstBaseURL: false)!
+        source.host = "source.brk.test"
+        let sourceURL = source.url!
+        let item = try app.load(sourceURL), id = page(app, item)
+        try app.waitForPageInput(id, at: sourceURL)
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: url.absoluteString, options: .fragmentsAllowed), as: UTF8.self)
         try app.evaluate(id, "document.body.innerHTML='<a id=preview style=\\\"display:block;margin:80px;width:240px;height:40px\\\">Deliberate hover</a>';document.getElementById('preview').href=\(literal)")
         let frame = try app.native().pages[id]!.surfaceFrame!
@@ -167,7 +171,7 @@ enum SidebarToolsScenarios {
         try app.hover(CGPoint(x: frame.minX + 100, y: frame.minY + 100)); app.sleep(1)
         try expect(try app.native().pages[publicPage]?.linkPreviewTitle == nil, "disabled previews still appeared")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
-        let target = app.site.url("sidebar-preview-target").absoluteString.replacingOccurrences(of: "127.0.0.1", with: "localhost")
+        let target = app.site.url("sidebar-preview-target").absoluteString.replacingOccurrences(of: "127.0.0.1", with: "preview.brk.test")
         let srcdoc = "<a href='\(target)' style='display:block;margin:80px;width:240px;height:40px'>Iframe preview</a>"
         let html = "<iframe style='position:fixed;left:0;top:0;width:600px;height:300px;border:0' srcdoc=\"\(srcdoc)\"></iframe>"
         let literal = String(decoding: try JSONSerialization.data(withJSONObject: html, options: .fragmentsAllowed), as: UTF8.self)

@@ -159,13 +159,16 @@ extension Work {
             case .loading(let doc):
                 guard doc.browser == token, doc.sequence > live.documentSequence else { return }
                 live.documentSequence = doc.sequence
+                live.loadProgress = 0
             case .ready(let doc):
                 guard doc.browser == token, doc.sequence == live.documentSequence,
                       live.document == .loading(doc) || live.document == .ready(doc) else { return }
             case .unavailable: break
             }
             live.document = document
-        case .navigationRequested(let url): live.requestedURL = url
+        case .navigationRequested(let url):
+            live.loadProgress = 0
+            live.requestedURL = url
         case .committed(let url):
             state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: live.observedTitle, favicon: state.doc.windows[window]?.slots[tab]?.favicon)
             live.requestedURL = nil
