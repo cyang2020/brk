@@ -24,8 +24,11 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
 
 public struct PageObservation: Sendable, Equatable, Codable {
     public var lastOpenRequest: PageOpenMetadata? = nil
+    /// Uncommitted navigation intent. A nil value also admits permissions for an already committed document.
+    public var provisionalURL: URL? = nil
     public let browser: BrowserToken?
     public let document: DocumentAvailability
+    /// The address being requested or still loaded. It can equal committedURL while a streamed document loads.
     public let requestedURL: URL?
     public let committedURL: URL?
 }

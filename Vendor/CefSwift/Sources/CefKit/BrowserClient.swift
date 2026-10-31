@@ -889,12 +889,13 @@ extension BrowserClient {
             let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
             cefRelease(frame.map(UnsafeMutableRawPointer.init))
             let url = URL(string: CefStringUtil.string(from: targetURL))
-            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
+            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { client, cefBrowser in
                 var request = CefWindowOpenRequest(targetURL: url, disposition: CefWindowOpenDisposition(cefValue: disposition), userGesture: userGesture != 0,
                                                    isSourceOffscreen: cefBrowser.isOffscreen)
                 request.rawDisposition = Int(disposition.rawValue)
                 request.sourceFrame = sourceFrame; request.sourceIsMainFrame = sourceIsMain
-                return (cefBrowser.delegate?.browser(cefBrowser, openURLFromTab: request) ?? false) ? 1 : 0
+                let owner = client.auxiliaryRoot.browser ?? cefBrowser
+                return (owner.delegate?.browser(owner, openURLFromTab: request) ?? false) ? 1 : 0
             }
         }
         handler.pointee.on_certificate_error = { handlerSelf, browser, certError, requestURL, sslInfo, callback in

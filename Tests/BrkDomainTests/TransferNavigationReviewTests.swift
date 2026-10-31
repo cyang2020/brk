@@ -4,6 +4,29 @@ import XCTest
 @testable import BrkDomain
 
 final class TransferNavigationReviewTests: XCTestCase {
+    func testLoadingObservationRetainsNewAddressAfterActualCommitAndOldTransferProgress() throws {
+        let d = Driver(), id = DownloadID("loading-observation")
+        let tab = d.todayIDs[0], page = PageID(window: d.window, item: d.todayIDs[0])
+        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
+        d.page(tab, .titleChanged("Original document"))
+        d.download(tab, id, .receiving(TransferProgress(received: 10, total: 100)),
+                   details: DownloadDetails(url: url("https://example.com/attachment"), suggestedName: "file.bin"))
+        let next = url("https://example.com/held-document")
+        d.user(.commandBar(.open(.editCurrent)))
+        d.user(.commandBar(.submit(next.absoluteString)))
+        let document = DocumentToken(browser: browser, sequence: 1)
+        d.page(tab, .documentChanged(.loading(document)))
+        d.page(tab, .committed(next))
+        XCTAssertNil(d.state.session.live[page]?.requestedURL, "Actual commit must still admit this document's permission decisions")
+        d.download(tab, id, .receiving(TransferProgress(received: 20, total: 100)))
+        XCTAssertEqual(d.snapshot.observations[page]?.requestedURL, next,
+                       "The observed address being loaded must survive old transfer progress after an actual commit")
+        XCTAssertEqual(d.view.urlPill.text, "example.com/held-document")
+        d.page(tab, .titleChanged("New loading document"))
+        XCTAssertEqual(d.state.doc.history.first { $0.url == start }?.title, "Original document")
+        d.page(tab, .documentChanged(.ready(document)))
+        XCTAssertNil(d.snapshot.observations[page]?.requestedURL)
+    }
     func testProgressMustPreserveAnUnrelatedPendingNavigationAndHistoryTitle() throws {
         let d = Driver()
         let tab = d.todayIDs[0]

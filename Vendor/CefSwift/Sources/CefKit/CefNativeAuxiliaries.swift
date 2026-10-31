@@ -13,6 +13,11 @@ extension CefBrowser {
 }
 
 extension BrowserClient {
+    var auxiliaryRoot: BrowserClient {
+        var root = self
+        while let parent = root.auxiliaryParent { root = parent }
+        return root
+    }
     var auxiliaryCount: Int { nativeAuxiliaries.values.reduce(0) { $0 + 1 + $1.auxiliaryCount } }
     var auxiliaryBrowsers: [(browser: CefBrowser, kind: CefAuxiliaryKind)] {
         nativeAuxiliaries.values.flatMap { child in

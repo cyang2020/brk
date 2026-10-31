@@ -320,6 +320,12 @@ final class ChromePage: CefBrowserDelegate {
         guard engine.isLive(self) else { return .deny }
         popupRequests.append(openMetadata(request))
         if popupRequests.count > 16 { popupRequests.removeFirst() }
+        if !request.features.isPopup, let url = request.targetURL, !url.absoluteString.isEmpty,
+           url.absoluteString != "about:blank", request.disposition == .newForegroundTab || request.disposition == .newBackgroundTab {
+            engine.pageDidEmit(self, .openRequested(url, request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,
+                                                  metadata: openMetadata(request)))
+            return .handled
+        }
         return .allowNativePopup
     }
 

@@ -36,10 +36,12 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
                        observations: Dictionary(uniqueKeysWithValues: state.session.loaded.map { page in
-                           (page, PageObservation(lastOpenRequest: state.session.live[page]?.lastOpenRequest, browser: state.session.live[page]?.browser,
-                                                  document: state.session.live[page]?.document ?? .unavailable,
-                                                  requestedURL: state.session.live[page]?.requestedURL,
-                                                  committedURL: state.doc.windows[page.window]?.slots[page.item]?.committedURL))
+                           let live = state.session.live[page]
+                           let committed = state.doc.windows[page.window]?.slots[page.item]?.committedURL
+                           let loadingURL: URL? = if case .loading? = live?.document { committed } else { nil }
+                           return (page, PageObservation(lastOpenRequest: live?.lastOpenRequest, provisionalURL: live?.requestedURL,
+                                                  browser: live?.browser, document: live?.document ?? .unavailable,
+                                                  requestedURL: live?.requestedURL ?? loadingURL, committedURL: committed))
                        }))
 }
 
