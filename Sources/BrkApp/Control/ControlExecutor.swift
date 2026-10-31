@@ -242,6 +242,7 @@ final class ControlExecutor {
         case .sheetButton(let title):
             guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
             if let panel = sheet as? NSSavePanel, title == "Cancel" { panel.cancel(nil); return .ok }
+            if let panel = sheet as? NSSavePanel, title == "Save" { panel.ok(nil); return .ok }
             var selected: NSButton?
             ViewTree.walk(content) { view in
                 if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }

@@ -216,7 +216,7 @@ enum ExtScenarios {
             try app.dispatch(.tab(.focus(item)))
             let marker = "matrix:" + name + ":"
             let readback = "JSON.stringify(Array.from(document.querySelectorAll('audio,video')).map(x=>({tag:x.tagName,paused:x.paused,ended:x.ended,muted:x.muted,ready:x.readyState,time:x.currentTime})))"
-            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";document.title=" + js(marker) + "+" + readback + "})().catch(e=>document.title='matrix-error:'+e.message)")
+            try SitePolicyScenarios.evaluate(app, item, "(async()=>{if(document.hidden)await new Promise(resolve=>document.addEventListener('visibilitychange',()=>{if(!document.hidden)resolve()},{once:true}));if(window.extElement){extElement.pause();extElement.remove()}" + setup + ";await new Promise(resolve=>setTimeout(resolve,0));document.title=" + js(marker) + "+" + readback + "})().catch(e=>document.title='matrix-error:'+e.message)")
             var proof = ""
             try app.waitUntil("actual DOM media state before hiding " + name) {
                 guard let title = try tab(item, in: app.view())?.title, title.hasPrefix(marker) else { return false }
@@ -244,6 +244,11 @@ enum ExtScenarios {
                     throw Check(description: String(describing: error) + "; DOM before hide=" + proof + "; native policy=" + String(describing: policy) + "; DOM after showing=" + after)
                 }
             } else {
+                try app.waitUntil("native frozen policy for " + name, timeout: 8) {
+                    guard case .pageObservations(let observations) = try app.send(.pageObservations) else { return false }
+                    return observations[PageID(window: app.window!, item: item)]?.websitePolicyStatus?.frozen == true
+                }
+                let baseline = app.site.requestCount("/ext-media-tick")
                 app.sleep(1.4)
                 try expect(app.site.requestCount("/ext-media-tick") == baseline, name + " incorrectly kept a hidden page active")
             }
@@ -283,7 +288,7 @@ enum ExtScenarios {
         try app.perform(.configureSavePanel(window: app.window, path: destination.path))
         try control(app, "siteExportLink", .press)
         try app.waitUntil("selected link export save panel") { try app.native().sheetClass == "NSSavePanel" }
-        try app.perform(.answerSavePanel(window: app.window, path: destination.path))
+        try app.perform(.sheetButton(title: "Save"))
         try app.waitUntil("actual link export bytes") { FileManager.default.fileExists(atPath: destination.path) }
         let data = try Data(contentsOf: destination)
         let exported = try JSONDecoder().decode(ExportDocument.self, from: data)
