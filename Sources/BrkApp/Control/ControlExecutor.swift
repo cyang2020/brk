@@ -425,6 +425,8 @@ final class ControlExecutor {
         })
         facts.miniaturized = window.isMiniaturized
         facts.fullscreen = window.styleMask.contains(.fullScreen)
+        facts.fullscreenTransitioning = c.isFullscreenTransitioning
+        facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue

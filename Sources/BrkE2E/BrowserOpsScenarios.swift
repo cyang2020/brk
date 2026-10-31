@@ -180,23 +180,26 @@ enum BrowserOpsScenarios {
             phase = video ? "video" : "document"
             try app.evaluate(page, "window.boPhase='\(phase)'")
             try clickedScript(app, page, "{let el=document.documentElement;\(video ? "let canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;canvas.getContext('2d').fillRect(0,0,64,64);el=document.createElement('video');el.controls=true;el.muted=true;el.srcObject=canvas.captureStream(5);document.body.append(el);el.play();window.boVideo=el;" : "")document.onfullscreenchange=()=>document.title='fullscreen:'+!!document.fullscreenElement;el.requestFullscreen().catch(e=>document.title='fullscreen-error:'+e.name)}")
-            try app.waitUntil("\(phase) DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen }
+            try app.waitUntil("\(phase) DOM fullscreen reaches native window", timeout: 15) { try title(app, page) == "fullscreen:true" && app.native().fullscreen && app.native().fullscreenTransitioning == false }
             if video {
                 try app.evaluate(page, "boVideo.play().then(()=>document.title='video-playing:'+(!boVideo.paused&&boVideo.readyState>=2))")
                 try app.waitUntil("actual captured video playback") { try title(app, page) == "video-playing:true" }
             }
             try app.dispatch(.library(.open(.history)))
+            try app.waitUntil("Library is visible before fullscreen Escape") {
+                if case .library? = try app.view().overlay { return true }; return false
+            }
             try app.press("escape")
             try app.waitUntil("overlay closes before fullscreen") { try app.view().overlay == nil }
             try expect(try app.native().fullscreen, "First Escape left fullscreen before closing overlay")
             try app.press("escape")
-            try app.waitUntil("page fullscreen exits native window", timeout: 15) { try !app.native().fullscreen }
+            try app.waitUntil("page fullscreen exits native window", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
             try app.waitUntil("focus returns to document") { try app.native().focusedPage == page }
         }
         try app.press("ctrl+cmd+f")
-        try app.waitUntil("native fullscreen shortcut", timeout: 15) { try app.native().fullscreen }
+        try app.waitUntil("native fullscreen shortcut", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning == false }
         try app.press("escape")
-        try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen }
+        try app.waitUntil("native fullscreen Escape", timeout: 15) { try !app.native().fullscreen && app.native().fullscreenTransitioning == false }
         try app.screenshot("fullscreen-focus-returned")
         app.note("Actual NSWindow style and DOM fullscreen were observed for document/video elements and injected native key input. Physical keys and traffic-light gestures remain manual.")
     }

@@ -167,6 +167,8 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var windowLevel: Int = 0
     public var miniaturized: Bool = false
     public var fullscreen: Bool = false
+    public var fullscreenTransitioning: Bool? = nil
+    public var keyWindowNumber: Int? = nil
     public var appHidden: Bool = false
     public var sheetClass: String? = nil
     public var window: WindowID

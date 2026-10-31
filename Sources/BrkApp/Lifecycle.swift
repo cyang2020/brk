@@ -119,8 +119,16 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated {
-                guard event.keyCode == Key.escape.code, let window = NSApp.keyWindow as? any HostWindow else { return false }
-                return window.onEscapeBeforePage?(event) == true
+                guard event.keyCode == Key.escape.code else { return false }
+                // AppKit's fullscreen toolbar may be key while its owning browser still reports key status.
+                let window = (NSApp.keyWindow as? any HostWindow)
+                    ?? NSApp.windows.compactMap { $0 as? any HostWindow }.first { $0.isKeyWindow && $0.attachedSheet == nil }
+                let handled = window?.attachedSheet == nil && window?.onEscapeBeforePage?(event) == true
+                if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                    let key = NSApp.keyWindow.map { NSStringFromClass(type(of: $0)) } ?? "nil"
+                    FileHandle.standardError.write(Data("escape ingress key=\(key) host=\(window?.windowNumber ?? -1) handled=\(handled)\n".utf8))
+                }
+                return handled
             }
             return handled ? nil : event
         }

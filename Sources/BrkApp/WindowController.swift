@@ -24,6 +24,7 @@ public class WindowController: NSObject, NSWindowDelegate {
     private var pendingFocus: FocusTarget?
     private var placed = false
     private var pageFullscreen = PageFullscreenTransition()
+    var isFullscreenTransitioning: Bool { pageFullscreen.isTransitioning }
 
     /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
     /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
@@ -186,6 +187,16 @@ public class WindowController: NSObject, NSWindowDelegate {
     public func windowDidEnterFullScreen(_ notification: Notification) {
         tracePageFullscreen("did enter")
         pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen()
+    }
+    public func windowDidFailToEnterFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
+    public func windowDidFailToExitFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
+    private func fullscreenTransitionFailed() {
+        tracePageFullscreen("failed")
+        if pageFullscreen.nativeFailed(nativeFullscreen: window.styleMask.contains(.fullScreen)) {
+            for pane in lastSnapshot?.content.presentedPanes ?? [] {
+                if case .page(let page) = pane.content { engine.perform(.exitFullscreen, on: page) }
+            }
+        }
     }
     public func windowDidExitFullScreen(_ notification: Notification) {
         tracePageFullscreen("did exit")

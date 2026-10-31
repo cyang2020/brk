@@ -4,6 +4,8 @@ struct PageFullscreenTransition {
     private var pending: Bool?
     private var transitionTarget: Bool?
 
+    var isTransitioning: Bool { transitionTarget != nil || pending != nil }
+
     mutating func pageChanged(_ on: Bool, nativeFullscreen: Bool) {
         if on {
             if restoreNative == nil { restoreNative = pending ?? transitionTarget ?? nativeFullscreen }
@@ -15,6 +17,13 @@ struct PageFullscreenTransition {
     }
     mutating func nativeWillChange(to fullscreen: Bool) { transitionTarget = fullscreen }
     mutating func nativeDidChange() { transitionTarget = nil }
+    mutating func nativeFailed(nativeFullscreen: Bool) -> Bool {
+        transitionTarget = nil
+        pending = nil
+        guard !nativeFullscreen, restoreNative != nil else { return false }
+        restoreNative = nil
+        return true
+    }
     mutating func nativeExited() -> Bool {
         let exitDocument = nativeExitShouldExitDocument
         if exitDocument { restoreNative = false }
