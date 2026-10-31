@@ -156,6 +156,16 @@ final class EventInjector {
             else if event.type == .leftMouseDown {
                 // What a key window's sendEvent does first: report the click's modifiers (a Shift+click opens a Peek).
                 _ = (window as? any HostWindow)?.hostEvent(event)
+                // Direct mouseDown delivery skips NSWindow's responder handoff. Preserve that handoff for
+                // a page click even when this injected window cannot become key on the shared display.
+                if ViewTree.page(containing: target) != nil {
+                    var candidate: NSView? = target
+                    while let view = candidate {
+                        if view.acceptsFirstResponder, window.makeFirstResponder(view) { break }
+                        candidate = view.superview
+                    }
+                    print("[control] page-click target=\(NSStringFromClass(type(of: target))) responder=\(window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil")")
+                }
                 target.mouseDown(with: event)
             }
             else { target.mouseUp(with: event) }
