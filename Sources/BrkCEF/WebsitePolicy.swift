@@ -158,7 +158,9 @@ extension ChromePage {
             guard self.engine.isLive(self), self.matchesPermission(prompt.target), granted else {
                 self.answerPermission(prompt.id, .deny); return
             }
-            if kinds.allSatisfy({ decisions[$0] == .allow }) { self.answerPermission(prompt.id, .allow); return }
+            let currentDecisions = self.websitePolicy.preferences.permissions(for: requesting, embeddedIn: origin)
+            if kinds.contains(where: { currentDecisions[$0] == .deny }) { self.answerPermission(prompt.id, .deny); return }
+            if kinds.allSatisfy({ currentDecisions[$0] == .allow }) { self.answerPermission(prompt.id, .allow); return }
             self.engine.permission(self, prompt: prompt) { [weak self] decision in self?.answerPermission(prompt.id, decision) }
         }
     }

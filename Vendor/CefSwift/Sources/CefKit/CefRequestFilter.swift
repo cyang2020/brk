@@ -28,7 +28,9 @@ public final class CefRequestFilter: @unchecked Sendable {
         let host = (url.host?.lowercased() ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
         return hosts.contains { host == $0 || host.hasSuffix("." + $0) } || paths.contains { url.path.hasPrefix($0) } || urlPrefixes.contains { prefix in
             guard let rule = URL(string: prefix), url.scheme == rule.scheme, url.host == rule.host, url.port == rule.port else { return false }
-            return url.path.hasPrefix(rule.path)
+            guard let requestedPath = URLComponents(url: url, resolvingAgainstBaseURL: false)?.path,
+                  let prefixPath = URLComponents(url: rule, resolvingAgainstBaseURL: false)?.path else { return false }
+            return requestedPath.hasPrefix(prefixPath)
         }
     }
     func makeHandler() -> UnsafeMutablePointer<cef_resource_request_handler_t> {
