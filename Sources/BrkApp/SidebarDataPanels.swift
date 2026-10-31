@@ -183,12 +183,11 @@ final class SidebarDataPanels {
         // The folder chooser cannot return a file (canChooseFiles is false); the explicit command re-checks that here so a
         // regular file is never persisted as the sync folder (parent repair after the Fable review of 3b48d60).
         var isDirectory: ObjCBool = false
-        guard url.isFileURL, target(owner) == captured else { return }
+        guard url.isFileURL, target(owner) == captured, prepareSelectedFile(owner: owner, window: window) else { return }
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             send(.failed(epoch: nil, "Sync could not use that path: it is not a folder. Choose a folder."))
             return
         }
-        guard prepareSelectedFile(owner: owner, window: window) else { return }
         send(.connected(owner, folder: url.path))
     }
 

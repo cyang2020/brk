@@ -93,6 +93,16 @@ enum ReviewFilePanelProbes {
         app.note("connectSelectedFolder(regular file): connected=\(data.connected); status='\(data.status)'; state.json contains the file path as the sync folder: \(persisted); file bytes unchanged: \(fileBytes == Data("owned regular file".utf8))")
         try expect(!data.connected && !persisted, "a regular file was accepted and persisted as the sync folder: connected=\(data.connected) persisted=\(persisted) status='\(data.status)'")
         try app.dispatch(.sidebarData(.disconnect))
+        // A refused explicit selection must also retire this adapter's picker ticket, allowing another operation.
+        try app.dispatch(.sidebarData(.syncSettings)); try ImportSyncScenarios.waitPanel(app, "Choose sync folder")
+        try ImportSyncScenarios.panel(app, .button("Choose sync folder…")); try ImportSyncScenarios.waitPanel(app, "Connect this profile")
+        _ = try FilePanelScenarios.recordPanel(app)
+        try app.dispatch(.sidebarData(.connectSelectedFolder(file)))
+        try app.waitUntil("refused folder selection retires picker") { try app.native().sheetClass == nil }
+        try expect(!(try ImportSyncScenarios.data(app).connected), "refused path connected from a picker")
+        try app.dispatch(.sidebarData(.syncSettings)); try ImportSyncScenarios.waitPanel(app, "Choose sync folder")
+        try ImportSyncScenarios.panel(app, .button("Close"))
+        app.note("A refused folder selection also retired its pending picker and allowed a new sidebar operation.")
     }
 
     @Sendable static func exportSelectedLateCallback(_ app: AppUnderTest) throws {
