@@ -161,7 +161,8 @@
       "branch": "t3/captures-media-2",
       "task_id": "node:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae0af9f80-1244-4e59-868d-8b3c3b0b8d6e",
       "thread_id": "thread:delegated-task:command%3Amcp%3Aaae002e1-2e6d-4cfa-941f-b46a5f5c04dd%3Adelegate-task%3Ae0af9f80-1244-4e59-868d-8b3c3b0b8d6e",
-      "status_at_dispatch": "running"
+      "status_at_dispatch": "delivered ISSUES (A102/A103/A105 implemented; A104/A106 partial); parent reviews",
+      "delivered_commit": "69ccd75e685aa1696e406c8ba8c5b2f72466fe6d"
     }
   ],
   "lock_wait_correction": {
