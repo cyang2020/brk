@@ -19,15 +19,18 @@ enum NativePickerInput {
 
     static func find(_ root: AXUIElement, _ matches: (AXUIElement, String) -> Bool) -> AXUIElement? {
         var queue = [root], visited: [CFHashCode: [AXUIElement]] = [:], count = 0
+        var roles: [String: Int] = [:]
         let searchDeadline = ProcessInfo.processInfo.systemUptime + 3
         while !queue.isEmpty, count < 2500, ProcessInfo.processInfo.systemUptime < searchDeadline {
             let node = queue.removeFirst(), hash = CFHash(node)
             guard !(visited[hash] ?? []).contains(where: { CFEqual($0, node) }) else { continue }
             visited[hash, default: []].append(node); count += 1
             let role = string(node, kAXRoleAttribute)
+            roles[role, default: 0] += 1
             if matches(node, role) { return node }
             queue += attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
         }
+        print("[AX] requested control absent after \(count) nodes; roles=\(roles.sorted { $0.key < $1.key })")
         return nil
     }
     static func executable(_ pid: Int32) -> URL? {
