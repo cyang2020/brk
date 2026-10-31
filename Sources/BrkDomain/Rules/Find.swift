@@ -3,6 +3,7 @@ import Foundation
 
 struct FindSession: Equatable, Sendable {
     enum Capture: Equatable, Sendable { case selection, replace, jump }
+    struct Operation: Equatable, Sendable { let id: FindRequestID; let ticket: SelectionTicket }
     let page: PageID
     let context: BrowsingContext
     var document: DocumentToken?
@@ -11,7 +12,7 @@ struct FindSession: Equatable, Sendable {
     var search: SearchToken?
     var request: FindRequestID?
     var capture: (id: FindRequestID, purpose: Capture)?
-    var operation: FindRequestID?
+    var operation: Operation?
     var ticket: SelectionTicket?
     var editable: EditableKind?
     var count: Int?
@@ -81,7 +82,7 @@ extension Work {
             guard f.operation == nil, let ticket = f.ticket, f.editable != nil, f.replacement else {
                 f.message = "Select text in a supported editable field, then capture that field."; break
             }
-            let id = FindRequestID(ctx.newID()); f.operation = id
+            let id = FindRequestID(ctx.newID()); f.operation = .init(id: id, ticket: ticket)
             let all: Bool = if case .replaceAll = intent { true } else { false }
             effects.append(.find(.replace(id, ticket, f.query, replacement: replacement, all: all)))
         case .close: break
@@ -159,7 +160,7 @@ extension Work {
                 guard f.capture?.id == id, f.document == ticket.document else { continue }
                 let purpose = f.capture!.purpose; f.capture = nil; f.ticket = ticket; f.editable = editable
                 if purpose == .jump {
-                    let id = FindRequestID(ctx.newID()); f.operation = id; f.focusInput = false
+                    let id = FindRequestID(ctx.newID()); f.operation = .init(id: id, ticket: ticket); f.focusInput = false
                     effects.append(.find(.jump(id, ticket)))
                 } else {
                     if purpose == .selection || !text.isEmpty { f.query.text = text }
@@ -167,10 +168,10 @@ extension Work {
                     else { startFind(&f) }
                 }
             case .jumped(let id, let ticket):
-                guard f.operation == id, f.ticket == ticket else { continue }
+                guard f.operation == .init(id: id, ticket: ticket) else { continue }
                 f.operation = nil; f.message = "Selection revealed."
             case .edited(let id, let ticket, let result):
-                guard f.operation == id, f.ticket == ticket else { continue }
+                guard f.operation == .init(id: id, ticket: ticket) else { continue }
                 if result != .unconfirmed { f.operation = nil; f.ticket = nil }
                 f.editable = nil; f.search = nil; f.count = nil; f.ordinal = nil; f.searching = false
                 switch result {
@@ -186,8 +187,9 @@ extension Work {
                     f.message = "The selection changed. Select and capture the field again."
                 }
             case .failed(let id, let failure):
-                guard f.request == id || f.capture?.id == id || f.operation == id else { continue }
-                f.message = failure.message; f.searching = false; f.capture = nil; f.operation = nil
+                guard f.request == id || f.capture?.id == id || f.operation?.id == id else { continue }
+                f.message = failure.message; f.searching = false; f.capture = nil
+                if f.operation?.id == id { f.operation = nil }
                 if f.request == id { f.search = nil; f.request = nil }
                 f.ticket = nil; f.editable = nil
             }

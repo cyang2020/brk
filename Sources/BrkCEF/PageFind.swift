@@ -157,7 +157,7 @@ final class PageFind {
                 switch value.operation {
                 case .edit(let ticket):
                     _ = mutations.complete(id, ticket: ticket, result: .unconfirmed)
-                    publish(.failed(id, .failed("Replacement was not confirmed because its frame changed. Select and capture the field again.")))
+                    publish(.failed(id, .failed("Replacement was not confirmed because this part of the page changed. Select and capture the field again.")))
                 case .capture, .jump, .search: publish(.failed(id, .staleSelection))
                 case .validate, .revision: break
                 }

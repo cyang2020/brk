@@ -17,8 +17,10 @@ final class IndependentFindDomainReviewTests: XCTestCase {
         XCTAssertEqual(d.state.session.windows[d.window]?.find?.operation, pending)
         XCTAssertEqual(d.state.session.windows[d.window]?.find?.ticket, ticket)
         XCTAssertNil(d.state.session.windows[d.window]?.find?.capture)
-        d.system(.find(.edited(pending, ticket, .replaced(2))))
+        d.system(.find(.invalidated(ticket)))
+        d.system(.find(.edited(pending.id, ticket, .replaced(2))))
         XCTAssertNil(d.state.session.windows[d.window]?.find?.operation)
+        XCTAssertTrue(d.view.find?.message.hasPrefix("Replaced 2.") == true)
     }
 
     func testNewCaptureAfterFrameRetirementMustNotKeepOldOperationLocked() throws {
@@ -32,7 +34,7 @@ final class IndependentFindDomainReviewTests: XCTestCase {
         let pending=try XCTUnwrap(d.state.session.windows[d.window]?.find?.operation)
         d.system(.find(.invalidated(old)))
         // The corrected adapter also settles the retired frame's outstanding mutation.
-        d.system(.find(.failed(pending,.failed("Replacement was not confirmed because its frame changed. Select and capture the field again."))))
+        d.system(.find(.failed(pending.id,.failed("Replacement was not confirmed because this part of the page changed. Select and capture the field again."))))
         d.user(.find(.captureScope))
         let fresh=SelectionTicket(id:SelectionID("new-frame"),document:doc)
         d.system(.find(.selection(try XCTUnwrap(d.state.session.windows[d.window]?.find?.capture?.id),fresh,text:"apple",editable:.input)))
