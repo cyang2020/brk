@@ -21,6 +21,7 @@ final class EmbeddedSurface: PageSurfaceView {
     private var attempts = 0
     private var retired = false
     private var observedWindow: NSWindow?
+    private var nativeFullscreenOwnsFrame = false
     var editableSelection = false
     var editingMenuTransport: CefDevTools?
     override var editingMenuResponder: NSResponder? { editingBrowser == nil ? nil : self }
@@ -56,7 +57,7 @@ final class EmbeddedSurface: PageSurfaceView {
            let compositor = Self.find("ViewsCompositorSuperview", in: content),
            let webContents = Self.find("WebContentsViewCocoa", in: content) {
             host = hostWindow
-            HostWindows.adopt(hostWindow, parent: window)
+            HostWindows.adopt(hostWindow, parent: nativeFullscreenOwnsFrame ? nil : window)
             borrowed = [(compositor, compositor.superview), (webContents, webContents.superview)]
             for (view, _) in borrowed {
                 addSubview(view)
@@ -141,7 +142,7 @@ final class EmbeddedSurface: PageSurfaceView {
         if let window {
             // Borrowed Chromium input views need mouse movement from their new host window.
             window.acceptsMouseMovedEvents = true
-            if let host { HostWindows.adopt(host, parent: window) }
+            if let host { HostWindows.adopt(host, parent: nativeFullscreenOwnsFrame ? nil : window) }
             syncHostFrame()
             chrome?.browser.wasHidden(false)
             NotificationCenter.default.addObserver(self, selector: #selector(windowDidMove(_:)), name: NSWindow.didMoveNotification, object: window)
@@ -150,6 +151,15 @@ final class EmbeddedSurface: PageSurfaceView {
             chrome?.browser.wasHidden(true)
             if let host { host.parent?.removeChildWindow(host) }
         }
+    }
+
+    /// A native fullscreen host cannot simultaneously be a child of another fullscreen window or accept
+    /// embedding frame writes. CEF owns that interval; normal parenting/geometry resume after its exit completes.
+    func nativeFullscreenChanged(_ fullscreen: Bool, completed: Bool) {
+        guard !retired else { return }
+        nativeFullscreenOwnsFrame = fullscreen || !completed
+        if let host { HostWindows.adopt(host, parent: nativeFullscreenOwnsFrame ? nil : window) }
+        if !nativeFullscreenOwnsFrame { syncHostFrame() }
     }
 
     @objc private func windowDidMove(_ note: Notification) { syncHostFrame() }
@@ -162,7 +172,7 @@ final class EmbeddedSurface: PageSurfaceView {
     /// Keeps the host window's frame equal to our screen frame, so popups, IME candidate windows and tooltips that
     /// Chromium positions in host-window coordinates land on the card (one layout behind is harmless: it is empty).
     private func syncHostFrame() {
-        guard let host, let window else { return }
+        guard !nativeFullscreenOwnsFrame, let host, let window else { return }
         let target = window.convertToScreen(convert(bounds, to: nil))
         if host.frame != target { host.setFrame(target, display: false) }
     }

@@ -105,8 +105,11 @@ final class ChromePage: CefBrowserDelegate {
         chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
         chrome.browser.delegate = self
         chrome.onFullscreenTransition = { [weak self] nativeFullscreen, completed in
-            guard let self, let fullscreen = self.fullscreenTransition.nativeChanged(fullscreen: nativeFullscreen, completed: completed) else { return }
-            self.emitFullscreen(fullscreen)
+            guard let self else { return }
+            self.surface.nativeFullscreenChanged(nativeFullscreen, completed: completed)
+            if let fullscreen = self.fullscreenTransition.nativeChanged(fullscreen: nativeFullscreen, completed: completed) {
+                self.emitFullscreen(fullscreen)
+            }
         }
         chrome.onWindowDestroyed = { [weak self] in
             guard let self else { return }
