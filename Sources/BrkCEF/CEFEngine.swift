@@ -44,6 +44,7 @@ public final class CEFEngine: WebEngine {
     private var disposals: [DisposalID: ContextDisposal] = [:]
     private var disposalResults: [DisposalID: ContextDisposalResult] = [:]
     private var ledger = PageLedger()
+    private let pageReconciliation = PageReconciliation()
     /// One CEF request context per browsing context, created on first use (`profile(for:)`). The default profile
     /// is the runtime's own cache; a custom profile is `<rootCachePath>/Profile-<id>`; incognito is in memory.
     private var profiles: [BrowsingContext: CefProfile] = [:]
@@ -631,7 +632,7 @@ public final class CEFEngine: WebEngine {
     }
 
     private func retire(_ page: ChromePage) {
-        guard ledger.retire(page.id) == page.incarnation else { return }
+        guard ledger.isLive(page.incarnation), ledger.retire(page.id) == page.incarnation else { return }
         resources.unpresent(page.incarnation)
         page.park()
         outputs.sourceGone(page.incarnation)
