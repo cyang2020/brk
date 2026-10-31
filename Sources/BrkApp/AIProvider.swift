@@ -258,6 +258,8 @@ private final class CLIExecution: @unchecked Sendable {
                 var status: Int32 = 0
                 while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
                 readers.wait()
+                // No request-owned background helper may survive a successful leader either.
+                kill(-pid, SIGKILL)
                 try? stdout.fileHandleForReading.close()
                 try? stderr.fileHandleForReading.close()
                 lock.lock()

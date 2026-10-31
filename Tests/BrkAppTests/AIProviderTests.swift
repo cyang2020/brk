@@ -55,4 +55,14 @@ final class AIProviderTests: XCTestCase {
         catch { XCTAssertTrue(String(describing: error).contains("timed out")) }
     }
 
+    func testSuccessfulLeaderDoesNotLeaveBackgroundHelpers() async throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-pid-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: path); try? FileManager.default.removeItem(atPath: path.path + ".child") }
+        let result = try await provider().run("PID \(path.path)\nbackground-no-pipes")
+        XCTAssertEqual(result, "spawned")
+        let child = try XCTUnwrap(Int32(String(contentsOfFile: path.path + ".child", encoding: .utf8)))
+        for _ in 0..<50 { if kill(child, 0) == -1 { break }; try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(kill(child, 0), -1)
+    }
+
 }

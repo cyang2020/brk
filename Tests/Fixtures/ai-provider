@@ -4,10 +4,19 @@ import json, os, re, signal, sys, time
 prompt = sys.argv[2] if sys.argv[1] == '-p' else sys.argv[-1]
 if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
     with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'prompt': prompt})+'\n')
+pid_path = None
 if prompt.startswith('PID '):
     path, prompt = prompt[4:].split('\n', 1)
+    pid_path = path
     open(path, 'w').write(str(os.getpid()))
-if prompt == 'detached':
+if prompt == 'background-no-pipes':
+    child = os.fork()
+    if child == 0:
+        os.close(1); os.close(2)
+        while True: time.sleep(1)
+    open(pid_path + '.child', 'w').write(str(child))
+    print('spawned')
+elif prompt == 'detached':
     child = os.fork()
     if child == 0:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
