@@ -4,6 +4,28 @@ import XCTest
 @testable import BrkDomain
 
 final class BrowserBasicIntegrationTests: XCTestCase {
+    func testBackgroundStartupSyncKeepsTheEmptyWindowCommandBar() {
+        let d = Driver(startURL: nil)
+        let overlay = d.view.overlay
+        d.system(.sidebarData(.syncPoll))
+        XCTAssertEqual(d.view.overlay, overlay)
+        if case .commandBar? = d.view.overlay {} else { XCTFail("The new empty window lost its command bar") }
+        XCTAssertTrue(d.snapshot.pages.isEmpty)
+    }
+
+    func testPageCancellationUsesItsWindowOperationAndStopsAfterTerminal() throws {
+        let d = Driver()
+        XCTAssertFalse(d.view.enabledActions.contains(.cancelPageOutput))
+        let browser = try XCTUnwrap(d.state.session.live[d.snapshot.pages[0].id]?.browser)
+        let document = DocumentToken(browser: browser, sequence: 1)
+        let id = OutputID("owned-window-output")
+        d.system(.output(OutputUpdate(id: id, document: document, stage: .rendering)))
+        XCTAssertTrue(d.view.enabledActions.contains(.cancelPageOutput))
+        XCTAssertEqual(d.user(.page(.cancelOutput)).effects, [.cancelOutput(id)])
+        d.system(.output(OutputUpdate(id: id, document: document, stage: .terminal(.cancelled(.absent)))))
+        XCTAssertTrue(d.user(.page(.cancelOutput)).effects.isEmpty)
+        XCTAssertFalse(d.view.enabledActions.contains(.cancelPageOutput))
+    }
     func testStayOnTopPreservesFindAndItsNativeFocusIntent() throws {
         let d = Driver()
         d.user(.find(.open(replace: false)))

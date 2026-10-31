@@ -108,7 +108,7 @@ public final class WindowRootView: NSView {
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
         tabTools.frame = bounds
-        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette)
+        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
         lastTheme = snapshot.theme
     }

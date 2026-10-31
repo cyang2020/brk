@@ -104,6 +104,10 @@ extension Work {
                   case .ready(let document) = state.session.live[PageID(window: window, item: tab)]?.document else { return }
             let title = state.displayedTab(tab, in: window)?.displayTitle ?? "Page"
             effects.append(.output(OutputRequest(id: OutputID(ctx.newID()), document: document, intent: intent, suggestedName: title)))
+        case .cancelOutput:
+            guard let output = state.session.windows[window]?.output, output.document.browser.page.window == window else { return }
+            if case .terminal = output.stage { return }
+            effects.append(.cancelOutput(output.id))
         case .toggleDevTools: emit(.focused, .toggleDevTools)
         case .developer(let operation): emit(.focused, .developer(operation))
         case .copyURL(let format):

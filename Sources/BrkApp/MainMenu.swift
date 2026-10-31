@@ -251,6 +251,7 @@ enum MainMenu {
 final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     var perform: ((ActionID, NSEvent?) -> Void)?
     var isEnabled: ((ActionID) -> Bool)?
+    var isChecked: ((ActionID) -> Bool?)?
     /// The resolved shortcuts to show (`AppSnapshot.settings.shortcuts`): the running app's store unless set; the
     /// table's defaults when there is none.
     var shortcuts: () -> [ActionID: KeyBindingState]? = {
@@ -269,6 +270,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { return true }
         if action.spec.later != nil { return false }
+        if let checked = isChecked?(action) { item.state = checked ? .on : .off }
         return isEnabled?(action) ?? true
     }
 

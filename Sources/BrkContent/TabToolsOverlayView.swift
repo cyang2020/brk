@@ -11,6 +11,10 @@ final class TabToolsOverlayView: NSView {
     private let recent = NSView()
     private let toast = NSButton(title: "", target: nil, action: nil)
     private let education = NSButton(title: "", target: nil, action: nil)
+    private let outputStatus = NSTextField(labelWithString: "")
+    private var outputTask: Task<Void, Never>?
+    private var lastOutput: OutputUpdate?
+    private var lastExport: ExportOutcome?
     private var toastTask: Task<Void, Never>?
     private var toastExpiry: Instant?
     private var labels: [NSTextField] = []
@@ -18,7 +22,12 @@ final class TabToolsOverlayView: NSView {
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
-        for view in [recent, toast, education] as [NSView] { addSubview(view) }
+        for view in [recent, toast, education, outputStatus] as [NSView] { addSubview(view) }
+        outputStatus.isHidden = true
+        outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        outputStatus.lineBreakMode = .byTruncatingMiddle
+        outputStatus.wantsLayer = true
+        outputStatus.layer?.cornerRadius = 6
         recent.identify(.tabTool("switcher"))
         toast.identify(.tabTool("toast"))
         education.identify(.tabTool("education"))
@@ -35,9 +44,29 @@ final class TabToolsOverlayView: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
-        return hit === self ? nil : hit
+        return hit === self || hit === outputStatus ? nil : hit
     }
-    func render(_ tools: TabToolsSnapshot, sidebarWidth: Double, palette: Palette) {
+    func render(_ tools: TabToolsSnapshot, sidebarWidth: Double, palette: Palette,
+                output: OutputUpdate? = nil, exported: ExportOutcome? = nil) {
+        let active = output.map { if case .terminal = $0.stage { false } else { true } } ?? false
+        if output != lastOutput || exported != lastExport {
+            outputTask?.cancel()
+            lastOutput = output; lastExport = exported
+            outputStatus.stringValue = exported?.message ?? output?.message ?? ""
+            outputStatus.toolTip = outputStatus.stringValue
+            outputStatus.isHidden = outputStatus.stringValue.isEmpty
+            if !active {
+                outputTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(4))
+                    guard !Task.isCancelled else { return }
+                    self?.outputStatus.isHidden = true
+                }
+            }
+        }
+        outputStatus.textColor = palette.color(palette.tokens.foregroundStrong)
+        outputStatus.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor
+        let statusWidth = min(440.0, max(0, bounds.width - 48))
+        outputStatus.frame = NSRect(x: (bounds.width - statusWidth) / 2, y: bounds.height - (tools.toast == nil ? 54 : 94), width: statusWidth, height: 28)
         recent.isHidden = tools.recent == nil
         if let switcher = tools.recent {
             labels.forEach { $0.removeFromSuperview() }

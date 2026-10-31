@@ -24,7 +24,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // File (16 to 39). Send to Dia is dropped (open question in wave2.md).
     case newTab, newWindow, newBlankWindow, newIncognitoWindow, showLittleArc, reopenLastClosedTab, addressBar
     case newBoost, editBoost, newLegacyBoost, boostGallery, newProfile, newNote, newNoteInSplitView, newEasel
-    case closeWindow, archiveTab, share, capturePage, captureFullPage, capturePrettyScreenshot, savePageAs, printPage
+    case closeWindow, archiveTab, share, capturePage, captureFullPage, capturePrettyScreenshot, savePageAs, savePageAsPDF, printPage, cancelPageOutput
     // Edit (45 to 58). Undo through Select All and the Spelling, Substitutions, Transformations, Speech and Font
     // submenus are AppKit first-responder items (MainMenu.standardEditItems); Chromium handles them in pages.
     case copyCurrentURL, copyCurrentURLMarkdown, copyCurrentURLAsQuote
@@ -52,7 +52,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // Extensions (165, 166)
     case addExtension, manageExtensions
     // Window (168 to 174). Zoom and Bring All to Front are AppKit items.
-    case minimize, viewLibrary, viewDownloads, viewEaselsAndNotes, viewMedia, viewBoosts
+    case minimize, toggleStayOnTop, viewLibrary, viewDownloads, viewEaselsAndNotes, viewMedia, viewBoosts
     // Help (177 to 189)
     case gettingStarted, keyboardShortcutsEDU, releaseNotes, contactTheTeam, visitHelpCenter, restoreData, exportArcNotes
     case recordTrace, cancelTrace, openTaskManager, revealArcData, copyArcInfo
@@ -217,6 +217,8 @@ extension ActionID {
                   bar: listing("camera.macro", "Screenshot in Portrait Mode", "Capture Portrait", "Portrait Mode", "Screenshot"))
         case .savePageAs: entry(38, "Save Page As", .file, 4, [key([shift, cmd], .s, .page)], .page(.output(.mhtml)), bar: listing("square.and.arrow.down", "Save Page", "Save File"))
         case .printPage: entry(39, "Print", .file, 4, [key(cmd, .p, .pageThenApp)], .page(.output(.print)), bar: listing("printer", "Print Page"))
+        case .savePageAsPDF: entry(200, "Export Page as PDF…", .file, 4, [], .page(.output(.pdf)), bar: listing("doc", "Export PDF"))
+        case .cancelPageOutput: entry(201, "Cancel Save or Print", .file, 4, [], .page(.cancelOutput), bar: listing("xmark", "Cancel Save Print"))
 
         // MARK: Edit (groups: Undo, Redo | Cut to Select All | the submenus, Find first)
         case .copyCurrentURL:
@@ -421,6 +423,7 @@ extension ActionID {
 
         // MARK: Window (groups: Minimize, Zoom | the Library pages | Bring All to Front)
         case .minimize: entry(168, "Minimize Window", .window, 0, [key(cmd, .m, .app)], .app(.minimize), bar: listing("arrow.down.right.and.arrow.up.left"))
+        case .toggleStayOnTop: entry(202, "Stay on Top", .window, 3, [], .window(.toggleStayOnTop), bar: listing("pin", "Always on Top"))
         case .viewLibrary: entry(170, "View Library", .window, 1, [key([shift, cmd], .l, .page)], .library(.open(nil)), bar: listing("archivebox", "Library"))
         case .viewDownloads:
             // Chrome runtime can consume this accelerator before OnKeyEvent. Brk's Library owns the default;

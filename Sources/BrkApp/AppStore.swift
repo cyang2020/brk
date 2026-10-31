@@ -78,7 +78,8 @@ public final class AppStore {
         dispatching = false
         drain()
         if let window = snapshot.windows.keys.sorted().first {
-            dispatch(.user(window, .sidebarData(snapshot.sidebarData.needsOnboarding ? .welcome : .syncNow)))
+            if snapshot.sidebarData.needsOnboarding { dispatch(.user(window, .sidebarData(.welcome))) }
+            else { dispatch(.system(.sidebarData(.syncPoll))) }
         }
     }
 
@@ -277,6 +278,7 @@ public final class AppStore {
                     self?.dispatch(.user(window, .item(.setIcon(item, icon))))
                 }
             case .output(let request): engine.output(request)
+            case .cancelOutput(let id): engine.cancelOutput(id)
             case .page(let page, let action):
                 engine.perform(action, on: page)
             case .copyToPasteboard(let text):

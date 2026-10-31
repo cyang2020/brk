@@ -104,6 +104,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
                   let snapshot = self.store?.snapshot.windows[window] else { return true }
             return snapshot.enabledActions.contains(action)
         }
+        menuTarget.isChecked = { [weak self] action in
+            guard action == .toggleStayOnTop, let self, let id = self.store?.windowController(nil)?.id else { return nil }
+            return self.store?.snapshot.windows[id]?.stayOnTop
+        }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
         let entryPoints = LittleEntryPoints(target: menuTarget)

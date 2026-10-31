@@ -24,9 +24,6 @@ public class WindowController: NSObject, NSWindowDelegate {
     private var pendingFocus: FocusTarget?
     private var placed = false
     private var pageFullscreenWasNative: Bool?
-    private let topButton = NSButton(checkboxWithTitle: "Stay on Top", target: nil, action: nil)
-    private let outputButton = NSPopUpButton(frame: .zero, pullsDown: true)
-    private let outputStatus = NSTextField(labelWithString: "")
 
     /// `routeKey` answers a `.menu`-stage key input synchronously (`AppStore.dispatchKey`): the window asks it for a
     /// key equivalent its views did not take, so Arc's hidden menu rows ("key works while hidden") and remapped
@@ -57,24 +54,6 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.layoutAttribute = .right
-        let controls = NSStackView(views: [outputStatus, outputButton, topButton])
-        controls.orientation = .horizontal
-        controls.spacing = 8
-        outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        outputStatus.lineBreakMode = .byTruncatingMiddle
-        outputStatus.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        outputStatus.widthAnchor.constraint(lessThanOrEqualToConstant: 230).isActive = true
-        accessory.view = controls
-        outputButton.addItems(withTitles: ["Page Output", "Save Offline Page…", "Export PDF…", "Print…", "Cancel Output"])
-        outputButton.target = self; outputButton.action = #selector(outputAction)
-        outputButton.controlSize = .small
-        controls.frame = CGRect(x: 0, y: 0, width: 470, height: 24)
-        topButton.frame = CGRect(x: 0, y: 0, width: 110, height: 24)
-        topButton.target = self
-        topButton.action = #selector(toggleTop)
-        window.addTitlebarAccessoryViewController(accessory)
         window.onActivity = { [weak self] in
             guard let self else { return }; self.send(.system(.window(self.id, .activity)))
         }
@@ -108,18 +87,6 @@ public class WindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    @objc private func outputAction() {
-        switch outputButton.indexOfSelectedItem {
-        case 1: send(.user(id, .page(.output(.mhtml))))
-        case 2: send(.user(id, .page(.output(.pdf))))
-        case 3: send(.user(id, .page(.output(.print))))
-        case 4:
-            if let output = lastSnapshot?.output { engine.cancelOutput(output.id) }
-        default: break
-        }
-    }
-    @objc private func toggleTop() { send(.user(id, .window(.toggleStayOnTop))) }
-
     /// Restores the saved frame once (`initialFrame`), before the window is shown. The resulting `windowDidResize`
     /// reports the fitted frame to the store, which queues it behind the current dispatch.
     func place(_ snapshot: WindowSnapshot) {
@@ -142,10 +109,6 @@ public class WindowController: NSObject, NSWindowDelegate {
     /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
         place(snapshot)
-        outputStatus.stringValue = snapshot.exportOutcome?.message ?? snapshot.output?.message ?? ""
-        outputStatus.toolTip = snapshot.exportOutcome?.message ?? snapshot.output?.message
-        outputButton.isEnabled = snapshot.content.panes.contains { if case .page = $0.content { true } else { false } } || { if case .peek? = snapshot.overlay { true } else { false } }()
-        topButton.state = snapshot.stayOnTop ? .on : .off
         window.level = window.styleMask.contains(.fullScreen) ? .normal : (snapshot.stayOnTop ? .floating : .normal)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
         root.render(snapshot, frames: frames, surface: { [engine, id] page in page.window == id ? engine.surface(for: page) : nil })

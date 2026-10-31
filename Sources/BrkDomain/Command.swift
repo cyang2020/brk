@@ -138,6 +138,7 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case zoom(ZoomStep)
     case toggleDevTools
     case output(OutputIntent)
+    case cancelOutput
     case developer(DeveloperOperation)
     /// Cmd+Shift+C (plain), Opt+Shift+Cmd+C (Markdown), Ctrl+Shift+Cmd+C (quote: Arc rows 45 to 47).
     case copyURL(CopyURLFormat)

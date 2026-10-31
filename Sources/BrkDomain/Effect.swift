@@ -14,6 +14,7 @@ public enum Effect: Hashable, Sendable {
     case iconPicker(WindowID, ItemID)
     case siteRequest(SiteRequest)
     case output(OutputRequest)
+    case cancelOutput(OutputID)
     case copyToPasteboard(String)
     case window(WindowID, WindowEffect)
     case app(AppEffect)

@@ -377,6 +377,8 @@ private func profileRows(_ state: AppState) -> [ProfileRow] {
 /// in…" when the window holds no Little Arc tab or Peek; in an ephemeral window, what needs a space's sidebar.
 private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, shown: Item?, focused: (ItemID, Tab)?) -> Set<ActionID> {
     var enabled = Set(ActionID.allCases.filter { $0.spec.later == nil })
+    let activeOutput = state.session.windows[window]?.output.map { if case .terminal = $0.stage { false } else { true } } ?? false
+    if !activeOutput { enabled.remove(.cancelPageOutput) }
     if state.findPage(in: window) == nil {
         enabled.subtract([.find, .findAndReplace, .findNext, .findPrevious, .useSelectionForFind, .jumpToSelection])
     }
@@ -387,7 +389,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
-    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
+    let pageActions: [ActionID] = [.stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }
