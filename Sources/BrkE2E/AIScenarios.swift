@@ -15,13 +15,17 @@ enum AIScenarios {
         Scenario("AIBrowse", "selected sources use owning profile cookies, citations and close all readers", cefOnly: "CEF hidden pages", browse),
         Scenario("AITranslate", "text node translation preserves DOM, controls, events and never-translate settings", cefOnly: "CEF isolated world", translate),
         Scenario("AIMax", "native Max pane persists delivered switches and provider choice without an API key", cefOnly: "native settings", maxPane),
-        Scenario("AIQuit", "quit terminates and reaps a running fixture CLI", cefOnly: "native shutdown", quit),
+        Scenario("AIQuit", "quit reaps active and already-cancelled fixture CLIs", cefOnly: "native shutdown", quit),
     ]
     private static func enable(_ app: AppUnderTest, _ features: [AIFeature] = AIFeature.allCases) throws {
         for feature in features { try app.dispatch(.settings(.max(.feature(feature, true)))) }
     }
     private static func answer(_ app: AppUnderTest, contains expected: String) throws {
-        try app.waitUntil("AI answer containing \(expected)", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains(expected) == true }
+        try app.waitUntil("AI answer containing \(expected)", timeout: 15) {
+            let facts = try app.native()
+            try expect(!facts.appWindows.contains { $0.isKey && $0.className.contains("CefNSWindow") }, "AI work activated a CEF window")
+            return try app.view().ai?.busy == false && app.view().ai?.text.contains(expected) == true
+        }
     }
     private static func load(_ app: AppUnderTest, _ path: String = "ai.html") throws -> PageID {
         let url = app.site.url(path), item = try app.load(url), page = PageID(window: app.window!, item: item)
@@ -209,8 +213,12 @@ enum AIScenarios {
         try enable(app)
         try app.dispatch(.assist(.ask("fixture:hang")))
         try app.waitUntil("fixture CLI to hang") { calls(app).last?["prompt"] as? String == "fixture:hang" }
-        let pid = calls(app).last!["pid"] as! Int32
+        let cancelled = calls(app).last!["pid"] as! Int32
+        try app.dispatch(.assist(.cancel))
+        try app.dispatch(.assist(.ask("fixture:hang")))
+        try app.waitUntil("second fixture CLI to hang") { calls(app).filter { $0["prompt"] as? String == "fixture:hang" }.count == 2 }
+        let active = calls(app).last!["pid"] as! Int32
         _ = try app.quit()
-        try expect(kill(pid, 0) == -1 && errno == ESRCH, "quit left provider PID \(pid) alive")
+        for pid in [cancelled, active] { try expect(kill(pid, 0) == -1 && errno == ESRCH, "quit left provider PID \(pid) alive") }
     }
 }

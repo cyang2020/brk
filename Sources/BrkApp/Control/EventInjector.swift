@@ -268,20 +268,13 @@ final class EventInjector {
     /// new position (exits, entries, moves to the owners of the tracking areas that contain it), because synthetic
     /// events do not drive the window server's tracking-area bookkeeping.
     func hover(at point: CGPoint, in window: NSWindow) {
-        let hit = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point)
-        print("[control] hover key=\(window.isKeyWindow) acceptsMoved=\(window.acceptsMouseMovedEvents) target=\(hit.map { NSStringFromClass(Swift.type(of: $0)) } ?? "nil")")
         if let moved = try? mouse(.mouseMoved, at: point, modifiers: [], clickCount: 0, in: window) {
-            // Merged rule (sidebar-tabs + ai-features): a page target always gets the move directly, because synthetic
-            // moves do not update NSWindow's window-server mouse target; otherwise a key window routes through NSApp and
-            // an inactive window delivers to the hit view, matching inactive-window click delivery.
-            if let hit, ViewTree.page(containing: hit) != nil {
+            // A page target gets the move directly (sidebar-tabs): synthetic moves do not update NSWindow's window-server
+            // mouse target. Everything else takes the ordinary NSApp route; ai-features withdrew its inactive-window variant.
+            if let hit = window.contentView?.superview?.hitTest(point) ?? window.contentView?.hitTest(point), ViewTree.page(containing: hit) != nil {
                 hit.mouseMoved(with: moved)
                 print("[control] page-hover target=\(NSStringFromClass(Swift.type(of: hit))) acceptsMoves=\(window.acceptsMouseMovedEvents)")
-            } else if window.isKeyWindow { NSApp.sendEvent(moved) }
-            else {
-                hit?.mouseMoved(with: moved)
-                print("[control] inactive hover target=\(hit.map { NSStringFromClass(Swift.type(of: $0)) } ?? "nil")")
-            }
+            } else { NSApp.sendEvent(moved) }
         }
         guard let top = window.contentView?.superview ?? window.contentView else { return }
         var inside: [ObjectIdentifier: NSTrackingArea] = [:]

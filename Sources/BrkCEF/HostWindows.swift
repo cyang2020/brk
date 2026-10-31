@@ -2,8 +2,8 @@ import AppKit
 import BrkBase
 import ObjectiveC
 
-/// The CEF-owned host windows whose page views were moved out. Chromium activates its own window when the page
-/// takes focus; if that window became key, keys would go to an empty window. So host windows answer false to
+/// CEF-owned page host windows, guarded before their first show until native destruction. Chromium activates its
+/// own window when the page takes focus; keys would then go to an empty window. Hosts answer false to
 /// `canBecomeKeyWindow`/`canBecomeMainWindow`, by replacing those two methods on CEF's window class once. Other
 /// windows of that class (DevTools) keep the original answer: the replacement checks membership in `hosts`.
 ///
@@ -38,9 +38,10 @@ enum HostWindows {
         }
     }
 
+    /// Release parenting while CEF finishes closing. The never-key policy has native-window lifetime.
     static func release(_ host: NSWindow) {
         host.parent?.removeChildWindow(host)
-        hosts.remove(host)
+        // CEF still owns the closing window. The weak entry expires at native destruction.
     }
 
     static func isHost(_ window: NSWindow) -> Bool { hosts.contains(window) }

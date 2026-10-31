@@ -139,6 +139,8 @@ final class EmbeddedSurface: PageSurfaceView {
         super.viewDidMoveToWindow()
         stopObservingMoves()
         if let window {
+            // Borrowed Chromium input views need mouse movement from their new host window.
+            window.acceptsMouseMovedEvents = true
             if let host { HostWindows.adopt(host, parent: window) }
             syncHostFrame()
             chrome?.browser.wasHidden(false)

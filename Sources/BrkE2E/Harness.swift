@@ -326,7 +326,11 @@ final class AppUnderTest {
         let hostNumbers = Set(facts.pages.values.compactMap(\.hostWindowNumber))
         for w in facts.appWindows where w.isKey && (hostNumbers.contains(w.number) || w.className.contains("NativeWidget")) {
             let entry = "window \(w.number) (\(w.className))"
-            if !hostKeyViolations.contains(entry) { hostKeyViolations.append(entry) }
+            if !hostKeyViolations.contains(entry) {
+                hostKeyViolations.append(entry)
+                let path = shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(scenarioID)-host-key-\(w.number)-native.json")
+                try? ControlWire.encode(facts).write(to: path)
+            }
         }
         return facts
     }

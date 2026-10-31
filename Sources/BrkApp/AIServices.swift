@@ -64,7 +64,7 @@ final class AIServices {
         }
     }
     func cancel(_ id: AIRequestID) {
-        for task in tasks.removeValue(forKey: id)?.values ?? [:].values { task.cancel() }
+        for task in tasks[id]?.values ?? [:].values { task.cancel() }
         deadlines.removeValue(forKey: id)?.cancel()
     }
     func cancelAll() {
