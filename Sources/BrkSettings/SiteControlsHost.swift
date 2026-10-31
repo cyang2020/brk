@@ -79,7 +79,7 @@ private struct SiteControlsView: View {
                         })).disabled(kind == .storage && dataScope == .profile)
                     }
                     Toggle("Refresh the same document after completion", isOn: $refreshAfterClear)
-                    Text("Site storage requires a website origin. The HTTP cache covers the entire originating profile or private session.").font(.caption).foregroundStyle(.secondary)
+                    Text("Profile-wide localStorage, IndexedDB, Cache Storage and service-worker removal is unavailable. Choose This website for site storage. The HTTP cache covers the entire originating profile or private session.").font(.caption).foregroundStyle(.secondary)
                     Button("Clear selected data…") { dispatch(.site(.clear(kinds: selectedData, scope: dataScope, reload: refreshAfterClear))) }
                         .disabled(selectedData.isEmpty || value.clearing)
                     if value.clearing {
@@ -87,7 +87,7 @@ private struct SiteControlsView: View {
                         Button("Stop remaining steps") { dispatch(.site(.cancelClearing)) }
                     }
                     if let result = value.result {
-                        Text(result.error ?? "Cleared: " + result.completed.map(\.rawValue).sorted().joined(separator: ", ")).foregroundStyle(result.error == nil ? .secondary : .primary)
+                        Text((result.error.map { $0 + "\n" } ?? "") + "Cleared: " + (result.completed.isEmpty ? "none" : result.completed.map(\.rawValue).sorted().joined(separator: ", "))).foregroundStyle(result.error == nil ? .secondary : .primary)
                     }
                     Divider()
                     HStack {

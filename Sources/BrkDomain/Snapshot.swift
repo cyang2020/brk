@@ -435,6 +435,8 @@ public struct SettingsSnapshot: Sendable, Equatable, Codable {
 public struct ProfileSettingsRow: Sendable, Equatable, Codable {
     public var profile: ProfileRow
     public var settings: ProfileSettings
+    public var clearingData: Bool? = nil
+    public var clearDataResult: ClearProfileDataResult? = nil
 }
 
 public struct LinkRouteRow: Sendable, Equatable, Codable {

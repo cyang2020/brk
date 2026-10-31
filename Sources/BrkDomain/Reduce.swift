@@ -145,7 +145,7 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
+        case .profileDataCleared, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -166,6 +166,7 @@ struct Work {
         case .extensionOperationFailed(let context, let error): extensionOperationFailed(context, error)
         case .extensionsRead(let catalog): extensionsRead(catalog)
         case .siteDataCleared(let result): siteDataCleared(result)
+        case .profileDataCleared(let result): profileDataCleared(result)
         case .contextDisposed(let result):
             switch result {
             case .completed(let id, .profile(let profile), _):

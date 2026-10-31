@@ -75,6 +75,25 @@ public struct SiteTarget: Hashable, Sendable, Codable {
 public enum SiteDataKind: String, Hashable, Sendable, Codable, CaseIterable { case cookies, cache, storage, history }
 public enum SiteDataScope: String, Hashable, Sendable, Codable, CaseIterable { case site, profile }
 
+/// A profile operation needs no live page and never disposes the request context.
+public struct ClearProfileData: Hashable, Sendable, Codable {
+    public let id: String
+    public let profile: ProfileID
+    public let kinds: Set<SiteDataKind>
+    public init(id: String, profile: ProfileID, kinds: Set<SiteDataKind>) {
+        self.id = id; self.profile = profile; self.kinds = kinds
+    }
+}
+
+public struct ClearProfileDataResult: Hashable, Sendable, Codable {
+    public let request: ClearProfileData
+    public let completed: Set<SiteDataKind>
+    public let error: String?
+    public init(request: ClearProfileData, completed: Set<SiteDataKind>, error: String?) {
+        self.request = request; self.completed = completed; self.error = error
+    }
+}
+
 public struct ClearSiteData: Hashable, Sendable, Codable {
     public let id: String
     public let target: SiteTarget

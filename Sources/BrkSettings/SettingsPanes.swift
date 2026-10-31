@@ -122,11 +122,29 @@ struct ProfileSettingsForm: View {
     let row: ProfileSettingsRow
     private var id: ProfileID { row.profile.id }
     private var settings: ProfileSettings { row.settings }
+    @State private var clearingConfirmation = false
+    @State private var clearKinds: Set<SiteDataKind> = [.cookies, .cache, .history]
 
     private func send(_ setting: ProfileSetting) { context.dispatch(.settings(.profile(id, setting))) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: S.sectionSpacing.value) {
+            SettingsSection(.text("Privacy — " + row.profile.name)) {
+                SettingsNote(text: "These controls affect only this profile, across all its Spaces. Profile settings, tabs, extensions and downloaded files are kept.")
+                ForEach([SiteDataKind.cookies, .cache, .history], id: \.self) { kind in
+                    Toggle(kind == .cache ? "HTTP cache" : kind == .history ? "Brk browsing history" : "Cookies (including HttpOnly and domain cookies)", isOn: Binding(get: { clearKinds.contains(kind) }, set: { on in
+                        if on { clearKinds.insert(kind) } else { clearKinds.remove(kind) }
+                    }))
+                }
+                SettingsNote(text: "Profile-wide localStorage, IndexedDB, Cache Storage and service-worker removal is unavailable. To remove those, open each website and use Website Controls → Site storage. HTTP cache removal always covers this entire profile.")
+                SettingsButton(title: "Clear selected browsing data…", field: "clearProfileData-\(id)") { clearingConfirmation = true }
+                    .disabled(clearKinds.isEmpty || row.clearingData == true)
+                if row.clearingData == true { ProgressView("Clearing this profile’s data…") }
+                if let result = row.clearDataResult {
+                    Text((result.error.map { "Could not finish: " + $0 + "\n" } ?? "") + "Cleared: " + (result.completed.isEmpty ? "none" : result.completed.map(\.rawValue).sorted().joined(separator: ", ")))
+                        .font(.caption).textSelection(.enabled)
+                }
+            }
             SettingsSection(.text(SettingsCopy.autoArchive)) {
                 SettingsPopUp(field: "autoArchive-\(id)", entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0), $0) },
                               selected: settings.autoArchive) { send(.autoArchive($0)) }
@@ -148,6 +166,13 @@ struct ProfileSettingsForm: View {
                 }
                 .frame(width: S.popUpWidth.value)
             }
+
+        }
+        .alert("Clear browsing data for \(row.profile.name)?", isPresented: $clearingConfirmation) {
+            Button("Clear selected data", role: .destructive) { context.dispatch(.site(.clearProfile(id, clearKinds))) }.keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Remove \(clearKinds.map(\.rawValue).sorted().joined(separator: ", ")) from this profile only. Active downloads and document output must finish first. This does not delete the profile or its origin storage.")
         }
     }
 

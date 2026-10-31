@@ -120,6 +120,8 @@ extension Work {
             state.session.sites.results[window] = nil
             state.session.sites.controls.insert(window)
             effects.append(.confirmSiteData(request))
+        case .clearProfile(let profile, let kinds):
+            clearProfileData(profile, kinds: kinds)
         case .cancelClearing:
             for request in state.session.sites.running.values where request.target.page.window == window { effects.append(.cancelSiteData(request.id)) }
         case .confirmClear(let id, let confirmed):

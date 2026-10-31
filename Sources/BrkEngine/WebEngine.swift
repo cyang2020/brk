@@ -55,6 +55,7 @@ public protocol WebEngine: AnyObject {
 
     func cancelSiteData(_ id: String)
     func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult
+    func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult
     func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog
     func invokeExtension(_ id: String, target: SiteTarget) async -> String?
     func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String?
@@ -158,6 +159,9 @@ extension WebEngine {
         if let id = request.requestID { delegate?.engine(self, find: .failed(id, .unavailable)) }
     }
     public func cancelSiteData(_ id: String) {}
+    public func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult {
+        ClearProfileDataResult(request: request, completed: [], error: "This engine has no profile storage")
+    }
     public func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult {
         ClearSiteDataResult(request: request, completed: [], error: "This engine has no website storage")
     }

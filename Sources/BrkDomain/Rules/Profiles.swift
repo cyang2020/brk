@@ -7,6 +7,25 @@ import Foundation
 // already exists."
 
 extension Work {
+    /// The settings confirmation submits a data request; deletion is a different command and effect.
+    mutating func clearProfileData(_ profile: ProfileID, kinds: Set<SiteDataKind>) {
+        guard state.doc.profiles[profile] != nil, !kinds.isEmpty,
+              state.session.sites.profileClears[profile] == nil else { return }
+        let request = ClearProfileData(id: ctx.newID(), profile: profile, kinds: kinds)
+        state.session.sites.profileClears[profile] = request
+        state.session.sites.profileResults[profile] = nil
+        effects.append(.clearProfileData(request))
+    }
+
+    mutating func profileDataCleared(_ result: ClearProfileDataResult) {
+        let request = result.request
+        guard state.session.sites.profileClears[request.profile] == request else { return }
+        state.session.sites.profileClears[request.profile] = nil
+        guard state.doc.profiles[request.profile] != nil else { return }
+        if result.completed.contains(.history) { state.doc.history.removeAll { $0.profile == request.profile } }
+        state.session.sites.profileResults[request.profile] = result
+    }
+
     mutating func profiles(_ command: ProfileCommand, in window: WindowID) {
         switch command {
         case .create(let name, let icon):

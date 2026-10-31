@@ -428,6 +428,7 @@ public enum SystemEvent: Sendable, Equatable {
     case extensionOperationFailed(BrowsingContext, String)
     case extensionsRead(ExtensionCatalog)
     case siteDataCleared(ClearSiteDataResult)
+    case profileDataCleared(ClearProfileDataResult)
     /// Auto-archive sweep: on a real-time interval, and after the e2e clock moves.
     case clockTick
     case siteResult(String, SiteOutcome)

@@ -60,7 +60,7 @@ enum CommandInventory {
         .site(.nativeExtensions), .site(.pinExtension("ghost", true)), .site(.invokeExtension("ghost")), .site(.removeExtension("ghost")),
         .site(.controls), .site(.closeControls), .site(.rule(siteTarget, SiteRule())),
         .site(.permission(siteTarget, SiteOrigin(example)!, [.notifications], .deny)), .site(.appearance(.dark)),
-        .site(.cancelClearing),
+        .site(.cancelClearing), .site(.clearProfile(profile, [.cookies])),
         .site(.clear(kinds: [.cookies], scope: .site, reload: true)), .site(.confirmClear("ghost", false)),
         .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
         .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
@@ -90,6 +90,7 @@ enum CommandInventory {
         .websiteRulesLoaded(.profile(profile), .failed("fixture")),
         .extensionOperationFailed(.profile(profile), "fixture"),
         .extensionsRead(ExtensionCatalog(context: .profile(profile), extensions: [], error: "fixture")),
+        .profileDataCleared(ClearProfileDataResult(request: ClearProfileData(id: "ghost", profile: profile, kinds: [.cookies]), completed: [], error: "fixture")),
         .siteDataCleared(ClearSiteDataResult(request: ClearSiteData(id: "ghost", target: siteTarget, kinds: [.cookies]), completed: [], error: "fixture")),
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
@@ -312,6 +313,7 @@ enum CommandInventory {
             case .permission: "permission"
             case .appearance: "appearance"
             case .clear: "clear"
+            case .clearProfile: "clearProfile"
             case .cancelClearing: "cancelClearing"
             case .confirmClear: "confirmClear"
             case .extensions: "extensions"
@@ -356,6 +358,7 @@ enum CommandInventory {
         case .extensionOperationFailed: "extensionOperationFailed"
         case .extensionsRead: "extensionsRead"
         case .siteDataCleared: "siteDataCleared"
+        case .profileDataCleared: "profileDataCleared"
         case .contextDisposed: "contextDisposed"
         case .siteResult: "siteResult"
         case .clockTick: "clockTick"

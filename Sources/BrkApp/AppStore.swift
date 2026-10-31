@@ -449,6 +449,12 @@ public final class AppStore {
                     let result = await self.engine.clearSiteData(request)
                     self.dispatch(.system(.siteDataCleared(result)))
                 }
+            case .clearProfileData(let request):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let result = await self.engine.clearProfileData(request)
+                    self.dispatch(.system(.profileDataCleared(result)))
+                }
             case .confirmLocalExtension(let window, let context, let directory):
                 confirmLocalExtension(window, context: context, directory: directory)
             case .installLocalExtension(let page, let context, let directory):
