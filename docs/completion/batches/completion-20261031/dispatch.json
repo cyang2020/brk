@@ -1,0 +1,108 @@
+{
+  "checkpoint": "184da38f2df97d9dab6cbe37e91288b863140629",
+  "dispatched_at": "2026-10-31T22:05:00Z",
+  "roles": {
+    "implementation": {
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "xhigh",
+      "why": "user decision 2026-10-31: implementation on Codex"
+    },
+    "review": {
+      "provider": "claudeAgent",
+      "models": [
+        "claude-fable-5-1",
+        "claude-opus-5-5"
+      ],
+      "effort": "xhigh",
+      "why": "pstack interrogate reviewers; cross-model review of Codex work"
+    },
+    "parent": {
+      "provider": "claudeAgent",
+      "model": "claude-fable-5-1",
+      "effort": "xhigh"
+    }
+  },
+  "file_panel_acceptance_rule": "Two more bounded real-input attempts. If both fail: panel shown and recorded plus the real post-selection command exercised with an explicitly selected fixture URL counts as implemented with a manual gap, never verified. Decided by the parent because the user asked not to stop.",
+  "waves": {
+    "1": [
+      "browser-ops",
+      "file-panels",
+      "privacy-data",
+      "extensions-sites",
+      "sidebar-tabs",
+      "ai-features",
+      "captures-media",
+      "boosts"
+    ],
+    "2": [
+      "easels-notes",
+      "settings-panes",
+      "menus-system",
+      "little-arc-folders"
+    ],
+    "parent_after_wave_2": [
+      "A043 consumers",
+      "A081 Library",
+      "A107 Boost and capture actions"
+    ]
+  },
+  "tasks": [
+    {
+      "slice": "browser-ops",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Ad6eabce8-c802-45d4-a4b9-6d665d4f4785",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Ad6eabce8-c802-45d4-a4b9-6d665d4f4785",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "file-panels",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Ad2f34270-c88b-4c07-807f-d0b5fd814b05",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Ad2f34270-c88b-4c07-807f-d0b5fd814b05",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "privacy-data",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Afa34208e-1744-48b8-a2b3-4b364cc70961",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Afa34208e-1744-48b8-a2b3-4b364cc70961",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "extensions-sites",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A657c0d6e-8918-4e51-852f-6532af1fc7a5",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A657c0d6e-8918-4e51-852f-6532af1fc7a5",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "sidebar-tabs",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A454fe162-fb4f-4b3f-8efb-9741a9fb9f24",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3A454fe162-fb4f-4b3f-8efb-9741a9fb9f24",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "ai-features",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Af6ff7ff4-df0e-4b79-9b5c-f0589c292a7f",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Af6ff7ff4-df0e-4b79-9b5c-f0589c292a7f",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "captures-media",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Adb9bf908-e260-4019-b73d-f2bf87768090",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Adb9bf908-e260-4019-b73d-f2bf87768090",
+      "status_at_dispatch": "running"
+    },
+    {
+      "slice": "boosts",
+      "wave": 1,
+      "task_id": "node:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
+      "thread_id": "thread:delegated-task:command%3Amcp%3A0ba67eef-525d-4d14-a5cc-d1d737bde887%3Adelegate-task%3Aba85784d-2383-4601-ae27-34a48852d7f4",
+      "status_at_dispatch": "running"
+    }
+  ]
+}
