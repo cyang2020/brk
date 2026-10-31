@@ -15,7 +15,7 @@ enum AIScenarios {
         Scenario("AIBrowse", "selected sources use owning profile cookies, citations and close all readers", cefOnly: "CEF hidden pages", browse),
         Scenario("AITranslate", "text node translation preserves DOM, controls, events and never-translate settings", cefOnly: "CEF isolated world", translate),
         Scenario("AIMax", "native Max pane persists delivered switches and provider choice without an API key", cefOnly: "native settings", maxPane),
-        Scenario("AIQuit", "quit terminates and reaps a running fixture CLI", cefOnly: "native shutdown", quit),
+        Scenario("AIQuit", "quit reaps active and already-cancelled fixture CLIs", cefOnly: "native shutdown", quit),
     ]
     private static func enable(_ app: AppUnderTest, _ features: [AIFeature] = AIFeature.allCases) throws {
         for feature in features { try app.dispatch(.settings(.max(.feature(feature, true)))) }
@@ -209,8 +209,12 @@ enum AIScenarios {
         try enable(app)
         try app.dispatch(.assist(.ask("fixture:hang")))
         try app.waitUntil("fixture CLI to hang") { calls(app).last?["prompt"] as? String == "fixture:hang" }
-        let pid = calls(app).last!["pid"] as! Int32
+        let cancelled = calls(app).last!["pid"] as! Int32
+        try app.dispatch(.assist(.cancel))
+        try app.dispatch(.assist(.ask("fixture:hang")))
+        try app.waitUntil("second fixture CLI to hang") { calls(app).filter { $0["prompt"] as? String == "fixture:hang" }.count == 2 }
+        let active = calls(app).last!["pid"] as! Int32
         _ = try app.quit()
-        try expect(kill(pid, 0) == -1 && errno == ESRCH, "quit left provider PID \(pid) alive")
+        for pid in [cancelled, active] { try expect(kill(pid, 0) == -1 && errno == ESRCH, "quit left provider PID \(pid) alive") }
     }
 }

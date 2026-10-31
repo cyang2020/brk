@@ -20,6 +20,7 @@ final class FakeEngine: WebEngine {
     var shutdownOutcome: ShutdownOutcome = .clean
     var onReconcile: (([PageSpec]) -> Void)?
     var onShutdown: (() -> Void)?
+    var onAIRead: ((DocumentToken) async throws -> AIPageContent)?
     private var ledger = PageLedger()
     func token(_ page: PageID) -> BrowserToken { BrowserToken(page: page, generation: ledger.liveGeneration(of: page)!) }
     private var surfaces: [PageID: PageSurfaceView] = [:]
@@ -53,6 +54,10 @@ final class FakeEngine: WebEngine {
 
     func evaluate(_ script: String, in page: PageID) { calls.append("evaluate") }
     func facts(for page: PageID) -> PageFacts? { nil }
+    func readAIPage(_ document: DocumentToken) async throws -> AIPageContent {
+        guard let onAIRead else { throw AIPageFailure.unavailable }
+        return try await onAIRead(document)
+    }
     private(set) var forgotten: [BrowsingContext] = []
     func cancelDownload(_ id: DownloadID) { calls.append("cancelDownload") }
     func disposeContext(_ request: ContextDisposal) {
