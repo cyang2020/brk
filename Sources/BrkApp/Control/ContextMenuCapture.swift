@@ -32,7 +32,8 @@ import BrkEngine
     }
 
     @objc private func began(_ note: Notification) {
-        guard let current = note.object as? NSMenu,
+        // AppKit reports menu-bar tracking with the main menu as its object; a context-menu capture never wants that one.
+        guard let current = note.object as? NSMenu, current !== NSApp.mainMenu,
               note.name == Self.willPresent || menu == nil else { return }
         if current === menu { return }
         driver?.cancel(); completion.signal(); completion = DispatchSemaphore(value:0)

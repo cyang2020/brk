@@ -99,7 +99,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                             }
                         }
                         if let (frame, hover) = candidate, let href = hover["href"] as? String,
-                           let url = URL(string: href), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                           let url = URL(string: href), ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                           url.user == nil, url.password == nil {  // a userinfo address reads as a different site on the card; no preview
                             if self.current != href || self.currentFrame != frame.frame {
                                 self.closeCard(); self.fetch?.cancel(); self.current = href; self.currentFrame = frame.frame
                                 if self.dismissed != href { self.fetchPreview(url, hover: hover, document: document, frame: frame) }
