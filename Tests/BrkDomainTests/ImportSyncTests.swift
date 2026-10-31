@@ -4,6 +4,55 @@ import XCTest
 @testable import BrkDomain
 
 final class ImportSyncTests: XCTestCase {
+    func testRemoteSpaceDeletionRemovesEmptyInactiveSpaceAndKeepsNeededLocalShells() throws {
+        let d = Driver(), home = d.view.space.id
+        let empty = d.newSpace("Empty shared")
+        let current = d.newSpace("Current shared")
+        let emptyPinned = try XCTUnwrap(d.state.doc.spaces[empty]?.pinnedRoot)
+        let currentPinned = d.view.space.pinned.root
+        let homePinned = try XCTUnwrap(d.state.doc.spaces[home]?.pinnedRoot)
+        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-delete-spaces")))
+        let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
+        var peer = local.document
+        for key in ["s-" + empty.rawValue, "i-" + emptyPinned.rawValue] {
+            peer.records[key] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: local.counter + 1, replica: "peer"), value: nil)
+        }
+        d.system(.sidebarData(.syncRead(epoch: local.epoch, peer)))
+        XCTAssertNil(d.state.doc.spaces[empty])
+        for key in ["s-" + current.rawValue, "i-" + currentPinned.rawValue, "s-" + home.rawValue, "i-" + homePinned.rawValue] {
+            peer.records[key] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: local.counter + 2, replica: "peer"), value: nil)
+        }
+        d.system(.sidebarData(.syncRead(epoch: local.epoch, peer)))
+        XCTAssertNotNil(d.state.doc.spaces[current], "The current window keeps its local shell")
+        XCTAssertNotNil(d.state.doc.spaces[home], "Device-local Today content is preserved")
+        XCTAssertEqual(d.state.doc.windows[d.window]?.space, current)
+    }
+
+    func testRemoteFolderDeletionKeepsExcludedTabInItsOriginalProfile() throws {
+        let d = Driver(startURL: nil)
+        let mappedSpace = d.view.space.id
+        d.user(.profile(.create(name: "Mapped", icon: nil)))
+        let profile = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
+        d.user(.profile(.assign(.current, to: profile)))
+        d.user(.item(.newFolder)); let folder = try XCTUnwrap(d.pinnedIDs.first)
+        d.user(.item(.rename(folder, title: "Shared folder")))
+        let tab = d.open("https://example.test/?token=OWNED-LOCAL-ONLY")
+        d.user(.item(.move(tab, to: .into(parent: folder, index: 0))))
+        d.newSpace("Unrelated default")
+        d.user(.space(.focus(mappedSpace)))
+        let saved = d.state.doc.windows[d.window]?.slots[tab]
+        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-excluded-tab")))
+        let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
+        var peer = local.document
+        peer.records["i-" + folder.rawValue] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: local.counter + 1, replica: "peer"), value: nil)
+        d.system(.sidebarData(.syncRead(epoch: local.epoch, peer)))
+        XCTAssertNotNil(d.state.doc.tree[tab])
+        XCTAssertNil(d.state.doc.tree[folder])
+        XCTAssertEqual(d.state.doc.tree[tab]?.parent, d.state.doc.spaces[mappedSpace]?.pinnedRoot)
+        XCTAssertEqual(d.state.browsingContext(of: tab), .profile(profile))
+        XCTAssertEqual(d.state.doc.windows[d.window]?.slots[tab], saved)
+        XCTAssertFalse(String(decoding: try SidebarDataCodec.encodeSync(peer), as: UTF8.self).contains("OWNED-LOCAL-ONLY"))
+    }
     func testUnpinningCreatesSharedTombstoneButIncomingMergeKeepsLocalTodayAndWindowAddress() throws {
         let d = Driver()
         let tab = d.open("https://example.test/unpin"); d.user(.tab(.togglePin(.item(tab))))
@@ -12,7 +61,7 @@ final class ImportSyncTests: XCTestCase {
         d.user(.tab(.togglePin(.item(tab))))
         let window = d.state.doc.windows[d.window], today = d.todayIDs
         var peer = old.document
-        peer.records["peer-folder"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: old.counter + 5, replica: "peer"),
+        peer.records["i-peer-folder"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: old.counter + 5, replica: "peer"),
             value: SidebarSyncValue(payload: .folder(title: "Peer folder", icon: nil), parent: "i-" + d.view.space.pinned.root.rawValue, order: 0))
         d.system(.sidebarData(.syncRead(epoch: old.epoch, peer)))
         XCTAssertEqual(d.todayIDs, today)

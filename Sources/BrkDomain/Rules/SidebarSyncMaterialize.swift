@@ -70,11 +70,33 @@ extension Work {
             if state.doc.tree[id] != nil {
                 guard state.doc.tree.role(of: id)?.kind != .today,
                       state.browsingContext(of: id) == .profile(local.profile) else { continue }
+                if case .tab(let tab)? = state.doc.tree[id]?.body,
+                   tab.pinnedURL.map({ !SidebarSync.safeURL($0) }) ?? true { continue }
             }
             if state.doc.spaces.values.contains(where: { $0.pinnedRoot == id }) { records[id]?.children = [] }
             else { records[id] = nil }
             // A deleted space may still contain device-local Today tabs or be shown in a window. Keep its
             // local shell. Its shared metadata remains tombstoned and excluded from further publication.
+        }
+        for (key, record) in local.document.records where record.value == nil && key.hasPrefix("s-") {
+            let id = spaceID(key)
+            guard let space = state.doc.spaces[id], space.profile == local.profile, state.doc.spaces.count > 1,
+                  !state.doc.windows.values.contains(where: { $0.space == id }) else { continue }
+            let localContent = state.doc.tree.items.values.contains { item in
+                guard item.kind != .section, records[item.id] != nil, let role = state.doc.tree.role(of: item.id), role.space == id else { return false }
+                if role.kind == .today { return true }
+                let raw = "i-" + item.id.rawValue
+                if local.document.records[local.aliases[raw] ?? raw] == nil { return true }
+                if case .tab(let tab) = item.body { return tab.pinnedURL.map({ !SidebarSync.safeURL($0) }) ?? true }
+                return false
+            }
+            guard !localContent else { continue }
+            records[space.pinnedRoot] = nil; records[space.todayRoot] = nil
+            state.doc.spaces[id] = nil; state.doc.spaceOrder.removeAll { $0 == id }
+            for window in Array(state.doc.windows.keys) {
+                state.doc.windows[window]?.activeBySpace[id] = nil
+                state.doc.windows[window]?.emptySelections.remove(id)
+            }
         }
         for key in sortedKeys {
             guard let value = values[key], case .space(let title, let icon, let theme) = value.payload else { continue }
@@ -140,12 +162,24 @@ extension Work {
             records[id] = Record(id: id, createdAt: records[id]?.createdAt ?? ctx.now, parent: parent, children: records[id]?.children ?? [], payload: payload)
             if let parent { sharedChildren[parent, default: []].append(id) }
         }
+        // Local-only children of a deleted shared folder retain their original profile and section.
+        for id in Array(records.keys) {
+            guard let parent = records[id]?.parent, records[parent] == nil, let role = state.doc.tree.role(of: id) else { continue }
+            switch role {
+            case .pinned(let space): records[id]?.parent = state.doc.spaces[space]?.pinnedRoot
+            case .today(let space): records[id]?.parent = state.doc.spaces[space]?.todayRoot
+            case .favorites(let profile): records[id]?.parent = state.doc.favorites[profile]
+            case .scratch: break
+            }
+        }
         let syncedIDs = Set(local.document.records.keys.filter { key in
             guard !key.hasPrefix("s-") else { return false }
             let id = itemID(key)
             if let role = state.doc.tree.role(of: id) {
                 if state.browsingContext(of: id) != .profile(local.profile) { return false }
                 if role.kind == .today, local.document.records[key]?.value == nil { return false }
+                if case .tab(let tab)? = state.doc.tree[id]?.body,
+                   tab.pinnedURL.map({ !SidebarSync.safeURL($0) }) ?? true { return false }
             }
             return true
         }.map(itemID))

@@ -626,20 +626,22 @@ public enum SidebarDataCodec {
             guard identifier(id), identifier(record.stamp.replica), record.stamp.counter < UInt64.max - 10_000 else {
                 throw SidebarDataError.invalid("Invalid sync identity or revision.")
             }
+            guard id == "favorites" || id.hasPrefix("i-") || id.hasPrefix("s-") else { throw SidebarDataError.invalid("Invalid sync entity key.") }
             guard let value = record.value else { continue }
             guard value.parent.map(identifier) ?? true, (0...10_000).contains(value.order) else { throw SidebarDataError.invalid("Invalid sync placement.") }
             switch value.payload {
             case .tab(let title, let url, _):
-                guard title.count <= 500, SidebarSync.safeURL(url) else { throw SidebarDataError.invalid("Sync tabs require a public HTTP(S) URL without credentials, query or fragment.") }
+                guard id.hasPrefix("i-"), title.count <= 500, SidebarSync.safeURL(url) else { throw SidebarDataError.invalid("Sync tabs require a public HTTP(S) URL without credentials, query or fragment.") }
             case .folder(let title, _):
-                guard title.count <= 500 else { throw SidebarDataError.invalid("Sync folder name is too long.") }
+                guard id.hasPrefix("i-"), title.count <= 500 else { throw SidebarDataError.invalid("Invalid sync folder key or name.") }
             case .space(let title, _, let theme):
-                guard title.count <= 500, theme == clamped(theme), theme.colors.allSatisfy({ $0.red.isFinite && $0.green.isFinite && $0.blue.isFinite && $0.alpha.isFinite }) else {
+                guard id.hasPrefix("s-"), value.parent == nil, title.count <= 500, theme == clamped(theme), theme.colors.allSatisfy({ $0.red.isFinite && $0.green.isFinite && $0.blue.isFinite && $0.alpha.isFinite }) else {
                     throw SidebarDataError.invalid("Invalid sync Space theme or name.")
                 }
             case .root(let space):
-                guard space.map(identifier) ?? true else { throw SidebarDataError.invalid("Invalid sync Space key.") }
-            case .split: break
+                guard value.parent == nil, space.map({ identifier($0) && $0.hasPrefix("s-") && id.hasPrefix("i-") }) ?? (id == "favorites") else { throw SidebarDataError.invalid("Invalid sync Space key.") }
+            case .split:
+                guard id.hasPrefix("i-") else { throw SidebarDataError.invalid("Invalid sync split key.") }
             }
         }
     }

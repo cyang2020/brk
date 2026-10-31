@@ -125,7 +125,7 @@ enum ImportSyncScenarios {
     @Sendable static func exportLifetime(_ app: AppUnderTest) throws {
         guard let first = app.window else { throw Check(description: "Missing first window") }
         try app.dispatch(.app(.export(.space(.current)))); try waitPanel(app, "Export")
-        _ = try app.send(.dispatch(window: first, command: .window(.newStandard)))
+        _ = try app.send(.dispatch(window: first, command: .window(.new)))
         guard case .hello(let hello) = try app.send(.hello), let second = hello.windows.first(where: { $0 != first }) else {
             throw Check(description: "Second window missing")
         }

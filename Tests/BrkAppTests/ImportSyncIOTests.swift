@@ -142,9 +142,9 @@ final class ImportSyncIOTests: XCTestCase {
         let shared = root.appendingPathComponent("shared")
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
         let a = SidebarSyncIO(), b = SidebarSyncIO()
-        let one = SidebarSyncDocument(records: ["item-a": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-a"),
+        let one = SidebarSyncDocument(records: ["i-item-a": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-a"),
             value: SidebarSyncValue(payload: .tab(title: "Owned A", url: URL(string: "https://example.test/a")!, icon: nil), parent: "favorites", order: 0))])
-        let two = SidebarSyncDocument(records: ["item-b": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-b"),
+        let two = SidebarSyncDocument(records: ["i-item-b": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-b"),
             value: SidebarSyncValue(payload: .tab(title: "Owned B", url: URL(string: "https://example.test/b")!, icon: nil), parent: "favorites", order: 1))])
         // Owned local checkpoints, independent of the shared transport files.
         for (device, document) in [("a", one), ("b", two)] {
@@ -163,10 +163,10 @@ final class ImportSyncIOTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: shared.appendingPathComponent("replica-a.brksync.json")), before)
         XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: shared.path).contains { $0.hasSuffix(".tmp") })
         var deletion = receivedB
-        deletion.records["item-a"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 2, replica: "replica-b"), value: nil)
+        deletion.records["i-item-a"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 2, replica: "replica-b"), value: nil)
         _ = try await b.exchange(folder: shared, replica: "replica-b", document: deletion)
         let stale = try await a.exchange(folder: shared, replica: "replica-a", document: one)
-        XCTAssertNil(stale.records["item-a"]?.value)
+        XCTAssertNil(stale.records["i-item-a"]?.value)
         XCTAssertEqual(stale.records.count, 2)
     }
 
