@@ -56,6 +56,7 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // Toolbar (P01-b): grey glyphs and host on the white card top.
     let toolbarGlyph = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the toolbar arrows are 13 pt wide, a size under the title row's"))
+    let toolbarHostSlack = Metric(2.0, .guess("the host label is a little wider than its cell so a short host never truncates"))
     let toolbarLinkGap = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the host starts 5 after the link glyph"))
     let toolbarGlyphAlpha = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: toolbar glyphs #7E7E7E on white"))
     let toolbarDisabledAlpha = Metric(0.21, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: a disabled arrow is #C9C9C9 on white"))
