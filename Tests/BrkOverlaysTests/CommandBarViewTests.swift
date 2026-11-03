@@ -80,6 +80,21 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(chosen.last, .commandBar(.submit("bing.com")))
     }
 
+    /// P20-a, P21-a, Q03-a: a window without a space highlights in Arc's blue-violet (#8F95FF light, #424ADD dark);
+    /// a space's centered bar in grey (Q01-a)
+    func testWindowsWithoutASpaceHighlightInBlueViolet() throws {
+        func highlight(_ scheme: Scheme, spaceless: Bool) throws -> NSColor {
+            let view = CommandBarView(dispatch: { _ in })
+            view.show(commandBar([], []), in: box, scheme: scheme, spaceless: spaceless)
+            let row = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == "command-bar-result-0" })
+            return try XCTUnwrap(row.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.sRGB))
+        }
+        let light = try highlight(.light, spaceless: true), dark = try highlight(.dark, spaceless: true), space = try highlight(.light, spaceless: false)
+        XCTAssertEqual([light.redComponent, light.greenComponent, light.blueComponent].map { ($0 * 255).rounded() }, [0x8F, 0x95, 0xFF])
+        XCTAssertEqual([dark.redComponent, dark.greenComponent, dark.blueComponent].map { ($0 * 255).rounded() }, [0x42, 0x4A, 0xDD])
+        XCTAssertEqual(space.alphaComponent, 0.31, accuracy: 0.01, "grey: black at 31%")
+    }
+
     /// P02-b: the bar over the URL pill is 350 wide (wider only for its input row), the centered one fills its box
     func testTheCardOverThePillIs350WideAndTheCenteredOneFillsTheBox() {
         let view = CommandBarView(dispatch: { _ in })

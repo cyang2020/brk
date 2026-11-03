@@ -40,6 +40,15 @@ final class TabSwitcherViewTests: XCTestCase {
         XCTAssertEqual(fill.greenComponent * 255, 211, accuracy: 1)
     }
 
+    /// a page not drawn yet in this session is a grey card, never a blank white one
+    func testAnUndrawnPageIsAGreyCard() throws {
+        let strip = switcher(0, of: 2)
+        let card = strip.subviews[1]
+        let page = try XCTUnwrap(card.subviews.compactMap { $0 as? NSImageView }.first)
+        let fill = try XCTUnwrap(page.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.sRGB))
+        XCTAssertLessThan(fill.alphaComponent, 0.5, "a grey wash, not opaque white")
+    }
+
     /// past the fifth card the strip slides so the chosen one stays the last shown; two tabs make a two-card strip
     func testTheStripSlidesAndShrinks() {
         XCTAssertEqual(switcher(6, of: 7).subviews.map { $0.accessibilityLabel() ?? "" }, ["Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"])

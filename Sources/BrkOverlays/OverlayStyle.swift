@@ -72,8 +72,9 @@ struct OverlayColors {
 }
 
 /// The command bar's own colors (Arc 1.170, measured on the 2026-11-03 captures in verify/visual-pairs/run-20261103).
-/// Centered (Cmd+T) the bar is neutral grey; over the URL pill (Cmd+L) its highlight and text selection are shades
-/// of the sidebar theme's primary color. Both follow the sidebar's scheme, not the system's (P29-c).
+/// In a space's window the centered bar (Cmd+T) is neutral grey and over the URL pill (Cmd+L) its highlight and text
+/// selection are shades of the sidebar theme's primary color; a window without a space (blank, Little, incognito)
+/// highlights in Arc's blue-violet (P20-a, P21-a, Q03-a). All follow the sidebar's scheme, not the system's (P29-c).
 struct CommandBarColors {
     let card: NSColor
     let border: NSColor
@@ -91,23 +92,30 @@ struct CommandBarColors {
     let tileOnHighlight: NSColor
     let infoCircle: NSColor
 
-    static func of(_ scheme: Scheme, attached: Bool, primary: RGBA) -> CommandBarColors {
+    static func of(_ scheme: Scheme, attached: Bool, primary: RGBA, spaceless: Bool = false) -> CommandBarColors {
         let base = OverlayColors.of(scheme)
         let ink: NSColor = scheme == .light ? .black : .white
         guard scheme == .light else {
-            return CommandBarColors(card: base.popover, border: ink.withAlphaComponent(0.12), text: base.textPrimary, secondary: base.textSecondary,
-                                    placeholder: ink.withAlphaComponent(0.4), highlight: ink.withAlphaComponent(0.16), onHighlight: .white,
-                                    textSelection: ink.withAlphaComponent(0.25), hairline: base.hairline, accessory: ink.withAlphaComponent(0.08),
-                                    accessoryText: base.accessoryForeground, tileOnHighlight: ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
+            // Q03-a (incognito): a neutral #191A1C card, the highlight #424ADD with a white tile under its glyph.
+            return CommandBarColors(card: srgb(0x191A1C), border: ink.withAlphaComponent(0.12), text: base.textPrimary, secondary: base.textSecondary,
+                                    placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.16),
+                                    onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.25), hairline: base.hairline,
+                                    accessory: ink.withAlphaComponent(0.08), accessoryText: base.accessoryForeground,
+                                    tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
         }
         // P02-b over a #F2EAE4 theme: highlight #B8A89B, selection #C8B9AF. Q01-a/b: highlight #ABABAB, selection #BBBBBB.
-        let highlight = attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.31)
-        let selection = attached ? shade(primary, saturation: 2.16, brightness: 0.826) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25)
+        // P20-a, P21-a (blank and Little windows): highlight #8F95FF.
+        let highlight = spaceless ? srgb(0x8F95FF) : attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.31)
+        let selection = spaceless ? srgb(0xC9CCFF) : attached ? shade(primary, saturation: 2.16, brightness: 0.826) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25)
         return CommandBarColors(card: NSColor(srgbRed: 0xF9 / 255.0, green: 0xF9 / 255.0, blue: 0xFA / 255.0, alpha: 1),
                                 border: ink.withAlphaComponent(0.2), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
                                 placeholder: ink.withAlphaComponent(0.45), highlight: highlight, onHighlight: .white, textSelection: selection,
                                 hairline: ink.withAlphaComponent(0.09), accessory: ink.withAlphaComponent(0.04), accessoryText: ink.withAlphaComponent(0.48),
                                 tileOnHighlight: .white, infoCircle: .white)
+    }
+
+    private static func srgb(_ hex: Int) -> NSColor {
+        NSColor(srgbRed: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, alpha: 1)
     }
 
     /// `color` with its hue kept, saturation and brightness scaled (sRGB HSB).

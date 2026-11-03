@@ -69,7 +69,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         didSet { if fillsWindow != oldValue { layoutCard() } }
     }
     private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
-    private var look: (Scheme, Style, RGBA)?
+    private var look: (Scheme, Style, RGBA, Bool)?
     private var leadingFavicon: URL?
     private var eventMonitor: Any?
     private var savedSelection: [NSAttributedString.Key: Any]?
@@ -110,7 +110,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         info.onClick = { [weak self] in self?.dispatch(.settings(.openPane(.shortcuts))) }
         for view in [leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
-        applyColors(.light, style: .centered, primary: RGBA(1, 1, 1))
+        applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
 
     @available(*, unavailable)
@@ -128,23 +128,25 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         return focused
     }
 
-    public func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette) {
+    /// `window`: the window's kind; a window without a space (blank, Little, incognito) highlights in Arc's blue-violet.
+    public func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette, window: WindowKind = .standard) {
         guard let bar, let frame = frames.commandBar else { return hide() }
         // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
         fillsWindow = frame.size == frames.contentSize
-        show(bar, in: frame, scheme: palette.scheme, primary: palette.primary)
+        show(bar, in: frame, scheme: palette.scheme, primary: palette.primary, spaceless: window != .standard)
     }
 
     /// `render` once the slice and its frame are known. A new `openID` resets the query to `initialQuery` and the
     /// highlight to the first row and plays the bounce; the same opening re-ranks what the user typed against the
     /// new candidates.
-    func show(_ bar: CommandBarSnapshot, in frame: CGRect, scheme: Scheme, primary: RGBA = RGBA(1, 1, 1)) {
+    func show(_ bar: CommandBarSnapshot, in frame: CGRect, scheme: Scheme, primary: RGBA = RGBA(1, 1, 1), spaceless: Bool = false) {
         let reopened = bar.openID != openID
         let style: Style = bar.placement == .overURLPill && bar.aiMode == nil ? .attached : .centered
-        guard reopened || isHidden || bar != self.bar || frame != self.frame || look.map({ $0 != (scheme, style, primary) }) ?? true else { return }
+        let changedLook = look.map { $0 != (scheme, style, primary, spaceless) } ?? true
+        guard reopened || isHidden || bar != self.bar || frame != self.frame || changedLook else { return }
         self.frame = frame
         isHidden = false
-        if look.map({ $0 != (scheme, style, primary) }) ?? true { applyColors(scheme, style: style, primary: primary) }
+        if changedLook { applyColors(scheme, style: style, primary: primary, spaceless: spaceless) }
         self.bar = bar
         if reopened {
             openID = bar.openID
@@ -450,10 +452,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         }
     }
 
-    private func applyColors(_ scheme: Scheme, style: Style, primary: RGBA) {
-        look = (scheme, style, primary)
+    private func applyColors(_ scheme: Scheme, style: Style, primary: RGBA, spaceless: Bool) {
+        look = (scheme, style, primary, spaceless)
         self.style = style
-        colors = CommandBarColors.of(scheme, attached: style == .attached, primary: primary)
+        colors = CommandBarColors.of(scheme, attached: style == .attached, primary: primary, spaceless: spaceless)
         appearance = .of(scheme)
         let o = OverlayMetrics.commandBar
         input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
@@ -593,6 +595,8 @@ final class ResultRowView: NSView {
     private let tile = NSView()
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    /// " — youtube.com/c/thebrowsercompany": its own label, so a long address loses its middle, as Arc's do (P20-a).
+    private let detail = NSTextField(labelWithString: "")
     private let hint = NSTextField(labelWithString: "")
     private let hintPill = NSView()
     private let arrow = NSView()
@@ -610,6 +614,7 @@ final class ResultRowView: NSView {
         layer?.cornerRadius = OverlayMetrics.commandBar.rowCornerRadius.value
         label.lineBreakMode = .byTruncatingTail
         label.cell?.truncatesLastVisibleLine = true
+        detail.lineBreakMode = .byTruncatingMiddle
         hint.alignment = .center
         hintPill.wantsLayer = true
         hintPill.layer?.cornerCurve = .continuous
@@ -624,7 +629,7 @@ final class ResultRowView: NSView {
         arrowGlyph.symbolConfiguration = .init(pointSize: 16, weight: .regular)
         arrow.addSubview(arrowGlyph)
         hintPill.addSubview(hint)
-        for view in [tile, icon, label, hintPill, arrow] { addSubview(view) }
+        for view in [tile, icon, label, detail, hintPill, arrow] { addSubview(view) }
     }
 
     @available(*, unavailable)
@@ -675,17 +680,16 @@ final class ResultRowView: NSView {
     private func paint(_ suggestion: Suggestion, highlighted: Bool, _ colors: CommandBarColors) {
         let o = OverlayMetrics.commandBar
         let ink = highlighted ? colors.onHighlight : colors.text
-        let title = NSMutableAttributedString(string: suggestion.title, attributes: [
+        label.attributedStringValue = NSAttributedString(string: suggestion.title, attributes: [
             .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium), .foregroundColor: ink,
         ])
         // Over the URL pill (captions off) rows are titles only, P02-b.
-        if captions, let subtitle = suggestion.subtitle, !subtitle.isEmpty {
-            title.append(NSAttributedString(string: " — " + subtitle, attributes: [
-                .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
-                .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
-            ]))
-        }
-        label.attributedStringValue = title
+        let subtitle = captions ? suggestion.subtitle ?? "" : ""
+        detail.isHidden = subtitle.isEmpty
+        detail.attributedStringValue = NSAttributedString(string: " — " + subtitle, attributes: [
+            .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
+            .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
+        ])
         // Arc's own entries keep their tile; a favicon gets a white one on the highlight so it stays legible. A glyph on
         // the highlight's white tile takes the highlight's color (P21-a's Contact the Team).
         tile.isHidden = !(suggestion.tile || (highlighted && hasFavicon))
@@ -731,7 +735,11 @@ final class ResultRowView: NSView {
         }
         let x = o.textX.value - o.rowInset.value - 2
         let height = label.intrinsicContentSize.height
-        label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: max(0, right - x), height: height)
+        let titleWidth = min(ceil(label.intrinsicContentSize.width), max(0, right - x))
+        label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: titleWidth, height: height)
+        // The label pads 2 on each side, so the detail starts 4 back to sit right after the title's text.
+        let detailX = label.frame.maxX - 4
+        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.intrinsicContentSize.width), right - detailX)), height: height)
     }
 
     // Hover follows pointer motion (not entry), so rows sliding under a still pointer keep the keyboard highlight.

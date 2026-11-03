@@ -230,19 +230,21 @@ public enum Suggest {
 
     /// Arc's own entries, which fill an empty list after the recent tabs and follow the page being edited: Contact
     /// the Team, The Browser Company (its YouTube channel, from Arc's starter content), Air Traffic Control, Tips for
-    /// Organizing and Help Center (P02-b, Q01-a, P21-a). Arc's last three are its help articles; ours open the Links
-    /// preferences (Air Traffic Control's pane, also its type-travel trigger), Getting Started and the Help menu's
-    /// Visit Help Center.
+    /// Organizing and Help Center, each with its address (P02-b, Q01-a, P20-a, P21-a). The channel and the help center
+    /// open what Arc's rows open. Arc's Air Traffic Control and Tips for Organizing open two help articles whose
+    /// addresses the captures show only in part (resources.arc.net/…stinct-browsing-areas, …5255982103-features);
+    /// ours open the Links preferences (Air Traffic Control's pane, also its type-travel trigger) and Getting Started,
+    /// and say so where Arc shows the address.
     static let arcRows: [Suggestion] = [
         contactRow,
-        Suggestion(kind: .suggested, title: "The Browser Company", subtitle: "youtube.com/@TheBrowserCompany", symbol: "play.rectangle.fill",
-                   favicon: nil, hint: nil, command: .commandBar(.submit("https://www.youtube.com/@TheBrowserCompany")), accent: RGBA(hex: "#FF0033")),
-        Suggestion(kind: .suggested, title: "Air Traffic Control", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
+        Suggestion(kind: .suggested, title: "The Browser Company", subtitle: "youtube.com/c/thebrowsercompany", symbol: "play.rectangle.fill",
+                   favicon: nil, hint: nil, command: .commandBar(.submit("https://www.youtube.com/c/thebrowsercompany")), accent: RGBA(hex: "#FF0033")),
+        Suggestion(kind: .suggested, title: "Air Traffic Control", subtitle: OverlayCopy.preferencesTitle(.links), symbol: "globe", favicon: nil, hint: nil,
                    command: .settings(.openPane(.links))),
-        Suggestion(kind: .suggested, title: "Tips for Organizing", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
+        Suggestion(kind: .suggested, title: "Tips for Organizing", subtitle: ActionID.gettingStarted.spec.title, symbol: "globe", favicon: nil, hint: nil,
                    command: ActionID.gettingStarted.spec.command),
-        Suggestion(kind: .suggested, title: "Help Center", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
-                   command: ActionID.visitHelpCenter.spec.command),
+        Suggestion(kind: .suggested, title: "Help Center", subtitle: "resources.arc.net", symbol: "globe", favicon: nil, hint: nil,
+                   command: .commandBar(.submit("https://resources.arc.net/hc/en-us"))),
     ]
 
     /// The engine's suggestions that still answer `text`: all of them while they were asked for exactly this text,

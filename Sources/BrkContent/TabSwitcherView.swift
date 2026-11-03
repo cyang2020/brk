@@ -26,6 +26,8 @@ struct SwitcherMetricsTable: MetricGroup {
     let titleRightInset = Metric(10.0, .anatomy("\(measured): \"Long title for tru…\" ends about 10 before the page image's right edge"))
     let windowMargin = Metric(24.0, .guess("the strip keeps 24 from the window's sides, dropping cards in a narrow window"))
     let placeholderRadius = Metric(3.0, .guess("the grey square for a tab without a favicon, a sidebar row's placeholder at 14 pt"))
+    /// A page not drawn yet in this session: a grey card with the site's icon in the middle, never a blank card.
+    let pagePlaceholderIcon = Metric(28.0, .guess("the icon centred on a card whose page was not drawn yet, twice the title's"))
 }
 
 /// The top-right notice (P43-a, Arc's "ChatGPT in the Command Bar not enabled").
@@ -48,7 +50,8 @@ struct NoticeMetricsTable: MetricGroup {
 /// centred in the window, one card per recent tab or split (at most five, the order frozen when the walk began)
 /// showing its page and its icon and title; the chosen one sits on a theme-tinted rounded selection and its title is
 /// bold. Each Tab press moves the selection right (`.tab(.cycleRecent)`); the strip slides when the selection passes
-/// its last card. Page images come from `PageThumbnails`; a tab never seen in this session shows a white card.
+/// its last card. Page images come from `PageThumbnails`; a tab not drawn yet in this session shows a grey card with its
+/// icon (or a grey square) in the middle.
 @MainActor
 final class TabSwitcherView: NSView {
     private var cards: [SwitcherCard] = []
@@ -106,6 +109,8 @@ final class TabSwitcherView: NSView {
 private final class SwitcherCard: NSView {
     private let page = NSImageView()
     private let pageShadow = NSView()
+    private let pageIcon = NSImageView()
+    private let pageSquare = NSView()
     private let icon = NSImageView()
     private let placeholder = NSView()
     private let title = NSTextField(labelWithString: "")
@@ -130,11 +135,15 @@ private final class SwitcherCard: NSView {
         page.layer?.backgroundColor = NSColor.white.cgColor
         page.imageScaling = .scaleAxesIndependently
         icon.imageScaling = .scaleProportionallyUpOrDown
+        pageIcon.imageScaling = .scaleProportionallyUpOrDown
+        pageSquare.wantsLayer = true
+        pageSquare.layer?.cornerCurve = .continuous
+        pageSquare.layer?.cornerRadius = SwitcherMetrics.thumbnailRadius.value
         placeholder.wantsLayer = true
         placeholder.layer?.cornerRadius = SwitcherMetrics.placeholderRadius.value
         title.lineBreakMode = .byTruncatingTail
         title.cell?.truncatesLastVisibleLine = true
-        for view in [pageShadow, page, placeholder, icon, title] { addSubview(view) }
+        for view in [pageShadow, page, pageSquare, pageIcon, placeholder, icon, title] { addSubview(view) }
     }
 
     @available(*, unavailable)
@@ -146,11 +155,17 @@ private final class SwitcherCard: NSView {
         let m = SwitcherMetrics
         layer?.backgroundColor = selected ? selection.cgColor : nil
         page.image = image
+        let ink: NSColor = dark ? .white : .black
+        page.layer?.backgroundColor = (image == nil ? ink.withAlphaComponent(0.06) : .white).cgColor
         let inset = m.thumbnailInset.value
         let pageRect = CGRect(x: inset, y: inset, width: bounds.width - 2 * inset, height: m.thumbnailHeight.value)
         page.frame = pageRect
         pageShadow.frame = pageRect
-        let ink: NSColor = dark ? .white : .black
+        let big = m.pagePlaceholderIcon.value
+        let middle = CGRect(x: (pageRect.midX - big / 2).rounded(), y: (pageRect.midY - big / 2).rounded(), width: big, height: big)
+        pageIcon.frame = middle
+        pageSquare.frame = middle
+        pageSquare.layer?.backgroundColor = ink.withAlphaComponent(0.12).cgColor
         title.font = .systemFont(ofSize: m.titleFontSize.value, weight: selected ? .semibold : .medium)
         title.textColor = ink.withAlphaComponent(selected ? 0.9 : 0.72)
         title.stringValue = item.title
@@ -161,14 +176,19 @@ private final class SwitcherCard: NSView {
         placeholder.layer?.backgroundColor = ink.withAlphaComponent(0.12).cgColor
         favicon = item.favicon
         icon.image = nil
+        pageIcon.image = nil
         placeholder.isHidden = false
+        let drawn = image != nil
+        pageSquare.isHidden = drawn
         if let url = item.favicon, let cached = FaviconCache.shared.image(for: url, then: { [weak self] loaded in
             guard let self, self.favicon == url else { return }
             self.icon.image = loaded
             self.placeholder.isHidden = true
+            if !drawn { self.pageIcon.image = loaded; self.pageSquare.isHidden = true }
         }) {
             icon.image = cached
             placeholder.isHidden = true
+            if !drawn { pageIcon.image = cached; pageSquare.isHidden = true }
         }
         let x = pageRect.minX + m.textInset.value
         let height = title.intrinsicContentSize.height
