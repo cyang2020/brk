@@ -166,6 +166,9 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case loadFailed(code: Int, description: String, url: String)
     /// The renderer process crashed or was killed. The page object stays; see `PageAction.recover`.
     case websitePolicyApplied(WebsitePolicyStatus)
+    /// The document's connection security, reported once it is ready and again whenever it changes (insecure content
+    /// can arrive after the main document).
+    case securityChanged(PageSecurity)
     case boostFailed(DocumentToken, String)
     case rendererGone
     /// The page closed itself (`window.close()`); the engine has already started closing the browser.

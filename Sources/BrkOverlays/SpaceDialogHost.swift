@@ -11,8 +11,8 @@ import SwiftUI
 ///   (`SpaceCreateFlow.swift`). The draft's theme and icon are reported through `onDraft` while it is open.
 /// - Rename Space and the delete confirmation: the small centred dialogs (`SpaceAlertView.swift`).
 /// - Change Space Icon…: the Emoji / Icon popover under the space header (`SpaceIconPicker.swift`).
-/// - Edit Theme…: the theme panel beside the sidebar (`ThemeEditor.swift`); each edit is saved as it is made.
-/// - Edit Space (the Library's Spaces page): the name and icon form centred in the content area.
+/// - Edit Theme…, Edit Theme Color… and the Library Space card's Edit Space…: the theme panel beside the sidebar
+///   (`ThemeEditor.swift`); each edit is saved as it is made.
 ///
 /// The host spans the window and takes clicks only on what it shows.
 @MainActor
@@ -32,10 +32,6 @@ public final class SpaceDialogHost: NSView {
     private var scheme: Scheme = .light
     private var frames: WindowFrames?
 
-    // Edit Space.
-    private let card = NSView()
-    private var form: NSHostingController<SpaceDialogForm>?
-    var hosting: NSView? { form?.view }
     // Create a Space.
     private var create: SpaceCreateModel?
     private var flow: NSHostingView<SpaceCreateFlowView>?
@@ -51,11 +47,6 @@ public final class SpaceDialogHost: NSView {
         self.dispatch = dispatch
         super.init(frame: .zero)
         isHidden = true
-        card.wantsLayer = true
-        card.layer?.cornerCurve = .continuous
-        card.layer?.cornerRadius = OverlayMetrics.dialog.cornerRadius.value
-        card.isHidden = true
-        addSubview(card)
         blank.wantsLayer = true
         blank.layer?.cornerCurve = .continuous
         blank.isHidden = true
@@ -72,18 +63,14 @@ public final class SpaceDialogHost: NSView {
         return hit === self ? nil : hit
     }
 
-    /// Keyboard focus into what is open: the delete dialog, the rename field, the Create a Space name field, or the
-    /// Edit Space form's first field. False while nothing is shown or the view is not in a window.
+    /// Keyboard focus into what is open: the delete dialog, the rename field or the Create a Space name field. False
+    /// while nothing is shown or the view is not in a window.
     public func focusForm() -> Bool {
         guard !isHidden, let window else { return false }
         if let alert { return alert.focus() }
         if let flow {
             flow.layoutSubtreeIfNeeded()
             return window.makeFirstResponder(Self.firstEditableField(in: flow) ?? flow)
-        }
-        if let hosting, !card.isHidden {
-            hosting.layoutSubtreeIfNeeded()
-            return window.makeFirstResponder(Self.firstEditableField(in: hosting) ?? hosting)
         }
         // The popovers and the theme panel leave the browser window's focus where it is.
         return iconPopover != nil || themePanel != nil
@@ -110,7 +97,6 @@ public final class SpaceDialogHost: NSView {
         // What closed.
         if !Self.sameKind(previous, dialog) {
             closeCreate()
-            closeEdit()
             iconPopover?.dismiss(); iconPopover = nil
             themePanel?.dismiss(); themePanel = nil
         }
@@ -129,7 +115,6 @@ public final class SpaceDialogHost: NSView {
 
         switch dialog {
         case .newSpace?: showCreate(frames: frames)
-        case .editSpace?: showEdit(dialog!, in: frames.contentArea, schemeChanged: schemeChanged)
         case .icon(let id, let icon)?: showIconPicker(space: id, icon: icon, frames: frames)
         case .theme(let id, let theme)?: showThemePanel(space: id, theme: theme, frames: frames)
         case .rename?, nil: break
@@ -139,7 +124,6 @@ public final class SpaceDialogHost: NSView {
     private static func sameKind(_ a: SpaceDialogSnapshot?, _ b: SpaceDialogSnapshot?) -> Bool {
         switch (a, b) {
         case (nil, nil), (.newSpace?, .newSpace?): true
-        case (.editSpace(let x, _, _, _)?, .editSpace(let y, _, _, _)?): x == y
         case (.rename(let x, _)?, .rename(let y, _)?): x == y
         case (.icon(let x, _)?, .icon(let y, _)?): x == y
         case (.theme(let x, _)?, .theme(let y, _)?): x == y
@@ -234,83 +218,6 @@ public final class SpaceDialogHost: NSView {
         themePanel?.update(draft)
         themePanel?.show(over: window, sidebarMaxX: Double(frames.sidebar?.frame.maxX ?? 0), scheme: scheme)
     }
-
-    // MARK: Edit Space
-
-    /// A different space starts a fresh form; the same one keeps what the user has entered.
-    private func showEdit(_ dialog: SpaceDialogSnapshot, in area: CGRect, schemeChanged: Bool) {
-        if form == nil {
-            let controller = NSHostingController(rootView: SpaceDialogForm(draft: SpaceDraft(dialog), dispatch: dispatch))
-            // The card never sits under the titlebar; without this the window's titlebar inset pads the form.
-            controller.safeAreaRegions = []
-            card.addSubview(controller.view)
-            card.identify(.spaceDialog)
-            form = controller
-        }
-        if schemeChanged || card.isHidden {
-            let colors = OverlayColors.of(scheme)
-            card.appearance = .of(scheme)
-            card.layer?.backgroundColor = colors.popover.cgColor
-            card.shadow = .popover(colors)
-        }
-        card.isHidden = false
-        let margin = Metrics.commandBar.minVerticalMargin.value
-        let width = min(OverlayMetrics.dialog.width.value, area.width - 2 * margin)
-        let fitted = form?.sizeThatFits(in: CGSize(width: width, height: area.height)).height ?? 0
-        let height = min(fitted, area.height - 2 * margin)
-        card.frame = CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height).integral
-        hosting?.frame = card.bounds
-    }
-
-    private func closeEdit() {
-        hosting?.removeFromSuperview()
-        form = nil
-        card.isHidden = true
-    }
-
-    /// The card's frame while Edit Space is open (tests).
-    var editCardFrame: CGRect? { card.isHidden ? nil : card.frame }
-}
-
-/// What the Edit Space form edits, and the commands its two buttons send. Plain data, so the decisions are testable
-/// without SwiftUI.
-struct SpaceDraft: Equatable {
-    let editing: SpaceID
-    var title: String
-    var icon: SpaceIcon
-    let theme: SpaceTheme
-
-    /// Nil for anything but Edit Space.
-    init?(_ dialog: SpaceDialogSnapshot) {
-        guard case .editSpace(let id, let title, let icon, let theme) = dialog else { return nil }
-        editing = id
-        self.title = title
-        self.icon = icon
-        self.theme = theme
-    }
-
-    /// Save: the trimmed name (blank keeps the old one) and the icon. The theme is the theme panel's.
-    var saveCommand: Command {
-        .space(.update(editing, title: title.trimmingCharacters(in: .whitespacesAndNewlines), icon: icon, theme: nil))
-    }
-
-    static let cancelCommand: Command = .sidebar(.openDialog(nil))
-
-    /// The emoji field shows the emoji icon, if that is the icon.
-    var emoji: String {
-        if case .custom(.emoji(let emoji)) = icon { return emoji }
-        return ""
-    }
-
-    /// Typing into the emoji field: the last character typed is the icon (so a second emoji replaces the first);
-    /// emptying the field while an emoji is the icon goes back to none.
-    mutating func setEmoji(_ text: String) {
-        if let last = text.trimmingCharacters(in: .whitespacesAndNewlines).last {
-            icon = .custom(.emoji(String(last)))
-        } else if case .custom(.emoji) = icon {
-            icon = SpaceIcon.none
-        }
-    }
 }
 
 extension RGBA {
@@ -319,119 +226,6 @@ extension RGBA {
     }
 
     var swiftUI: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha) }
-}
-
-/// Edit Space: the name and the icon, with Save and Cancel. Its theme is edited in the theme panel.
-struct SpaceDialogForm: View {
-    @State private var draft: SpaceDraft
-    let dispatch: Dispatch
-    @State private var symbolDraft: String
-    @FocusState private var emojiFocused: Bool
-    @Environment(\.colorScheme) private var colorScheme
-
-    init(draft: SpaceDraft?, dispatch: @escaping Dispatch) {
-        let draft = draft ?? SpaceDraft(.editSpace(id: SpaceID(""), title: "", icon: .none, theme: .default))!
-        _draft = State(initialValue: draft)
-        let symbol: String = if case .custom(.symbol(let value)) = draft.icon { value } else { "" }
-        _symbolDraft = State(initialValue: symbol)
-        self.dispatch = dispatch
-    }
-
-    private var colors: OverlayColors { .of(colorScheme == .dark ? .dark : .light) }
-    private var m: DialogOverlayMetrics { OverlayMetrics.dialog }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(OverlayCopy.editSpaceTitle).font(.headline)
-            preview
-            TextField(OverlayCopy.spaceName, text: $draft.title, prompt: Text(OverlayCopy.spaceNamePlaceholder))
-                .textFieldStyle(.roundedBorder).labelsHidden().onSubmit(save)
-                .spaceToolsID("name")
-            Text(OverlayCopy.icon).font(.subheadline).foregroundStyle(.secondary)
-            iconPicker
-            HStack {
-                Spacer()
-                SpaceToolsButton(title: OverlayCopy.cancel, id: "cancel", key: "\u{1b}", action: cancel)
-                SpaceToolsButton(title: OverlayCopy.save, id: "save", key: "\r", action: save)
-            }
-        }.padding(m.padding.value).onExitCommand(perform: cancel)
-    }
-
-    private func save() { dispatch(draft.saveCommand) }
-    private func cancel() { dispatch(SpaceDraft.cancelCommand) }
-
-    /// The space as it will look: the resolved theme's gradient with the icon and name in its scheme's ink.
-    private var preview: some View {
-        let resolved = resolveTheme(draft.theme)
-        let ink: Color = resolved.scheme == .dark ? .white : .black
-        let name = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ThemePadPreview(theme: resolved)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.content.cornerRadius.value, style: .continuous))
-            .overlay(alignment: .leading) {
-                HStack(spacing: m.padding.value / 2) {
-                    SpaceGlyph(icon: draft.icon, dot: resolved.gradient.first?.swiftUI ?? .gray)
-                    Text(name.isEmpty ? OverlayCopy.spaceNamePlaceholder : name).font(.headline)
-                }
-                .foregroundStyle(ink.opacity(0.8))
-                .padding(.horizontal, m.padding.value)
-            }
-            .frame(height: m.previewHeight.value)
-    }
-
-    private var iconPicker: some View {
-        let side = m.iconButtonSize.value
-        let perRow = 8
-        let rows = stride(from: 0, to: NamedIcon.allCases.count, by: perRow).map { Array(NamedIcon.allCases[$0..<min($0 + perRow, NamedIcon.allCases.count)]) }
-        return VStack(alignment: .leading, spacing: m.padding.value / 4) {
-            HStack(spacing: m.padding.value / 4) {
-                TextField(OverlayCopy.emojiPlaceholder, text: Binding(get: { draft.emoji }, set: { draft.setEmoji($0) }))
-                    .spaceToolsID("emoji")
-                    .focused($emojiFocused)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: side * 2.5)
-                choice(selected: draft.icon == SpaceIcon.none, help: OverlayCopy.noIcon) {
-                    Circle().fill(draft.theme.colors.first?.swiftUI ?? .gray).frame(width: side / 3, height: side / 3)
-                } action: { draft.icon = SpaceIcon.none }.spaceToolsID("icon-none")
-            }
-            HStack {
-                TextField("SF Symbol name", text: $symbolDraft)
-                    .onChange(of: symbolDraft) { _, value in
-                        if value.isEmpty, case .custom(.symbol) = draft.icon { draft.icon = .none }
-                        else if NSImage(systemSymbolName: value, accessibilityDescription: nil) != nil { draft.icon = .custom(.symbol(value)) }
-                    }.textFieldStyle(.roundedBorder).spaceToolsID("symbol")
-                Button("Emoji & Symbols…") {
-                    emojiFocused = true
-                    Task { @MainActor in await Task.yield(); NSApp.orderFrontCharacterPalette(nil) }
-                }
-            }
-            ForEach(rows, id: \.self) { row in
-                HStack(spacing: m.padding.value / 4) {
-                    ForEach(row, id: \.self) { name in
-                        choice(selected: draft.icon == .custom(.named(name)), help: name.rawValue.capitalized) {
-                            Image(systemName: NamedIconSymbol.of(name))
-                        } action: { draft.icon = .custom(.named(name)); symbolDraft = "" }
-                    }
-                }
-            }
-        }
-    }
-
-    private func choice<Label: View>(selected: Bool, help: String, @ViewBuilder label: () -> Label, action: @escaping () -> Void) -> some View {
-        let side = m.iconButtonSize.value
-        return Button(action: action) {
-            label()
-                .frame(width: side, height: side)
-                .background(RoundedRectangle(cornerRadius: side / 4, style: .continuous)
-                    .fill(selected ? Color(nsColor: colors.focusRing).opacity(0.18) : Color(nsColor: colors.accessoryBackground)))
-                .overlay(RoundedRectangle(cornerRadius: side / 4, style: .continuous)
-                    .stroke(selected ? Color(nsColor: colors.focusRing) : .clear, lineWidth: m.ringWidth.value))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
-        .accessibilityLabel(help)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
 }
 
 /// A space icon as the dock draws it: the emoji, the named icon's symbol, or a dot in the theme color.
@@ -447,23 +241,6 @@ struct SpaceGlyph: View {
         case .custom(.emoji(let emoji)): Text(emoji)
         case .custom(.named(let name)): Image(systemName: NamedIconSymbol.of(name))
         case .custom(.symbol(let symbol)): Image(systemName: symbol)
-        }
-    }
-}
-
-/// A small preview of the resolved theme, with its texture (the Edit Space form's header).
-struct ThemePadPreview: View {
-    let theme: ResolvedTheme
-    var body: some View {
-        Canvas { context, size in
-            let cells = 80
-            for y in 0..<cells {
-                for x in 0..<cells {
-                    let color = themePreviewSample(theme, at: ThemePoint(x: (Double(x) + 0.5) / Double(cells), y: (Double(y) + 0.5) / Double(cells)))
-                    context.fill(Path(CGRect(x: Double(x) / Double(cells) * size.width, y: Double(y) / Double(cells) * size.height,
-                                             width: size.width / Double(cells) + 1, height: size.height / Double(cells) + 1)), with: .color(color.swiftUI))
-                }
-            }
         }
     }
 }

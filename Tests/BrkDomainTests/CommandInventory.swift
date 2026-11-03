@@ -113,6 +113,7 @@ enum CommandInventory {
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .fullscreenChanged(true)),
         .window(WindowID("ghost"), .becameKey), .window(WindowID("ghost"), .resignedKey), .window(WindowID("ghost"), .activity),
         .page(siteTarget.document.browser, .websitePolicyApplied(WebsitePolicyStatus(document: siteTarget.document, appearance: .automatic, themeApplied: false, frozen: false, error: nil))),
+        .page(siteTarget.document.browser, .securityChanged(PageSecurity(document: siteTarget.document, secureConnection: true, certificateError: true, insecureContent: false))),
         .websiteRulesLoaded(.profile(profile), .failed("fixture")),
         .extensionOperationFailed(.profile(profile), "fixture"),
         .extensionsRead(ExtensionCatalog(context: .profile(profile), extensions: [], error: "fixture")),
@@ -454,6 +455,7 @@ enum CommandInventory {
             case .loadFailed: "page.loadFailed"
             case .boostFailed: "page.boostFailed"
             case .websitePolicyApplied: "page.websitePolicyApplied"
+            case .securityChanged: "page.securityChanged"
             case .loadProgress: "page.loadProgress"
             case .rendererGone: "page.rendererGone"
             case .closedByPage: "page.closedByPage"

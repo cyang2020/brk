@@ -136,6 +136,7 @@ final class TabToolsTests: XCTestCase {
         let b = d.open("127.0.0.1:9/b")
         d.user(.tab(.cycleRecent(.next)))
         XCTAssertEqual(d.view.tabTools.recent?.selected, a)
+        XCTAssertEqual(d.current?.id, b, "a press switches nothing")
         d.user(.tabTools(.cancelRecent))
         XCTAssertEqual(d.current?.id, b)
         XCTAssertNil(d.view.tabTools.recent)

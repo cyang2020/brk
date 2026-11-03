@@ -40,10 +40,13 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [b])
         d.system(.window(window, .modifiersChanged(held: .control)))
         d.user(.tab(.cycleRecent(.next)), in: window)
-        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [a])
+        XCTAssertEqual(d.view(of: window).tabTools.recent?.items.map(\.id), [b, a], "only the private window's tabs")
+        XCTAssertEqual(d.view(of: window).tabTools.recent?.selected, a)
         d.user(.tab(.cycleRecent(.next)), in: window)
-        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [b])
+        XCTAssertEqual(d.view(of: window).tabTools.recent?.selected, b)
+        d.user(.tab(.cycleRecent(.next)), in: window)
         d.system(.window(window, .modifiersChanged(held: [])))
+        XCTAssertEqual(d.view(of: window).content.panes.map(\.tab), [a], "the release shows the selection")
         XCTAssertEqual(d.paneIDs, standard)
     }
 

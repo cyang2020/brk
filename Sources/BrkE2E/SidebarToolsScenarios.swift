@@ -122,18 +122,22 @@ enum SidebarToolsScenarios {
         let split = try app.view().content.split!
         try app.dispatch(.tabTools(.chooseIcon(split)))
         try panel(app, .button("moon"))
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        try app.click(.spaceToolsControl("emoji")); try app.press("cmd+a"); try app.type("🌵")
-        try app.click(.spaceToolsControl("save"))
+        // The space's icon through Change Space Icon… (Arc's Emoji / Icon popover).
+        try app.dispatch(.sidebar(.openDialog(.icon(.current))))
+        try SpaceToolsScenarios.clickWhenShown(app, "icon-picker-search")
+        try app.type("cactus")
+        try SpaceToolsScenarios.clickWhenShown(app, "icon-result-0")
+        try app.waitUntil("the space icon picked") { try app.view().space.icon == .custom(.emoji("🌵")) && app.view().dialog == nil }
         try app.flush(); try app.restart()
         try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space picker icon did not survive restart")
         try expect(try app.view().space.today.rows.contains { row in
             if case .split(let value) = row { return value.id == split && value.icon == .named(.moon) }; return false
         }, "split picker icon did not survive restart")
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        try app.click(.spaceToolsControl("emoji")); try app.press("cmd+a"); try app.type("🦊")
-        try app.click(.spaceToolsControl("cancel"))
-        try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space Cancel changed icon")
+        try app.dispatch(.sidebar(.openDialog(.icon(.current))))
+        try SpaceToolsScenarios.clickWhenShown(app, "icon-picker-search")
+        try app.type("fox"); try app.press("escape")
+        try app.waitUntil("Escape closes the space's popover") { try app.view().dialog == nil }
+        try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space Escape changed icon")
         try app.dispatch(.tabTools(.chooseIcon(folder))); try app.press("escape")
         try app.waitUntil("Escape closes the folder's popover") { if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }; return false }
         guard case .folder(let retained)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
@@ -142,8 +146,10 @@ enum SidebarToolsScenarios {
         try app.dispatch(.tabTools(.chooseIcon(split))); try app.press("escape")
         try app.waitUntil("Escape closes the split's popover") { if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }; return false }
         try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("moon"))
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        try app.click(.spaceToolsControl("icon-none")); try app.click(.spaceToolsControl("save"))
+        try app.dispatch(.sidebar(.openDialog(.icon(.current))))
+        try SpaceToolsScenarios.clickWhenShown(app, "icon-picker-icon")
+        try SpaceToolsScenarios.clickWhenShown(app, "icon-none")
+        try app.waitUntil("the space icon cleared") { try app.view().space.icon == .none && app.view().dialog == nil }
         try app.flush(); try app.restart()
         try expect(try app.view().space.icon == .none, "space clear did not persist")
         guard case .folder(let cleared)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }

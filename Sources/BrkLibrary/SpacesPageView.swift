@@ -226,7 +226,8 @@ private final class SpaceCardView: NSView {
         menu.autoenablesItems = false
         guard let row else { return menu }
         let id = row.id, index = index
-        menu.addItem(LibraryFilterButton.item(LibraryCopy.editSpace) { [dispatch] in dispatch(.sidebar(.openDialog(.editSpace(.space(id))))) })
+        // Arc opens the theme panel, the same one as Spaces > Edit Theme… and the space name's Edit Theme Color….
+        menu.addItem(LibraryFilterButton.item(LibraryCopy.editSpace) { [dispatch] in dispatch(.sidebar(.openDialog(.theme(.space(id))))) })
         menu.addItem(.separator())
         menu.addItem(LibraryFilterButton.item(LibraryCopy.moveEarlier, enabled: index > 0) { [dispatch] in dispatch(.space(.move(id, index: index - 1))) })
         menu.addItem(LibraryFilterButton.item(LibraryCopy.moveLater, enabled: index + 1 < count) { [dispatch] in dispatch(.space(.move(id, index: index + 1))) })
@@ -263,7 +264,7 @@ private final class SpaceCardView: NSView {
     }
 
     @objc private func focus() { if let row { dispatch(.space(.focus(row.id))) } }
-    @objc private func editSpace() { if let row { dispatch(.sidebar(.openDialog(.editSpace(.space(row.id))))) } }
+    @objc private func editSpace() { if let row { dispatch(.sidebar(.openDialog(.theme(.space(row.id))))) } }
 }
 
 /// The … button: a click shows the card's menu under it; so does a right-click.

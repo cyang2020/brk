@@ -104,8 +104,9 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// incognito. F2.
     public var profile: ProfileBadge?
     public var toolbarText: String? = nil
-    /// What the pill shows at rest (Arc: the host only, "127.0.0.1" for "127.0.0.1:8764/visual.html";
-    /// "about:blank" while a new tab has not committed its first document). Nil shows "Search or Enter URL…".
+    /// What the pill shows at rest (Arc: the host only, "127.0.0.1" for "127.0.0.1:8764/visual.html"; the whole
+    /// address, "http://127.0.0.1:8764/visual.html", while the site's Developer Mode is on; "about:blank" while a new
+    /// tab has not committed its first document). Nil shows "Search or Enter URL…".
     public var host: String? = nil
 }
 
@@ -266,7 +267,6 @@ public enum PaneContent: Sendable, Equatable, Codable {
 
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
     case newSpace
-    case editSpace(id: SpaceID, title: String, icon: SpaceIcon, theme: SpaceTheme)
     /// `title` is the name as the dock shows it ("Space N" for a blank one).
     case rename(id: SpaceID, title: String)
     case icon(id: SpaceID, icon: SpaceIcon)

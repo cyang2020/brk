@@ -266,7 +266,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     if let focusedPane, let t = state.displayedTab(focusedPane, in: id) {
         focusedTab = t
         pill.text = t.url.map(displayURL)
-        pill.host = awaitingFirstDocument(focusedPane, t) ? "about:blank" : t.url.map(displayHost)
+        // Arc: with the site's Developer Mode on (its site controls row) the pill shows the whole address, scheme
+        // and path included; off, the host only.
+        let developer = t.url.flatMap(SiteOrigin.init).map { state.sitePreferences(state.browsingContext(of: focusedPane)).rule(for: $0).developerMode == true } ?? false
+        pill.host = awaitingFirstDocument(focusedPane, t) ? "about:blank" : t.url.map { developer ? $0.absoluteString : displayHost($0) }
         // The toolbar shows the host like the pill (Arc P01-b), or the whole address with "Show full URL in toolbar".
         pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : pill.host ?? displayHost($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
@@ -397,7 +400,6 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     let dialog: SpaceDialogSnapshot? = switch session.dialog {
     case .newSpace?: .newSpace
-    case .editSpace(let sid)?: state.doc.spaces[sid].map { .editSpace(id: sid, title: $0.title, icon: $0.icon, theme: $0.theme) }
     case .rename(let sid)?: state.doc.spaces[sid] == nil ? nil : .rename(id: sid, title: state.displayTitle(of: sid))
     case .icon(let sid)?: state.doc.spaces[sid].map { .icon(id: sid, icon: $0.icon) }
     case .theme(let sid)?: state.doc.spaces[sid].map { .theme(id: sid, theme: $0.theme) }

@@ -119,7 +119,8 @@ public enum TabCommand: Hashable, Sendable, Codable {
     case focus(ItemID)
     /// Cmd+Opt+Down/Up: next or previous stop in sidebar order, no wrap; a split is one stop.
     case step(Step)
-    /// Ctrl+Tab / Ctrl+Shift+Tab: walk the frozen recent order; commits on Control release.
+    /// Ctrl+Tab / Ctrl+Shift+Tab: move the switcher's selection along the frozen recent order. The window switches
+    /// to the selection only when the walk commits (Control released, or any other command); Esc cancels it.
     case cycleRecent(Step)
     /// Cmd+W and the hover x. Today: archive. Pinned or Favorites: unload, keep the row ("Close and Keep Pinned").
     case close(ItemRef)
@@ -241,12 +242,12 @@ public enum SidebarCommand: Hashable, Sendable, Codable {
 public enum SpaceDialogRequest: Hashable, Sendable, Codable {
     /// Arc's Create a Space flow, in place of the sidebar.
     case newSpace
-    case editSpace(SpaceRef)
     /// Rename Space: the small centred dialog with the name selected.
     case rename(SpaceRef)
     /// Change Space Icon…: the Emoji / Icon popover under the space header.
     case icon(SpaceRef)
-    /// Edit Theme… and Edit Theme Color…: the theme panel. Its changes apply to the space as they are made.
+    /// Edit Theme…, Edit Theme Color… and the Library Space card's Edit Space…: the theme panel. Its changes apply to
+    /// the space as they are made.
     case theme(SpaceRef)
 }
 

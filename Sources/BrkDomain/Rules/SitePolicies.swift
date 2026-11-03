@@ -62,6 +62,18 @@ extension AppState {
         })
     }
 
+    /// The site controls' Secure / Insecure: https, and no certificate error or insecure content in the engine's
+    /// report for this document.
+    func secure(_ target: SiteTarget) -> Bool {
+        guard target.origin.url.scheme == "https" else { return false }
+        return security(target)?.secure ?? true
+    }
+
+    /// The engine's security report, if it is about the target's document.
+    func security(_ target: SiteTarget) -> PageSecurity? {
+        session.live[target.page]?.security.flatMap { $0.document == target.document ? $0 : nil }
+    }
+
     func siteSnapshots() -> [WindowID: SiteControlSnapshot] {
         Dictionary(uniqueKeysWithValues: session.sites.controls.compactMap { window in
             guard doc.windows[window] != nil else { return nil }
@@ -74,7 +86,7 @@ extension AppState {
                 rule: target.map { preferences.rule(for: $0.origin) } ?? SiteRule(),
                 appearance: preferences.appearance ?? WebsiteAppearance(rawValue: doc.settings.general.webAppearance.rawValue) ?? .automatic,
                 clearing: session.sites.running.values.contains { $0.target.page.window == window },
-                result: session.sites.results[window]))
+                result: session.sites.results[window], secure: target.map(secure) ?? false, security: target.flatMap(security)))
         })
     }
 }

@@ -137,6 +137,24 @@ public struct SitePermissionPrompt: Hashable, Sendable, Codable {
     }
 }
 
+/// A document's connection as Chromium reports it (the visible navigation entry's SSL status), for the site
+/// controls' Secure / Insecure row.
+public struct PageSecurity: Hashable, Sendable, Codable {
+    public let document: DocumentToken
+    /// The document came over TLS.
+    public let secureConnection: Bool
+    /// The certificate has an error Chromium counts against the page (expired, wrong name, unknown authority…) and the
+    /// page was loaded anyway.
+    public let certificateError: Bool
+    /// The page displayed or ran content that came over plain HTTP.
+    public let insecureContent: Bool
+    public var secure: Bool { secureConnection && !certificateError && !insecureContent }
+    public init(document: DocumentToken, secureConnection: Bool, certificateError: Bool, insecureContent: Bool) {
+        self.document = document; self.secureConnection = secureConnection
+        self.certificateError = certificateError; self.insecureContent = insecureContent
+    }
+}
+
 public struct WebsitePolicyStatus: Hashable, Sendable, Codable {
     public let document: DocumentToken
     public let appearance: WebsiteAppearance

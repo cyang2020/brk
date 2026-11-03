@@ -140,6 +140,8 @@ enum TabToolsScenarios {
         try ready(app, item, url)
         try app.dispatch(.tab(.cycleRecent(.next)))
         try expect(try app.view().tabTools.recent != nil, "recent panel state missing")
+        // Arc switches on Control's release: a press moves only the switcher's selection.
+        try expect(try app.view().tabTools.recent?.selected != item && currentTab(app.view())?.id == item, "a Tab press switched the page")
         try expect(try app.native().actual[ViewID.tabTool("switcher").identifier]?.hidden == false, "native switcher is not visible")
         _ = try app.screenshot("TabTools4-switcher")
         try app.press("escape")

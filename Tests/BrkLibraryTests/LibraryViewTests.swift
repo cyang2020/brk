@@ -224,6 +224,25 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(view.downloads.filterMenu().items.filter { $0.state == .on }.map(\.title), ["In Progress"])
     }
 
+    /// a Space card's pencil and its … menu's Edit Space… open Arc's theme panel for that space (P32-d), not a form
+    func testASpaceCardsEditOpensTheThemePanel() throws {
+        let space = SpaceID("s2")
+        let view = SpacesPageView(dispatch: { [unowned self] in self.sent.append($0) })
+        var snapshot = library(.spaces)
+        snapshot.spaces = [SpaceManagerRow(id: space, title: "Work", icon: .none, profileName: "Default", theme: resolveTheme(.default), tabCount: 0, active: true)]
+        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 600, height: 700), scheme: .light)
+        let edit = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == ViewID.spaceToolsControl("manager-edit-s2").identifier } as? NSButton)
+        edit.performClick(nil)
+        XCTAssertEqual(sent.last, .sidebar(.openDialog(.theme(.space(space)))))
+        sent = []
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                                     context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        let menu = try XCTUnwrap(edit.superview?.menu(for: event))
+        let index = try XCTUnwrap(menu.items.firstIndex { $0.title == "Edit Space…" })
+        menu.performActionForItem(at: index)
+        XCTAssertEqual(sent, [.sidebar(.openDialog(.theme(.space(space))))])
+    }
+
     /// day headers: today, yesterday, a date this year, a date with its year
     func testDaysAreTodayYesterdayThenTheDate() {
         let day: Int64 = 86_400_000

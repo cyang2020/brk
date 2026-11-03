@@ -47,8 +47,9 @@ struct NoticeMetricsTable: MetricGroup {
 /// Owner: tab tools. The Ctrl+Tab switcher as Arc draws it (P09-a/b): a white strip with rounded corners and a shadow,
 /// centred in the window, one card per recent tab or split (at most five, the order frozen when the walk began)
 /// showing its page and its icon and title; the chosen one sits on a theme-tinted rounded selection and its title is
-/// bold. Each Tab press moves the selection right (`.tab(.cycleRecent)`); the strip slides when the selection passes
-/// its last card. Page images come from `PageThumbnails`; a tab not drawn yet in this session shows a grey card with its
+/// bold. Each Tab press moves the selection right (`.tab(.cycleRecent)`) while the window keeps showing the page the
+/// walk started from; releasing Control shows the selected one. The strip slides when the selection passes its last
+/// card. Page images come from `PageThumbnails`; a tab not drawn yet in this session shows a grey card with its
 /// icon (or a grey square) in the middle.
 @MainActor
 final class TabSwitcherView: NSView {
