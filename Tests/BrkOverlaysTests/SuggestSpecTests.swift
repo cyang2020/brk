@@ -176,6 +176,16 @@ final class SuggestSpecTests: XCTestCase {
                        .tab(.focus(ItemID("exact"))), "scheme inference uses the domain URL policy")
     }
 
+    /// Filling an empty split pane (Add Split View), a typed address opens in that pane, so it leads even when a
+    /// tab already shows it (Arc 1.170, the 2026-11-03 capture P23a); the tab is still offered after it
+    func test_aBarFillingASplitPaneOpensTheTypedAddressBeforeSwitching() {
+        let url = "http://127.0.0.1:4000/docs.html"
+        var bar = commandBar([candidate("docs", "Docs", url)], [])
+        bar.fillsPane = true
+        let list = Suggest.rank(query: url, bar: bar, appName: "Brk")
+        XCTAssertEqual(list.prefix(2).map(\.command), [.commandBar(.submit(url)), .tab(.focus(ItemID("docs")))])
+    }
+
     /// listed actions match by label and Arc's trigger words and carry their shortcut, or none; one that the query
     /// begins is the top hit, above everything (an exact title or trigger first), the rest come last
     func test_listedActionsMatchByLabelAndCarryTheFormattedFirstKeyOrNone() {

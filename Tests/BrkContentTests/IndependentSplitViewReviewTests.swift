@@ -59,7 +59,7 @@ final class IndependentSplitViewReviewTests: XCTestCase {
         model.send(.commandBar(.open(.newTab)));model.send(.commandBar(.submit("https://test.example/source")));model.commit()
         let source=model.view.content.panes[0].tab;model.send(.tab(.focus(target)))
         let content=ContentAreaView(dispatch:{model.send($0)})
-        func render() { content.render(model.view.content,frames:WindowLayout.compute(model.view,contentSize:model.size),palette:Palette(model.view.theme),surface:{_ in nil}) }
+        func render() { content.render(model.view.content,frames:WindowLayout.compute(model.view,contentSize:model.size),theme:model.view.theme,palette:Palette(model.view.theme),surface:{_ in nil}) }
         render();let capturedOffer=model.view.content.drop?.offers[source];content.beginDrop(source)
         let frames=WindowLayout.compute(model.view,contentSize:model.size)
         let point=CGPoint(x:frames.contentArea.maxX-12,y:frames.contentArea.midY)
@@ -98,7 +98,7 @@ final class IndependentSplitViewReviewTests: XCTestCase {
         model.send(.commandBar(.open(.newTab)));model.send(.commandBar(.submit("https://test.example/source")));model.commit()
         let source=model.view.content.panes[0].tab;model.send(.tab(.focus(target)))
         let content=ContentAreaView(dispatch:{model.send($0)})
-        func render(){content.render(model.view.content,frames:WindowLayout.compute(model.view,contentSize:model.size),palette:Palette(model.view.theme),surface:{_ in nil})}
+        func render(){content.render(model.view.content,frames:WindowLayout.compute(model.view,contentSize:model.size),theme:model.view.theme,palette:Palette(model.view.theme),surface:{_ in nil})}
         render();content.beginDrop(source)
         let area=WindowLayout.compute(model.view,contentSize:model.size).contentArea
         let point=CGPoint(x:area.maxX-12,y:area.midY)

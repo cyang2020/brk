@@ -70,7 +70,8 @@ public struct MetricsTable: MetricGroup {
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
     public let find = FindMetrics()
-    public let splitTools = SplitToolsMetrics()
+    public let boostPanel = BoostPanelMetrics()
+    public let capture = CaptureMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -182,6 +183,13 @@ public struct ContentMetrics: MetricGroup {
     public let shadowOpacity = Metric(0.2, .guess("visual-and-copy.md Shadow token #000000 @ 0.2 (light); the draw value was not recovered"))
     public let highlightBorder = Metric(2.0, .arc("Content highlight border width", .medium))
     public let splitGap = Metric(10.0, .arc("Split view gap between panes", .low))
+    /// Each split pane's header (back, forward, reload, host, close) and the hairline under it.
+    public let paneHeaderHeight = Metric(32.0, .guess("measured on the 2026-11-03 Arc capture P23a: the header runs from the card top to the hairline 32 pt below"))
+    public let paneHeaderSeparator = Metric(1.0, .guess("measured on the 2026-11-03 Arc capture P23a: a 1 pt hairline under the pane header"))
+    public let paneHeaderButton = Metric(28.0, .guess("measured on the 2026-11-03 Arc capture P23a: header buttons on a 36 pt pitch, glyphs 14 pt"))
+    public let paneHeaderButtonPitch = Metric(36.0, .guess("measured on the 2026-11-03 Arc capture P23a: back, forward and reload centres 36 pt apart"))
+    public let paneHeaderEdge = Metric(21.0, .guess("measured on the 2026-11-03 Arc capture P23a: the first and last button centres 21 pt in from the card edges"))
+    public let paneHeaderFont = Metric(13.0, .guess("measured on the 2026-11-03 Arc capture P23a: the host reads at the sidebar's 13 pt"))
     public let maxPanes = Metric(4, .anatomy("visual-and-copy.md, Split view: first to fourth Split View page"))
     public let minPaneFraction = Metric(0.15, .guess("narrowest a pane may be dragged, as a fraction of the content width; Arc's minimum was not traced"))
 }
@@ -252,16 +260,48 @@ public struct LittleArcMetrics: MetricGroup {
     /// The other sizes Arc's `LittleBrowserWindow` uses in other branches; which branch is which was not traced.
     public let compactSize = Metric(CGSize(width: 800, height: 600), .arc("Little Arc default window size", .medium, note: "800 x 600 in another branch"))
     public let commandBarWidth = Metric(500.0, .arc("Little Arc command bar width", .low))
+    /// Without a page a Little Arc is its command bar alone (the 2026-11-03 capture P21a: 980 x 658 px at 2x).
+    public let commandBarSize = Metric(CGSize(width: 490, height: 329), .arc("Little Arc default window size", .medium, note: "490 x 329 in another branch"))
+    // The header over the page (measured on the 2026-11-03 Arc capture P21b, a 1185 x 832 window).
+    public let headerHeight = Metric(47.0, .guess("measured on the 2026-11-03 Arc capture P21b: the page starts 47 pt below the window top"))
+    public let lightsLeading = Metric(10.0, .guess("measured on the 2026-11-03 Arc capture P21b: the close light's left edge 10 pt from the window's"))
+    public let controlTop = Metric(8.0, .guess("measured on the 2026-11-03 Arc capture P21b: the pill and the Open in button start 8 pt below the top"))
+    public let pillLeading = Metric(83.0, .guess("measured on the 2026-11-03 Arc capture P21b: the host pill starts 83 pt from the left, after the lights"))
+    public let pillHeight = Metric(31.0, .guess("measured on the 2026-11-03 Arc capture P21b: the host pill is 31 pt tall"))
+    public let pillGap = Metric(9.0, .guess("measured on the 2026-11-03 Arc capture P21b: 9 pt between the pill and the Open in button"))
+    public let openInHeight = Metric(30.0, .guess("measured on the 2026-11-03 Arc capture P21b: the Open in button is 30 pt tall"))
+    public let openInTrailing = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P21b: the Open in button ends 7 pt from the right"))
+    public let pickerWidth = Metric(247.0, .guess("measured on the 2026-11-03 Arc capture P21c: the space picker is 247 pt wide"))
+    public let pickerTop = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P21c: the picker starts 4 pt below the top"))
+    public let pickerTrailing = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P21c: the picker ends 4 pt from the right"))
+    public let pickerSearchHeight = Metric(46.0, .guess("measured on the 2026-11-03 Arc capture P21c: the Search Spaces field row is 46 pt"))
+    public let pickerRowHeight = Metric(46.0, .guess("measured on the 2026-11-03 Arc capture P21c: space rows on a 46 pt pitch"))
+    public let pickerIcon = Metric(26.0, .guess("measured on the 2026-11-03 Arc capture P21c: 26 pt icon boxes, 13 pt in from the picker's edge"))
+    public let closeButton = Metric(24.0, .guess("measured on the 2026-11-03 Arc capture P21a: the bar's close button is 24 pt square, 22 pt from the right, centred on the input row"))
+    public let openInRadius = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P21b: the Open in button's corners about 7 pt"))
+    public let badgeRadius = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P21b: the ⌘O badge's corners about 4 pt"))
+    public let controlRadius = Metric(6.0, .guess("measured on the 2026-11-03 Arc captures P21a/c: the close button, collapse button and icon boxes round about 6 pt"))
+    public let pickerRadius = Metric(10.0, .guess("measured on the 2026-11-03 Arc capture P21c: the space picker's corners about 10 pt"))
 }
 
-/// Peek (Arc: `modalV2`): a card over the content area. Its geometry was not recovered from Arc; these are ours.
+/// Peek (Arc: `modalV2`): a card over the content area with a column of round buttons beside it. Arc's modal frame
+/// math was not traced; the values are measured on the 2026-11-03 paired capture (P22a, 1280 x 776 window).
 public struct PeekMetrics: MetricGroup {
-    /// The Peek card is the content area inset by this on every side.
-    public let inset = Metric(40.0, .guess("Peek card inset from the content area; Arc's modal frame math was not traced"))
-    public let cornerRadius = Metric(12.0, .guess("Peek card corner radius; visual-and-copy.md shows a rounded modal, the value was not traced"))
-    public let shadowRadius = Metric(24.0, .guess("Peek card shadow radius; not traced"))
-    /// The hint strip under the Peek card ("Click “Open in” to move this page in a full window, or ⌘W to close").
-    public let hintHeight = Metric(28.0, .guess("height of the Peek and Little Arc hint strip; not traced"))
+    /// The card's left edge from the content area's (333 - 228 on the capture).
+    public let leadingInset = Metric(105.0, .guess("measured on the 2026-11-03 Arc capture P22a: card left edge 105 pt right of the content area's"))
+    /// The card's right edge from the content area's (1270 - 1175 on the capture), room for the button column.
+    public let trailingInset = Metric(95.0, .guess("measured on the 2026-11-03 Arc capture P22a: card right edge 95 pt left of the content area's"))
+    public let verticalInset = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P22a: card 12 pt below the window top and 12 pt above its bottom"))
+    public let cornerRadius = Metric(6.0, .derived(rule: "the capture's card corner matches the content card's", from: ["Content card corner radius"]))
+    public let shadowRadius = Metric(18.0, .guess("Peek card shadow radius; the capture shows a soft shadow, the value was not traced"))
+    /// The three round buttons (close, open as tab, open in split) beside the card's top right corner.
+    public let controlSize = Metric(34.0, .guess("measured on the 2026-11-03 Arc capture P22a: white circles 34 pt across"))
+    public let controlGap = Metric(13.0, .guess("measured on the 2026-11-03 Arc capture P22a: 13 pt between the card and the circles"))
+    public let controlTop = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P22a: the first circle's top 7 pt below the card's"))
+    public let controlPitch = Metric(44.0, .guess("measured on the 2026-11-03 Arc capture P22a: circle centres 44 pt apart"))
+    public let controlGlyph = Metric(15.0, .guess("measured on the 2026-11-03 Arc capture P22a: the glyphs are about 15 pt"))
+    /// The page under an open Peek is washed with the window color (white reads #F7F4F1 under the #F2EAE4 theme).
+    public let backdropAlpha = Metric(0.55, .guess("measured on the 2026-11-03 Arc capture P22a: white under the Peek reads 55 percent toward the theme color"))
 }
 
 /// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). Like Arc's, its panel replaces
@@ -335,13 +375,6 @@ public struct FindMetrics: MetricGroup {
     public let actionWidth = Metric(92.0, .guess("Minimum width for readable replacement action labels"))
 }
 
-public struct SplitToolsMetrics: MetricGroup {
-    public let width = Metric(240.0, .guess("Compact native split-toolbar width; Arc pixel parity is unmeasured"))
-    public let height = Metric(28.0, .guess("Native small split-toolbar control height"))
-    public let inset = Metric(6.0, .guess("Split-toolbar inset within the content area"))
-    public let overlayGap = Metric(4.0, .guess("Gap between Find and split controls"))
-}
-
 /// Local CLI answer document; these are Brk choices, not claimed Arc pixel measurements.
 public struct AIMetrics: MetricGroup {
     public let width = Metric(420.0, .guess("readable answer column beside the source page"))
@@ -358,4 +391,32 @@ public struct AIMetrics: MetricGroup {
     public let bodyFont = Metric(13.0, .guess("selectable answer body font"))
     public let cornerRadius = Metric(12.0, .guess("answer document rounded corners"))
     public let borderWidth = Metric(1.0, .guess("answer panel hairline"))
+}
+
+/// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).
+public struct BoostPanelMetrics: MetricGroup {
+    public let size = Metric(CGSize(width: 183, height: 588), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the panel window, 366 x 1176 px"))
+    public let codeWidth = Metric(480.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the Code page widens the panel to 960 px"))
+    public let cornerRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: transparent panel corners"))
+    public let headerHeight = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: header with its hairline at y 79 px"))
+    public let tileHeight = Metric(38.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tiles 76 px tall"))
+    public let tileRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tile corners"))
+    public let settingsRadius = Metric(10.0, .guess("My Boost settings card: matches the tiles; Arc's menu was not captured"))
+    public let zapHintHeight = Metric(55.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 Zap strip, hairline at 1416 px to the card bottom at 1526 px"))
+    public let zapOutline = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 the page card's #575757 outline while Zap is on, 6 px"))
+}
+
+/// Arc's capture mode, measured on this run's 2x shots (P33-a/b/c/d-arc.png).
+public struct CaptureMetrics: MetricGroup {
+    public let pageDim = Metric(0.224, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: white page under the mask reads #C6C6C6"))
+    public let sidebarFade = Metric(0.55, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: sidebar text #1A1A1A reads #959594 on an unchanged background"))
+    public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
+    public let hintCardRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
+    public let hintCardBottom = Metric(35.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card ends 70 px above the page bottom"))
+    public let lessonHeight = Metric(46.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip, 92 px"))
+    public let lessonRadius = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip corners"))
+    public let menuCard = Metric(CGSize(width: 273, height: 354), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card, 546 x 708 px"))
+    public let menuRadius = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card corners"))
+    public let menuGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card starts 6 px right of the selection"))
+    public let menuRowPitch = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c rows 80 px apart"))
 }

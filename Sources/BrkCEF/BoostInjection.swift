@@ -93,7 +93,7 @@ extension ChromePage {
         new Promise(resolve=>{
           if(location.origin!==\(Self.jsString(target.origin.value))){resolve(null);return;}
           if(globalThis.__brkZapCancel)globalThis.__brkZapCancel();
-          let current=null;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#f2c524;mix-blend-mode:multiply;border-radius:4px;box-sizing:border-box;display:none';document.documentElement.append(highlight);
+          let current=null;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#ffcc02;mix-blend-mode:multiply;border-radius:4px;box-sizing:border-box;display:none';document.documentElement.append(highlight);
           const place=()=>{if(!current||!current.isConnected){highlight.style.display='none';return;}const r=current.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:(r.left-2)+'px',top:(r.top-2)+'px',width:(r.width+4)+'px',height:(r.height+4)+'px'});};
           const ignored=t=>!t||t===document.documentElement||t===document.body||t===highlight;
           const finish=value=>{highlight.remove();for(const [n,f] of listeners)window.removeEventListener(n,f,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};

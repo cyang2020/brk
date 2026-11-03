@@ -40,8 +40,8 @@ import BrkUIKit
     func render(_ value: CaptureSnapshot?, frames: WindowFrames, peek: PeekSnapshot?) {
         // A full-page capture has nothing to select: Arc's page stays as it is until the copied toast (P33-d).
         guard let value, value.request.mode != .fullPage else { isHidden = true; snapshot = nil; window?.invalidateCursorRects(for: self); return }
-        let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.rect
-            ?? (peek?.page == value.request.document.browser.page ? frames.peek.map { CGRect(x:$0.minX,y:$0.minY,width:$0.width,height:max(0,$0.height-Metrics.peek.hintHeight.value)) } : nil)
+        let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.page
+            ?? (peek?.page == value.request.document.browser.page ? frames.peek : nil)
         guard let rect else { isHidden = true; snapshot = nil; return }
         let fresh = snapshot?.request.id != value.request.id
         let retaken = snapshot?.image != nil && value.image == nil && !value.rendering
@@ -56,9 +56,9 @@ import BrkUIKit
         menuCard.isHidden = !showMenu
         if showMenu {
             menuCard.render(privateCapture: !value.canSaveToLibrary)
-            let size = CaptureMenuCard.size
-            var x = selection.maxX + 3
-            if x + size.width > bounds.maxX - 6 { x = max(bounds.minX + 6, selection.minX - 3 - size.width) }
+            let size = Metrics.capture.menuCard.value, gap = Metrics.capture.menuGap.value
+            var x = selection.maxX + gap
+            if x + size.width > bounds.maxX - 6 { x = max(bounds.minX + 6, selection.minX - gap - size.width) }
             let y = min(max(bounds.minY + 6, selection.minY), bounds.maxY - 6 - size.height)
             menuCard.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
         }
@@ -73,10 +73,10 @@ import BrkUIKit
         let cut = selection.isEmpty ? nil : selection
         // The sidebar and window frame fade; the page dims to grey (P33-a: white → #C6C6C6, black text → #959594).
         let outside = NSBezierPath(rect: bounds); outside.append(NSBezierPath(rect: page)); outside.windingRule = .evenOdd
-        NSColor.white.withAlphaComponent(0.55).setFill(); outside.fill()
+        NSColor.white.withAlphaComponent(Metrics.capture.sidebarFade.value).setFill(); outside.fill()
         let dim = NSBezierPath(rect: page)
         if let cut { dim.append(NSBezierPath(rect: cut)); dim.windingRule = .evenOdd }
-        NSColor.black.withAlphaComponent(0.224).setFill(); dim.fill()
+        NSColor.black.withAlphaComponent(Metrics.capture.pageDim.value).setFill(); dim.fill()
         if let cut, cut.width > 12, cut.height > 10 {
             let line = CGRect(x: cut.minX + 4.5, y: cut.maxY - 8, width: cut.width - 9, height: 4)
             NSColor(srgbRed: 0x99 / 255.0, green: 0xBD / 255.0, blue: 0xE7 / 255.0, alpha: 1).setFill()
@@ -89,8 +89,9 @@ import BrkUIKit
 
     /// The white card at the bottom centre with its soft colour glow (P33-a).
     private func drawHintCard(portrait: Bool) {
-        let card = CGRect(x: page.midX - 177.5, y: page.maxY - 35 - 66, width: 355, height: 66)
-        let path = NSBezierPath(roundedRect: card, xRadius: 14, yRadius: 14)
+        let size = Metrics.capture.hintCard.value, radius = Metrics.capture.hintCardRadius.value
+        let card = CGRect(x: page.midX - size.width / 2, y: page.maxY - Metrics.capture.hintCardBottom.value - size.height, width: size.width, height: size.height)
+        let path = NSBezierPath(roundedRect: card, xRadius: radius, yRadius: radius)
         for (color, radius) in [(NSColor(srgbRed: 1, green: 0.62, blue: 0.72, alpha: 0.55), CGFloat(34)), (NSColor(srgbRed: 0.55, green: 0.62, blue: 1, alpha: 0.6), 22)] {
             NSGraphicsContext.saveGraphicsState()
             let glow = NSShadow(); glow.shadowColor = color; glow.shadowBlurRadius = radius; glow.shadowOffset = .zero; glow.set()
@@ -101,8 +102,8 @@ import BrkUIKit
         let text = NSAttributedString(string: portrait ? "Drag to frame a portrait, or click to capture it" : "Drag to capture a portion of this page",
                                       attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold),
                                                    .foregroundColor: NSColor(srgbRed: 0x67 / 255.0, green: 0x47 / 255.0, blue: 0xB0 / 255.0, alpha: 1)])
-        let size = text.size()
-        text.draw(at: CGPoint(x: card.midX - size.width / 2, y: card.midY - size.height / 2))
+        let textSize = text.size()
+        text.draw(at: CGPoint(x: card.midX - textSize.width / 2, y: card.midY - textSize.height / 2))
     }
 
     /// "Next time, hold ⇧⌘ and drag your mouse to capture any time." in the toast style (P15-a), top right.
@@ -114,11 +115,11 @@ import BrkUIKit
         let after = NSAttributedString(string: "and drag your mouse to capture any time.", attributes: ink)
         let chip = CGSize(width: keys.size().width + 20, height: 28)
         let width = 14 + before.size().width + 8 + chip.width + 8 + after.size().width + 16
-        let strip = CGRect(x: page.maxX - 8 - width, y: page.minY + 9, width: width, height: 46)
+        let strip = CGRect(x: page.maxX - 8 - width, y: page.minY + 9, width: width, height: Metrics.capture.lessonHeight.value)
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.12); shadow.shadowBlurRadius = 6; shadow.shadowOffset = CGSize(width: 0, height: -1); shadow.set()
         NSColor(srgbRed: 0xE8 / 255.0, green: 0xF6 / 255.0, blue: 0xF6 / 255.0, alpha: 1).setFill()
-        NSBezierPath(roundedRect: strip, xRadius: 12, yRadius: 12).fill()
+        NSBezierPath(roundedRect: strip, xRadius: Metrics.capture.lessonRadius.value, yRadius: Metrics.capture.lessonRadius.value).fill()
         NSGraphicsContext.restoreGraphicsState()
         var x = strip.minX + 14
         before.draw(at: CGPoint(x: x, y: strip.midY - before.size().height / 2)); x += before.size().width + 8
@@ -219,12 +220,11 @@ import BrkUIKit
 /// The menu card beside a finished selection (P33-c): a Send To… field, then Save to Library, Copy, Save…, Send via
 /// iMessage… | Edit, Retake | New Easel. Brk has no iMessage or Easel hand-off here, so those rows are shown disabled.
 @MainActor final class CaptureMenuCard: NSView, NSTextFieldDelegate {
-    static let size = CGSize(width: 273, height: 354)
     struct Row { let action: CaptureAction?; let title: String; let symbol: String; let id: String }
     static let groups: [[Row]] = [
         [Row(action: .library, title: "Save to Library", symbol: "circle", id: "library"), Row(action: .copy, title: "Copy", symbol: "doc.on.doc", id: "copy"),
-         Row(action: .file, title: "Save…", symbol: "square.and.arrow.down.fill", id: "file"), Row(action: nil, title: "Send via iMessage…", symbol: "message.fill", id: "imessage")],
-        [Row(action: .edit, title: "Edit", symbol: "pencil.tip.crop.circle", id: "edit"), Row(action: .retake, title: "Retake", symbol: "arrow.counterclockwise", id: "retake")],
+         Row(action: .file, title: "Save…", symbol: "square.and.arrow.down", id: "file"), Row(action: nil, title: "Send via iMessage…", symbol: "message.fill", id: "imessage")],
+        [Row(action: .edit, title: "Edit", symbol: "pencil.circle", id: "edit"), Row(action: .retake, title: "Retake", symbol: "arrow.counterclockwise", id: "retake")],
         [Row(action: nil, title: "New Easel", symbol: "plus", id: "easel")],
     ]
     var chosen: ((CaptureAction) -> Void)?
@@ -236,7 +236,7 @@ import BrkUIKit
     override init(frame: CGRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor; layer?.cornerRadius = 9; layer?.masksToBounds = false
+        layer?.backgroundColor = NSColor.white.cgColor; layer?.cornerRadius = Metrics.capture.menuRadius.value; layer?.masksToBounds = false
         layer?.shadowColor = NSColor.black.cgColor; layer?.shadowOpacity = 0.2; layer?.shadowRadius = 10; layer?.shadowOffset = CGSize(width: 0, height: -3)
         identify(.tabTool("capture-menu"))
         field.placeholderString = "Send To…"; field.isBordered = false; field.drawsBackground = false; field.focusRingType = .none
@@ -279,7 +279,7 @@ import BrkUIKit
             for _ in group {
                 let view = rows[index].1; index += 1
                 guard !view.isHidden else { continue }
-                view.frame = CGRect(x: 8, y: y, width: bounds.width - 16, height: 36); y += 40; shown += 1
+                view.frame = CGRect(x: 8, y: y, width: bounds.width - 16, height: 36); y += Metrics.capture.menuRowPitch.value; shown += 1
             }
             if shown > 0, g < Self.groups.count - 1 { separators.append(y + 2); y += 9 }
         }

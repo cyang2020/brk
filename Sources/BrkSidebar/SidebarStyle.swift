@@ -24,8 +24,14 @@ struct SidebarDrawMetrics: MetricGroup {
     let titleLeading = Metric(37.0, .anatomy("cra L141: row text starts at x 45 = selection inset 8 + 37"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(6.0, .guess("the hover button's right padding inside the selection: (36 - 24) / 2"))
-    let splitSlashHeight = Metric(14.0, .guess("height of the TabCellSlash stroke between split panes"))
-    let splitSlashSlant = Metric(4.0, .guess("horizontal run of the TabCellSlash stroke"))
+    // Split rows: each pane a TabCellBackgroundChild box inside the row (measured on the 2026-11-03 Arc capture P23a/b).
+    let splitSegmentInset = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane boxes 4 pt inside the row's selection"))
+    let splitSegmentGap = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: 4 pt between pane boxes"))
+    let splitSegmentRadius = Metric(8.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane box corners about 8 pt"))
+    let splitSegmentIconLeading = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's icon 7 pt inside its box"))
+    let splitSegmentTitleLeading = Metric(36.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's title 36 pt inside its box"))
+    let peekMarkerIcon = Metric(14.0, .guess("measured on the 2026-11-03 Arc capture P22a: a 14 pt icon in the 24 pt Peek marker"))
+    let splitSegmentTitleMinWidth = Metric(80.0, .guess("the 2026-11-03 Arc capture P23b: four pane boxes of about 50 pt show icons only, two of 100 pt show titles"))
 
     // Title row (cra L1215, Arc 1.170 AX tree).
     let navButton = Metric(32.0, .anatomy("cra L1215: Go back, Go forward and Reload are 32 x 32"))
@@ -36,6 +42,7 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // URL pill.
     let pillTextLeading = Metric(12.0, .anatomy("cra L1219: pill at x 8, host text at x 20"))
+    let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
     let pillLoadingSweep = Metric(1.2, .guess("seconds per pass of the loading shimmer across the pill"))
 

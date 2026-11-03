@@ -13,27 +13,32 @@ public final class BoostPanel {
     private var window: BoostPanelWindow?
     private var shown: String?
     private weak var parent: NSWindow?
+    /// Where the browser window was at the last render: the panel moves with it (it is not a child window;
+    /// host-window plumbing stays in BrkCEF), and keeps any offset the user dragged it to.
+    private var parentFrame: CGRect?
+    private var closing: NSObjectProtocol?
 
     public init(dispatch: @escaping Dispatch) { editor = BoostEditorView(dispatch: dispatch) }
 
     /// Shows the panel beside `parent` while there is an editor; hides it otherwise.
     public func render(_ value: BoostEditor?, parent: NSWindow?) {
-        guard let value, let parent, parent.isVisible else { close(); return }
+        guard let value, let parent, parent.isVisible, !parent.isMiniaturized else { close(); return }
         let panel = window ?? makeWindow()
-        if panel.parent !== parent {
-            panel.parent?.removeChildWindow(panel)
-            parent.addChildWindow(panel, ordered: .above)
-            self.parent = parent
-        }
+        if self.parent !== parent { follow(parent) }
         let size = BoostEditorView.size(for: value.page)
         if shown != value.id {
             shown = value.id
             panel.setFrame(Self.initialFrame(size: size, parent: parent.frame, screen: (parent.screen ?? NSScreen.main)?.visibleFrame), display: false)
-        } else if panel.frame.size != size {
+        } else {
+            var frame = panel.frame
+            if let old = parentFrame, old.origin != parent.frame.origin {
+                frame.origin.x += parent.frame.minX - old.minX; frame.origin.y += parent.frame.maxY - old.maxY
+            }
             // The Code page grows to the left: the right edge and the top stay where the user left them.
-            let old = panel.frame
-            panel.setFrame(CGRect(x: old.maxX - size.width, y: old.maxY - size.height, width: size.width, height: size.height), display: true)
+            if frame.size != size { frame = CGRect(x: frame.maxX - size.width, y: frame.maxY - size.height, width: size.width, height: size.height) }
+            if frame != panel.frame { panel.setFrame(frame, display: true) }
         }
+        parentFrame = parent.frame
         editor.frame = CGRect(origin: .zero, size: size)
         editor.render(value)
         if !panel.isVisible { panel.orderFront(nil) }
@@ -41,7 +46,8 @@ public final class BoostPanel {
 
     /// Centred on the window's right edge, its top a third of the way down the window (P37-a), kept on screen.
     static func initialFrame(size: CGSize, parent: CGRect, screen: CGRect?) -> CGRect {
-        var frame = CGRect(x: parent.maxX - 91.5 - (size.width - BoostEditorView.styleSize.width), y: parent.maxY - parent.height / 3 - size.height,
+        let base = Metrics.boostPanel.size.value.width
+        var frame = CGRect(x: parent.maxX - base / 2 - (size.width - base), y: parent.maxY - parent.height / 3 - size.height,
                            width: size.width, height: size.height)
         if let screen {
             frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - frame.width)
@@ -50,17 +56,31 @@ public final class BoostPanel {
         return frame
     }
 
+    private func follow(_ parent: NSWindow) {
+        self.parent = parent
+        if let closing { NotificationCenter.default.removeObserver(closing) }
+        // The browser window going away takes its Boost panel with it.
+        closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: parent, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.close() }
+        }
+    }
+
     private func makeWindow() -> BoostPanelWindow {
-        let panel = BoostPanelWindow(contentRect: CGRect(origin: .zero, size: BoostEditorView.styleSize), styleMask: [.borderless], backing: .buffered, defer: false)
+        let size = Metrics.boostPanel.size.value
+        let panel = BoostPanelWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.appearance = NSAppearance(named: .aqua)
-        let content = NSView(frame: CGRect(origin: .zero, size: BoostEditorView.styleSize))
+        // A utility panel: above the browser windows while Brk is active, gone while another app is.
+        panel.level = .floating
+        panel.hidesOnDeactivate = true
+        panel.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        let content = NSView(frame: CGRect(origin: .zero, size: size))
         content.wantsLayer = true
-        content.layer?.cornerRadius = 10
+        content.layer?.cornerRadius = Metrics.boostPanel.cornerRadius.value
         content.layer?.masksToBounds = true
         content.autoresizesSubviews = false
         content.addSubview(editor)
@@ -71,10 +91,8 @@ public final class BoostPanel {
     }
 
     private func close() {
-        shown = nil
-        guard let window else { return }
-        window.parent?.removeChildWindow(window)
-        window.orderOut(nil)
+        shown = nil; parentFrame = nil
+        window?.orderOut(nil)
     }
 }
 
@@ -106,8 +124,8 @@ enum BoostInk {
 /// The panel's content: Arc's first-run card, the visual editor and the Code page, plus the My Boost ▾ settings card.
 @MainActor
 public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
-    static let styleSize = CGSize(width: 183, height: 588)
-    static let codeSize = CGSize(width: 480, height: 588)
+    static var styleSize: CGSize { Metrics.boostPanel.size.value }
+    static var codeSize: CGSize { CGSize(width: Metrics.boostPanel.codeWidth.value, height: styleSize.height) }
     static func size(for page: BoostEditorPage) -> CGSize { page == .css || page == .javascript ? codeSize : styleSize }
 
     private let dispatch: Dispatch
@@ -242,7 +260,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         codeStatus.stringValue = value.message ?? (value.page == .javascript
             ? (value.draft.javascript.isEmpty ? "JavaScript runs only after you allow it with the hammer."
                : value.draft.javascriptApproved ? "Allowed. This JavaScript runs on matching pages." : "Not running yet. Press the hammer to review and allow it.")
-            : "CSS applies to the page as you type. Pick an element with the eyedropper.")
+            : "")
         settings.render(value.draft, origin: value.target?.origin)
         settings.isHidden = !menuOpen || codePage || value.page == .intro
         needsLayout = true
@@ -366,7 +384,8 @@ final class BoostTile: BoostPressable {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override func draw(_ dirtyRect: NSRect) {
         let fill = active ? BoostInk.tileActive : pressed ? BoostInk.rgb(0xDFE1E3) : BoostInk.tile
-        fill.setFill(); NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
+        let radius = Metrics.boostPanel.tileRadius.value
+        fill.setFill(); NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
         let ink = !isEnabled ? BoostInk.rgb(0xC6C8CA) : active ? BoostInk.glyphActive : BoostInk.glyph
         if let title {
             let font = NSFont.systemFont(ofSize: 14.5, weight: .semibold)
@@ -467,7 +486,7 @@ final class BoostColorSquare: NSView {
     var changed: ((BoostPoint?, BoostPoint?) -> Void)?
     private var tint: BoostPoint?, text: BoostPoint?
     private var dragging: Int?
-    private var lastSent = Date.distantPast
+    private var lastSent: TimeInterval = 0
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     private var inner: CGRect { bounds.insetBy(dx: 7, dy: 7) }
@@ -514,21 +533,21 @@ final class BoostColorSquare: NSView {
         let p = convert(event.locationInWindow, from: nil)
         let big = center(of: tint ?? BoostStyle.restingTint), small = center(of: text ?? BoostStyle.restingText)
         dragging = hypot(p.x - small.x, p.y - small.y) <= 13 ? 1 : 0
-        if hypot(p.x - big.x, p.y - big.y) > 19 && dragging == 0 { move(to: p, force: true); return }
-        move(to: p, force: false)
+        if hypot(p.x - big.x, p.y - big.y) > 19 && dragging == 0 { move(to: p, force: true, at: event.timestamp); return }
+        move(to: p, force: false, at: event.timestamp)
     }
-    override func mouseDragged(with event: NSEvent) { move(to: convert(event.locationInWindow, from: nil), force: false) }
+    override func mouseDragged(with event: NSEvent) { move(to: convert(event.locationInWindow, from: nil), force: false, at: event.timestamp) }
     override func mouseUp(with event: NSEvent) {
-        move(to: convert(event.locationInWindow, from: nil), force: true)
+        move(to: convert(event.locationInWindow, from: nil), force: true, at: event.timestamp)
         dragging = nil
     }
-    private func move(to location: CGPoint, force: Bool) {
+    private func move(to location: CGPoint, force: Bool, at time: TimeInterval = 0) {
         guard let dragging else { return }
         if dragging == 1 { text = point(at: location) } else { tint = point(at: location) }
         needsDisplay = true
         // Each change re-injects page CSS: send at most ~25 per second while dragging, and always the last position.
-        guard force || Date().timeIntervalSince(lastSent) > 0.04 else { return }
-        lastSent = Date()
+        guard force || time - lastSent > 0.04 else { return }
+        lastSent = time
         changed?(tint, text)
     }
 }
@@ -618,8 +637,8 @@ final class BoostIntroView: NSView {
         BoostInk.introBottom.setFill(); wave.fill()
         drawBadge(center: CGPoint(x: bounds.midX, y: 293))
         let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineHeightMultiple = 0.92
-        let title = NSAttributedString(string: "Edit the Internet with Boosts", attributes: [.font: NSFont.systemFont(ofSize: 20, weight: .bold), .foregroundColor: BoostInk.blue, .paragraphStyle: paragraph])
-        title.draw(with: CGRect(x: 10, y: 338, width: bounds.width - 20, height: 80), options: [.usesLineFragmentOrigin])
+        let title = NSAttributedString(string: "Edit the Internet with Boosts", attributes: [.font: NSFont.systemFont(ofSize: 22, weight: .bold), .foregroundColor: BoostInk.blue, .paragraphStyle: paragraph])
+        title.draw(with: CGRect(x: 10, y: 341, width: bounds.width - 20, height: 84), options: [.usesLineFragmentOrigin])
         let line = NSMutableAttributedString(string: "Make ", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: BoostInk.introText, .paragraphStyle: paragraph])
         line.append(NSAttributedString(string: host, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .bold), .foregroundColor: BoostInk.rgb(0x7D7A85)]))
         line.append(NSAttributedString(string: " your own!", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: BoostInk.introText]))
@@ -676,7 +695,7 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
     override init(frame: CGRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor; layer?.cornerRadius = 10
+        layer?.backgroundColor = NSColor.white.cgColor; layer?.cornerRadius = Metrics.boostPanel.settingsRadius.value
         layer?.shadowColor = NSColor.black.cgColor; layer?.shadowOpacity = 0.18; layer?.shadowRadius = 8; layer?.shadowOffset = CGSize(width: 0, height: -2)
         layer?.masksToBounds = false
         identify(.boostControl("settings"))
@@ -734,34 +753,44 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
     }
 }
 
-/// Arc's Zap hint: a white strip across the bottom of the page card, "Click elements on the page to **Zap** them" (P37-c2).
+/// Arc's Zap mode on the page card (P37-c2): a dark outline around the card and a white strip across its bottom,
+/// "Click elements on the page to **Zap** them". Clicks go through to the page, where the picker takes them.
 @MainActor
 public final class BoostZapOverlayView: NSView {
     private let label = NSTextField(labelWithString: "")
     public init(dispatch: @escaping Dispatch) {
         super.init(frame: .zero)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor
         identify(.boostControl("zap-hint"))
-        let text = NSMutableAttributedString(string: "Click elements on the page to ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: BoostInk.rgb(0x1A1A1A)])
-        text.append(NSAttributedString(string: "Zap", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: BoostInk.rgb(0x1A1A1A)]))
-        text.append(NSAttributedString(string: " them", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: BoostInk.rgb(0x1A1A1A)]))
-        label.attributedStringValue = text; label.alignment = .center
+        let ink = BoostInk.rgb(0x1A1A1A), paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
+        let text = NSMutableAttributedString(string: "Click elements on the page to ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: ink, .paragraphStyle: paragraph])
+        text.append(NSAttributedString(string: "Zap", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: ink, .paragraphStyle: paragraph]))
+        text.append(NSAttributedString(string: " them", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: ink, .paragraphStyle: paragraph]))
+        label.attributedStringValue = text
         addSubview(label); isHidden = true
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
     public override var isFlipped: Bool { true }
-    /// `card`: the content card showing the Boost's page.
+    /// `card`: the page rect of the content card showing the Boost's page.
     public func render(_ editor: BoostEditor?, card: CGRect?) {
         guard let editor, editor.picking, editor.pickPurpose == .zap, let card else { isHidden = true; return }
         isHidden = false
-        frame = CGRect(x: card.minX, y: card.maxY - 55, width: card.width, height: 55)
-        label.frame = CGRect(x: 0, y: (55 - 18) / 2 + 1, width: bounds.width, height: 18)
+        frame = card
+        let height = Metrics.boostPanel.zapHintHeight.value
+        label.frame = CGRect(x: 0, y: bounds.height - height + (height - 18) / 2 + 1, width: bounds.width, height: 18)
+        needsDisplay = true
     }
     public override func draw(_ dirtyRect: NSRect) {
-        BoostInk.rgb(0xE9E9E9).setFill(); CGRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+        let height = Metrics.boostPanel.zapHintHeight.value, radius = Metrics.content.cornerRadius.value
+        let card = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+        NSGraphicsContext.saveGraphicsState(); card.addClip()
+        NSColor.white.setFill(); CGRect(x: 0, y: bounds.height - height, width: bounds.width, height: height).fill()
+        BoostInk.rgb(0xE9E9E9).setFill(); CGRect(x: 0, y: bounds.height - height, width: bounds.width, height: 1).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), xRadius: radius, yRadius: radius)
+        outline.lineWidth = Metrics.boostPanel.zapOutline.value
+        BoostInk.rgb(0x575757).setStroke(); outline.stroke()
     }
-    // The page under the strip keeps its clicks: Zap picks through Chromium, not through this view.
+    // The page under the outline and strip keeps its clicks: Zap picks through Chromium, not through this view.
     public override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
