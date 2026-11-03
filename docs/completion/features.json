@@ -3831,7 +3831,8 @@
         }
       ],
       "remaining": [
-        "None for the assigned transfer contract; final-source T1–T15 all pass. Parent unified integration regression remains its separate delivery gate."
+        "None for the assigned transfer contract; final-source T1–T15 all pass. Parent unified integration regression remains its separate delivery gate.",
+        "R3-4（2026-11-04，合并 0adfa4b1）：下载行的取消按钮真的停止传输（原生场景 LibraryDownload-Cancel：测试服务器在 491,520 / 4,194,304 字节处停发）。"
       ],
       "implementation": [
         "Sources/BrkBase/Page.swift",
@@ -4956,7 +4957,7 @@
       "description": "Grid of all spaces, search, reorder, \"Export into Folder\"",
       "historical_status": "not started",
       "status": "verified",
-      "acceptance": "Provide a searchable space grid, reorder controls and Export into Folder using local files.",
+      "acceptance": "Provide the Spaces grid as Arc's cards (no search box, Arc has none there), a drag handle to reorder, the card's … menu with Arc's four groups, and Export into Folder using local files.",
       "owner": "parent-ledger-reconciliation",
       "required_checks": [
         "unit",
@@ -5024,7 +5025,8 @@
       "remaining": [
         "The independently operable native path-confirmation export passes with real files. Optional OS Browse picker selection/confirmation remains unproven on this host.",
         "Arc 对照（run-20261103 P30）仍有差异或无参照：P30-a: 一致 | P30-b: 未比较（无参照；Brk 的 Spaces 页也不要搜索框） | P30-c: 要修（Space 组：卡片菜单按 Arc 的四组九项重排（Edit Space… 拆成 Change Space Icon… / Rename Space… / Edit Theme Color…，补 Set Profile、New Folder、Live Folders、Share Space，Export 带 Space 名并做子菜单），去掉 Move Left/Right）",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Library Spaces 卡片的 Edit Space…（菜单项和铅笔）改为打开主题面板，和 Spaces > Edit Theme… 同一个面板；旧的名字加图标表单已删；从 Library 打开主题面板后 Esc 先关面板再关 Library。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Library Spaces 卡片的 Edit Space…（菜单项和铅笔）改为打开主题面板，和 Spaces > Edit Theme… 同一个面板；旧的名字加图标表单已删；从 Library 打开主题面板后 Esc 先关面板再关 Library。",
+        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：Spaces 卡片的 … 菜单改成 Arc 的四组九项（去掉 Move Left/Right，十字拖柄真能拖动排序），卡片去描边、加 Arc 的软阴影和主题色底，站台 P30-a 10.5% / P30-c 8.7%；剩余：Library 打开时网页被挤窄重排（Arc 保持宽度平移），归内容区下一轮；菜单比 Arc 偏左约 6 点。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -6646,7 +6648,8 @@
       ],
       "remaining": [
         "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency.",
-        "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据"
+        "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据",
+        "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -8181,7 +8184,8 @@
       "remaining": [
         "No owned implementation gate remains. Parent wires the exported site-control command and runs unified integration regression. Physical file-picker acceptance and Arc pixel comparison are not claimed.",
         "Reviews (verify/completion/batch2-parent/boosts/REVIEW.md): CSP-restricted pages get no Boost and no error; page scripts can read and remove the injected style; cross-origin iframe Zap; IDN and IPv6 hosts; scope text reverts after a refusal; editor covers the command bar; reload ends preview. Edit and Export buttons have no native click receipt; file install only by command.",
-        "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比"
+        "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比",
+        "R3-4（2026-11-04，合并 0adfa4b1）：Install from File… 走真实打开面板，原生场景 LibraryBoost-Install 选文件并装上。"
       ],
       "implementation": [
         "Sources/BrkDomain/Boosts.swift",
@@ -8385,7 +8389,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P34）仍有差异或无参照：P34-b: 未比较（无参照；Brk 的媒体列表样式按 P32-e 归档列表的两行样式对齐即可） | P34-c: 未比较（无参照）"
+        "Arc 对照（run-20261103 P34）仍有差异或无参照：P34-b: 未比较（无参照；Brk 的媒体列表样式按 P32-e 归档列表的两行样式对齐即可） | P34-c: 未比较（无参照）",
+        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：媒体页只列 Brk 自己的截图，两行样式按归档列表；不读系统相册。Arc 有内容的媒体页仍无参照（要授权读电脑截图）。"
       ],
       "implementation": [
         "Sources/BrkApp/CaptureFiles.swift",
