@@ -69,7 +69,7 @@ enum CommandInventory {
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
         .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
-        .site(.loadBlockingRules), .site(.selectedBlockingRules(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))), .site(.resetBlockingRules),
+        .site(.loadBlockingRules), .site(.selectedBlockingRules(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))), .site(.resetBlockingRules), .site(.filterList("easylist", false)), .site(.filterUpdates(false)), .site(.updateFilterLists),
         .site(.extensionIncognito("ghost", false)), .site(.extensionShortcut("ghost", "run", "cmd+shift+u")),
         .site(.nativeExtensions), .site(.pinExtension("ghost", true)), .site(.invokeExtension("ghost")), .site(.removeExtension("ghost")),
         .site(.controls), .site(.closeControls), .site(.rule(siteTarget, SiteRule())),
@@ -115,6 +115,7 @@ enum CommandInventory {
         .page(siteTarget.document.browser, .websitePolicyApplied(WebsitePolicyStatus(document: siteTarget.document, appearance: .automatic, themeApplied: false, frozen: false, error: nil))),
         .page(siteTarget.document.browser, .securityChanged(PageSecurity(document: siteTarget.document, secureConnection: true, certificateError: true, insecureContent: false))),
         .websiteRulesLoaded(.profile(profile), .failed("fixture")),
+        .filterListFetched(.profile(profile), "easylist", .offline),
         .extensionOperationFailed(.profile(profile), "fixture"),
         .extensionsRead(ExtensionCatalog(context: .profile(profile), extensions: [], error: "fixture")),
         .profileDataCleared(ClearProfileDataResult(request: ClearProfileData(id: "ghost", profile: profile, kinds: [.cookies]), completed: [], error: "fixture")),
@@ -406,6 +407,9 @@ enum CommandInventory {
             case .loadBlockingRules: "loadBlockingRules"
             case .selectedBlockingRules: "selectedBlockingRules"
             case .resetBlockingRules: "resetBlockingRules"
+            case .filterList: "filterList"
+            case .filterUpdates: "filterUpdates"
+            case .updateFilterLists: "updateFilterLists"
             case .nativeExtensions: "nativeExtensions"
             case .extensionIncognito: "extensionIncognito"
             case .extensionShortcut: "extensionShortcut"
@@ -468,6 +472,7 @@ enum CommandInventory {
         case .output: "output"
         case .download: "download"
         case .websiteRulesLoaded: "websiteRulesLoaded"
+        case .filterListFetched: "filterListFetched"
         case .extensionOperationFailed: "extensionOperationFailed"
         case .extensionsRead: "extensionsRead"
         case .siteDataCleared: "siteDataCleared"

@@ -141,6 +141,9 @@ final class ArcBehaviourAlignmentTests: XCTestCase {
         XCTAssertEqual(d.snapshot.sites[d.window]?.security?.certificateError, true)
         d.page(tab, .securityChanged(PageSecurity(document: document, secureConnection: true, certificateError: false, insecureContent: true)))
         XCTAssertEqual(d.snapshot.sites[d.window]?.secure, false, "insecure content makes https Insecure")
+        d.page(tab, .securityChanged(PageSecurity(document: document, secureConnection: true, certificateError: false, insecureContent: false, insecureForm: true)))
+        XCTAssertEqual(d.snapshot.sites[d.window]?.secure, false, "a form posting over plain HTTP makes https Insecure")
+        XCTAssertEqual(d.snapshot.sites[d.window]?.security?.insecureForm, true)
         d.page(tab, .securityChanged(PageSecurity(document: document, secureConnection: true, certificateError: false, insecureContent: false)))
         XCTAssertEqual(d.snapshot.sites[d.window]?.secure, true)
         // A report for a document that is no longer shown is ignored.

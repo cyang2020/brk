@@ -52,7 +52,11 @@ extension ChromePage {
     func configureRequestFilter(_ url: URL?) {
         let rule = url.flatMap(SiteOrigin.init).map { websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
         let rules = websitePolicy.preferences.blockingRules ?? .builtIn
-        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes, urlPrefixes: rules.blockedURLPrefixes ?? [])
+        // The profile's EasyList-syntax lists, judged against this document: third-party, $domain and page-wide
+        // exceptions read the page the request belongs to (a new top-level page judges itself).
+        let lists = rule.blocking ? engine.filterLists.lists(websitePolicy.preferences.activeFilterKeys) : []
+        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes,
+                                         urlPrefixes: rules.blockedURLPrefixes ?? [], matcher: lists.isEmpty ? nil : FilterResourceTypes.matcher(lists, document: url))
     }
 
     func refreshWebsitePolicy() {
@@ -67,7 +71,10 @@ extension ChromePage {
         let rule = policy.preferences.rule(for: origin)
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
-        let cosmetic = rule.blocking ? rules.cosmeticSelectors.map { $0 + "{display:none!important;}" }.joined() : ""
+        let lists = rule.blocking ? engine.filterLists.lists(policy.preferences.activeFilterKeys) : []
+        let listed = FilterLists.hiddenSelectors(lists, documentURL: browser.url, pageFlags: FilterLists.pageFlags(lists, documentURL: browser.url))
+        // One rule per selector, so a selector this Chromium does not support drops alone.
+        let cosmetic = rule.blocking ? (rules.cosmeticSelectors + listed).map { $0 + "{display:none!important;}" }.joined(separator: "\n") : ""
         let banners = rule.hideCookieBanners ? "[data-cookie-banner],[aria-label=\"cookie consent\"]{display:none!important;}" : ""
         // A dedicated style element changes no inline user styles. Opt-out removes exactly this owner's CSS.
         let content = ":root{" + css + "}" + cosmetic + banners

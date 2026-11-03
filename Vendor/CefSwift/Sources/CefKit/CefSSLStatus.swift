@@ -23,11 +23,20 @@ public struct CefSSLStatus: Sendable, Equatable {
         return certStatus & 0xFF00_FFFF & ~UInt32(minor) != 0
     }
 
-    /// The page displayed or ran content that came over plain HTTP.
+    /// The page displayed or ran content that came over plain HTTP, or with a certificate error. Content's
+    /// `SSLStatus::ContentStatusFlags` reach CEF unchanged; CEF's enum names only the first two bits.
     public var hasInsecureContent: Bool {
         let insecure = SSL_CONTENT_DISPLAYED_INSECURE_CONTENT.rawValue | SSL_CONTENT_RAN_INSECURE_CONTENT.rawValue
-        return contentStatus & UInt32(insecure) != 0
+        return contentStatus & (UInt32(insecure) | Self.displayedContentWithCertErrors | Self.ranContentWithCertErrors) != 0
     }
+
+    /// A form on the page submits to a plain HTTP address. Since Chromium upgrades plain HTTP images and media and blocks
+    /// other plain HTTP subresources, this is what an https page with plain HTTP parts usually reports.
+    public var hasInsecureFormAction: Bool { contentStatus & Self.displayedFormWithInsecureAction != 0 }
+
+    static let displayedContentWithCertErrors: UInt32 = 1 << 3
+    static let ranContentWithCertErrors: UInt32 = 1 << 4
+    static let displayedFormWithInsecureAction: UInt32 = 1 << 6
 }
 
 extension CefBrowser {

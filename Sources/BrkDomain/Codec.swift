@@ -723,8 +723,22 @@ private func restoreSitePreferencesV3(_ saved: [ProfileID: SitePreferences]?, pr
         if let list = preferences.blockingRules {
             switch StateCodec.decodeWebsiteRules(try! JSONEncoder().encode(list)) {
             case .loaded(let valid): preferences.blockingRules = valid
-            case .failed: preferences.blockingRules = nil; repairs.append("restored built-in website rules after an invalid saved list")
+            case .failed, .filterList: preferences.blockingRules = nil; repairs.append("restored built-in website rules after an invalid saved list")
             }
+        }
+        if let lists = preferences.filterLists {
+            var ids = Set<String>()
+            // Only the two subscriptions and one import, by their own addresses; a bad store key is forgotten (the
+            // list downloads again) rather than read.
+            let kept = lists.compactMap { record -> FilterListRecord? in
+                let known = record.source == nil ? record.id == FilterListRecord.importedID : FilterListRecord.subscriptions.contains { $0.id == record.id && $0.source == record.source }
+                guard known, ids.insert(record.id).inserted, record.title.count <= 500 else { return nil }
+                guard let key = record.key, !FilterListStore.isKey(key) else { return record }
+                var repaired = record; repaired.key = nil; repaired.summary = nil; repaired.checked = nil
+                return record.source == nil ? nil : repaired
+            }
+            if kept != lists { repairs.append("dropped an invalid saved filter list") }
+            preferences.filterLists = kept
         }
         if let embedded = preferences.embeddedPermissions {
             preferences.embeddedPermissions = embedded.filter { key, _ in
@@ -758,28 +772,6 @@ extension StateCodec {
             }
             return .loaded(WebsiteBlockingRules(version: rules.version, blockedHosts: Array(Set(hosts)).sorted(), blockedPathPrefixes: Array(Set(rules.blockedPathPrefixes)).sorted(), cosmeticSelectors: Array(Set(rules.cosmeticSelectors)).sorted(), blockedURLPrefixes: rules.blockedURLPrefixes.map { Array(Set($0)).sorted() }))
         } catch { return .failed("Cannot read this rule file: " + error.localizedDescription) }
-    }
-}
-
-extension StateCodec {
-    /// Strict import: unsupported syntax rejects the entire update, preserving the last good list.
-    public static func decodeEasyListRules(_ data: Data) -> WebsiteRulesUpdate {
-        guard data.count <= 1_048_576, let text = String(data: data, encoding: .utf8) else { return .failed("Rule text must be UTF-8 and at most 1 MB") }
-        var hosts: [String] = []; var urls: [String] = []; var selectors: [String] = []
-        for (index, raw) in text.components(separatedBy: .newlines).enumerated() {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty || line.hasPrefix("!") || line == "[Adblock Plus 2.0]" { continue }
-            if line.hasPrefix("||"), line.hasSuffix("^"), !line.contains("$") {
-                hosts.append(String(line.dropFirst(2).dropLast()))
-            } else if line.hasPrefix("|http://") || line.hasPrefix("|https://"), !line.contains("$") {
-                urls.append(String(line.dropFirst()))
-            } else if line.hasPrefix("##") {
-                selectors.append(String(line.dropFirst(2)))
-            } else { return .failed("Unsupported EasyList syntax at line \(index + 1): \(line.prefix(100))") }
-        }
-        guard !hosts.isEmpty || !urls.isEmpty || !selectors.isEmpty else { return .failed("The rule file contains no supported rules") }
-        let rules = WebsiteBlockingRules(version: 1, blockedHosts: hosts, blockedPathPrefixes: [], cosmeticSelectors: selectors, blockedURLPrefixes: urls)
-        return decodeWebsiteRules(try! JSONEncoder().encode(rules))
     }
 }
 

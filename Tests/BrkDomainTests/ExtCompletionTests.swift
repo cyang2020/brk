@@ -57,21 +57,6 @@ final class ExtCompletionTests: XCTestCase {
         }
     }
 
-    func testEasyListImportIsAtomicAndReportsUnsupportedLines() throws {
-        let source = "[Adblock Plus 2.0]\n! selected local rules\n||ads.example^\n|https://fixture.test/blocked/\n##.advert\n"
-        guard case .loaded(let rules) = StateCodec.decodeEasyListRules(Data(source.utf8)) else { return XCTFail("valid subset rejected") }
-        XCTAssertEqual(rules.blockedHosts, ["ads.example"])
-        XCTAssertEqual(rules.blockedURLPrefixes, ["https://fixture.test/blocked/"])
-        XCTAssertEqual(rules.cosmeticSelectors, [".advert"])
-        for line in ["@@||ads.example^", "||ads.example^$third-party", "example.com##.advert", "/ad[0-9]/", "##div > span", "|https://fixture.test/*"] {
-            guard case .failed = StateCodec.decodeEasyListRules(Data((source + line).utf8)) else { XCTFail("unsupported rule accepted: " + line); continue }
-        }
-        let d = Driver(); let context = BrowsingContext.profile(.default)
-        d.system(.websiteRulesLoaded(context, .loaded(rules)))
-        d.system(.websiteRulesLoaded(context, .failed("line 4")))
-        XCTAssertEqual(d.state.doc.sitePreferences[.default]?.blockingRules, rules)
-        XCTAssertEqual(Driver(file: d.savedFile).state.doc.sitePreferences[.default]?.blockingRules, rules)
-    }
     func testControlsReadSavedChoicesDuringLoadingWithoutEnablingDestructiveOperations() throws {
         let d = Driver()
         let page = d.snapshot.pages[0].id

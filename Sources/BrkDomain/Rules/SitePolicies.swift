@@ -35,6 +35,8 @@ extension AppState {
         let context = browsingContext(of: page.item)
         var policy = WebsitePolicy()
         policy.preferences = sitePreferences(context)
+        // A private session has no downloads of its own: it blocks with the default profile's lists.
+        if case .incognito = context, policy.preferences.filterLists == nil { policy.preferences.filterLists = doc.sitePreferences[.default]?.filterLists }
         policy.appearance = policy.preferences.appearance ?? WebsiteAppearance(rawValue: doc.settings.general.webAppearance.rawValue) ?? .automatic
         policy.visible = visiblePages().contains(page)
         if doc.settings.advanced.themeToCSS, let window = doc.windows[page.window],
@@ -86,7 +88,8 @@ extension AppState {
                 rule: target.map { preferences.rule(for: $0.origin) } ?? SiteRule(),
                 appearance: preferences.appearance ?? WebsiteAppearance(rawValue: doc.settings.general.webAppearance.rawValue) ?? .automatic,
                 clearing: session.sites.running.values.contains { $0.target.page.window == window },
-                result: session.sites.results[window], secure: target.map(secure) ?? false, security: target.flatMap(security)))
+                result: session.sites.results[window], secure: target.map(secure) ?? false, security: target.flatMap(security),
+                filterLists: preferences.effectiveFilterLists, filterUpdates: preferences.filterUpdates ?? true))
         })
     }
 }
@@ -154,8 +157,28 @@ extension Work {
             effects.append(.loadWebsiteRules(file, context))
         case .resetBlockingRules:
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
-            updateSitePreferences(context) { $0.blockingRules = nil }
+            updateSitePreferences(context) { preferences in
+                preferences.blockingRules = nil
+                if let lists = preferences.filterLists { preferences.filterLists = lists.filter { $0.id != FilterListRecord.importedID } }
+            }
             state.session.sites.rulesErrors[context] = nil
+        case .filterList(let id, let enabled):
+            let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
+            updateSitePreferences(context) { preferences in
+                var lists = preferences.effectiveFilterLists
+                guard let index = lists.firstIndex(where: { $0.id == id }) else { return }
+                lists[index].enabled = enabled
+                preferences.filterLists = lists
+            }
+            scheduleFilterListUpdates(context)
+        case .filterUpdates(let on):
+            let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
+            guard case .profile = context else { return }
+            updateSitePreferences(context) { $0.filterUpdates = on }
+            scheduleFilterListUpdates(context)
+        case .updateFilterLists:
+            let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
+            scheduleFilterListUpdates(context, now: true)
         case .nativeExtensions:
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             state.session.sites.extensionErrors[context] = nil
@@ -234,6 +257,53 @@ extension Work {
         switch update {
         case .failed(let error): state.session.sites.rulesErrors[context] = error
         case .loaded(let rules): updateSitePreferences(context) { $0.blockingRules = rules }; state.session.sites.rulesErrors[context] = nil
+        case .filterList(let key, let title, let summary):
+            guard FilterListStore.isKey(key) else { return }
+            let now = ctx.now
+            updateSitePreferences(context) { preferences in
+                var record = FilterListRecord(id: FilterListRecord.importedID, title: title, source: nil)
+                record.key = key; record.summary = summary; record.updated = now
+                var lists = preferences.effectiveFilterLists.filter { $0.id != record.id }
+                lists.append(record)
+                preferences.filterLists = lists
+            }
+            state.session.sites.rulesErrors[context] = nil
+        }
+    }
+
+    /// Ask for the downloads that are due: each enabled subscription of a profile with updates on, never checked or
+    /// checked longer ago than its refresh interval. `now` skips the interval. Only effects: the app runs one download
+    /// per list at a time and drops a repeated ask while it runs, so an idle tick leaves state untouched.
+    mutating func scheduleFilterListUpdates(_ only: BrowsingContext? = nil, now: Bool = false) {
+        let contexts = only.map { [$0] } ?? state.doc.profiles.keys.sorted().map { BrowsingContext.profile($0) }
+        for context in contexts {
+            guard case .profile(let id) = context, state.doc.profiles[id] != nil else { continue }
+            let preferences = state.sitePreferences(context)
+            guard preferences.filterUpdates ?? true else { continue }
+            for record in preferences.effectiveFilterLists where record.enabled && record.source != nil {
+                if !now, let checked = record.checked, checked.advanced(by: record.refreshInterval) > ctx.now { continue }
+                effects.append(.fetchFilterList(context, record))
+            }
+        }
+    }
+
+    mutating func filterListFetched(_ context: BrowsingContext, _ id: String, _ result: FilterListFetch) {
+        guard case .profile(let profile) = context, state.doc.profiles[profile] != nil else { return }
+        if case .updated(let key, _) = result, !FilterListStore.isKey(key) { return }
+        let now = ctx.now
+        updateSitePreferences(context) { preferences in
+            var lists = preferences.effectiveFilterLists
+            guard let index = lists.firstIndex(where: { $0.id == id }), lists[index].source != nil else { return }
+            lists[index].checked = now
+            switch result {
+            case .updated(let key, let summary):
+                lists[index].key = key; lists[index].summary = summary; lists[index].updated = now
+                lists[index].problem = nil; lists[index].offline = nil
+            case .unchanged: lists[index].problem = nil; lists[index].offline = nil
+            case .offline: lists[index].offline = true
+            case .failed(let message): lists[index].problem = message; lists[index].offline = nil
+            }
+            preferences.filterLists = lists
         }
     }
 

@@ -159,7 +159,7 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
+        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -178,6 +178,7 @@ struct Work {
             state.session.windows[window]?.outputUpdates[update.id] = update
         case .download(let update): downloadEvent(update)
         case .websiteRulesLoaded(let context, let update): websiteRulesLoaded(context, update)
+        case .filterListFetched(let context, let id, let result): filterListFetched(context, id, result)
         case .boost(let event): boostEvent(event)
         case .extensionOperationFailed(let context, let error): extensionOperationFailed(context, error)
         case .extensionsRead(let catalog): extensionsRead(catalog)
@@ -202,6 +203,7 @@ struct Work {
                 }
             }
             requestSidebarSync()
+            scheduleFilterListUpdates()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)

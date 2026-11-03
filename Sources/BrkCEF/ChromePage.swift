@@ -396,9 +396,13 @@ final class ChromePage: CefBrowserDelegate {
     private func reportSecurity() {
         guard let document = mainDocument.readyDocument, let status = browser.visibleSSLStatus() else { return }
         let security = PageSecurity(document: document, secureConnection: status.isSecureConnection,
-                                    certificateError: status.hasCertificateError, insecureContent: status.hasInsecureContent)
+                                    certificateError: status.hasCertificateError, insecureContent: status.hasInsecureContent,
+                                    insecureForm: status.hasInsecureFormAction)
         guard security != reportedSecurity else { return }
         reportedSecurity = security
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-security] page=\(id) secure=\(security.secure) tls=\(status.isSecureConnection) cert=0x\(String(status.certStatus, radix: 16)) content=0x\(String(status.contentStatus, radix: 16))")
+        }
         engine.pageDidEmit(self, .securityChanged(security))
     }
 

@@ -100,6 +100,11 @@ final class ControlExecutor {
             try png.write(to: URL(fileURLWithPath: path))
             return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
         case .siteControls: return .siteControls(store.snapshot.sites)
+        case .siteControlTexts(let id):
+            guard let window = store.sitePanels.window(for: id), window.isVisible, let root = window.contentView else {
+                throw Failure(message: "Site controls are closed")
+            }
+            return .menuItems(Self.accessibilityTexts(root))
         case .hello:
             return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))
@@ -510,6 +515,28 @@ final class ControlExecutor {
             throw Failure(message: "CGWindowListCreateImage returned no image for window \(window.windowNumber)")
         }
         return image
+    }
+
+    /// The visible accessibility tree under `root` (AppKit controls and SwiftUI's elements alike), label, title and
+    /// string value of each element, in order, without repeats of the same string on one element.
+    static func accessibilityTexts(_ root: NSView) -> [String] {
+        var out: [String] = [], seen = Set<ObjectIdentifier>()
+        func visit(_ element: Any, depth: Int) {
+            guard depth < 40, let object = element as? NSObject, seen.insert(ObjectIdentifier(object)).inserted else { return }
+            if let view = object as? NSView, view.isHiddenOrHasHiddenAncestor { return }
+            guard let node = object as? NSAccessibilityProtocol else { return }
+            var own: [String] = []
+            for text in [node.accessibilityLabel(), node.accessibilityTitle(), node.accessibilityValue() as? String] {
+                if let text, !text.isEmpty, !own.contains(text) { own.append(text) }
+            }
+            out += own
+            for child in node.accessibilityChildren() ?? [] { visit(child, depth: depth + 1) }
+            if let view = object as? NSView, node.accessibilityChildren()?.isEmpty ?? true {
+                for subview in view.subviews { visit(subview, depth: depth + 1) }
+            }
+        }
+        visit(root, depth: 0)
+        return out
     }
 
     /// Polls every 50 ms: no row in any window is loading, then two more idle turns of the main queue.

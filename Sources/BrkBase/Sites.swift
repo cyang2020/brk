@@ -49,6 +49,13 @@ public struct SitePreferences: Hashable, Sendable, Codable {
     public var appearance: WebsiteAppearance? = nil
     public var rules: [String: SiteRule] = [:]
     public var embeddedPermissions: [String: [SiteCapability: SitePermission]]? = nil
+    /// EasyList-syntax lists; nil means the two default subscriptions, not downloaded yet.
+    public var filterLists: [FilterListRecord]? = nil
+    /// Whether Brk downloads list updates; nil means on.
+    public var filterUpdates: Bool? = nil
+    public var effectiveFilterLists: [FilterListRecord] { filterLists ?? FilterListRecord.subscriptions }
+    /// The stored lists the engine applies, in order.
+    public var activeFilterKeys: [String] { effectiveFilterLists.filter(\.enabled).compactMap(\.key) }
     public func permissions(for origin: SiteOrigin, embeddedIn top: SiteOrigin) -> [SiteCapability: SitePermission] {
         origin == top ? rule(for: origin).permissions : embeddedPermissions?[top.value + "\n" + origin.value] ?? [:]
     }
@@ -146,12 +153,14 @@ public struct PageSecurity: Hashable, Sendable, Codable {
     /// The certificate has an error Chromium counts against the page (expired, wrong name, unknown authority…) and the
     /// page was loaded anyway.
     public let certificateError: Bool
-    /// The page displayed or ran content that came over plain HTTP.
+    /// The page displayed or ran content that came over plain HTTP (or with a certificate error).
     public let insecureContent: Bool
-    public var secure: Bool { secureConnection && !certificateError && !insecureContent }
-    public init(document: DocumentToken, secureConnection: Bool, certificateError: Bool, insecureContent: Bool) {
+    /// A form on the page submits to a plain HTTP address.
+    public let insecureForm: Bool
+    public var secure: Bool { secureConnection && !certificateError && !insecureContent && !insecureForm }
+    public init(document: DocumentToken, secureConnection: Bool, certificateError: Bool, insecureContent: Bool, insecureForm: Bool = false) {
         self.document = document; self.secureConnection = secureConnection
-        self.certificateError = certificateError; self.insecureContent = insecureContent
+        self.certificateError = certificateError; self.insecureContent = insecureContent; self.insecureForm = insecureForm
     }
 }
 

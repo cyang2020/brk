@@ -189,6 +189,11 @@ final class AppUnderTest {
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
+        if scenarioID.hasPrefix("SiteFilters") {
+            // Port 9 (discard) refuses connections: the offline scenario's downloads find no server.
+            environment["BRK_TEST_FILTER_BASE"] = scenarioID == "SiteFilters-offline" ? "http://127.0.0.1:9/filter-lists" : site.url("filter-lists").absoluteString
+        }
+        if scenarioID.hasPrefix("SiteSecurity"), let spki = HTTPSFixture.trustedSPKI(siteRoot: site.root) { environment["BRK_TEST_TRUSTED_SPKI"] = spki }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)
