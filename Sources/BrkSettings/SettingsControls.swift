@@ -19,15 +19,30 @@ private var S: SettingsMetrics { Metrics.settings }
 
 // MARK: - Layout
 
-/// A pane's body: fixed width, the package's padding.
+/// A pane's body: the window's width, top-aligned. Card panes pad themselves (`CardPane`); banner panes (Max,
+/// Links) draw edge to edge.
 struct SettingsContainer<Content: View>: View {
+    /// The pane's area: a shorter pane stays at the top of it instead of being centred.
+    var minHeight: CGFloat = 0
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .frame(width: S.contentWidth.value, alignment: .leading)
+            .frame(width: Metrics.settings.windowSize.value.width, alignment: .topLeading)
+            .frame(minHeight: minHeight, alignment: .top)
+    }
+}
+
+/// The cards' column: Arc's 64-point side margins and 20 points under the toolbar.
+struct CardPane<Content: View>: View {
+    var spacing: CGFloat = CardMetrics.cardSpacing.value
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) { content }
+            .frame(width: S.contentWidth.value, alignment: .topLeading)
             .padding(.horizontal, S.horizontalPadding.value)
-            .padding(.vertical, S.verticalPadding.value)
+            .padding(.vertical, CardMetrics.paneTop.value)
     }
 }
 
@@ -109,6 +124,33 @@ struct IdentifiedRegion: NSViewRepresentable {
 
 // MARK: - Controls
 
+/// A transparent click target behind a SwiftUI row (a profile in the list, a data row): an NSControl the control
+/// socket and tests can click (`settings-field-<field>`), so the row is not a SwiftUI-only gesture.
+struct ClickArea: NSViewRepresentable {
+    let field: String
+    let action: @MainActor () -> Void
+
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> ClickAreaControl { ClickAreaControl() }
+
+    func updateNSView(_ control: ClickAreaControl, context: NSViewRepresentableContext<Self>) {
+        control.identify(.settingsField(field))
+        control.run = action
+        control.isEnabled = context.environment.isEnabled
+    }
+
+    final class ClickAreaControl: NSControl {
+        var run: (@MainActor () -> Void)?
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) {}
+        override func mouseUp(with event: NSEvent) {
+            guard isEnabled, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+            run?()
+        }
+        override func performClick(_ sender: Any?) { if isEnabled { run?() } }
+        override func accessibilityPerformPress() -> Bool { performClick(nil); return true }
+    }
+}
+
 /// An AppKit control's own size, narrowed to the offer (it truncates rather than overflow). Without this SwiftUI
 /// treats a control with low hugging priority as flexible and stretches it.
 @MainActor
@@ -122,6 +164,7 @@ struct SettingsCheckbox: NSViewRepresentable {
     let title: String
     let field: String
     let isOn: Bool
+    var size: NSControl.ControlSize = .regular
     let toggle: @MainActor (Bool) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -129,6 +172,8 @@ struct SettingsCheckbox: NSViewRepresentable {
     func makeNSView(context: NSViewRepresentableContext<Self>) -> NSButton {
         let button = NSButton(checkboxWithTitle: title, target: context.coordinator, action: #selector(Coordinator.clicked(_:)))
         button.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        button.controlSize = size
+        button.font = .systemFont(ofSize: NSFont.systemFontSize)
         return button
     }
 
@@ -136,6 +181,7 @@ struct SettingsCheckbox: NSViewRepresentable {
         context.coordinator.isOn = isOn
         context.coordinator.toggle = toggle
         button.isEnabled = context.environment.isEnabled
+        button.controlSize = size
         button.identify(.settingsField(field))
         if button.title != title { button.title = title }
         button.state = isOn ? .on : .off
@@ -175,11 +221,20 @@ enum PopUpEntry<Value: Hashable> {
     }
 }
 
+/// How wide a settings pop-up is.
+enum PopUpWidth {
+    /// As wide as offered (the old label-column panes line their pickers up this way).
+    case proposed
+    /// Arc 1.170's card pickers: the chosen item's title plus the control's chrome, at least `minimum`.
+    case selected(minimum: CGFloat)
+}
+
 /// A pop-up button for one choice. `selected` is the snapshot's value; choosing another calls `choose` once.
 struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
     let field: String
     let entries: [PopUpEntry<Value>]
     let selected: Value?
+    var width: PopUpWidth = .proposed
     let choose: @MainActor (Value) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -214,9 +269,17 @@ struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
         context.coordinator.showSelected(in: button)
     }
 
-    /// As wide as offered (the panes give pop-ups one width so they line up), as tall as the control.
+    /// As tall as the control; as wide as `width` says.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSPopUpButton, context: NSViewRepresentableContext<Self>) -> CGSize? {
-        CGSize(width: proposal.width ?? button.intrinsicContentSize.width, height: button.intrinsicContentSize.height)
+        switch width {
+        case .proposed:
+            return CGSize(width: proposal.width ?? button.intrinsicContentSize.width, height: button.intrinsicContentSize.height)
+        case .selected(let minimum):
+            let item = button.selectedItem
+            let title = ((item?.title ?? "") as NSString).size(withAttributes: [.font: button.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)]).width
+            let image = item?.image.map { $0.size.width + CardMetrics.popUpImageGap.value } ?? 0
+            return CGSize(width: max(minimum, (title + image + CardMetrics.popUpChrome.value).rounded(.up)), height: button.intrinsicContentSize.height)
+        }
     }
 
     @MainActor final class Coordinator: NSObject {
@@ -313,7 +376,8 @@ struct SettingsTextField: NSViewRepresentable {
         context.coordinator.commit = commit
         context.coordinator.edit = edit
         context.coordinator.submit = submit
-        context.coordinator.last = text
+        // While the user edits, `last` stays the value last sent, so ending the edit does not send it again.
+        if textField.currentEditor() == nil { context.coordinator.last = text }
         textField.identify(.settingsField(field))
         textField.placeholderString = placeholder
         if textField.currentEditor() == nil, textField.stringValue != text { textField.stringValue = text }

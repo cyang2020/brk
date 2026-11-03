@@ -343,6 +343,7 @@ extension OverlayCopy {
         case .profiles: "Profile Preferences"
         case .shortcuts: "Shortcuts Preferences"
         case .links: "Link Preferences"
+        case .icon: "Icon Preferences"
         case .advanced: "Advanced Preferences"
         }
     }
@@ -353,6 +354,7 @@ extension OverlayCopy {
         switch pane {
         case .links: ["Air Traffic Control", "Air Traffic Controller"]
         case .profiles: ["Search Settings"]
+        case .icon: ["App Icon"]
         case .general, .max, .shortcuts, .advanced: []
         }
     }

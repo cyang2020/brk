@@ -5,43 +5,120 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
-/// Owner: F4. Arc's Shortcuts pane (anatomy-m 1.14, 2.2, 4.2; strings around "PreferencesFeature/ShortcutsPane.swift"):
-/// every action of the shortcut table with its shortcut as routing resolves it (`SettingsSnapshot.shortcuts`), a
-/// recorder to change it, and a menu per shortcut with Arc's three priorities, "Reset Shortcut to Default", "Remove
-/// Shortcut" and, on a conflict, "Remove Conflicting Shortcut". Changed shortcuts are listed first under "Customized
-/// Shortcuts", the rest by menu under "Default Shortcuts". Every control dispatches a `.settings(.shortcuts(...))`
+/// Owner: F4. Arc's Shortcuts pane as Arc 1.170 lays it out (P38-e): "Start with the basics" and its button on top;
+/// at the left a search field and every action of the shortcut table by name, each with its shortcut in a key cap
+/// (`SettingsSnapshot.shortcuts`, as routing resolves it; "---" when unset) that records a new one after a click and,
+/// on hover, a menu with Arc's three priorities, "Reset Shortcut to Default", "Remove Shortcut" and, on a conflict,
+/// "Remove Conflicting Shortcut"; at the right the key-cap drawing, "Custom Shortcuts" and "Reset All Shortcuts".
+/// Changed shortcuts are listed first under "Customized Shortcuts", the rest by name under "Default Shortcuts". The
+/// list scrolls inside its box; the window does not grow. Every control dispatches a `.settings(.shortcuts(...))`
 /// command and keeps no setting of its own (the filter text and a recording in progress are view state).
 ///
 /// Mounted by F1's `SettingsHost` for `SettingsPane.shortcuts`: `ShortcutsPane(rows: settings.shortcuts, dispatch:)`.
 struct ShortcutsPane: View {
     let rows: [ShortcutRow]
     let dispatch: Dispatch
+    var height: CGFloat = CardMetrics.paneSize.height
     @State private var filter = ""
+    @State private var essentials = false
+    @State private var customizedOnly = false
+
+    private var shown: [ShortcutRow] {
+        let base = essentials ? rows.filter { ShortcutsPane.essentials.contains($0.action) } : rows
+        return customizedOnly ? base.filter { $0.source == .userDefined } : base
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ShortcutsPaneMetrics.sectionSpacing.value) {
-            VStack(alignment: .leading, spacing: ShortcutsPaneMetrics.lineSpacing.value) {
-                Text(ShortcutsCopy.title).font(.title2.weight(.semibold))
-                Text(ShortcutsCopy.subtitle).foregroundStyle(.secondary)
+        VStack(spacing: K.basicsToColumns.value) {
+            basics
+            HStack(alignment: .top, spacing: K.columnGap.value) {
+                list.frame(width: K.listWidth.value, height: listHeight)
+                side.frame(height: listHeight)
             }
-            HStack {
+            .frame(width: Metrics.settings.contentWidth.value, alignment: .topLeading)
+        }
+        .padding(.top, CardMetrics.paneTop.value)
+        .frame(width: Metrics.settings.windowSize.value.width, alignment: .top)
+    }
+
+    /// The list box ends 27 points above the window's bottom (P38-e).
+    private var listHeight: CGFloat {
+        max(K.listMinHeight.value, height - CardMetrics.paneTop.value - K.basicsHeight.value - K.basicsToColumns.value - K.listBottom.value)
+    }
+
+    private var basics: some View {
+        HStack(spacing: K.basicsGap.value) {
+            Text(ShortcutsCopy.basics).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
+            ProminentButton(title: essentials ? ShortcutsCopy.showAll : ShortcutsCopy.learnEssentials, field: "shortcut-essentials",
+                            prominent: true, symbol: "command.circle.fill", accent: .controlAccentColor) { essentials.toggle() }
+        }
+        .padding(.horizontal, K.basicsPadding.value)
+        .frame(height: K.basicsHeight.value)
+        .background(RoundedRectangle(cornerRadius: K.basicsRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor))
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 1))
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: K.searchGap.value) {
+                Image(systemName: "magnifyingglass").font(.system(size: K.searchGlyph.value)).foregroundStyle(SettingsStyle.secondaryText)
                 TextField(ShortcutsCopy.filter, text: $filter)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(SettingsStyle.font)
                     .accessibilityIdentifier(ViewID.settingsField("shortcut-filter").identifier)
-                Button(ShortcutsCopy.resetAll) { dispatch(.settings(.shortcuts(.resetAll))) }
-                    .disabled(!rows.contains { $0.source == .userDefined })
-                    .accessibilityIdentifier(ViewID.settingsField("shortcut-reset-all").identifier)
             }
-            ForEach(ShortcutsPane.sections(rows, filter: filter), id: \.title) { section in
-                VStack(alignment: .leading, spacing: ShortcutsPaneMetrics.lineSpacing.value) {
-                    Text(section.title).font(.headline).padding(.top, ShortcutsPaneMetrics.sectionSpacing.value)
-                    ForEach(section.rows, id: \.action) { row in
-                        ShortcutRowView(row: row, others: rows, dispatch: dispatch)
-                        Divider()
+            .padding(.horizontal, K.searchInset.value)
+            .frame(height: K.searchHeight.value)
+            CardDivider(inset: 0)
+            ScrollView {
+                // Not lazy: every row's key cap exists, so the control socket and tests can find any of them.
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
+                        Text(section.title).font(SettingsStyle.font.weight(.semibold)).foregroundStyle(SettingsStyle.secondaryText)
+                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value)
+                        CardDivider(inset: 0)
+                        ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
+                            if index > 0 { CardDivider(inset: K.rowInset.value) }
+                            ShortcutRowView(row: row, others: rows, dispatch: dispatch)
+                        }
                     }
                 }
+                .padding(.bottom, K.listPadding.value)
             }
         }
+        .background(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
+        .clipShape(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+
+    private var side: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: K.keyGap.value) {
+                KeyCapArt(symbol: "command")
+                KeyCapArt(symbol: "face.smiling")
+            }
+            Text(ShortcutsCopy.title).font(.system(size: K.titleSize.value, weight: .semibold)).foregroundStyle(.primary)
+                .padding(.top, K.titleTop.value)
+            Text(ShortcutsCopy.subtitle).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
+                .lineSpacing(K.subtitleLeading.value)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, K.subtitleTop.value)
+            Spacer(minLength: 0)
+            HStack(spacing: K.searchGap.value) {
+                SettingsButton(title: ShortcutsCopy.resetAll, field: "shortcut-reset-all") { dispatch(.settings(.shortcuts(.resetAll))) }
+                    .disabled(!rows.contains { $0.source == .userDefined })
+                Menu {
+                    Toggle(ShortcutsCopy.customizedOnly, isOn: $customizedOnly)
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.system(size: K.moreGlyph.value))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityIdentifier(ViewID.settingsField("shortcut-more").identifier)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     struct Section {
@@ -49,8 +126,15 @@ struct ShortcutsPane: View {
         let rows: [ShortcutRow]
     }
 
-    /// "Customized Shortcuts" (the user's, in table order), then each menu's other rows under its menu's name, the
-    /// first of those headed "Default Shortcuts"; rows whose title or shortcut does not match `filter` are left out.
+    /// Arc's essential shortcuts ("Learn the Essential Shortcuts").
+    static let essentials: Set<ActionID> = [
+        .newTab, .archiveTab, .addressBar, .copyCurrentURL, .showSidebar, .addSplitView, .showLittleArc, .newWindow,
+        .reopenLastClosedTab, .pinTab, .focusNextSpace, .focusPreviousSpace, .find, .viewLibrary,
+    ]
+
+    /// "Customized Shortcuts" (the user's), then "Default Shortcuts", each by title as Arc sorts them ("Capture Full
+    /// Page", "Capture in Portrait Mode", "Capture…"); rows whose title or shortcut does not match `filter` are left
+    /// out.
     static func sections(_ rows: [ShortcutRow], filter: String) -> [Section] {
         let needle = filter.trimmingCharacters(in: .whitespaces).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
         let shown = rows.filter { row in
@@ -58,64 +142,71 @@ struct ShortcutsPane: View {
             let title = ShortcutsCopy.title(of: row).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
             return title.contains(needle) || ShortcutsCopy.chord(row.state).map { $0.lowercased().contains(needle) } == true
         }
+        func byTitle(_ list: [ShortcutRow]) -> [ShortcutRow] {
+            list.sorted { ShortcutsCopy.title(of: $0).compare(ShortcutsCopy.title(of: $1), options: [.caseInsensitive]) == .orderedAscending }
+        }
         var sections: [Section] = []
         let custom = shown.filter { $0.source == .userDefined }
-        if !custom.isEmpty { sections.append(Section(title: ShortcutsCopy.customized, rows: custom)) }
-        for menu in MenuName.allCases {
-            let list = shown.filter { $0.source == .default && $0.menu == menu }
-            guard !list.isEmpty else { continue }
-            let name = ShortcutsCopy.menuTitle(menu)
-            sections.append(Section(title: sections.count == (custom.isEmpty ? 0 : 1) ? "\(ShortcutsCopy.defaults): \(name)" : name, rows: list))
-        }
+        if !custom.isEmpty { sections.append(Section(title: ShortcutsCopy.customized, rows: byTitle(custom))) }
+        let defaults = shown.filter { $0.source == .default }
+        if !defaults.isEmpty { sections.append(Section(title: ShortcutsCopy.defaults, rows: byTitle(defaults))) }
         return sections
     }
 }
 
-/// One shortcut: title, the conflict or system note, the recorder, the menu.
+/// One shortcut: title, the conflict or system note, the menu on hover, the key cap.
 struct ShortcutRowView: View {
     let row: ShortcutRow
     let others: [ShortcutRow]
     let dispatch: Dispatch
+    @State private var hovering = false
 
     var body: some View {
         HStack(alignment: .center, spacing: ShortcutsPaneMetrics.controlSpacing.value) {
             VStack(alignment: .leading, spacing: ShortcutsPaneMetrics.lineSpacing.value) {
                 // A later wave's action is remappable already; its title is dimmed like its menu item.
-                Text(ShortcutsCopy.title(of: row)).foregroundStyle(row.action.spec.later == nil ? .primary : .secondary)
+                Text(ShortcutsCopy.title(of: row)).font(SettingsStyle.font).foregroundStyle(row.action.spec.later == nil ? .primary : .secondary)
                 if let note = ShortcutsCopy.conflict(row, among: others) {
                     Label(note, systemImage: "exclamationmark.circle.fill").font(.caption).foregroundStyle(.orange)
                 } else if case .valid(let chord) = row.state, KeyBindings.isSystemShortcut(chord) {
                     Label(ShortcutsCopy.systemNote, systemImage: "exclamationmark.circle.fill").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: ShortcutsPaneMetrics.sectionSpacing.value)
+            Spacer(minLength: ShortcutsPaneMetrics.controlSpacing.value)
+            menu.opacity(hovering ? 1 : 0)
             ChordRecorder(state: row.state) { chord in dispatch(.settings(.shortcuts(.setChord(row.action, chord)))) }
                 .frame(width: ShortcutsPaneMetrics.recorderSize.value.width, height: ShortcutsPaneMetrics.recorderSize.value.height)
                 .accessibilityIdentifier(ViewID.settingsField("shortcut-\(row.action.rawValue)").identifier)
-            Menu {
-                Picker(ShortcutsCopy.priorityTitle, selection: Binding(get: { row.priority },
-                                                                       set: { dispatch(.settings(.shortcuts(.setPriority(row.action, $0)))) })) {
-                    ForEach(KeyPriority.allCases, id: \.self) { Text(ShortcutsCopy.priority($0)).tag($0) }
-                }
-                .pickerStyle(.inline)
-                Divider()
-                Button(ShortcutsCopy.resetOne) { dispatch(.settings(.shortcuts(.reset(row.action)))) }.disabled(row.source == .default)
-                Button(ShortcutsCopy.remove) { dispatch(.settings(.shortcuts(.setChord(row.action, nil)))) }.disabled(row.state == .unset)
-                if case .conflict(_, let with) = row.state {
-                    Button(with.count == 1 ? ShortcutsCopy.removeConflicting : ShortcutsCopy.removeConflictingMany) {
-                        for other in with { dispatch(.settings(.shortcuts(.setChord(other, nil)))) }
-                    }
-                    .accessibilityIdentifier(ViewID.settingsField("shortcut-remove-conflict-\(row.action.rawValue)").identifier)
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityIdentifier(ViewID.settingsField("shortcut-menu-\(row.action.rawValue)").identifier)
         }
-        .padding(.vertical, ShortcutsPaneMetrics.rowPadding.value)
+        .padding(.horizontal, K.rowInset.value)
+        .frame(minHeight: K.rowHeight.value)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+
+    private var menu: some View {
+        Menu {
+            Picker(ShortcutsCopy.priorityTitle, selection: Binding(get: { row.priority },
+                                                                   set: { dispatch(.settings(.shortcuts(.setPriority(row.action, $0)))) })) {
+                ForEach(KeyPriority.allCases, id: \.self) { Text(ShortcutsCopy.priority($0)).tag($0) }
+            }
+            .pickerStyle(.inline)
+            Divider()
+            Button(ShortcutsCopy.resetOne) { dispatch(.settings(.shortcuts(.reset(row.action)))) }.disabled(row.source == .default)
+            Button(ShortcutsCopy.remove) { dispatch(.settings(.shortcuts(.setChord(row.action, nil)))) }.disabled(row.state == .unset)
+            if case .conflict(_, let with) = row.state {
+                Button(with.count == 1 ? ShortcutsCopy.removeConflicting : ShortcutsCopy.removeConflictingMany) {
+                    for other in with { dispatch(.settings(.shortcuts(.setChord(other, nil)))) }
+                }
+                .accessibilityIdentifier(ViewID.settingsField("shortcut-remove-conflict-\(row.action.rawValue)").identifier)
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityIdentifier(ViewID.settingsField("shortcut-menu-\(row.action.rawValue)").identifier)
     }
 }
 
@@ -162,6 +253,7 @@ final class ChordRecorderView: NSView {
         label.alignment = .center
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         label.lineBreakMode = .byTruncatingTail
+        label.cell?.truncatesLastVisibleLine = true
         addSubview(label)
         setAccessibilityRole(.button)
         refresh()
@@ -245,18 +337,29 @@ final class ChordRecorderView: NSView {
         return .record(KeyChord(modifiers, key))
     }
 
+    /// Arc's key cap: the chord, "---" when there is none; the accessibility label spells out what the cap means.
     private func refresh() {
-        let text: String
+        let text: String, spoken: String
         if isRecording {
             text = note ?? ShortcutsCopy.recording
+            spoken = text
         } else {
-            text = ShortcutsCopy.chord(state) ?? ShortcutsCopy.record
+            text = ShortcutsCopy.chord(state) ?? ShortcutsCopy.unsetCap
+            spoken = ShortcutsCopy.chord(state) ?? ShortcutsCopy.record
         }
         label.stringValue = text
+        label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : NSFont.systemFontSize)
         label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor
         layer?.borderColor = (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        setAccessibilityLabel(text)
+        layer?.borderWidth = isRecording ? 2 * ShortcutsPaneMetrics.recorderBorder.value : ShortcutsPaneMetrics.recorderBorder.value
+        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        toolTip = isRecording ? text : nil
+        setAccessibilityLabel(spoken)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        refresh()
     }
 }
 
@@ -275,9 +378,16 @@ enum ShortcutsCopy {
     /// GUESS: the string for "Menu item to remove a shortcut, i.e. unset it" did not survive.
     static let remove = "Remove Shortcut"
     /// GUESS labels.
-    static let filter = "Search Shortcuts"
+    static let filter = "Type a feature name or shortcut (like “Command Bar” or ⌘T)"
     static let record = "Record Shortcut"
     static let recording = "Type Shortcut…"
+    /// Observed (P38-e): an unset shortcut's key cap.
+    static let unsetCap = "---"
+    /// Observed (P38-e).
+    static let basics = "Start with the basics"
+    static let learnEssentials = "Learn the Essential Shortcuts"
+    static let showAll = "Show All Shortcuts"
+    static let customizedOnly = "Show Customized Shortcuts Only"
     static let priorityTitle = "Priority"
     static let unsupportedKey = "This key can't be a shortcut"
     static let needsModifier = "Add ⌘, ⌃ or ⌥"
@@ -325,15 +435,43 @@ enum ShortcutsCopy {
     }
 }
 
-/// The pane's numbers; Arc's Shortcuts pane was not measured, so all are guesses (the login wall keeps the real
-/// Arc from being captured).
+/// The pane's numbers, measured on Arc 1.170's capture (verify/visual-pairs/run-20261103/P38/P38-e-arc.png).
 let ShortcutsPaneMetrics = ShortcutsPaneMetricsTable()
 
+private var K: ShortcutsPaneMetricsTable { ShortcutsPaneMetrics }
+
 struct ShortcutsPaneMetricsTable: MetricGroup {
-    let recorderSize = Metric(CGSize(width: 132, height: 24), .guess("shortcut field: room for four modifier glyphs and a key, a regular control's height"))
-    let recorderRadius = Metric(6.0, .guess("shortcut field corner radius, a rounded text field's"))
+    private static let capture = "verify/visual-pairs/run-20261103/P38/P38-e-arc.png"
+    let recorderSize = Metric(CGSize(width: 64, height: 24), .anatomy("\(capture): the key caps span x 632 to 760 px, y 530 to 578 px"))
+    let recorderRadius = Metric(6.0, .guess("the key cap's corner"))
+    let recorderBorder = Metric(1.0, .anatomy("\(capture): a 2 px grey edge"))
     let sectionSpacing = Metric(12.0, .guess("space between the pane's header, filter row and sections"))
-    let controlSpacing = Metric(8.0, .guess("space between a row's title, shortcut field and menu"))
+    let controlSpacing = Metric(8.0, .guess("space between a row's title, menu and key cap"))
     let lineSpacing = Metric(4.0, .guess("space between a title and its note"))
-    let rowPadding = Metric(4.0, .guess("a row's vertical padding, and the shortcut field's text inset"))
+    let rowPadding = Metric(4.0, .guess("the key cap's text inset"))
+    let basicsHeight = Metric(36.0, .anatomy("\(capture): the basics box spans y 216 to 288 px"))
+    let basicsPadding = Metric(16.0, .anatomy("\(capture): its text starts at x 336 px in a box that starts at 304 px"))
+    let basicsGap = Metric(17.0, .anatomy("\(capture): the text ends near x 584 px, the button starts at 601 px"))
+    let basicsRadius = Metric(8.0, .guess("the basics box's corner"))
+    let basicsToColumns = Metric(30.0, .anatomy("\(capture): the basics box ends at y 288 px, the list at 348 px"))
+    let columnGap = Metric(16.0, .anatomy("\(capture): the list ends at x 808 px, the drawing starts at 840 px"))
+    let listWidth = Metric(340.0, .anatomy("\(capture): the list spans x 128 to 808 px"))
+    let listBottom = Metric(27.0, .anatomy("\(capture): the list ends at y 1246 px of 1300"))
+    let listMinHeight = Metric(200.0, .guess("the list's height on a short screen"))
+    let boxRadius = Metric(8.0, .guess("the list box's corner"))
+    let searchHeight = Metric(41.0, .anatomy("\(capture): the search row spans y 348 to 430 px"))
+    let searchInset = Metric(16.0, .anatomy("\(capture): the magnifier starts at x 162 px"))
+    let searchGap = Metric(6.0, .anatomy("\(capture): the magnifier ends near x 188 px, the placeholder starts at 200 px"))
+    let searchGlyph = Metric(15.0, .anatomy("\(capture): the magnifier is about 26 px tall"))
+    let headerHeight = Metric(28.0, .anatomy("\(capture): the Default Shortcuts row spans y 430 to 486 px"))
+    let headerInset = Metric(16.0, .anatomy("\(capture): 'Default Shortcuts' starts at x 160 px"))
+    let rowHeight = Metric(48.0, .anatomy("\(capture): rows centred at y 554, 650, 746 px"))
+    let rowInset = Metric(24.0, .anatomy("\(capture): titles start at x 176 px, hairlines span 176 to 776 px, key caps end at 760 px"))
+    let listPadding = Metric(8.0, .guess("space under the last row"))
+    let keyGap = Metric(4.0, .anatomy("\(capture): the key caps are 7 px apart"))
+    let titleSize = Metric(15.0, .guess("'Custom Shortcuts' is a heading, larger than the rows"))
+    let titleTop = Metric(22.0, .anatomy("\(capture): the key caps end at y 476 px, the heading is centred at 542 px"))
+    let subtitleTop = Metric(8.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
+    let subtitleLeading = Metric(2.0, .anatomy("\(capture): paragraph lines 30 px apart"))
+    let moreGlyph = Metric(17.0, .anatomy("\(capture): the … circle is 46 px wide"))
 }

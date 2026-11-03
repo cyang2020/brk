@@ -97,25 +97,28 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertEqual(ShortcutsCopy.priority(.pageThenApp), "Press this shortcut once to use the website's shortcut. Press it twice to use \(Product.name)'s shortcut.")
     }
 
-    /// changed shortcuts first, then the defaults menu by menu; the filter matches titles and shortcuts
+    /// changed shortcuts first, then the defaults by name as Arc sorts them; the filter matches titles and shortcuts
     func test_sectionsPutTheUsersShortcutsFirstAndFilter() {
         let list = rows([.reloadPage: KeyOverride(chord: KeyChord([.option, .command], .r), priority: nil)])
         let sections = ShortcutsPane.sections(list, filter: "")
-        XCTAssertEqual(sections.first?.title, ShortcutsCopy.customized)
+        XCTAssertEqual(sections.map(\.title), [ShortcutsCopy.customized, ShortcutsCopy.defaults])
         XCTAssertEqual(sections.first?.rows.map(\.action), [.reloadPage])
-        XCTAssertEqual(sections.dropFirst().first?.title, "\(ShortcutsCopy.defaults): \(Product.name)")
-        XCTAssertEqual(sections.dropFirst(2).map(\.title), ["File", "Edit", "View", "Spaces", "Tabs", "Archive", "Extensions", "Window", "Help"])
         XCTAssertEqual(sections.flatMap(\.rows).count, ActionID.allCases.count)
-        XCTAssertEqual(ShortcutsPane.sections(list, filter: "⌘T").flatMap(\.rows).map(\.action), [.newTab, .reopenLastClosedTab], "⌘T and ⇧⌘T")
-        XCTAssertEqual(ShortcutsPane.sections(list, filter: "refresh").flatMap(\.rows).map(\.action),
-                       [.reloadPage, .forceReloadPage, .clearCookies, .clearCache], "the customized one first")
-        XCTAssertEqual(ShortcutsPane.sections(rows(), filter: "").first?.title, "\(ShortcutsCopy.defaults): \(Product.name)", "nothing customized")
+        let titles = sections[1].rows.map(ShortcutsCopy.title(of:))
+        XCTAssertEqual(titles, titles.sorted { $0.compare($1, options: .caseInsensitive) == .orderedAscending }, "Default Shortcuts by name")
+        XCTAssertEqual(["Capture Full Page", "Capture in Portrait Mode", "Capture…"].sorted { $0.compare($1, options: .caseInsensitive) == .orderedAscending },
+                       ["Capture Full Page", "Capture in Portrait Mode", "Capture…"], "Arc's order in P38-e")
+        XCTAssertEqual(Set(ShortcutsPane.sections(list, filter: "⌘T").flatMap(\.rows).map(\.action)), [.newTab, .reopenLastClosedTab], "⌘T and ⇧⌘T")
+        let refresh = ShortcutsPane.sections(list, filter: "refresh").flatMap(\.rows).map(\.action)
+        XCTAssertEqual(refresh.first, .reloadPage, "the customized one first")
+        XCTAssertEqual(Set(refresh), [.reloadPage, .forceReloadPage, .clearCookies, .clearCache])
+        XCTAssertEqual(ShortcutsPane.sections(rows(), filter: "").map(\.title), [ShortcutsCopy.defaults], "nothing customized")
     }
 
     /// rendered for real (SwiftUI in an NSHostingView): one shortcut field per action, each showing its shortcut
     func test_thePaneShowsAFieldPerActionWithItsShortcut() {
         let list = rows([.newTab: KeyOverride(chord: KeyChord(.command, .e), priority: nil)])
-        let host = NSHostingView(rootView: ShortcutsPane(rows: list, dispatch: { _ in }).frame(width: 700))
+        let host = NSHostingView(rootView: ShortcutsPane(rows: list, dispatch: { _ in }, height: 6000).frame(width: 700))
         host.frame = CGRect(x: 0, y: 0, width: 700, height: 6000)
         host.layoutSubtreeIfNeeded()
         func recorders(_ view: NSView) -> [ChordRecorderView] { (view as? ChordRecorderView).map { [$0] } ?? view.subviews.flatMap(recorders) }
@@ -124,5 +127,6 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertEqual(fields.first?.accessibilityLabel(), "⌘E", "the customized New Tab… comes first")
         XCTAssertTrue(fields.contains { $0.accessibilityLabel() == "⇧⌘N" }, "New Incognito Window")
         XCTAssertTrue(fields.contains { $0.accessibilityLabel() == ShortcutsCopy.record }, "unset rows offer to record")
+        XCTAssertTrue(fields.contains { ($0.subviews.first as? NSTextField)?.stringValue == ShortcutsCopy.unsetCap }, "and show Arc's ---")
     }
 }

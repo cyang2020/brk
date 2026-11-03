@@ -25,6 +25,8 @@ enum SettingsEditingScenario {
         try app.click(.settingsField("showFullURLInToolbar"))
         try open(.profiles)
         try app.click(.settingsField("searchSuggestions-default"))
+        try app.click(.settingsField("editProfile")) // Arc's pencil under Your Profiles starts the rename.
+        try app.settle()
         try app.click(.settingsField("profileName-default"))
         try app.press("cmd+a")
         try app.type("Personal")
@@ -33,6 +35,8 @@ enum SettingsEditingScenario {
             guard case .settings(let s) = try app.send(.settings) else { return false }
             return s.profiles.first?.profile.name == "Personal"
         }
+        try app.click(.settingsField("addProfile")) // + under Your Profiles asks for the name.
+        try app.settle()
         try app.click(.settingsField("newProfileName"))
         try app.type("Settings Work")
         try app.click(.settingsField("createProfile"))
