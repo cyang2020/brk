@@ -45,6 +45,8 @@ enum CommandInventory {
         .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
         .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
         .tabTools(.spaceIntoFolder(space, into: space)),
+        .tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: false)), .tabTools(.closeGroup(item)), .tabTools(.removeGroupHeader(item)),
+        .tabTools(.openFolder(item)), .tabTools(.replacePinned(item)), .tabTools(.muteAll(true)), .split(.addPaneAt(.left)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
@@ -122,6 +124,7 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
+        .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
         .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example), .aiTranslated(AIRequestID("ghost"), false),
@@ -286,6 +289,12 @@ enum CommandInventory {
             case .customize: "customize"
             case .addToSplit: "addToSplit"
             case .spaceIntoFolder: "spaceIntoFolder"
+            case .siteDisplay: "siteDisplay"
+            case .closeGroup: "closeGroup"
+            case .removeGroupHeader: "removeGroupHeader"
+            case .openFolder: "openFolder"
+            case .replacePinned: "replacePinned"
+            case .muteAll: "muteAll"
             }
         case .page(let c):
             switch c {
@@ -327,7 +336,7 @@ enum CommandInventory {
             case .togglePinnedSection: "togglePinnedSection"
             }
         case .split(let c): switch c {
-            case .addPane: "addPane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
+            case .addPane: "addPane"; case .addPaneAt: "addPaneAt"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
             case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
             case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
             case .restore: "restore"; case .dropTab: "dropTab"
@@ -488,6 +497,7 @@ enum CommandInventory {
         case .externalURL: "externalURL"
         case .suggestions: "suggestions"
         case .aiProvidersDetected: "aiProvidersDetected"
+        case .globalShortcut: "globalShortcut"
         case .aiResult: "aiResult"
         case .aiPartial: "aiPartial"
         case .aiPageRead: "aiPageRead"
@@ -507,7 +517,7 @@ enum CommandInventory {
         case "page.closed": return #"page\([^\n]*\.closed\)"#
         case "window.becameKey", "window.resignedKey", "window.activity": return #"\."# + parts[1] + #"\b"#
         case "window.closed": return #"\.window\([^\n]*\.closed\)"#
-        case "exportFinished", "output", "download", "contextDisposed", "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult": return #"\."# + name + #"\b"#
+        case "exportFinished", "output", "download", "contextDisposed", "clockTick", "externalURL", "suggestions", "aiProvidersDetected", "aiResult", "globalShortcut": return #"\."# + name + #"\b"#
         default:
             if parts.count == 1 { return #"\."# + parts[0] + #"\b"# }
             if name.hasPrefix("later.") { return #"\.later\(\s*\."# + parts[1] + #"\b"# }

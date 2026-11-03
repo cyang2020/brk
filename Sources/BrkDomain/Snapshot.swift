@@ -224,6 +224,7 @@ public struct LiveFolderSnapshot: Sendable, Equatable, Codable {
     public var state: LiveFolderState
     /// The last refresh this session.
     public var updatedAt: Instant?
+    public init(source: String, state: LiveFolderState, updatedAt: Instant?) { self.source = source; self.state = state; self.updatedAt = updatedAt }
 }
 
 public enum LiveFolderState: Sendable, Equatable, Codable {

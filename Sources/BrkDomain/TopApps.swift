@@ -112,12 +112,14 @@ public struct HoverMeeting: Hashable, Sendable, Codable {
     public var end: Instant
     /// The meeting's link when it is one Join may open (https).
     public var joinURL: URL?
+    public init(title: String, start: Instant, end: Instant, joinURL: URL?) { self.title = title; self.start = start; self.end = end; self.joinURL = joinURL }
 }
 
 public struct HoverPage: Hashable, Sendable, Codable {
     public var title: String
     public var url: URL
     public var visitedAt: Instant
+    public init(title: String, url: URL, visitedAt: Instant) { self.title = title; self.url = url; self.visitedAt = visitedAt }
 }
 
 public enum TopAppCopy {

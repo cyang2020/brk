@@ -20,6 +20,9 @@ public struct TravelCandidate: Sendable, Equatable, Codable {
     /// SF Symbol name.
     public var symbol: String
     public var command: Command
+    public init(title: String, triggers: [String], symbol: String, command: Command) {
+        self.title = title; self.triggers = triggers; self.symbol = symbol; self.command = command
+    }
 }
 
 public enum TypeTravelCopy {
@@ -91,7 +94,7 @@ extension AppState {
         if muted { add(TypeTravelCopy.unmuteAll, "speaker.wave.2", ["Audio"], .tabTools(.muteAll(false))) }
         // Arc's `undoAction(actionName:)`: the toast's own words name what Undo brings back ("Undo Cleared Tabs").
         if session.windows[window]?.toastUndo != nil, let text = session.windows[window]?.toast?.text {
-            let what = text.trimmingCharacters(in: CharacterSet(charactersIn: "!. "))
+            let what = String(text.split(separator: "!").first ?? Substring(text)).trimmingCharacters(in: .whitespaces)
             add("\(TypeTravelCopy.undo) \(what)", "arrow.uturn.backward", [TypeTravelCopy.undo], .tabTools(.undoToast))
         }
         if standard, resolveTab(.focused, in: window) != nil {
