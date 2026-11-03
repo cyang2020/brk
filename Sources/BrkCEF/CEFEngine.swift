@@ -28,6 +28,8 @@ public final class CEFEngine: WebEngine {
 
     public weak var delegate: (any WebEngineDelegate)?
     public private(set) var pageLog: [PageLogEntry] = []
+    /// The Chromium the pinned CEF headers (and so the downloaded binary) were built from.
+    public var engineVersion: String? { "\(CHROME_VERSION_MAJOR).\(CHROME_VERSION_MINOR).\(CHROME_VERSION_BUILD).\(CHROME_VERSION_PATCH)" }
 
     /// Which incarnation of each id is live or closing (BrkEngine/PageLedger.swift). The browsers themselves:
     var pictureInPictureWindows: [CefBrowser] {

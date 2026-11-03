@@ -286,6 +286,12 @@ final class ControlExecutor {
                     throw Failure(message: "no visible view \(viewID.identifier) in any window")
                 }
                 target = window
+                // A control below the fold of a scrolling pane (the settings window's Max and Links) is scrolled to,
+                // as a user would before clicking it.
+                if view.enclosingScrollView != nil, view.visibleRect.size != view.bounds.size {
+                    view.scrollToVisible(view.bounds)
+                    window.displayIfNeeded()
+                }
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
                 let hit = (window.contentView?.superview ?? window.contentView)?.hitTest(at)
                 print("[control] click id=\(viewID.identifier) window=\(window.windowNumber) view=\(NSStringFromClass(type(of: view))) frame=\(view.frame) visible=\(view.visibleRect) point=\(at) hit=\(hit.map { NSStringFromClass(type(of: $0)) } ?? "nil") key=\(window.isKeyWindow) active=\(NSApp.isActive)")

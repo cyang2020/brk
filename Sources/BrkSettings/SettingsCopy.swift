@@ -19,6 +19,7 @@ public enum SettingsCopy {
         case .profiles: "Profiles"
         case .shortcuts: "Shortcuts"
         case .links: "Links"
+        case .icon: "Icon"
         case .advanced: "Advanced"
         }
     }
@@ -33,22 +34,26 @@ public enum SettingsCopy {
         case .profiles: "Profile Preferences"
         case .shortcuts: "Shortcuts Preferences"
         case .links: "Link Preferences"
+        case .icon: "Icon Preferences"
         case .advanced: "Advanced Preferences"
         }
     }
 
-    /// SF Symbols for the toolbar. Arc draws General and Links with its own vectors (`PrefsGeneral`,
-    /// `LinksPrefPaneIcon`, not shipped here) and uses `command.circle.fill` in the Shortcuts pane; the rest are ours.
+    /// SF Symbols for the toolbar, the closest to Arc 1.170's own toolbar drawings (P38): a gear, a person, Max's
+    /// four-petal mark, two windows, a keyboard, the app's squircle, three sliders.
     public static func symbol(_ pane: SettingsPane) -> String {
         switch pane {
         case .general: "gearshape"
-        case .max: "sparkles"
-        case .profiles: "person.crop.circle"
-        case .shortcuts: "command"
-        case .links: "link"
-        case .advanced: "gearshape.2"
+        case .max: "circle.grid.cross"
+        case .profiles: "person"
+        case .shortcuts: "keyboard"
+        case .links: "macwindow.on.rectangle"
+        case .icon: "app"
+        case .advanced: "slider.horizontal.3"
         }
     }
+
+    public static let back = "Back"
 
     // MARK: General
 
@@ -64,6 +69,22 @@ public enum SettingsCopy {
     /// Observed.
     public static let warnBeforeQuitting = "Warn before quitting"
     public static let appearanceLabel = "Appearance:"
+    /// Observed (P38-a).
+    public static let previews = "Previews"
+    public static let previewsSettingsButton = "Previews Settings…"
+    /// The Previews sheet (P13-settings-arc.png): Arc's title and paragraph with the product's name.
+    public static var showPreviews: String { "Show \(Product.name) Previews:" }
+    public static var previewsExplanation: String {
+        "Save a click! Hover your mouse over a \(Product.name) Folder, Pinned, or Favorited tab to quickly preview what you need from that site!"
+    }
+    public static let learnMore = "Learn more"
+    public static var previewsDetail: String {
+        "Hover a folder to see the tabs inside it, or a Pinned or Favorited tab to see its page and address. Links on a page preview after a deliberate hover. Max’s 5-Second Previews add a short summary, written by your local AI tool."
+    }
+    public static var folderAndTabPreviews: String { "\(Product.name) Folders, Pinned and Favorited tabs, and links" }
+    public static let maxLinkPreviews = "5-Second Previews (Max)"
+    public static let done = "Done"
+    public static let numberedFavorites = "Include Favorites in numbered tab shortcuts"
     /// View > Appearance's heading (observed).
     public static let webAppearance = "Websites, Easels, and Notes will use:"
 
@@ -146,16 +167,32 @@ public enum SettingsCopy {
     public static let shiftClickPeek = "Open a Peek window when clicking on links with Shift held"
 
     public static let littleArcLabel = "Little Arc:"
-    /// Observed ("a smaller, simpler Arc window").
+    /// Observed ("a smaller, simpler Arc window"), with the product's name for both.
     public static var littleArcDescription: String {
-        "Little Arc is a smaller, simpler \(Product.name) window. It’s perfect for quick lookups and reading funny tweets your friends send you."
+        "Little \(Product.name) is a smaller, simpler \(Product.name) window. It’s perfect for quick lookups and reading funny tweets your friends send you."
     }
+    /// Observed ("Links from other apps open in Little Arc").
+    public static var externalLinksInLittleArc: String { "Links from other apps open in Little \(Product.name)" }
     /// Observed.
-    public static let externalLinksInLittleArc = "Links from other apps open in Little Arc"
-    /// Observed.
-    public static let optionCommandClickLittleArc = "Open Little Arc when clicking on links with ⌥⌘ held"
-    /// Observed.
-    public static let littleArcAutoArchive = "Archive Little Arcs after:"
+    public static var optionCommandClickLittleArc: String { "Open Little \(Product.name) when clicking on links with ⌥⌘ held" }
+    /// Observed ("Archive Little Arcs after:").
+    public static var littleArcAutoArchive: String { "Archive Little \(Product.name)s after:" }
+    /// Observed ("Open Little Arc when I press " then the shortcut, " in any app"): the New Little Window shortcut as
+    /// the Shortcuts pane has it.
+    public static func globalLittleArcShortcut(_ shortcuts: [ShortcutRow]) -> String {
+        let state = shortcuts.first { $0.action == .showLittleArc }?.state
+        let chord: String = if case .valid(let key)? = state { KeyGlyphs.text(key) } else { "its shortcut" }
+        return "Open Little \(Product.name) when I press \(chord) in any app"
+    }
+    /// Air Traffic Control moved one level down (observed button "Air Traffic Control…").
+    public static let airTrafficControlButton = "Air Traffic Control…"
+    public static func routesSummary(_ count: Int) -> String {
+        switch count {
+        case 0: "Choose where specific sites open"
+        case 1: "1 route chooses where a site opens"
+        default: "\(count) routes choose where sites open"
+        }
+    }
 
     // MARK: Shortcuts
 
@@ -232,6 +269,21 @@ public enum SettingsCopy {
 
     // MARK: Advanced (all observed)
 
+    /// The buttons under the Advanced cards (P38-g, observed).
+    public static let moreSettings = "More Settings…"
+    public static let moreSettingsTitle = "More Settings"
+    public static let resetTranslatedSitePrompts = "Reset Translated-site Prompts"
+    public static let exportData = "Export Data"
+    /// Observed (P38-g): the Shared Quotes row's subtitle.
+    public static let sharedQuotesNote = "If disabled, you can still copy URL as a quote using ⌃⇧⌘C."
+    public static let defaultBrowser = "Default browser"
+    public static var isDefaultBrowser: String { "\(Product.name) is your default web browser." }
+    public static let importBrowserFile = "Import File…"
+    public static let importBrowserFileTitle = "Import an exported browser file"
+    public static let tourTitle = "Learn the basics"
+    public static let sidebarData = "Sidebar Data: Import, Sync and Export"
+    public static var tour: String { "Open \(Product.name) 101" }
+
     public static var restoreWindowsOnLaunch: String { "When opening \(Product.name), restore windows from previous session" }
     public static var soundEffects: String { "Play \(Product.name) sound effects" }
     public static let hapticsOnReorder = "Haptic feedback when reordering tabs"
@@ -250,6 +302,12 @@ public enum SettingsCopy {
     public static let advancedFeedbackSymbol = "speaker.wave.2.fill"
 
     // MARK: Shared
+
+    /// A threshold as Arc's pickers list it, " (default)" after the default one (P38-d "12 hours (default)", P38-f
+    /// "6 hours (default)").
+    public static func threshold(_ threshold: AutoArchiveThreshold, default standard: AutoArchiveThreshold) -> String {
+        threshold == standard ? "\(Self.threshold(threshold)) (default)" : Self.threshold(threshold)
+    }
 
     /// Arc's seven choices (visual-and-copy.md "Auto-archive options and durations").
     public static func threshold(_ threshold: AutoArchiveThreshold) -> String {
