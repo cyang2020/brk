@@ -17,10 +17,9 @@ import BrkUIKit
     /// Started by ⇧⌘-drag on the page: the "Next time, hold ⇧⌘" lesson is already learned.
     private var viaShortcut = false
     private var shortcutPending = false
-    /// Above the dim and below the hint card: greys the page out (Arc's mask is colourless, P33-a).
-    private let shade = CaptureShadeView()
-    /// The hint card, the ⇧⌘ lesson and the selection's blue line, drawn above the grey-out so they keep their colours.
-    private let chrome = CaptureChromeView()
+    /// The page as it was when capture mode began, in greys: Arc's mask shows the page colourless (P33-a, the blue card
+    /// reads #949191). Chromium's surface cannot be blended from here, so the overlay draws this copy under its dim.
+    private var backdrop: CGImage?
     private let menuCard = CaptureMenuCard()
     private var tracking: NSTrackingArea?
 
@@ -30,8 +29,7 @@ import BrkUIKit
         wantsLayer = true
         identify(.tabTool("capture-overlay"))
         menuCard.chosen = { [weak self] action in self?.dispatch(.capture(.act(action))) }
-        chrome.drawChrome = { [weak self] in self?.drawChrome() }
-        addSubview(shade); addSubview(chrome); addSubview(menuCard)
+        addSubview(menuCard)
         isHidden = true
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -44,7 +42,7 @@ import BrkUIKit
 
     func render(_ value: CaptureSnapshot?, frames: WindowFrames, peek: PeekSnapshot?) {
         // A full-page capture has nothing to select: Arc's page stays as it is until the copied toast (P33-d).
-        guard let value, value.request.mode != .fullPage else { isHidden = true; snapshot = nil; window?.invalidateCursorRects(for: self); return }
+        guard let value, value.request.mode != .fullPage else { isHidden = true; snapshot = nil; backdrop = nil; window?.invalidateCursorRects(for: self); return }
         let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.page
             ?? (peek?.page == value.request.document.browser.page ? frames.peek : nil)
         guard let rect else { isHidden = true; snapshot = nil; return }
@@ -52,6 +50,8 @@ import BrkUIKit
         let retaken = snapshot?.image != nil && value.image == nil && !value.rendering
         snapshot = value; page = rect; isHidden = false
         if fresh {
+            // Before this render shows the overlay, the window on screen is still the plain page.
+            backdrop = window.flatMap { Self.greyscale(of: $0, area: rect) }
             viaShortcut = shortcutPending; shortcutPending = false
             anchor = nil
             let width = min(360, rect.width, rect.height * 9 / 16)
@@ -73,27 +73,20 @@ import BrkUIKit
 
     // MARK: Drawing
 
-    override func layout() {
-        super.layout()
-        shade.frame = bounds; chrome.frame = bounds
-    }
-
     override func draw(_ dirtyRect: NSRect) {
-        guard snapshot != nil else { return }
+        guard let snapshot else { return }
         let cut = selection.isEmpty ? nil : selection
         // The sidebar and window frame fade; the page dims to grey (P33-a: white → #C6C6C6, black text → #959594).
         let outside = NSBezierPath(rect: bounds); outside.append(NSBezierPath(rect: page)); outside.windingRule = .evenOdd
         NSColor.white.withAlphaComponent(Metrics.capture.sidebarFade.value).setFill(); outside.fill()
         let dim = NSBezierPath(rect: page)
         if let cut { dim.append(NSBezierPath(rect: cut)); dim.windingRule = .evenOdd }
+        if let backdrop {
+            NSGraphicsContext.saveGraphicsState(); dim.addClip()
+            NSImage(cgImage: backdrop, size: page.size).draw(in: page, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+            NSGraphicsContext.restoreGraphicsState()
+        }
         NSColor.black.withAlphaComponent(Metrics.capture.pageDim.value).setFill(); dim.fill()
-        shade.render(page: page, cut: cut)
-        chrome.needsDisplay = true
-    }
-
-    private func drawChrome() {
-        guard let snapshot else { return }
-        let cut = selection.isEmpty ? nil : selection
         if let cut, cut.width > 12, cut.height > 10 {
             let line = CGRect(x: cut.minX + 4.5, y: cut.maxY - 8, width: cut.width - 9, height: 4)
             NSColor(srgbRed: 0x99 / 255.0, green: 0xBD / 255.0, blue: 0xE7 / 255.0, alpha: 1).setFill()
@@ -210,6 +203,18 @@ import BrkUIKit
                                                 width: selection.width / page.width, height: selection.height / page.height))))
     }
 
+    /// `area` of the window's own pixels (content coordinates, top-left origin), converted to grey. Reading the app's own
+    /// window needs no screen-recording permission.
+    static func greyscale(of window: NSWindow, area: CGRect) -> CGImage? {
+        guard window.frame.width > 0, let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]) else { return nil }
+        let scale = CGFloat(image.width) / window.frame.width
+        guard let part = image.cropping(to: CGRect(x: area.minX * scale, y: area.minY * scale, width: area.width * scale, height: area.height * scale).integral),
+              let context = CGContext(data: nil, width: part.width, height: part.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        context.draw(part, in: CGRect(x: 0, y: 0, width: part.width, height: part.height))
+        return context.makeImage()
+    }
+
     /// A crosshair with a small camera at its upper right (P33-a/b).
     static let cameraCursor: NSCursor = {
         let size = NSSize(width: 40, height: 40), hot = NSPoint(x: 13, y: 27)
@@ -232,36 +237,6 @@ import BrkUIKit
         }
         return NSCursor(image: image, hotSpot: hot)
     }()
-}
-
-/// Neutral grey composited with a saturation blend: whatever is under it keeps its brightness and loses its colour.
-@MainActor final class CaptureShadeView: NSView {
-    private var page = CGRect.zero, cut: CGRect?
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layerUsesCoreImageFilters = true
-        compositingFilter = CIFilter(name: "CISaturationBlendMode")
-    }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    override var isFlipped: Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    func render(page: CGRect, cut: CGRect?) {
-        guard page != self.page || cut != self.cut else { return }
-        self.page = page; self.cut = cut; needsDisplay = true
-    }
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(rect: page)
-        if let cut { path.append(NSBezierPath(rect: cut)); path.windingRule = .evenOdd }
-        NSColor(white: 0.5, alpha: 1).setFill(); path.fill()
-    }
-}
-
-@MainActor final class CaptureChromeView: NSView {
-    var drawChrome: (() -> Void)?
-    override var isFlipped: Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    override func draw(_ dirtyRect: NSRect) { drawChrome?() }
 }
 
 /// The menu card beside a finished selection (P33-c): a Send To… field, then Save to Library, Copy, Save…, Send via

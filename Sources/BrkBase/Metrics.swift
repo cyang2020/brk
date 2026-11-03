@@ -421,7 +421,7 @@ public struct BoostPanelMetrics: MetricGroup {
 
 /// Arc's capture mode, measured on this run's 2x shots (P33-a/b/c/d-arc.png).
 public struct CaptureMetrics: MetricGroup {
-    public let pageDim = Metric(0.26, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: white page under the mask reads #C6C6C6 (0.224 drawn read #CECECD)"))
+    public let pageDim = Metric(0.224, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: white page under the mask reads #C6C6C6"))
     public let sidebarFade = Metric(0.55, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: sidebar text #1A1A1A reads #959594 on an unchanged background"))
     public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
     public let hintCardRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
