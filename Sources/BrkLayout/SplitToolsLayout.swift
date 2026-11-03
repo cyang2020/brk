@@ -3,19 +3,6 @@ import BrkDomain
 import CoreGraphics
 
 public enum SplitToolsLayout {
-    public static func toolbar(in area: CGRect, avoiding overlay: CGRect?) -> CGRect {
-        let m = Metrics.splitTools
-        let width = min(m.width.value, area.width), height = m.height.value
-        let top = area.minY + m.inset.value
-        let right = CGRect(x: max(area.minX, area.maxX - width - m.inset.value), y: top, width: width, height: height)
-        guard let overlay, right.intersects(overlay) else { return right }
-        let left = CGRect(x: area.minX + m.inset.value, y: top, width: width, height: height)
-        if area.contains(left), !left.intersects(overlay) { return left }
-        let below = CGRect(x: right.minX, y: overlay.maxY + m.overlayGap.value, width: width, height: height)
-        if area.contains(below) { return below }
-        return CGRect(x: area.minX, y: max(area.minY, area.maxY - height), width: width, height: height)
-    }
-
     /// The nearest edge within one quarter of the content area. The center cancels a drop.
     public static func edge(at point: CGPoint, in area: CGRect) -> SplitEdge? {
         guard area.width > 0, area.height > 0, area.contains(point) else { return nil }

@@ -84,7 +84,7 @@ enum SplitToolsScenarios {
         try app.flush(); try app.restart()
         try expect(try app.view().content.orientation == .horizontal && app.view().content.panes.map(\.fraction) == horizontal,
                    "restart lost horizontal divider fractions")
-        try app.click(.splitTool(.splitVertical))
+        try SplitParentScenarios.splitTool(app, .splitVertical)
         try expect(try app.view().content.orientation == .vertical, "orientation button did not stack panes")
         divider = try visible(app.native(), .divider(1)).frame
         try drag(app, from: CGPoint(x: divider.midX, y: divider.midY), to: CGPoint(x: divider.midX, y: divider.midY + 36))
@@ -132,7 +132,7 @@ enum SplitToolsScenarios {
         try expect(try app.view().content.panes.map(\.tab) == [target, source], "right-edge pointer drag did not group tabs")
         try expect(try app.pageLog().filter { $0.kind == .created && ($0.page.item == target || $0.page.item == source) } == idsBefore,
                    "drop replaced an original browser or changed its generation")
-        try app.click(.splitTool(.separateAllSplit)); try app.click(.row(target))
+        try SplitParentScenarios.splitTool(app, .separateAllSplit); try app.click(.row(target))
         row = try visible(app.native(), .row(source)).frame
         area = try app.native().computed.contentArea
         try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: CGPoint(x: area.minX + 12, y: area.midY))
@@ -176,20 +176,20 @@ enum SplitToolsScenarios {
         _ = try app.send(.activate(window: window))
         try app.click(.splitSegment(third))
         let identities = try app.native(window).pages.mapValues(\.browserID)
-        try app.click(.splitTool(.maximizeSplitPane))
+        try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
         try expect(try app.view(window).content.expanded, "expand control missed")
         try expect(try app.native(window).computed.cards.count == 1 && app.native(window).computed.dividers.isEmpty, "expanded presentation still tiled")
         try expect(try !app.view(other).content.expanded && app.view(other).content.panes.first(where: \.focused)?.tab == second, "expansion changed the other window")
         try app.press("ctrl+alt+1")
         try expect(try app.native(window).focusedPage == PageID(window: window, item: first), "expanded pane shortcut did not focus")
-        try app.click(.splitTool(.maximizeSplitPane))
+        try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
         try expect(try app.native(window).pages.mapValues(\.browserID) == identities, "expand/restore replaced pages")
         try app.click(.splitSegment(third)); try fill(app, pane: 2, text: "survives")
-        try app.click(.splitTool(.separateTabFromSplitView))
+        try SplitParentScenarios.splitTool(app, .separateTabFromSplitView)
         try expect(try app.view(window).content.panes.map(\.tab) == [third], "Separate did not select original pane")
         try title(app, PageID(window: window, item: third), "Split text:survives")
         try expect(try app.view(other).content.split == split && app.view(other).content.panes.first(where: \.focused)?.tab == second, "Separate changed other window selection")
-        try app.click(.row(split)); try app.click(.splitTool(.separateAllSplit))
+        try app.click(.row(split)); try SplitParentScenarios.splitTool(app, .separateAllSplit)
         try expect(try app.view(other).content.panes.map(\.tab) == [second], "Separate All lost other focused page")
         try expect(try tab(second, in: app.view(other))?.url == otherURL, "Separate All lost window-local address")
         try expect(try app.view(window).space.pinned.rows.map(\.id) == [first, second, third], "separation changed pinned pane order")
@@ -223,9 +223,9 @@ enum SplitToolsScenarios {
         try app.type(app.site.url("split-tools.html?private-two").absoluteString); try app.press("return")
         let second = try app.view(owner).content.panes[1].tab
         try app.waitForPageInput(PageID(window: owner, item: second), at: app.site.url("split-tools.html?private-two"))
-        try app.click(.splitTool(.splitVertical))
+        try SplitParentScenarios.splitTool(app, .splitVertical)
         try expect(try app.view(owner).content.orientation == .vertical, "private orientation control failed")
-        try app.click(.splitTool(.maximizeSplitPane)); try app.click(.splitTool(.maximizeSplitPane))
+        try SplitParentScenarios.splitTool(app, .maximizeSplitPane); try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
         try app.press("ctrl+alt+1")
         try app.press("ctrl+shift+-")
         try expect(try app.view(owner).content.split == nil, "private singleton did not dissolve")
@@ -253,8 +253,8 @@ enum SplitToolsScenarios {
             return library.downloads.contains { $0.filename == "transfer-post-split.bin" && $0.state == .inProgress && $0.received > 0 }
         }
         try app.dispatch(.library(.close))
-        try app.click(.splitTool(.maximizeSplitPane)); try app.click(.splitTool(.maximizeSplitPane))
-        try app.click(.splitTool(.separateTabFromSplitView))
+        try SplitParentScenarios.splitTool(app, .maximizeSplitPane); try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
+        try SplitParentScenarios.splitTool(app, .separateTabFromSplitView)
         try expect(try app.native().pages[page]?.browserID == browser, "split tools replaced the download's browser")
         try app.dispatch(.library(.open(.downloads)))
         try app.waitUntil("POST transfer completes after separation", timeout: 18) {
