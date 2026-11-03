@@ -74,6 +74,16 @@ public struct CardFrame: Sendable, Equatable, Codable {
     public var content: PaneContent
     public var rect: CGRect
     public var cornerRadius: Double
+    /// A split pane's own header strip along the top of its card (Arc: each pane has back, forward, reload, its
+    /// host and close; Metrics.content.paneHeaderHeight), nil outside a split.
+    public var header: CGRect? = nil
+
+    /// Where the page draws: the card under its header and the header's hairline, else the whole card.
+    public var page: CGRect {
+        guard let header else { return rect }
+        let top = header.height + Metrics.content.paneHeaderSeparator.value
+        return CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(0, rect.height - top))
+    }
 }
 
 public struct SidebarFrames: Sendable, Equatable, Codable {
@@ -118,7 +128,7 @@ public struct RowFrame: Sendable, Equatable, Codable {
 /// this enum, never typed by hand), and `WindowFrames.frame(of:)` is its computed frame when layout owns it.
 public enum ViewID: Hashable, Sendable, Codable {
     case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String), boostControl(String)
-    case siteInfo
+    case siteInfo, paneSiteInfo
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
     case section(SectionKind)
@@ -138,8 +148,8 @@ public enum ViewID: Hashable, Sendable, Codable {
     // Wave 2
     /// The Library host, its page strip cells, its close button; the Downloads and History rows (F5).
     case library, libraryPage(LibraryPage), libraryClose, downloadEntry(DownloadID), historyEntry(Int)
-    /// The Peek card, its close and "Open in" buttons (F3).
-    case peek, peekClose, peekOpenIn
+    /// The Peek card and its round buttons: close, open as a tab, open in a split (F3).
+    case peek, peekClose, peekOpenIn, peekSplit
     /// The scratch section of an ephemeral window's sidebar and the Little Arc hint strip (F3).
     case littleHint
     /// The profile badge in the URL pill and the profile dialog (F2).
@@ -158,6 +168,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .floatingSidebar: "floating-sidebar"
         case .titleRow: "title-row"
         case .siteInfo: "site-info"
+        case .paneSiteInfo: "pane-site-info"
         case .urlPill: "url-pill"
         case .favoritesTray: "favorites"
         case .favorite(let id): "favorite-\(id)"
@@ -208,6 +219,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .peek: "peek"
         case .peekClose: "peek-close"
         case .peekOpenIn: "peek-open-in"
+        case .peekSplit: "peek-split"
         case .littleHint: "little-hint"
         case .profileBadge: "profile-badge"
         case .profileDialog: "profile-dialog"
@@ -253,9 +265,9 @@ extension WindowFrames {
         case .libraryPage(let page): return library?.pageCells[page]
         case .archive: return library?.page   // the archive page fills the Library's page area while it is the open page
         case .peek: return peek
-        case .siteInfo, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+        case .siteInfo, .paneSiteInfo, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
-             .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
+             .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
              .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:
             return nil   // view-owned: reported by `actual` only
         }

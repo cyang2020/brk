@@ -112,8 +112,11 @@ public final class SidebarView: NSView {
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
         canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
+        // A blank or incognito window: no favorites, no space dots, "This Window" or "Incognito Tabs" over its own tabs.
+        let thisWindow = SidebarLayout.listsOwnTabs(snapshot.kind)
+        let dockItems = thisWindow ? [] : snapshot.dock
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
-                          dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
+                          dock: dockItems, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
         guard slice != last else { return }
         let previous = last
@@ -135,20 +138,23 @@ public final class SidebarView: NSView {
         backdrop.frame = bounds
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         header.frame = local(f.titleRow)
-        header.render(snapshot.urlPill, frames: f, palette: palette)
+        // In a split each pane has its own back, forward and reload (Arc moves them off the title row).
+        header.render(snapshot.urlPill, frames: f, palette: palette, navigation: snapshot.content.split == nil)
         urlPill.frame = local(f.urlPill)
-        urlPill.render(snapshot.urlPill, palette: palette)
+        urlPill.render(snapshot.urlPill, palette: palette, searchField: thisWindow)
+        favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
         favorites.previewsEnabled = snapshot.tabTools.hoverPreviews
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         spaceHeader.frame = local(f.spaceHeader)
-        spaceHeader.render(space, palette: palette)
+        spaceHeader.render(space, palette: palette, interactive: !thisWindow)
         tablist.frame = local(f.tablistViewport)
-        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
+        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
+                       newTabCurrent: thisWindow && snapshot.content.panes.isEmpty)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
-        dock.render(snapshot.dock, frames: f, palette: palette)
+        dock.render(dockItems, frames: f, palette: palette)
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
@@ -252,7 +258,7 @@ final class TitleRowView: NSView {
     private let forward = GlyphButton()
     private let reload = GlyphButton()
     private var loading = false
-    private var last: (URLPillSnapshot, SidebarFrames, Palette)?
+    private var last: (URLPillSnapshot, SidebarFrames, Palette, Bool)?
 
     init(dispatch: @escaping Dispatch) {
         super.init(frame: .zero)
@@ -277,9 +283,10 @@ final class TitleRowView: NSView {
     /// The title row moves the window (spike unknown 6); its buttons do not.
     override var mouseDownCanMoveWindow: Bool { true }
 
-    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, palette: Palette) {
-        if let last, last.0 == pill, last.1 == f, last.2 == palette { return }
-        last = (pill, f, palette)
+    /// `navigation` false hides back, forward and reload (a split shows them in each pane's header).
+    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, palette: Palette, navigation: Bool = true) {
+        if let last, last.0 == pill, last.1 == f, last.2 == palette, last.3 == navigation { return }
+        last = (pill, f, palette, navigation)
         loading = pill.loading
         let w = Metrics.window, size = Draw.navButton.value, gap = Draw.navGap.value
         let y = (f.titleRow.height - size) / 2
@@ -289,7 +296,7 @@ final class TitleRowView: NSView {
         for button in [reload, forward, back] {
             x -= size
             button.frame = CGRect(x: x, y: y, width: size, height: size)
-            button.isHidden = button.frame.minX < toggle.frame.maxX + gap
+            button.isHidden = !navigation || button.frame.minX < toggle.frame.maxX + gap
             x -= gap
         }
         back.isEnabled = pill.canGoBack
@@ -344,16 +351,23 @@ final class URLPillView: HoverView {
         identify(.urlPill)
     }
 
-    func render(_ pill: URLPillSnapshot, palette: Palette) {
-        if pill == self.pill, palette == self.palette { needsLayout = true; return }
+    /// A blank or incognito window's pill reads as a search field while it has no page (Arc: a magnifier before
+    /// "Search or Enter URL…").
+    private var searchField = false
+
+    func render(_ pill: URLPillSnapshot, palette: Palette, searchField: Bool = false) {
+        let search = searchField && pill.text == nil
+        if pill == self.pill, palette == self.palette, search == self.searchField { needsLayout = true; return }
         self.pill = pill
         self.palette = palette
+        self.searchField = search
         label.stringValue = (pill.text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
         toolTip = "Zoom: \(pill.zoomPercent)%"
         label.textColor = pill.text == nil ? palette.ink.placeholder : palette.ink.secondary
         copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
                         hoverFill: palette.tokens.itemHover)
-        siteInfo.render(.siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
+        siteInfo.render(search ? .search : .siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
+        siteInfo.isEnabled = !search
         shimmer.colors = [NSColor.systemPurple.withAlphaComponent(0.35).cgColor, NSColor.systemBlue.withAlphaComponent(0.7).cgColor, NSColor.systemOrange.withAlphaComponent(0.8).cgColor]
         shimmer.shadowColor = palette.ink.loading.cgColor
         shimmer.shadowOpacity = 0.85
@@ -361,7 +375,8 @@ final class URLPillView: HoverView {
         shimmer.cornerRadius = Metrics.sidebarTools.glowRadius.value
         shimmer.isHidden = !pill.loading
         if !pill.loading { shimmer.removeAllAnimations() }
-        badge.render(pill.profile, palette: palette)
+        // Arc's incognito pill keeps its own background but shows no badge (the 2026-11-03 capture Q03).
+        badge.render(pill.profile?.incognito == true ? nil : pill.profile, palette: palette)
         stateChanged()
         needsLayout = true
     }
@@ -371,7 +386,7 @@ final class URLPillView: HoverView {
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
         copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
         siteInfo.frame = CGRect(x: inset, y: (bounds.height - size) / 2, width: size, height: size)
-        let leading = inset + size + Draw.pillTextLeading.value
+        let leading = inset + size + (searchField ? Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value)
         var trailing = copyLink.alphaValue > 0 ? copyLink.frame.minX : bounds.width - inset
         if !badge.isHidden {
             let width = min(badge.fittingWidth, max(0, (trailing - leading) / 2))

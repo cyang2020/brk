@@ -6,15 +6,16 @@ import BrkUIKit
 
 /// Owner: W2. The content cards and split dividers. Each card is a rounded, clipping layer (Metrics.content
 /// .cornerRadius, continuous) with a separate shadow view behind it (a clipping layer cannot cast its own shadow),
-/// hosting the engine's page surface for its pane. Divider drags dispatch `.split(.resize)` with
-/// `ContentLayout.fractions(afterDragging:...)`.
+/// hosting the engine's page surface for its pane. In a split each card has its own header (`PaneHeaderView`:
+/// back, forward, reload, host, close) and the focused card a ring, as Arc draws them; the split's other actions
+/// are in the header's split menu and the View menu (Arc has no toolbar of split buttons). Divider drags dispatch
+/// `.split(.resize)` with `ContentLayout.fractions(afterDragging:...)`.
 @MainActor
 public final class ContentAreaView: NSView {
     let dispatch: Dispatch
     private var cards: [CardView] = []
     private var shadows: [ShadowView] = []
     private var dividers: [DividerView] = []
-    private let tools: SplitToolsView
     private let dropPreview = SplitDropPreview(frame: .zero)
     private var drop: SplitDropSnapshot?
     private var dropArea = CGRect.zero
@@ -24,9 +25,7 @@ public final class ContentAreaView: NSView {
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
-        tools = SplitToolsView(dispatch: dispatch)
         super.init(frame: .zero)
-        addSubview(tools)
         dropPreview.wantsLayer = true
         dropPreview.layer?.cornerRadius = Metrics.content.cornerRadius.value
         dropPreview.identify(.splitDropPreview)
@@ -49,7 +48,7 @@ public final class ContentAreaView: NSView {
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
     /// i hosts the surface for pane i (`.page`), a white card (`.blank`) or the sad-tab placeholder (`.crashed`).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
-    func render(_ content: ContentSnapshot, frames: WindowFrames, palette: Palette, surface: (PageID) -> NSView?) {
+    func render(_ content: ContentSnapshot, frames: WindowFrames, theme: ResolvedTheme, palette: Palette, surface: (PageID) -> NSView?) {
         frame = CGRect(origin: .zero, size: frames.contentSize)
         drop = content.drop
         dropArea = frames.contentArea
@@ -68,9 +67,19 @@ public final class ContentAreaView: NSView {
         for ((card, shadow), frame) in zip(zip(cards, shadows), frames.cards) {
             shadow.frame = frame.rect
             shadow.layer?.cornerRadius = frame.cornerRadius
+            shadow.isHidden = !Metrics.content.showsShadow.value || frame.cornerRadius == 0   // an edge-to-edge page (Little Arc) casts none
             card.frame = frame.rect
             card.layer?.cornerRadius = frame.cornerRadius
             card.identify(.card(frame.pane))
+            let pane = content.panes.indices.contains(frame.pane) ? content.panes[frame.pane] : nil
+            card.header(frame.header.flatMap { _ in pane }, orientation: content.orientation, expanded: content.expanded,
+                        palette: palette, dispatch: dispatch)
+            // Arc rings the focused pane of a split in a dark shade of the theme (Metrics.content.highlightBorder).
+            let ringed = content.split != nil && content.presentedPanes.count > 1 && pane?.focused == true
+            card.layer?.borderWidth = ringed ? Metrics.content.highlightBorder.value : 0
+            card.layer?.borderColor = ThemeAccent.splitFocusRing(theme).cgColor
+            // An empty card follows the appearance: dark under a dark theme (Arc's incognito window, Q03a: #2A2B2F).
+            card.emptyColor = palette.scheme == .dark ? NSColor(srgbRed: 0x2A / 255.0, green: 0x2B / 255.0, blue: 0x2F / 255.0, alpha: 1) : .white
             switch frame.content {
             case .page(let page):
                 card.host(surface(page), placeholder: nil)
@@ -96,12 +105,10 @@ public final class ContentAreaView: NSView {
             divider.area = frames.contentArea
             divider.orientation = content.orientation
         }
-        tools.render(content, in: frames.contentArea, avoiding: frames.find?.bar, palette: palette)
-        addSubview(tools, positioned: .above, relativeTo: cards.last)
         dropPreview.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).withAlphaComponent(0.22).cgColor
         dropPreview.layer?.borderColor = palette.color(palette.tokens.dragHintStrong).cgColor
         dropPreview.layer?.borderWidth = 2
-        addSubview(dropPreview, positioned: .above, relativeTo: tools)
+        addSubview(dropPreview, positioned: .above, relativeTo: cards.last)
         if let offer = dragOffer, let point = dragPosition { _ = dropCommand(offer.source, at: point) }
         else { clearDrop() }
     }
@@ -148,6 +155,35 @@ final class CardView: NSView {
     private let sad = SadTabView(frame: .zero)
     var retryAction: (() -> Void)? { didSet { sad.reloadAction = retryAction } }
     private weak var hosted: NSView?
+    private var paneHeader: PaneHeaderView?
+    /// The card's color where no page draws (an empty card, a page still loading).
+    var emptyColor = NSColor.white
+
+    /// The page area: under the split header and its hairline, else the whole card.
+    private var pageBounds: CGRect {
+        guard let paneHeader, !paneHeader.isHidden else { return bounds }
+        let top = Metrics.content.paneHeaderHeight.value + Metrics.content.paneHeaderSeparator.value
+        return CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
+    }
+
+    /// Shows the split header for `pane` (nil hides it).
+    func header(_ pane: Pane?, orientation: SplitOrientation, expanded: Bool, palette: Palette, dispatch: @escaping Dispatch) {
+        guard let pane else {
+            if paneHeader?.isHidden == false { paneHeader?.isHidden = true; needsLayout = true }
+            return
+        }
+        let header = paneHeader ?? {
+            let made = PaneHeaderView(dispatch: dispatch)
+            addSubview(made)
+            paneHeader = made
+            return made
+        }()
+        let wasHidden = header.isHidden
+        header.isHidden = false
+        header.frame = CGRect(x: 0, y: 0, width: bounds.width, height: Metrics.content.paneHeaderHeight.value + Metrics.content.paneHeaderSeparator.value)
+        header.render(pane, orientation: orientation, expanded: expanded, palette: palette)
+        if wasHidden { needsLayout = true }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -174,21 +210,23 @@ final class CardView: NSView {
                 addSubview(surface)
             }
             hosted = surface
-            surface.frame = bounds
+            surface.frame = pageBounds
             surface.autoresizingMask = [.width, .height]
         } else {
             if hosted?.superview === self { hosted?.removeFromSuperview() }
             hosted = nil
         }
         sad.isHidden = text == nil
-        sad.frame = bounds
-        layer?.backgroundColor = (text == nil ? NSColor.white : NSColor.windowBackgroundColor).cgColor
+        sad.frame = pageBounds
+        layer?.backgroundColor = (text == nil ? emptyColor : NSColor.windowBackgroundColor).cgColor
+        if let paneHeader, subviews.last !== paneHeader { addSubview(paneHeader, positioned: .above, relativeTo: nil) }
     }
 
     override func layout() {
         super.layout()
-        if hosted?.superview === self { hosted?.frame = bounds }
-        sad.frame = bounds
+        if hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
+        sad.frame = pageBounds
+        if let paneHeader { paneHeader.frame.size.width = bounds.width }
     }
 }
 

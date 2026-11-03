@@ -71,7 +71,8 @@ final class SitePanels: NSObject, NSPopoverDelegate {
         return entry
     }
     /// Where Arc's arrow points (P36-a): at the site icon 19 pt in from the URL pill's right edge, the body 8 pt under the
-    /// pill. Then the site button wherever it is; the content area's top-left corner when the sidebar is hidden.
+    /// pill; under a split pane's own button when that opened it. Then the site button wherever it is; the content
+    /// area's top-left corner when the sidebar is hidden.
     private func anchor(in window: NSWindow, content: NSView) -> (CGRect, NSRectEdge) {
         let below: NSRectEdge = content.isFlipped ? .maxY : .minY
         let m = Metrics.siteControls
@@ -79,6 +80,11 @@ final class SitePanels: NSObject, NSPopoverDelegate {
             guard let view = ViewTree.find(id.identifier, in: window), view.window === window, !view.isHiddenOrHasHiddenAncestor else { return nil }
             let rect = view.convert(view.bounds, to: content)
             return !rect.isEmpty && content.bounds.contains(CGPoint(x: rect.midX, y: rect.midY)) ? rect : nil
+        }
+        // Opened from a split pane's header: under that pane's button.
+        if let pane = visible(.paneSiteInfo), let event = NSApp.currentEvent, event.window === window,
+           [.leftMouseDown, .leftMouseUp].contains(event.type), pane.contains(content.convert(event.locationInWindow, from: nil)) {
+            return (pane, below)
         }
         if let pill = visible(.urlPill) {
             let x = pill.maxX - m.anchorTrailing.value, rise = m.anchorRise.value
