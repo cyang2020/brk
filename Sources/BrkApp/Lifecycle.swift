@@ -134,6 +134,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated {
                 guard event.keyCode == Key.escape.code else { return false }
+                // The icon popover is open whichever window is key (the browser window usually stays key).
+                if TabIconPicker.isOpen { TabIconPicker.close(); return true }
                 // AppKit's fullscreen toolbar may be key while its owning browser still reports key status.
                 let window = (NSApp.keyWindow as? any HostWindow)
                     ?? NSApp.windows.compactMap { $0 as? any HostWindow }.first { $0.isKeyWindow && $0.attachedSheet == nil }

@@ -20,6 +20,9 @@ enum TabIconPicker {
 
     /// Closes the open picker without a change. The popover is application-defined (a row's hover card, itself a
     /// transient popover, would otherwise close it), so a click outside it and leaving the app close it here.
+    /// Escape closes an open picker before anything else sees the key (Lifecycle's Escape monitor asks).
+    static var isOpen: Bool { shown != nil }
+
     static func close() {
         if let clicks { NSEvent.removeMonitor(clicks) }
         if let resign { NotificationCenter.default.removeObserver(resign) }
@@ -56,8 +59,9 @@ enum TabIconPicker {
         } else if let content = window.contentView {
             popover.show(relativeTo: CGRect(x: content.bounds.midX, y: content.bounds.midY, width: 1, height: 1), of: content, preferredEdge: .maxY)
         }
-        // Key, so Escape reaches it and closes it.
+        // Key when AppKit allows it, so Escape typed into the popover itself closes it too.
         grid.view.window?.makeKey()
+        grid.view.window?.makeFirstResponder(grid.view)
     }
 }
 
@@ -75,7 +79,7 @@ private final class IconGridController: NSViewController {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override func loadView() {
-        let root = NSView(frame: CGRect(origin: .zero, size: Self.size))
+        let root = KeyView(frame: CGRect(origin: .zero, size: Self.size))
         root.setAccessibilityIdentifier("tab-icon-picker")
         let title = NSTextField(labelWithString: "Icon")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -126,4 +130,10 @@ private final class IconGridController: NSViewController {
     private func close() {
         TabIconPicker.close()
     }
+}
+
+/// Takes key focus inside the popover so its window can become key.
+private final class KeyView: NSView {
+    override var acceptsFirstResponder: Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
 }
