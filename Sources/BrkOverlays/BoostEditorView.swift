@@ -106,8 +106,14 @@ final class BoostPanelWindow: NSWindow {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == Key.escape.code { onEscape?(); return }
         if event.type == .leftMouseDown, !isKeyWindow { makeKey() }
+        if [.leftMouseDown, .leftMouseUp].contains(event.type) { boostTrace("panel \(event.type == .leftMouseDown ? "down" : "up") key=\(isKeyWindow) hit=\(contentView?.hitTest(event.locationInWindow).map { NSStringFromClass(type(of: $0)) } ?? "nil")") }
         super.sendEvent(event)
     }
+}
+
+/// Panel input trace for native runs (the app's other traces use the same switch).
+func boostTrace(_ line: String) {
+    if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data(("[boost] " + line + "\n").utf8)) }
 }
 
 /// Colours measured on Arc's panel (P37-a/b/c/d at 2x).
@@ -363,8 +369,9 @@ class BoostPressable: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { if isEnabled { pressed = true } }
+    override func mouseDown(with event: NSEvent) { boostTrace("pressable down \(NSStringFromClass(type(of: self))) enabled=\(isEnabled)"); if isEnabled { pressed = true } }
     override func mouseUp(with event: NSEvent) {
+        boostTrace("pressable up \(NSStringFromClass(type(of: self))) pressed=\(pressed) inside=\(bounds.contains(convert(event.locationInWindow, from: nil)))")
         guard pressed else { return }
         pressed = false
         if bounds.contains(convert(event.locationInWindow, from: nil)) { onPress?() }
