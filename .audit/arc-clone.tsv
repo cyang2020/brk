@@ -180,3 +180,4 @@ ts	phase	decision	why	evidence	result
 2026-11-03T20:43:52Z	gate	合并后 main：单元测试 1016/0 失败/1 跳过；站台 P01、P18、P19、P36 持平	验收规矩	/tmp/station-parent/r3-7/sheet.tsv；/tmp/r3-7-tests-3.log	通过；A037/A041/A044/A045/A046/A049/A104/A106 → implemented
 2026-11-03T20:50:42Z	merge	R3-6 标签/小窗/命令栏分支合进 main（2c2f3306 + 事件计数 6029da75）；四处冲突两边保留	任务自己的门：1011 单元测试（它已自合 main）、22 个原生场景	分支 t3/r3-6-tabs-little-arc-commandbar（50a25c31）；verify/completion/browser-basic-parent/r36-merged	合并提交 2c2f3306
 2026-11-03T20:50:42Z	gate	合并后 main：单元测试 1034/0 失败/1 跳过；站台 P02、P13、P21、P22、Q01 持平；八个组全部合完	验收规矩	/tmp/station-parent/r3-6/sheet.tsv；/tmp/r3-6-tests.log	通过；A031/A085/A086/A092/A068 → implemented；台账 41/83/15/2
+2026-11-03T20:59:52Z	gate	第三轮收尾：最终 main cfa87d56 单元测试 1034/0 失败；站台全部 40 场景 100 对 0 失败，无一对比第一轮收尾差超过 1 点	八个组全部合并后要有一次全量门	verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv；/tmp/r3-6-tests.log	通过；Q02-b 连拍 15% 是脚本顺序问题，已改脚本（04a507f3）
