@@ -75,6 +75,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var tabTools = TabToolsSnapshot()
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// What View > Appearance applies to this window's site (the check mark of Automatic, Light or Dark).
+    public var websiteAppearance: WebsiteAppearance = .automatic
 }
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {

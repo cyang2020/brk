@@ -21,10 +21,10 @@ import CefKit
     }
     private var pending: Pending?
 
-    func show(_ model: CefMenuModel, at point: CGPoint, in surface: NSView,
+    func show(_ model: CefMenuModel, at point: CGPoint, in surface: NSView, link: Bool = false,
               callback: CefRunContextMenuCallback, valid: @escaping @MainActor () -> Bool) {
         cancel()
-        let items = snapshot(model)
+        let items = Self.trimmed(snapshot(model), link: link)
         guard !items.isEmpty, let owner = surface.window else { callback.cancel(); return }
         let request = Pending(callback)
         pending = request
@@ -58,6 +58,25 @@ import CefKit
                         separator: false, enabled: model.isEnabled(at: i), checked: model.isChecked(at: i),
                         children: model.withSubmenu(at: i) { snapshot($0) })
         }
+    }
+
+    /// Chromium rows Arc 1.170 does not show (Q07): the QR code row everywhere; on a plain link everything but
+    /// opening, saving and copying it, Copy and Inspect. Separators left next to each other or at an end go too.
+    static let removed: Set<String> = ["Create QR Code for this Page", "Create QR Code for this Image"]
+    static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window", "Open Link in Incognito Window",
+                                        "Save Link As…", "Copy Link Address", "Copy", "Inspect"]
+
+    private static func trimmed(_ items: [Item], link: Bool) -> [Item] {
+        let kept = items.filter { item in
+            item.separator || (!removed.contains(item.title) && (!link || linkRows.contains(item.title)))
+        }
+        var out: [Item] = []
+        for item in kept {
+            if item.separator, out.last?.separator ?? true { continue }
+            out.append(item)
+        }
+        while out.last?.separator == true { out.removeLast() }
+        return out
     }
 
     private func label(_ source: String) -> String {

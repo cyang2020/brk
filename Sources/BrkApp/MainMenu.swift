@@ -74,6 +74,9 @@ enum MainMenu {
     private struct Slot {
         let row: Int
         let group: Int
+        /// Brk's own hidden rows (after Arc's 189) take no part in the separators, so they leave no stray line;
+        /// Arc's hidden rows keep the nib's separators.
+        var silent = false
         let make: () -> NSMenuItem
     }
 
@@ -82,16 +85,50 @@ enum MainMenu {
         menu.delegate = target
         var last: Int?
         for slot in slots.sorted(by: { $0.row < $1.row }) {
-            if let last, last != slot.group { menu.addItem(.separator()) }
-            last = slot.group
+            if !slot.silent {
+                if let last, last != slot.group { menu.addItem(.separator()) }
+                last = slot.group
+            }
             menu.addItem(slot.make())
         }
+    }
+
+    /// Arc's View menu as it shows at runtime (P19-a) differs from its nib: the sidebar, toolbar, pinned and full
+    /// screen rows name what they will do, Show Toolbar and Collapse Pinned Tabs show, Exit hides (Esc still
+    /// works). Applied each time the menu opens (`MenuTarget.menuNeedsUpdate`).
+    static func presentation(of action: ActionID, window: WindowSnapshot?, fullScreen: Bool) -> (title: String?, hidden: Bool)? {
+        switch action {
+        case .showSidebar: (window?.sidebar.visible == false ? "Show Sidebar" : "Hide Sidebar", false)
+        case .toggleToolbar: (window?.sidebar.toolbarVisible == true ? "Hide Toolbar" : "Show Toolbar", false)
+        case .collapsePinnedSection: (window?.space.pinned.collapsed == true ? "Expand Pinned Tabs" : "Collapse Pinned Tabs", false)
+        case .expandPinnedSection, .exit: (nil, true)
+        case .fullscreen: (fullScreen ? "Exit Full Screen" : "Enter Full Screen", false)
+        default: nil
+        }
+    }
+
+    /// The View rows Arc draws with an icon (macOS draws Zoom to Actual Size indented, as if its icon were blank).
+    static func symbol(of action: ActionID, fullScreen: Bool = false) -> String? {
+        switch action {
+        case .zoomIn: "plus.magnifyingglass"
+        case .zoomOut: "minus.magnifyingglass"
+        case .resetZoom: ""
+        case .fullscreen: fullScreen ? "arrow.down.right.and.arrow.up.left.rectangle" : "arrow.up.left.and.arrow.down.right.rectangle"
+        default: nil
+        }
+    }
+
+    static func image(_ symbol: String) -> NSImage? {
+        guard !symbol.isEmpty else {
+            return NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in true }
+        }
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
     }
 
     private static func slots(in name: MenuName, submenu: Submenu?, target: MenuTarget, bindings: [ActionID: ResolvedBinding]) -> [Slot] {
         var slots: [Slot] = []
         for action in ActionID.allCases where action.spec.row < 1000 && action.spec.menu == name && action.spec.submenu == submenu {
-            slots.append(Slot(row: action.spec.row, group: action.spec.group) {
+            slots.append(Slot(row: action.spec.row, group: action.spec.group, silent: action.spec.hidden && action.spec.row > 189) {
                 item(action, binding: 0, title: nil, hidden: action.spec.hidden, target: target, bindings: bindings)
             })
         }
@@ -135,7 +172,11 @@ enum MainMenu {
         item.toolTip = action.unsupportedReason
         item.tag = binding
         item.isHidden = hidden
+        // Rows Arc's View menu does not show but Brk had shown (its own split and Picture in Picture rows, Exit at
+        // runtime) keep their keys.
+        item.allowsKeyEquivalentWhenHidden = action.spec.row >= 190 || action == .exit
         item.isAlternate = binding == 0 && action.spec.alternate
+        if binding == 0, let symbol = symbol(of: action) { item.image = image(symbol) }
         if binding == 0 {
             MenuTarget.apply(bindings[action]?.state, to: item)
         } else if action.spec.bindings.indices.contains(binding) {
@@ -256,6 +297,8 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     var perform: ((ActionID, NSEvent?) -> Void)?
     var isEnabled: ((ActionID) -> Bool)?
     var isChecked: ((ActionID) -> Bool?)?
+    /// The key window's snapshot and whether it is in full screen, for `MainMenu.presentation`.
+    var current: () -> (window: WindowSnapshot?, fullScreen: Bool) = { (nil, NSApp?.keyWindow?.styleMask.contains(.fullScreen) ?? false) }
     /// The resolved shortcuts to show (`AppSnapshot.settings.shortcuts`): the running app's store unless set; the
     /// table's defaults when there is none.
     var shortcuts: () -> [ActionID: KeyBindingState]? = {
@@ -289,9 +332,15 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
             }
         }
         let states = shortcuts() ?? KeyBindings.resolve(overrides: [:]).mapValues(\.state)
+        let now = current()
         for item in menu.items where item.tag == 0 {
             guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }
             Self.apply(states[action], to: item)
+            if let shown = MainMenu.presentation(of: action, window: now.window, fullScreen: now.fullScreen) {
+                if let title = shown.title { item.title = title }
+                item.isHidden = shown.hidden
+            }
+            if action == .fullscreen, let symbol = MainMenu.symbol(of: action, fullScreen: now.fullScreen) { item.image = MainMenu.image(symbol) }
         }
     }
 

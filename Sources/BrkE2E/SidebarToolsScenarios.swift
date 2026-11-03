@@ -9,7 +9,7 @@ enum SidebarToolsScenarios {
     static let all = [
         Scenario("SidebarToolsSources", "Favorite badge HTTP, refresh, expiry and access failure", cefOnly: "native sources", sources),
         Scenario("SidebarToolsMeeting", "selected calendar subtitle, shortcut destination, expiry and no meeting", cefOnly: "native calendar and HTTPS navigation", meeting),
-        Scenario("SidebarToolsIcons", "native icon keyboard, emoji, cancel, clear and restart", cefOnly: "native sheet and persisted icons", icons),
+        Scenario("SidebarToolsIcons", "icon popover choose, toggle off, Escape and restart", cefOnly: "native popover and persisted icons", icons),
         Scenario("SidebarToolsGlow", "real CEF load progress, stop and completion", cefOnly: "engine callbacks", glow),
         Scenario("SidebarToolsPreview", "deliberate link hover, native card and profile cookie isolation", cefOnly: "context-scoped network and hover", preview),
         Scenario("SidebarToolsCrash", "automatic recovery, second crash stays sad and native Reload", cefOnly: "renderer termination", crash),
@@ -93,53 +93,55 @@ enum SidebarToolsScenarios {
         try expect(try app.view().favorites.tiles.first { $0.id == calendar }?.subtitle == nil, "calendar feed survived restart")
     }
     @Sendable static func icons(_ app: AppUnderTest) throws {
+        // Arc's popover (P10-a): one click on a glyph sets it, a click on the current glyph restores the default,
+        // Escape leaves the icon as it was.
         let item = try currentTab(app.view())!.id
         try app.dispatch(.tabTools(.chooseIcon(item)))
-        _ = try app.panelScreenshot("named-and-emoji-picker")
-        try panel(app, .select(identifier: "tab-icon-named", index: NamedIcon.allCases.count - 1))
-        try panel(app, .button("Save"))
-        try expect(try tab(item, in: app.view())?.icon == .named(NamedIcon.allCases.last!), "named repertoire selection failed")
-        try app.dispatch(.tabTools(.chooseIcon(item)))
-        try panel(app, .text(identifier: "tab-icon-custom", value: "🧑🏽‍🚀")); try panel(app, .button("Save"))
-        try expect(try tab(item, in: app.view())?.icon == .emoji("🧑🏽‍🚀"), "multi-scalar emoji failed")
-        try app.dispatch(.tabTools(.chooseIcon(item)))
-        try panel(app, .text(identifier: "tab-icon-custom", value: "🌵")); try app.press("escape")
-        try expect(try tab(item, in: app.view())?.icon == .emoji("🧑🏽‍🚀"), "cancel changed icon")
+        _ = try app.panelScreenshot("icon-popover")
+        try panel(app, .button("skull"))
+        try expect(try tab(item, in: app.view())?.icon == .named(.skull), "named icon selection failed")
+        try app.dispatch(.tabTools(.chooseIcon(item))); try panel(app, .button("skull"))
+        try expect(try tab(item, in: app.view())?.icon == nil, "clicking the current icon did not restore the favicon")
+        try app.dispatch(.tabTools(.chooseIcon(item))); try panel(app, .button("star"))
+        try app.dispatch(.tabTools(.chooseIcon(item))); try app.press("escape")
+        try app.waitUntil("Escape closes the icon popover") { if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }; return false }
+        try expect(try tab(item, in: app.view())?.icon == .named(.star), "cancel changed icon")
+        try app.dispatch(.item(.setIcon(item, .emoji("🧑🏽‍🚀"))))
         try app.flush(); try app.restart()
         try expect(try tab(item, in: app.view())?.icon == .emoji("🧑🏽‍🚀"), "restart lost emoji")
-        try app.dispatch(.tabTools(.chooseIcon(item))); try panel(app, .button("Clear"))
-        try expect(try tab(item, in: app.view())?.icon == nil, "clear did not restore favicon")
+        try app.dispatch(.item(.setIcon(item, nil)))
         try app.dispatch(.item(.newFolder)); try app.press("return")
         let folder = try app.view().space.pinned.rows.first!.id
         try app.dispatch(.tabTools(.chooseIcon(folder)))
-        try panel(app, .focus(identifier: "tab-icon-custom"))
-        try app.press("cmd+a"); try app.type("sparkles"); try app.press("tab"); try app.press("return")
+        try panel(app, .button("leaf"))
         guard case .folder(let row)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
-        try expect(row.icon == .symbol("sparkles"), "folder picker did not apply SF Symbol")
+        try expect(row.icon == .named(.leaf), "folder picker did not apply its glyph")
         _ = try app.screenshot("custom-folder")
         try app.dispatch(.tab(.focus(item)))
         try app.press("ctrl+shift+="); try app.dispatch(.commandBar(.dismiss))
         let split = try app.view().content.split!
         try app.dispatch(.tabTools(.chooseIcon(split)))
-        try panel(app, .text(identifier: "tab-icon-custom", value: "🌙")); try panel(app, .button("Save"))
+        try panel(app, .button("moon"))
         try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
         try app.click(.spaceToolsControl("emoji")); try app.press("cmd+a"); try app.type("🌵")
         try app.click(.spaceToolsControl("save"))
         try app.flush(); try app.restart()
         try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space picker icon did not survive restart")
         try expect(try app.view().space.today.rows.contains { row in
-            if case .split(let value) = row { return value.id == split && value.icon == .emoji("🌙") }; return false
+            if case .split(let value) = row { return value.id == split && value.icon == .named(.moon) }; return false
         }, "split picker icon did not survive restart")
         try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
         try app.click(.spaceToolsControl("emoji")); try app.press("cmd+a"); try app.type("🦊")
         try app.click(.spaceToolsControl("cancel"))
         try expect(try app.view().space.icon == .custom(.emoji("🌵")), "space Cancel changed icon")
-        try app.dispatch(.tabTools(.chooseIcon(folder))); try panel(app, .button("Cancel"))
+        try app.dispatch(.tabTools(.chooseIcon(folder))); try app.press("escape")
+        try app.waitUntil("Escape closes the folder's popover") { if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }; return false }
         guard case .folder(let retained)? = try app.view().space.pinned.rows.first else { throw Check(description: "folder missing") }
-        try expect(retained.icon == .symbol("sparkles"), "folder cancel or restart lost its icon")
-        try app.dispatch(.tabTools(.chooseIcon(folder))); try panel(app, .button("Clear"))
-        try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("Cancel"))
-        try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("Clear"))
+        try expect(retained.icon == .named(.leaf), "folder cancel or restart lost its icon")
+        try app.dispatch(.tabTools(.chooseIcon(folder))); try panel(app, .button("leaf"))
+        try app.dispatch(.tabTools(.chooseIcon(split))); try app.press("escape")
+        try app.waitUntil("Escape closes the split's popover") { if case .failed = try app.send(.sidebarPanel(window: app.window, action: .inspect)) { return true }; return false }
+        try app.dispatch(.tabTools(.chooseIcon(split))); try panel(app, .button("moon"))
         try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
         try app.click(.spaceToolsControl("icon-none")); try app.click(.spaceToolsControl("save"))
         try app.flush(); try app.restart()

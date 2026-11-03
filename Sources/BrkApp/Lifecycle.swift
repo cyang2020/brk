@@ -107,8 +107,18 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             return snapshot.enabledActions.contains(action)
         }
         menuTarget.isChecked = { [weak self] action in
-            guard action == .toggleStayOnTop, let self, let id = self.store?.windowController(nil)?.id else { return nil }
-            return self.store?.snapshot.windows[id]?.stayOnTop
+            guard let self, let id = self.store?.windowController(nil)?.id, let window = self.store?.snapshot.windows[id] else { return nil }
+            switch action {
+            case .toggleStayOnTop: return window.stayOnTop
+            case .appearanceAutomatic: return window.websiteAppearance == .automatic
+            case .appearanceLight: return window.websiteAppearance == .light
+            case .appearanceDark: return window.websiteAppearance == .dark
+            default: return nil
+            }
+        }
+        menuTarget.current = { [weak self] in
+            let controller = self?.store?.windowController(nil)
+            return (controller.flatMap { self?.store?.snapshot.windows[$0.id] }, controller?.window.styleMask.contains(.fullScreen) ?? false)
         }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
