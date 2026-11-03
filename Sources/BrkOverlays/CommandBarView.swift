@@ -65,6 +65,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private var openID: Int?
     private var bar: CommandBarSnapshot?
     private(set) var style = Style.centered
+    private var fillsWindow = false {
+        didSet { if fillsWindow != oldValue { layoutCard() } }
+    }
     private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
     private var look: (Scheme, Style, RGBA)?
     private var leadingFavicon: URL?
@@ -127,6 +130,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette) {
         guard let bar, let frame = frames.commandBar else { return hide() }
+        // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
+        fillsWindow = frame.size == frames.contentSize
         show(bar, in: frame, scheme: palette.scheme, primary: palette.primary)
     }
 
@@ -389,7 +394,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
         offerLabel.isHidden = offer == nil
         keyCap.isHidden = offer == nil
-        info.isHidden = offer != nil || bar?.aiMode != nil
+        info.isHidden = offer != nil || bar?.aiMode != nil || fillsWindow
         offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
         // A label draws its text 2 in from each side of its frame.
         func width(_ label: NSTextField) -> CGFloat {
@@ -681,9 +686,12 @@ final class ResultRowView: NSView {
             ]))
         }
         label.attributedStringValue = title
-        icon.contentTintColor = suggestion.accent.map { NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) } ?? ink
-        // Arc's own entries keep their tile; a favicon gets a white one on the highlight so it stays legible.
+        // Arc's own entries keep their tile; a favicon gets a white one on the highlight so it stays legible. A glyph on
+        // the highlight's white tile takes the highlight's color (P21-a's Contact the Team).
         tile.isHidden = !(suggestion.tile || (highlighted && hasFavicon))
+        let onTile = !tile.isHidden && highlighted
+        icon.contentTintColor = suggestion.accent.map { NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) }
+            ?? (onTile ? colors.highlight : ink)
         tile.layer?.backgroundColor = (highlighted ? colors.tileOnHighlight : colors.accessory).cgColor
         if isSwitch {
             hint.textColor = highlighted ? colors.onHighlight : colors.secondary
