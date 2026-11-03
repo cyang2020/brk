@@ -23,7 +23,7 @@ final class TabToolsOverlayView: NSView {
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
-        for view in [recent, toast, toastAction, education, outputStatus] as [NSView] { addSubview(view) }
+        for view in [recent, toast, education, outputStatus] as [NSView] { addSubview(view) }
         outputStatus.isHidden = true
         outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         outputStatus.lineBreakMode = .byTruncatingMiddle
@@ -114,7 +114,6 @@ final class TabToolsOverlayView: NSView {
         education.frame = NSRect(x: 8, y: bounds.height - 130, width: max(0, sidebarWidth - 16), height: 68)
     }
     @objc private func dismissToast() { dispatch(.tabTools(.dismissToast)) }
-    @objc private func toastActionPressed() { if let toastCommand { dispatch(toastCommand) } }
     @objc private func dismissEducation() { dispatch(.tabTools(.dismissArchiveEducation)) }
 }
 
