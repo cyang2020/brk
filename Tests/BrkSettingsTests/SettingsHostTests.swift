@@ -198,7 +198,12 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.click("tidyTabs"), [.settings(.max(.tidyTabs(true)))])
         XCTAssertEqual(f.click("commandBar"), [.settings(.max(.feature(.commandBar, true)))])
         XCTAssertEqual(f.click("autoEnableFutureFeatures"), [.settings(.max(.autoEnableFutureFeatures(true)))])
-        XCTAssertEqual(f.click("enableMax"), [.settings(.max(.enable(false)))], "the default tool is on: the button turns Max off")
+        XCTAssertEqual(f.click("enableMax"), [.settings(.max(.enable(true)))], "no feature is on by default: Turn On Max")
+        var running = MaxSettings.default
+        running.tidyTabs = true
+        f.render(snapshot(pane: .max, max: MaxSnapshot(settings: running, detected: [.claude], active: .claude)))
+        XCTAssertEqual(f.click("enableMax"), [.settings(.max(.enable(false)))], "a feature on: Turn Off Max")
+        XCTAssertFalse(MaxPane.isOn(MaxSettings.default))
 
         f.render(snapshot(pane: .profiles))
         XCTAssertEqual(f.pick("autoArchive-default", "1 hour"), [.settings(.profile(.default, .autoArchive(.oneHour)))])

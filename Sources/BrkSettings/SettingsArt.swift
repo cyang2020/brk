@@ -267,7 +267,8 @@ struct MaxThumbnail: View {
                 ArtColor.rgb(0x7FB0D8).frame(height: 13)
                 HStack(spacing: 4) {
                     Image(systemName: "rays").font(.system(size: 7)).foregroundStyle(.secondary)
-                    Text("Searching the web…").font(.system(size: 6.5, weight: .semibold)).foregroundStyle(ArtColor.rgb(0x2B3A55))
+                    Text("Searching the web…").font(.system(size: 6, weight: .semibold)).foregroundStyle(ArtColor.rgb(0x2B3A55))
+                        .lineLimit(1).fixedSize()
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 5).frame(height: 18)

@@ -13,7 +13,13 @@ struct MaxPane: View {
     let context: PaneContext
     @State private var explaining = false
     private var max: MaxSnapshot { context.settings.max }
-    private var on: Bool { max.settings.provider != .off }
+    /// Max is on when a tool may run and at least one feature uses it; Brk's default (the automatic tool, no
+    /// feature switched on) shows "Turn On Max", as Arc's default does.
+    private var on: Bool { Self.isOn(max.settings) }
+
+    static func isOn(_ settings: MaxSettings) -> Bool {
+        settings.provider != .off && MaxFeature.allCases.contains { $0.isOn(settings) }
+    }
 
     private func send(_ setting: MaxSetting) { context.dispatch(.settings(.max(setting))) }
 
