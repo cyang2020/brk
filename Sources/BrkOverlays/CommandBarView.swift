@@ -178,6 +178,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         takeSiteSearchEscape(event) || super.performKeyEquivalent(with: event)
     }
 
+    /// For the window's own Escape handling, which runs before the page and before this view's event monitor (the
+    /// app's monitor routes Escape to Exit while any overlay is open): true when site search took this Escape.
+    public func takeEscape(_ event: NSEvent) -> Bool { takeSiteSearchEscape(event) }
+
     /// The window routes Escape to Exit before the text field's delegate sees it. Site search owns the first
     /// Escape while its input has focus. The key-equivalent path also covers input in an inactive window.
     private func takeSiteSearchEscape(_ event: NSEvent) -> Bool {

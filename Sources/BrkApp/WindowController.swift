@@ -72,6 +72,8 @@ public class WindowController: NSObject, NSWindowDelegate {
             return routeKey(input)
         }
         window.onEscapeBeforePage = { [weak self] event in
+            // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
+            if let self, self.root.commandBar.takeEscape(event) { return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
