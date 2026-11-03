@@ -28,6 +28,8 @@ final class TablistView: NSScrollView {
     private var rowViews: [ItemID: RowView] = [:]
     /// A render cache of the domain selection. Pointer gestures dispatch typed selection and bulk commands.
     private var multiselection: [ItemID] = []
+    /// The command bar is opening a new tab: the New Tab row shows as the current row (Arc, Q01-a).
+    var newTabActive = false
     private var last: (space: SpaceSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette)?
     private var tools: TabToolsSnapshot?
     private var lastReveal: UInt64?
@@ -145,7 +147,7 @@ final class TablistView: NSScrollView {
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
-                newTab.render(palette: palette)
+                newTab.render(palette: palette, active: newTabActive)
             case .topSpacer:
                 break
             }
@@ -799,6 +801,7 @@ final class NewTabRowView: HoverView {
     private let icon = IconView()
     private let label = NSTextField(labelWithString: Copy.newTab)
     private var palette: Palette?
+    private var active = false
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -812,10 +815,12 @@ final class NewTabRowView: HoverView {
         identify(.todayNewTab)
     }
 
-    func render(palette: Palette) {
-        guard palette != self.palette else { return }
+    /// `active`: the command bar is opening a new tab, and this row looks like the current tab's (Q01-a).
+    func render(palette: Palette, active: Bool = false) {
+        guard palette != self.palette || active != self.active else { return }
         self.palette = palette
-        let color = palette.color(palette.tokens.foregroundStrong)
+        self.active = active
+        let color = active ? palette.ink.text : palette.color(palette.tokens.foregroundStrong)
         label.textColor = color
         icon.render(.glyph(.plus), tint: color)
         stateChanged()
@@ -831,8 +836,13 @@ final class NewTabRowView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        let fill = isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : nil
-        background.layer?.backgroundColor = fill.map { palette.color($0).cgColor }
+        let fill = active ? palette.tokens.tabCurrent : isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : nil
+        let layer = background.layer
+        layer?.backgroundColor = fill.map { palette.color($0).cgColor }
+        layer?.shadowColor = palette.color(palette.tokens.tabShadow).cgColor
+        layer?.shadowOpacity = active ? 1 : 0
+        layer?.shadowRadius = Draw.selectedShadowRadius.value
+        layer?.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
     }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }

@@ -31,12 +31,12 @@ extension Work {
         case .submitSearch(let engine, let query):
             // Site search: Tab or Space on a known engine's name, then the query (F4 ranks the hint rows).
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, let engine = (SearchEngine.builtIn + (state.profileSettings(in: window).siteSearchEngines ?? [])).first(where: { $0.id == engine }), let url = engine.searchURL(trimmed) else { return }
+            guard !trimmed.isEmpty, let engine = SearchEngine.siteSearchable(state.profileSettings(in: window)).first(where: { $0.id == engine }), let url = engine.searchURL(trimmed) else { return }
             apply(url, in: window)
         case .queryChangedForSite(let id, let query):
             guard state.doc.windows[window]?.kind != .incognito,
                   state.profileSettings(in: window).searchSuggestions,
-                  let engine = (SearchEngine.builtIn + (state.profileSettings(in: window).siteSearchEngines ?? [])).first(where: { $0.id == id }),
+                  let engine = SearchEngine.siteSearchable(state.profileSettings(in: window)).first(where: { $0.id == id }),
                   let url = engine.suggestURL(query), !query.isEmpty else {
                 state.session.windows[window]?.suggestions = nil; return
             }

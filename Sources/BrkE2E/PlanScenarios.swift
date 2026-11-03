@@ -72,8 +72,11 @@ enum PlanScenarios {
             let bar = try visible(n, .commandBar)
             try expect(near(bar.frame, computed), "command-bar at \(bar.frame), computed \(computed)")
             try expect(computed.width == Metrics.commandBar.width.value, "command bar width \(computed.width), expected \(Metrics.commandBar.width.value)")
-            try expect(abs(computed.midX - n.computed.contentArea.midX) <= 0.5 && abs(computed.midY - n.computed.contentArea.midY) <= 0.5,
-                       "command bar \(computed) is not centred in the content area \(n.computed.contentArea)")
+            // Arc centres the Cmd+T card in the window (the content area plus its inset), not in the content area.
+            let inset = Metrics.content.inset.value
+            let window = CGRect(x: 0, y: 0, width: n.computed.contentArea.maxX + inset, height: n.computed.contentArea.maxY + inset)
+            try expect(abs(computed.midX - window.midX) <= 0.5 && abs(computed.midY - window.midY) <= 0.5,
+                       "command bar \(computed) is not centred in the window \(window)")
             try expect(n.firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier), "first responder is \(n.firstResponder)")
             return true
         }

@@ -34,8 +34,8 @@ extension AppState {
 }
 
 extension Work {
-    mutating func toast(_ text: String, in window: WindowID) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(4)))
+    mutating func toast(_ text: String, link: ToastLink? = nil, in window: WindowID) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(4)), link: link)
     }
     mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {
         guard let tree = state.tree(of: window), tree[id] != nil else { return }

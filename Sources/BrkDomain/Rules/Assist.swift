@@ -33,6 +33,12 @@ extension Work {
             aiMessage("AI page features are unavailable in private windows.", in: window); return
         }
         if case .open(let mode) = intent {
+            // Arc with Max off answers Opt+Cmd+G with a notice ("ChatGPT in the Command Bar not enabled", "Arc Max
+            // Preferences ↗") instead of an input. Ours asks the local CLI, so the notice says what is missing.
+            if mode == .question, let missing = askBarMissing() {
+                toast(missing, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window)
+                return
+            }
             openOverlay({ .commandBar(openID: $0, target: .ai(mode)) }, in: window)
             return
         }
@@ -77,6 +83,13 @@ extension Work {
     private func aiQuestion(_ text: String) -> String? {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return !q.isEmpty && q.count <= 2000 ? q : nil
+    }
+    /// Why Ask in Command Bar cannot run, or nil: the Max switch is off, or the provider is set to off. (Whether a
+    /// CLI is on PATH is only known to the app's seam; an answer without one says so, `AIOutcome.unavailable`.)
+    private func askBarMissing() -> String? {
+        if !state.doc.settings.max.enabled(.commandBar) { return "\(AIFeature.commandBar.title) not enabled" }
+        if state.doc.settings.max.provider == .off { return "No local AI tool selected for Max" }
+        return nil
     }
     private mutating func aiEnabled(_ feature: AIFeature, _ window: WindowID) -> Bool {
         guard state.doc.settings.max.enabled(feature) else { aiMessage("Enable \(feature.title) in Settings → Max.", in: window); return false }

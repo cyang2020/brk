@@ -55,6 +55,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        // The Ctrl+Tab switcher's page images: the window's own pixels, which include Chromium's.
+        root.captureWindow = { [weak window] in (window as? NSWindow).flatMap(WindowCapture.image(of:)) }
         window.onActivity = { [weak self] in
             guard let self else { return }; self.send(.system(.window(self.id, .activity)))
         }

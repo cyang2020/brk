@@ -48,6 +48,13 @@ struct TabSelection: Equatable, Sendable {
 public struct ToastSnapshot: Equatable, Sendable, Codable {
     public var text: String
     public var expiresAt: Instant
+    /// A notice with a way out (Arc's "ChatGPT in the Command Bar not enabled" with "Arc Max Preferences ↗"): shown
+    /// as a banner at the window's top right instead of the bottom toast.
+    public var link: ToastLink? = nil
+}
+public struct ToastLink: Equatable, Sendable, Codable {
+    public var title: String
+    public var command: Command
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]
@@ -57,6 +64,8 @@ public struct RecentTabRow: Equatable, Sendable, Codable {
     public var id: ItemID
     public var title: String
     public var url: URL?
+    /// The tab's favicon, drawn before its title under the switcher's thumbnail.
+    public var favicon: URL? = nil
 }
 public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     public var pendingSiteRequest: String? = nil

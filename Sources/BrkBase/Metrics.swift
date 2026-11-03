@@ -199,6 +199,15 @@ public struct CommandBarMetrics: MetricGroup {
     public let maxVisibleRows = Metric(5, .arc("Visible suggestions and list height", .medium, note: "1 to 5 rows"))
     public let listPadding = Metric(10.0, .arc("Visible suggestions and list height", .medium, note: "rows x 50 + 10"))
     public let inputRowHeight = Metric(50.0, .arc("Command bar input row height", .medium, note: "at least 50; cra measures 60"))
+    /// The centered bar (Cmd+T) has the taller input row and a hairline under it; the bar over the URL pill has neither.
+    public let centeredInputRowHeight = Metric(64.0, .arc("Command bar input row height", .medium, note: "64 in the other mode"))
+    /// Over the URL pill the card starts at the pill's left edge, 1.5 above its top, and is 350 wide until its input
+    /// row needs more (P02-b: x 8 to 358 over a pill at 8...220, y 46; P02-c grows to 359 for "Search Google Docs").
+    public let attachedCardWidth = Metric(350.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: edit card 350 pt wide"))
+    public let attachedTopOffset = Metric(-1.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: card top 44.5, pill top 46"))
+    /// Rows start right under the input row over the pill and 5 under the hairline when centered; 9 under the last row.
+    public let centeredListTop = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Q01-a Arc capture: first row 5 under the hairline"))
+    public let listBottom = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b and Q01-a Arc captures: 9 under the last row"))
     public let stackSpacing = Metric(10.0, .arc("Command bar inner spacing", .medium, note: "stack spacing 10"))
     public let contentInset = Metric(12.0, .arc("Command bar inner spacing", .medium, note: "inset 12"))
     public let openBounceFrom = Metric(0.95, .arc("Command bar opening bounce", .medium))

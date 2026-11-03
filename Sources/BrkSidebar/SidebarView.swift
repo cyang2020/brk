@@ -145,6 +145,7 @@ public final class SidebarView: NSView {
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
+        if case .commandBar(let bar)? = snapshot.overlay { tablist.newTabActive = bar.createsTab } else { tablist.newTabActive = false }
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled

@@ -92,13 +92,14 @@ final class LayoutSpecTests: XCTestCase {
     }
 
     /// overlay command-bar: overlay rect is the full window; overlay archive: overlay rect equals content
-    /// (Swift: the command bar frame is the bar's box, centred in the content area; the archive is the content area,
+    /// (Swift: the command bar frame is the bar's box, centred in the window; the archive is the content area,
     /// beside the Library panel that replaces the sidebar.)
     func test_overlayCommandBarOverlayRectIsTheFullWindowOverlayArchiveOverlayRectEquals() throws {
         let d = LayoutDriver()
         d.user(.commandBar(.open(.newTab)))
         let bar = d.frames()
-        XCTAssertEqual(bar.commandBar.map { CGPoint(x: $0.midX, y: $0.midY) }, CGPoint(x: bar.contentArea.midX, y: bar.contentArea.midY))
+        // Centred in the window (Arc's Cmd+T card, Q01-a), which is the content area plus its 10 pt inset.
+        XCTAssertEqual(bar.commandBar.map { CGPoint(x: $0.midX, y: $0.midY) }, CGPoint(x: (bar.contentArea.maxX + 10) / 2, y: bar.contentArea.midY))
         XCTAssertNil(bar.library)
         d.user(.library(.open(.archive)))
         let archive = d.frames()
