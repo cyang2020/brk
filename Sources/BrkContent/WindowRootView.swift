@@ -34,6 +34,14 @@ public final class WindowRootView: NSView {
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
+    private let thumbnails = PageThumbnails()
+    private var switcherShown = false
+    /// Takes the window's image as the window server shows it (BrkApp's `WindowCapture`), for the Ctrl+Tab
+    /// switcher's page images. Nil (tests): the switcher shows white cards.
+    public var captureWindow: (() -> CGImage?)? {
+        get { thumbnails.capture }
+        set { thumbnails.capture = newValue }
+    }
     private let loadingBar = LoadingBarView(frame: .zero)
 
     public init(dispatch: @escaping Dispatch) {
@@ -95,6 +103,9 @@ public final class WindowRootView: NSView {
     /// floating: same view, re-parented above `content` while floating), content cards (each card hosts the
     /// surface for its pane; a surface that moved to another card is simply re-added there), Library, command bar.
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, surface: (PageID) -> NSView?) {
+        // The screen still shows the last frame: the page the switcher starts from is taken before it covers it.
+        thumbnails.beforeRender(opening: snapshot.tabTools.recent != nil && !switcherShown, in: self)
+        switcherShown = snapshot.tabTools.recent != nil
         background.frame = bounds
         background.show(snapshot.theme, animated: lastTheme != nil && lastTheme != snapshot.theme)
         let palette = Palette(snapshot.theme)
@@ -127,12 +138,13 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
-        commandBar.render(barSnapshot, frames: frames, palette: palette)
+        commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
         spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
         tabTools.frame = bounds
-        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome, contentArea: frames.contentArea)
+        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output,
+                        exported: snapshot.exportOutcome, contentArea: frames.contentArea, thumbnails: thumbnails.images)
         boostPanel.render(snapshot.boostEditor, parent: window)
         zapOverlay.render(snapshot.boostEditor, card: snapshot.boostEditor?.target.flatMap { target in
             frames.cards.first { if case .page(let page) = $0.content { page == target.page } else { false } }?.page
@@ -140,6 +152,7 @@ public final class WindowRootView: NSView {
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
         captureOverlay.frame = bounds
         captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
+        thumbnails.afterRender(snapshot, frames: frames, in: self)
         lastTheme = snapshot.theme
     }
 }

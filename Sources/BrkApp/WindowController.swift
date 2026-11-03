@@ -55,6 +55,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentView = root
         window.delegate = self
+        // The Ctrl+Tab switcher's page images: the window's own pixels, which include Chromium's.
+        root.captureWindow = { [weak window] in (window as? NSWindow).flatMap(WindowCapture.image(of:)) }
         window.onActivity = { [weak self] in
             guard let self else { return }; self.send(.system(.window(self.id, .activity)))
         }
@@ -79,6 +81,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onEscapeBeforePage = { [weak self] event in
             // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
             if TabIconPicker.isOpen { TabIconPicker.close(); return true }
+            // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
+            if let self, self.root.commandBar.takeEscape(event) { return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)

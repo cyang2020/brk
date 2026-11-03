@@ -226,6 +226,30 @@ public struct SearchEngine: Hashable, Sendable, Codable {
 
     public static let builtIn: [SearchEngine] = [.google, .duckDuckGo, .bing, .ecosia, .kagi]
 
+    /// Sites the command bar offers site search on ("Search Wikipedia" and Tab when the input completes to
+    /// wikipedia.org; Arc 1.170, P02-c and Q01-b of the 2026-11-03 captures). Never a default engine, so the Profiles
+    /// pane does not list them. Arc reads these from Chromium's keyword table, which was not dumped; the sites are the
+    /// top domains with a well-known search page, and the keyword is the domain the input completes to.
+    public static let siteSearchSites: [SearchEngine] = [
+        site("Wikipedia", "wikipedia.org", "https://en.wikipedia.org/wiki/Special:Search?search={q}"),
+        site("YouTube", "youtube.com", "https://www.youtube.com/results?search_query={q}"),
+        site("Google Docs", "docs.google.com", "https://docs.google.com/document/u/0/?q={q}"),
+        site("Google Drive", "drive.google.com", "https://drive.google.com/drive/search?q={q}"),
+        site("Google Maps", "maps.google.com", "https://www.google.com/maps/search/{q}"),
+        site("GitHub", "github.com", "https://github.com/search?q={q}"),
+        site("Amazon", "amazon.com", "https://www.amazon.com/s?k={q}"),
+        site("Reddit", "reddit.com", "https://www.reddit.com/search/?q={q}"),
+    ]
+
+    /// Every engine site search can reach for a profile: the built-ins, the sites above, then the user's own.
+    public static func siteSearchable(_ settings: ProfileSettings) -> [SearchEngine] {
+        builtIn + siteSearchSites + (settings.siteSearchEngines ?? [])
+    }
+
+    private static func site(_ name: String, _ domain: String, _ template: String) -> SearchEngine {
+        SearchEngine(id: SearchEngineID("site:" + domain), name: name, keyword: domain, template: template, suggestTemplate: nil)
+    }
+
     public static func builtIn(_ id: SearchEngineID) -> SearchEngine? { builtIn.first { $0.id == id } }
 
     /// encodeURIComponent: everything but A-Z a-z 0-9 - _ . ! ~ * ' ( ) is percent-encoded.

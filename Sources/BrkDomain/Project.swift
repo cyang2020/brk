@@ -326,10 +326,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                 state.doc.spaces[sid].map { SpaceCandidate(id: sid, title: state.displayTitle(of: sid), icon: $0.icon, isCurrent: sid == space.id) }
             },
             engine: SearchEngineCandidate(template: engine.template, id: engine.id, name: engine.name, keyword: engine.keyword),
-            siteSearch: (SearchEngine.builtIn + (state.profileSettings(in: id).siteSearchEngines ?? [])).filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
+            siteSearch: SearchEngine.siteSearchable(state.profileSettings(in: id)).filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
             suggestions: session.suggestions?.results ?? [],
             suggestedFor: session.suggestions?.query,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
+            createsTab: target == .newTab,
             fillsPane: { if case .fillPane = target { true } else { false } }()
         ))
     case .library(let openID, let page)?:
@@ -601,7 +602,7 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
     if let cycle = session.recentCycle, cycle.order.indices.contains(cycle.index) {
         let rows = cycle.order.map { item -> RecentTabRow in
             let tab = state.panes(of: item).first.flatMap { state.displayedTab($0, in: window) }
-            return RecentTabRow(id: item, title: state.detached(item, in: window)?.title ?? "Tab", url: tab?.url)
+            return RecentTabRow(id: item, title: state.detached(item, in: window)?.title ?? "Tab", url: tab?.url, favicon: tab?.favicon)
         }
         result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
     }

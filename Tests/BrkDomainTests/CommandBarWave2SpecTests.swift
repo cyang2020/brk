@@ -13,7 +13,8 @@ final class CommandBarWave2SpecTests: XCTestCase {
         d.user(.settings(.profile(.default, .searchEngine(SearchEngine.duckDuckGo.id))))
         d.user(.commandBar(.open(.newTab)))
         XCTAssertEqual(d.bar?.engine.name, "DuckDuckGo")
-        XCTAssertEqual(d.bar?.siteSearch.map(\.keyword), ["google", "bing", "ecosia", "kagi"])
+        // The other built-ins, then the sites the bar offers site search on beside the input (P02-c, Q01-b).
+        XCTAssertEqual(d.bar?.siteSearch.map(\.keyword), ["google", "bing", "ecosia", "kagi", "wikipedia.org", "youtube.com", "docs.google.com", "drive.google.com", "maps.google.com", "github.com", "amazon.com", "reddit.com"])
         d.user(.commandBar(.submit("arc browser")))
         XCTAssertEqual(d.current?.url, url("https://duckduckgo.com/?q=arc%20browser"))
     }
@@ -106,12 +107,12 @@ final class CommandBarWave2SpecTests: XCTestCase {
     }
 
     /// what the bar needs to rank site search: the profile's engine and every other built-in engine with its
-    /// keyword; switching the default moves Google into the site-search list
+    /// keyword, then the site-search sites; switching the default moves Google into the site-search list
     func test_theBarCarriesTheEnginesForSiteSearch() {
         let d = Driver()
         d.user(.commandBar(.open(.newTab)))
         XCTAssertEqual(d.bar?.engine.keyword, "google")
-        XCTAssertEqual(d.bar?.siteSearch.map(\.name), ["DuckDuckGo", "Bing", "Ecosia", "Kagi"])
+        XCTAssertEqual(d.bar?.siteSearch.map(\.name), ["DuckDuckGo", "Bing", "Ecosia", "Kagi", "Wikipedia", "YouTube", "Google Docs", "Google Drive", "Google Maps", "GitHub", "Amazon", "Reddit"])
         d.user(.commandBar(.submitSearch(engine: SearchEngine.kagi.id, query: "arc browser")))
         XCTAssertEqual(d.current?.url, url("https://kagi.com/search?q=arc%20browser"))
     }

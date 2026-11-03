@@ -68,6 +68,8 @@ public final class SidebarView: NSView {
         var resizeHandle: CGRect?
         var revealStrip: CGRect?
         var palette: Palette
+        /// The New Tab row looks like the current tab (a blank window with nothing open, or Cmd+T's bar is open).
+        var newTabCurrent: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -150,9 +152,14 @@ public final class SidebarView: NSView {
         // A blank or incognito window: no favorites, no space dots, "This Window" or "Incognito Tabs" over its own tabs.
         let thisWindow = SidebarLayout.listsOwnTabs(snapshot.kind)
         let dockItems = thisWindow ? [] : snapshot.dock
+        // The New Tab row looks like the current tab in a blank window with nothing open, and while the command bar
+        // opens a new tab (Q01-a).
+        let creating: Bool = if case .commandBar(let bar)? = snapshot.overlay { bar.createsTab } else { false }
+        let newTabCurrent = (thisWindow && snapshot.content.panes.isEmpty) || creating
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: dockItems, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
-                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
+                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
+                          newTabCurrent: newTabCurrent)
         guard slice != last else { return }
         let previous = last
         last = slice
@@ -186,7 +193,7 @@ public final class SidebarView: NSView {
         spaceHeader.render(space, palette: palette, interactive: !thisWindow)
         tablist.frame = local(f.tablistViewport)
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
-                       newTabCurrent: thisWindow && snapshot.content.panes.isEmpty, now: snapshot.now)
+                       newTabCurrent: newTabCurrent, now: snapshot.now)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(dockItems, frames: f, palette: palette)
