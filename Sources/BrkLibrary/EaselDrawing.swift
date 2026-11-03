@@ -154,24 +154,61 @@ public enum EaselDrawing {
         return image
     }
 
-    /// The Library card's red scribble (P32 c) and the board's pen glyph share this path, in a 17 x 13 box.
-    static func scribble(in box: CGRect, color: NSColor, width: CGFloat) {
-        let sx = box.width / 17, sy = box.height / 13
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: box.minX + x * sx, y: box.minY + y * sy) }
+    /// Arc's squiggle (`EaselPage.squiggle`) filling `box`: the Library card's red one (P32 c) and the freehand tool's.
+    /// `flipped` is whether y grows down in the current context.
+    static func scribble(in box: CGRect, color: NSColor, width: CGFloat, flipped: Bool = true) {
+        let points = EaselPage.squiggle.map { CGPoint(x: box.minX + $0.x * box.width, y: flipped ? box.minY + $0.y * box.height : box.maxY - $0.y * box.height) }
         let path = NSBezierPath()
-        path.move(to: p(1.5, 11.5))
-        path.line(to: p(8.5, 3.5))
-        path.line(to: p(4.5, 6.5))
-        path.line(to: p(11.5, 1.5))
-        path.move(to: p(5.5, 12))
-        path.line(to: p(12.5, 5.5))
-        path.line(to: p(9, 7.5))
-        path.line(to: p(15.5, 3))
+        path.move(to: points[0])
+        for i in 1..<(points.count - 1) {
+            let mid = CGPoint(x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2)
+            path.curve(to: mid, controlPoint1: points[i], controlPoint2: points[i])
+        }
+        path.line(to: points[points.count - 1])
         path.lineWidth = width
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         color.setStroke()
         path.stroke()
+    }
+
+    /// The freehand tool's glyph: the squiggle (Arc's EaselIconFreehand).
+    static func squiggleGlyph(size: CGFloat, color: NSColor) -> NSImage {
+        let image = NSImage(size: CGSize(width: size, height: size), flipped: false) { rect in
+            let box = rect.insetBy(dx: rect.width * 0.2, dy: rect.height * 0.12)
+            scribble(in: box, color: color, width: max(1.5, size * 0.11), flipped: false)
+            return true
+        }
+        image.accessibilityDescription = "Freehand"
+        return image
+    }
+
+    /// The image tool's glyph: a picture frame with a sun and a hill, in outline (Arc's EaselIconImage).
+    static func pictureGlyph(size: CGFloat, color: NSColor) -> NSImage {
+        let image = NSImage(size: CGSize(width: size, height: size), flipped: true) { rect in
+            let line = max(1.3, size * 0.09)
+            let frame = rect.insetBy(dx: size * 0.1, dy: size * 0.14)
+            color.setStroke()
+            let outline = NSBezierPath(roundedRect: frame, xRadius: size * 0.12, yRadius: size * 0.12)
+            outline.lineWidth = line
+            outline.stroke()
+            let sun = NSBezierPath(ovalIn: CGRect(x: frame.minX + frame.width * 0.2, y: frame.minY + frame.height * 0.2, width: frame.width * 0.2, height: frame.width * 0.2))
+            sun.lineWidth = line
+            sun.stroke()
+            let hill = NSBezierPath()
+            hill.move(to: CGPoint(x: frame.minX + line, y: frame.maxY - frame.height * 0.12))
+            hill.line(to: CGPoint(x: frame.minX + frame.width * 0.42, y: frame.midY + frame.height * 0.02))
+            hill.line(to: CGPoint(x: frame.minX + frame.width * 0.62, y: frame.maxY - frame.height * 0.22))
+            hill.line(to: CGPoint(x: frame.minX + frame.width * 0.75, y: frame.midY + frame.height * 0.16))
+            hill.line(to: CGPoint(x: frame.maxX - line, y: frame.maxY - frame.height * 0.1))
+            hill.lineWidth = line
+            hill.lineJoinStyle = .round
+            hill.lineCapStyle = .round
+            hill.stroke()
+            return true
+        }
+        image.accessibilityDescription = "Image"
+        return image
     }
 }
 

@@ -434,7 +434,8 @@ final class URLPillView: HoverView {
         addSubview(label)
         addSubview(badge)
         lock.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "Share")?
-            .withSymbolConfiguration(.init(pointSize: Draw.shareLockGlyph.value, weight: .medium))
+            .withSymbolConfiguration(.init(pointSize: Draw.shareLockGlyph.value[1], weight: .medium))
+        lock.imageScaling = .scaleProportionallyUpOrDown
         lock.contentTintColor = NSColor(srgbRed: 0x9B / 255.0, green: 0x9A / 255.0, blue: 0x9A / 255.0, alpha: 1)   // Q09 a: #9B9A9A
         lock.isHidden = true
         addSubview(lock)
@@ -485,8 +486,8 @@ final class URLPillView: HoverView {
             .offsetBy(dx: searchField ? 0 : -(size + Draw.pillAccessoryGap.value), dy: 0)
         var leading = searchField ? inset + size + Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value
         if !lock.isHidden {
-            let glyph = lock.intrinsicContentSize
-            lock.frame = CGRect(x: Draw.pillTextLeading.value, y: (bounds.height - glyph.height) / 2, width: glyph.width, height: glyph.height)
+            let glyph = Draw.shareLockGlyph.value
+            lock.frame = CGRect(x: glyph[2], y: (bounds.height - glyph[1]) / 2, width: glyph[0], height: glyph[1])
             leading = Draw.shareTextLeading.value
         }
         var trailing = accessoriesShown ? copyLink.frame.minX : bounds.width - leading

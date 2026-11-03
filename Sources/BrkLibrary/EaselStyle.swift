@@ -46,6 +46,7 @@ struct EaselToolbarMetrics: MetricGroup {
     let buttonRadius = Metric(8.0, .guess("the selected tool's square corner radius"))
     let glyph = Metric(17.0, .anatomy("Q09 a: the tool glyphs are about 17 pt"))
     let person = Metric(44.0, .anatomy("Q09 a: the person button spans x 1214...1258, y 710...754"))
+    let shadowBlur = Metric(9.0, .guess("the panels' shadow blur, fitted to Q09 a's soft edge"))
 }
 
 /// The Library's Easels page (P32 c, positions from the page column's left at x 112).
@@ -59,10 +60,10 @@ struct EaselCardMetrics: MetricGroup {
     let boardRadius = Metric(9.0, .guess("the board's corner radius inside a card"))
     let boardRim = Metric(3.0, .anatomy("P32 c: a 1 pt grey edge, then 3 pt of white before the board's grey fill"))
     let titleLeading = Metric(10.5, .anatomy("P32 c: the scribble and the title start 10.5 into the board"))
-    let titleBottom = Metric(11.0, .anatomy("P32 c: the title's last line ends 11 above the board's bottom"))
+    let titleBottom = Metric(9.7, .anatomy("P32 c: \"Untitled\" starts at y 145.5, the board ends at 184"))
     let titleFont = Metric(13.5, .anatomy("P32 c: \"Untitled\" is 53.5 pt wide in bold"))
     let titleWidth = Metric(78.0, .anatomy("P32 c: \"Untitled Easel\" wraps after \"Untitled\""))
-    let scribble = Metric([17.0, 13.0], .anatomy("P32 c: the red scribble is 17 x 13, 6 above the title"))
+    let scribble = Metric([12.5, 14.5, 12.0, 57.0], .anatomy("P32 c: the red squiggle is 12.5 x 14.5 at x 144, y 125: 12 and 57 into the board"))
 }
 
 /// Colors observed on Q09 a and P32 c, and Arc's Easel colors (visual-and-copy.md, ARC_EaselUI).
@@ -73,7 +74,15 @@ struct EaselColors {
     let board = LibraryColors.srgb(0xFEFEFE)
     /// The toolbar, the font-size card and the person button (Q09 a: #FDFDFD with a soft shadow).
     let panel = LibraryColors.srgb(0xFDFDFD)
-    let shadow = NSColor.black.withAlphaComponent(0.12)
+    /// The toolbar's, the font card's and the person button's soft shadow (Q09 a: about 5 % darker 6 pt around them).
+    let shadow = NSColor.black.withAlphaComponent(0.16)
+
+    func applyShadow(to layer: CALayer?) {
+        layer?.shadowColor = shadow.cgColor
+        layer?.shadowOpacity = 1
+        layer?.shadowRadius = EaselDraw.toolbar.shadowBlur.value
+        layer?.shadowOffset = CGSize(width: 0, height: -1)
+    }
     /// A tool's glyph (Q09 a: #575757) and the selected tool's square (#ABABAB) under a white glyph.
     let glyph = LibraryColors.srgb(0x575757)
     let selectedTool = LibraryColors.srgb(0xABABAB)

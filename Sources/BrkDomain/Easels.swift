@@ -27,14 +27,25 @@ public enum EaselPage {
     /// Observed on Q09 a: the new Easel's row, its title box and its Library card all read "Untitled Easel".
     public static let defaultTitle = "Untitled Easel"
 
-    /// The row's icon (Arc: `ARC_Favicons` Easel favicon, Q09 a): a black scribble on a white tile, as an SVG data
-    /// URL so the sidebar's favicon loader draws it like any other.
+    /// The row's icon (Arc: `ARC_Favicons` Easel favicon, Q09 a): Arc's squiggle in dark grey on a white tile, as an
+    /// SVG data URL so the sidebar's favicon loader draws it like any other. The path is `EaselPage.squiggle` (traced
+    /// on P32 c) through its midpoints.
     public static let favicon = URL(string: "data:image/svg+xml;base64," + Data((
         #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32">"#
             + ##"<rect x="0.5" y="0.5" width="15" height="15" rx="3.5" fill="#FFFFFF"/>"##
-            + ##"<path d="M4.2 11.6 L8.6 6.4 L6.4 6.1 L10.6 3.4 M5.6 12.4 L10.4 7.6 L8.9 7.4 L11.8 5.2" fill="none" stroke="#1C1C1E" "##
-            + #"stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>"#
+            + #"<path d="M10.37 13.60 Q3.27 6.74 3.58 5.79 Q3.90 4.85 4.61 4.92 Q5.32 5.00 7.68 7.61 Q10.05 10.21 10.84 10.37 "#
+            + #"Q11.63 10.52 11.86 9.89 Q12.10 9.26 10.37 6.97 Q8.63 4.69 8.87 3.82 Q9.10 2.95 9.81 2.68 Q10.52 2.40 11.39 2.52 "#
+            + ##"Q12.26 2.64 12.50 3.27 L12.73 3.90" fill="none" stroke="#3A3A3A" stroke-width="1.7" stroke-linecap="round" "##
+            + #"stroke-linejoin="round"/></svg>"#
     ).utf8).base64EncodedString())!
+
+    /// Arc's Easel squiggle (the sidebar row, the Library card, the freehand tool), traced on P32 c, in a unit box:
+    /// drawn through the midpoints of these points so its turns are round.
+    public static let squiggle: [CGPoint] = [
+        CGPoint(x: 0.75, y: 1.0), CGPoint(x: 0.0, y: 0.387), CGPoint(x: 0.067, y: 0.218), CGPoint(x: 0.217, y: 0.232),
+        CGPoint(x: 0.717, y: 0.697), CGPoint(x: 0.883, y: 0.725), CGPoint(x: 0.933, y: 0.613), CGPoint(x: 0.567, y: 0.204),
+        CGPoint(x: 0.617, y: 0.049), CGPoint(x: 0.767, y: 0.0), CGPoint(x: 0.95, y: 0.021), CGPoint(x: 1.0, y: 0.134),
+    ]
 }
 
 /// Words Arc shows around an Easel (observed on Q09 a and Q09 c).

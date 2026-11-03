@@ -190,7 +190,7 @@ final class EaselCardView: NSView {
         let titleBox = title.boundingRect(with: CGSize(width: c.titleWidth.value, height: 80), options: [.usesLineFragmentOrigin])
         let titleY = board.maxY - c.titleBottom.value - ceil(titleBox.height)
         let scribble = c.scribble.value
-        let scribbleRect = CGRect(x: board.minX + c.titleLeading.value, y: titleY - 6 - scribble[1] + 4, width: scribble[0], height: scribble[1])
+        let scribbleRect = CGRect(x: board.minX + scribble[2], y: board.minY + scribble[3], width: scribble[0], height: scribble[1])
         if !card.elements.isEmpty {
             NSGraphicsContext.saveGraphicsState()
             fill.addClip()
@@ -201,7 +201,7 @@ final class EaselCardView: NSView {
             EaselDrawing.draw(card.elements, origin: origin, scale: scale)
             NSGraphicsContext.restoreGraphicsState()
         }
-        EaselDrawing.scribble(in: scribbleRect, color: EaselPalette.scribble, width: 2.4)
+        EaselDrawing.scribble(in: scribbleRect, color: EaselPalette.scribble, width: 2.6)
         title.draw(with: CGRect(x: board.minX + c.titleLeading.value, y: titleY, width: c.titleWidth.value, height: ceil(titleBox.height)),
                    options: [.usesLineFragmentOrigin])
     }

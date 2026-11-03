@@ -241,7 +241,8 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
 
     private func updateTools() {
         for (tool, button) in toolbar.tools { button.isSelectedTool = tool == self.tool }
-        toolbar.duplicate.isEnabled = !selection.isEmpty
+        // Arc draws duplicate at full ink with nothing selected; a click then does nothing.
+        toolbar.duplicate.toolTip = selection.isEmpty ? "Duplicate (select something first)" : "Duplicate"
         window?.invalidateCursorRects(for: self)
     }
 
@@ -261,7 +262,7 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
     public override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     public override func mouseDown(with event: NSEvent) {
-        guard let easel else { return }
+        guard easel != nil else { return }
         let local = convert(event.locationInWindow, from: nil)
         let p = boardPoint(local)
         if editingText != nil { endTextEditing(commit: true) }
@@ -306,12 +307,17 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
             titleSelected = false
             gesture = .ink(id: UUID().uuidString, points: [p])
         }
-        _ = easel
         changed()
     }
 
     public override func mouseDragged(with event: NSEvent) {
-        let p = boardPoint(convert(event.locationInWindow, from: nil))
+        guard gesture != nil else { return }
+        extend(to: boardPoint(convert(event.locationInWindow, from: nil)), square: event.modifierFlags.contains(.shift))
+        changed()
+    }
+
+    /// The gesture in progress follows the pointer to `p` (a drag, and the release's own position).
+    private func extend(to p: CGPoint, square: Bool) {
         switch gesture {
         case .move(let start, _)?:
             gesture = .move(start: start, offset: CGSize(width: p.x - start.x, height: p.y - start.y))
@@ -323,7 +329,7 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
                 let start = draft.points.first ?? draft.frame.origin
                 draft.points = [start]
                 var box = CGRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
-                if event.modifierFlags.contains(.shift) { let side = max(box.width, box.height); box.size = CGSize(width: side, height: side) }
+                if square { let side = max(box.width, box.height); box.size = CGSize(width: side, height: side) }
                 draft.frame = box
             }
             gesture = .draw(draft)
@@ -334,12 +340,12 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
             gesture = .marquee(start: start, end: p)
         case nil: return
         }
-        changed()
     }
 
     public override func mouseUp(with event: NSEvent) {
         guard let easel else { gesture = nil; return }
         let p = boardPoint(convert(event.locationInWindow, from: nil))
+        extend(to: p, square: event.modifierFlags.contains(.shift))
         switch gesture {
         case .move(_, let offset)?:
             if abs(offset.width) >= 1 || abs(offset.height) >= 1 {
@@ -387,8 +393,11 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
 
     public override func keyDown(with event: NSEvent) {
         guard let easel else { return super.keyDown(with: event) }
-        switch event.keyCode {
-        case 51, 117:   // Delete, Forward Delete
+        // Delete and Forward Delete by key, or by the character they type (0x7F, the forward-delete function key).
+        let character = event.charactersIgnoringModifiers?.unicodeScalars.first?.value
+        let delete = event.keyCode == 51 || event.keyCode == 117 || character == 0x7F || character == 0x08 || character == 0xF728
+        switch delete ? 51 : event.keyCode {
+        case 51:
             guard !selection.isEmpty else { return }
             dispatch(.easel(.remove(easel.id, Array(selection).sorted())))
             selection = []
@@ -574,10 +583,7 @@ class EaselPanelView: NSView {
         layer?.backgroundColor = EaselPalette.panel.cgColor
         layer?.cornerRadius = radius
         layer?.cornerCurve = .continuous
-        layer?.shadowColor = EaselPalette.shadow.cgColor
-        layer?.shadowOpacity = 1
-        layer?.shadowRadius = 6
-        layer?.shadowOffset = CGSize(width: 0, height: -1)
+        EaselPalette.applyShadow(to: layer)
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -595,10 +601,7 @@ final class EaselPanelButton: NSButton {
         layer?.backgroundColor = EaselPalette.panel.cgColor
         layer?.cornerRadius = EaselDraw.toolbar.radius.value
         layer?.cornerCurve = .continuous
-        layer?.shadowColor = EaselPalette.shadow.cgColor
-        layer?.shadowOpacity = 1
-        layer?.shadowRadius = 6
-        layer?.shadowOffset = CGSize(width: 0, height: -1)
+        EaselPalette.applyShadow(to: layer)
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -618,7 +621,9 @@ final class EaselToolButton: NSButton {
         layer?.cornerRadius = EaselDraw.toolbar.buttonRadius.value
         layer?.cornerCurve = .continuous
         let glyph = EaselDraw.toolbar.glyph.value
-        image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: tool?.label ?? "Duplicate")?.withSymbolConfiguration(.init(pointSize: glyph, weight: .regular)) }
+        // Arc's arrow and duplicate glyphs are heavier than the outline tools.
+        let weight: NSFont.Weight = tool == .arrow || tool == nil ? .semibold : .regular
+        image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: tool?.label ?? "Duplicate")?.withSymbolConfiguration(.init(pointSize: glyph, weight: weight)) }
         toolTip = tool?.label ?? "Duplicate"
         setAccessibilityLabel(toolTip)
         refresh()
@@ -626,12 +631,16 @@ final class EaselToolButton: NSButton {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
 
-    override var isEnabled: Bool { didSet { alphaValue = isEnabled ? 1 : 0.45 } }
-
     private func refresh() {
         let ink = isSelectedTool ? NSColor.white : EaselPalette.glyph
         contentTintColor = ink
-        if tool == .text { image = EaselDrawing.outlinedA(size: EaselDraw.toolbar.glyph.value, color: ink) }
+        let glyph = EaselDraw.toolbar.glyph.value
+        switch tool {
+        case .text?: image = EaselDrawing.outlinedA(size: glyph, color: ink)
+        case .image?: image = EaselDrawing.pictureGlyph(size: glyph + 5, color: ink)
+        case .pen?: image = EaselDrawing.squiggleGlyph(size: glyph + 5, color: ink)
+        default: break
+        }
         layer?.backgroundColor = isSelectedTool ? EaselPalette.selectedTool.cgColor : NSColor.clear.cgColor
     }
 }
