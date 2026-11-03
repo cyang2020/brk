@@ -155,12 +155,12 @@ enum SpaceToolsScenarios {
         // Change Space Icon…: the Emoji / Icon popover.
         try app.dispatch(.sidebar(.openDialog(.icon(.current))))
         try clickWhenShown(app, "icon-picker-search")
-        try app.type("crescent moon")
+        try app.type("blue book")
         try clickWhenShown(app, "icon-result-0")
-        try app.waitUntil("icon picked") { try app.view().space.icon == .custom(.emoji("🌙")) && app.view().dialog == nil }
+        try app.waitUntil("icon picked") { try app.view().space.icon == .custom(.emoji("📘")) && app.view().dialog == nil }
         try app.flush(); try app.restart()
         try expect(try app.view().theme.scheme == .dark, "dark appearance not restored")
-        try expect(try app.view().space.id == created && app.view().space.title == "Native Work Edited" && app.view().space.icon == .custom(.emoji("🌙")),
+        try expect(try app.view().space.id == created && app.view().space.title == "Native Work Edited" && app.view().space.icon == .custom(.emoji("📘")),
                    "name and icon did not restore")
         try app.dispatch(.library(.open(.spaces)))
         try expect(isShown(try app.native(), .spaceToolsControl("manager")), "Spaces destination missing")
