@@ -126,20 +126,19 @@ enum SidebarWindowScenarios {
     }
 
     @Sendable static func emptyToday(_ app: AppUnderTest) throws {
-        let pinned = try app.load(app.site.url("split-tools.html?pinned"))
-        try app.waitForPageInput(PageID(window: app.window!, item: pinned), at: app.site.url("split-tools.html?pinned"))
-        try app.dispatch(.tab(.togglePin(.item(pinned))))
+        // A pinned folder (never shown) and Today tabs; then every Today tab closes, as Arc's Q02-b.
+        try app.dispatch(.item(.newFolder))
+        guard let folder = try app.view().space.pinned.rows.first(where: { $0.kind == .folder })?.id else { throw Check(description: "no pinned folder") }
         _ = try app.load(app.site.url("split-tools.html?today"))
         try app.waitUntil("Today to hold a tab") { try !app.view().space.today.rows.isEmpty }
         for row in try app.view().space.today.rows { try app.dispatch(.tab(.close(.item(row.id)))) }
-        try app.dispatch(.tab(.close(.item(pinned))))
         try app.waitUntil("Today to be empty and nothing shown") {
             let v = try app.view()
             return v.space.today.rows.isEmpty && v.content.panes.isEmpty
         }
         let n = try app.native()
         try expect(!isShown(n, .todayClear), "the Pinned/Today divider's Clear still shows")
-        let newTab = try visible(n, .todayNewTab).frame, row = try visible(n, .row(pinned)).frame
+        let newTab = try visible(n, .todayNewTab).frame, row = try visible(n, .row(folder)).frame
         try expect(near(newTab.minY - row.maxY, Metrics.tablist.rowSpacing.value), "New Tab is not right under Pinned: \(row) then \(newTab)")
         try expect(isShown(n, .card(0)), "no empty card")
         try app.screenshot("today-empty")
