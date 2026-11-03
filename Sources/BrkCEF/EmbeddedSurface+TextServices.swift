@@ -1,5 +1,6 @@
 import AppKit
 import CefKit
+import ObjectiveC
 import Foundation
 
 /// Edit > Spelling and Grammar, Substitutions, Speech and Format > Font for the focused editor of a page (an input,
@@ -46,7 +47,46 @@ import Foundation
     static let spellTag = NSSpellChecker.uniqueSpellDocumentTag()
 }
 
+/// AppKit's spelling and substitutions panels send their buttons' actions (`changeSpelling:`, `ignoreSpelling:`,
+/// `checkTextInDocument:`, `checkTextInSelection:`) to the first responder, Chromium's input view. In Brk's window
+/// that view takes `changeSpelling:` without changing anything, so on its class these actions go to the enclosing
+/// page surface, which carries them out (a view outside a surface keeps Chromium's own behavior).
+@MainActor enum PanelActionRouting {
+    private static var installed: Set<ObjectIdentifier> = []
+    private typealias Action = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
+    static let selectors = ["changeSpelling:", "ignoreSpelling:", "checkTextInDocument:", "checkTextInSelection:"]
+
+    static func install(on view: NSView) {
+        let cls: AnyClass = type(of: view)
+        guard installed.insert(ObjectIdentifier(cls)).inserted else { return }
+        for name in selectors {
+            let selector = NSSelectorFromString(name)
+            let inherited = class_getInstanceMethod(cls, selector)
+            let original = inherited.map { unsafeBitCast(method_getImplementation($0), to: Action.self) }
+            let block: @convention(block) (AnyObject, AnyObject?) -> Void = { object, sender in
+                nonisolated(unsafe) let target = object, argument = sender
+                let handled = MainActor.assumeIsolated { () -> Bool in
+                    guard let view = target as? NSView, let surface = EmbeddedSurface.enclosing(view) else { return false }
+                    _ = surface.perform(selector, with: argument)
+                    return true
+                }
+                if !handled { original?(object, selector, sender) }
+            }
+            let replacement = imp_implementationWithBlock(block)
+            let added = if let types = inherited.flatMap({ method_getTypeEncoding($0) }) { class_addMethod(cls, selector, replacement, types) }
+                        else { class_addMethod(cls, selector, replacement, "v@:@") }
+            if !added, let inherited { method_setImplementation(inherited, replacement) }
+        }
+    }
+}
+
 extension EmbeddedSurface {
+    static func enclosing(_ view: NSView) -> EmbeddedSurface? {
+        var current: NSView? = view
+        while let next = current { if let surface = next as? EmbeddedSurface { return surface }; current = next.superview }
+        return nil
+    }
+
     /// The JavaScript that finds the focused editor: `find()` returns `{d, e, kind}` with kind field, rich or none.
     private static let editorPrelude = """
     const find=()=>{let d=document;for(;;){const a=d.activeElement;if(a&&a.tagName==='IFRAME'){try{if(a.contentDocument){d=a.contentDocument;continue}}catch(_){}}break}

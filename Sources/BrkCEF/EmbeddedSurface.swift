@@ -86,6 +86,7 @@ final class EmbeddedSurface: PageSurfaceView {
     private func waitForInputView(attempt: Int) {
         guard !retired else { return }
         if isReadyForFocus {
+            if let input = Self.find("RenderWidgetHostViewCocoa", in: self) { PanelActionRouting.install(on: input) }
             log.notice("page \(self.page.description, privacy: .public): input view ready after \(attempt, privacy: .public) polls")
             onReadyForFocus?()
             return

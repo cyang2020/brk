@@ -144,7 +144,7 @@ final class BrowserClient {
         }
         lifeSpan.pointee.on_before_popup = {
             handlerSelf, browser, frame, popupID, targetURL, targetFrameName, targetDisposition,
-            userGesture, popupFeatures, _, popupClient, _, _, _ in
+            userGesture, popupFeatures, windowInfo, popupClient, _, _, _ in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             let sourceFrame = frame.flatMap { CefStringUtil.takingUserFree($0.pointee.get_identifier?($0)) }
             let sourceIsMain = frame.map { $0.pointee.is_main?($0) != 0 } ?? false
@@ -179,6 +179,13 @@ final class BrowserClient {
                 switch CefWindowOpenPolicy.resolve(raw, for: request) {
                 case .allowNativePopup:
                     guard let popupClient else { return 1 }
+                    // A Chrome-style popup otherwise opens at CEF's default 800x600 at the screen's corner; the
+                    // page's window features ask for a position and a content size (screen coordinates, DIP).
+                    if let windowInfo, let width = features.width, let height = features.height, width > 0, height > 0 {
+                        let current = windowInfo.pointee.bounds
+                        windowInfo.pointee.bounds = cef_rect_t(x: Int32(features.x ?? Int(current.x)), y: Int32(features.y ?? Int(current.y)),
+                                                               width: Int32(width), height: Int32(height))
+                    }
                     client.installNativeAuxiliary(.popup(request), replacing: popupClient)
                     return 0  // let CEF create the native popup
                 case .openInCurrentBrowser:

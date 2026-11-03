@@ -330,7 +330,8 @@ public final class CEFEngine: WebEngine {
                     // Automatic entry (Arc's "auto picture in picture" when the user leaves a playing video tab) is
                     // the browser acting on that user's tab switch, as Chromium's own automatic entry is: it runs
                     // with the browser's gesture, so it no longer depends on the page's transient activation, which
-                    // expires five seconds after the user last touched the page. The page itself never gains one.
+                    // expires five seconds after the user last touched the page. As with an explicit PiP request, the
+                    // injected call runs with that gesture inside the page.
                     let gesture = request.userInitiated || request.operation == .enterPictureInPicture
                     try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: gesture)
                     if !request.userInitiated, request.operation == .enterPictureInPicture, let self, let live,

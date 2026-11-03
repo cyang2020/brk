@@ -52,7 +52,12 @@ extension PageBrowsingScenarios {
             try expect(try !settledFullscreen(app), "physical Ctrl+Cmd+F did not leave fullscreen")
             trace["physical-shortcut"] = "entered and left"
 
-            // The green traffic light, clicked through the window server, enters; a physical Escape leaves.
+            // The green traffic light, clicked through the window server, enters; a physical Escape leaves. The
+            // window first moves to the screen's top-left corner, clear of other processes' windows.
+            let screen = CGDisplayBounds(CGMainDisplayID())
+            let size = try app.native().windowFrame.size
+            try app.setWindowFrame(CGRect(x: 0, y: screen.height - 40 - size.height, width: size.width, height: size.height))
+            app.sleep(0.5)
             let n = try app.native()
             guard let zoom = n.actual["window-zoom-button"], !zoom.hidden else { throw Check(description: "no green button on screen") }
             let display = CGDisplayBounds(CGMainDisplayID())
@@ -307,9 +312,11 @@ extension PageBrowsingScenarios {
         try app.waitUntil("video plays") { try tab(item, in: app.view())?.mediaPlayers.contains { $0.kind == .video && !$0.paused } == true }
         let other = try load(app, "page2.html")
         try app.dispatch(.tab(.focus(item)))
-        // No input reaches the page from here on; its transient activation (5 s in Chromium) expires.
-        app.sleep(6)
-        try expect(try pageText(app, page, "navigator.userActivation.isActive") == "false", "the page still had user activation")
+        // Scripts the harness runs count as user activation, so the page reports its own state on a timer; no input
+        // reaches it from here on and its transient activation (5 s in Chromium) expires.
+        try app.evaluate(page, "setInterval(()=>{document.title='ua:'+navigator.userActivation.isActive},200)")
+        app.sleep(6.5)
+        try app.waitUntil("page reports no user activation", timeout: 3) { try title(app, page) == "ua:false" }
         try app.dispatch(.tab(.focus(other.item)))
         try app.waitUntil("automatic PiP after activation expired", timeout: 10) {
             guard let row = try tab(item, in: app.view()) else { return false }
@@ -319,8 +326,6 @@ extension PageBrowsingScenarios {
         try app.recordWindows("auto-pip-open")
         try app.dispatch(.tab(.focus(item)))
         try app.waitUntil("PiP returns to the tab") { try tab(item, in: app.view())?.mediaPlayers.contains { $0.pictureInPicture } == false }
-        try expect(try pageText(app, page, "navigator.userActivation.hasBeenActive+':'+navigator.userActivation.isActive").hasSuffix(":false"),
-                   "the browser's entry gave the page user activation")
         try app.dispatch(.settings(.advanced(.autoPictureInPicture(false))))
         try app.dispatch(.tab(.focus(other.item)))
         for _ in 0..<10 { try expect(try tab(item, in: app.view())?.mediaPlayers.contains { $0.pictureInPicture } == false, "PiP entered with the setting off"); app.sleep(0.1) }
@@ -416,8 +421,24 @@ extension PageBrowsingScenarios {
 
 /// Mouse clicks posted through the window server, only while this run's Brk window is key in the active app.
 enum PhysicalPointer {
+    /// The frontmost ordinary window (below the system overlay layers) containing `point`, as (pid, window number).
+    static func frontmost(at point: CGPoint) -> (pid: Int32, number: Int)? {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        for info in list {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer < 20, let bounds = info[kCGWindowBounds as String] as? [String: Double],
+                  let pid = info[kCGWindowOwnerPID as String] as? Int32, let number = info[kCGWindowNumber as String] as? Int else { continue }
+            let rect = CGRect(x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0, width: bounds["Width"] ?? 0, height: bounds["Height"] ?? 0)
+            if rect.contains(point), (info[kCGWindowAlpha as String] as? Double ?? 1) > 0 { return (pid, number) }
+        }
+        return nil
+    }
+    /// Refuses (throws) unless this run's Brk window is the frontmost window at the point, so a click never lands on
+    /// another application's window or on another Brk process's always-on-top window.
     static func click(_ app: AppUnderTest, at point: CGPoint, window: WindowID) throws {
         try PhysicalKeys.ensureFrontmost(app, window)
+        guard case .hello(let hello) = try app.send(.hello), let front = frontmost(at: point), front.pid == hello.pid else {
+            throw Check(description: "another window is in front of Brk at \(point) (\(String(describing: frontmost(at: point)))); physical click not posted")
+        }
         let source = CGEventSource(stateID: .hidSystemState)
         for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
             guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left) else { throw Check(description: "mouse event") }

@@ -223,7 +223,7 @@ enum PageBrowsingScenarios {
         for _ in 0..<2 {
             // Join Meeting asks for a calendar file, Save and Print for a destination: dismiss any sheet they left.
             guard let sheet = try app.native(main).sheetClass else { break }
-            if sheet.contains("Print") { _ = try? app.send(.cancelPrintPanel(window: main)) } else { _ = try? app.send(.answerSavePanel(window: main, path: nil)) }
+            if sheet.contains("Print") { _ = try? app.send(.cancelPrintPanel(window: main)) } else { _ = try? app.send(.sheetButton(title: "Cancel")) }
             try app.waitUntil("\(sheet) dismissed", timeout: 10) { try app.native(main).sheetClass == nil }
         }
         _ = try app.send(.activate(window: main))
