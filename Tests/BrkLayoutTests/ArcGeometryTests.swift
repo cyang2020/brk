@@ -96,21 +96,23 @@ final class ArcGeometryTests: XCTestCase {
         let frames = try XCTUnwrap(d.frames().sidebar)
         XCTAssertEqual(frames.dockSpaces, [d.view.dock[0].id: CGRect(x: 97, y: 735, width: 34, height: 32)])
     }
-    /// Centered command bar: min(766, area - 160) wide, 338 tall, centered in the content area.
+    /// Centered command bar: min(766, area - 160) wide, 338 tall, centered in the window (Q01-a: Arc's card spans
+    /// 257...1023 with the sidebar shown).
     func testCommandBarCentered() throws {
         let d = LayoutDriver()
         d.user(.commandBar(.open(.newTab)))
         let frames = d.frames()
         XCTAssertEqual(frames.contentArea, CGRect(x: 228, y: 10, width: 1042, height: 756))
-        XCTAssertEqual(frames.commandBar, CGRect(x: 366, y: 219, width: 766, height: 338))
+        XCTAssertEqual(frames.commandBar, CGRect(x: 257, y: 219, width: 766, height: 338))
         let area = { (w: Double, h: Double) in CGRect(x: 0, y: 0, width: w, height: h) }
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(800, 600), urlPill: nil).width, 640, "min(766, 800 - 160)")
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(700, 600), urlPill: nil).width, 680, "narrower than 766: area - 20")
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(1000, 300), urlPill: nil).height, 252, "24 from top and bottom")
-        // Cmd+L with the sidebar shown: anchored at the pill, reaching right, 80 from the window's right edge at most 720 wide.
+        // Cmd+L with the sidebar shown: from the pill's left edge, 1.5 above it (P02-b), reaching right, 80 from the
+        // window's right edge at most 720 wide.
         d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 46, width: 720, height: 338))
-        XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 46, width: 512, height: 330))
+        XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 44.5, width: 720, height: 338))
+        XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 44.5, width: 512, height: 331.5))
     }
     /// Card inset 10 on every side with the sidebar hidden; beside the sidebar the card starts at its edge; radius 6.
     func testContentCardInsetAndRadius() throws {

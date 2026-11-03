@@ -4,17 +4,30 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// Owner: W4 / F4. The command bar: input row, then up to 5 results (`Suggest.rank`: the top hit, switch to tab,
-/// open what you typed, site search, top domains, the engine's suggestions, history, type travel). The typed query,
-/// the highlighted row and site-search mode are view state; the snapshot's `openID` resets them. Every edit
-/// dispatches `.commandBar(.queryChanged(text))` so the reducer can ask for suggestions. Return dispatches the
-/// highlighted result's command (`Suggestion.command`), Esc `.commandBar(.dismiss)`, and so does a click anywhere
-/// outside the card. Opening plays Arc's bounce (scale 0.95 -> 1, no fade).
+/// Owner: W4 / F4. The command bar: input row, then up to 5 results (`Suggest.rank`: the completed site or the top
+/// hit, switch to tab, what you typed, top domains, the engine's suggestions, history, type travel). The typed query,
+/// its inline completion, the highlighted row and site-search mode are view state; the snapshot's `openID` resets
+/// them. Every edit dispatches `.commandBar(.queryChanged(text))` with the text as typed (never the completion) so
+/// the reducer can ask for suggestions. Return dispatches the highlighted result's command (`Suggestion.command`),
+/// Esc `.commandBar(.dismiss)`, and so does a click anywhere outside the card. Opening plays Arc's bounce (scale 0.95
+/// -> 1, no fade).
 ///
-/// Site search (Arc): on a row that offers it, Tab (or choosing the row) enters site search for that engine; so
-/// does Space right after an engine's whole name or keyword. The engine's name sits in a pill before the input,
-/// the placeholder reads "Search Bing…", and Return searches there (`.commandBar(.submitSearch)`). Backspace in the
-/// empty input or Esc leaves the mode and gives back the engine's name as typed.
+/// Two cards, as Arc 1.170 draws them (verify/visual-pairs/run-20261103 P02-b/c, Q01-a/b): centered (Cmd+T) the
+/// card fills the box, with a 64 pt input row (magnifier, 18 pt text, ⓘ) and a hairline over the rows, each recent
+/// tab with "Switch to Tab" and an arrow square, the highlight grey. Over the URL pill (Cmd+L) the card is 350 wide
+/// from the pill's left edge (wider only when its input row needs it), its input row 50 tall with the page's icon
+/// and 13 pt text, no hairline and no Switch to Tab captions, the highlight and the text selection shades of the
+/// sidebar theme. Both follow the sidebar's scheme.
+///
+/// Inline completion (Arc): typing on the start of a site's domain shows the rest of it selected ("wiki" ->
+/// "wiki|pedia.org"), the site leads the rows, Return opens or switches to it; typing replaces the selection, a
+/// deletion never completes, and → or End keeps the whole domain as typed.
+///
+/// Site search (Arc): beside the input the bar offers "Search Wikipedia" and a Tab key (`Suggest.siteSearchOffer`);
+/// Tab enters site search for that engine, and so does Space right after an engine's whole name or keyword. The
+/// engine's name sits in a pill before the input, the placeholder reads "Search Bing…", and Return searches there
+/// (`.commandBar(.submitSearch)`). Backspace in the empty input or Esc leaves the mode and gives back the engine's
+/// name as typed.
 ///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
@@ -23,6 +36,8 @@ import BrkUIKit
 /// controller asks for focus, it does not reach into the bar.
 @MainActor
 public final class CommandBarView: NSView, NSTextFieldDelegate {
+    enum Style { case centered, attached }
+
     let dispatch: Dispatch
     let input = NSTextField()
     /// Typed text -> URL: the domain's one URL policy with the bar's engine unless a test sets it.
@@ -30,8 +45,18 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// Site-search mode: the engine the query goes to, and the text that named it (given back on leaving).
     private(set) var siteSearch: SearchEngineCandidate?
     private var namedBy = ""
+    /// What the user typed; the input shows it followed by the rest of `completion`, selected.
+    private(set) var typed = ""
+    private(set) var completion: String?
+    /// The engine Tab would search, shown beside the input.
+    private(set) var offer: SearchEngineCandidate?
     private let sitePill = NSView()
     private let siteLabel = NSTextField(labelWithString: "")
+    private let leadingIcon = NSImageView()
+    private let info = InfoButton()
+    private let offerLabel = NSTextField(labelWithString: "")
+    private let keyCap = NSView()
+    private let keyLabel = NSTextField(labelWithString: OverlayCopy.siteSearchKey)
     private(set) var results: [Suggestion] = []
     private(set) var highlighted = 0
     private let card = FlippedView()
@@ -39,9 +64,15 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private var rows: [ResultRowView] = []
     private var openID: Int?
     private var bar: CommandBarSnapshot?
-    private var colors = OverlayColors.of(.light)
-    private var scheme: Scheme?
+    private(set) var style = Style.centered
+    private var fillsWindow = false {
+        didSet { if fillsWindow != oldValue { layoutCard() } }
+    }
+    private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
+    private var look: (Scheme, Style, RGBA, Bool)?
+    private var leadingFavicon: URL?
     private var eventMonitor: Any?
+    private var savedSelection: [NSAttributedString.Key: Any]?
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -53,13 +84,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         input.isBordered = false
         input.drawsBackground = false
         input.focusRingType = .none
-        input.font = .systemFont(ofSize: OverlayMetrics.commandBar.inputFontSize.value)
         input.cell?.isScrollable = true
         input.cell?.wraps = false
         input.cell?.usesSingleLineMode = true
         card.wantsLayer = true
         card.layer?.cornerCurve = .continuous
         card.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
+        card.layer?.borderWidth = 0.5
         hairline.wantsLayer = true
         sitePill.wantsLayer = true
         sitePill.layer?.cornerCurve = .continuous
@@ -67,11 +98,19 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         sitePill.isHidden = true
         siteLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
         sitePill.addSubview(siteLabel)
-        card.addSubview(sitePill)
-        card.addSubview(input)
-        card.addSubview(hairline)
+        leadingIcon.imageScaling = .scaleProportionallyUpOrDown
+        offerLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
+        offerLabel.lineBreakMode = .byTruncatingTail
+        keyCap.wantsLayer = true
+        keyCap.layer?.cornerCurve = .continuous
+        keyCap.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
+        keyLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.keyFontSize.value, weight: .medium)
+        keyLabel.alignment = .center
+        keyCap.addSubview(keyLabel)
+        info.onClick = { [weak self] in self?.dispatch(.settings(.openPane(.shortcuts))) }
+        for view in [leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
-        applyColors(.light)
+        applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
 
     @available(*, unavailable)
@@ -83,32 +122,40 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// bar is hidden or not in a window.
     public func focusInput() -> Bool {
         guard !isHidden, let window else { return false }
-        if input.currentEditor() != nil { return true }
-        return window.makeFirstResponder(input)
+        if input.currentEditor() != nil { tintSelection(); return true }
+        let focused = window.makeFirstResponder(input)
+        tintSelection()
+        return focused
     }
 
-    public func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette) {
+    /// `window`: the window's kind; a window without a space (blank, Little, incognito) highlights in Arc's blue-violet.
+    public func render(_ bar: CommandBarSnapshot?, frames: WindowFrames, palette: Palette, window: WindowKind = .standard) {
         guard let bar, let frame = frames.commandBar else { return hide() }
-        show(bar, in: frame, scheme: palette.scheme)
+        // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
+        fillsWindow = frame.size == frames.contentSize
+        show(bar, in: frame, scheme: palette.scheme, primary: palette.accent, spaceless: window != .standard)
     }
 
     /// `render` once the slice and its frame are known. A new `openID` resets the query to `initialQuery` and the
     /// highlight to the first row and plays the bounce; the same opening re-ranks what the user typed against the
     /// new candidates.
-    func show(_ bar: CommandBarSnapshot, in frame: CGRect, scheme: Scheme) {
+    func show(_ bar: CommandBarSnapshot, in frame: CGRect, scheme: Scheme, primary: RGBA = RGBA(1, 1, 1), spaceless: Bool = false) {
         let reopened = bar.openID != openID
-        guard reopened || isHidden || bar != self.bar || frame != self.frame || scheme != self.scheme else { return }
+        let style: Style = bar.placement == .overURLPill && bar.aiMode == nil ? .attached : .centered
+        let changedLook = look.map { $0 != (scheme, style, primary, spaceless) } ?? true
+        guard reopened || isHidden || bar != self.bar || frame != self.frame || changedLook else { return }
         self.frame = frame
         isHidden = false
-        if scheme != self.scheme { applyColors(scheme) }
+        if changedLook { applyColors(scheme, style: style, primary: primary, spaceless: spaceless) }
         self.bar = bar
         if reopened {
             openID = bar.openID
             siteSearch = nil
+            typed = bar.initialQuery
+            completion = nil
             input.stringValue = bar.initialQuery
             input.currentEditor()?.selectAll(nil)
             applySiteSearchLook()
-            if let mode = bar.aiMode { input.placeholderString = Self.aiPlaceholder(mode) }
         }
         rerank(keepHighlight: !reopened)
         installEventMonitor()
@@ -138,6 +185,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         takeSiteSearchEscape(event) || super.performKeyEquivalent(with: event)
     }
 
+    /// For the window's own Escape handling, which runs before the page and before this view's event monitor (the
+    /// app's monitor routes Escape to Exit while any overlay is open): true when site search took this Escape.
+    public func takeEscape(_ event: NSEvent) -> Bool { takeSiteSearchEscape(event) }
+
     /// The window routes Escape to Exit before the text field's delegate sees it. Site search owns the first
     /// Escape while its input has focus. The key-equivalent path also covers input in an inactive window.
     private func takeSiteSearchEscape(_ event: NSEvent) -> Bool {
@@ -161,8 +212,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
-            // Tab never leaves the bar; on a site-search row (the highlighted one first) it enters site search.
-            if siteSearch == nil, let engine = siteSearchOffer() { enterSiteSearch(engine) }
+            // Tab never leaves the bar; with a site-search offer beside the input it enters site search.
+            if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
             leaveSiteSearch()
@@ -173,6 +224,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         case #selector(NSResponder.moveDown(_:)):
             step(1)
             return true
+        case #selector(NSResponder.moveRight(_:)), #selector(NSResponder.moveToEndOfLine(_:)), #selector(NSResponder.moveToEndOfDocument(_:)):
+            // Keeping the completion: the whole domain is now what was typed.
+            if completion != nil { acceptCompletion() }
+            return false
         default:
             return false
         }
@@ -182,23 +237,55 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let text = input.stringValue
         if bar?.aiMode == nil, siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
            !text.dropLast().contains(where: \.isWhitespace) {
-            return enterSiteSearch(engine)
+            return enterSiteSearch(engine, namedBy: String(text.dropLast()))
+        }
+        // Typing (the caret at the end) may complete; a deletion, of the completion itself or of what was typed,
+        // never does: the text is then the start of what was there.
+        let typingOn = !typed.hasPrefix(text) && caretAtEnd()
+        typed = text
+        completion = nil
+        if siteSearch == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
+            complete(to: domain)
         }
         if let siteSearch { dispatch(.commandBar(.queryChangedForSite(siteSearch.id, text))) }
         else { dispatch(.commandBar(.queryChanged(text))) }
         rerank(keepHighlight: false)
     }
 
-    /// The engine Tab would search: the highlighted row's when it is a site-search row, else the first such row.
-    private func siteSearchOffer() -> SearchEngineCandidate? {
-        func engine(_ s: Suggestion) -> SearchEngineCandidate? { if case .siteSearch(let e) = s.kind { e } else { nil } }
-        if results.indices.contains(highlighted), let e = engine(results[highlighted]) { return e }
-        return results.lazy.compactMap(engine).first
+    public func controlTextDidEndEditing(_ notification: Notification) {
+        guard let editor = notification.userInfo?["NSFieldEditor"] as? NSTextView, let savedSelection else { return }
+        editor.selectedTextAttributes = savedSelection
+        self.savedSelection = nil
     }
 
-    private func enterSiteSearch(_ engine: SearchEngineCandidate) {
-        namedBy = input.stringValue.trimmingCharacters(in: .whitespaces)
+    private func caretAtEnd() -> Bool {
+        guard let editor = input.currentEditor() else { return true }
+        return NSMaxRange(editor.selectedRange) == (input.stringValue as NSString).length
+    }
+
+    /// Shows `domain`'s rest after what was typed, selected, so the next key replaces it.
+    private func complete(to domain: String) {
+        completion = domain
+        let rest = String(domain.dropFirst(typed.count))
+        input.stringValue = typed + rest
+        if let editor = input.currentEditor() {
+            editor.selectedRange = NSRange(location: (typed as NSString).length, length: (rest as NSString).length)
+            tintSelection()
+        }
+    }
+
+    private func acceptCompletion() {
+        typed = input.stringValue
+        completion = nil
+        dispatch(.commandBar(.queryChanged(typed)))
+        rerank(keepHighlight: false)
+    }
+
+    private func enterSiteSearch(_ engine: SearchEngineCandidate, namedBy name: String) {
+        namedBy = name.trimmingCharacters(in: .whitespaces)
         siteSearch = engine
+        typed = ""
+        completion = nil
         input.stringValue = ""
         applySiteSearchLook()
         dispatch(.commandBar(.queryChanged("")))
@@ -207,6 +294,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func leaveSiteSearch() {
         siteSearch = nil
+        typed = namedBy
+        completion = nil
         input.stringValue = namedBy
         applySiteSearchLook()
         dispatch(.commandBar(.queryChanged(namedBy)))
@@ -216,11 +305,19 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private func applySiteSearchLook() {
         sitePill.isHidden = siteSearch == nil
         siteLabel.stringValue = siteSearch?.name ?? ""
-        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? Copy.urlPlaceholder
+        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
         input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
-            .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.inputFontSize.value),
+            .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.centeredInputFontSize.value),
         ])
         layoutCard()
+    }
+
+    /// The text selection (Cmd+L's URL, the completed part) in the bar's colors. The window's field editor is shared,
+    /// so its own selection colors come back when the input stops editing.
+    private func tintSelection() {
+        guard let editor = input.currentEditor() as? NSTextView else { return }
+        if savedSelection == nil { savedSelection = editor.selectedTextAttributes }
+        editor.selectedTextAttributes = [.backgroundColor: colors.textSelection, .foregroundColor: colors.text]
     }
 
     private func step(_ delta: Int) {
@@ -230,7 +327,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func choose(_ index: Int) {
         guard results.indices.contains(index) else { return }
-        if case .siteSearch(let engine) = results[index].kind { return enterSiteSearch(engine) }
         dispatch(results[index].command)
     }
 
@@ -244,7 +340,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: input.stringValue, bar: bar, appName: Product.name, siteSearch: siteSearch, resolve: resolve)
+        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, resolve: resolve, completing: completion)
+        offer = siteSearch == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
         while rows.count < results.count {
             let index = rows.count
@@ -257,47 +354,130 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         }
         for (i, row) in rows.enumerated() {
             row.isHidden = i >= results.count
-            if i < results.count { row.update(results[i], highlighted: i == highlighted, colors: colors) }
+            if i < results.count { row.update(results[i], highlighted: i == highlighted, colors: colors, captions: style == .centered) }
         }
+        updateLeadingIcon()
         layoutCard()
+    }
+
+    /// The page's icon while its address is untouched, the completed site's icon, sparkles for Max, else the magnifier.
+    private func updateLeadingIcon() {
+        let o = OverlayMetrics.commandBar
+        var favicon: URL?
+        var symbol = "magnifyingglass"
+        if bar?.aiMode != nil { symbol = "sparkles" }
+        else if let first = results.first, first.kind == .current || (completion != nil && results.first?.kind != .openTyped) {
+            favicon = first.favicon
+            symbol = first.symbol ?? "globe"
+        }
+        leadingIcon.contentTintColor = colors.text
+        leadingIcon.symbolConfiguration = .init(pointSize: o.symbolPointSize.value, weight: .medium)
+        let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        leadingFavicon = favicon
+        if let favicon {
+            leadingIcon.image = FaviconCache.shared.image(for: favicon) { [weak self] image in
+                if self?.leadingFavicon == favicon { self?.leadingIcon.image = image }
+            } ?? glyph
+        } else {
+            leadingIcon.image = glyph
+        }
+        leadingIcon.isHidden = siteSearch != nil
     }
 
     private func layoutCard() {
         let m = Metrics.commandBar, o = OverlayMetrics.commandBar
+        let attached = style == .attached
+        let inputHeight = attached ? m.inputRowHeight.value : m.centeredInputRowHeight.value
         let rowHeight = m.suggestionRowHeight.value
-        let listHeight = results.isEmpty ? 0 : CGFloat(results.count) * rowHeight + m.listPadding.value
-        card.frame = CGRect(x: 0, y: 0, width: bounds.width, height: min(bounds.height, m.inputRowHeight.value + listHeight))
-        let inset = m.contentInset.value
+        let listTop = inputHeight + (attached ? 0 : m.centeredListTop.value)
+        let listHeight = results.isEmpty ? 0 : listTop - inputHeight + CGFloat(results.count) * rowHeight + m.listBottom.value
+        let side = o.accessorySize.value
+
+        // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
+        offerLabel.isHidden = offer == nil
+        keyCap.isHidden = offer == nil
+        info.isHidden = offer != nil || bar?.aiMode != nil || fillsWindow
+        offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
+        // A label draws its text 2 in from each side of its frame.
+        func width(_ label: NSTextField) -> CGFloat {
+            ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
+        }
+        let offerWidth = width(offerLabel) + 4
+        let keyWidth = width(keyLabel) + 2 * o.keyPadding.value
+        let accessoryWidth = offer != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
+
+        // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
+        let font = input.font ?? .systemFont(ofSize: o.attachedInputFontSize.value)
+        let textWidth = ceil((input.stringValue as NSString).size(withAttributes: [.font: font]).width)
+        let needed = o.textX.value + textWidth + o.offerGap.value + accessoryWidth + o.accessoryRightInset.value
+        let width = attached ? min(bounds.width, max(m.attachedCardWidth.value, needed)) : bounds.width
+        card.frame = CGRect(x: 0, y: 0, width: width, height: min(bounds.height, inputHeight + listHeight))
+        card.layer?.shadowPath = CGPath(roundedRect: card.bounds, cornerWidth: o.cornerRadius.value, cornerHeight: o.cornerRadius.value, transform: nil)
+
+        let mid = inputHeight / 2
+        let iconSide = o.iconSize.value
+        leadingIcon.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - iconSide / 2).rounded(), width: iconSide, height: iconSide)
+        let right = width - o.accessoryRightInset.value
+        var accessoryLeft = right
+        if offer != nil {
+            keyCap.frame = CGRect(x: right - keyWidth, y: (mid - side / 2).rounded(), width: keyWidth, height: side)
+            let keyHeight = keyLabel.intrinsicContentSize.height
+            keyLabel.frame = CGRect(x: o.keyPadding.value - 2, y: ((side - keyHeight) / 2).rounded(), width: keyWidth - 2 * o.keyPadding.value + 4, height: keyHeight)
+            let offerHeight = offerLabel.intrinsicContentSize.height
+            offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
+            accessoryLeft = offerLabel.frame.minX
+        } else if !info.isHidden {
+            info.frame = CGRect(x: right - side, y: (mid - side / 2).rounded(), width: side, height: side)
+            accessoryLeft = info.frame.minX
+        }
+
+        // NSTextField draws its text 2 in from its frame.
         let fieldHeight = input.intrinsicContentSize.height
-        var fieldX = inset
+        var fieldX = o.textX.value - 2
         if !sitePill.isHidden {
-            let o = OverlayMetrics.commandBar
             let labelSize = siteLabel.intrinsicContentSize
             let pill = CGSize(width: ceil(labelSize.width) + 2 * o.hintPadding.value, height: max(o.hintHeight.value, ceil(labelSize.height) + 4))
-            sitePill.frame = CGRect(x: inset, y: ((m.inputRowHeight.value - pill.height) / 2).rounded(), width: pill.width, height: pill.height)
+            sitePill.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - pill.height / 2).rounded(), width: pill.width, height: pill.height)
             siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width), height: labelSize.height)
             fieldX = sitePill.frame.maxX + m.stackSpacing.value
         }
-        input.frame = CGRect(x: fieldX, y: ((m.inputRowHeight.value - fieldHeight) / 2).rounded(), width: card.bounds.width - fieldX - inset, height: fieldHeight)
+        input.frame = CGRect(x: fieldX, y: (mid - fieldHeight / 2).rounded(), width: max(40, accessoryLeft - o.offerGap.value - fieldX + 2), height: fieldHeight)
+
         let scale = window?.backingScaleFactor ?? 2
-        hairline.isHidden = results.isEmpty
-        hairline.frame = CGRect(x: 0, y: m.inputRowHeight.value, width: card.bounds.width, height: 1 / scale)
-        let top = m.inputRowHeight.value + m.listPadding.value / 2
+        hairline.isHidden = attached || results.isEmpty
+        hairline.frame = CGRect(x: o.rowInset.value, y: inputHeight - 1 / scale, width: max(0, width - 2 * o.rowInset.value), height: 1 / scale)
         for (i, row) in rows.enumerated() where i < results.count {
-            row.frame = CGRect(x: o.rowInset.value, y: top + CGFloat(i) * rowHeight, width: card.bounds.width - 2 * o.rowInset.value, height: rowHeight)
+            row.frame = CGRect(x: o.rowInset.value, y: listTop + CGFloat(i) * rowHeight + o.rowVerticalInset.value,
+                               width: max(0, width - 2 * o.rowInset.value), height: rowHeight - 2 * o.rowVerticalInset.value)
         }
     }
 
-    private func applyColors(_ scheme: Scheme) {
-        self.scheme = scheme
-        colors = OverlayColors.of(scheme)
+    private func applyColors(_ scheme: Scheme, style: Style, primary: RGBA, spaceless: Bool) {
+        look = (scheme, style, primary, spaceless)
+        self.style = style
+        colors = CommandBarColors.of(scheme, attached: style == .attached, primary: primary, spaceless: spaceless)
         appearance = .of(scheme)
-        card.layer?.backgroundColor = colors.popover.cgColor
-        card.shadow = .popover(colors)
+        let o = OverlayMetrics.commandBar
+        input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
+        card.layer?.backgroundColor = colors.card.cgColor
+        card.layer?.borderColor = colors.border.cgColor
+        card.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(scheme == .light ? o.cardShadowAlpha.value : 0.6)
+            shadow.shadowBlurRadius = o.cardShadowRadius.value
+            shadow.shadowOffset = NSSize(width: 0, height: -o.cardShadowOffset.value)
+            return shadow
+        }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor
-        sitePill.layer?.backgroundColor = colors.accessoryBackground.cgColor
-        siteLabel.textColor = colors.accessoryForeground
-        input.textColor = colors.textPrimary
+        sitePill.layer?.backgroundColor = colors.accessory.cgColor
+        siteLabel.textColor = colors.accessoryText
+        offerLabel.textColor = colors.secondary
+        keyCap.layer?.backgroundColor = colors.accessory.cgColor
+        keyLabel.textColor = colors.accessoryText
+        info.apply(colors)
+        input.textColor = colors.text
+        if input.currentEditor() != nil { tintSelection() }
+        for (i, row) in rows.enumerated() where i < results.count { row.update(results[i], highlighted: i == highlighted, colors: colors, captions: style == .centered) }
         applySiteSearchLook()
     }
 
@@ -360,16 +540,72 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     }
 }
 
-/// One result row: icon, title with its dimmed detail, and a hint on the right ("Switch to Tab" or a key).
+/// The ⓘ at the input row's right: a 24 pt circle with the info glyph (Arc: `CommandBarIconView` infoOutline). It
+/// opens the keyboard shortcuts.
+@MainActor
+final class InfoButton: NSView {
+    var onClick: () -> Void = {}
+    private let glyph = NSImageView()
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        glyph.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: "Keyboard Shortcuts")
+        glyph.symbolConfiguration = .init(pointSize: 16, weight: .regular)
+        addSubview(glyph)
+        toolTip = "Keyboard Shortcuts"
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Keyboard Shortcuts")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    func apply(_ colors: CommandBarColors) {
+        layer?.backgroundColor = colors.infoCircle.cgColor
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.12
+        layer?.shadowRadius = 2
+        layer?.shadowOffset = CGSize(width: 0, height: -0.5)
+        glyph.contentTintColor = colors.accessoryText
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
+        let size = glyph.intrinsicContentSize
+        glyph.frame = CGRect(x: ((bounds.width - size.width) / 2).rounded(), y: ((bounds.height - size.height) / 2).rounded(), width: size.width, height: size.height)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
+    }
+}
+
+/// One result row: icon (on a tile for Arc's own entries, and for a favicon on the highlighted row), the title with a
+/// top domain's " — domain", and on the right "Switch to Tab" and its arrow square, or an action's key hint.
 @MainActor
 final class ResultRowView: NSView {
     var onHover: () -> Void = {}
     var onChoose: () -> Void = {}
+    private let tile = NSView()
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    /// " — youtube.com/c/thebrowsercompany": its own label, so a long address loses its middle, as Arc's do (P20-a).
+    private let detail = NSTextField(labelWithString: "")
     private let hint = NSTextField(labelWithString: "")
     private let hintPill = NSView()
+    private let arrow = NSView()
+    private let arrowGlyph = NSImageView()
     private var favicon: URL?
+    private var suggestion: Suggestion?
+    private var captions = true
+    private var isSwitch = false
+    private var hasFavicon = false
 
     init() {
         super.init(frame: .zero)
@@ -378,14 +614,22 @@ final class ResultRowView: NSView {
         layer?.cornerRadius = OverlayMetrics.commandBar.rowCornerRadius.value
         label.lineBreakMode = .byTruncatingTail
         label.cell?.truncatesLastVisibleLine = true
-        hint.font = .systemFont(ofSize: OverlayMetrics.commandBar.hintFontSize.value, weight: .medium)
+        detail.lineBreakMode = .byTruncatingMiddle
         hint.alignment = .center
         hintPill.wantsLayer = true
         hintPill.layer?.cornerCurve = .continuous
         hintPill.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
+        for view in [tile, arrow] {
+            view.wantsLayer = true
+            view.layer?.cornerCurve = .continuous
+            view.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
+        }
         icon.imageScaling = .scaleProportionallyUpOrDown
+        arrowGlyph.image = NSImage(systemSymbolName: "arrow.right", accessibilityDescription: nil)
+        arrowGlyph.symbolConfiguration = .init(pointSize: 16, weight: .regular)
+        arrow.addSubview(arrowGlyph)
         hintPill.addSubview(hint)
-        for view in [icon, label, hintPill] { addSubview(view) }
+        for view in [tile, icon, label, detail, hintPill, arrow] { addSubview(view) }
     }
 
     @available(*, unavailable)
@@ -393,60 +637,111 @@ final class ResultRowView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func update(_ suggestion: Suggestion, highlighted: Bool, colors: OverlayColors) {
-        let o = OverlayMetrics.commandBar
-        let title = NSMutableAttributedString(string: suggestion.title, attributes: [
-            .font: NSFont.systemFont(ofSize: o.titleFontSize.value), .foregroundColor: colors.textPrimary,
-        ])
-        if let subtitle = suggestion.subtitle, !subtitle.isEmpty {
-            title.append(NSAttributedString(string: "  " + subtitle, attributes: [
-                .font: NSFont.systemFont(ofSize: o.titleFontSize.value), .foregroundColor: colors.textSecondary,
-            ]))
-        }
-        label.attributedStringValue = title
-        icon.contentTintColor = colors.textSecondary
+    /// `captions`: Switch to Tab and its arrow (the centered bar); over the URL pill the card is too narrow for them.
+    func update(_ suggestion: Suggestion, highlighted: Bool, colors: CommandBarColors, captions: Bool) {
+        self.suggestion = suggestion
+        self.captions = captions
+        isSwitch = suggestion.kind == .switchToTab
         let symbol = NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
+        icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)
         favicon = suggestion.favicon
-        if let url = suggestion.favicon {
-            icon.image = FaviconCache.shared.image(for: url) { [weak self] image in
-                if self?.favicon == url { self?.icon.image = image }
-            } ?? symbol
+        hasFavicon = false
+        if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
+            guard let self, self.favicon == url else { return }
+            self.icon.image = image
+            self.hasFavicon = true
+            if let s = self.suggestion { self.paint(s, highlighted: self.isHighlighted, colors) }
+        }) {
+            icon.image = image
+            hasFavicon = true
         } else {
             icon.image = symbol
         }
-        hintPill.isHidden = suggestion.hint == nil
+        hint.font = .systemFont(ofSize: isSwitch ? OverlayMetrics.commandBar.titleFontSize.value : OverlayMetrics.commandBar.hintFontSize.value, weight: .medium)
         hint.stringValue = suggestion.hint ?? ""
-        let isSwitch = suggestion.kind == .switchToTab
-        hint.textColor = isSwitch ? colors.hintPillText : colors.accessoryForeground
-        hintPill.layer?.backgroundColor = colors.accessoryBackground.cgColor
+        hintPill.isHidden = suggestion.hint == nil || (isSwitch && !captions)
+        arrow.isHidden = !(isSwitch && captions)
         setAccessibilityLabel(suggestion.title)
         setHighlighted(highlighted, colors)
         needsLayout = true
     }
 
-    func setHighlighted(_ highlighted: Bool, _ colors: OverlayColors) {
-        layer?.backgroundColor = highlighted ? colors.rowHighlight.cgColor : nil
+    private var isHighlighted = false
+    private var lastColors: CommandBarColors?
+
+    func setHighlighted(_ highlighted: Bool, _ colors: CommandBarColors) {
+        isHighlighted = highlighted
+        lastColors = colors
+        layer?.backgroundColor = highlighted ? colors.highlight.cgColor : nil
         setAccessibilitySelected(highlighted)
+        if let suggestion { paint(suggestion, highlighted: highlighted, colors) }
+    }
+
+    private func paint(_ suggestion: Suggestion, highlighted: Bool, _ colors: CommandBarColors) {
+        let o = OverlayMetrics.commandBar
+        let ink = highlighted ? colors.onHighlight : colors.text
+        label.attributedStringValue = NSAttributedString(string: suggestion.title, attributes: [
+            .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium), .foregroundColor: ink,
+        ])
+        // Over the URL pill (captions off) rows are titles only, P02-b.
+        let subtitle = captions ? suggestion.subtitle ?? "" : ""
+        detail.isHidden = subtitle.isEmpty
+        detail.attributedStringValue = NSAttributedString(string: " — " + subtitle, attributes: [
+            .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
+            .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
+        ])
+        // Arc's own entries keep their tile; a favicon gets a white one on the highlight so it stays legible. A glyph on
+        // the highlight's white tile takes the highlight's color (P21-a's Contact the Team).
+        tile.isHidden = !(suggestion.tile || (highlighted && hasFavicon))
+        let onTile = !tile.isHidden && highlighted
+        icon.contentTintColor = suggestion.accent.map { NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) }
+            ?? (onTile ? colors.highlight : ink)
+        tile.layer?.backgroundColor = (highlighted ? colors.tileOnHighlight : colors.accessory).cgColor
+        if isSwitch {
+            hint.textColor = highlighted ? colors.onHighlight : colors.secondary
+            hintPill.layer?.backgroundColor = nil
+        } else {
+            hint.textColor = highlighted ? colors.onHighlight : colors.accessoryText
+            hintPill.layer?.backgroundColor = colors.accessory.cgColor
+        }
+        arrow.layer?.backgroundColor = (highlighted ? colors.tileOnHighlight : colors.accessory).cgColor
+        arrowGlyph.contentTintColor = colors.accessoryText
     }
 
     override func layout() {
         super.layout()
         let m = Metrics.commandBar, o = OverlayMetrics.commandBar
-        let pad = m.contentInset.value - o.rowInset.value
-        let side = o.iconSize.value
-        icon.frame = CGRect(x: pad, y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
-        var right = bounds.width - pad
+        let side = o.iconSize.value, tileSide = o.accessorySize.value
+        // Icon centre and text start are measured from the card; this row starts rowInset into it.
+        let iconCentre = o.iconCentreX.value - o.rowInset.value
+        icon.frame = CGRect(x: iconCentre - side / 2, y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
+        tile.frame = CGRect(x: iconCentre - tileSide / 2, y: ((bounds.height - tileSide) / 2).rounded(), width: tileSide, height: tileSide)
+        var right = bounds.width - o.arrowRightInset.value
+        if !arrow.isHidden {
+            arrow.frame = CGRect(x: right - tileSide, y: ((bounds.height - tileSide) / 2).rounded(), width: tileSide, height: tileSide)
+            let g = arrowGlyph.intrinsicContentSize
+            arrowGlyph.frame = CGRect(x: ((tileSide - g.width) / 2).rounded(), y: ((tileSide - g.height) / 2).rounded(), width: g.width, height: g.height)
+            // Q01-a: 9 between "Switch to Tab" and its square (the label keeps 2 of them inside its frame).
+            right = arrow.frame.minX - 7
+        }
         if !hintPill.isHidden {
             let textWidth = ceil(hint.intrinsicContentSize.width)
-            let pill = CGSize(width: textWidth + 2 * o.hintPadding.value, height: o.hintHeight.value)
+            let padding = isSwitch ? 0 : o.hintPadding.value
+            let pill = CGSize(width: textWidth + 2 * padding, height: isSwitch ? tileSide : o.hintHeight.value)
             hintPill.frame = CGRect(x: right - pill.width, y: ((bounds.height - pill.height) / 2).rounded(), width: pill.width, height: pill.height)
             let textHeight = hint.intrinsicContentSize.height
-            hint.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth, height: textHeight)
+            hint.frame = CGRect(x: padding, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth, height: textHeight)
             right = hintPill.frame.minX - m.stackSpacing.value
         }
-        let x = icon.frame.maxX + m.stackSpacing.value
+        let x = o.textX.value - o.rowInset.value - 2
         let height = label.intrinsicContentSize.height
-        label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: max(0, right - x), height: height)
+        // Widths from the text itself (a label pads 2 on each side): the title is whole unless the row cannot hold it,
+        // and only the address after it gives way, from its middle (P20-a, Q01-b).
+        let titleWidth = min(ceil(label.attributedStringValue.size().width) + 4, max(0, right - x))
+        label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: titleWidth, height: height)
+        // The label pads 2 on each side, so the detail starts 4 back to sit right after the title's text.
+        let detailX = label.frame.maxX - 4
+        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX)), height: height)
     }
 
     // Hover follows pointer motion (not entry), so rows sliding under a still pointer keep the keyboard highlight.
@@ -482,15 +777,15 @@ final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
-/// Favicons for result rows and archive entries, fetched once per URL.
+/// Favicons for result rows, archive entries and the tab switcher, fetched once per URL.
 @MainActor
-final class FaviconCache {
-    static let shared = FaviconCache()
+public final class FaviconCache {
+    public static let shared = FaviconCache()
     private var images: [URL: NSImage] = [:]
     private var waiting: [URL: [(NSImage) -> Void]] = [:]
 
     /// The cached image, or nil now and `then` once it arrives (never, if the fetch fails).
-    func image(for url: URL, then: @escaping (NSImage) -> Void) -> NSImage? {
+    public func image(for url: URL, then: @escaping (NSImage) -> Void) -> NSImage? {
         if let image = images[url] { return image }
         if waiting[url] != nil {
             waiting[url]?.append(then)

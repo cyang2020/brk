@@ -271,25 +271,28 @@ public enum ContentLayout {
 /// The command bar box.
 public enum CommandBarLayout {
     /// Centered: width min(766, area - 160), or area - 20 when the area is narrower than 766; box 338 tall, at least
-    /// 24 from top and bottom, centered both ways in the content area, on whole points. Over the pill (Cmd+L with the
-    /// sidebar shown): anchored at the pill's top-left and reaching right over the content, as wide as the window
-    /// allows while staying 80 from its right edge, within 100...720; as tall as the box but at least 24 above the
-    /// bottom (layout-constants.md "Command bar attached to the toolbar", low confidence). The window's right edge is
-    /// the content area's plus the card inset.
+    /// 24 from top and bottom, centered both ways in the window (Arc's Cmd+T card spans 257...1023 in a 1280 window
+    /// whose content area starts at 238: the window's centre, not the content area's), on whole points. Over the pill
+    /// (Cmd+L with the sidebar shown): from the pill's left edge, 1.5 above its top, reaching right over the content,
+    /// as wide as the window allows while staying 80 from its right edge, within 100...720; as tall as the box but at
+    /// least 24 above the bottom (layout-constants.md "Command bar attached to the toolbar", low confidence). The
+    /// visible card inside that box is 350 wide until its input row needs more (`Metrics.commandBar.attachedCardWidth`).
+    /// The window's right and bottom edges are the content area's plus the card inset.
     public static func frame(placement: CommandBarPlacement, contentArea: CGRect, urlPill: CGRect?) -> CGRect {
         let m = Metrics.commandBar
+        let windowRight = contentArea.maxX + Metrics.content.inset.value
+        let windowBottom = contentArea.maxY + Metrics.content.inset.value
         switch placement {
         case .overURLPill where urlPill != nil:
             let pill = urlPill!
-            let windowRight = contentArea.maxX + Metrics.content.inset.value
-            let windowBottom = contentArea.maxY + Metrics.content.inset.value
+            let top = pill.minY + m.attachedTopOffset.value
             let width = min(max(windowRight - m.attachedRightMargin.value - pill.minX, m.attachedMinWidth.value), m.attachedMaxWidth.value)
-            let height = max(0, min(m.boxHeight.value, windowBottom - m.minVerticalMargin.value - pill.minY))
-            return CGRect(x: pill.minX, y: pill.minY, width: width, height: height)
+            let height = max(0, min(m.boxHeight.value, windowBottom - m.minVerticalMargin.value - top))
+            return CGRect(x: pill.minX, y: top, width: width, height: height)
         case .centered, .overURLPill:
             let width = contentArea.width < m.width.value ? contentArea.width - m.narrowMargin.value : min(m.width.value, contentArea.width - m.sideMargin.value)
             let height = min(m.boxHeight.value, contentArea.height - 2 * m.minVerticalMargin.value)
-            return CGRect(x: contentArea.midX - width / 2, y: contentArea.midY - height / 2, width: max(0, width), height: max(0, height)).integral
+            return CGRect(x: windowRight / 2 - width / 2, y: windowBottom / 2 - height / 2, width: max(0, width), height: max(0, height)).integral
         }
     }
 }
