@@ -8001,7 +8001,8 @@
         }
       ],
       "remaining": [
-        "BLOCKED: actual popup invocation, typing/clicks/focus and owner navigation/close/profile/quit lifetimes. The forbidden browser-target route was removed before execution and never retried."
+        "BLOCKED: actual popup invocation, typing/clicks/focus and owner navigation/close/profile/quit lifetimes. The forbidden browser-target route was removed before execution and never retried.",
+        "R3-8（2026-11-04，合并 c792cfc9）：扩展弹出面板经查证做不到：CEF 154 没有扩展接口，弹出面板只能从 Chrome 自己的工具栏打开（之前三次实验连那条工具栏都弹不出来），把弹出页放进 Brk 自己的浏览器里大多数扩展会操作错的标签页。按钮改成 Arc 的灰态（显示扩展图标、不能按），第二页写明原因；依据在 verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md。"
       ],
       "implementation": [
         "Sources/BrkBase/Extensions.swift",
@@ -8033,7 +8034,7 @@
       "arc_evidence": "Shortcuts pane \"Extension Shortcuts\"",
       "description": "Keys for extension commands",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Extension command shortcuts can be inspected and configured per profile and coexist with Brk/page priorities, with duplicate and reserved-key handling.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -8100,7 +8101,8 @@
         }
       ],
       "remaining": [
-        "Synthetic physical utility-panel mouse input remains unverified. Native proof uses owner-scoped AppKit focus/press and ordinary key events. Broad keyboard-layout/global-shortcut coverage is not claimed."
+        "Synthetic physical utility-panel mouse input remains unverified. Native proof uses owner-scoped AppKit focus/press and ordinary key events. Broad keyboard-layout/global-shortcut coverage is not claimed.",
+        "R3-8（2026-11-04，合并 c792cfc9）：扩展快捷键的物理按键经窗口服务器只发给 Brk 进程（Ext-shortcut-physical 通过）；输入框的焦点仍由程序设置，不是物理鼠标点击。"
       ],
       "implementation": [
         "Sources/BrkBase/Keys.swift",
@@ -8651,7 +8653,7 @@
       "arc_evidence": "`ARC_SiteControlCenter`",
       "description": "Popover with site settings, Boosts, capture, copy URL, share",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "A site control popover shows the active origin/profile, effective permissions/settings and actions for Boosts, capture, copy URL and local file export with current readback.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -8727,7 +8729,8 @@
       "remaining": [
         "Physical remote save-chooser confirmation remains with file-panels. NSSavePanel.ok was unimplemented on this OS and that experimental call was removed. Boost/capture actions await their slices.",
         "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Secure/Insecure 按证书状态判定（https 且证书干净、无混合内容才是 Secure；http 一律 Insecure），引擎在加载完成和加载停止时上报。只有单元测试和状态注入入口，没有用真实证书验证：本地测试站只有 http，要做需给测试站加 https 端口和自签证书。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Secure/Insecure 按证书状态判定（https 且证书干净、无混合内容才是 Secure；http 一律 Insecure），引擎在加载完成和加载停止时上报。只有单元测试和状态注入入口，没有用真实证书验证：本地测试站只有 http，要做需给测试站加 https 端口和自签证书。",
+        "R3-8（2026-11-04，合并 c792cfc9）：Secure/Insecure 用真实证书验过：verify/visual-pairs/https-fixture/ 有 https 测试站和两张自签证书（信任用 Brk 自己的测试开关 BRK_TEST_TRUSTED_SPKI，不动钥匙串），原生场景 SiteSecurity-secure / -invalid（先出 Chromium 拦截页，继续后 Insecure）/ -mixed 通过；浮层第二页的原因文案核过。实测 Chromium 会把 https 页里的 http 图片自动升级，真正算 Insecure 的是表单提交到 http，Brk 现在也认。站台启动不带那个开关，拍不了证书正常那页。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -8762,7 +8765,7 @@
       "arc_evidence": "Info.plist permission prompts (anatomy-v 3)",
       "description": "Camera, microphone, location, notifications prompts",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Native site prompts for camera, microphone, location and notifications show the correct origin/capability, support allow/deny/dismiss and settings readback, respect OS permissions, and cannot resolve stale prompts for a new page/profile.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -8836,7 +8839,8 @@
         }
       ],
       "remaining": [
-        "A real OS prompt cannot be driven here. Camera/microphone/location allow paths and real OS authorization allow/deny matrix remain external. Desktop capture needs a source picker. No OS permission changes were made."
+        "A real OS prompt cannot be driven here. Camera/microphone/location allow paths and real OS authorization allow/deny matrix remain external. Desktop capture needs a source picker. No OS permission changes were made.",
+        "R3-8（2026-11-04，合并 c792cfc9）：macOS 不弹系统提示的权限（剪贴板、MIDI、窗口管理等）由 Brk 自己的浮层询问，三个按钮照 Chromium（一直允许、只允许这次、永不允许），前后两个记住并写回 Chromium 的存储（原生场景 SitePermission-prompt）。摄像头、麦克风、位置、通知的系统授权仍是外部依赖。已知：MIDI 的记住选择不写回（Chromium 154 一写就崩）。"
       ],
       "implementation": [
         "Sources/BrkApp/SitePanels.swift",
@@ -8871,7 +8875,7 @@
       "arc_evidence": "`ARC_AdBlocking`, `ARCClients_BlockListClient` (EasyList, EasyPrivacy); General pane",
       "description": "Built-in ad, tracker and cookie-banner blocking",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Built-in ad/tracker blocking and cookie-banner handling use defined rules, profile/site exceptions and updates, block relevant requests/cosmetic content and preserve normal navigation.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -8938,7 +8942,8 @@
         }
       ],
       "remaining": [
-        "Full EasyList/EasyPrivacy syntax, subscription downloads and broad real-world coverage are unsupported or unproved. Physical rule-file selection is not claimed. RULES.md defines the exact supported subset."
+        "Full EasyList/EasyPrivacy syntax, subscription downloads and broad real-world coverage are unsupported or unproved. Physical rule-file selection is not claimed. RULES.md defines the exact supported subset.",
+        "R3-8（2026-11-04，合并 c792cfc9）：EasyList/EasyPrivacy 常用规则语法都支持，做不到的（csp、重定向等）整条跳过并计数；两个订阅各自开关，下载总开关可关，离线用旧副本；规则文件走真实文件面板（原生场景 SiteFilters-panel / -subscriptions / -offline）。实测当天的 EasyList 解析 0.49 秒、跳过 3,442 条，每个请求判断约 40 微秒。已知：状态行 1 rules 应为 1 rule；每次刷新页面策略都重新注入 1.3 万多条隐藏规则。"
       ],
       "implementation": [
         "Sources/BrkBase/Resources/website-rules.json",
@@ -8971,7 +8976,7 @@
       "arc_evidence": "`ARC_WebContentBehaviorConfigurationClient`",
       "description": "Keep-alive list, PiP rules, tab suspension block list",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Per-site keep-alive, PiP and suspension-exclusion rules have explicit matching/profile/private scope and affect real scheduling/media behavior without interrupting protected operations.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -9039,7 +9044,8 @@
       ],
       "remaining": [
         "PiP consumer, complete protected-operation matrix and cross-origin muted media remain gates. Hidden script pause is conservatively protected until visible reconciliation; hidden end/removal needs a later policy refresh. Hidden muted decoding is not claimed.",
-        "Ext-media fails on the integrated tree (audible WebAudio readback not observed after the start click) although it passed on the slice branch; cause not attributed."
+        "Ext-media fails on the integrated tree (audible WebAudio readback not observed after the start click) although it passed on the slice branch; cause not attributed.",
+        "R3-8（2026-11-04，合并 c792cfc9）：隐藏时暂停的站点在画中画开着、跨源 iframe 里有静音媒体在播、正在用摄像头或麦克风时继续运行；前两种有原生场景（SitePolicy-pip、SitePolicy-frame-media），摄像头/麦克风那条要 macOS 授权，没法原生验证。顺带修了冻结标签让整个 profile 媒体读取超时的旧问题，main 上一直失败的 Ext-media 通过了。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
