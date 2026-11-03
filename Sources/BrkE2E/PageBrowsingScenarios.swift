@@ -226,7 +226,8 @@ enum PageBrowsingScenarios {
             if sheet.contains("Print") { _ = try? app.send(.cancelPrintPanel(window: main)) } else { _ = try? app.send(.sheetButton(title: "Cancel")) }
             try app.waitUntil("\(sheet) dismissed", timeout: 10) { try app.native(main).sheetClass == nil }
         }
-        _ = try app.send(.activate(window: main))
+        // Hide Brk leaves the app inactive after it is shown again: make it the active app once more.
+        if try app.native(main).appHidden { try app.perform(.activateApp(window: main)) } else { _ = try app.send(.activate(window: main)) }
         try app.waitUntil("window visible again") { let n = try app.native(); return !n.appHidden && !n.miniaturized }
         if try app.native().fullscreen || app.native().fullscreenTransitioning == true {
             try app.waitUntil("fullscreen transition ends", timeout: 10) { try app.native().fullscreenTransitioning != true }
