@@ -43,6 +43,10 @@ public protocol WebEngine: AnyObject {
     /// `document.title`) and, later, Boosts' user scripts. A no-op for a page that is not live.
     func evaluate(_ script: String, in page: PageID)
 
+    /// The text highlighted in a live page's focused frame (nil when nothing is, or the page is not live). For
+    /// Shared Quotes' Copy Link to Highlight.
+    func selectedText(_ page: PageID) async -> String?
+
     /// The browser engine's version as the About window shows it ("154.0.8037.98" for Chromium); nil without one.
     var engineVersion: String? { get }
 
@@ -76,6 +80,19 @@ public protocol WebEngine: AnyObject {
     func cancelDownload(_ id: DownloadID)
     /// Revokes synchronously. Final drain results arrive through the delegate.
     func disposeContext(_ request: ContextDisposal)
+
+    /// AppleScript's `execute`: runs `script` in the page's main frame and answers its value as text (a string as it
+    /// is, other values as JSON, nil for undefined or null). Throws when the page is not live or the script threw.
+    func evaluateForResult(_ script: String, in page: PageID) async throws -> String?
+    /// Help > Troubleshooting > Record Trace: starts a browser-wide trace (all processes). False when the engine
+    /// cannot (already tracing, or no runtime).
+    func beginTrace() async -> Bool
+    /// Stops the trace and writes it as Chromium's JSON trace file at `file` (nil discards it). Answers the file.
+    func endTrace(writingTo file: URL?) async -> URL?
+    /// Open Task Manager: the browser's processes and what each costs now.
+    func tasks() -> [EngineTask]
+    /// The Task Manager's End Process. False when the task cannot be ended.
+    func endTask(_ id: Int64) -> Bool
 
     /// Ordered teardown, idempotent: after it returns no browser is alive and every borrowed view is back where it
     /// came from. `.clean` means the runtime is shut down too and the process may exit; `.timedOut` means some
@@ -120,6 +137,7 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func selectedText(_ page: PageID) async -> String? { nil }
     public func cancelBoostPick(_ target: SiteTarget) {}
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }
@@ -206,4 +224,30 @@ extension WebEngine {
 
 extension WebEngine {
     public var engineVersion: String? { nil }
+}
+
+/// One row of the Task Manager (CEF's `cef_task_info_t`): a browser, renderer, GPU, utility or extension process.
+public struct EngineTask: Hashable, Sendable {
+    public enum Kind: String, Hashable, Sendable { case browser, gpu, zygote, utility, renderer, `extension`, guest, plugin, sandboxHelper, dedicatedWorker, sharedWorker, serviceWorker, unknown }
+    public let id: Int64
+    public let kind: Kind
+    public let title: String
+    /// Percent of one core (Chrome's CPU column); nil when not measured yet.
+    public let cpu: Double?
+    /// Private memory footprint in bytes; nil when not measured.
+    public let memory: Int64?
+    public let gpuMemory: Int64?
+    public let killable: Bool
+    public init(id: Int64, kind: Kind, title: String, cpu: Double?, memory: Int64?, gpuMemory: Int64?, killable: Bool) {
+        self.id = id; self.kind = kind; self.title = title; self.cpu = cpu; self.memory = memory; self.gpuMemory = gpuMemory; self.killable = killable
+    }
+}
+
+/// Engines without scripting, tracing or a task manager (the stub, test fakes) answer that they have none.
+extension WebEngine {
+    public func evaluateForResult(_ script: String, in page: PageID) async throws -> String? { throw CocoaError(.featureUnsupported) }
+    public func beginTrace() async -> Bool { false }
+    public func endTrace(writingTo file: URL?) async -> URL? { nil }
+    public func tasks() -> [EngineTask] { [] }
+    public func endTask(_ id: Int64) -> Bool { false }
 }

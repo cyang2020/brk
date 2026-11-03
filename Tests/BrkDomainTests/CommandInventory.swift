@@ -8,7 +8,7 @@ import Foundation
 /// and a behavior test (found by scanning the test sources for a dispatch of that case).
 enum CommandInventory {
     static let item = ItemID("ghost-item"), space = SpaceID("ghost-space"), profile = ProfileID("ghost-profile")
-    static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route")
+    static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route"), easel = EaselID("ghost-easel")
     static let example = URL(string: "https://example.com/")!
     static let splitOffer = SplitDropOffer(window: WindowID("ghost"), source: item, target: ItemID("target"),
         sourceParent: ItemID("parent"), targetParent: ItemID("parent"), panes: [ItemID("target")],
@@ -37,7 +37,7 @@ enum CommandInventory {
         .commandBar(.queryChanged("exa")), .commandBar(.dismiss),
         .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.requestClear), .archive(.clear),
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
-        .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday),
+        .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday), .tab(.newDocument),
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
@@ -54,13 +54,15 @@ enum CommandInventory {
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
         .space(.delete(space)), .space(.move(space, index: 0)), .space(.focus(space)), .space(.step(.previous)),
         .space(.togglePinnedSection(.current)), .space(.requestDelete(space)), .space(.confirmDelete(space, token: "ghost", confirmed: false)), .space(.exportIntoFolder(space)),
-        .split(.addPane), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
+        .space(.inSpace(space, .newFolder)),
+        .split(.addPane), .split(.addPaneBefore), .split(.movePane(.previous)), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
         .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)),
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
         .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
+        .app(.help(.copyInfo)), .page(.navigate(.focused, example)), .site(.toggleDeveloperMode),
         .settings(.autoArchive(.sevenDays)), .settings(.general(.warnBeforeQuitting(true))), .settings(.profile(.default, .searchSuggestions(false))),
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
@@ -86,6 +88,11 @@ enum CommandInventory {
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
+        .easel(.create), .easel(.open(easel)), .easel(.rename(easel, title: "x")), .easel(.stepTitleSize(easel, by: 1)),
+        .easel(.add(easel, EaselElement(id: "ghost", shape: .rectangle, frame: CGRect(x: 0, y: 0, width: 10, height: 10)))),
+        .easel(.update(easel, [])), .easel(.remove(easel, ["ghost"])), .easel(.duplicate(easel, ["ghost"])),
+        .easel(.chooseImage(easel, at: .zero)), .easel(.importImage(easel, from: URL(fileURLWithPath: "/tmp/ghost.png"), at: .zero)),
+        .easel(.share(easel)), .easel(.requestDelete(easel)), .easel(.confirmDelete(easel, token: "ghost", confirmed: true)),
         .later(.boosts),
         .window(.close),
     ]
@@ -95,6 +102,8 @@ enum CommandInventory {
         .boost(.loaded(profile, BoostCatalog(), error: nil)),
         .page(siteTarget.document.browser, .boostFailed(siteTarget.document, "fixture")),
         .capture(.exported(WindowID("ghost"), "fixture")),
+        .easel(.imageImported(WindowID("ghost"), easel, element: "ghost", file: URL(fileURLWithPath: "/tmp/ghost.png"), size: CGSize(width: 10, height: 10), at: .zero)),
+        .easel(.shared(WindowID("ghost"), easel, URL(fileURLWithPath: "/tmp/ghost.png"))), .easel(.failed(WindowID("ghost"), easel, "fixture")),
         .page(siteTarget.document.browser, .documentPictureInPictureChanged(siteTarget.document, true, error: nil)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .mediaChanged(DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), [], error: nil)),
         .sidebarData(.syncPoll),
@@ -137,6 +146,7 @@ enum CommandInventory {
         case .boost: "boost"
         case .assist: "assist"
         case .capture: "capture"
+        case .easel: "easel"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -200,6 +210,22 @@ enum CommandInventory {
             case .neverTranslateSite: "neverTranslateSite"
             case .neverTranslateLanguage: "neverTranslateLanguage"
             }
+        case .easel(let c):
+            switch c {
+            case .create: "create"
+            case .open: "open"
+            case .rename: "rename"
+            case .stepTitleSize: "stepTitleSize"
+            case .add: "add"
+            case .update: "update"
+            case .remove: "remove"
+            case .duplicate: "duplicate"
+            case .chooseImage: "chooseImage"
+            case .importImage: "importImage"
+            case .share: "share"
+            case .requestDelete: "requestDelete"
+            case .confirmDelete: "confirmDelete"
+            }
         case .capture(let c):
             switch c {
             case .open: "open"
@@ -259,6 +285,7 @@ enum CommandInventory {
             case .togglePin: "togglePin"
             case .reset: "reset"
             case .clearToday: "clearToday"
+            case .newDocument: "newDocument"
             }
         case .tabTools(let c):
             switch c {
@@ -311,6 +338,7 @@ enum CommandInventory {
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"
+            case .navigate: "navigate"
             }
         case .item(let c):
             switch c {
@@ -334,9 +362,10 @@ enum CommandInventory {
             case .focus: "focus"
             case .step: "step"
             case .togglePinnedSection: "togglePinnedSection"
+            case .inSpace: "inSpace"
             }
         case .split(let c): switch c {
-            case .addPane: "addPane"; case .addPaneAt: "addPaneAt"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
+            case .addPane: "addPane"; case .addPaneAt: "addPaneAt"; case .addPaneBefore: "addPaneBefore"; case .movePane: "movePane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
             case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
             case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
             case .restore: "restore"; case .dropTab: "dropTab"
@@ -363,6 +392,7 @@ enum CommandInventory {
             case .setAsDefaultBrowser: "setAsDefaultBrowser"
             case .export: "export"
             case .revealDataDirectory: "revealDataDirectory"
+            case .help: "help"
             }
         case .settings(let c):
             switch c {
@@ -424,6 +454,7 @@ enum CommandInventory {
             case .controls: "controls"
             case .closeControls: "closeControls"
             case .rule: "rule"
+            case .toggleDeveloperMode: "toggleDeveloperMode"
             case .permission: "permission"
             case .appearance: "appearance"
             case .clear: "clear"
@@ -445,6 +476,12 @@ enum CommandInventory {
         switch event {
         case .boost: "boost"
         case .capture: "capture"
+        case .easel(let e):
+            switch e {
+            case .imageImported: "easel.imageImported"
+            case .shared: "easel.shared"
+            case .failed: "easel.failed"
+            }
         case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {

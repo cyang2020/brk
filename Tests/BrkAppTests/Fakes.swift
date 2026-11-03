@@ -53,6 +53,27 @@ final class FakeEngine: WebEngine {
     }
 
     func evaluate(_ script: String, in page: PageID) { calls.append("evaluate") }
+    /// Diagnostics fakes: a trace writes `traceText` to the file it is asked for; the task list is `taskList`.
+    var traceText = "{\"traceEvents\":[]}"
+    var tracing = false
+    var taskList: [EngineTask] = []
+    private(set) var endedTasks: [Int64] = []
+    func beginTrace() async -> Bool {
+        guard !tracing else { return false }
+        tracing = true; calls.append("beginTrace"); return true
+    }
+    func endTrace(writingTo file: URL?) async -> URL? {
+        tracing = false; calls.append(file == nil ? "discardTrace" : "endTrace")
+        guard let file else { return nil }
+        try? traceText.write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+    func tasks() -> [EngineTask] { taskList }
+    func endTask(_ id: Int64) -> Bool {
+        guard taskList.contains(where: { $0.id == id && $0.killable }) else { return false }
+        endedTasks.append(id); taskList.removeAll { $0.id == id }; return true
+    }
+    func evaluateForResult(_ script: String, in page: PageID) async throws -> String? { calls.append("evaluateForResult"); return "fake:" + script }
     func facts(for page: PageID) -> PageFacts? { nil }
     func readAIPage(_ document: DocumentToken) async throws -> AIPageContent {
         guard let onAIRead else { throw AIPageFailure.unavailable }
@@ -122,8 +143,12 @@ final class QuitCounter {
 
     init() {
         previous = Quit.perform
+        Quit.confirmed = false
         Quit.perform = { [unowned self] in self.count += 1 }
     }
 
-    func restore() { Quit.perform = previous }
+    func restore() {
+        Quit.perform = previous
+        Quit.confirmed = false
+    }
 }

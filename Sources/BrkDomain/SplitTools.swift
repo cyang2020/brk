@@ -49,7 +49,7 @@ extension AppState {
               panes(of: target).count < Metrics.content.maxPanes.value else { return nil }
         guard let tree = tree(of: window) else { return nil }
         let sources = Set(tree.allTabs().filter { tab in
-            tab != target && tree.splitContaining(tab) == nil && self.role(of: tab) == role
+            tab != target && tree.splitContaining(tab) == nil && self.role(of: tab)?.joinsSplit(in: role) == true
         })
         guard let parent = tree[target]?.parent else { return nil }
         let orientation: SplitOrientation = if case .split(let split)? = tree[target]?.body { split.orientation } else { .horizontal }

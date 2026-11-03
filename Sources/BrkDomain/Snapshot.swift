@@ -20,6 +20,20 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
     public var settings: SettingsSnapshot
     public var sites: [WindowID: SiteControlSnapshot] = [:]
     public var observations: [PageID: PageObservation] = [:]
+    /// What the Dock icon shows: the downloads under way, app-wide.
+    public var dockTile = DockTileSnapshot()
+}
+
+/// The Dock icon's badge and progress bar (Chrome's and Arc's Dock tile): `active` downloads in progress, and the
+/// share of their bytes received when every one of them knows its size. `finished` names the most recent finished
+/// downloads with their files, so BrkApp can bounce the Downloads stack once for each new one.
+public struct DockTileSnapshot: Sendable, Equatable, Codable {
+    public var active = 0
+    public var progress: Double? = nil
+    public var finished: [DownloadID: String] = [:]
+    public init(active: Int = 0, progress: Double? = nil, finished: [DownloadID: String] = [:]) {
+        self.active = active; self.progress = progress; self.finished = finished
+    }
 }
 
 public struct PageObservation: Sendable, Equatable, Codable {
@@ -64,6 +78,10 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var renaming: ItemID?
     public var dialog: SpaceDialogSnapshot?
     public var pendingSpaceDeletion: SpaceDeletionRequest? = nil
+    /// Arc's "Are you sure you want to delete this Easel?" (Q09 c), from a Library card's menu.
+    public var pendingEaselDeletion: EaselDeletionRequest? = nil
+    /// The boards of the cards that show an Easel (`PaneContent.easel`), in pane order.
+    public var easels: [EaselSnapshot] = []
     public var spaceProfiles: [ProfileRow] = []
     public var profileDialog: ProfileDialogSnapshot?
     public var find: FindSnapshot? = nil
@@ -108,6 +126,10 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// address, "http://127.0.0.1:8764/visual.html", while the site's Developer Mode is on; "about:blank" while a new
     /// tab has not committed its first document). Nil shows "Search or Enter URL…".
     public var host: String? = nil
+    /// The focused page's site has Developer Mode on (View > Developer's row then reads "Turn off …").
+    public var developerMode = false
+    /// The focused card shows an Easel: the pill reads "Share" after a lock (Q09 a) and a click shares the board.
+    public var share: EaselID? = nil
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {
@@ -268,6 +290,9 @@ public struct ContentSnapshot: Sendable, Equatable, Codable {
     public var split: ItemID?
     /// How the panes are laid out (`.horizontal` for a single pane).
     public var orientation: SplitOrientation
+    /// Advanced > "Allow window dragging from the top of webpages", in a standard window with the toolbar hidden:
+    /// the top of a page card that touches the window's top edge drags the window.
+    public var windowDragging: Bool = false
     public var presentedPanes: [Pane] { panes.filter { !expanded || $0.focused } }
 }
 
@@ -294,6 +319,8 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case crashed(PageID)
     /// The History page (`HistoryPage`): no browser; the card draws `WindowSnapshot.history`.
     case history(PageID)
+    /// An Easel's board (`EaselPage`): no browser; the card draws `WindowSnapshot.easels`.
+    case easel(PageID, EaselID)
 }
 
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
@@ -345,6 +372,8 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var spaceExportMessage: String? = nil
     public var spaceExportInProgress: Bool = false
     public var canManageSpaces: Bool = true
+    /// The Easels page: the profile's Easels, most recently edited first (P32 c).
+    public var easels: [EaselCard] = []
 }
 
 public struct DownloadRow: Sendable, Equatable, Codable {
@@ -409,6 +438,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
     /// even when a tab already shows that address (Arc opens the page in the new pane).
     public var fillsPane: Bool = false
+    /// The profile's "New documents" app (Profiles pane): type travel offers its "New Google Doc" row
+    /// (`.tab(.newDocument)`). Nil (Arc's "——"): no such row.
+    public var newDocument: DocumentApp? = nil
     /// Type travel results that are not menu rows, panes, spaces or folder moves (`TypeTravel.swift`).
     public var travel: [TravelCandidate] = []
 }
@@ -490,6 +522,8 @@ public enum FocusTarget: Sendable, Equatable, Codable {
     case renameField(ItemID)
     case spaceDialog
     case profileDialog
+    /// The board of the focused card showing an Easel (Delete removes the selection, typing edits the title).
+    case easel(PageID)
     /// A native view in the sidebar (e.g. after Ctrl+Space later).
     case sidebar
     case none

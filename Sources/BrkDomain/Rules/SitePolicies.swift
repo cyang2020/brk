@@ -25,10 +25,23 @@ extension AppState {
     }
 
     func sitePreferences(_ context: BrowsingContext) -> SitePreferences {
-        switch context {
+        var preferences = switch context {
         case .profile(let id): doc.sitePreferences[id] ?? SitePreferences()
         case .incognito(let id): session.sites.privatePreferences[id] ?? SitePreferences()
         }
+        // Only a changed default is carried, so a policy built with the defaults is the same value as before.
+        let fallback = defaultSiteRule
+        preferences.defaultRule = fallback == SiteRule() ? nil : fallback
+        return preferences
+    }
+
+    /// The app-wide ad blocker (`GeneralSettings.blockAds`, on unless turned off) and cookie banners
+    /// (`hideCookieBanners`, off unless turned on) for every site without a rule of its own.
+    var defaultSiteRule: SiteRule {
+        var rule = SiteRule()
+        rule.blocking = doc.settings.general.blockAds != false
+        rule.hideCookieBanners = doc.settings.general.hideCookieBanners == true
+        return rule
     }
 
     func websitePolicy(for page: PageID, systemScheme: Scheme = .light) -> WebsitePolicy {
@@ -95,6 +108,7 @@ extension Work {
     mutating func updateSitePreferences(_ context: BrowsingContext, _ edit: (inout SitePreferences) -> Void) {
         var value = state.sitePreferences(context)
         edit(&value)
+        value.defaultRule = nil
         switch context {
         case .profile(let id): guard state.doc.profiles[id] != nil else { return }; state.doc.sitePreferences[id] = value
         case .incognito(let id): guard state.session.privateSession == id else { return }; state.session.sites.privatePreferences[id] = value
@@ -108,6 +122,14 @@ extension Work {
         case .rule(let target, let rule):
             guard target.page.window == window, state.validSiteTarget(target) else { return }
             updateSitePreferences(target.context) { $0.rules[target.origin.value] = rule }
+        case .toggleDeveloperMode:
+            // The page the window shows (its committed document); a page without an http(s) site has no switch.
+            guard let target = state.siteTarget(in: window) else { return }
+            updateSitePreferences(target.context) { preferences in
+                var rule = preferences.rule(for: target.origin)
+                rule.developerMode = rule.developerMode == true ? false : true
+                preferences.rules[target.origin.value] = rule
+            }
         case .permission(let target, let origin, let capabilities, let decision):
             // Device requests may precede load completion, but the requesting main document must already have
             // committed its origin. Pending navigation and superseded document tokens still reject persistence.

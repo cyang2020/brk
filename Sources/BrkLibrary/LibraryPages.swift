@@ -86,16 +86,16 @@ final class DownloadsPageView: LibraryListPage {
         }
         if download.path != nil {
             let reveal: () -> Void = { [weak self] in self?.dispatch(.library(.revealDownload(id))) }
-            accessories.append(.init(symbol: "magnifyingglass", tooltip: LibraryCopy.showInFinder, action: reveal))
+            accessories.append(.init(symbol: "magnifyingglass", tooltip: LibraryCopy.showInFinder, id: .tabTool("download-reveal-\(id)"), action: reveal))
             menu.append((LibraryCopy.showInFinder, reveal))
         }
         if download.state == .inProgress || download.state == .choosingDestination {
             let cancel: () -> Void = { [weak self] in self?.dispatch(.library(.cancelDownload(id))) }
-            accessories.append(.init(symbol: "xmark.circle", tooltip: LibraryCopy.cancelDownload, action: cancel))
+            accessories.append(.init(symbol: "xmark.circle", tooltip: LibraryCopy.cancelDownload, id: .tabTool("download-cancel-\(id)"), action: cancel))
             menu.append((LibraryCopy.cancelDownload, cancel))
         } else if !download.state.isActive {
             let remove: () -> Void = { [weak self] in self?.dispatch(.library(.removeDownload(id))) }
-            accessories.append(.init(symbol: "xmark", tooltip: LibraryCopy.removeFromList, action: remove))
+            accessories.append(.init(symbol: "xmark", tooltip: LibraryCopy.removeFromList, id: .tabTool("download-remove-\(id)"), action: remove))
             menu.append((LibraryCopy.removeFromList, remove))
         }
         let icon = onDisk && file != nil ? NSWorkspace.shared.icon(forFile: file!.path)
@@ -133,54 +133,5 @@ final class DownloadsPageView: LibraryListPage {
         guard download.state == .inProgress else { return .none }
         guard let total = download.total, total > 0 else { return .indeterminate }
         return .fraction(min(1, Double(download.received) / Double(total)))
-    }
-}
-
-/// The Easels page (Arc: `HomeButton.EaselsAndNotesPage`): the search field over a grid of easel cards. Brk has no
-/// Easels yet, so the grid is empty and the page shows the empty state under the search field.
-@MainActor
-final class EaselsPageView: NSView {
-    let searchField = LibrarySearchField(placeholder: LibraryCopy.search(.easelsAndNotes))
-    private let empty = EmptyStateView()
-    private var scheme: Scheme?
-
-    init(dispatch: @escaping Dispatch) {
-        super.init(frame: .zero)
-        isHidden = true
-        searchField.onEscape = { dispatch(.library(.close)) }
-        addSubview(searchField)
-        addSubview(empty)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override var isFlipped: Bool { true }
-
-    var texts: [String] { empty.texts }
-
-    func hide() {
-        isHidden = true
-        searchField.stringValue = ""
-    }
-
-    func show(in frame: CGRect, scheme: Scheme) {
-        self.frame = frame
-        isHidden = false
-        if self.scheme != scheme {
-            self.scheme = scheme
-            let colors = LibraryColors.of(scheme)
-            appearance = .library(scheme)
-            searchField.apply(colors)
-            empty.show(glyph: .easelsAndNotes, title: LibraryCopy.nothingHereYet, subtitle: LibraryCopy.easelsEmpty, colors: colors)
-        }
-        needsLayout = true
-    }
-
-    override func layout() {
-        super.layout()
-        searchField.frame = LibraryColumnLayout.top(in: bounds, filter: false).search
-        let top = LibraryDraw.list.listTop.value
-        empty.place(in: CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top)))
     }
 }

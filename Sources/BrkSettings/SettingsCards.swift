@@ -306,5 +306,10 @@ struct SettingsCardMetricsTable: MetricGroup {
     let keyGlyphRadius = Metric(4.0, .guess("the ↩ box's corner"))
     let popoverWidth = Metric(320.0, .guess("a Learn more popover"))
     let introLineSpacing = Metric(0.0, .anatomy("\(capture)/P38-f-arc.png: paragraph lines 32 px apart, a 13 pt line"))
+    let peekNoteRowHeight = Metric(56.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the other-sites Peek row with its Note spans y 913 to 1025 px"))
+    let routesRowHeight = Metric(43.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Air Traffic Control card spans y 1125 to 1211 px"))
+    let linksBottom = Metric(44.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: scrolled to the end, the Air Traffic Control card ends at y 1211 px of a 1300 px window"))
+    let infoGap = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: 'Arc.' ends at x 584 px, the ⓘ starts at 596 px"))
+    let infoSize = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the ⓘ spans x 596 to 622 px"))
     let sectionRule = Metric(25.0, .anatomy("\(capture)/P38-f-arc.png: card ends at y 914 px, the rule is at 965 px, Peek's paragraph centred at 1031 px"))
 }

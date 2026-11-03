@@ -319,46 +319,71 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.window.title, "Max")
     }
 
-    /// Drives F3's mounted native text fields and pop-ups. SwiftUI identifiers belong to its accessibility
-    /// elements rather than these AppKit views, so the controls are selected by their displayed values.
-    func testTheLinksPaneEditsAirTrafficControlRoutes() throws {
+    /// Air Traffic Control is Arc's sheet over the Links pane (Q06-a): New Route, the two-line rows (match pop-up,
+    /// text, ⊖ / Open in pop-up), Default, ×. Driven through the sheet's own controls.
+    func testAirTrafficControlIsASheetOverTheLinksPane() throws {
         let f = Fixture()
-        let route = LinkRoute(id: spotify, pattern: "open.spotify.com", destination: .space(personal))
-        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: route, destinationTitle: "Personal")]))
-        XCTAssertEqual(f.click("airTrafficControl"), [], "Air Traffic Control is one level down")
-        func descendants<T: NSView>(_ view: NSView, _ type: T.Type) -> [T] {
-            (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, type) }
+        let route = LinkRoute(id: spotify, pattern: "meet.google.com", destination: .mostRecentSpace, match: .contains)
+        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: route, destinationTitle: "Most Recent Space")]))
+        f.window.orderFront(nil)
+        defer { f.window.orderOut(nil); f.window.close() }
+        XCTAssertEqual(f.click("airTrafficControl"), [], "the button only opens the sheet")
+        for _ in 0..<10 where f.window.attachedSheet == nil { f.settle() }
+        let sheet = try XCTUnwrap(f.window.attachedSheet, "the sheet is attached to the settings window")
+        XCTAssertLessThanOrEqual(abs(sheet.frame.width - 508), 2, "Arc's 508-point sheet")
+        XCTAssertLessThanOrEqual(abs(sheet.frame.height - 500), 2, "Arc's 500-point sheet")
+        func find<T: NSView>(_ field: String, _ type: T.Type = T.self) -> T? {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == ViewID.settingsField(field).identifier { return view }
+                for child in view.subviews { if let found = walk(child) { return found } }
+                return nil
+            }
+            return sheet.contentView.flatMap(walk) as? T
         }
-        let destinations = descendants(f.host, NSPopUpButton.self).filter { $0.itemTitles.contains("Most Recent Space") }
-        XCTAssertEqual(destinations.count, 2, "default and new route destinations; existing rows build their borderless menus on open")
+        func sent(_ action: () -> Void) -> [Command] { f.sent = []; action(); f.settle(); return f.sent }
+        let id = spotify.rawValue
 
-        let fields = descendants(f.host, NSTextField.self).filter { $0.isEditable }
-        let pattern = try XCTUnwrap(fields.first { $0.stringValue == "open.spotify.com" })
-        f.sent = []
-        pattern.stringValue = "spotify.com"
-        pattern.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: pattern))
-        f.settle()
-        XCTAssertEqual(f.sent, [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "spotify.com", destination: .space(personal)))))])
+        let match = try XCTUnwrap(find("route-\(id)-match", NSPopUpButton.self))
+        XCTAssertEqual(match.itemTitles, ["Contains", "Matches"])
+        XCTAssertEqual(match.titleOfSelectedItem, "Contains")
+        XCTAssertEqual(sent { match.selectItem(withTitle: "Matches"); match.sendAction(match.action, to: match.target) },
+                       [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "meet.google.com", destination: .mostRecentSpace, match: .matches))))])
 
-        let draft = try XCTUnwrap(fields.first { $0.stringValue.isEmpty })
-        f.sent = []
-        draft.stringValue = "news.ycombinator.com"
-        draft.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: draft))
-        f.settle()
-        XCTAssertEqual(f.sent, [], "typing a draft must not create a route")
-        draft.sendAction(draft.action, to: draft.target)
-        f.settle()
-        guard case .settings(.links(.addRoute(let added)))? = f.sent.first else { return XCTFail("Return did not add the route: \(f.sent)") }
-        XCTAssertEqual(added.pattern, "news.ycombinator.com")
+        let pattern = try XCTUnwrap(find("route-\(id)-pattern", NSTextField.self))
+        XCTAssertEqual(pattern.stringValue, "meet.google.com")
+        XCTAssertEqual(sent {
+            pattern.stringValue = "zoom.us"
+            pattern.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: pattern))
+        }, [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "zoom.us", destination: .mostRecentSpace, match: .contains))))])
+
+        let destination = try XCTUnwrap(find("route-\(id)-destination", NSPopUpButton.self))
+        XCTAssertEqual(destination.itemTitles, ["Personal", "Work", "", "Little Arc", "Most Recent Space"])
+        XCTAssertEqual(destination.titleOfSelectedItem, "Most Recent Space")
+        XCTAssertEqual(sent { destination.selectItem(withTitle: "Work"); destination.sendAction(destination.action, to: destination.target) },
+                       [.settings(.links(.updateRoute(LinkRoute(id: spotify, pattern: "meet.google.com", destination: .space(work), match: .contains))))])
+
+        let fallback = try XCTUnwrap(find("defaultRoute", NSPopUpButton.self))
+        XCTAssertEqual(fallback.titleOfSelectedItem, "Little Arc", "the default follows 'Links from other apps open in Little Arc'")
+        XCTAssertEqual(sent { fallback.selectItem(withTitle: "Most Recent Space"); fallback.sendAction(fallback.action, to: fallback.target) },
+                       [.settings(.links(.defaultRoute(.mostRecentSpace)))])
+
+        guard case .settings(.links(.addRoute(let added)))? = sent({ (find("route-new") as NSControl?)?.performClick(nil) }).first else {
+            return XCTFail("New Route did not add a route")
+        }
+        XCTAssertEqual(added.pattern, "")
+        XCTAssertEqual(added.match, .contains)
         XCTAssertEqual(added.destination, .mostRecentSpace)
-        XCTAssertFalse(added.id.rawValue.isEmpty)
+        XCTAssertEqual(sent { (find("route-\(id)-remove") as NSControl?)?.performClick(nil) }, [.settings(.links(.removeRoute(spotify)))])
 
-        f.sent = []
-        let fallback = try XCTUnwrap(destinations.first)
-        fallback.selectItem(withTitle: "Little Arc")
-        fallback.menu?.performActionForItem(at: fallback.indexOfSelectedItem)
-        f.settle()
-        XCTAssertEqual(f.sent, [.settings(.links(.defaultRoute(.littleArc)))])
+        // The next snapshot has the empty row New Route added; × drops it and closes the sheet.
+        let empty = LinkRoute(id: github, pattern: "", destination: .mostRecentSpace, match: .contains)
+        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: route, destinationTitle: "Most Recent Space"),
+                                                 LinkRouteRow(route: empty, destinationTitle: "Most Recent Space")]))
+        XCTAssertNotNil(find("route-\(github.rawValue)-pattern", NSTextField.self), "the new row is in the sheet")
+        XCTAssertEqual(sent { (find("routes-close") as NSControl?)?.performClick(nil) }, [.settings(.links(.removeRoute(github)))])
+        for _ in 0..<10 where f.window.attachedSheet != nil { f.settle() }
+        if let open = f.window.attachedSheet { f.window.endSheet(open) }
+        XCTAssertNil(f.window.attachedSheet, "× closes the sheet")
     }
 
     func testProfilesEditorCreatesRenamesAndProtectsDefaultProfile() throws {
@@ -452,6 +477,22 @@ final class SettingsHostTests: XCTestCase {
         _ = g.click("moreSettings")
         XCTAssertEqual(g.view("defaultBrowserNotice", NSTextField.self)?.stringValue, "\(Product.name) is your default web browser.")
         XCTAssertEqual(g.view("setAsDefaultBrowser", NSButton.self)?.isEnabled, false)
+    }
+
+    /// Advanced > More Settings… has the app-wide ad blocker and cookie banners; Profiles' New documents picks an app
+    func testAdBlockingAndNewDocumentsControls() {
+        let f = Fixture()
+        f.render(snapshot(pane: .advanced))
+        _ = f.click("moreSettings")
+        XCTAssertEqual(f.isOn("blockAds"), true, "on by default")
+        XCTAssertEqual(f.click("blockAds"), [.settings(.general(.blockAds(false)))])
+        XCTAssertEqual(f.isOn("hideCookieBanners"), false)
+        XCTAssertEqual(f.click("hideCookieBanners"), [.settings(.general(.hideCookieBanners(true)))])
+        f.render(snapshot(pane: .profiles))
+        let documents: NSPopUpButton? = f.view("newDocuments-default")
+        XCTAssertEqual(documents?.isEnabled, true, "a real choice, not a greyed placeholder")
+        XCTAssertEqual(documents?.titleOfSelectedItem, "——")
+        XCTAssertEqual(f.pick("newDocuments-default", "Google Docs"), [.settings(.profile(.default, .documentApp(.googleDocs)))])
     }
 
     /// Max shows what launch found on PATH and what the choice resolves to

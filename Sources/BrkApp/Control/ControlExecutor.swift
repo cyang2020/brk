@@ -4,6 +4,7 @@ import BrkControl
 import BrkDomain
 import BrkEngine
 import BrkLayout
+import BrkSettings
 
 /// Executes control ops against the running app, on the main actor, through the same paths a user takes:
 /// `dispatch` and `load` -> `AppStore.dispatch`; `press`/`hold`/`type`/`click`/`hover` -> in-process NSEvents into
@@ -35,6 +36,8 @@ final class ControlExecutor {
     /// The ordered quit, started after `quit`'s reply is written (ControlServer).
     func startQuit() {
         guard let controller = store.windowController(nil) else { return }
+        // The runner's ordered quit never waits on "Warn before quitting".
+        Quit.confirmed = true
         store.dispatch(.user(controller.id, .app(.quit)))
     }
 
@@ -432,7 +435,39 @@ final class ControlExecutor {
         case .externalURL(let url):
             store.dispatch(.system(.externalURL(url)))
             return .dispatched(rev: store.snapshot.rev)
+
+        case .appleScript(let script):
+            return .text(await Self.appleScript(script))
         }
+    }
+
+    /// Runs AppleScript in this process on a background thread; the main thread stays free to answer its events
+    /// (and `execute`, which suspends while the page evaluates). The permission check asks the privacy service, which
+    /// can stall while another app's consent prompt is open, so it runs on that thread too.
+    static func appleScript(_ source: String) async -> String {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return await withCheckedContinuation { (done: CheckedContinuation<String, Never>) in
+            Thread.detachNewThread {
+                let me = NSAppleEventDescriptor(processIdentifier: pid)
+                let permission = AEDeterminePermissionToAutomateTarget(me.aeDesc, typeWildCard, typeWildCard, false)
+                guard permission == noErr else { return done.resume(returning: "permission \(permission)") }
+                var error: NSDictionary?
+                let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
+                if let error {
+                    done.resume(returning: "permission 0\nerror \(error[NSAppleScript.errorNumber] ?? "?"): \(error[NSAppleScript.errorMessage] ?? error)")
+                } else {
+                    done.resume(returning: "permission 0\nresult: " + (result.map(Self.text) ?? ""))
+                }
+            }
+        }
+    }
+
+    /// An AppleScript result as text: lists one item per line, records and references by their string value.
+    nonisolated static func text(_ value: NSAppleEventDescriptor) -> String {
+        if value.descriptorType == typeAEList, value.numberOfItems > 0 {
+            return (1...value.numberOfItems).compactMap { value.atIndex($0).map(text) }.joined(separator: "\n")
+        }
+        return value.stringValue ?? "<\(value)>"
     }
 
     // MARK: Helpers
@@ -497,6 +532,8 @@ final class ControlExecutor {
         facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
+        // AppKit keeps its own copy of the image it was given, so the store says which drawing it set.
+        facts.dockIcon = NSApp.applicationIconImage?.size == CGSize(width: AppStore.dockIconSide, height: AppStore.dockIconSide) ? store.shownIcon?.rawValue : nil
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts

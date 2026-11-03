@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import BrkSettings
 import os
 import XCTest
 @testable import BrkApp
@@ -149,6 +150,37 @@ final class AppStoreTests: XCTestCase {
         h.store.dispatch(.user(h.window, .app(.quit)))
         XCTAssertEqual(quits.count, 1)
         XCTAssertEqual(h.store.snapshot.rev, rev)
+    }
+
+    /// "Warn before quitting" on: Cmd+Q asks (a sheet, no nested run loop) and tears nothing down until the answer;
+    /// Cancel keeps the app, Quit goes on, "Quit, and don’t ask again" turns the setting off. Off: no question
+    func test_warnBeforeQuittingAsksBeforeTheOrderedQuit() {
+        let h = Harness(), quits = QuitCounter()
+        let previousAsk = AppStore.askQuit
+        var asked = 0
+        var pending: (@MainActor (QuitWarning.Answer) -> Void)?
+        AppStore.askQuit = { _, _, done in asked += 1; pending = done }
+        defer { h.cleanUp(); quits.restore(); AppStore.askQuit = previousAsk }
+        func answer(_ reply: QuitWarning.Answer) { let done = pending; pending = nil; done?(reply) }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .settings(.general(.warnBeforeQuitting(true)))))
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 1)
+        XCTAssertEqual(quits.count, 0, "nothing quits while the question is open")
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 1, "a second Cmd+Q while it is open does not ask twice")
+        answer(.init(quit: false, dontAskAgain: false))
+        XCTAssertEqual(quits.count, 0, "Cancel keeps the app running")
+        XCTAssertFalse(Quit.confirmed)
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 2)
+        answer(.init(quit: true, dontAskAgain: true))
+        XCTAssertEqual(quits.count, 1, "Quit goes on to the ordered quit")
+        XCTAssertFalse(h.store.snapshot.settings.general.warnBeforeQuitting, "Quit, and don’t ask again turns the setting off")
+        Quit.confirmed = false
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 2, "with the setting off nothing is asked")
+        XCTAssertEqual(quits.count, 2, "and the quit starts at once")
     }
 
     /// an input dispatched from inside a dispatch (a page event fired by the engine during reconcile) is queued and
@@ -340,8 +372,7 @@ final class MenuTests: XCTestCase {
         let target = MenuTarget()
         target.isEnabled = { _ in true }
         let main = MainMenu.build(target: target)
-        let developer = try XCTUnwrap(main.items[3].submenu!.items.first { $0.title == "Developer" }?.submenu)
-        let unsupported = try XCTUnwrap(developer.items.first { $0.title == "Toggle Developer Mode" })
+        let unsupported = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Note" })
         let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
         XCTAssertFalse(target.validateMenuItem(unsupported))
         XCTAssertTrue(target.validateMenuItem(newWindow))

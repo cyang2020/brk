@@ -4,12 +4,14 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// The Media page (Arc: `HomeButton.ScreenshotsAndCapturesPage`; P32-a, P34): "Search Media…" across the top, then
-/// the profile's captures by day as cards (a thumbnail, the title, its size and host). A click previews a capture
-/// over the content area (`.capture(.preview(id))`, drawn by `MediaPreviewView`); Open, Export…, Remove and Insert
-/// in Easel are in the card's … menu (shown while hovered) and its context menu. Before the first capture, the page
-/// shows Arc's empty list of grey cards under the "Your Media in the Library" card; its × and Show Media put it away
-/// for the rest of the session and show the empty state.
+/// The Media page (Arc: `HomeButton.ScreenshotsAndCapturesPage`; P32-i, P34): "Search Media…" across the top, then
+/// Brk's own captures of the profile by day, in the archive list's two-line rows (P32-e): the thumbnail in the icon
+/// tile, the title, its size and host. Arc lists the computer's screenshot folder after a permission prompt; Brk reads
+/// no system photos or folders. A click previews a capture over the content area (`.capture(.preview(id))`, drawn by
+/// `MediaPreviewView`; the previewed row keeps a grey fill); Open, Export…, Remove and Insert in Easel are in the
+/// row's … menu (shown while hovered) and its context menu. Before the first capture, the page shows Arc's empty
+/// list of grey cards under the "Your Media in the Library" card; its × and Show Media put it away for the rest of the
+/// session and show the empty state.
 @MainActor final class MediaPageView: NSView {
     private let dispatch: Dispatch
     let searchField = LibrarySearchField(placeholder: LibraryCopy.search(.media))
@@ -54,7 +56,9 @@ import BrkUIKit
     override var isFlipped: Bool { true }
 
     var introShown: Bool { !intro.isHidden }
-    var cards: [MediaCardView] { list.subviews.compactMap { $0 as? MediaCardView } }
+    var rows: [LibraryRowView] { list.subviews.compactMap { $0 as? LibraryRowView } }
+    /// Arc's grey cards before the first capture, instead of rows.
+    private var placeholders = false
 
     func hide() {
         isHidden = true
@@ -97,7 +101,7 @@ import BrkUIKit
         }
         rendered = key
         list.subviews.forEach { $0.removeFromSuperview() }
-        let placeholders = records.isEmpty && !Self.introDismissed
+        placeholders = records.isEmpty && !Self.introDismissed
         intro.isHidden = !placeholders
         glow.isHidden = !placeholders
         if placeholders {
@@ -112,10 +116,7 @@ import BrkUIKit
             }
             for day in LibraryDays.group(shown, at: \.createdAt, now: now, calendar: .current) {
                 list.addSubview(DayHeaderView(day.title, colors: colors))
-                for record in day.items {
-                    let card = MediaCardView(record: record, file: files[record.id], selected: record.id == selected, colors: colors, dispatch: dispatch)
-                    list.addSubview(card)
-                }
+                for record in day.items { list.addSubview(row(record)) }
             }
             empty.isHidden = !shown.isEmpty
             if shown.isEmpty {
@@ -127,24 +128,47 @@ import BrkUIKit
         needsLayout = true
     }
 
+    /// One capture as a list row; its … and its context menu hold the four actions.
+    private func row(_ record: CaptureRecord) -> LibraryRowView {
+        let id = record.id
+        let actions: [(String, CaptureCommand)] = [("Open", .open(id)), ("Export…", .export(id)), ("Remove", .remove(id)), ("Insert in Easel", .insertInEasel(id))]
+        weak var shown: LibraryRowView?
+        let more = LibraryRowView.Accessory(symbol: "ellipsis.circle", tooltip: LibraryCopy.more) { shown?.showMenu(under: LibraryCopy.more) }
+        let row = LibraryRowView(id: .tabTool("capture-card-" + id), icon: nil, thumbnail: files[id].flatMap { NSImage(contentsOf: $0) },
+                                 title: record.title, detail: "\(record.width) × \(record.height) · \(record.url.host ?? "")", progress: .none,
+                                 accessories: [more], menu: actions.map { title, command in (title, { [dispatch] in dispatch(.capture(command)) }) },
+                                 selected: id == selected, colors: colors, onClick: { [dispatch] in dispatch(.capture(.preview(id))) })
+        shown = row
+        return row
+    }
+
     override func layout() {
         super.layout()
-        let m = LibraryDraw.media, pad = Metrics.library.columnPadding.value
+        let m = LibraryDraw.media, l = LibraryDraw.list, pad = Metrics.library.columnPadding.value
         searchField.frame = LibraryColumnLayout.top(in: bounds, filter: false).search
-        let top = LibraryDraw.list.listTop.value
+        let top = l.listTop.value
         scroll.frame = CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
-        // A header's text (16 pt tall) is centred at y 63 and the first card starts at 83 (P32-a).
-        let headerStep = m.cardTop.value - top, width = max(0, bounds.width - 2 * m.cardLeading.value)
-        let headerHeight = m.headerCenter.value + 8 + LibraryDraw.list.dayHeaderBottom.value - top
         var y = 0.0
-        for view in list.subviews {
-            if view is DayHeaderView {
-                view.frame = CGRect(x: LibraryDraw.list.rowLeading.value, y: y, width: width, height: headerHeight)
-                y += headerStep
-            } else {
-                let height = (view as? MediaCardView)?.height ?? m.cardHeight.value
-                view.frame = CGRect(x: m.cardLeading.value, y: y, width: width, height: height)
-                y += height + (m.cardPitch.value - m.cardHeight.value)
+        if placeholders {
+            // A header's text (16 pt tall) is centred at y 63 and the first card starts at 83 (P32-a).
+            let headerStep = m.cardTop.value - top, width = max(0, bounds.width - 2 * m.cardLeading.value)
+            let headerHeight = m.headerCenter.value + 8 + l.dayHeaderBottom.value - top
+            for view in list.subviews {
+                if view is DayHeaderView {
+                    view.frame = CGRect(x: l.rowLeading.value, y: y, width: width, height: headerHeight)
+                    y += headerStep
+                } else {
+                    view.frame = CGRect(x: m.cardLeading.value, y: y, width: width, height: m.cardHeight.value)
+                    y += m.cardPitch.value
+                }
+            }
+        } else {
+            // The archive list's geometry (LibraryListPage): day headers, then 56 pt rows inside the column's padding.
+            let width = max(0, bounds.width - 2 * l.rowLeading.value)
+            for view in list.subviews {
+                let height = view is DayHeaderView ? l.dayHeaderHeight.value : l.rowPitch.value
+                view.frame = CGRect(x: l.rowLeading.value, y: y, width: width, height: height)
+                y += height
             }
         }
         list.frame = CGRect(x: 0, y: 0, width: scroll.contentSize.width, height: max(y + pad, scroll.contentSize.height))
@@ -168,112 +192,6 @@ import BrkUIKit
         layer?.backgroundColor = colors.placeholder.cgColor
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-}
-
-/// One capture: its thumbnail, title, size and host; the previewed one on a darker grey. Hovered, a … button shows
-/// its actions; so does a right-click.
-@MainActor final class MediaCardView: NSView {
-    private let record: CaptureRecord
-    private let dispatch: Dispatch
-    private let thumbnail = NSImageView()
-    private let title: NSTextField
-    private let detail: NSTextField
-    private let more = NSButton()
-    private let colors: LibraryColors
-    let selected: Bool
-
-    init(record: CaptureRecord, file: URL?, selected: Bool, colors: LibraryColors, dispatch: @escaping Dispatch) {
-        self.record = record
-        self.dispatch = dispatch
-        self.selected = selected
-        self.colors = colors
-        title = NSTextField(labelWithString: record.title)
-        detail = NSTextField(labelWithString: "\(record.width) × \(record.height) · \(record.url.host ?? "")")
-        super.init(frame: .zero)
-        identify(.tabTool("capture-card-" + record.id))
-        setAccessibilityLabel(record.title)
-        wantsLayer = true
-        layer?.cornerCurve = .continuous
-        layer?.cornerRadius = LibraryDraw.media.cardRadius.value
-        layer?.backgroundColor = (selected ? colors.control : colors.placeholder).cgColor
-        thumbnail.image = file.flatMap { NSImage(contentsOf: $0) }
-        thumbnail.imageScaling = .scaleProportionallyUpOrDown
-        thumbnail.wantsLayer = true
-        thumbnail.layer?.cornerCurve = .continuous
-        thumbnail.layer?.cornerRadius = LibraryDraw.list.iconRadius.value
-        thumbnail.layer?.masksToBounds = true
-        thumbnail.layer?.backgroundColor = colors.page.cgColor
-        title.font = .systemFont(ofSize: LibraryDraw.list.titleFont.value, weight: .medium)
-        title.textColor = colors.foregroundPrimary
-        title.lineBreakMode = .byTruncatingTail
-        detail.font = .systemFont(ofSize: LibraryDraw.list.detailFont.value)
-        detail.textColor = colors.foregroundSecondary
-        detail.lineBreakMode = .byTruncatingTail
-        more.image = LibraryIcon.symbol("ellipsis.circle.fill", size: 16, label: LibraryCopy.more)
-        more.isBordered = false
-        more.contentTintColor = colors.foregroundSecondary
-        more.toolTip = LibraryCopy.more
-        more.target = self
-        more.action = #selector(moreClicked)
-        more.alphaValue = 0
-        for view in [thumbnail, title, detail, more] { addSubview(view) }
-    }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    override var isFlipped: Bool { true }
-
-    var height: Double { LibraryDraw.media.cardHeight.value }
-
-    /// Open, Export…, Remove, Insert in Easel.
-    func actions() -> NSMenu {
-        let menu = NSMenu()
-        let id = record.id
-        for (title, command) in [("Open", CaptureCommand.open(id)), ("Export…", .export(id)), ("Remove", .remove(id)), ("Insert in Easel", .insertInEasel(id))] {
-            menu.addItem(LibraryFilterButton.item(title) { [dispatch] in dispatch(.capture(command)) })
-        }
-        return menu
-    }
-
-    @objc private func moreClicked() { actions().popUp(positioning: nil, at: CGPoint(x: 0, y: more.bounds.maxY + 2), in: more) }
-
-    override func menu(for event: NSEvent) -> NSMenu? { actions() }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { rowHit(point, buttons: [more]) }
-
-    /// A click on the card (not on its … button): preview it.
-    func click() { dispatch(.capture(.preview(record.id))) }
-
-    override func mouseUp(with event: NSEvent) {
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { click() }
-    }
-
-    override func layout() {
-        super.layout()
-        let m = LibraryDraw.media, l = LibraryDraw.list, side = m.thumbnail.value
-        thumbnail.frame = CGRect(x: ((bounds.height - side) / 2).rounded(), y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
-        let b = 24.0
-        more.frame = CGRect(x: bounds.width - l.rowInset.value - b, y: ((bounds.height - b) / 2).rounded(), width: b, height: b)
-        let x = thumbnail.frame.maxX + l.iconToTitle.value, width = max(0, more.frame.minX - 4 - x)
-        let th = title.fittingSize.height, dh = detail.fittingSize.height
-        let top = ((bounds.height - th - dh) / 2).rounded()
-        title.frame = CGRect(x: x, y: top, width: width, height: th)
-        detail.frame = CGRect(x: x, y: top + th, width: width, height: dh)
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        more.alphaValue = 1
-        if !selected { layer?.backgroundColor = colors.control.withAlphaComponent(colors.control.alphaComponent * 0.7).cgColor }
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        more.alphaValue = 0
-        layer?.backgroundColor = (selected ? colors.control : colors.placeholder).cgColor
-    }
 }
 
 /// The previewed capture over the content card (P34: Brk opens a picked capture where the page is): the image fitted

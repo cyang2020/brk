@@ -31,6 +31,23 @@ final class SplitToolsGeometryTests: XCTestCase {
         XCTAssertNil(SplitToolsLayout.edge(at: CGPoint(x: 640, y: 310), in: area))
         XCTAssertNil(SplitToolsLayout.edge(at: CGPoint(x: 100, y: 310), in: area))
     }
+    /// Arc's P23-d: a tab held at the right edge of the 1042 x 756 content area halves it on the 10 pt gap: the page
+    /// keeps 228...744 and the slot is 754...1270. An existing split gains the slot at the end with the mean share.
+    func testDropLayoutMakesRoomForTheNewPaneOnTheSplitGap() {
+        let area = CGRect(x: 228, y: 10, width: 1042, height: 756)
+        let right = SplitToolsLayout.dropLayout(.right, in: area)
+        XCTAssertEqual(right.panes, [CGRect(x: 228, y: 10, width: 516, height: 756)])
+        XCTAssertEqual(right.slot, CGRect(x: 754, y: 10, width: 516, height: 756))
+        let left = SplitToolsLayout.dropLayout(.left, in: area)
+        XCTAssertEqual(left.slot, CGRect(x: 228, y: 10, width: 516, height: 756))
+        XCTAssertEqual(left.panes, [CGRect(x: 754, y: 10, width: 516, height: 756)])
+        let bottom = SplitToolsLayout.dropLayout(.bottom, in: area, fractions: [0.5, 0.5])
+        XCTAssertEqual(bottom.panes.count, 2)
+        XCTAssertEqual(bottom.slot.maxY, area.maxY)
+        XCTAssertEqual(bottom.slot.width, area.width)
+        XCTAssertEqual(bottom.slot.height, bottom.panes[0].height, accuracy: 1)
+    }
+
     func testDividerAtItsRenderedCenterDoesNotChangeAnyFraction() {
         for orientation in SplitOrientation.allCases {
             let area = CGRect(x: 238, y: 10, width: 1012, height: 756)

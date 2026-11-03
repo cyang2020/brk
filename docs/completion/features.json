@@ -649,7 +649,8 @@
       ],
       "remaining": [
         "Add a native New Tab row click check and verify overflow and empty states against the reference.",
-        "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）"
+        "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：Today 清空后不画置顶区与 Today 之间的分隔线和 Clear；无当前标签时内容区是不透明 #FCFCFC 白卡片带阴影（新建 Space 后的空白页同样）。站台 Q02-b 1.1%，一致。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -3129,7 +3130,8 @@
       ],
       "remaining": [
         "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup.",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。",
+        "R3-5（2026-11-04，合并 e9f5e87d）：View > Developer 子菜单按真实 Arc 的七项做齐，最后一项 Turn on/off Developer Mode for this site（⌃D）接到按站点的开关，Allow JavaScript from Apple Events 是会保存的打勾开关（默认关）。剩余归 R3-7：检查元素的节点选择、辅助输入。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3831,7 +3833,8 @@
         }
       ],
       "remaining": [
-        "None for the assigned transfer contract; final-source T1–T15 all pass. Parent unified integration regression remains its separate delivery gate."
+        "None for the assigned transfer contract; final-source T1–T15 all pass. Parent unified integration regression remains its separate delivery gate.",
+        "R3-4（2026-11-04，合并 0adfa4b1）：下载行的取消按钮真的停止传输（原生场景 LibraryDownload-Cancel：测试服务器在 491,520 / 4,194,304 字节处停发）。"
       ],
       "implementation": [
         "Sources/BrkBase/Page.swift",
@@ -4924,7 +4927,8 @@
       ],
       "remaining": [
         "Physical reorder haptic output is unverified; its setting is consumed by the owned gestures.",
-        "Arc 对照（run-20261103 P27）仍有差异或无参照：P27-a: 已修（一致） | P27-b: 要修（Space 组：dock 拖动时被拖的圆点用浅色小胶囊跟随指针，不在格位上画灰方块）"
+        "Arc 对照（run-20261103 P27）仍有差异或无参照：P27-a: 已修（一致） | P27-b: 要修（Space 组：dock 拖动时被拖的圆点用浅色小胶囊跟随指针，不在格位上画灰方块）",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：底栏拖 Space 圆点时圆点装进浅色胶囊跟着指针走，原格位空出；站台 P27-b 4.1%，剩余为测试数据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Sidebar.swift",
@@ -4956,7 +4960,7 @@
       "description": "Grid of all spaces, search, reorder, \"Export into Folder\"",
       "historical_status": "not started",
       "status": "verified",
-      "acceptance": "Provide a searchable space grid, reorder controls and Export into Folder using local files.",
+      "acceptance": "Provide the Spaces grid as Arc's cards (no search box, Arc has none there), a drag handle to reorder, the card's … menu with Arc's four groups, and Export into Folder using local files.",
       "owner": "parent-ledger-reconciliation",
       "required_checks": [
         "unit",
@@ -5024,7 +5028,8 @@
       "remaining": [
         "The independently operable native path-confirmation export passes with real files. Optional OS Browse picker selection/confirmation remains unproven on this host.",
         "Arc 对照（run-20261103 P30）仍有差异或无参照：P30-a: 一致 | P30-b: 未比较（无参照；Brk 的 Spaces 页也不要搜索框） | P30-c: 要修（Space 组：卡片菜单按 Arc 的四组九项重排（Edit Space… 拆成 Change Space Icon… / Rename Space… / Edit Theme Color…，补 Set Profile、New Folder、Live Folders、Share Space，Export 带 Space 名并做子菜单），去掉 Move Left/Right）",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Library Spaces 卡片的 Edit Space…（菜单项和铅笔）改为打开主题面板，和 Spaces > Edit Theme… 同一个面板；旧的名字加图标表单已删；从 Library 打开主题面板后 Esc 先关面板再关 Library。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Library Spaces 卡片的 Edit Space…（菜单项和铅笔）改为打开主题面板，和 Spaces > Edit Theme… 同一个面板；旧的名字加图标表单已删；从 Library 打开主题面板后 Esc 先关面板再关 Library。",
+        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：Spaces 卡片的 … 菜单改成 Arc 的四组九项（去掉 Move Left/Right，十字拖柄真能拖动排序），卡片去描边、加 Arc 的软阴影和主题色底，站台 P30-a 10.5% / P30-c 8.7%；剩余：Library 打开时网页被挤窄重排（Arc 保持宽度平移），归内容区下一轮；菜单比 Arc 偏左约 6 点。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -6023,7 +6028,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修"
+        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：拖标签进内容区有了 Arc 的落点预览（当前页让位不重排、主题色描边落点框、169×250 点的拖动卡片、被拖行的 ×），松开建成分屏，置顶文件夹里的标签可以和 Today 标签分屏；栏头右侧四个按钮（翻译、站点控制、分屏菜单、×）和分屏菜单七项四组按 Arc，两栏之间有拖动条，焦点栏描边按主题色取同亮度。站台 P23-d 12.1%（剩余为参照图主题和测试数据）、P23-c 5.3%。待补拍：上下分屏时的菜单措辞和拖动条样式、米色主题下的 P23-c。"
       ],
       "implementation": [
         "Sources/BrkContent/SplitToolsView.swift",
@@ -6305,7 +6311,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修"
+        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：同 A073；新增命令：前后挪动当前栏（Move Left/Right）、在左侧加一栏（Add Left Split）。"
       ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
@@ -6646,7 +6653,9 @@
       ],
       "remaining": [
         "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency.",
-        "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据"
+        "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据",
+        "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。",
+        "R3-3（2026-11-04，合并 662007f2）：Library 的 Easels 页改成真实的 Easel 卡片列表（旧的占位页删掉）。Easels 图标若要更贴近 Arc（带波浪线的小窗口）归 Library 图标工作。"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -8181,7 +8190,8 @@
       "remaining": [
         "No owned implementation gate remains. Parent wires the exported site-control command and runs unified integration regression. Physical file-picker acceptance and Arc pixel comparison are not claimed.",
         "Reviews (verify/completion/batch2-parent/boosts/REVIEW.md): CSP-restricted pages get no Boost and no error; page scripts can read and remove the injected style; cross-origin iframe Zap; IDN and IPv6 hosts; scope text reverts after a refusal; editor covers the command bar; reload ends preview. Edit and Export buttons have no native click receipt; file install only by command.",
-        "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比"
+        "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比",
+        "R3-4（2026-11-04，合并 0adfa4b1）：Install from File… 走真实打开面板，原生场景 LibraryBoost-Install 选文件并装上。"
       ],
       "implementation": [
         "Sources/BrkDomain/Boosts.swift",
@@ -8223,7 +8233,8 @@
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "No complete user-facing workflow is implemented in current source."
+        "No complete user-facing workflow is implemented in current source.",
+        "R3-3（2026-11-04）：Note 没做。Arc 1.170 的菜单和命令栏都没有 New Note 入口（results.tsv Q09-b），菜单里的三项 Note 已隐藏；要不要做 Brk 自己的 Note 等用户定。"
       ]
     },
     {
@@ -8233,13 +8244,14 @@
       "arc_evidence": "rows 30, 172; `ARC_EaselUI`",
       "description": "A canvas for captures, drawing and text",
       "historical_status": "planned",
-      "status": "missing",
+      "status": "implemented",
       "acceptance": "Create and reopen an Easel with captures, drawing and text; edit its objects and export the result.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "No complete user-facing workflow is implemented in current source."
+        "No complete user-facing workflow is implemented in current source.",
+        "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。"
       ]
     },
     {
@@ -8385,7 +8397,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P34）仍有差异或无参照：P34-b: 未比较（无参照；Brk 的媒体列表样式按 P32-e 归档列表的两行样式对齐即可） | P34-c: 未比较（无参照）"
+        "Arc 对照（run-20261103 P34）仍有差异或无参照：P34-b: 未比较（无参照；Brk 的媒体列表样式按 P32-e 归档列表的两行样式对齐即可） | P34-c: 未比较（无参照）",
+        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：媒体页只列 Brk 自己的截图，两行样式按归档列表；不读系统相册。Arc 有内容的媒体页仍无参照（要授权读电脑截图）。"
       ],
       "implementation": [
         "Sources/BrkApp/CaptureFiles.swift",
@@ -9116,7 +9129,8 @@
       ],
       "remaining": [
         "Complete actual external events with edited/reordered rules, invalid destinations and multiple physically activated windows.",
-        "Arc 对照（run-20261103 Q06）仍有差异或无参照：Q06-a: 要修（设置组：改成盖在 Links 窗口上的表单，按 Arc 的标题、New Route、×、路由行两段式和底部 Default 下拉）"
+        "Arc 对照（run-20261103 Q06）仍有差异或无参照：Q06-a: 要修（设置组：改成盖在 Links 窗口上的表单，按 Arc 的标题、New Route、×、路由行两段式和底部 Default 下拉）",
+        "R3-2（2026-11-04，合并 05c81d7b）：Air Traffic Control 改成盖在 Links 窗口上的表单（Q06-a 3.1%），路由多了 Contains / Matches 两种匹配，Default 下拉和 Links from other apps open in Little Arc 是同一个设置（原来选 Most Recent Space 不生效的 bug 已修；两者互改是对 Arc 行为的推断）；表单按钮的点击区域原来压在文字下面，已放到最上层。原生场景 SettingsRoutes 通过。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -9192,7 +9206,7 @@
       "arc_evidence": "row 3; anatomy-m 4.1 (nine panes)",
       "description": "Account, General, Max, Profiles, Shortcuts, Links, Advanced, App Icon",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Provide General, Max, Profiles, Shortcuts, Links, Advanced and App Icon panes in a native settings window; omit excluded Account features.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9232,7 +9246,8 @@
       ],
       "remaining": [
         "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features.",
-        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
+        "R3-2（2026-11-04，合并 05c81d7b）：Icon 页补上，各页开关接到了行为（见 A114–A117）。"
       ],
       "implementation": [
         "Sources/BrkApp/SettingsWindowController.swift",
@@ -9253,7 +9268,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Warn before quitting, auto update, previews, ad blocker, translation",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "General settings must actually warn before quit and control previews, ad blocking and translation; updater remains deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9284,7 +9299,8 @@
         }
       ],
       "remaining": [
-        "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers."
+        "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers.",
+        "R3-2（2026-11-04，合并 05c81d7b）：Warn before quitting 接到有序退出（Cmd+Q、菜单、Dock 退出先问，SIGTERM/控制口/注销不问；对话框挂在当前窗口上，不是独立对话框，Arc 的样子没拍到，待补拍）；Previews 原来就接好；拦截广告和跟踪器（默认开）、Block Cookie Banners（默认关）两个开关放在 Advanced 的 More Settings… 里（Arc 的 General 页截图里没有这两项）；翻译用现有的 Translate Pages 开关，补了开关关着时不读网页的测试。原生场景 SettingsQuit 通过。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -9306,7 +9322,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Search engine, document app, download location, archive after",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Profile settings control search, default document app, download location and archive threshold for that profile.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9337,7 +9353,8 @@
         }
       ],
       "remaining": [
-        "Add default document app behavior and native per-profile checks for each setting."
+        "Add default document app behavior and native per-profile checks for each setting.",
+        "R3-2（2026-11-04，合并 05c81d7b）：New documents 下拉能选七个网页文档应用（Google Docs/Sheets/Slides、Word、Notion、Figma、FigJam），每个 Profile 各存一份；选了之后命令栏输入 new doc 出现 New Google Doc 这类一行，回车新开该应用的新建文档页。除 Google Doc 外几个应用的命令栏文案是任务起的。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -9390,7 +9407,8 @@
         }
       ],
       "remaining": [
-        "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings."
+        "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings.",
+        "R3-2（2026-11-04）：录制、冲突提示、Remove Conflicting Shortcut 原来就有（单元测试）。未做：用真实按键操作录制框的原生测试；Go Back / Go Forward / Zoom Out 的第二个快捷键仍固定、编辑器不显示；Edit 菜单系统自带项不能改快捷键。"
       ],
       "implementation": [
         "Sources/BrkSettings/Panes/ShortcutsPane.swift",
@@ -9412,7 +9430,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Restore windows, sounds, haptics, toolbar URL, window dragging, auto PiP, theme CSS, Boosts, shared quotes, update channel",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Each Advanced switch must change the named runtime behavior; updates and update-channel selection may remain deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9450,7 +9468,8 @@
         }
       ],
       "remaining": [
-        "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers."
+        "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers.",
+        "R3-2（2026-11-04，合并 05c81d7b）：页面顶部拖动窗口（开着且工具栏隐藏时网页顶上 10 点高的透明窄条，高度是估的；原生场景 SettingsPageDrag）、Shared Quotes（选中文字再复制网址得到指向这段文字的链接；SettingsQuotes）、重排触感（侧栏拖动标签排序每换一个位置振一下）新做；恢复窗口、音效、工具栏完整网址、自动画中画、主题 CSS、Boosts 原来就有行为和开关测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -9473,7 +9492,7 @@
       "arc_evidence": "anatomy-m 4.2; `ARCClients_BaseAssets` (10 icons)",
       "description": "Pick one of the app icons",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "implemented",
       "acceptance": "Pick an available Brk app icon, apply it to the application and retain the choice without account or referral gates.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9499,7 +9518,8 @@
       ],
       "remaining": [
         "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker.",
-        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
+        "R3-2（2026-11-04，合并 05c81d7b）：App Icon 页能选 Brk 自己的几个图标，选了 Dock 和 About 马上换，重启记住（原生场景 SettingsIcon）。未做：Brk 没运行时访达和 Dock 里仍是原图标（要往签名包里写文件或做 Dock 插件）。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -9857,13 +9877,14 @@
       "arc_evidence": "rows 176 to 189",
       "description": "Shortcuts guide, release notes, help, restore data, export notes, task manager, troubleshooting",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Help entries open useful local documentation and working restore, diagnostics and troubleshooting tools instead of disabled placeholders.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "The menu and shortcut settings entry exist. Restore, tracing, task manager and most help actions remain disabled."
+        "The menu and shortcut settings entry exist. Restore, tracing, task manager and most help actions remain disabled.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：Help 菜单各项有了真实行为：Release Notes（构建时从 git 历史生成的页面）、Visit Help Center、Contact the Team（指向仓库的新建 issue 页，仓库私有，未登录 GitHub 时 404，目标待用户定）、Restore Data（启动时自动备份，可选备份恢复并重启）、Record/Stop/Cancel Trace（Chromium trace 存到数据目录 Traces/）、Open Task Manager（每秒刷新，可结束进程）、Copy Brk Info、Check for Updates…（说明没有更新渠道）。Note 相关三项隐藏（Arc 1.170 也没有）。只有单元测试的：End Process 按钮。"
       ]
     },
     {
@@ -10035,7 +10056,8 @@
         }
       ],
       "remaining": [
-        "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior."
+        "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：菜单栏可用行数 107→118、147→158，Help 和 Developer 子菜单补齐；Note 三项隐藏，New Easel 归 R3-3。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -10057,7 +10079,7 @@
       "arc_evidence": "anatomy-m 4.1 (Dock tile plugin plists)",
       "description": "Custom Dock icon behavior",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "partial",
       "acceptance": "Implement the intended custom Dock tile behavior for Brk and verify it across active and inactive application states.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10076,7 +10098,8 @@
         }
       ],
       "remaining": [
-        "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features."
+        "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：下载时 Dock 图标底部有进度条（截图验证），下载完成时 Dock 下载文件夹弹一下（只有单元测试），Dock 右键菜单有 New Window / New Incognito Window。未做：下载数角标代码里设了但这台机器不显示（要给 Brk 开通知权限，属系统权限，待用户定）；Arc 那个不运行时也显示自选图标的 Dock 插件（验证要把 Brk 固定到 Dock）。"
       ],
       "implementation": [
         "Sources/BrkApp/Lifecycle.swift",
@@ -10135,7 +10158,7 @@
       "arc_evidence": "anatomy-m 1.1 (4 classes, 10 commands)",
       "description": "Scripting windows, tabs and spaces",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "partial",
       "acceptance": "Script windows, tabs and spaces through a documented AppleScript dictionary with correct object identity and context.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10153,7 +10176,8 @@
         }
       ],
       "remaining": [
-        "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions."
+        "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：脚本字典照 Arc（窗口、标签、Space；make/count/close/select/go back/go forward/reload/stop/execute/focus），所有修改走普通命令，execute 只在 Developer 子菜单的开关打开时运行。验证是在 Brk 自己的进程里用 NSAppleScript 跑同一份字典（外部 osascript 会弹系统授权框，没动系统设置）；记录在 verify/completion/r3-5-menus/applescript/。要补外部 osascript 证据需用户在系统设置里允许一次。"
       ],
       "implementation": [
         "Sources/BrkApp/ExternalLinks.swift",

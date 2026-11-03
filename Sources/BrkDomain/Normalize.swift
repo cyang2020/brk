@@ -143,6 +143,8 @@ private func repairSessionTargets(_ state: inout AppState) {
             session.expandedSplit = nil
         }
         if let pending = session.pendingSpaceDeletion, state.doc.spaces[pending.id] == nil || state.doc.spaces.count <= 1 { session.pendingSpaceDeletion = nil }
+        if let pending = session.pendingEaselDeletion, state.doc.easels[pending.id] == nil { session.pendingEaselDeletion = nil }
+        if let editing = session.easelTitleEditing, state.doc.easels[editing] == nil { session.easelTitleEditing = nil }
         if let renaming = session.renaming, tree?[renaming] == nil { session.renaming = nil }
         switch session.overlay {
         case .commandBar(_, .navigate(let tab, _)), .commandBar(_, .fillPane(let tab)):

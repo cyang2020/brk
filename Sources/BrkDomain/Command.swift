@@ -46,6 +46,8 @@ public enum Command: Hashable, Sendable, Codable {
     /// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). F5.
     case library(LibraryCommand)
     case boost(BoostCommand)
+    /// Easels: the whiteboard rows and their boards (Easels.swift).
+    case easel(EaselCommand)
     /// Windows: new standard, incognito and Little Arc windows, closing, "Open in <space>". F3.
     case window(WindowCommand)
     /// Peek: a link previewed in a card over the content. F3.
@@ -62,10 +64,9 @@ public enum Command: Hashable, Sendable, Codable {
 /// Features behind the greyed-out menu rows. One case per feature, not per row, so a wave that ships a feature
 /// replaces every `.later(x)` in the table with real commands and deletes the case.
 public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
-    case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, toolbar
-    case sidebarKeyboardFocus, siteData, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
-    case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding, help, restoreData
-    case troubleshooting
+    case importer, blankWindow, boosts, notes, captures, savePage, print, toolbar
+    case sidebarKeyboardFocus, siteData, cast, spaceManager, aiCommandBar, joinMeeting
+    case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding
 }
 
 /// "What the user is looking at" or an explicit item.
@@ -132,6 +133,9 @@ public enum TabCommand: Hashable, Sendable, Codable {
     case reset(ItemRef)
     /// Cmd+Shift+K and Today's Clear: archive every Today item not on screen in any window.
     case clearToday
+    /// The command bar's New document row: a new tab in the current space at the profile's "New documents" app
+    /// (`ProfileSettings.documentApp`); nothing without one.
+    case newDocument
 }
 
 /// Browsing actions on a tab's page. Each resolves the target and becomes `Effect.page`; an unloaded target is a no-op.
@@ -150,6 +154,8 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case developer(DeveloperOperation)
     /// Cmd+Shift+C (plain), Opt+Shift+Cmd+C (Markdown), Ctrl+Shift+Cmd+C (quote: Arc rows 45 to 47).
     case copyURL(CopyURLFormat)
+    /// AppleScript's `set URL of tab`: the tab's page goes to `url` in place (an address the bar could open).
+    case navigate(ItemRef, URL)
 }
 
 public enum CopyURLFormat: String, Hashable, Sendable, Codable {
@@ -193,6 +199,8 @@ public enum SpaceCommand: Hashable, Sendable, Codable {
     case exportIntoFolder(SpaceID)
     case delete(SpaceID)
     case move(SpaceID, index: Int)
+    /// A Library Spaces card's New Folder or Live Folders row, for that card's space (P30-c).
+    case inSpace(SpaceID, SpaceCardAction)
     /// Dock icon click.
     case focus(SpaceID)
     /// Cmd+Opt+Right/Left, no wrap.
@@ -204,6 +212,12 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     /// Ctrl+Shift+=. A tab becomes a split of [tab, empty pane]; a split gains a pane (max Metrics.content.maxPanes).
     /// The command bar opens to fill the new pane.
     case addPane
+    /// Arc's split menu "Add Left Split" ("Add Top Split" when stacked): `addPane` with the empty pane before the
+    /// focused one (a shown tab becomes [empty pane, tab]).
+    case addPaneBefore
+    /// Arc's split menu "Move Left" / "Move Right" ("Move Up" / "Move Down" when stacked): the focused pane trades
+    /// places with its neighbour; at the end it is a no-op. Its width and focus go with it.
+    case movePane(Step)
     /// Command bar "Add Left/Right/Top/Bottom Split": `addPane` with the new pane on that side; the split takes
     /// that edge's orientation.
     case addPaneAt(SplitEdge)
@@ -261,6 +275,20 @@ public enum PopupMenuRequest: Hashable, Sendable, Codable {
     /// Product controls include confirmation and view preferences; `.space` retains the existing model-query contract.
     case spaceControls(SpaceID)
     case plusButton
+    /// The … of a card on the Library's Spaces page (and the card's right-click; P30-c): the space's menu as Arc shows
+    /// it there, its New Folder and Live Folders acting on the card's space and Delete Space asking first.
+    case spaceCard(SpaceID)
+}
+
+/// What a Library Spaces card's New Folder and Live Folders rows do to the card's space (`SpaceCommand.inSpace`).
+public enum SpaceCardAction: Hashable, Sendable, Codable {
+    /// "New Folder" at the top of the space's Pinned. The card shows it; the rename field is the sidebar's, which the
+    /// Library covers, so it keeps Arc's default name.
+    case newFolder
+    /// Live Folders > "New GitHub Live Folder…" and "Connect Calendar File…": a source request belongs to the space
+    /// the window shows (its folder lands in that space's Pinned), so the window shows the card's space first.
+    case connectGitHub
+    case connectCalendar
 }
 
 /// App and window chrome. Also the commands behind app shortcuts (Cmd+Q, Cmd+H, Cmd+M): while a page has focus
@@ -282,6 +310,33 @@ public enum AppCommand: Hashable, Sendable, Codable {
     case export(ExportSubject)
     /// Help > Troubleshooting > "Reveal {app} Data": the data directory in the Finder.
     case revealDataDirectory
+    /// The Help menu's other rows and Check for Updates (`HelpAction`).
+    case help(HelpAction)
+}
+
+/// Check for Updates… and the Help menu (Arc rows 7, 179 to 189). Most run in BrkApp (`AppEffect.help`); `open` is
+/// the page BrkApp resolved for one of them, opened as a new tab of the dispatching window.
+public enum HelpAction: Hashable, Sendable, Codable {
+    /// Brk has no update feed: an alert names the running build and says how a new one is made.
+    case checkForUpdates
+    /// The release notes bundled with this build (made from the build's git history).
+    case releaseNotes
+    /// Arc's help center (the command bar's Help Center row opens the same page).
+    case helpCenter
+    /// A new issue on Brk's repository, its body filled with Copy {app} Info's text.
+    case contactTeam
+    /// The Restore Data window: pick a saved copy of the state file, check it, restore and relaunch.
+    case restoreData
+    /// Record Trace: starts a Chromium trace; while one records, the row stops it and saves the file.
+    case trace
+    /// Cancel Trace: stops the recording and discards it.
+    case cancelTrace
+    /// Open Task Manager: Brk's window listing the browser's processes (CPU, memory, End Process).
+    case taskManager
+    /// Copy {app} Info: version, build, Chromium, macOS and the data directory, on the pasteboard.
+    case copyInfo
+    /// A page one of the rows above resolved: a new tab in the dispatching window.
+    case open(URL)
 }
 
 /// What "Share…" exports. Arc shares spaces, folders, tab sets and Easels by link.
@@ -330,6 +385,13 @@ public enum GeneralSetting: Hashable, Sendable, Codable {
     case dismissDefaultBrowserPrompt
     case webAppearance(WebAppearance)
     case appIcon(AppIconChoice)
+    /// View > Developer > "Allow JavaScript from Apple Events" (AppleScript's `execute`).
+    case javaScriptFromAppleEvents(Bool)
+    /// The menu row: flips the setting above.
+    case toggleJavaScriptFromAppleEvents
+    /// The app-wide ad blocker and cookie banners (`GeneralSettings.blockAds`, `hideCookieBanners`).
+    case blockAds(Bool)
+    case hideCookieBanners(Bool)
 }
 
 public enum ProfileSetting: Hashable, Sendable, Codable {
@@ -341,6 +403,8 @@ public enum ProfileSetting: Hashable, Sendable, Codable {
     /// Nil: the system Downloads folder.
     case downloadsDirectory(String?)
     case promptForDownloadLocation(Bool)
+    /// "New documents"; nil is "——".
+    case documentApp(DocumentApp?)
 }
 
 public enum LinkSetting: Hashable, Sendable, Codable {
@@ -470,6 +534,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 
 public enum SystemEvent: Sendable, Equatable {
     case capture(CaptureEvent)
+    case easel(EaselEvent)
     case find(FindUpdate)
     case sidebarData(SidebarDataEvent)
     case page(BrowserToken, PageEvent)
@@ -537,7 +602,12 @@ extension Command {
         switch self {
         case .capture(.begin), .library(.openHistory): false
         case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
-             .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
+             .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create),
+             .easel(.requestDelete), .easel(.confirmDelete), .easel(.rename): true
+        // A Spaces card's … menu and what its rows do (P30-c): the Library stays, so the card shows the result.
+        case .sidebar(.popupMenu(.spaceCard, _)), .space(.inSpace), .profile(.assign), .app(.export), .tabTools(.spaceIntoFolder): true
+        // The save panel of Share Space… answering (a destination, or Cancel) changes nothing the window shows.
+        case .sidebarData(.exportSelected), .sidebarData(.cancelFilePanel): true
         default: false
         }
     }

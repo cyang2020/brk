@@ -301,6 +301,9 @@ public enum Suggest {
             candidates.append((action.barTitle(appName: appName), action.barTriggers(appName: appName), listing.symbol,
                                bar.keys[action]?.glyphs, action.spec.command))
         }
+        if let app = bar.newDocument {
+            candidates.append((app.newDocumentTitle, ["New Document", "New Doc", "New " + app.title], "doc.badge.plus", nil, .tab(.newDocument)))
+        }
         for pane in SettingsPane.allCases {
             candidates.append((OverlayCopy.preferencesTitle(pane), OverlayCopy.preferencesTriggers(pane), "gearshape", nil, .settings(.openPane(pane))))
         }

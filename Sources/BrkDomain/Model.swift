@@ -83,6 +83,8 @@ struct Doc: Sendable, Equatable {
     /// Arc: `StorableKeyBindings.userOverrides`. `KeyBindings.resolve` combines them with the table. F4 owns the rules.
     var keyOverrides: [ActionID: KeyOverride]
     var tabPreferences = TabPreferences()
+    /// Every Easel's board, whether or not a row shows it (the Library's Easels page lists them all).
+    var easels: [EaselID: Easel] = [:]
 }
 
 /// Arc: `SpaceModel` + `CustomInfo`.
@@ -304,6 +306,10 @@ struct WindowSession: Sendable, Equatable {
     var peek: Bool
     var renaming: ItemID?
     var pendingSpaceDeletion: SpaceDeletionRequest? = nil
+    var pendingEaselDeletion: EaselDeletionRequest? = nil
+    /// The Easel this window just created: its title box shows selected until the board is first edited.
+    var easelTitleEditing: EaselID? = nil
+    var easelMessage: String? = nil
     var spaceExport: SpaceExportOperation? = nil
     var spaceExportMessage: String? = nil
     var dialog: SpaceDialog?

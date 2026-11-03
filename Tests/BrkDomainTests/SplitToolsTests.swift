@@ -150,14 +150,16 @@ final class SplitToolsTests: XCTestCase {
         }
     }
 
-    func testDropRefusesFavoritesSectionsProfilesStaleTargetsAndFullSplits() throws {
+    func testDropRefusesFavoritesProfilesStaleTargetsAndFullSplits() throws {
         let d = Driver()
         let original = d.paneIDs[0], source = d.open("https://fixture.example/source")
         d.user(.tab(.focus(original)))
-        d.user(.tab(.togglePin(.item(source))))
+        d.user(.item(.move(source, to: .into(parent: d.view.favorites.root, index: 0))))
         var before = d.state
+        XCTAssertNil(d.view.content.drop?.offers[source], "a Favorites tile offered a content drop")
         assertUnchanged(before, d.user(.split(.dropTab(offer(d, source, original), edge: .right))))
-        d.user(.tab(.togglePin(.item(source))))
+        d.user(.item(.move(source, to: .into(parent: d.view.space.today.root, index: 0))))
+        d.user(.tab(.focus(original)))
         d.user(.split(.dropTab(offer(d, source, original), edge: .right)))
         let split = try XCTUnwrap(d.view.content.split)
         for n in 3...4 { d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/\(n)"))); d.commitRequested() }
@@ -168,6 +170,52 @@ final class SplitToolsTests: XCTestCase {
         assertUnchanged(d.state, d.user(.split(.dropTab(offer(d, extra, original), edge: .right))))
         XCTAssertEqual(d.paneIDs.count, 4)
         XCTAssertFalse(d.view.enabledActions.contains(.addSplitView))
+    }
+
+    /// Arc's P23-d: a tab in a pinned folder dragged beside the current Today tab is offered the drop, and the
+    /// release makes the split where the Today tab was; the tab leaves Pinned (and its folder) for it.
+    func testPinnedFolderTabJoinsATodaySplitWhereTheTargetIs() throws {
+        let d = Driver()
+        let original = d.paneIDs[0], source = d.open("https://fixture.example/pinned")
+        d.user(.item(.newFolder))
+        let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
+        d.user(.item(.move(source, to: .into(parent: folder, index: 0))))
+        d.user(.tab(.focus(original)))
+        let offered = try XCTUnwrap(d.view.content.drop?.offers[source], "a pinned tab was not offered the content drop")
+        d.user(.split(.dropTab(offered, edge: .right)))
+        XCTAssertEqual(d.paneIDs, [original, source])
+        let split = try XCTUnwrap(d.view.content.split)
+        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == split })
+        guard case .folder(let pinnedFolder)? = d.view.space.pinned.rows.first(where: { $0.id == folder }) else { return XCTFail("folder lost") }
+        XCTAssertTrue(pinnedFolder.children.isEmpty)
+        XCTAssertEqual(d.state.address(of: source, in: d.window, for: .savedDocument), url("https://fixture.example/pinned"))
+    }
+
+    /// Arc's split menu: Move Left / Right trade the focused pane with its neighbour (no-op at the ends), Add Left
+    /// Split puts an empty pane before the focused one and opens the command bar for it.
+    func testSplitMenuMovesThePaneAndAddsBeforeIt() throws {
+        let d = Driver()
+        d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/right"))); d.commitRequested()
+        let panes = d.paneIDs
+        XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, panes[1])
+        let unchanged = d.state
+        assertUnchanged(unchanged, d.user(.split(.movePane(.next))))
+        d.user(.split(.movePane(.previous)))
+        XCTAssertEqual(d.paneIDs, [panes[1], panes[0]])
+        XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, panes[1])
+        d.user(.split(.movePane(.next)))
+        XCTAssertEqual(d.paneIDs, panes)
+        d.user(.split(.addPaneBefore))
+        XCTAssertEqual(d.paneIDs.count, 3)
+        XCTAssertEqual(Array(d.paneIDs.prefix(1)), [panes[0]])
+        XCTAssertEqual(d.paneIDs[2], panes[1])
+        XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, d.paneIDs[1])
+        XCTAssertNotNil(d.bar)
+        // On a single tab, the empty pane goes first.
+        let single = Driver(), tab = single.paneIDs[0]
+        single.user(.split(.addPaneBefore))
+        XCTAssertEqual(single.paneIDs.count, 2)
+        XCTAssertEqual(single.paneIDs[1], tab)
     }
 
     func testPrivateSplitsStayInTheirOwnerAndNeverPersistOrArchive() throws {

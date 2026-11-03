@@ -22,6 +22,7 @@ public final class WindowRootView: NSView {
     public let content: ContentAreaView
     public let library: LibraryView
     public let history: HistoryPageView
+    public let easel: EaselBoardView
     public let peek: PeekCardView
     public let findBar: FindBarView
     public let commandBar: CommandBarView
@@ -59,18 +60,21 @@ public final class WindowRootView: NSView {
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
         history = HistoryPageView(dispatch: dispatch)
+        easel = EaselBoardView(dispatch: dispatch)
         peek = PeekCardView(dispatch: dispatch)
         findBar = FindBarView(dispatch: dispatch)
         commandBar = CommandBarView(dispatch: dispatch)
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, history, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
+        // Both span the window from its top left, so the Library's coordinates are the dialog host's.
+        spaceDialog.cardHeader = { [weak library] space in library?.spaceCardHeader(space) }
         spaceDialog.onDraft = { [weak self] draft in
             guard let self else { return }
             self.draft = draft
@@ -94,6 +98,7 @@ public final class WindowRootView: NSView {
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
         case .spaceDialog: spaceDialog.focusForm()
+        case .easel: easel.focusBoard()
         case .profileDialog: ProfileDialogHost.focus(over: spaceDialog)
         case .sidebar: sidebar.focusList()
         case .page, .none: false
@@ -123,7 +128,7 @@ public final class WindowRootView: NSView {
         }
         renderChrome(snapshot, frames: frames)
         let palette = Palette(snapshot.theme)
-        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil
+        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil && snapshot.pendingEaselDeletion == nil
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         // Arc's Create a Space flow shows no page: the content area is a blank card over the draft's theme.
         content.isHidden = snapshot.dialog == .newSpace
@@ -131,6 +136,11 @@ public final class WindowRootView: NSView {
         let historyPage: PageID? = if case .history(let page)? = historyCard?.content { page } else { nil }
         history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
         history.layer?.cornerRadius = historyCard?.cornerRadius ?? 0
+        // One board at a time: the focused card's Easel, else the first card showing one.
+        let easelCards = frames.cards.filter { if case .easel = $0.content { true } else { false } }
+        let easelCard = easelCards.first { card in snapshot.content.panes.indices.contains(card.pane) && snapshot.content.panes[card.pane].focused } ?? easelCards.first
+        let shownEasel = easelCard.flatMap { card in snapshot.easels.first { if case .easel(let page, _) = card.content { $0.page == page } else { false } } }
+        easel.render(shownEasel, in: easelCard?.rect, cornerRadius: easelCard?.cornerRadius ?? 0)
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
         loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,
@@ -149,7 +159,7 @@ public final class WindowRootView: NSView {
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
-        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, frames: frames, palette: palette)
+        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, easelDeletion: snapshot.pendingEaselDeletion, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette,
                                  spaceNames: Dictionary(snapshot.dock.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }))
         tabTools.frame = bounds
@@ -344,10 +354,50 @@ final class PeekRoundButton: NSView {
 }
 
 /// Shades of the space's primary color, same hue, for chrome Arc tints with the theme: the split view's focus ring
-/// (#725137 under the #F2EAE4 capture theme) and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
+/// and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
 enum ThemeAccent {
+    /// Light: the primary's hue and saturation (HSL) at the lightness whose relative luminance is Arc's 0.097. That is
+    /// the ring in both Arc captures, which is also Arc's folder outline there: #725137 under the #F2EAE4 theme
+    /// (P23-a) and #006362 under the cyan one (P23-c, the round-2 Arc space). Dark keeps a light shade.
     static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
-        shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: theme.scheme == .dark ? 0.8 : 0.45)
+        guard theme.scheme == .light else { return shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: 0.8) }
+        return luminanceMatched(theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1), luminance: ThemeAccentDraw.ringLuminance.value)
+    }
+
+    /// `color`'s hue and HSL saturation at the HSL lightness (at most 0.5) that gives `luminance`.
+    static func luminanceMatched(_ color: RGBA, luminance target: Double) -> NSColor {
+        let hi = max(color.red, color.green, color.blue), lo = min(color.red, color.green, color.blue), l = (hi + lo) / 2
+        var hue = 0.0, saturation = 0.0
+        if hi > lo {
+            let d = hi - lo
+            saturation = l > 0.5 ? d / (2 - hi - lo) : d / (hi + lo)
+            if hi == color.red { hue = (color.green - color.blue) / d + (color.green < color.blue ? 6 : 0) }
+            else if hi == color.green { hue = (color.blue - color.red) / d + 2 }
+            else { hue = (color.red - color.green) / d + 4 }
+            hue /= 6
+        }
+        func rgb(_ l: Double) -> (Double, Double, Double) {
+            let q = l < 0.5 ? l * (1 + saturation) : l + saturation - l * saturation, p = 2 * l - q
+            func channel(_ t: Double) -> Double {
+                let t = t < 0 ? t + 1 : t > 1 ? t - 1 : t
+                if t < 1.0 / 6 { return p + (q - p) * 6 * t }
+                if t < 0.5 { return q }
+                if t < 2.0 / 3 { return p + (q - p) * (2.0 / 3 - t) * 6 }
+                return p
+            }
+            return (channel(hue + 1.0 / 3), channel(hue), channel(hue - 1.0 / 3))
+        }
+        func luminance(_ c: (Double, Double, Double)) -> Double {
+            func linear(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            return 0.2126 * linear(c.0) + 0.7152 * linear(c.1) + 0.0722 * linear(c.2)
+        }
+        var low = 0.0, high = 0.5
+        for _ in 0..<30 {
+            let mid = (low + high) / 2
+            if luminance(rgb(mid)) < target { low = mid } else { high = mid }
+        }
+        let c = rgb((low + high) / 2)
+        return NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: 1)
     }
 
     static func peekGlyph(_ theme: ResolvedTheme) -> NSColor {
@@ -363,6 +413,12 @@ enum ThemeAccent {
     }
 }
 
+let ThemeAccentDraw = ThemeAccentMetrics()
+
+struct ThemeAccentMetrics: MetricGroup {
+    let ringLuminance = Metric(0.097, .anatomy("verify/visual-pairs/run-20261103/P23: the split focus ring #725137 (P23-a) and #006362 (P23-c) both have relative luminance 0.096 to 0.098"))
+}
+
 /// Arc's Peek and Little Arc copy shared by the card and the Little Arc panel (visual-and-copy.md "Little Arc").
 public enum PeekCopy {
     /// `bin:0x103a05b60`, Arc's Little Arc hint; the Peek strip reads the same, since both close with ⌘W and move with "Open in".
@@ -370,4 +426,10 @@ public enum PeekCopy {
     public static let openInTab = "Open as Tab"
     public static let openInSplit = "Open in Split View"
     public static let close = "Close"
+}
+
+/// Share's PNG of an Easel's board, for BrkApp (which reaches the Library's drawing only through this module).
+@MainActor
+public enum EaselExport {
+    public static func png(_ card: EaselCard) -> Data? { EaselDrawing.png(card) }
 }

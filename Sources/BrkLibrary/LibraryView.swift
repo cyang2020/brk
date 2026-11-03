@@ -12,9 +12,9 @@ import BrkUIKit
 ///
 /// Media's selected capture shows as a preview over the content area (`MediaPreviewView`).
 ///
-/// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`, `requestClearConfirmation`. The
-/// view spans the window; its panel (identified `library`, frame `frames.library.frame`), the panel's views and the
-/// preview take clicks, anywhere else the views below do.
+/// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`, `requestClearConfirmation`,
+/// `spaceCardHeader`. The view spans the window; its panel (identified `library`, frame `frames.library.frame`), the
+/// panel's views and the preview take clicks, anywhere else the views below do.
 @MainActor
 public final class LibraryView: NSView {
     private let dispatch: Dispatch
@@ -86,6 +86,13 @@ public final class LibraryView: NSView {
 
     public override var isFlipped: Bool { true }
 
+    /// The header of `space`'s card on the Spaces page, in this view's coordinates (the window's content view's): where
+    /// the icon popover of the card menu's Change Space Icon… points. Nil unless that card is on screen.
+    public func spaceCardHeader(_ space: SpaceID) -> CGRect? {
+        guard !isHidden else { return nil }
+        return spaces.cardHeader(space).map { convert($0, from: spaces) }
+    }
+
     /// The panel and the preview take clicks; the rest of the window is the views below.
     public override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
@@ -146,7 +153,7 @@ public final class LibraryView: NSView {
         } else {
             preview.hide()
         }
-        if library.page == .easelsAndNotes { easels.show(in: page, scheme: scheme) } else { easels.hide() }
+        if library.page == .easelsAndNotes { easels.show(library, in: page, scheme: scheme) } else { easels.hide() }
     }
 
     public func requestClearConfirmation() {

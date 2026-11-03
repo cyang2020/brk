@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<!--
+  Brk's AppleScript dictionary: Arc's (Arc.sdef, anatomy-m 1.1) with Brk's classes (BrkApp/Scripting/ScriptObjects.swift).
+  Same classes, codes and commands, so a script written for Arc runs against Brk with the application name changed.
+  `execute` runs only while View > Developer > Allow JavaScript from Apple Events is on.
+-->
+<dictionary title="Brk Terminology">
+  <suite name="Standard Suite" code="core" description="Common classes and commands for all applications.">
+
+    <command name="make" code="corecrel" description="Make a new object.">
+      <cocoa class="NSCreateCommand"/>
+      <access-group identifier="*"/>
+      <parameter name="new" code="kocl" description="The class of the new object." type="type">
+        <cocoa key="ObjectClass"/>
+      </parameter>
+      <parameter name="at" code="insh" type="location specifier" optional="yes" description="The location at which to insert the object.">
+        <cocoa key="Location"/>
+      </parameter>
+      <parameter name="with properties" code="prdt" type="record" optional="yes" description="The initial values for properties of the object.">
+        <cocoa key="KeyDictionary"/>
+      </parameter>
+      <result description="to the new object" type="specifier"/>
+    </command>
+
+    <command name="count" code="corecnte" description="Return the number of elements of a particular class within an object.">
+      <cocoa class="NSCountCommand"/>
+      <access-group identifier="*"/>
+      <direct-parameter description="the object whose elements are to be counted" type="specifier"/>
+      <parameter name="each" code="kocl" description="The class of objects to be counted." type="type" optional="yes">
+        <cocoa key="ObjectClass"/>
+      </parameter>
+      <result description="the number of elements" type="integer"/>
+    </command>
+
+    <class name="application" code="capp" description="The application's top-level scripting object.">
+      <cocoa class="NSApplication"/>
+      <element description="The windows contained within this application, ordered front to back." type="window">
+        <cocoa key="scriptWindows"/>
+      </element>
+      <property name="name" code="pnam" description="The name of the application." type="text" access="r"/>
+      <property name="frontmost" code="pisf" description="Is this the frontmost (active) application?" type="boolean" access="r">
+        <cocoa key="isActive"/>
+      </property>
+      <property name="version" code="vers" description="The version of the application." type="text" access="r"/>
+      <responds-to command="quit">
+        <cocoa method="handleQuitScriptCommand:"/>
+      </responds-to>
+      <element description="A write-only collection that makes new Little windows: make new tab with properties {URL: …}." type="tab" access="w">
+        <cocoa key="scriptTabs"/>
+      </element>
+    </class>
+
+    <command name="close" code="coreclos" description="Close a window or a tab.">
+      <direct-parameter description="The object to close." type="specifier"/>
+    </command>
+
+    <class name="window" code="WiND" description="A browser window." plural="windows">
+      <cocoa class="BrkScriptWindow"/>
+      <element description="The tabs of the space the window shows (Favorites, Pinned, Today), or a Little or incognito window's own tabs." type="tab" access="rw">
+        <cocoa key="scriptTabs"/>
+      </element>
+      <element description="The spaces the window can show." type="space">
+        <cocoa key="scriptSpaces"/>
+      </element>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the window.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The title of the tab the window shows.">
+        <cocoa key="title"/>
+      </property>
+      <property name="index" code="pidx" type="integer" description="The index of the window, ordered front to back; set it to 1 to bring the window to the front.">
+        <cocoa key="orderedIndex"/>
+      </property>
+      <property name="closeable" code="hclb" description="Whether the window has a close box." type="boolean" access="r">
+        <cocoa key="hasCloseBox"/>
+      </property>
+      <property name="minimizable" code="ismn" description="Whether the window can be minimized." type="boolean" access="r">
+        <cocoa key="isMiniaturizable"/>
+      </property>
+      <property name="minimized" code="pmnd" description="Whether the window is currently minimized." type="boolean">
+        <cocoa key="isMiniaturized"/>
+      </property>
+      <property name="resizable" code="prsz" description="Whether the window can be resized." type="boolean" access="r">
+        <cocoa key="isResizable"/>
+      </property>
+      <property name="visible" code="pvis" description="Whether the window is currently visible." type="boolean">
+        <cocoa key="isVisible"/>
+      </property>
+      <property name="zoomable" code="iszm" description="Whether the window can be zoomed." type="boolean" access="r">
+        <cocoa key="isZoomable"/>
+      </property>
+      <property name="zoomed" code="pzum" description="Whether the window is currently zoomed." type="boolean">
+        <cocoa key="isZoomed"/>
+      </property>
+      <property name="active tab" code="acTa" description="The tab the window shows." type="tab" access="r">
+        <cocoa key="activeTab"/>
+      </property>
+      <property name="active space" code="acSp" description="The space the window shows (none for a Little or incognito window)." type="space" access="r">
+        <cocoa key="activeSpace"/>
+      </property>
+      <property name="incognito" code="inco" description="Whether the window is an incognito window; settable only when making the window." type="boolean">
+        <cocoa key="isIncognito"/>
+      </property>
+      <property name="mode" code="mode" description="'normal' or 'incognito'; settable only when making the window." type="text">
+        <cocoa key="mode"/>
+      </property>
+      <responds-to command="close">
+        <cocoa method="handleClose:"/>
+      </responds-to>
+    </class>
+
+    <command name="select" code="CrSelect" description="Select the tab.">
+      <direct-parameter description="The tab to select." type="specifier"/>
+    </command>
+
+    <command name="go back" code="CrSuBack" description="Go back (if possible).">
+      <direct-parameter description="The tab to go back in." type="specifier"/>
+    </command>
+
+    <command name="go forward" code="CrSuFwd " description="Go forward (if possible).">
+      <direct-parameter description="The tab to go forward in." type="specifier"/>
+    </command>
+
+    <command name="reload" code="CrSuRlod" description="Reload a tab.">
+      <direct-parameter description="The tab to reload." type="specifier"/>
+    </command>
+
+    <command name="stop" code="CrSustop" description="Stop the tab from loading.">
+      <direct-parameter description="The tab to stop." type="specifier"/>
+    </command>
+
+    <command name="execute" code="CrSuExJa" description="Run JavaScript in the tab's page and return its value as text. Needs View &gt; Developer &gt; Allow JavaScript from Apple Events.">
+      <direct-parameter description="The tab to run the JavaScript in." type="specifier"/>
+      <parameter name="javascript" code="JvSc" description="The JavaScript code to run." type="text">
+        <cocoa key="javascript"/>
+      </parameter>
+      <result type="text"/>
+    </command>
+
+    <class name="tab" code="tAbB" description="A tab." plural="tabs">
+      <cocoa class="BrkScriptTab"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the tab.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="title" code="pnam" type="text" access="r" description="The title of the tab.">
+        <cocoa key="title"/>
+      </property>
+      <property name="URL" code="URL " description="The address of the tab; setting it loads the address in the tab." type="text" access="rw">
+        <cocoa key="URL"/>
+      </property>
+      <property name="loading" code="ldng" description="Whether the tab is loading." type="boolean" access="r">
+        <cocoa key="loading"/>
+      </property>
+      <property name="location" code="loca" description="Where the tab is in the sidebar: 'topApp' (Favorites), 'pinned' or 'unpinned' (Today)." type="text" access="r">
+        <cocoa key="location"/>
+      </property>
+      <responds-to command="select">
+        <cocoa method="handleSelect:"/>
+      </responds-to>
+      <responds-to command="go back">
+        <cocoa method="handleGoBack:"/>
+      </responds-to>
+      <responds-to command="go forward">
+        <cocoa method="handleGoForward:"/>
+      </responds-to>
+      <responds-to command="reload">
+        <cocoa method="handleReload:"/>
+      </responds-to>
+      <responds-to command="stop">
+        <cocoa method="handleStop:"/>
+      </responds-to>
+      <responds-to command="execute">
+        <cocoa method="handleExecute:"/>
+      </responds-to>
+      <responds-to command="close">
+        <cocoa method="handleClose:"/>
+      </responds-to>
+    </class>
+
+    <command name="focus" code="SpaFocus" description="Show the space in its window.">
+      <direct-parameter description="The space to show." type="specifier"/>
+    </command>
+
+    <class name="space" code="sPaC" description="A space." plural="spaces">
+      <cocoa class="BrkScriptSpace"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the space.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="title" code="pnam" type="text" access="r" description="The title of the space.">
+        <cocoa key="title"/>
+      </property>
+      <element description="The space's tabs (its Favorites, Pinned and Today)." type="tab" access="rw">
+        <cocoa key="scriptTabs"/>
+      </element>
+      <responds-to command="focus">
+        <cocoa method="handleFocus:"/>
+      </responds-to>
+    </class>
+  </suite>
+</dictionary>

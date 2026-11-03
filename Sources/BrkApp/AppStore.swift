@@ -27,7 +27,8 @@ import os
 @MainActor
 public final class AppStore {
     public private(set) var snapshot: AppSnapshot
-    private var state: AppState
+    /// Read by the AppleScript objects (BrkApp/Scripting) through `AppState.script…`; only `apply` changes it.
+    private(set) var state: AppState
     private let clock: any Clock
     let engine: any WebEngine
     private let stateFile: StateFile
@@ -37,8 +38,11 @@ public final class AppStore {
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
-    private var shownIcon: AppIconChoice?
-    private static let dockIconSide: CGFloat = 512
+    /// The Icon pane's drawing last set as `NSApp.applicationIconImage` (the Dock icon); nil before the first render.
+    private(set) var shownIcon: AppIconChoice?
+    /// The "Warn before quitting" dialog is open.
+    private var askingQuit = false
+    static let dockIconSide: CGFloat = 512
     private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
         guard let self, let window = self.windowController(nil)?.id else { return }
         self.dispatch(.user(window, command))
@@ -69,9 +73,14 @@ public final class AppStore {
     let sounds = SoundEffects()
     let captureSheets = CaptureSheets()
     let captureFiles: CaptureFiles
+    let easelFiles: EaselFiles
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
+    /// Check for Updates… and the Help menu (`AppEffect.help`).
+    private(set) lazy var help = HelpActions(engine: engine, now: { [clock] in clock.now() }, send: { [weak self] window, command in
+        self?.dispatch(.user(window, command))
+    }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window })
     let siteDialogs = SiteDialogs()
     lazy var sitePanels: SitePanels = {
         let panels = SitePanels()
@@ -86,6 +95,7 @@ public final class AppStore {
         self.stateFile = stateFile
         self.boostFiles = BoostFiles(root: stateFile.url.deletingLastPathComponent())
         captureFiles = CaptureFiles(root: stateFile.url.deletingLastPathComponent())
+        easelFiles = EaselFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
         for row in snapshot.settings.profiles {
             let id = row.profile.id
@@ -195,6 +205,9 @@ public final class AppStore {
     func prepareForTermination() {
         guard !isTerminating else { return }
         isTerminating = true
+        settingsWindow?.endSheets()
+        // An open Warn before quitting sheet (a quit that did not ask, SIGTERM or the control socket, overtook it).
+        for controller in windows.values { if let sheet = controller.window.attachedSheet, sheet.className.contains("Alert") { controller.window.endSheet(sheet) } }
         aiServices.cancelAll()
         cancelExports()
         for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
@@ -203,6 +216,27 @@ public final class AppStore {
     }
 
     func stopAI() async { await aiServices.stop() }
+
+    /// "Warn before quitting" (`QuitWarning`): `answer` gets whether to go on quitting. Asks only while the setting is
+    /// on, as a sheet on `window`; "Quit, and don’t ask again" turns it off through the reducer, so the answer is saved
+    /// before the ordered quit flushes.
+    func confirmQuit(on window: NSWindow?, answer: @escaping @MainActor (Bool) -> Void) {
+        QuitWarning.confirm(snapshot.settings.general, on: window, dispatch: { [weak self] command in
+            guard let self, let window = self.windowController(nil)?.id else { return }
+            self.dispatch(.user(window, command))
+        }, ask: Self.askQuit, answer: answer)
+    }
+
+    /// The quit dialog; tests answer it without presenting it.
+    static var askQuit: @MainActor (NSAlert, NSWindow?, @escaping @MainActor (QuitWarning.Answer) -> Void) -> Void = QuitWarning.present
+
+    private func quitNow() {
+        // AppKit can defer termination while a save sheet remains attached.
+        sidebarPanels.cancelForQuit()
+        exports.cancelAll()
+        spacePanels.cancelAll()
+        Quit.request()
+    }
 
     func cancelExports() { exports.cancelAll() }
 
@@ -401,6 +435,7 @@ public final class AppStore {
         for effect in effects {
             switch effect {
             case .capture(let effect): runCapture(effect)
+            case .easel(let effect): runEasel(effect)
             case .find(let request): engine.find(request)
             case .boost(let request): runBoost(request)
             case .siteRequest(let request):
@@ -418,6 +453,17 @@ public final class AppStore {
             case .copyToPasteboard(let text):
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
+            case .copySharedQuote(let page, let url, let title, let format):
+                // The plain copy at once (nothing highlighted is the common case), then the link to the highlight
+                // once the page answers, unless something else was copied in between.
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(SharedQuote.plain(url: url, title: title, format: format), forType: .string)
+                let copied = NSPasteboard.general.changeCount
+                Task { @MainActor [engine] in
+                    guard let selection = await engine.selectedText(page), NSPasteboard.general.changeCount == copied else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(SharedQuote.text(url: url, title: title, selection: selection, format: format), forType: .string)
+                }
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }
                 switch effect {
@@ -431,11 +477,18 @@ public final class AppStore {
             case .app(let effect):
                 switch effect {
                 case .quit:
-                    // AppKit can defer termination while a save sheet remains attached.
-                    sidebarPanels.cancelForQuit()
-                    exports.cancelAll()
-                    spacePanels.cancelAll()
-                    Quit.request()
+                    // "Warn before quitting": the question comes first, before anything is torn down, as a sheet on
+                    // this window (no nested run loop: the key press that asked returns, and the ordered quit that
+                    // follows does not run inside a modal session). While it is open another quit is ignored,
+                    // except an already confirmed one (the control socket's), which quits.
+                    if askingQuit { if Quit.confirmed { quitNow() }; break }
+                    if Quit.confirmed || !snapshot.settings.general.warnBeforeQuitting { quitNow(); break }
+                    askingQuit = true
+                    confirmQuit(on: NSApp.keyWindow ?? windowController(nil)?.window) { [weak self] go in
+                        guard let self else { return }
+                        self.askingQuit = false
+                        if go || Quit.confirmed { self.quitNow() }
+                    }
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
@@ -450,6 +503,7 @@ public final class AppStore {
                         alert.beginSheetModal(for: owner)
                     }
                 case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
+                case .help(let action, let owner): help.run(action, owner: owner)
                 }
             case .popupMenu(let id, let model, let at):
                 guard let controller = windows[id] else { continue }
@@ -742,6 +796,7 @@ extension AppStore {
             if let selected { read(selected) }
             else if let owner = windows[window]?.window, owner.attachedSheet == nil {
                 let panel = NSOpenPanel(); panel.title = "Install Boost from File"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+                SidebarPanelControl.configureTestDirectory(panel)
                 panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { read(url) } }
             }
         case .exportFile(let window, let boost, let selected):
@@ -756,6 +811,7 @@ extension AppStore {
             if let selected { write(selected) }
             else if let owner = windows[window]?.window, owner.attachedSheet == nil {
                 let panel = NSSavePanel(); panel.title = "Export Boost"; panel.nameFieldStringValue = "Boost.brkboost.json"
+                SidebarPanelControl.configureTestDirectory(panel)
                 panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { write(url) } }
             }
         }

@@ -66,6 +66,9 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // URL pill.
     /// The label's frame; its cell draws the text 2 further in, at x 21 in the sidebar.
+    let shareTextLeading = Metric(32.0, .anatomy("Q09 a: an Easel's \"Share\" starts at x 42 in the pill at x 8 (the label's own 2 pt inset first)"))
+    let shareLockGlyph = Metric([10.0, 13.0, 13.0], .anatomy("Q09 a: the pill's lock is 10 x 13 at x 21 (13 into the pill)"))
+    let shareEdge = Metric(1.0, .anatomy("Q09 a: an Easel's pill has a 1 pt #CFCFCF edge"))
     let pillTextLeading = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: pill at x 8, host text at x 21"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
@@ -101,6 +104,17 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragPreviewAlpha = Metric(0.9, .guess("opacity of the dragged row image"))
     let dragSourceAlpha = Metric(0.3, .guess("opacity of the row left behind while it is dragged"))
     let dragPreviewShadow = Metric(8.0, .guess("blur of the shadow under the dragged row or tile"))
+    // The card a tab drag shows over the content (P23-d-arc.png: card x 989.5...1158.5, y 273.5...523.5 in the window).
+    let dragCardWidth = Metric(169.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 338 px wide at 2x"))
+    let dragCardHeight = Metric(250.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 500 px tall at 2x"))
+    let dragCardRadius = Metric(18.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the card's edge is 13 pt in 1 pt below its top and meets the side 17 pt down"))
+    let dragCardIcon = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the empty favicon is a 14 pt square, the row's 16 pt slot"))
+    let dragCardIconCenter = Metric(105.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the icon is centred 105 below the card top, on its vertical axis"))
+    let dragCardTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: \"Interface comparison\" is 137 pt wide in bold, SF 13 bold"))
+    let dragCardTitleTop = Metric(137.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the title's capitals span 140.5...150 below the card top"))
+    let dragCardInset = Metric(8.0, .guess("the title's side margin inside the card: Arc keeps the 137 pt \"Interface comparison\" on one line in the 169 pt card"))
+    let dragCardShadow = Metric(10.0, .guess("blur of the drag card's shadow: it fades over about 16 pt at the sides, 20 below (P23-d-arc.png)"))
+    let dragCardShadowOpacity = Metric(0.16, .guess("the drag card's shadow darkens #FCFCFC to #E4E5E5 at its side (P23-d-arc.png)"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
     let selectedShadowRadius = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's current tab card has a 1.5 pt shadow line under its lower edge, darkest at the edge"))
     let selectedShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the shadow line sits under the card, not around it"))

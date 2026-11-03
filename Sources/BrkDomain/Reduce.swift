@@ -141,6 +141,7 @@ struct Work {
         case .settings(let c): settings(c, in: window)
         case .library(let c): library(c, in: window)
         case .boost(let c): boosts(c, in: window)
+        case .easel(let c): easels(c, in: window)
         case .window(let c): windows(c, in: window)
         case .peek(let c): peek(c, in: window)
         case .site(let c): sites(c, in: window)
@@ -159,6 +160,10 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .easel(let event):
+            switch event {
+            case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
+            }
         case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .globalShortcut: begin(window: nil)
         }
         switch event {
@@ -167,6 +172,7 @@ struct Work {
         case .page(let page, let e): pageEvent(e, for: page)
         case .siteResult(let id, let outcome): siteResult(id, outcome)
         case .capture(let event): captureEvent(event)
+        case .easel(let event): easelEvent(event)
         case .exportFinished(let window, let outcome):
             state.session.windows[window]?.exportOutcome = outcome
             state.session.sidebarDataStatus = outcome.message

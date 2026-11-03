@@ -9,6 +9,7 @@ import Foundation
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
     case capture(CaptureEffect)
+    case easel(EaselEffect)
     case sound(MediaSoundEvent)
     case find(FindRequest)
     case boost(BoostEffect)
@@ -19,6 +20,9 @@ public enum Effect: Hashable, Sendable {
     case output(OutputRequest)
     case cancelOutput(OutputID)
     case copyToPasteboard(String)
+    /// Shared Quotes: read the page's highlighted text, then copy `SharedQuote.text` for it (the plain copy when
+    /// nothing is highlighted).
+    case copySharedQuote(PageID, url: URL, title: String, format: CopyURLFormat)
     case window(WindowID, WindowEffect)
     case app(AppEffect)
     /// A native popup menu built from state; each entry carries the command it dispatches when chosen.
@@ -113,6 +117,9 @@ public enum AppEffect: Hashable, Sendable {
     case registerAsDefaultBrowser
     /// The data directory in the Finder.
     case revealDataDirectory
+    /// A Help menu row BrkApp runs (`HelpAction`; never `.open`, which the reducer handles): `owner` is the window it
+    /// came from, where a resolved page opens and an alert attaches.
+    case help(HelpAction, owner: WindowID)
 }
 
 public struct MenuModel: Hashable, Sendable {

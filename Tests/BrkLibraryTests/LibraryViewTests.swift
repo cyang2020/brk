@@ -123,9 +123,10 @@ final class LibraryViewTests: XCTestCase {
     }
 
     /// Media before the first capture: Arc's grey cards under "Your Media in the Library"; × puts the card away for
-    /// the session. With captures: a card per capture by day; a click previews it over the content card, whose ×
-    /// hides the preview; the card's menu holds the four actions
-    func testMediaShowsArcsIntroductionThenCaptureCardsAndAPreview() throws {
+    /// the session. With captures: Brk's own captures by day in the archive list's two-line rows (P32-e: thumbnail
+    /// tile, title, size and host); a click previews it over the content card, whose × hides the preview, and the
+    /// previewed row keeps a grey fill; the row's menu holds the four actions
+    func testMediaShowsArcsIntroductionThenCaptureRowsAndAPreview() throws {
         MediaPageView.introDismissed = false
         let view = makeView()
         _ = render(view, library(.media))
@@ -136,18 +137,35 @@ final class LibraryViewTests: XCTestCase {
         let request = CaptureRequest(id: "c1", document: token, context: .profile(.default), mode: .area, title: "Visual fixture",
                                      url: URL(string: "http://127.0.0.1:9/a")!, createdAt: now)
         let record = CaptureRecord(request: request, profile: .default, image: CaptureImage(png: Data(), width: 400, height: 300, scale: 2))
+        let png = FileManager.default.temporaryDirectory.appendingPathComponent("library-media-\(UUID().uuidString).png")
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 3, bitsPerSample: 8, samplesPerPixel: 4,
+                                                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: png)
+        defer { try? FileManager.default.removeItem(at: png) }
         var snapshot = library(.media, openID: 2)
         snapshot.captures = [record]
+        snapshot.captureFiles = ["c1": png]
         let f = render(view, snapshot)
         XCTAssertFalse(view.media.introShown)
-        let card = try XCTUnwrap(view.media.cards.first)
-        XCTAssertEqual(card.accessibilityIdentifier(), "tab-tools-capture-card-c1")
-        XCTAssertEqual(card.actions().items.map(\.title), ["Open", "Export…", "Remove", "Insert in Easel"])
+        let row = try XCTUnwrap(view.media.rows.first)
+        XCTAssertEqual(row.accessibilityIdentifier(), "tab-tools-capture-card-c1")
+        XCTAssertEqual(row.texts, ["Visual fixture", "400 × 300 · 127.0.0.1"])
+        XCTAssertTrue(row.showsThumbnail, "the capture's own picture in the icon tile")
+        view.media.layoutSubtreeIfNeeded()
+        XCTAssertEqual(row.frame.minX, 10)
+        XCTAssertEqual(row.frame.height, 56, "the archive list's row pitch")
+        XCTAssertEqual(row.contextMenu()?.items.map(\.title), ["Open", "Export…", "Remove", "Insert in Easel"])
+        XCTAssertEqual(row.accessoryTooltips, ["More"])
+        XCTAssertFalse(row.selected)
         XCTAssertTrue(view.preview.isHidden, "nothing previews before a pick")
-        card.click()
+        row.click()
         XCTAssertEqual(sent.last, .capture(.preview("c1")))
+        let menu = try XCTUnwrap(row.contextMenu())
+        menu.performActionForItem(at: 2)
+        XCTAssertEqual(sent.last, .capture(.remove("c1")))
         snapshot.capturePreview = "c1"
         _ = render(view, snapshot)
+        XCTAssertEqual(view.media.rows.first?.selected, true)
         XCTAssertFalse(view.preview.isHidden)
         XCTAssertEqual(view.preview.frame, f.cards.first?.rect, "the preview covers the content card")
         XCTAssertEqual(view.preview.captionText, "Visual fixture · 400 × 300 · 127.0.0.1")
@@ -224,23 +242,77 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(view.downloads.filterMenu().items.filter { $0.state == .on }.map(\.title), ["In Progress"])
     }
 
-    /// a Space card's pencil and its … menu's Edit Space… open Arc's theme panel for that space (P32-d), not a form
-    func testASpaceCardsEditOpensTheThemePanel() throws {
-        let space = SpaceID("s2")
+    private func spacesPage(_ ids: [SpaceID]) -> SpacesPageView {
         let view = SpacesPageView(dispatch: { [unowned self] in self.sent.append($0) })
         var snapshot = library(.spaces)
-        snapshot.spaces = [SpaceManagerRow(id: space, title: "Work", icon: .none, profileName: "Default", theme: resolveTheme(.default), tabCount: 0, active: true)]
-        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 600, height: 700), scheme: .light)
-        let edit = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == ViewID.spaceToolsControl("manager-edit-s2").identifier } as? NSButton)
+        snapshot.spaces = ids.map {
+            SpaceManagerRow(id: $0, title: $0.rawValue, icon: .none, profileName: "Default", theme: resolveTheme(.default), tabCount: 0, active: $0 == ids[0])
+        }
+        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light)
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    private func control(_ name: String, in root: NSView) throws -> NSView {
+        try XCTUnwrap(root.descendants.first { $0.accessibilityIdentifier() == ViewID.spaceToolsControl(name).identifier }, name)
+    }
+
+    private func mouse(_ type: NSEvent.EventType, x: Double) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 100), modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    /// a Space card's pencil opens Arc's theme panel for that space (P32-d), not a form; its … and a right-click on
+    /// the card ask the reducer for the space's card menu (P30-c: Arc's four groups) instead of building one here
+    func testASpaceCardsPencilAndMenu() throws {
+        let space = SpaceID("s2")
+        let view = spacesPage([space])
+        let edit = try XCTUnwrap(try control("manager-edit-s2", in: view) as? NSButton)
         edit.performClick(nil)
         XCTAssertEqual(sent.last, .sidebar(.openDialog(.theme(.space(space)))))
         sent = []
-        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-                                                     context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-        let menu = try XCTUnwrap(edit.superview?.menu(for: event))
-        let index = try XCTUnwrap(menu.items.firstIndex { $0.title == "Edit Space…" })
-        menu.performActionForItem(at: index)
-        XCTAssertEqual(sent, [.sidebar(.openDialog(.theme(.space(space))))])
+        let more = try XCTUnwrap(try control("manager-more-s2", in: view) as? NSButton)
+        more.performClick(nil)
+        guard case .sidebar(.popupMenu(.spaceCard(space), _))? = sent.last else { return XCTFail("… sent \(sent)") }
+        let card = try XCTUnwrap(edit.superview)
+        XCTAssertNil(card.menu(for: try mouse(.rightMouseDown, x: 0)), "no menu of the view's own")
+        card.rightMouseDown(with: try mouse(.rightMouseDown, x: 40))
+        XCTAssertEqual(sent.count, 2)
+        guard case .sidebar(.popupMenu(.spaceCard(space), _))? = sent.last else { return XCTFail("right-click sent \(sent)") }
+        XCTAssertNil(view.descendants.first { $0.accessibilityIdentifier().hasPrefix("space-tools-manager-search") }, "no search field")
+        XCTAssertNotNil(view.cardHeader(space), "the icon popover's anchor")
+        let shadow = try XCTUnwrap(view.descendants.first { $0 is SpaceCardShadow })
+        XCTAssertEqual(shadow.frame, card.frame.insetBy(dx: -SpaceCardShadow.reach, dy: -SpaceCardShadow.reach), "the shadow reaches past the card")
+        XCTAssertTrue(shadow.superview === card.superview)
+        XCTAssertLessThan(try XCTUnwrap(shadow.superview?.subviews.firstIndex(of: shadow)), try XCTUnwrap(card.superview?.subviews.firstIndex(of: card)), "under the card")
+        XCTAssertNil(shadow.hitTest(CGPoint(x: shadow.frame.midX, y: shadow.frame.midY)))
+    }
+
+    /// the move handle at a card's lower left reorders: the card follows the pointer while the others close up, and
+    /// letting go over another slot moves the space there; a short drag leaves the order alone
+    func testTheMoveHandleDragsACardToAnotherSlot() throws {
+        let a = SpaceID("a"), b = SpaceID("b"), c = SpaceID("c")
+        let view = spacesPage([a, b, c])
+        let handle = try control("manager-move-a", in: view)
+        let card = { (id: String) in try XCTUnwrap(try self.control("manager-edit-\(id)", in: view).superview) }
+        let pitch = Metrics.library.spacesCardWidth.value + Metrics.library.spacesCardGap.value
+        let start = try card("a").frame.minX
+        XCTAssertEqual(try card("b").frame.minX, start + pitch)
+        handle.mouseDown(with: try mouse(.leftMouseDown, x: 100))
+        handle.mouseDragged(with: try mouse(.leftMouseDragged, x: 100 + 0.3 * pitch))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try card("a").frame.minX, (start + 0.3 * pitch).rounded(), "the dragged card follows the pointer")
+        handle.mouseUp(with: try mouse(.leftMouseUp, x: 100 + 0.3 * pitch))
+        XCTAssertEqual(sent, [], "a short drag keeps the order")
+        handle.mouseDown(with: try mouse(.leftMouseDown, x: 100))
+        handle.mouseDragged(with: try mouse(.leftMouseDragged, x: 100 + 1.7 * pitch))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try card("b").frame.minX, start, "b closes up into a's slot")
+        XCTAssertEqual(try card("c").frame.minX, start + pitch, "c closes up into b's slot")
+        handle.mouseUp(with: try mouse(.leftMouseUp, x: 100 + 1.7 * pitch))
+        XCTAssertEqual(sent, [.space(.move(a, index: 2))])
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try card("a").frame.minX, start, "until the order changes the card goes back")
     }
 
     /// day headers: today, yesterday, a date this year, a date with its year

@@ -95,9 +95,18 @@ enum MainMenu {
 
     /// Arc's View menu as it shows at runtime (P19-a) differs from its nib: the sidebar, toolbar, pinned and full
     /// screen rows name what they will do, Show Toolbar and Collapse Pinned Tabs show, Exit hides (Esc still
-    /// works). Applied each time the menu opens (`MenuTarget.menuNeedsUpdate`).
-    static func presentation(of action: ActionID, window: WindowSnapshot?, fullScreen: Bool) -> (title: String?, hidden: Bool)? {
+    /// works). View > Developer's last row names the focused site's Developer Mode ("Turn on/off Developer Mode for
+    /// this site", read from Arc 1.170). Arc 1.170 shows no Note rows (File has New Easel only); Brk has no Notes,
+    /// so New Note, New Note (in Split) and Export Notes are hidden too. While a trace records, Record Trace reads
+    /// "Stop Recording Trace" and the nib's hidden Cancel Trace shows. Applied each time the menu opens
+    /// (`MenuTarget.menuNeedsUpdate`).
+    static func presentation(of action: ActionID, window: WindowSnapshot?, fullScreen: Bool, tracing: Bool = false) -> (title: String?, hidden: Bool)? {
         switch action {
+        case .toggleDeveloperMode:
+            (window?.urlPill.developerMode == true ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site", false)
+        case .newNote, .newNoteInSplitView, .exportArcNotes: (nil, true)
+        case .recordTrace: (tracing ? "Stop Recording Trace" : "Record Trace", false)
+        case .cancelTrace: (nil, !tracing)
         case .showSidebar: (window?.sidebar.visible == false ? "Show Sidebar" : "Hide Sidebar", false)
         case .toggleToolbar: (window?.sidebar.toolbarVisible == true ? "Hide Toolbar" : "Show Toolbar", false)
         case .collapsePinnedSection: (window?.space.pinned.collapsed == true ? "Expand Pinned Tabs" : "Collapse Pinned Tabs", false)
@@ -169,7 +178,6 @@ enum MainMenu {
         let item = NSMenuItem(title: title ?? action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
         item.target = target
         item.representedObject = action.rawValue
-        item.toolTip = action.unsupportedReason
         item.tag = binding
         item.isHidden = hidden
         // Rows Arc's View menu does not show but Brk had shown (its own split and Picture in Picture rows, Exit at
@@ -299,6 +307,8 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     var isChecked: ((ActionID) -> Bool?)?
     /// The key window's snapshot and whether it is in full screen, for `MainMenu.presentation`.
     var current: () -> (window: WindowSnapshot?, fullScreen: Bool) = { (nil, NSApp?.keyWindow?.styleMask.contains(.fullScreen) ?? false) }
+    /// Whether Help > Troubleshooting's trace is recording (the running app's `TraceRecorder` unless set).
+    var tracing: () -> Bool = { (NSApp?.delegate as? Lifecycle)?.store?.help.trace.isRecording ?? false }
     /// The resolved shortcuts to show (`AppSnapshot.settings.shortcuts`): the running app's store unless set; the
     /// table's defaults when there is none.
     var shortcuts: () -> [ActionID: KeyBindingState]? = {
@@ -336,7 +346,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
         for item in menu.items where item.tag == 0 {
             guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }
             Self.apply(states[action], to: item)
-            if let shown = MainMenu.presentation(of: action, window: now.window, fullScreen: now.fullScreen) {
+            if let shown = MainMenu.presentation(of: action, window: now.window, fullScreen: now.fullScreen, tracing: tracing()) {
                 if let title = shown.title { item.title = title }
                 item.isHidden = shown.hidden
             }

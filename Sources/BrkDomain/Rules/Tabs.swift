@@ -84,6 +84,11 @@ extension Work {
             let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.doc.tree.tabs(under: $0).contains(where: onScreen.contains) }
             let entries = archiving { $0.archiveTabs(idle, reason: .clearToday, in: window) }
             if !entries.isEmpty { undoToast("Cleared Tabs! Use", undo: .restore(entries), in: window) }
+        case .newDocument:
+            // Profiles > New documents: a new focused tab in the current space at that profile's document app.
+            guard let shown = state.doc.windows[window], shown.kind != .little,
+                  let app = state.profileSettings(in: window).documentApp else { return }
+            openTab(app.newDocumentURL, inSpace: shown.space, window: window, focus: true)
         }
     }
 
@@ -129,12 +134,19 @@ extension Work {
         case .developer(let operation): emit(.focused, .developer(operation))
         case .copyURL(let format):
             guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window), let url = t.url else { return }
-            let text: String = switch format {
-            case .plain: url.absoluteString
-            case .markdown: "[\(markdownTitle(t.displayTitle))](\(url.absoluteString.replacingOccurrences(of: "(", with: "%28").replacingOccurrences(of: ")", with: "%29")))"
-            case .quote: "> \(t.displayTitle)\n\(url.absoluteString)"
+            // Advanced > Shared Quotes: on a loaded page, Copy URL and Copy URL as Quote link to the highlighted text
+            // (BrkApp reads the highlight, `SharedQuote.text` builds the link); off, or with nothing highlighted,
+            // the plain copy.
+            let page = PageID(window: window, item: tab)
+            if state.doc.settings.advanced.sharedQuotes, format != .markdown, case .ready? = state.session.live[page]?.document {
+                effects.append(.copySharedQuote(page, url: url, title: t.displayTitle, format: format))
+            } else {
+                effects.append(.copyToPasteboard(SharedQuote.plain(url: url, title: t.displayTitle, format: format)))
             }
-            effects.append(.copyToPasteboard(text))
+        case .navigate(let ref, let url):
+            // AppleScript's `set URL`: an address the command bar could open, in place, like the bar's edit-current.
+            guard isOpenableURL(url), let tab = state.resolveTab(ref, in: window) else { return }
+            request(url, for: PageID(window: window, item: tab))
         }
     }
 

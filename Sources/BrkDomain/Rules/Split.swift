@@ -6,11 +6,13 @@ import Foundation
 extension Work {
     mutating func splits(_ command: SplitCommand, in window: WindowID) {
         switch command {
-        case .addPane:
+        case .addPane, .addPaneBefore:
             guard state.doc.windows[window]?.kind != .little else { return }
             // A shown tab becomes a split [tab, new empty pane] in its place; a shown split below the pane cap gets
             // an empty pane after its focused pane, with an equal share. The new pane is focused and the command bar
             // opens to fill it. Nothing shown, a Favorites tab (Favorites hold tabs only), or a full split: no-op.
+            // `addPaneBefore` puts the empty pane before the tab or the focused pane instead.
+            let leading = command == .addPaneBefore
             guard let shown = state.shownItem(in: window), let scope = state.locate(shown), let tree = state.tree(scope) else { return }
             let pane = ItemID(ctx.newID())
             let empty = Tab(url: nil, title: "", lastActiveAt: ctx.now)
@@ -19,14 +21,14 @@ extension Work {
             case .tab?:
                 let split = ItemID(ctx.newID())
                 state.withTree(scope) { tree in
-                    added = (try? tree.splitInPlace(shown, splitID: split, newPane: pane, empty, createdAt: ctx.now)) != nil
+                    added = (try? tree.splitInPlace(shown, splitID: split, newPane: pane, empty, leading: leading, createdAt: ctx.now)) != nil
                 }
                 if added { state.doc.windows[window]!.activeBySpace[state.doc.windows[window]!.space] = split }
             case .split(let s)?:
                 let weights = s.panes.ids.map { s.widths[$0] ?? 1 }
                 let after = state.focusedPane(of: shown, in: window) ?? s.panes.ids[0]
                 state.withTree(scope) { tree in
-                    added = (try? tree.addPane(to: shown, newPane: pane, empty, after: after, createdAt: ctx.now)) != nil
+                    added = (try? tree.addPane(to: shown, newPane: pane, empty, after: after, leading: leading, createdAt: ctx.now)) != nil
                     if added, !s.widths.isEmpty {
                         // The mean, divided before adding so huge saved widths cannot overflow to infinity.
                         tree.updateSplit(shown) { $0.widths[pane] = weights.reduce(0) { $0 + $1 / Double(weights.count) } }
@@ -40,13 +42,14 @@ extension Work {
             focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)
         case .addPaneAt(let edge):
-            splits(.addPane, in: window)
-            guard let shown = state.shownItem(in: window), let scope = state.locate(shown), case .split? = state.tree(scope)?[shown]?.body,
-                  let pane = state.focusedPane(of: shown, in: window), state.tab(pane)?.url == nil else { return }
-            state.withTree(scope) { tree in
-                if edge == .left || edge == .top { tree.placePane(pane, at: 0) }
-                tree.updateSplit(shown) { if $0.orientation != edge.orientation { $0.orientation = edge.orientation } }
-            }
+            // Arc's Add Left/Top Split puts the empty pane before the focused one (`addPaneBefore`), Right/Bottom after.
+            splits(edge == .left || edge == .top ? .addPaneBefore : .addPane, in: window)
+            guard let shown = state.shownItem(in: window), let scope = state.locate(shown), case .split? = state.tree(scope)?[shown]?.body else { return }
+            state.withTree(scope) { tree in tree.updateSplit(shown) { if $0.orientation != edge.orientation { $0.orientation = edge.orientation } } }
+        case .movePane(let step):
+            guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window),
+                  let pane = state.focusedPane(of: split, in: window), let scope = state.locate(split) else { return }
+            state.withTree(scope) { tree in try? tree.movePane(pane, step) }
         case .closePane:
             // The focused pane leaves: archived from Today; moved out to sit right after the split and unloaded
             // from Pinned; an empty pane (no URL) is removed either way without an archive entry. A split left with

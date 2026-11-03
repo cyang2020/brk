@@ -48,7 +48,8 @@ struct IconPane: View {
         }
         .padding(.leading, I.radioLeading.value)
         .frame(height: I.rowHeight.value)
-        .background(ClickArea(field: "appIcon-\(choice.rawValue)") {
+        // On top of the row's drawing, so a click anywhere on the row reaches it.
+        .overlay(ClickArea(field: "appIcon-\(choice.rawValue)") {
             if choice != current { context.dispatch(.settings(.general(.appIcon(choice)))) }
         })
     }

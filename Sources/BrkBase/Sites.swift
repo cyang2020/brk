@@ -49,11 +49,14 @@ public struct SitePreferences: Hashable, Sendable, Codable {
     public var appearance: WebsiteAppearance? = nil
     public var rules: [String: SiteRule] = [:]
     public var embeddedPermissions: [String: [SiteCapability: SitePermission]]? = nil
+    /// What a site without its own rule gets: the app-wide ad blocker and cookie-banner choices (Settings, Advanced
+    /// > More Settings…). The reducer fills it in for every policy it hands out and never saves it.
+    public var defaultRule: SiteRule? = nil
     public func permissions(for origin: SiteOrigin, embeddedIn top: SiteOrigin) -> [SiteCapability: SitePermission] {
         origin == top ? rule(for: origin).permissions : embeddedPermissions?[top.value + "\n" + origin.value] ?? [:]
     }
     public init() {}
-    public func rule(for origin: SiteOrigin) -> SiteRule { rules[origin.value] ?? SiteRule() }
+    public func rule(for origin: SiteOrigin) -> SiteRule { rules[origin.value] ?? defaultRule ?? SiteRule() }
 }
 
 /// Immutable input to one browser. The engine receives no global application store or saved tree.

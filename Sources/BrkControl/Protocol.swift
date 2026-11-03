@@ -112,6 +112,12 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case openSettings(pane: SettingsPane)
     /// A link from another app, as the GetURL Apple Event delivers it (`SystemEvent.externalURL`). F3.
     case externalURL(url: URL)
+    /// Native verification of the AppleScript dictionary only: compiles and runs AppleScript `script` inside the app
+    /// (NSAppleScript, off the main thread, so its Apple Events reach the app the way an outside script's do) and
+    /// answers `.text`: "permission <status>" (AEDeterminePermissionToAutomateTarget for the app itself, never
+    /// asking), then "result: …" or "error <number>: …". Apple Events an app sends itself need no Automation
+    /// consent; a separate osascript process does (macOS asks the user once per sender).
+    case appleScript(script: String)
 }
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
@@ -185,6 +191,9 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var keyWindowNumber: Int? = nil
     public var appHidden: Bool = false
     public var sheetClass: String? = nil
+    /// The Icon pane's choice the Dock shows now (`NSApp.applicationIconImage` is that drawing), nil when it is none
+    /// of them (the bundle's own icon).
+    public var dockIcon: String? = nil
     public var window: WindowID
     /// NSWindow frame (screen, bottom-left origin) and content size.
     public var windowFrame: CGRect
