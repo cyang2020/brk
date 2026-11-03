@@ -175,8 +175,9 @@ public enum EaselDrawing {
     /// The freehand tool's glyph: the squiggle (Arc's EaselIconFreehand).
     static func squiggleGlyph(size: CGFloat, color: NSColor) -> NSImage {
         let image = NSImage(size: CGSize(width: size, height: size), flipped: false) { rect in
-            let box = rect.insetBy(dx: rect.width * 0.2, dy: rect.height * 0.12)
-            scribble(in: box, color: color, width: max(1.5, size * 0.11), flipped: false)
+            // Q09 a: the freehand glyph is 13 x 14 pt with a 2 pt stroke.
+            let box = CGRect(x: rect.midX - size * 0.27, y: rect.midY - size * 0.29, width: size * 0.54, height: size * 0.58)
+            scribble(in: box, color: color, width: max(1.5, size * 0.09), flipped: false)
             return true
         }
         image.accessibilityDescription = "Freehand"

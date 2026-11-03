@@ -107,14 +107,16 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
     /// Shows `easel` over `card` (window coordinates); nil hides the board. Idempotent.
     public func render(_ easel: EaselSnapshot?, in card: CGRect?, cornerRadius: Double) {
         guard let easel, let card else {
-            if self.easel != nil { endTextEditing(commit: true) }
+            // Leaving the board keeps what was being typed, as Arc saves as you go.
+            if self.easel != nil { endTextEditing(commit: true); endTitleEditing() }
             self.easel = nil
             isHidden = true
             return
         }
         let previous = self.easel
         if previous?.id != easel.id {
-            endTextEditing(commit: false)
+            endTextEditing(commit: true)
+            endTitleEditing()
             selection = []
             tool = .select
             gesture = nil
@@ -435,10 +437,12 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
     private func endTitleEditing() {
         guard editingTitle else { return }
         editingTitle = false
+        let typed = titleField.stringValue
+        if titleField.currentEditor() != nil { window?.endEditing(for: titleField) }
         titleField.isEditable = false
         titleField.isSelectable = false
         guard let easel else { return }
-        let title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty { titleField.stringValue = easel.title }
         else if title != easel.title { dispatch(.easel(.rename(easel.id, title: title))) }
     }
@@ -477,8 +481,9 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
     private func endTextEditing(commit: Bool) {
         guard let editing = editingText, let easel else { editingText = nil; textEditor.isHidden = true; return }
         editingText = nil
-        textEditor.isHidden = true
         let text = textEditor.stringValue
+        if textEditor.currentEditor() != nil { window?.endEditing(for: textEditor) }
+        textEditor.isHidden = true
         let size = Double(textEditor.font?.pointSize ?? CGFloat(EaselElement.textSize))
         defer { changed() }
         guard commit else { return }
