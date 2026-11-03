@@ -104,24 +104,35 @@ final class LayoutSpecTests: XCTestCase {
         d.user(.library(.open(.archive)))
         let archive = d.frames()
         // The Library's panel replaces the sidebar (Arc: max(417, min(window - 56, sidebar width)) wide, here 417 for a
-        // 228 sidebar); the archive page fills the content area beside it, where the page was.
+        // 228 sidebar): a 112 pt navigation column and the archive's column beside it; the content area keeps the page.
         let panel = CGRect(x: 0, y: 0, width: 417, height: 776)
-        XCTAssertEqual(archive.library?.frame, CGRect(x: 0, y: 0, width: 1280, height: 776))
+        XCTAssertEqual(archive.library?.frame, panel)
         XCTAssertEqual(archive.library?.strip, panel)
+        XCTAssertEqual(archive.library?.nav, CGRect(x: 0, y: 0, width: 112, height: 776))
+        XCTAssertEqual(archive.library?.page, CGRect(x: 112, y: 0, width: 305, height: 776))
         XCTAssertEqual(archive.contentArea, CGRect(x: 427, y: 10, width: 843, height: 756))
-        XCTAssertEqual(archive.library?.page, archive.contentArea)
         XCTAssertEqual(archive.cards.map(\.rect), [archive.contentArea])
         XCTAssertNil(archive.sidebar)
         XCTAssertNil(archive.resizeHandle)
         XCTAssertNil(archive.revealStrip)
-        // One sidebar row per page from under the title row, in page order; the exit button is the dock's Library button.
+        // One 78 pt cell per page in Arc's order, 100 apart from y 94 in a 776 pt window (P32); the exit button is the
+        // dock's Library button, the gift button level with it at the column's right.
+        XCTAssertEqual(LibraryPage.allCases, [.media, .downloads, .easelsAndNotes, .spaces, .boosts, .archive])
         XCTAssertEqual(LibraryPage.allCases.map { archive.library?.pageCells[$0] },
-                       (0..<7).map { CGRect(x: 8, y: 44 + 41 * Double($0), width: 401, height: 40) })
+                       (0..<6).map { CGRect(x: 9.5, y: 94 + 100 * Double($0), width: 94.5, height: 78) })
         XCTAssertEqual(LibraryLayout.closeButton(in: panel), CGRect(x: 8, y: 735, width: 32, height: 32))
+        XCTAssertEqual(LibraryLayout.giftButton(in: archive.library!.nav), CGRect(x: 73, y: 735, width: 32, height: 32))
         XCTAssertEqual(LibraryLayout.trafficLightsOrigin(in: panel), bar.sidebar?.trafficLightsOrigin, "the window buttons stay put")
         XCTAssertNil(archive.commandBar)
         XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
         XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)
+        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P32-d: two spaces, 745).
+        d.user(.space(.create(title: "Second", icon: .none, theme: .default)))
+        d.user(.library(.open(.spaces)))
+        XCTAssertEqual(d.frames().library?.strip.width, 745)
+        XCTAssertEqual(d.frames().contentArea.minX, 755)
+        XCTAssertEqual(LibraryLayout.panelWidth(windowWidth: 700, sidebarWidth: 228, page: .spaces, spaces: 2), 644, "never past the window minus 56")
+        d.user(.library(.open(.archive)))
         // A wider sidebar keeps its width up to the window minus 56, never below 417; a hidden one is replaced all the same.
         var wide = d.view
         wide.sidebar.width = 450
@@ -132,7 +143,7 @@ final class LayoutSpecTests: XCTestCase {
         d.user(.library(.open(.archive)))
         let hidden = d.frames()
         XCTAssertEqual(hidden.library?.strip, panel)
-        XCTAssertEqual(hidden.library?.page, CGRect(x: 427, y: 10, width: 843, height: 756))
+        XCTAssertEqual(hidden.contentArea, CGRect(x: 427, y: 10, width: 843, height: 756))
         XCTAssertNil(hidden.revealStrip)
         d.user(.commandBar(.dismiss))
         XCTAssertNil(d.frames().library)

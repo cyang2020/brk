@@ -41,7 +41,9 @@ enum CommandInventory {
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
         .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
-        .tabTools(.preferences(includeFavorites: true, previews: false)),
+        .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
+        .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
+        .tabTools(.spaceIntoFolder(space, into: space)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
@@ -60,7 +62,7 @@ enum CommandInventory {
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
         .settings(.openBrowserPage(.passwords, profile: .default)),
-        .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
+        .library(.open(.archive)), .library(.close), .library(.openHistory), .library(.cancelDownload(download)), .library(.revealDownload(download)),
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
@@ -269,6 +271,13 @@ enum CommandInventory {
             case .dismissToast: "dismissToast"
             case .dismissArchiveEducation: "dismissArchiveEducation"
             case .preferences: "preferences"
+            case .copyLinks: "copyLinks"
+            case .openInSplit: "openInSplit"
+            case .newNestedFolder: "newNestedFolder"
+            case .folderToSpace: "folderToSpace"
+            case .customize: "customize"
+            case .addToSplit: "addToSplit"
+            case .spaceIntoFolder: "spaceIntoFolder"
             }
         case .page(let c):
             switch c {
@@ -355,6 +364,7 @@ enum CommandInventory {
             switch c {
             case .open: "open"
             case .close: "close"
+            case .openHistory: "openHistory"
             case .cancelDownload: "cancelDownload"
             case .revealDownload: "revealDownload"
             case .removeDownload: "removeDownload"

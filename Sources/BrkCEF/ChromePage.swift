@@ -341,7 +341,8 @@ final class ChromePage: CefBrowserDelegate {
     // MARK: CefBrowserDelegate -> PageEvent
 
     func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool {
-        contextMenu.show(menu, at: CGPoint(x: params.x, y: params.y), in: surface, callback: callback) { [weak self] in
+        let plainLink = params.linkURL != nil && params.mediaType == .none && !params.isEditable
+        contextMenu.show(menu, at: CGPoint(x: params.x, y: params.y), in: surface, link: plainLink, callback: callback) { [weak self] in
             guard let self else { return false }; return self.engine.isLive(self) && !self.surface.isHiddenOrHasHiddenAncestor
         }
         return true

@@ -405,7 +405,7 @@ public final class AppStore {
                 if let window = windows[request.window]?.window { siteTools.run(request, in: window) }
             case .iconPicker(let window, let item, let initial):
                 guard let owner = windows[window]?.window else { continue }
-                TabIconPicker.present(in: owner, initial: initial) { [weak self, weak owner] icon in
+                TabIconPicker.present(for: item, in: owner, initial: initial) { [weak self, weak owner] icon in
                     guard owner?.isVisible == true else { return }
                     self?.dispatch(.user(window, .item(.setIcon(item, icon))))
                 }
@@ -453,7 +453,16 @@ public final class AppStore {
                 guard let controller = windows[id] else { continue }
                 let menu = popupTarget.menu(for: model) { [weak self] command in self?.dispatch(.user(id, command)) }
                 NotificationCenter.default.post(name:ContextMenuCapture.willPresent,object:menu)
-                menu.popUp(positioning: nil, at: at, in: controller.root)
+                // A context menu, not a positioned popup: it opens below and right of the pointer with no row
+                // highlighted, as Arc's sidebar menus do (P12). `at` is in the root view's coordinates.
+                let point = controller.root.convert(at, to: nil)
+                if let event = NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [],
+                                                  timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber,
+                                                  context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                    NSMenu.popUpContextMenu(menu, with: event, for: controller.root)
+                } else {
+                    menu.popUp(positioning: nil, at: at, in: controller.root)
+                }
                 popupTarget.clear()
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }
@@ -627,22 +636,47 @@ final class PopupTarget: NSObject, NSMenuDelegate {
     func menu(for model: MenuModel, choose: @escaping (Command) -> Void) -> NSMenu {
         self.choose = choose
         commands.removeAll()
+        let menu = build(model.entries)
+        menu.delegate = self
+        return menu
+    }
+
+    /// Submenus are built in place; every choosable row gets the next tag, so one table serves the whole tree.
+    private func build(_ entries: [MenuEntry]) -> NSMenu {
         let menu = NSMenu()
-        for (i, entry) in model.entries.enumerated() {
+        menu.autoenablesItems = false
+        func row(_ title: String, _ command: Command) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: #selector(fire(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = commands.count
+            commands[item.tag] = command
+            return item
+        }
+        for entry in entries {
             switch entry {
             case .separator:
                 menu.addItem(.separator())
+            case .header(let title):
+                // Arc draws its captions as plain grey rows at the menu's own size (P12-e), not AppKit's smaller
+                // section headers.
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
             case .action(let title, let command, let enabled):
-                let item = NSMenuItem(title: title, action: #selector(fire(_:)), keyEquivalent: "")
-                item.target = self
-                item.tag = i
+                let item = row(title, command)
                 item.isEnabled = enabled
-                commands[i] = command
+                menu.addItem(item)
+            case .choice(let title, let command, let on):
+                let item = row(title, command)
+                item.state = on ? .on : .off
+                menu.addItem(item)
+            case .submenu(let title, let children):
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.submenu = build(children)
+                item.isEnabled = !children.isEmpty
                 menu.addItem(item)
             }
         }
-        menu.autoenablesItems = false
-        menu.delegate = self
         return menu
     }
 

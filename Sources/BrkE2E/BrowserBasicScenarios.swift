@@ -272,13 +272,12 @@ enum BrowserBasicScenarios {
         let page = try page(app, app.site.url("browser-basic.html"))
         for _ in 0..<2 { try app.dispatch(.page(.reload(.focused, ignoringCache: true))); try app.waitForPageInput(page, at: app.site.url("browser-basic.html")) }
         try app.press("cmd+y")
-        try app.waitUntil("History opened from the real key callback") { if case .library(let history)? = try app.view().overlay { history.page == .history } else { false } }
-        guard case .library(let history)? = try app.view().overlay else { throw Check(description: "History missing") }
-        try expect(history.history.filter { $0.url == app.site.url("browser-basic.html") }.count >= 3, "Repeated visits were lost")
+        try app.waitUntil("History opened from the real key callback") { try app.view().history != nil }
+        let history = try app.view().history ?? []
+        try expect(history.filter { $0.url == app.site.url("browser-basic.html") }.count >= 3, "Repeated visits were lost")
         try app.screenshot("full-history")
         try app.flush(); try app.restart()
-        try app.dispatch(.library(.open(.history)))
-        guard case .library(let restored)? = try app.view().overlay else { throw Check(description: "Restored History missing") }
-        try expect(restored.history.filter { $0.url == app.site.url("browser-basic.html") }.count >= 3, "Repeated visits did not persist")
+        let restored = try historyRows(app, returning: false)
+        try expect(restored.filter { $0.url == app.site.url("browser-basic.html") }.count >= 3, "Repeated visits did not persist")
     }
 }

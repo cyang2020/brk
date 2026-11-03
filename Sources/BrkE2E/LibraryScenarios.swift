@@ -77,9 +77,8 @@ enum LibraryScenarios {
         try expect(!saved.contains("private=1") && !saved.contains("fixture.txt") && !saved.contains("Private history marker"),
                    "incognito metadata leaked into state.json")
         try app.restart()
-        try app.dispatch(.library(.open(.history)))
-        guard case .library(let history)? = try app.view().overlay else { throw Check(description: "no history") }
-        try expect(history.history.allSatisfy { $0.url == sameURL && $0.title != "Private history marker" }, "private history survived restart")
+        let history = try historyRows(app)
+        try expect(history.allSatisfy { $0.url == sameURL && $0.title != "Private history marker" }, "private history survived restart")
         try expect(try Data(contentsOf: file) == Data("fixture download\n".utf8), "the private downloaded file was removed")
     }
 }

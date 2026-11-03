@@ -59,7 +59,10 @@ func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec
         let directory = settings.downloadsDirectory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) } ?? DownloadPolicy.defaultDirectory
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
-        var spec = PageSpec(id: page, initialURL: requested ?? state.address(of: page.item, in: page.window, for: .savedDocument), context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
+        let initialURL = requested ?? state.address(of: page.item, in: page.window, for: .savedDocument)
+        // The History page is drawn natively in its card: no browser.
+        if HistoryPage.shows(live?.requestedURL ?? initialURL) { return nil }
+        var spec = PageSpec(id: page, initialURL: initialURL, context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
         spec.hoverPreviews = state.doc.tabPreferences.hoverPreviews
         spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
         spec.boostPolicy = state.boostPolicy(for: page)
@@ -228,8 +231,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     // Content.
     let contentPanes = zip(panes, fractions).map { p, fraction -> Pane in
         let content: PaneContent
-        if state.address(of: p, in: id, for: .visible) != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
-            content = (state.session.live[PageID(window: id, item: p)]?.crashed ?? false) ? .crashed(PageID(window: id, item: p)) : .page(PageID(window: id, item: p))
+        let address = state.address(of: p, in: id, for: .visible)
+        if address != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
+            content = HistoryPage.shows(address) ? .history(PageID(window: id, item: p))
+                : (state.session.live[PageID(window: id, item: p)]?.crashed ?? false) ? .crashed(PageID(window: id, item: p)) : .page(PageID(window: id, item: p))
         } else {
             content = .blank
         }
@@ -329,9 +334,6 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                 DownloadRow(id: $0.id, filename: $0.filename, url: $0.url, path: $0.path, received: $0.received, total: $0.total,
                             end: $0.end, state: $0.state, startedAt: $0.startedAt)
             } : [],
-            history: page == .history ? state.doc.history.filter { $0.profile == listed }.map {
-                HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
-            } : [],
             boosts: page == .boosts ? listed.flatMap { state.session.boosts[$0]?.boosts } ?? [] : [],
             boostMessage: session.boostMessage ?? listed.flatMap { state.session.boostErrors[$0] },
             canManageBoosts: listed != nil,
@@ -341,7 +343,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                                     profileName: state.doc.profiles[value.profile]?.name ?? "Default",
                                     theme: resolveTheme(value.theme, systemScheme: ctx.systemScheme),
                                     tabCount: state.doc.tree.tabs(under: value.pinnedRoot).count + state.doc.tree.tabs(under: value.todayRoot).count,
-                                    active: sid == space.id)
+                                    active: sid == space.id,
+                                    pinned: rows(under: value.pinnedRoot, .pinned), today: rows(under: value.todayRoot, .today))
                 }
             } : [],
             spaceExportMessage: session.spaceExportMessage, spaceExportInProgress: session.spaceExport != nil,
@@ -400,7 +403,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         : doc.kind == .blank || doc.kind == .little
         ? SpaceTheme(colors: [RGBA(hex: "#C7C9F0"), RGBA(hex: "#E2D3D9")], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .light)
         : space.theme
-    return WindowSnapshot(capture: session.capture,
+    // Owner: F5. The History card's visits: the window's profile's (none in incognito), only while a card shows it.
+    let historyShown = content.panes.contains { if case .history = $0.content { true } else { false } }
+    let historyProfile: ProfileID? = if case .profile(let p) = state.libraryContext(in: id) { p } else { nil }
+    let history: [HistoryRow]? = historyShown ? state.doc.history.filter { $0.profile == historyProfile }.map {
+        HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
+    } : nil
+    var snapshot = WindowSnapshot(capture: session.capture,
         id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme, systemScheme: ctx.systemScheme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
                                  toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
@@ -414,8 +423,12 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }, overlay: overlay, focus: focus,
         enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } }),
         tabTools: projectTabTools(state, window: id, now: ctx.now),
-        boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil
+        boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil,
+        websiteAppearance: state.sitePreferences(state.siteTarget(in: id)?.context ?? state.libraryContext(in: id)).appearance
+            ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic
     )
+    snapshot.history = history
+    return snapshot
 }
 
 /// Every profile as the dialogs list it: default first, then by name.
@@ -454,6 +467,9 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }
         if state.session.live[PageID(window: window, item: id)]?.canGoForward != true { enabled.remove(.goForward) }
+        // Arc greys Stop Loading on a page that is not loading and Zoom to Actual Size at 100% (P19-a).
+        if state.session.live[PageID(window: window, item: id)]?.loading != true { enabled.remove(.stopLoading) }
+        if (state.session.live[PageID(window: window, item: id)]?.zoomPercent ?? 100) == 100 { enabled.remove(.resetZoom) }
         if tab.url == nil { enabled.remove(.copyCurrentURL) }
         if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
     } else {

@@ -237,6 +237,8 @@ enum PlanScenarios {
         try app.waitUntil("A to be archived after 13 h") { try !todayIDs(app.view()).contains(a.id) }
         try expect(todayIDs(try app.view()).contains(b.id), "B (on screen) was archived too")
         try app.click(.dockLibrary)
+        try app.waitUntil("the Library to open") { if case .library? = try app.view().overlay { true } else { false } }
+        try app.click(.libraryPage(.archive))
         try app.waitUntil("the archive page to open") { isArchive(try app.view().overlay) }
         guard case .library(let library)? = try app.view().overlay, let archive = library.archive else {
             throw Check(description: "the overlay is not the Library's archive page")
@@ -250,9 +252,10 @@ enum PlanScenarios {
             let n = try app.native()
             let page = try visible(n, .archive)
             guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
-            try expect(near(library.page, n.computed.contentArea), "library page area \(library.page), content area \(n.computed.contentArea)")
+            try expect(library.strip.contains(library.page) && library.page.minX == library.nav.maxX, "library page column \(library.page), panel \(library.strip)")
             try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
-            try expect(near(page.frame, library.page), "archive at \(page.frame), library page area \(library.page)")
+            try expect(near(page.frame, library.page), "archive at \(page.frame), library page column \(library.page)")
+            try expect(n.computed.cards.first.map { $0.rect.minX > library.strip.maxX } == true, "the page's card is not beside the Library")
             let group = try visible(n, .archiveGroup(.today)), row = try visible(n, .archiveEntry(entry.1.id))
             try expect(contains(group, row), "archive-entry \(row.frame) is outside archive-group-today \(group.frame)")
             return true
