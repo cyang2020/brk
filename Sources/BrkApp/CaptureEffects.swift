@@ -33,13 +33,27 @@ extension AppStore {
                 catch { fail(request.document.browser.page.window, request.id, error) }
             case .store(let request, let image):
                 let window = request.document.browser.page.window
-                trace("store \(request.id); pending \(snapshot.windows[window]?.capture?.request == request)")
-                guard snapshot.windows[window]?.capture?.request == request else { return }
+                trace("store \(request.id); pending \(captureAwaitsStore(request))")
+                guard captureAwaitsStore(request) else { return }
                 do {
                     let (record, file) = try await captureFiles.store(request, image: image)
-                    guard snapshot.windows[window]?.capture?.request == request else { try await captureFiles.remove(record); return }
+                    guard captureAwaitsStore(request) else { try await captureFiles.remove(record); return }
                     dispatch(.system(.capture(.stored(request, record, file))))
                 } catch { fail(window, request.id, error) }
+            case .copy(let image):
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setData(image.png, forType: .png)
+            case .saveFile(let request, let image, let window):
+                guard let owner = captureWindow(window) else { return }
+                captureSheets.choose(name: CaptureSheets.fileName(request), capture: request.id, listed: false, in: owner, id: window) { [weak self, weak owner] url in
+                    guard let self, let url, owner?.isVisible == true, self.captureWindow(window) === owner else { return }
+                    Task { @MainActor in
+                        do {
+                            try await Task.detached { try image.png.write(to: url, options: .atomic) }.value
+                            self.dispatch(.system(.capture(.exported(window, "Saved " + url.lastPathComponent))))
+                        } catch { self.dispatch(.system(.capture(.failed(window, "", error.localizedDescription)))) }
+                    }
+                }
             case .remove(let record):
                 do { try await captureFiles.remove(record); dispatch(.system(.capture(.removed(record.profile, record.id)))) }
                 catch { if let window = snapshot.windows.keys.sorted().first { fail(window, record.id, error) } }

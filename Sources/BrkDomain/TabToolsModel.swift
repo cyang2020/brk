@@ -99,6 +99,12 @@ public struct ToastSnapshot: Equatable, Sendable, Codable {
     /// Arc's undo toasts: "Cleared Tabs! Use", the key cap "⌘Z", then "to undo".
     public var keycap: String? = nil
     public var trailing: String? = nil
+    /// One button on the toast (Arc: "Screenshot Copied to Clipboard" · Save).
+    public var action: ToastAction? = nil
+}
+public struct ToastAction: Equatable, Sendable, Codable {
+    public var title: String
+    public var command: Command
 }
 public struct ToastLink: Equatable, Sendable, Codable {
     public var title: String

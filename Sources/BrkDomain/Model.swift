@@ -278,6 +278,8 @@ struct WindowSession: Sendable, Equatable {
     var boostEditor: BoostEditor? = nil
     var boostMessage: String? = nil
     var capture: CaptureSnapshot? = nil
+    /// The last copied capture, kept for its toast's Save.
+    var copiedCapture: CaptureSnapshot? = nil
     var capturePreview: String? = nil
     var captureMessage: String? = nil
     var find: FindSession?

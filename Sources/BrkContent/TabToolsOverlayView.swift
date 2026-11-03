@@ -10,6 +10,7 @@ final class TabToolsOverlayView: NSView {
     private let dispatch: Dispatch
     private let recent = TabSwitcherView()
     private let toast = ToastView(frame: .zero)
+    private var toastCommand: Command?
     private let banner = NoticeBanner()
     private let education = NSButton(title: "", target: nil, action: nil)
     private let outputStatus = NSTextField(labelWithString: "")
@@ -38,6 +39,7 @@ final class TabToolsOverlayView: NSView {
         banner.identify(.tabTool("notice"))
         education.identify(.tabTool("education"))
         toast.onClick = { [weak self] in self?.dispatch(.tabTools(.dismissToast)) }
+        toast.onAction = { [weak self] in if let command = self?.toastCommand { self?.dispatch(command) } }
         education.target = self
         education.action = #selector(dismissEducation)
         education.font = .systemFont(ofSize: 11)
@@ -84,6 +86,7 @@ final class TabToolsOverlayView: NSView {
                 }
             }
         }
+        toastCommand = tools.toast?.action?.command
         // A notice with a way out is Arc's notice banner (P43-a); any other toast is Arc's toast (P15). Both sit at the
         // top-right corner of the content area, overlapping the window margin above the card.
         let notice = tools.toast?.link != nil ? tools.toast : nil
@@ -177,7 +180,11 @@ final class ToastView: NSView {
     private let cap = NSTextField(labelWithString: "")
     private let capBackground = NSView()
     private let trailing = NSTextField(labelWithString: "")
+    /// Arc's "Screenshot Copied to Clipboard" · Save (P33-d): a white bordered button at the end of the toast.
+    private let actionBox = NSView()
+    private let actionLabel = NSTextField(labelWithString: "")
     var onClick: (() -> Void)?
+    var onAction: (() -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -203,13 +210,25 @@ final class ToastView: NSView {
         cap.font = .systemFont(ofSize: m.font.value, weight: .semibold)
         cap.textColor = .black
         cap.alignment = .center
-        for view in [label, capBackground, cap, trailing] as [NSView] { addSubview(view) }
+        actionBox.wantsLayer = true
+        actionBox.layer?.cornerCurve = .continuous
+        actionBox.layer?.cornerRadius = m.capRadius.value
+        actionBox.layer?.backgroundColor = NSColor.white.cgColor
+        actionBox.layer?.borderColor = NSColor(srgbRed: 0xC9 / 255, green: 0xD2 / 255, blue: 0xD3 / 255, alpha: 1).cgColor
+        actionBox.layer?.borderWidth = 1
+        actionBox.identify(.tabTool("toast-action"))
+        actionLabel.font = .systemFont(ofSize: m.font.value, weight: .semibold)
+        actionLabel.textColor = .black
+        actionLabel.alignment = .center
+        for view in [label, capBackground, cap, trailing, actionBox, actionLabel] as [NSView] { addSubview(view) }
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) && !isHidden ? self : nil }
-    override func mouseDown(with event: NSEvent) { onClick?() }
+    override func mouseDown(with event: NSEvent) {
+        if !actionBox.isHidden, actionBox.frame.contains(convert(event.locationInWindow, from: nil)) { onAction?() } else { onClick?() }
+    }
 
     func render(_ toast: ToastSnapshot) {
         label.stringValue = toast.text
@@ -218,6 +237,9 @@ final class ToastView: NSView {
         cap.isHidden = toast.keycap == nil
         capBackground.isHidden = toast.keycap == nil
         trailing.isHidden = toast.trailing == nil
+        actionLabel.stringValue = toast.action?.title ?? ""
+        actionBox.isHidden = toast.action == nil
+        actionLabel.isHidden = toast.action == nil
         needsLayout = true
     }
 
@@ -226,9 +248,12 @@ final class ToastView: NSView {
         var width = m.padding.value * 2 + ceil(label.intrinsicContentSize.width)
         if !cap.isHidden { width += m.gap.value + capWidth }
         if !trailing.isHidden { width += m.gap.value + ceil(trailing.intrinsicContentSize.width) }
+        if !actionBox.isHidden { width += m.gap.value + actionWidth - m.padding.value + m.actionInset.value }
         return NSSize(width: width, height: m.height.value)
     }
 
+    private var actionWidth: Double { ceil(actionLabel.intrinsicContentSize.width) + 2 * m.actionPadding.value }
+    private var m: ToastMetrics { ToastDraw }
     private var capWidth: Double { max(ToastDraw.capMinWidth.value, ceil(cap.intrinsicContentSize.width) + 2 * ToastDraw.capPadding.value) }
 
     override func layout() {
@@ -248,6 +273,11 @@ final class ToastView: NSView {
             x = capBackground.frame.maxX + m.gap.value
         }
         if !trailing.isHidden { place(trailing) }
+        if !actionBox.isHidden {
+            actionBox.frame = CGRect(x: x, y: mid - m.actionHeight.value / 2, width: actionWidth, height: m.actionHeight.value)
+            let size = actionLabel.intrinsicContentSize
+            actionLabel.frame = CGRect(x: actionBox.frame.minX, y: mid - size.height / 2, width: actionWidth, height: size.height)
+        }
     }
 }
 
@@ -263,6 +293,9 @@ struct ToastMetrics: MetricGroup {
     let border = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: a 1 px #AFB9B9 edge"))
     let shadowBlur = Metric(12.0, .guess("soft popover shadow under the toast"))
     let shadowAlpha = Metric(0.12, .guess("the toast's shadow is faint in P15"))
+    let actionHeight = Metric(32.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the toast's Save button, 64 px tall"))
+    let actionPadding = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: Save sits 24 px in from its button's edges"))
+    let actionInset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the Save button ends 14 px before the toast's right edge"))
     let capHeight = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
     let capMinWidth = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
     let capPadding = Metric(7.0, .guess("side padding inside the key cap for longer shortcuts"))

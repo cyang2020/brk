@@ -57,31 +57,36 @@ final class BoostTests: XCTestCase {
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, boost().javascript)
         XCTAssertTrue(Driver(file: d.savedFile).snapshot.pages[0].boostPolicy.boosts.isEmpty)
     }
-    func testDraftPreviewIsCSSOnlyAndCancelRestoresSavedPolicy() throws {
+    func testDraftPreviewRunsOnlyConfirmedJavaScriptAndCloseKeepsTheEdits() throws {
         let d = readyDriver(); d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
         d.user(.boost(.edit("fixture-boost")))
         var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.css = "body { color: blue }"
         d.user(.boost(.update(draft)))
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, draft.css)
-        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "")
-        d.user(.boost(.cancel))
-        XCTAssertEqual(d.view.boostEditor?.confirmDiscard, true, "the first Escape on a dirty draft only warns")
-        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, draft.css, "the draft and its preview survive the warning")
-        d.user(.boost(.cancel))
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, boost().javascript, "the saved, confirmed program keeps running")
+        draft.javascript += ";1"
+        d.user(.boost(.update(draft)))
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "", "typing never runs code")
+        let editor = try XCTUnwrap(d.view.boostEditor)
+        let closed = d.user(.boost(.close))
+        guard case .boost(.write(_, _, let catalog, let owner))? = closed.effects.first else { return XCTFail("close did not save") }
+        XCTAssertEqual(owner, editor.id); XCTAssertEqual(catalog.boosts[0].css, draft.css); XCTAssertFalse(catalog.boosts[0].javascriptApproved)
+        d.system(.boost(.written(d.window, .default, catalog, editor: editor.id)))
         XCTAssertNil(d.view.boostEditor)
-        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, boost().css)
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, draft.css)
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "", "changed JavaScript waits for the hammer's confirmation")
     }
-    func testDiscardClosesADirtyDraftAtOnceAndACleanDraftCancelsAtOnce() throws {
+    func testDiscardClosesADirtyDraftAtOnceAndAnUnchangedDraftClosesWithoutWriting() throws {
         let d = readyDriver(); d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
         d.user(.boost(.edit("fixture-boost")))
         var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.css = "body { color: blue }"
         d.user(.boost(.update(draft)))
         d.user(.boost(.discard))
-        XCTAssertNil(d.view.boostEditor, "the Cancel button discards without asking")
+        XCTAssertNil(d.view.boostEditor, "Maybe Later and discard drop the draft")
         XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].css, boost().css)
         d.user(.boost(.edit("fixture-boost")))
-        d.user(.boost(.cancel))
-        XCTAssertNil(d.view.boostEditor, "Escape on an unchanged draft closes at once")
+        XCTAssertTrue(d.user(.boost(.close)).effects.isEmpty)
+        XCTAssertNil(d.view.boostEditor, "closing an unchanged Boost writes nothing")
     }
     func testTrustCannotBeGrantedByAnEditorUpdateAndConfirmationRejectsChangedDraft() throws {
         let d = readyDriver(); d.user(.boost(.create))
@@ -174,7 +179,7 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.draft.name, "Comfortable reading")
         d.user(.boost(.legacy)); XCTAssertNotNil(d.view.boostEditor)
         d.user(.boost(.editCurrent)); XCTAssertEqual(d.view.boostEditor?.draft.id, original.id)
-        d.user(.boost(.cancel))
+        d.user(.boost(.close))
         let file = URL(fileURLWithPath: "/tmp/owned-boost.json")
         XCTAssertEqual(d.user(.boost(.importSelected(file))).effects, [.boost(.importFile(d.window, .default, file))])
         XCTAssertEqual(d.user(.boost(.exportSelected(original.id, file))).effects, [.boost(.exportFile(d.window, original, file))])
@@ -235,9 +240,7 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.picking, false)
         XCTAssertNil(d.view.boostEditor?.pickID)
         XCTAssertEqual(d.view.boostEditor?.draft, draft)
-        d.user(.app(.exit))
-        XCTAssertEqual(d.view.boostEditor?.confirmDiscard, true, "a never-saved draft counts as unsaved: the first Exit warns")
-        d.user(.app(.exit))
+        XCTAssertTrue(d.user(.app(.exit)).effects.isEmpty, "a blank never-saved Boost is not written")
         XCTAssertNil(d.view.boostEditor)
     }
     func testZapRefusesAnEditorWhoseCapturedPageIsNoLongerVisible() throws {
@@ -267,5 +270,114 @@ extension BoostTests {
         XCTAssertEqual(d.view.boostEditor?.picking, false)
         XCTAssertNil(d.view.boostEditor?.pickID)
         XCTAssertEqual(d.view.boostEditor?.draft, draft)
+    }
+}
+
+extension BoostTests {
+    func testFirstBoostOpensOnTheIntroCardAndMaybeLaterCreatesNothing() throws {
+        let d = readyDriver(); d.user(.boost(.create))
+        XCTAssertEqual(d.view.boostEditor?.page, .intro)
+        d.user(.boost(.page(.style)))
+        XCTAssertEqual(d.view.boostEditor?.page, .style, "Make a Boost")
+        d.user(.boost(.discard))
+        XCTAssertNil(d.view.boostEditor)
+        d.user(.boost(.create))
+        XCTAssertTrue(d.user(.boost(.close)).effects.isEmpty, "× on the intro card creates no Boost")
+        d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
+        d.user(.boost(.create))
+        XCTAssertEqual(d.view.boostEditor?.page, .style, "the card is for the first Boost only")
+        d.user(.boost(.page(.javascript)))
+        XCTAssertEqual(d.view.boostEditor?.page, .javascript)
+    }
+    func testStyleControlsCompileIntoThePagesCSSAndSurviveTheFile() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.page(.style)))
+        var draft = try XCTUnwrap(d.view.boostEditor?.draft)
+        draft.style = BoostStyle(tint: BoostPoint(x: 0.6, y: 0.3), text: BoostPoint(x: 0.1, y: 0.9), inverted: true, intensity: 2, font: 8, size: 2, textCase: .upper)
+        draft.css = "#own { color: red }"
+        d.user(.boost(.update(draft)))
+        let css = try XCTUnwrap(d.snapshot.pages.first?.boostPolicy.boosts.first?.css)
+        for part in ["mix-blend-mode: multiply", "opacity: 0.56", "invert(1)", "font-family: Georgia", "zoom: 1.3", "uppercase", "#own { color: red }"] {
+            XCTAssertTrue(css.contains(part), part)
+        }
+        XCTAssertLessThan(try XCTUnwrap(css.range(of: "font-family")).lowerBound, try XCTUnwrap(css.range(of: "#own")).lowerBound, "the Code page's CSS comes last and wins")
+        let stored = try BoostCodec.decode(BoostCodec.encode(BoostCatalog(boosts: [d.view.boostEditor!.draft])))
+        XCTAssertEqual(stored.boosts[0].style, draft.style)
+        var invalid = draft; invalid.style?.font = 99
+        d.user(.boost(.update(invalid)))
+        XCTAssertEqual(d.view.boostEditor?.draft.style?.font, 8, "an out-of-range control value is refused")
+        XCTAssertThrowsError(try BoostCodec.encode(BoostCatalog(boosts: [invalid])))
+        var cleared = draft; cleared.style = BoostStyle(); cleared.css = ""
+        d.user(.boost(.update(cleared)))
+        XCTAssertNil(d.view.boostEditor?.draft.style, "the reset button's empty style is no style")
+        XCTAssertTrue(d.view.boostEditor?.draft.isBlank == true)
+        let legacy = try BoostCodec.decode(Data(#"{"version":1,"boosts":[{"id":"old","name":"Old","scope":{"allSites":{}},"css":"a{}","javascript":"","enabled":true,"allowPrivate":false,"javascriptApproved":false}]}"#.utf8))
+        XCTAssertNil(legacy.boosts[0].style, "Boost files from before the visual controls still load")
+    }
+    func testCloseSavesANewBoostAndABlankOneCreatesNothing() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.page(.style)))
+        XCTAssertTrue(d.user(.boost(.close)).effects.isEmpty)
+        XCTAssertNil(d.view.boostEditor)
+        d.user(.boost(.create)); d.user(.boost(.page(.style)))
+        var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.style = BoostStyle(font: 3)
+        d.user(.boost(.update(draft)))
+        let editor = try XCTUnwrap(d.view.boostEditor)
+        guard case .boost(.write(_, _, let catalog, let owner))? = d.user(.boost(.close)).effects.first else { return XCTFail("close did not save") }
+        XCTAssertEqual(owner, editor.id)
+        XCTAssertNotNil(d.view.boostEditor, "the panel waits for the durable write")
+        d.system(.boost(.written(d.window, .default, catalog, editor: editor.id)))
+        XCTAssertNil(d.view.boostEditor)
+        XCTAssertEqual(d.state.session.boosts[.default]?.boosts.first?.style?.font, 3)
+    }
+    func testZapStaysArmedAfterEachPickAndEscapeOnThePageEndsItQuietly() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.page(.style)))
+        let target = try XCTUnwrap(d.view.boostEditor?.target)
+        d.user(.boost(.zap))
+        let first = try XCTUnwrap(d.view.boostEditor?.pickID)
+        let rearmed = d.system(.boost(.picked(d.window, first, target, "#ad")))
+        let second = try XCTUnwrap(d.view.boostEditor?.pickID)
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(rearmed.effects, [.boost(.pick(d.window, second, target))])
+        XCTAssertEqual(d.view.boostEditor?.picking, true)
+        d.system(.boost(.picked(d.window, second, target, "#ad")))
+        let third = try XCTUnwrap(d.view.boostEditor?.pickID)
+        d.system(.boost(.picked(d.window, third, target, "main > p:nth-of-type(2)")))
+        let css = try XCTUnwrap(d.view.boostEditor?.draft.css)
+        XCTAssertEqual(css.components(separatedBy: "#ad { display: none !important; }").count, 2, "a second Zap of the same element adds nothing")
+        XCTAssertTrue(css.contains("main > p:nth-of-type(2) { display: none !important; }"))
+        let fourth = try XCTUnwrap(d.view.boostEditor?.pickID)
+        XCTAssertTrue(d.system(.boost(.picked(d.window, fourth, target, nil))).effects.isEmpty)
+        XCTAssertEqual(d.view.boostEditor?.picking, false)
+        XCTAssertNil(d.view.boostEditor?.message, "Escape is not an error")
+    }
+    func testEyedropperInsertsTheSelectorIntoTheOpenCodeSegment() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.page(.css)))
+        let target = try XCTUnwrap(d.view.boostEditor?.target)
+        d.user(.boost(.inspect))
+        XCTAssertEqual(d.view.boostEditor?.pickPurpose, .selector)
+        d.system(.boost(.picked(d.window, try XCTUnwrap(d.view.boostEditor?.pickID), target, "#hero")))
+        XCTAssertEqual(d.view.boostEditor?.picking, false, "the eyedropper picks once")
+        XCTAssertTrue(try XCTUnwrap(d.view.boostEditor?.draft.css).contains("#hero {\n"))
+        d.user(.boost(.page(.javascript)))
+        d.user(.boost(.inspect))
+        d.system(.boost(.picked(d.window, try XCTUnwrap(d.view.boostEditor?.pickID), target, "#hero")))
+        XCTAssertEqual(d.view.boostEditor?.draft.javascript, "document.querySelector(\"#hero\")\n")
+        d.user(.boost(.inspect)); XCTAssertEqual(d.view.boostEditor?.picking, true)
+        d.user(.boost(.page(.style)))
+        XCTAssertEqual(d.view.boostEditor?.picking, false, "leaving the Code page ends its pick")
+    }
+    func testHammerConfirmsJavaScriptSavesAndKeepsThePanelOpen() throws {
+        let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.page(.javascript)))
+        var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.javascript = "document.title='boost'"
+        d.user(.boost(.update(draft)))
+        let editor = try XCTUnwrap(d.view.boostEditor)
+        XCTAssertEqual(d.user(.boost(.save)).effects, [.boost(.confirm(d.window, editor.id, editor.draft))])
+        guard case .boost(.write(_, _, let catalog, let owner))? = d.system(.boost(.approved(d.window, editor.id, editor.draft))).effects.first else { return XCTFail("approval did not write") }
+        XCTAssertNil(owner, "the hammer saves without closing")
+        XCTAssertEqual(d.view.boostEditor?.draft.javascriptApproved, true)
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "", "nothing runs before the write is durable")
+        d.system(.boost(.written(d.window, .default, catalog, editor: nil)))
+        XCTAssertNotNil(d.view.boostEditor)
+        XCTAssertEqual(d.view.boostEditor?.message, "JavaScript allowed and saved.")
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts[0].javascript, "document.title='boost'")
     }
 }

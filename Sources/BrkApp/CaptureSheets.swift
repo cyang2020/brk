@@ -4,14 +4,20 @@ import BrkLayout
 
 /// A local AppKit sheet: no remote file-provider view participates in choosing a PNG destination.
 @MainActor final class CaptureSheets {
-    private struct Entry { let alert: NSAlert; let owner: NSWindow; let capture: String }
+    /// `listed`: the sheet belongs to a Library row and closes when that row goes; a menu card's Save… holds its
+    /// pixels itself and closes only with its window.
+    private struct Entry { let alert: NSAlert; let owner: NSWindow; let capture: String; var listed = true }
     private var entries: [WindowID: Entry] = [:]
-    func choose(name: String, capture: String, in owner: NSWindow, id: WindowID, reply: @escaping @MainActor (URL?) -> Void) {
+    static func fileName(_ request: CaptureRequest) -> String {
+        let host = request.url.host.map { $0.replacingOccurrences(of: ".", with: "-") } ?? "Capture"
+        return "Screenshot-" + host + "-" + String(request.id.prefix(8)) + ".png"
+    }
+    func choose(name: String, capture: String, listed: Bool = true, in owner: NSWindow, id: WindowID, reply: @escaping @MainActor (URL?) -> Void) {
         guard owner.attachedSheet == nil, entries[id] == nil else { return }
         let alert = NSAlert()
-        alert.messageText = "Export Capture"
+        alert.messageText = listed ? "Export Capture" : "Save Capture"
         alert.informativeText = "Save a PNG copy. Enter the full file path."
-        alert.addButton(withTitle:"Export"); alert.addButton(withTitle:"Cancel")
+        alert.addButton(withTitle:listed ? "Export" : "Save"); alert.addButton(withTitle:"Cancel")
         let folder = FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first ?? FileManager.default.homeDirectoryForCurrentUser
         let field = NSTextField(string:folder.appendingPathComponent(name).path)
         field.frame = CGRect(x:0,y:0,width:480,height:28)
@@ -19,7 +25,7 @@ import BrkLayout
         field.setAccessibilityIdentifier(ViewID.tabTool("capture-export-path").identifier)
         field.setAccessibilityLabel("PNG file path")
         alert.accessoryView = field; alert.window.initialFirstResponder = field
-        entries[id] = Entry(alert:alert,owner:owner,capture:capture)
+        entries[id] = Entry(alert:alert,owner:owner,capture:capture,listed:listed)
         alert.beginSheetModal(for:owner) { [weak self, weak owner] response in
             guard let self, let owner, self.entries[id]?.alert === alert else { return }
             self.entries[id] = nil
@@ -32,7 +38,7 @@ import BrkLayout
             let replace = NSAlert(); replace.messageText = "Replace “\(url.lastPathComponent)”?"
             replace.informativeText = "The existing file will be replaced by this capture."
             replace.addButton(withTitle:"Replace"); replace.addButton(withTitle:"Cancel")
-            self.entries[id] = Entry(alert:replace,owner:owner,capture:capture)
+            self.entries[id] = Entry(alert:replace,owner:owner,capture:capture,listed:listed)
             replace.beginSheetModal(for:owner) { [weak self, weak owner] answer in
                 guard let self, self.entries[id]?.alert === replace else { return }
                 self.entries[id] = nil; reply(answer == .alertFirstButtonReturn && owner?.isVisible == true ? url : nil)
@@ -60,7 +66,7 @@ import BrkLayout
     func reconcile(_ windows: Set<WindowID>, captures: [WindowID: Set<String>] = [:]) {
         for id in Array(entries.keys) {
             guard let entry = entries[id] else { continue }
-            if !windows.contains(id) || captures[id]?.contains(entry.capture) != true { cancel(id) }
+            if !windows.contains(id) || (entry.listed && captures[id]?.contains(entry.capture) != true) { cancel(id) }
         }
     }
     private func cancel(_ id: WindowID) {

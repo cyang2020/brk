@@ -394,6 +394,7 @@ public final class AppStore {
         captureSheets.reconcile(Set(snapshot.windows.keys), captures:captures)
     }
     func captureWindow(_ id: WindowID) -> NSWindow? { windows[id]?.window }
+    func captureAwaitsStore(_ request: CaptureRequest) -> Bool { state.captureAwaitsStore(request) }
 
     private func run(_ effects: [Effect]) {
         siteTools.reconcile(Set(snapshot.windows.values.compactMap { $0.tabTools.pendingSiteRequest }))
