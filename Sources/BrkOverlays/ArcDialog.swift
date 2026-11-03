@@ -17,7 +17,7 @@ struct ArcDialogMetrics: MetricGroup {
     let inset = Metric(38.0, .guess("text, field and icon left inset, measured on P26 a and P42 a"))
     let titleTop = Metric([56.0, 118.0], .guess("title label top without and with the icon, measured on P26 a and P27 a / P42 a"))
     let titleSize = Metric(17.0, .guess("title font size (cap height 11.5 pt), measured on P26 a"))
-    let bodySize = Metric(14.5, .guess("body text size (lines 18.3 pt apart), measured on P27 a and P42 a"))
+    let bodySize = Metric(14.0, .guess("body text size: P42 a wraps \"…separate — with their own\" on its first line"))
     let icon = Metric(CGRect(x: 39, y: 39, width: 60, height: 60), .guess("icon box at the top left, measured on P27 a, Q04 a and P42 a"))
     let buttonHeight = Metric(38.0, .guess("button height, measured on P26 a"))
     let buttonBottom = Metric(26.0, .guess("buttons' bottom edge above the card's, measured on P26 a, P27 a and P42 a"))

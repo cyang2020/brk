@@ -12,7 +12,7 @@ struct SpaceAlertMetrics: MetricGroup {
     let renameField = Metric([24.0, 36.0], .guess("Rename field's gap under the title and height (the field 375 wide, its top 100 pt down), measured on P26 a"))
     let renameButtonGap = Metric(21.5, .guess("Rename buttons' gap under the field, measured on P26 a"))
     let deleteBodyGap = Metric(12.0, .guess("Delete text's gap under the title, measured on P27 a"))
-    let deleteButtonGap = Metric(40.5, .guess("Delete buttons' gap under the text, fitted to the 273 pt card of P27 a"))
+    let deleteButtonGap = Metric(41.5, .guess("Delete buttons' gap under the text, fitted to the 273 pt card of P27 a"))
 }
 
 let SpaceAlert = SpaceAlertMetrics()
