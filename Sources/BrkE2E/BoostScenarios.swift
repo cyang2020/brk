@@ -46,9 +46,16 @@ enum BoostScenarios {
         try app.waitUntil("Boost renamed") { try editor(app).draft.name == name }
     }
     private static func code(_ app: AppUnderTest, _ page: BoostEditorPage) throws {
-        if try editor(app).page == .style { try app.click(.boostControl("code")) }
+        if try editor(app).page == .style {
+            try app.click(.boostControl("code"))
+            try app.waitUntil("Boost Code page") { try editor(app).page == .css }
+        }
         if page == .javascript { try app.click(.boostControl("tab-javascript")) }
-        try app.waitUntil("Boost Code page") { try editor(app).page == page }
+        try app.waitUntil("Boost Code segment") { try editor(app).page == page }
+    }
+    private static func back(_ app: AppUnderTest) throws {
+        try app.click(.boostControl("back"))
+        try app.waitUntil("Boost editor page again") { try editor(app).page == .style }
     }
     @Sendable static func css(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("boost.html"))
@@ -62,7 +69,7 @@ enum BoostScenarios {
         try typeField(app, "css", "#style-target { color: rgb(134, 14, 255) !important; }")
         try app.waitUntil("live CSS preview") { try report(app, item)["color"] as? String == "rgb(134, 14, 255)" }
         try app.screenshot("editor-live-preview")
-        try app.click(.boostControl("back"))
+        try back(app)
         try app.click(.boostControl("menu")); try typeField(app, "scope-value", "invalid-origin")
         try app.click(.boostControl("close"))
         try expect(try app.view().boostEditor != nil, "closing with an invalid origin silently saved a previous value")
@@ -77,7 +84,7 @@ enum BoostScenarios {
         try code(app, .css)
         try typeField(app, "css", "#style-target { color: rgb(134, 14, 255) !important; }")
         let id = try editor(app).draft.id
-        try app.click(.boostControl("back"))
+        try back(app)
         try app.click(.boostControl("close"))
         try app.waitUntil("closing saves and closes the panel") { try app.view().boostEditor == nil }
         try expect(try library(app).boosts.contains { $0.id == id }, "saved boost missing from Library")
@@ -118,7 +125,7 @@ enum BoostScenarios {
         try app.perform(.sheetButton(title: "Allow JavaScript & Save"))
         try app.waitUntil("approved JavaScript ran once with the panel still open") { try report(app, item)["runs"] as? Int == 1 }
         try expect(try app.view().boostEditor != nil, "the hammer closed the panel")
-        try app.click(.boostControl("back")); try app.click(.boostControl("close"))
+        try back(app); try app.click(.boostControl("close"))
         try app.waitUntil("panel closed") { try app.view().boostEditor == nil }
         for _ in 0..<4 { try app.dispatch(.sidebar(.toggleSpaceHeader)) }
         try expect(try report(app, item)["runs"] as? Int == 1, "reconcile reran JavaScript")

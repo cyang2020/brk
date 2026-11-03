@@ -41,6 +41,8 @@ public final class BoostPanel {
         parentFrame = parent.frame
         editor.frame = CGRect(origin: .zero, size: size)
         editor.render(value)
+        // Settle the page's geometry now: the next click can come in the same run-loop turn as a page change.
+        panel.contentView?.layoutSubtreeIfNeeded()
         if !panel.isVisible { panel.orderFront(nil) }
     }
 
@@ -291,6 +293,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         segments.frame = CGRect(x: (w - 92) / 2, y: 8, width: 92, height: 24)
         let editorFrame = CGRect(x: 0, y: 40, width: w, height: bounds.height - 40 - 69)
         cssScroll.frame = editorFrame; jsScroll.frame = editorFrame
+        for view in [segments, settings, fonts] as [NSView] { view.needsLayout = true }
         for (text, scroll) in [(css, cssScroll), (javascript, jsScroll)] { text.setFrameSize(NSSize(width: scroll.contentSize.width, height: max(text.frame.height, scroll.contentSize.height))) }
         codeFooter.frame = CGRect(x: 0, y: bounds.height - 69, width: w, height: 69)
         inspect.frame = CGRect(x: 15, y: 16, width: 38, height: 38)
@@ -358,6 +361,7 @@ class BoostPressable: NSView {
     var isEnabled = true { didSet { needsDisplay = true } }
     var pressed = false { didSet { needsDisplay = true } }
     override var isFlipped: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { if isEnabled { pressed = true } }
     override func mouseUp(with event: NSEvent) {

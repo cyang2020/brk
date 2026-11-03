@@ -142,7 +142,7 @@ enum CaptureScenarios {
         _ = try app.send(.pointerDrag(from:CGPoint(x:peekRect.minX+peekRect.width*0.4,y:peekRect.minY+peekRect.height*0.4),to:CGPoint(x:peekRect.minX+peekRect.width*0.65,y:peekRect.minY+peekRect.height*0.65),cancel:false))
         try menuCard(app)
         try app.click(.tabTool("capture-menu-library"))
-        try app.waitUntil("Peek capture reaches its public profile library") { try library(app)?.captures.count == 3 }
+        _ = try captureRecord(app,mode:.area,previous:2)
         guard let peekCapture = try library(app)?.captures.first, let peekFile = try library(app)?.captureFiles[peekCapture.id] else { throw Check(description:"Peek capture missing") }
         try expect(peekCapture.url == url,"Peek capture has the underlying tab's address")
         try Data(contentsOf:peekFile).write(to:app.shotsDirectory.appendingPathComponent("peek-area.png"))
