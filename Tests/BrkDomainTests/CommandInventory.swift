@@ -61,7 +61,7 @@ enum CommandInventory {
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
         .settings(.openBrowserPage(.passwords, profile: .default)),
-        .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
+        .library(.open(.archive)), .library(.close), .library(.openHistory), .library(.cancelDownload(download)), .library(.revealDownload(download)),
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
@@ -360,6 +360,7 @@ enum CommandInventory {
             switch c {
             case .open: "open"
             case .close: "close"
+            case .openHistory: "openHistory"
             case .cancelDownload: "cancelDownload"
             case .revealDownload: "revealDownload"
             case .removeDownload: "removeDownload"

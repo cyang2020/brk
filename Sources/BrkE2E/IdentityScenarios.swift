@@ -252,12 +252,14 @@ enum IdentityScenarios {
         let attachment = try app.load(app.site.url("download-active"))
         let blank = PageID(window: page.window, item: attachment)
         try app.waitUntil("explicit second attachment request") { app.site.requestCount(path) == before + 2 }
+        // The attachment-only tab is gone once the file is accepted (Arc downloads a typed address without a tab).
+        try app.waitUntil("the attachment-only tab removed") { try tab(attachment, in: app.view(page.window)) == nil }
         try app.dispatch(.profile(.assign(.current, to: .default)))
         try app.settle()
         try expect(try observations(app)[blank]?.browser == nil, "attachment-only tab was recreated")
         try app.restart(); try app.settle()
         try expect(app.site.requestCount(path) == before + 2, "blank attachment slot replayed after restart")
-        try expect(try app.view(page.window).content.panes.first?.content == .blank, "attachment-only restored pane is not blank")
+        try expect(try tab(attachment, in: app.view(page.window)) == nil, "the attachment-only tab came back after restart")
         try record(app, "no-replay")
         app.note("Attachment request counts stayed at \(before + 1) after reassignment/restart and \(before + 2) after an explicit second request. Original-request survival and transport cancellation are covered separately by T1-T11.")
     }

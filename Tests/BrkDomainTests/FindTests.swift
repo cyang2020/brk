@@ -71,7 +71,7 @@ final class FindTests: XCTestCase {
         d.user(.find(.open(replace:false))); d.user(.commandBar(.open(.newTab)))
         XCTAssertNil(d.view.find)
         d.user(.find(.open(replace:false))); XCTAssertNil(d.view.overlay)
-        d.user(.library(.open(.history))); XCTAssertNil(d.view.find)
+        d.user(.library(.open(.downloads))); XCTAssertNil(d.view.find)
     }
     func testSelectionAndMutationRequestsRequireCurrentScopeAndUnconfirmedStaysPending() throws {
         let d=Driver(); ready(d); d.user(.find(.open(replace:true)))
