@@ -110,6 +110,24 @@ func isCommandBar(_ overlay: OverlaySnapshot?) -> Bool { if case .commandBar? = 
 /// The Library is open on its archive page.
 func isArchive(_ overlay: OverlaySnapshot?) -> Bool { if case .library(let l)? = overlay { l.page == .archive } else { false } }
 
+/// The visits the History page lists (Cmd+Y's History tab in Today, drawn in its card). With `returning`, the tab
+/// that was shown before is shown again afterwards (the History tab stays in Today).
+func historyRows(_ app: AppUnderTest, returning: Bool = true) throws -> [HistoryRow] {
+    let before = try currentTab(app.view())?.id
+    try app.dispatch(.library(.openHistory))
+    var rows: [HistoryRow] = []
+    try app.waitUntil("the History page in its card") {
+        guard let shown = try app.view().history else { return false }
+        rows = shown
+        return true
+    }
+    if returning, let before {
+        try app.dispatch(.tab(.focus(before)))
+        try app.waitUntil("the previous tab shown again") { try app.view().history == nil }
+    }
+    return rows
+}
+
 /// The visible actual view for `id`, or a Check naming what is there instead.
 func visible(_ n: NativeFacts, _ id: ViewID) throws -> ActualView {
     guard let view = n.actual[id.identifier] else { throw Check(description: "native().actual has no \(id.identifier)") }

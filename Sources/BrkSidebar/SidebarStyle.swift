@@ -155,7 +155,8 @@ enum SidebarCopy {
     static let reload = "Reload"
     static let stop = "Stop"
     static let showHideSidebar = "Show/Hide Sidebar"
-    static let archive = "Archive"
+    /// The dock's left button opens the Library (Arc's `HomeButton`, "View Library").
+    static let library = "Library"
     static let copyLink = "Copy Link"
     static let newSpaceMenu = "New…"
     /// Arc's title for a new tab before its first document commits.

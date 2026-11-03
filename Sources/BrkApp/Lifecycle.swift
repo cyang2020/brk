@@ -50,7 +50,11 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         self.engineKind = engineKind
     }
 
-    public func applicationWillFinishLaunching(_ notification: Notification) { installURLHandler() }
+    public func applicationWillFinishLaunching(_ notification: Notification) {
+        // macOS would add its own "Enter Full Screen" (fn F) under View's table row; Arc's View menu has one (P19-a).
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
+        installURLHandler()
+    }
 
     private func installURLHandler() {
         guard getURL == nil else { return }
@@ -97,6 +101,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         menuTarget.edits.window = { [weak store] in NSApp.keyWindow ?? store?.windowController(nil)?.window }
 
         menuTarget.perform = { [weak self] action, event in
+            // Exit (Esc) closes an open icon popover first, as the Escape key does wherever it arrives.
+            if action == .exit, TabIconPicker.isOpen { TabIconPicker.close(); return }
             guard let self, let window = self.store?.windowController(nil)?.id else { return }
             self.router?.menuAction(action, in: window, event: event)
         }
@@ -107,8 +113,18 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             return snapshot.enabledActions.contains(action)
         }
         menuTarget.isChecked = { [weak self] action in
-            guard action == .toggleStayOnTop, let self, let id = self.store?.windowController(nil)?.id else { return nil }
-            return self.store?.snapshot.windows[id]?.stayOnTop
+            guard let self, let id = self.store?.windowController(nil)?.id, let window = self.store?.snapshot.windows[id] else { return nil }
+            switch action {
+            case .toggleStayOnTop: return window.stayOnTop
+            case .appearanceAutomatic: return window.websiteAppearance == .automatic
+            case .appearanceLight: return window.websiteAppearance == .light
+            case .appearanceDark: return window.websiteAppearance == .dark
+            default: return nil
+            }
+        }
+        menuTarget.current = { [weak self] in
+            let controller = self?.store?.windowController(nil)
+            return (controller.flatMap { self?.store?.snapshot.windows[$0.id] }, controller?.window.styleMask.contains(.fullScreen) ?? false)
         }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
@@ -120,6 +136,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated {
                 guard event.keyCode == Key.escape.code else { return false }
+                // The icon popover is open whichever window is key (the browser window usually stays key).
+                if TabIconPicker.isOpen { TabIconPicker.close(); return true }
                 // AppKit's fullscreen toolbar may be key while its owning browser still reports key status.
                 let window = (NSApp.keyWindow as? any HostWindow)
                     ?? NSApp.windows.compactMap { $0 as? any HostWindow }.first { $0.isKeyWindow && $0.attachedSheet == nil }

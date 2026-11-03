@@ -13,8 +13,9 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertEqual(visible.count, 1)
         XCTAssertEqual(visible.first?.id.item, d.view.content.presentedPanes.first?.tab)
         XCTAssertEqual(d.snapshot.pages.count, 4, "Hidden panes retain their native browser demand")
-        d.user(.library(.open(.history)))
-        XCTAssertTrue(d.snapshot.pages.allSatisfy { !$0.websitePolicy.visible })
+        d.user(.library(.open(.downloads)))
+        XCTAssertEqual(d.snapshot.pages.filter { $0.websitePolicy.visible }.map(\.id.item), visible.map(\.id.item),
+                       "the page stays visible beside the Library")
     }
 
     func testWebsiteCSSUsesEffectivePairedThemeAtTheCurrentSystemScheme() throws {

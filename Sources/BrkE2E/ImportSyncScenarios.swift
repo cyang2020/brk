@@ -100,9 +100,8 @@ enum ImportSyncScenarios {
         try panel(app, .select(identifier: "import-format", index: 2))
         try FilePanelScenarios.selectImport(app, historyFile); try waitPanel(app, "1 history entries")
         try panel(app, .button("Import")); try waitPanel(app, "1 new history URLs"); try panel(app, .button("Close"))
-        try app.dispatch(.library(.open(.history)))
-        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "History not shown") }
-        try expect(library.history.contains { $0.title == "Owned imported History" }, "selected History import not in the actual Library")
+        let history = try historyRows(app, returning: false)
+        try expect(history.contains { $0.title == "Owned imported History" }, "selected History import not on the actual History page")
         try expect(try Data(contentsOf: historyFile) == historyBytes, "history source changed")
         try FilePanelScenarios.retain(app, historyFile, label: "history-source-after-import")
         _ = try app.screenshot("imported-history")

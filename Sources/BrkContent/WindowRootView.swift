@@ -9,8 +9,8 @@ import BrkTheme
 import BrkUIKit
 
 /// Owner: W2 (the Library slot: F5). A window's content view. Bottom to top: themed background, anchored sidebar,
-/// content cards (page surfaces inside), the Library (its panel in place of the sidebar, its page over the content
-/// area; the archive is one of its pages), the Peek card, floating sidebar (only while peeking a hidden sidebar),
+/// content cards (page surfaces inside), the History page over its card, the Library (its panel in place of the
+/// sidebar; the archive is one of its pages), the Peek card, floating sidebar (only while peeking a hidden sidebar),
 /// command bar, space dialog (SwiftUI in an NSHostingView). TODO(F2): the profile dialog host.
 /// Native views above Chromium's moved views draw and take focus normally (spike unknown 2, embed mode).
 @MainActor
@@ -22,6 +22,7 @@ public final class WindowRootView: NSView {
     public let sidebar: SidebarView
     public let content: ContentAreaView
     public let library: LibraryView
+    public let history: HistoryPageView
     public let peek: PeekCardView
     public let findBar: FindBarView
     public let commandBar: CommandBarView
@@ -46,14 +47,16 @@ public final class WindowRootView: NSView {
         sidebar = SidebarView(dispatch: dispatch)
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
+        history = HistoryPageView(dispatch: dispatch)
         peek = PeekCardView(dispatch: dispatch)
         findBar = FindBarView(dispatch: dispatch)
         commandBar = CommandBarView(dispatch: dispatch)
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
+        sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
@@ -101,6 +104,10 @@ public final class WindowRootView: NSView {
         sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
         content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
+        let historyCard = frames.cards.first { if case .history = $0.content { true } else { false } }
+        let historyPage: PageID? = if case .history(let page)? = historyCard?.content { page } else { nil }
+        history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
+        history.layer?.cornerRadius = historyCard?.cornerRadius ?? 0
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
         loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,

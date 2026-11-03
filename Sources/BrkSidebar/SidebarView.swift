@@ -100,9 +100,18 @@ public final class SidebarView: NSView {
 
     public override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()
+        placeEdgeViews()
+    }
+
+    /// The root's view the edge views (resize handle, reveal strip) go above. The content card reaches the sidebar's
+    /// edge, so the handle, which straddles that edge, must be over the cards or half of it would be under the page.
+    public weak var edgeViewsAbove: NSView? { didSet { placeEdgeViews() } }
+
+    private func placeEdgeViews() {
         guard let superview else { return }
-        superview.addSubview(revealStrip, positioned: .above, relativeTo: self)
-        superview.addSubview(resizeHandle, positioned: .above, relativeTo: self)
+        let anchor = edgeViewsAbove.flatMap { $0.superview === superview ? $0 : nil } ?? self
+        superview.addSubview(revealStrip, positioned: .above, relativeTo: anchor)
+        superview.addSubview(resizeHandle, positioned: .above, relativeTo: anchor)
     }
 
     public override func viewDidMoveToWindow() {

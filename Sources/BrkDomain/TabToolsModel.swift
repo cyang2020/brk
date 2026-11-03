@@ -38,6 +38,23 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     /// ⌘Z while an undo toast shows: brings back what the cleared Today or the deleted space held.
     case undoToast
     case preferences(includeFavorites: Bool, previews: Bool)
+    /// Context menu "Copy Link", "Copy All Links" (a folder) and "Copy Links" (several rows): every address under
+    /// the targets, one per line, on the pasteboard.
+    case copyLinks(TabTargets)
+    /// Context menu "Open in Split View": the first target joins what the window shows in a split (or, when it
+    /// cannot, shows with a new empty pane); further targets join that split.
+    case openInSplit(TabTargets)
+    /// Folder menu "New Nested Folder…": a folder at the top of the folder, in rename mode.
+    case newNestedFolder(ItemID)
+    /// Folder menu "Turn “X” into Space": a new space named after the folder whose Pinned holds its contents.
+    case folderToSpace(ItemID)
+    /// Tab menu "Customize Page…": shows the tab and opens its site's Boost (a new one when there is none).
+    case customize(ItemID)
+    /// Split menu "Add Tab…": shows the split and adds an empty pane with the command bar.
+    case addToSplit(ItemID)
+    /// Space menu "Export “X” into Folder" > a space: the space's Pinned and Today move into a new folder at the
+    /// top of that space's Pinned and the emptied space is deleted (Arc's "Space turned into folder").
+    case spaceIntoFolder(SpaceID, into: SpaceID)
 }
 
 struct TabPreferences: Equatable, Sendable, Codable {

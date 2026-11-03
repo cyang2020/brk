@@ -249,15 +249,16 @@ extension BoostTests {
 }
 
 extension BoostTests {
-    func testLibraryCoverCancelsZapAndRejectsTheLateSelection() throws {
+    /// the Library opens beside the page (its panel replaces the sidebar), so the page stays visible and Zap keeps
+    /// picking; a page that leaves the screen still cancels it (`testZapRefusesAnEditorWhoseCapturedPageIsNoLongerVisible`)
+    func testTheLibraryBesideThePageKeepsZapPicking() throws {
         let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.zap))
         let editor = try XCTUnwrap(d.view.boostEditor), pick = try XCTUnwrap(editor.pickID), target = try XCTUnwrap(editor.target)
         d.user(.library(.open(.boosts)))
-        XCTAssertEqual(d.view.boostEditor?.picking, false)
-        XCTAssertNil(d.view.boostEditor?.pickID)
-        XCTAssertTrue(d.user(.boost(.zap)).effects.isEmpty)
+        XCTAssertEqual(d.view.boostEditor?.picking, true)
+        XCTAssertEqual(d.view.boostEditor?.pickID, pick)
         d.system(.boost(.picked(d.window, pick, target, "#hidden")))
-        XCTAssertEqual(d.view.boostEditor?.draft.css, "")
+        XCTAssertNotEqual(d.view.boostEditor?.draft.css, "", "the pick landed")
     }
     func testNavigationAwayCancelsAnActiveZapWithoutLosingItsDraft() throws {
         let d = readyDriver(); d.user(.boost(.create)); d.user(.boost(.zap))

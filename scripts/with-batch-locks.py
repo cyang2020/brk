@@ -70,6 +70,38 @@ def holders():
     return out
 
 
+def parent_of(pid):
+    try:
+        out = subprocess.run(['ps', '-o', 'ppid=', '-p', str(pid)], capture_output=True, text=True).stdout.strip()
+        return int(out) if out else 0
+    except Exception:
+        return 0
+
+
+def descends(pid, ancestor, limit=12):
+    while pid > 1 and limit > 0:
+        if pid == ancestor:
+            return True
+        pid = parent_of(pid)
+        limit -= 1
+    return False
+
+
+def stuck_behind_a_waiting_holder(waiter, held_now, waiting_pids):
+    """True when `waiter` wants a lock whose current holder has a descendant waiting in the queue (the holder is
+    itself blocked on a sub-step), so the waiter cannot proceed until that sub-step runs."""
+    for lock in waiter.get('locks', []):
+        holder = held_now.get(lock)
+        if not holder:
+            continue
+        hpid = holder.get('pid', -1)
+        if hpid == waiter.get('pid'):
+            continue
+        if any(w != hpid and descends(w, hpid) for w in waiting_pids):
+            return True
+    return False
+
+
 def describe(data, now):
     minutes = (now - data['since']) / 60
     cmd = ' '.join(data.get('command', []))[:90]
@@ -109,12 +141,20 @@ def acquire(paths, timeout, command):
             # It is my turn when I am at the head, or when nobody ahead of me wants any lock I want: a native run
             # need not wait behind iteration builds that hold only the build lock.
             my_turn = False
+            held_now = holders()
+            waiting_pids = [d.get('pid', -1) for _, d in queue]
             for path, data in queue:
                 if path == ticket:
                     my_turn = True
                     break
                 if set(data.get('locks', [])) & set(paths):
-                    break
+                    # A waiter ahead of me wants one of my locks. Normally I wait behind it. The exception is a
+                    # waiter that cannot move itself: one of its locks is held by a process whose own descendant
+                    # is waiting in this queue (the holder is waiting for a sub-step). Waiting behind such a waiter
+                    # would be a circular wait: the holder's sub-step waits for me to pass, I wait for the waiter,
+                    # the waiter waits for the holder. So that waiter does not block me.
+                    if not stuck_behind_a_waiting_holder(data, held_now, waiting_pids):
+                        break
             if not any(p == ticket for p, _ in queue):  # someone cleaned us up; re-register at the back
                 ticket.write_text(json.dumps(dict(pid=me, since=time.time(), locks=paths, command=command, cwd=os.getcwd())))
             if my_turn:
