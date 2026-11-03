@@ -122,5 +122,28 @@ public struct MenuModel: Hashable, Sendable {
 
 public enum MenuEntry: Hashable, Sendable {
     case action(title: String, command: Command, enabled: Bool)
+    /// A choice with a check mark when `on` (Set Profile's profiles).
+    case choice(title: String, command: Command, on: Bool)
+    /// A grey caption that cannot be chosen (the split menu's "Tab Options").
+    case header(String)
+    /// A row that opens `entries` to its right (Share, Move to, Set Profile). An empty submenu shows disabled.
+    case submenu(title: String, entries: [MenuEntry])
     case separator
+}
+
+extension MenuModel {
+    /// Every choosable row, submenus included, depth first: (title, command, enabled).
+    public var actions: [(title: String, command: Command, enabled: Bool)] {
+        func walk(_ entries: [MenuEntry]) -> [(title: String, command: Command, enabled: Bool)] {
+            entries.flatMap { entry -> [(title: String, command: Command, enabled: Bool)] in
+                switch entry {
+                case .action(let title, let command, let enabled): [(title, command, enabled)]
+                case .choice(let title, let command, _): [(title, command, true)]
+                case .submenu(_, let children): walk(children)
+                case .header, .separator: []
+                }
+            }
+        }
+        return walk(entries)
+    }
 }
