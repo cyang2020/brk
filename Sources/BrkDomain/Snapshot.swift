@@ -64,6 +64,10 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var renaming: ItemID?
     public var dialog: SpaceDialogSnapshot?
     public var pendingSpaceDeletion: SpaceDeletionRequest? = nil
+    /// Arc's "Are you sure you want to delete this Easel?" (Q09 c), from a Library card's menu.
+    public var pendingEaselDeletion: EaselDeletionRequest? = nil
+    /// The boards of the cards that show an Easel (`PaneContent.easel`), in pane order.
+    public var easels: [EaselSnapshot] = []
     public var spaceProfiles: [ProfileRow] = []
     public var profileDialog: ProfileDialogSnapshot?
     public var find: FindSnapshot? = nil
@@ -108,6 +112,8 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// address, "http://127.0.0.1:8764/visual.html", while the site's Developer Mode is on; "about:blank" while a new
     /// tab has not committed its first document). Nil shows "Search or Enter URL…".
     public var host: String? = nil
+    /// The focused card shows an Easel: the pill reads "Share" after a lock (Q09 a) and a click shares the board.
+    public var share: EaselID? = nil
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {
@@ -263,6 +269,8 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case crashed(PageID)
     /// The History page (`HistoryPage`): no browser; the card draws `WindowSnapshot.history`.
     case history(PageID)
+    /// An Easel's board (`EaselPage`): no browser; the card draws `WindowSnapshot.easels`.
+    case easel(PageID, EaselID)
 }
 
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
@@ -314,6 +322,8 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var spaceExportMessage: String? = nil
     public var spaceExportInProgress: Bool = false
     public var canManageSpaces: Bool = true
+    /// The Easels page: the profile's Easels, most recently edited first (P32 c).
+    public var easels: [EaselCard] = []
 }
 
 public struct DownloadRow: Sendable, Equatable, Codable {
@@ -457,6 +467,8 @@ public enum FocusTarget: Sendable, Equatable, Codable {
     case renameField(ItemID)
     case spaceDialog
     case profileDialog
+    /// The board of the focused card showing an Easel (Delete removes the selection, typing edits the title).
+    case easel(PageID)
     /// A native view in the sidebar (e.g. after Ctrl+Space later).
     case sidebar
     case none

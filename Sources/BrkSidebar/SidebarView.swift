@@ -404,9 +404,12 @@ final class TitleRowView: NSView {
 /// is over the sidebar two accessories show at its right end: copy link and the site controls. A click opens the
 /// command bar to edit the current tab. The profile badge (F2) sits at the trailing end while the space's profile is
 /// not the default, or the window is incognito; an incognito pill has Arc's CommandBarPlaceholderIncognitoBackground.
+/// While the focused card shows an Easel the pill is its Share button (Q09 a): a grey lock, "Share", a thin edge; a
+/// click shares the board (a PNG file).
 @MainActor
 final class URLPillView: HoverView {
     private let label = NSTextField(labelWithString: "")
+    private let lock = NSImageView()
     private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
     private let siteInfo = GlyphButton()
@@ -430,6 +433,11 @@ final class URLPillView: HoverView {
         siteInfo.identify(.siteInfo)
         addSubview(label)
         addSubview(badge)
+        lock.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "Share")?
+            .withSymbolConfiguration(.init(pointSize: Draw.shareLockGlyph.value, weight: .medium))
+        lock.contentTintColor = NSColor(srgbRed: 0x9B / 255.0, green: 0x9A / 255.0, blue: 0x9A / 255.0, alpha: 1)   // Q09 a: #9B9A9A
+        lock.isHidden = true
+        addSubview(lock)
         copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
@@ -458,6 +466,10 @@ final class URLPillView: HoverView {
         siteInfo.isEnabled = !search
         // Arc's incognito pill keeps its own background but shows no badge (the 2026-11-03 capture Q03).
         badge.render(pill.profile?.incognito == true ? nil : pill.profile, palette: palette)
+        lock.isHidden = pill.share == nil
+        layer?.borderWidth = pill.share == nil ? 0 : Draw.shareEdge.value
+        layer?.borderColor = NSColor.black.withAlphaComponent(0.13).cgColor
+        if pill.share != nil { label.textColor = palette.ink.secondary }
         stateChanged()
         needsLayout = true
     }
@@ -471,7 +483,12 @@ final class URLPillView: HoverView {
             : CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
         copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
             .offsetBy(dx: searchField ? 0 : -(size + Draw.pillAccessoryGap.value), dy: 0)
-        let leading = searchField ? inset + size + Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value
+        var leading = searchField ? inset + size + Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value
+        if !lock.isHidden {
+            let glyph = lock.intrinsicContentSize
+            lock.frame = CGRect(x: Draw.pillTextLeading.value, y: (bounds.height - glyph.height) / 2, width: glyph.width, height: glyph.height)
+            leading = Draw.shareTextLeading.value
+        }
         var trailing = accessoriesShown ? copyLink.frame.minX : bounds.width - leading
         if !badge.isHidden {
             if !accessoriesShown { trailing = bounds.width - inset }
@@ -484,7 +501,7 @@ final class URLPillView: HoverView {
     }
 
     /// Copy link and the site controls, shown while the pointer is over the sidebar and the tab has an address.
-    private var accessoriesShown: Bool { (sidebarHovered || isHovered) && pill?.text != nil }
+    private var accessoriesShown: Bool { (sidebarHovered || isHovered) && pill?.text != nil && pill?.share == nil }
 
     override func stateChanged() {
         guard let palette else { return }
@@ -502,7 +519,8 @@ final class URLPillView: HoverView {
 
     override func mouseUp(with event: NSEvent) {
         isPressed = false
-        if bounds.contains(local(event)) { dispatch(.commandBar(.open(.editCurrent))) }
+        guard bounds.contains(local(event)) else { return }
+        if let easel = pill?.share { dispatch(.easel(.share(easel))) } else { dispatch(.commandBar(.open(.editCurrent))) }
     }
 }
 

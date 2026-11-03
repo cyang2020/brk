@@ -35,6 +35,11 @@ extension AppState {
         let liveTitle = use == .visible ? session.live[page]?.observedTitle : nil
         tab.title = liveTitle ?? doc.windows[window]?.slots[item]?.observedTitle ?? tab.title
         if let saved = doc.windows[window]?.slots[item] { tab.favicon = saved.favicon }
+        // An Easel's row is named and drawn after its Easel, whatever the slot last saw.
+        if let easel = EaselPage.id(of: tab.url).flatMap({ doc.easels[$0] }) {
+            tab.title = easel.title
+            tab.favicon = EaselPage.favicon
+        }
         return tab
     }
 
@@ -88,9 +93,9 @@ extension Work {
         guard state.session.loaded.contains(page) else { return }
         state.session.live[page]!.requestedURL = url
         state.session.live[page]!.requestContext = state.browsingContext(of: page.item)
-        // The History page has no browser (`projectPages` lists none, so reconcile closes one that was there); it is
+        // The History page and an Easel's board have no browser (`projectPages` lists none, so reconcile closes one that was there); it is
         // committed at once, as no engine will report it.
-        if HistoryPage.shows(url) {
+        if HistoryPage.shows(url) || EaselPage.shows(url) {
             state.doc.windows[page.window]?.slots[page.item]?.committedURL = url
             return
         }

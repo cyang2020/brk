@@ -65,6 +65,9 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // URL pill.
     /// The label's frame; its cell draws the text 2 further in, at x 21 in the sidebar.
+    let shareTextLeading = Metric(35.5, .anatomy("Q09 a: an Easel's \"Share\" starts at x 43.5 in the pill at x 8"))
+    let shareLockGlyph = Metric(10.0, .anatomy("Q09 a: the pill's lock spans x 21...30"))
+    let shareEdge = Metric(1.0, .anatomy("Q09 a: an Easel's pill has a 1 pt #CFCFCF edge"))
     let pillTextLeading = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: pill at x 8, host text at x 21"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))

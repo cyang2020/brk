@@ -8,7 +8,7 @@ import Foundation
 /// and a behavior test (found by scanning the test sources for a dispatch of that case).
 enum CommandInventory {
     static let item = ItemID("ghost-item"), space = SpaceID("ghost-space"), profile = ProfileID("ghost-profile")
-    static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route")
+    static let download = DownloadID("ghost-download"), route = LinkRouteID("ghost-route"), easel = EaselID("ghost-easel")
     static let example = URL(string: "https://example.com/")!
     static let splitOffer = SplitDropOffer(window: WindowID("ghost"), source: item, target: ItemID("target"),
         sourceParent: ItemID("parent"), targetParent: ItemID("parent"), panes: [ItemID("target")],
@@ -84,6 +84,11 @@ enum CommandInventory {
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
+        .easel(.create), .easel(.open(easel)), .easel(.rename(easel, title: "x")), .easel(.stepTitleSize(easel, by: 1)),
+        .easel(.add(easel, EaselElement(id: "ghost", shape: .rectangle, frame: CGRect(x: 0, y: 0, width: 10, height: 10)))),
+        .easel(.update(easel, [])), .easel(.remove(easel, ["ghost"])), .easel(.duplicate(easel, ["ghost"])),
+        .easel(.chooseImage(easel, at: .zero)), .easel(.importImage(easel, from: URL(fileURLWithPath: "/tmp/ghost.png"), at: .zero)),
+        .easel(.share(easel)), .easel(.requestDelete(easel)), .easel(.confirmDelete(easel, token: "ghost", confirmed: true)),
         .later(.boosts),
         .window(.close),
     ]
@@ -93,6 +98,8 @@ enum CommandInventory {
         .boost(.loaded(profile, BoostCatalog(), error: nil)),
         .page(siteTarget.document.browser, .boostFailed(siteTarget.document, "fixture")),
         .capture(.exported(WindowID("ghost"), "fixture")),
+        .easel(.imageImported(WindowID("ghost"), easel, element: "ghost", file: URL(fileURLWithPath: "/tmp/ghost.png"), size: CGSize(width: 10, height: 10), at: .zero)),
+        .easel(.shared(WindowID("ghost"), easel, URL(fileURLWithPath: "/tmp/ghost.png"))), .easel(.failed(WindowID("ghost"), easel, "fixture")),
         .page(siteTarget.document.browser, .documentPictureInPictureChanged(siteTarget.document, true, error: nil)),
         .page(BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), .mediaChanged(DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("ghost"), item: item), generation: 1), sequence: 1), [], error: nil)),
         .sidebarData(.syncPoll),
@@ -134,6 +141,7 @@ enum CommandInventory {
         case .boost: "boost"
         case .assist: "assist"
         case .capture: "capture"
+        case .easel: "easel"
         case .find: "find"
         case .sidebarData: "sidebarData"
         case .commandBar: "commandBar"
@@ -196,6 +204,22 @@ enum CommandInventory {
             case .searchFallback: "searchFallback"
             case .neverTranslateSite: "neverTranslateSite"
             case .neverTranslateLanguage: "neverTranslateLanguage"
+            }
+        case .easel(let c):
+            switch c {
+            case .create: "create"
+            case .open: "open"
+            case .rename: "rename"
+            case .stepTitleSize: "stepTitleSize"
+            case .add: "add"
+            case .update: "update"
+            case .remove: "remove"
+            case .duplicate: "duplicate"
+            case .chooseImage: "chooseImage"
+            case .importImage: "importImage"
+            case .share: "share"
+            case .requestDelete: "requestDelete"
+            case .confirmDelete: "confirmDelete"
             }
         case .capture(let c):
             switch c {
@@ -436,6 +460,12 @@ enum CommandInventory {
         switch event {
         case .boost: "boost"
         case .capture: "capture"
+        case .easel(let e):
+            switch e {
+            case .imageImported: "easel.imageImported"
+            case .shared: "easel.shared"
+            case .failed: "easel.failed"
+            }
         case .sidebarData: "sidebarData"
         case .page(_, let e):
             switch e {

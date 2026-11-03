@@ -64,6 +64,13 @@ extension AppStore {
                     let bytes = try await captureFiles.bytes(record)
                     guard captureWindow(window)?.isVisible == true, captureRemainsListed(record,in:window) else { return }
                     if let insertCaptureInEasel { insertCaptureInEasel(EaselCaptureInsertion(capture: record, png: bytes), window) }
+                    else if let easel = snapshot.windows[window]?.easels.first?.id {
+                        // The card under the Library shows an Easel: the capture goes on its board like a dropped picture.
+                        let file = FileManager.default.temporaryDirectory.appendingPathComponent("brk-capture-\(record.id).png")
+                        try bytes.write(to: file, options: .atomic)
+                        dispatch(.user(window, .easel(.importImage(easel, from: file, at: CGPoint(x: 0, y: 320)))))
+                        dispatch(.system(.capture(.exported(window, "Inserted in \(snapshot.windows[window]?.easels.first?.title ?? EaselPage.defaultTitle)"))))
+                    }
                     else { dispatch(.system(.capture(.exported(window, "Open an Easel to insert this capture.")))) }
                 } catch { fail(window, record.id, error) }
             case .open(let record, let window):

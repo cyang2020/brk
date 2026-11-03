@@ -91,6 +91,9 @@ public final class ContentAreaView: NSView {
             switch frame.content {
             case .page(let page):
                 card.host(surface(page), placeholder: nil)
+            case .easel:
+                // The board is drawn over its card by the root (`EaselBoardView`), on its own white.
+                card.host(nil, placeholder: nil)
             case .blank, .history:
                 // The History page is drawn over its card by the root (`HistoryPageView`).
                 card.host(nil, placeholder: nil)

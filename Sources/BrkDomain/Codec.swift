@@ -235,6 +235,13 @@ struct StoredDocV3: Codable {
     var downloads: [StoredDownload]
     var linkRoutes: [LinkRoute]
     var keyOverrides: [ActionID: KeyOverride]
+    /// Easels' boards. Absent in files written before Easels existed.
+    var easels: [EaselID: StoredEasel]? = nil
+
+    struct StoredEasel: Codable {
+        var title: String, titleSize: Double, createdAt: Instant, modifiedAt: Instant, profile: ProfileID
+        var elements: [EaselElement]
+    }
 
     /// The settings panes, as saved. The public setting structs are Codable themselves; this wrapper names the
     /// per-profile map so a v3 can change one pane without touching the others.
@@ -379,6 +386,9 @@ struct StoredDocV3: Codable {
         }
         linkRoutes = doc.linkRoutes
         keyOverrides = doc.keyOverrides
+        easels = doc.easels.isEmpty ? nil : doc.easels.mapValues {
+            StoredEasel(title: $0.title, titleSize: $0.titleSize, createdAt: $0.createdAt, modifiedAt: $0.modifiedAt, profile: $0.profile, elements: $0.elements)
+        }
     }
 
     /// Stored -> Doc, with repairs, one line each. Every saved instant (created, last active, archived, visited) outside
@@ -405,7 +415,8 @@ struct StoredDocV3: Codable {
             return ctx.now
         }
         func opens(_ url: URL?, _ owner: String) -> Bool {
-            guard let url, !isOpenableURL(url) else { return true }
+            // An Easel's row keeps its brk:// address: its card draws the saved board, no page loads it.
+            guard let url, !isOpenableURL(url), !EaselPage.shows(url) else { return true }
             repairs.append("\(owner): dropped, its \(url.scheme ?? "schemeless") URL may not open")
             return false
         }
@@ -575,6 +586,15 @@ struct StoredDocV3: Codable {
             keyOverrides: keyOverrides
         )
         doc.tabPreferences = tabPreferences ?? TabPreferences()
+        for (id, stored) in easels ?? [:] {
+            let title = stored.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let elements = stored.elements.filter { $0.frame.minX.isFinite && $0.frame.minY.isFinite && $0.frame.width.isFinite && $0.frame.height.isFinite }
+            if elements.count != stored.elements.count { repairs.append("easel \(id): dropped elements with unusable coordinates") }
+            doc.easels[id] = Easel(id: id, title: title.isEmpty ? EaselPage.defaultTitle : title,
+                                   titleSize: EaselTitleSizes.all.contains(stored.titleSize) ? stored.titleSize : EaselTitleSizes.default,
+                                   createdAt: usable(stored.createdAt, "easel \(id): createdAt"), modifiedAt: usable(stored.modifiedAt, "easel \(id): modifiedAt"),
+                                   profile: doc.profiles[stored.profile] != nil ? stored.profile : .default, elements: elements)
+        }
         for (id, value) in items {
             if let repository = value.folder?.liveRepository { doc.tree.updateFolder(id) { $0.liveRepository = repository } }
             if let group = value.folder?.group { doc.tree.updateFolder(id) { $0.isGroup = group } }

@@ -146,7 +146,7 @@ public final class LibraryView: NSView {
         } else {
             preview.hide()
         }
-        if library.page == .easelsAndNotes { easels.show(in: page, scheme: scheme) } else { easels.hide() }
+        if library.page == .easelsAndNotes { easels.show(library, in: page, scheme: scheme) } else { easels.hide() }
     }
 
     public func requestClearConfirmation() {

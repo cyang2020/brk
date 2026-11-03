@@ -6,7 +6,7 @@ import BrkUIKit
 
 // Owner: W4 (dialogs). Rename Space and the Delete Space confirmation in Arc's centred dialog (`ArcDialog.swift`),
 // matched to P26 a (Rename “X”, the name filled in and selected, Rename) and P27 a (the app icon, Delete your “X”
-// Space?, one line of text, the red Delete).
+// Space?, one line of text, the red Delete). Deleting an Easel asks in the same dialog (Q09 c).
 
 struct SpaceAlertMetrics: MetricGroup {
     let renameField = Metric([24.0, 36.0], .guess("Rename field's gap under the title and height (the field 375 wide, its top 100 pt down), measured on P26 a"))
@@ -30,11 +30,13 @@ enum SpaceAlertCopy {
 enum SpaceAlertKind: Equatable {
     case rename(id: SpaceID, title: String)
     case delete(SpaceDeletionRequest)
+    case deleteEasel(EaselDeletionRequest)
 
     var cancelCommand: Command {
         switch self {
         case .rename: .sidebar(.openDialog(nil))
         case .delete(let request): .space(.confirmDelete(request.id, token: request.token, confirmed: false))
+        case .deleteEasel(let request): .easel(.confirmDelete(request.id, token: request.token, confirmed: false))
         }
     }
 
@@ -45,6 +47,7 @@ enum SpaceAlertKind: Equatable {
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : .space(.update(id, title: trimmed, icon: nil, theme: nil))
         case .delete(let request): return .space(.confirmDelete(request.id, token: request.token, confirmed: true))
+        case .deleteEasel(let request): return .easel(.confirmDelete(request.id, token: request.token, confirmed: true))
         }
     }
 }
@@ -71,6 +74,11 @@ final class SpaceAlertView: NSView, NSTextFieldDelegate {
                                    rows: [ArcDialogRow(view: ArcDialogView.body(SpaceAlertCopy.deleteBody, scheme: scheme), gap: SpaceAlert.deleteBodyGap.value)],
                                    buttonGap: SpaceAlert.deleteButtonGap.value, buttonRight: ArcDialog.buttonRight.value[0],
                                    confirm: SpaceAlertCopy.delete, destructive: true)
+        case .deleteEasel:
+            dialog = ArcDialogView(scheme: scheme, icon: .app, title: ArcDialogView.title(EaselCopy.deleteTitle, scheme: scheme),
+                                   rows: [ArcDialogRow(view: ArcDialogView.body(EaselCopy.deleteBody, scheme: scheme), gap: SpaceAlert.deleteBodyGap.value)],
+                                   buttonGap: SpaceAlert.deleteButtonGap.value, buttonRight: ArcDialog.buttonRight.value[0],
+                                   confirm: EaselCopy.delete, destructive: true)
         }
         super.init(frame: .zero)
         field.delegate = self
