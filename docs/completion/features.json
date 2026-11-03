@@ -1299,7 +1299,7 @@
       ],
       "remaining": [
         "Fresh native-capture pixels show the recent panel and current-item marker, and Escape cancellation passes before the separate audible-state failure. Complete held-Control visual/order matrix.",
-        "Arc 对照（run-20261103 P09）仍有差异或有意不同：P09-behaviour: 待定"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Ctrl+Tab 期间每按一次只移动切换器的选中框，松开 Control 才切页，Esc 只关切换器；两个真按住再松开的原生场景（R5a、R6）通过。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -3128,7 +3128,8 @@
         }
       ],
       "remaining": [
-        "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup."
+        "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup.",
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -5022,7 +5023,8 @@
       ],
       "remaining": [
         "The independently operable native path-confirmation export passes with real files. Optional OS Browse picker selection/confirmation remains unproven on this host.",
-        "Arc 对照（run-20261103 P30）仍有差异或无参照：P30-a: 一致 | P30-b: 未比较（无参照；Brk 的 Spaces 页也不要搜索框） | P30-c: 要修（Space 组：卡片菜单按 Arc 的四组九项重排（Edit Space… 拆成 Change Space Icon… / Rename Space… / Edit Theme Color…，补 Set Profile、New Folder、Live Folders、Share Space，Export 带 Space 名并做子菜单），去掉 Move Left/Right）"
+        "Arc 对照（run-20261103 P30）仍有差异或无参照：P30-a: 一致 | P30-b: 未比较（无参照；Brk 的 Spaces 页也不要搜索框） | P30-c: 要修（Space 组：卡片菜单按 Arc 的四组九项重排（Edit Space… 拆成 Change Space Icon… / Rename Space… / Edit Theme Color…，补 Set Profile、New Folder、Live Folders、Share Space，Export 带 Space 名并做子菜单），去掉 Move Left/Right）",
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Library Spaces 卡片的 Edit Space…（菜单项和铅笔）改为打开主题面板，和 Spaces > Edit Theme… 同一个面板；旧的名字加图标表单已删；从 Library 打开主题面板后 Esc 先关面板再关 Library。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -8711,7 +8713,8 @@
       ],
       "remaining": [
         "Physical remote save-chooser confirmation remains with file-panels. NSSavePanel.ok was unimplemented on this OS and that experimental call was removed. Boost/capture actions await their slices.",
-        "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点"
+        "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点",
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Secure/Insecure 按证书状态判定（https 且证书干净、无混合内容才是 Secure；http 一律 Insecure），引擎在加载完成和加载停止时上报。只有单元测试和状态注入入口，没有用真实证书验证：本地测试站只有 http，要做需给测试站加 https 端口和自签证书。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
