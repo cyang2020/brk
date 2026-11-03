@@ -165,7 +165,7 @@ final class SpaceToolsTests: XCTestCase {
         d.page(id, .committed(url))
         d.user(.sidebar(.toggleToolbar))
         XCTAssertTrue(d.view.sidebar.toolbarVisible)
-        XCTAssertEqual(d.view.urlPill.toolbarText, displayURL(url))
+        XCTAssertEqual(d.view.urlPill.toolbarText, displayHost(url))
         d.user(.settings(.advanced(.showFullURLInToolbar(true))))
         XCTAssertEqual(d.view.urlPill.toolbarText, url.absoluteString)
     }

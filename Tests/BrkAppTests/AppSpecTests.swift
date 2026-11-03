@@ -406,7 +406,7 @@ final class WindowControllerTests: XCTestCase {
         controller.render(h.store.snapshot.windows[h.window]!)
         XCTAssertEqual(h.engine.focused.count, 1)
         XCTAssertEqual(controller.lastFrames?.cards.count, 1)
-        XCTAssertEqual(controller.lastFrames?.cards.first?.rect.minX, Metrics.sidebar.defaultWidth.value + Metrics.content.inset.value)
+        XCTAssertEqual(controller.lastFrames?.cards.first?.rect.minX, Metrics.sidebar.defaultWidth.value + Metrics.content.sidebarGap.value)
     }
 
     /// a resize reports the window's geometry to the store

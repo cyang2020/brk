@@ -5,7 +5,7 @@ import BrkLayout
 import BrkUIKit
 
 /// Owner: W3. The favorites tray (Arc: Top Apps): square tiles at `SidebarFrames.favoriteTiles`, or the empty state
-/// "Drag to add Favorites" in a drop box. Tiles reorder by dragging inside the grid; rows dropped here become
+/// in a dashed drop box: a star badge, "Drag to add Favorites" in bold, two grey lines and a × that dismisses it. Tiles reorder by dragging inside the grid; rows dropped here become
 /// favorites; tiles dragged out land in the tab list or on a dock space (DragController).
 @MainActor
 final class FavoritesView: NSView {
@@ -13,17 +13,12 @@ final class FavoritesView: NSView {
     private let drag: DragController
     /// `section-favorites`: the tiles' container, so e2e can scope tiles to the section.
     private let section = FlippedView()
-    var previewsEnabled = true {
-        didSet {
-            guard previewsEnabled != oldValue else { return }
-            for tile in tiles.values { tile.previewsEnabled = previewsEnabled }
-            last = nil
-        }
-    }
     private var tiles: [ItemID: FavoriteTileView] = [:]
     private let emptyBox = CAShapeLayer()
+    private let emptyBadge = NSImageView()
     private let emptyTitle = NSTextField(labelWithString: Copy.favoritesEmptyTitle)
     private let emptySubtitle = NSTextField(wrappingLabelWithString: Copy.favoritesEmptySubtitle)
+    private let emptyClose = GlyphButton()
     private let dropBar = NSView()
     private var last: (FavoritesSnapshot, ItemID?, SidebarFrames, Palette)?
     private var palette: Palette?
@@ -39,12 +34,17 @@ final class FavoritesView: NSView {
         emptyBox.fillColor = nil
         emptyBox.lineDashPattern = Draw.emptyDash.value.map { NSNumber(value: $0) }
         layer?.addSublayer(emptyBox)
-        for (label, size, weight) in [(emptyTitle, Draw.smallFont.value, NSFont.Weight.medium), (emptySubtitle, Draw.captionFont.value, .regular)] {
+        for (label, size, weight) in [(emptyTitle, Draw.emptyTitleFont.value, NSFont.Weight.semibold), (emptySubtitle, Draw.smallFont.value, .regular)] {
             label.alignment = .center
             label.font = .systemFont(ofSize: size, weight: weight)
             label.isSelectable = false
             addSubview(label)
         }
+        emptyBadge.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(emptyBadge)
+        emptyClose.action = { _ in dispatch(.tabTools(.dismissFavoritesHint)) }
+        emptyClose.toolTip = SidebarCopy.dismiss
+        addSubview(emptyClose)
         dropBar.wantsLayer = true
         dropBar.isHidden = true
         addSubview(dropBar)
@@ -75,39 +75,47 @@ final class FavoritesView: NSView {
                 return t
             }()
             if let rect = frames.favoriteTiles[row.id] { tile.frame = rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY) }
-            tile.previewsEnabled = previewsEnabled
             tile.render(row, renaming: row.id == renaming, palette: palette)
         }
-        let empty = favorites.tiles.isEmpty
+        let empty = favorites.tiles.isEmpty && !favorites.hintDismissed
+        for view in [emptyBadge, emptyTitle, emptySubtitle, emptyClose] as [NSView] { view.isHidden = !empty }
         emptyBox.isHidden = !empty
-        emptyTitle.isHidden = !empty
-        emptySubtitle.isHidden = !empty
-        emptyTitle.textColor = palette.color(palette.tokens.foregroundStrong)
-        emptySubtitle.textColor = palette.color(palette.tokens.foreground)
+        emptyTitle.textColor = palette.ink.text
+        emptySubtitle.textColor = palette.ink.secondary
+        emptyBadge.image = StarBadge.image(side: Draw.emptyBadge.value, ink: HueInk(palette))
+        emptyClose.render(.close, size: Draw.captionFont.value, palette: palette, tint: palette.ink.secondary,
+                          radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
         dropBar.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).cgColor
         drawEmptyState()
     }
 
-    /// The empty tray is one tile row tall (`FavoritesGrid`); the drop box fills that row.
+    /// The empty tray (`FavoritesGrid`, Metrics.favorites.emptyTrayHeight) holds the dashed box: the badge, the
+    /// bold title and two lines of copy centred in it, the × in its top-right corner.
     private func drawEmptyState() {
         guard let palette else { return }
-        let inset = Metrics.favorites.inset.value
-        let box = bounds.insetBy(dx: inset, dy: inset)
-        let radius = Metrics.favorites.tileRadius.value
+        let f = Metrics.favorites
+        let box = CGRect(x: f.emptyBoxInset.value.width, y: f.emptyBoxInset.value.height,
+                         width: max(0, bounds.width - 2 * f.emptyBoxInset.value.width), height: f.emptyBoxHeight.value)
+        let radius = f.tileRadius.value
+        let ink = HueInk(palette)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         emptyBox.frame = bounds
         emptyBox.path = CGPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), cornerWidth: radius, cornerHeight: radius, transform: nil)
-        emptyBox.strokeColor = palette.color(dropHighlight ? palette.tokens.dragHintStrong : palette.tokens.dragHint).cgColor
+        emptyBox.strokeColor = dropHighlight ? palette.color(palette.tokens.dragHintStrong).cgColor : ink.emptyFavicon.cgColor
         emptyBox.lineWidth = dropHighlight ? Draw.dropLineWidth.value : Draw.hairline.value
-        emptyBox.fillColor = dropHighlight ? palette.color(palette.tokens.itemBackground).cgColor : nil
+        emptyBox.fillColor = palette.color(dropHighlight ? palette.tokens.itemBackground : palette.tokens.border).withAlphaComponent(dropHighlight ? 1 : Draw.emptyBoxFillAlpha.value).cgColor
         CATransaction.commit()
+        let badge = Draw.emptyBadge.value
+        emptyBadge.frame = CGRect(x: box.midX - badge / 2, y: box.minY + Draw.emptyBadgeTop.value, width: badge, height: badge)
+        let side = Draw.emptyTextInset.value
         let title = emptyTitle.intrinsicContentSize.height
-        emptySubtitle.preferredMaxLayoutWidth = box.width - 2 * inset
+        emptyTitle.frame = CGRect(x: box.minX + side, y: emptyBadge.frame.maxY + Draw.emptyTitleGap.value, width: max(0, box.width - 2 * side), height: title)
+        emptySubtitle.preferredMaxLayoutWidth = max(0, box.width - 2 * side)
         let subtitle = emptySubtitle.intrinsicContentSize.height
-        let top = box.midY - (title + subtitle) / 2
-        emptyTitle.frame = CGRect(x: box.minX + inset, y: top, width: box.width - 2 * inset, height: title)
-        emptySubtitle.frame = CGRect(x: box.minX + inset, y: top + title, width: box.width - 2 * inset, height: subtitle)
+        emptySubtitle.frame = CGRect(x: box.minX + side, y: emptyTitle.frame.maxY + Draw.emptySubtitleGap.value, width: max(0, box.width - 2 * side), height: subtitle)
+        let close = Draw.emptyCloseSize.value
+        emptyClose.frame = CGRect(x: box.maxX - Draw.emptyCloseInset.value - close / 2, y: box.minY + Draw.emptyCloseInset.value - close / 2, width: close, height: close)
     }
 
     // MARK: Drop feedback (DragController)
@@ -158,8 +166,6 @@ final class FavoritesView: NSView {
 @MainActor
 final class FavoriteTileView: HoverView {
     let id: ItemID
-    private let preview = TabHoverPreview()
-    var previewsEnabled = true { didSet { if previewsEnabled != oldValue { stateChanged() } } }
     private let badge = NSTextField(labelWithString: "")
     private let source = NSView()
     private let subtitle = NSTextField(labelWithString: "")
@@ -202,21 +208,23 @@ final class FavoriteTileView: HoverView {
         self.row = row
         self.palette = palette
         toolTip = [row.title, row.subtitle, row.sourceStatus].compactMap { $0 }.joined(separator: "\n")
-        source.isHidden = row.sourceStatus == nil
+        // An idle invitation ("Connect notifications") is a menu item in Arc, not a mark on the tile.
+        let status = Self.invitations.contains(row.sourceStatus ?? "") ? nil : row.sourceStatus
+        source.isHidden = status == nil
         source.toolTip = row.sourceStatus
         source.setAccessibilityLabel(row.sourceStatus)
         source.layer?.backgroundColor = (row.sourceStatus?.hasPrefix("Updated") == true || row.sourceStatus?.hasPrefix("Selected export") == true ? NSColor.systemGreen : NSColor.systemOrange).cgColor
         badge.stringValue = row.badge.map { $0 > 99 ? "99+" : String($0) } ?? ""
         badge.isHidden = row.badge == nil || row.badge == 0
-        subtitle.stringValue = row.subtitle ?? row.sourceStatus ?? ""
+        subtitle.stringValue = row.subtitle ?? status ?? ""
         subtitle.toolTip = toolTip
-        subtitle.isHidden = row.subtitle == nil && row.sourceStatus == nil
+        subtitle.isHidden = row.subtitle == nil && status == nil
         subtitle.lineBreakMode = .byTruncatingTail
         if row.sourceStatus?.hasPrefix("Access failed") == true { subtitle.stringValue = "Access" }
         if row.sourceStatus?.hasPrefix("Expired") == true || row.sourceStatus?.hasPrefix("Calendar expired") == true { subtitle.stringValue = "Expired" }
         badge.textColor = .white
         subtitle.textColor = palette.ink.secondary
-        icon.render(IconContent(tab: row), tint: palette.ink.secondary, loading: row.loading)
+        icon.render(IconContent(tab: row), tint: palette.ink.secondary, palette: palette)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
         if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
         stateChanged()
@@ -244,7 +252,6 @@ final class FavoriteTileView: HoverView {
 
     /// Drops the field without committing (the rename ended elsewhere, or the tile left).
     func retireRenameField() {
-        preview.cancel()
         guard let field = renameField else { return }
         field.retire()
         renameField = nil
@@ -271,13 +278,17 @@ final class FavoriteTileView: HoverView {
         CATransaction.commit()
     }
 
+    /// Status lines that only invite a connection; the tile shows nothing for them.
+    static let invitations: Set<String> = ["Connect notifications", "Select calendar export"]
+
+    /// Hovering darkens the tile one step (Arc shows no card or tip over a favorite unless Arc Previews is on).
     override func stateChanged() {
-        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: row.map { $0.title + "\n" + ($0.subtitle ?? $0.url?.absoluteString ?? "") }, over: self)
         guard let palette, let row else { return }
         let current = row.status == .current
         let fill: NSColor
         if isPressed { fill = palette.color(palette.tokens.tabPressed) }
-        else if current || isHovered { fill = palette.ink.tileCurrent(palette) }
+        else if current { fill = palette.ink.tileCurrent(palette) }
+        else if isHovered { fill = palette.color(palette.tokens.itemHover) }
         else { fill = palette.color(palette.tokens.itemBackground) }
         layer?.backgroundColor = fill.cgColor
         ring.isHidden = !current

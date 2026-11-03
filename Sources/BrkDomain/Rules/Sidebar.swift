@@ -127,13 +127,14 @@ extension Work {
             let neighbour = index + 1 < order.count ? order[index + 1] : order[index - 1]
             for (wid, w) in state.doc.windows where w.space == id { showSpace(neighbour, in: wid) }
             let contents = [space.pinnedRoot, space.todayRoot].flatMap { state.doc.tree[$0]?.children ?? [] }
-            archiveTabs(contents, reason: .containerDeleted, in: window, preservingStructure: false)
+            let entries = archiving { $0.archiveTabs(contents, reason: .containerDeleted, in: window, preservingStructure: false) }
             for root in [space.pinnedRoot, space.todayRoot] {
                 for (tab, _) in state.doc.tree.removeRoot(root) ?? [] { unload(tab) }
             }
             state.doc.spaces[id] = nil
             state.doc.spaceOrder.remove(at: index)
             for (wid, w) in state.doc.windows where w.activeBySpace[id] != nil { state.doc.windows[wid]!.activeBySpace[id] = nil }
+            if state.doc.windows[window]?.kind == .standard { undoToast("Space deleted! Use", undo: .space(space, index: index, entries: entries), in: window) }
         case .move(let id, let index):
             // `index` counts the dock after the space is taken out, clamped.
             guard let from = state.doc.spaceOrder.firstIndex(of: id) else { return }

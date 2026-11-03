@@ -33,6 +33,10 @@ final class TablistView: NSScrollView {
     private var lastReveal: UInt64?
     private var dropFolder: ItemID?
     private var contentBottom = 0.0
+    /// The pointer is over the sidebar: Today's Clear shows (Arc).
+    var sidebarHovered = false { didSet { divider.sidebarHovered = sidebarHovered } }
+    private lazy var folderPreview = FolderPreview(dispatch: dispatch)
+    private var now = Instant(milliseconds: 0)
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -90,8 +94,10 @@ final class TablistView: NSScrollView {
         return window.makeFirstResponder(document)
     }
 
-    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot) {
+    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot,
+                now: Instant) {
         self.tools = tools
+        self.now = now
         multiselection = tools.selected
         let previousSpace = last?.space.id
         last = (space, renaming, f, palette)
@@ -138,7 +144,6 @@ final class TablistView: NSScrollView {
                 let view = rowViews[id] ?? makeRow(id)
                 if view.superview !== container { container.addSubview(view) }
                 view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
-                view.previewsEnabled = tools.hoverPreviews
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
@@ -150,6 +155,7 @@ final class TablistView: NSScrollView {
                 break
             }
         }
+        folderPreview.validate { id in if case .folder(let folder)? = rows[id]?.row { folder.collapsed } else { false } }
         for (id, view) in rowViews where !seen.contains(id) {
             view.retire()
             view.removeFromSuperview()
@@ -172,12 +178,23 @@ final class TablistView: NSScrollView {
         view.onSelect = { [weak self] id in self?.dispatch(.tabTools(.select(id, .replace))) }
         view.onToggleMultiselect = { [weak self] id in self?.toggleMultiselect(id) }
         view.onClearMultiselect = { [weak self] in self?.clearMultiselect() }
+        view.onHover = { [weak self] row, hovered in self?.rowHovered(row, hovered) }
         view.closeTargets = { [weak self] id in
             guard let self, self.multiselection.contains(id) else { return [id] }
             return self.multiselection
         }
         rowViews[id] = view
         return view
+    }
+
+    /// Arc Previews: a collapsed folder shows its pages beside the sidebar; tabs and open folders show nothing.
+    private func rowHovered(_ view: RowView, _ hovered: Bool) {
+        guard hovered, tools?.hoverPreviews == true, case .folder(let folder)? = view.row, folder.collapsed, !view.isEditingName,
+              let palette = last?.palette else {
+            folderPreview.pointerLeft(view)
+            return
+        }
+        folderPreview.hover(folder, over: view, now: now, palette: palette)
     }
 
     private func toggleMultiselect(_ id: ItemID) { dispatch(.tabTools(.select(id, .toggle))) }
@@ -344,8 +361,9 @@ struct RowGeometry {
 final class RowView: HoverView {
     private let dispatch: Dispatch
     private let drag: DragController
-    private let preview = TabHoverPreview()
-    var previewsEnabled = true { didSet { if previewsEnabled != oldValue { stateChanged() } } }
+    /// Hover changes, for the folder preview (TablistView).
+    var onHover: ((RowView, Bool) -> Void)?
+    private var reportedHover = false
     private(set) var row: Row?
     private var section: SectionKind = .today
     private var depth = 0
@@ -408,20 +426,20 @@ final class RowView: HoverView {
             audio.toolTip = tab.muted ? "Unmute Tab" : "Mute Tab"
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
-            toolTip = tab.title
-            icon.render(IconContent(tab: tab), tint: palette.ink.secondary, loading: tab.loading)
+            icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
+            if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
+            title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
             dimmed = !tab.loaded && section != .today
             configureButton(tab: tab, palette: palette)
             setSegments([], palette: palette)
         case .folder(let folder):
             title.stringValue = (folder.group ? "Group · " : "") + folder.title
-            toolTip = folder.title
-            icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary)
+            title.font = .systemFont(ofSize: Draw.rowTitleFont.value, weight: .semibold)
+            icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary, palette: palette)
             button.isHidden = true
             setSegments([], palette: palette)
         case .split(let split):
             title.stringValue = ""
-            toolTip = split.panes.map(\.title).joined(separator: " / ")
             icon.render(split.icon.map(IconContent.custom) ?? .none, tint: palette.ink.secondary)
             splitIcon = split.icon != nil
             button.isHidden = true
@@ -438,7 +456,8 @@ final class RowView: HoverView {
         let today = section == .today
         button.isHidden = !today && !tab.loaded
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
-        button.render(today ? .archiveTab : .closeKeepPinned, size: Draw.smallFont.value, palette: palette,
+        // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
+        button.render(.archiveTab, size: Draw.smallFont.value, palette: palette,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
     }
 
@@ -473,7 +492,9 @@ final class RowView: HoverView {
         audio.frame = g.button.offsetBy(dx: -g.button.width, dy: 0)
         media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
-        let trailing = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
+        // The hover button takes room from the title only while it shows (Arc truncates at the selection's end).
+        let buttonShown = !button.isHidden && button.alphaValue > 0
+        let trailing = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
@@ -504,7 +525,8 @@ final class RowView: HoverView {
 
     override func stateChanged() {
         guard let palette, let row else { return }
-        preview.update(hovered: isHovered && previewsEnabled && !isEditingName && !isPressed, text: row.hoverPreviewText, over: self)
+        let hovered = isHovered && !isEditingName && !isPressed
+        if hovered != reportedHover { reportedHover = hovered; onHover?(self, hovered) }
         let tokens = palette.tokens
         let status: RowStatus? = switch row {
         case .tab(let tab): tab.status
@@ -522,12 +544,19 @@ final class RowView: HoverView {
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
         layer?.borderColor = palette.color(tokens.dragHintStrong).cgColor
         layer?.borderWidth = dropInto ? Draw.hairline.value : 0
-        let shadow = status == .current && !dropInto
-        layer?.shadowColor = palette.color(tokens.tabShadow).cgColor
-        layer?.shadowOpacity = shadow ? 1 : 0
-        layer?.shadowRadius = Draw.selectedShadowRadius.value
-        layer?.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
-        button.alphaValue = isHovered && !isEditingName ? 1 : 0
+        // AppKit owns a layer-backed view's shadow (`NSView.shadow`); its offset is not flipped, so negative is down.
+        if status == .current && !dropInto {
+            let shadow = NSShadow()
+            shadow.shadowColor = palette.color(tokens.tabShadow)
+            shadow.shadowBlurRadius = Draw.selectedShadowRadius.value
+            shadow.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
+            background.shadow = shadow
+        } else {
+            background.shadow = nil
+        }
+        let shown = isHovered && !isEditingName
+        if (button.alphaValue > 0) != shown { needsLayout = true }
+        button.alphaValue = shown ? 1 : 0
     }
 
     // MARK: Pointer
@@ -607,7 +636,7 @@ final class RowView: HoverView {
 
     /// Drops the field without committing (the rename ended elsewhere: Esc through the menu, or the row left).
     func retire() {
-        preview.cancel()
+        if reportedHover { reportedHover = false; onHover?(self, false) }
         guard let field = renameField else { return }
         field.retire()
         renameField = nil
@@ -649,7 +678,6 @@ final class SplitSegmentView: HoverView {
         self.pane = pane
         media.render(pane)
         identify(.splitSegment(pane.id))
-        toolTip = pane.title
         self.palette = palette
         audio.isHidden = !pane.audible && !pane.muted
         audio.render(pane.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
@@ -658,7 +686,7 @@ final class SplitSegmentView: HoverView {
         audio.identify(.tabTool("audio-" + pane.id.rawValue))
         title.stringValue = pane.title
         title.textColor = palette.ink.text
-        icon.render(IconContent(tab: pane), tint: palette.ink.secondary, loading: pane.loading)
+        icon.render(IconContent(tab: pane), tint: palette.ink.secondary, palette: palette)
         close.render(.archiveTab, size: Draw.smallFont.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value,
                      hoverFill: palette.tokens.itemHover)
         close.identify(.rowClose(pane.id))
@@ -703,6 +731,8 @@ final class DividerRowView: HoverView {
     private let clear: ClearButton
     private var palette: Palette?
     private var canClear = false
+    /// Arc shows Clear whenever the pointer is over the sidebar, not only over the divider.
+    var sidebarHovered = false { didSet { if sidebarHovered != oldValue { stateChanged() } } }
 
     init(dispatch: @escaping Dispatch) {
         clear = ClearButton { dispatch(.tab(.clearToday)) }
@@ -724,24 +754,23 @@ final class DividerRowView: HoverView {
 
     override func layout() {
         super.layout()
-        let inset = Metrics.tablist.selectionInset.value
+        let inset = Draw.dividerInset.value
         let size = clear.fittingSize
-        clear.frame = CGRect(x: bounds.width - inset - size.width, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
-        let end = clear.alphaValue > 0 && !clear.isHidden ? clear.frame.minX - inset / 2 : bounds.width - inset
+        clear.frame = CGRect(x: bounds.width - Draw.clearTrailing.value - size.width, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+        let end = clear.alphaValue > 0 && !clear.isHidden ? clear.frame.minX - Draw.clearGap.value : bounds.width - inset
         let hairline = Draw.hairline.value
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
     }
 
     override func stateChanged() {
-        clear.alphaValue = canClear && (isHovered || clear.isHovered) ? 1 : 0
+        clear.alphaValue = canClear && (sidebarHovered || isHovered || clear.isHovered) ? 1 : 0
         needsLayout = true
     }
 }
 
-/// "↓ Clear": the down arrow and the word, in the sidebar foreground; stronger on hover.
+/// "Clear": the word in the sidebar foreground, stronger on hover.
 @MainActor
 final class ClearButton: HoverView {
-    private let arrow = NSImageView()
     private let label = NSTextField(labelWithString: Copy.clearToday)
     private let action: () -> Void
     private var palette: Palette?
@@ -749,37 +778,26 @@ final class ClearButton: HoverView {
     init(action: @escaping () -> Void) {
         self.action = action
         super.init(frame: .zero)
-        label.font = .systemFont(ofSize: Draw.smallFont.value, weight: .medium)
+        label.font = .systemFont(ofSize: Draw.captionFont.value, weight: .semibold)
         label.isSelectable = false
-        addSubview(arrow)
         addSubview(label)
     }
 
-    override var fittingSize: NSSize {
-        let text = label.intrinsicContentSize
-        let glyph = Draw.smallFont.value
-        return NSSize(width: glyph + Draw.navGap.value * 2 + text.width, height: max(text.height, glyph))
-    }
+    override var fittingSize: NSSize { label.intrinsicContentSize }
 
     func render(palette: Palette) {
         self.palette = palette
-        arrow.image = Glyph.clearDown.image(size: Draw.captionFont.value, weight: .semibold)
         stateChanged()
     }
 
     override func layout() {
         super.layout()
-        let glyph = Draw.smallFont.value
-        arrow.frame = CGRect(x: 0, y: (bounds.height - glyph) / 2, width: glyph, height: glyph)
-        let text = label.intrinsicContentSize
-        label.frame = CGRect(x: glyph + Draw.navGap.value * 2, y: (bounds.height - text.height) / 2, width: text.width, height: text.height)
+        label.frame = bounds
     }
 
     override func stateChanged() {
         guard let palette else { return }
-        let color = palette.color(isHovered ? palette.tokens.foregroundStrong : palette.tokens.foreground)
-        arrow.contentTintColor = color
-        label.textColor = color
+        label.textColor = palette.color(isHovered ? palette.tokens.foregroundStrong : palette.tokens.foreground)
         (superview as? HoverView)?.stateChanged()
     }
 
@@ -815,7 +833,7 @@ final class NewTabRowView: HoverView {
     func render(palette: Palette) {
         guard palette != self.palette else { return }
         self.palette = palette
-        let color = palette.color(palette.tokens.foregroundStrong)
+        let color = palette.color(palette.tokens.foreground)
         label.textColor = color
         icon.render(.glyph(.plus), tint: color)
         stateChanged()
@@ -844,24 +862,32 @@ final class NewTabRowView: HoverView {
 }
 
 /// The space header above the list (Arc: `pinnedTabsHeader`): the space's icon and name, 14 pt medium in the
-/// secondary color. A click collapses or expands Pinned (a chevron says which on hover); right-click is the space's
-/// menu.
+/// secondary color. Hovered (and while Pinned is collapsed) the row becomes a pill in the URL pill's fill with the
+/// collapse chevron in the icon slot (down while expanded, right while collapsed) and a "…" button at the right that
+/// opens the space's menu. A click collapses or expands Pinned; right-click is the space's menu.
 @MainActor
 final class SpaceHeaderView: HoverView {
     private let dispatch: Dispatch
+    private let background = NSView()
     private let icon = IconView()
     private let label = NSTextField(labelWithString: "")
     private let chevron = NSImageView()
+    private let more = GlyphButton()
     private var space: SpaceSnapshot?
     private var palette: Palette?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
+        background.wantsLayer = true
+        background.layer?.cornerCurve = .continuous
+        background.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         label.font = .systemFont(ofSize: Draw.spaceHeaderFont.value, weight: .medium)
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
-        for view in [icon, label, chevron] as [NSView] { addSubview(view) }
+        more.action = { [weak self] _ in self?.showMenu() }
+        more.toolTip = SidebarCopy.spaceOptions
+        for view in [background, icon, label, chevron, more] as [NSView] { addSubview(view) }
     }
 
     func render(_ space: SpaceSnapshot, palette: Palette) {
@@ -871,29 +897,46 @@ final class SpaceHeaderView: HoverView {
         let color = palette.color(palette.tokens.foregroundStrong)
         label.stringValue = space.title
         label.textColor = color
-        icon.isHidden = space.icon == .none
         icon.render(IconContent(space: space.icon, color: RGBA(0, 0, 0, 0)), tint: color)
-        chevron.image = (space.pinned.collapsed ? Glyph.chevronRight : Glyph.chevronDown).image(size: Draw.captionFont.value, weight: .semibold)
-        chevron.contentTintColor = color
+        chevron.image = (space.pinned.collapsed ? Glyph.chevronRight : Glyph.chevronDown).image(size: Draw.spaceChevron.value, weight: .semibold)
+        chevron.contentTintColor = palette.ink.secondary
+        more.render(.more, size: Draw.navGlyph.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
         toolTip = space.pinned.collapsed ? SidebarCopy.expandPinned : SidebarCopy.collapsePinned
         stateChanged()
         needsLayout = true
     }
 
+    /// Pill, chevron and "…" show while hovered and while Pinned is collapsed.
+    private var expanded: Bool { isHovered || space?.pinned.collapsed == true }
+
     override func layout() {
         super.layout()
         let g = RowGeometry(bounds: bounds, depth: 0)
+        background.frame = CGRect(x: g.selection.minX, y: 0, width: g.selection.width, height: bounds.height)
         icon.frame = g.icon
-        let size = Draw.smallFont.value
-        chevron.frame = CGRect(x: g.selection.maxX - Draw.closeTrailing.value - size, y: (bounds.height - size) / 2, width: size, height: size)
-        let start = icon.isHidden ? g.icon.minX : g.titleX
+        let size = Draw.spaceChevron.value + 2
+        chevron.frame = CGRect(x: g.icon.midX - size / 2, y: (bounds.height - size) / 2, width: size, height: size)
+        more.frame = g.button
+        let hasIcon = space?.icon != SpaceIcon.none
+        let start = expanded || hasIcon ? g.titleX : g.selection.minX + Draw.spaceHeaderLeading.value
         let height = label.intrinsicContentSize.height
-        label.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, chevron.frame.minX - start), height: height)
+        label.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, (expanded ? more.frame.minX : g.selection.maxX) - start), height: height)
     }
 
-    override func stateChanged() { chevron.alphaValue = isHovered ? 1 : 0 }
+    override func stateChanged() {
+        guard let palette else { return }
+        let shown = expanded
+        background.layer?.backgroundColor = shown ? palette.color(isPressed ? palette.tokens.tabPressed : palette.tokens.itemBackground).cgColor : nil
+        chevron.isHidden = !shown
+        more.isHidden = !shown
+        icon.isHidden = shown || space?.icon == SpaceIcon.none
+        needsLayout = true
+    }
+
+    override func mouseDown(with event: NSEvent) { isPressed = true }
 
     override func mouseUp(with event: NSEvent) {
+        isPressed = false
         if bounds.contains(local(event)) { dispatch(.space(.togglePinnedSection(.current))) }
     }
 
@@ -901,5 +944,9 @@ final class SpaceHeaderView: HoverView {
         guard let space else { return }
         dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
-}
 
+    private func showMenu() {
+        guard let space else { return }
+        dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(of: CGPoint(x: more.frame.minX, y: more.frame.maxY)))))
+    }
+}

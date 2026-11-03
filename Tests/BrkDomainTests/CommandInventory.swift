@@ -40,7 +40,7 @@ enum CommandInventory {
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
-        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
+        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
         .tabTools(.preferences(includeFavorites: true, previews: false)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
@@ -267,6 +267,8 @@ enum CommandInventory {
             case .mute: "mute"
             case .dismissToast: "dismissToast"
             case .dismissArchiveEducation: "dismissArchiveEducation"
+            case .dismissFavoritesHint: "dismissFavoritesHint"
+            case .undoToast: "undoToast"
             case .preferences: "preferences"
             }
         case .page(let c):

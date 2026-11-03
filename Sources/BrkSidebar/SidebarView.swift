@@ -43,6 +43,15 @@ public final class SidebarView: NSView {
     private var swipe = SpaceSwipe()
     private var swallowMomentum = false
     private var canSwipe = false
+    /// The pointer is over the column: Arc then shows the pill's accessories and Today's Clear.
+    private var hoverTracking: NSTrackingArea?
+    private var pointerInside = false {
+        didSet {
+            guard pointerInside != oldValue else { return }
+            urlPill.sidebarHovered = pointerInside
+            tablist.sidebarHovered = pointerInside
+        }
+    }
 
     /// Everything `render` reads. Equal slices change nothing, so render returns before touching a view.
     struct Slice: Equatable {
@@ -101,7 +110,24 @@ public final class SidebarView: NSView {
         if window == nil {
             stopFloatingWatch()
             resetSwipe()
+            pointerInside = false
         }
+    }
+
+    public override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        guard hoverTracking == nil else { return }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        hoverTracking = area
+    }
+
+    public override func mouseEntered(with event: NSEvent) { pointerInside = true }
+    public override func mouseExited(with event: NSEvent) { pointerInside = false }
+
+    public override func viewDidHide() {
+        super.viewDidHide()
+        pointerInside = false
     }
 
     /// The root hides this view while the sidebar is hidden; the resize handle beside it goes with it.
@@ -135,17 +161,18 @@ public final class SidebarView: NSView {
         backdrop.frame = bounds
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         header.frame = local(f.titleRow)
-        header.render(snapshot.urlPill, frames: f, palette: palette)
+        header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette)
         urlPill.frame = local(f.urlPill)
+        urlPill.isHidden = f.urlPill.height == 0
         urlPill.render(snapshot.urlPill, palette: palette)
         favorites.frame = local(f.favoritesTray)
-        favorites.previewsEnabled = snapshot.tabTools.hoverPreviews
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
-        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
+        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
+                       now: snapshot.now)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(snapshot.dock, frames: f, palette: palette)
@@ -245,28 +272,32 @@ public final class SidebarView: NSView {
 
 /// The title row: sidebar toggle after the traffic lights, then back, forward and reload (stop while loading)
 /// right-aligned, 32 pt buttons 2 pt apart ending 6 pt from the edge (cra L1215). A window drag region.
+/// When the toggle and the three buttons do not fit (Arc at 164) the row keeps back and forward and folds the toggle
+/// and reload into a "…" menu, on 28 pt buttons without gaps. With the toolbar shown only the toggle stays: the
+/// navigation buttons are in the toolbar.
 @MainActor
 final class TitleRowView: NSView {
     private let toggle = GlyphButton()
     private let back = GlyphButton()
     private let forward = GlyphButton()
     private let reload = GlyphButton()
+    private let more = GlyphButton()
+    private let dispatch: Dispatch
     private var loading = false
-    private var last: (URLPillSnapshot, SidebarFrames, Palette)?
+    private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette)?
 
     init(dispatch: @escaping Dispatch) {
+        self.dispatch = dispatch
         super.init(frame: .zero)
         toggle.action = { _ in dispatch(.sidebar(.toggle)) }
         back.action = { _ in dispatch(.page(.back(.focused))) }
         forward.action = { _ in dispatch(.page(.forward(.focused))) }
-        reload.action = { [weak self] modifiers in
-            if self?.loading == true { dispatch(.page(.stop(.focused))) }
-            else { dispatch(.page(.reload(.focused, ignoringCache: modifiers.contains(.option)))) }
-        }
+        reload.action = { [weak self] modifiers in self?.reloadOrStop(modifiers) }
+        more.action = { [weak self] _ in self?.showMore() }
         toggle.toolTip = SidebarCopy.showHideSidebar
         back.toolTip = SidebarCopy.goBack
         forward.toolTip = SidebarCopy.goForward
-        for button in [toggle, back, forward, reload] { addSubview(button) }
+        for button in [toggle, back, forward, reload, more] { addSubview(button) }
         identify(.titleRow)
     }
 
@@ -277,20 +308,33 @@ final class TitleRowView: NSView {
     /// The title row moves the window (spike unknown 6); its buttons do not.
     override var mouseDownCanMoveWindow: Bool { true }
 
-    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, palette: Palette) {
-        if let last, last.0 == pill, last.1 == f, last.2 == palette { return }
-        last = (pill, f, palette)
+    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, toolbar: Bool, palette: Palette) {
+        if let last, last.0 == pill, last.1 == f, last.2 == toolbar, last.3 == palette { return }
+        last = (pill, f, toolbar, palette)
         loading = pill.loading
         let w = Metrics.window, size = Draw.navButton.value, gap = Draw.navGap.value
         let y = (f.titleRow.height - size) / 2
         let lightsEnd = f.trafficLightsOrigin.x - f.titleRow.minX + 3 * w.trafficLightSize.value + 2 * w.trafficLightSpacing.value
         toggle.frame = CGRect(x: lightsEnd + Draw.toggleGap.value, y: y, width: size, height: size)
-        var x = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
-        for button in [reload, forward, back] {
-            x -= size
-            button.frame = CGRect(x: x, y: y, width: size, height: size)
-            button.isHidden = button.frame.minX < toggle.frame.maxX + gap
-            x -= gap
+        let right = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
+        let fits = right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
+        more.isHidden = toolbar || fits
+        toggle.isHidden = !toolbar && !fits
+        if fits || toolbar {
+            var x = right
+            for button in [reload, forward, back] {
+                x -= size
+                button.frame = CGRect(x: x, y: y, width: size, height: size)
+                button.isHidden = toolbar
+                x -= gap
+            }
+        } else {
+            let compact = Draw.navButtonCompact.value, cy = (f.titleRow.height - compact) / 2
+            reload.isHidden = true
+            for (i, button) in [more, forward, back].enumerated() {
+                button.frame = CGRect(x: right - Double(i + 1) * compact, y: cy, width: compact, height: compact)
+                button.isHidden = button.frame.minX < lightsEnd
+            }
         }
         back.isEnabled = pill.canGoBack
         forward.isEnabled = pill.canGoForward
@@ -301,23 +345,46 @@ final class TitleRowView: NSView {
         back.render(.back, size: glyph, palette: palette, radius: radius, hoverFill: fill)
         forward.render(.forward, size: glyph, palette: palette, radius: radius, hoverFill: fill)
         reload.render(pill.loading ? .stop : .reload, size: glyph, palette: palette, radius: radius, hoverFill: fill)
+        more.render(.more, size: glyph, palette: palette, radius: radius, hoverFill: fill)
     }
+
+    private func reloadOrStop(_ modifiers: NSEvent.ModifierFlags) {
+        if loading { dispatch(.page(.stop(.focused))) }
+        else { dispatch(.page(.reload(.focused, ignoringCache: modifiers.contains(.option)))) }
+    }
+
+    /// The narrow row's "…": the buttons that did not fit.
+    private func showMore() {
+        let menu = NSMenu()
+        let reloadItem = NSMenuItem(title: loading ? SidebarCopy.stop : SidebarCopy.reload, action: #selector(menuReload), keyEquivalent: "")
+        reloadItem.target = self
+        reloadItem.isEnabled = last?.0.text != nil
+        let toggleItem = NSMenuItem(title: SidebarCopy.showHideSidebar, action: #selector(menuToggle), keyEquivalent: "")
+        toggleItem.target = self
+        menu.autoenablesItems = false
+        menu.items = [reloadItem, toggleItem]
+        menu.popUp(positioning: nil, at: CGPoint(x: more.frame.minX, y: more.frame.maxY), in: self)
+    }
+
+    @objc private func menuReload() { reloadOrStop([]) }
+    @objc private func menuToggle() { dispatch(.sidebar(.toggle)) }
 }
 
-/// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…", a progress glow
-/// while the page loads, and on hover a copy-link accessory. A click opens the command bar to edit the current tab.
-/// The profile badge (F2) sits at the trailing end while the space's profile is not the default, or the window is
-/// incognito; an incognito pill has Arc's CommandBarPlaceholderIncognitoBackground.
+/// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…". While the pointer
+/// is over the sidebar two accessories show at its right end: copy link and the site controls. A click opens the
+/// command bar to edit the current tab. The profile badge (F2) sits at the trailing end while the space's profile is
+/// not the default, or the window is incognito; an incognito pill has Arc's CommandBarPlaceholderIncognitoBackground.
 @MainActor
 final class URLPillView: HoverView {
     private let label = NSTextField(labelWithString: "")
     private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
     private let siteInfo = GlyphButton()
-    private let shimmer = CAGradientLayer()
     private var pill: URLPillSnapshot?
     private var palette: Palette?
     private let dispatch: Dispatch
+    /// Set by the sidebar while the pointer is anywhere over it.
+    var sidebarHovered = false { didSet { if sidebarHovered != oldValue { stateChanged() } } }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -328,19 +395,15 @@ final class URLPillView: HoverView {
         label.lineBreakMode = .byTruncatingTail
         label.font = .systemFont(ofSize: Draw.urlFont.value)
         label.isSelectable = false
-        shimmer.startPoint = CGPoint(x: 0, y: 0.5)
-        shimmer.endPoint = CGPoint(x: 1, y: 0.5)
-        shimmer.isHidden = true
-        layer?.addSublayer(shimmer)
         siteInfo.action = { _ in dispatch(.site(.controls)) }
         siteInfo.toolTip = "Website controls and privacy"
         siteInfo.identify(.siteInfo)
-        addSubview(siteInfo)
         addSubview(label)
         addSubview(badge)
         copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
+        addSubview(siteInfo)
         identify(.urlPill)
     }
 
@@ -348,19 +411,13 @@ final class URLPillView: HoverView {
         if pill == self.pill, palette == self.palette { needsLayout = true; return }
         self.pill = pill
         self.palette = palette
-        label.stringValue = (pill.text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
+        let text = pill.host ?? pill.text
+        label.stringValue = (text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
         toolTip = "Zoom: \(pill.zoomPercent)%"
-        label.textColor = pill.text == nil ? palette.ink.placeholder : palette.ink.secondary
-        copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
-                        hoverFill: palette.tokens.itemHover)
-        siteInfo.render(.siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
-        shimmer.colors = [NSColor.systemPurple.withAlphaComponent(0.35).cgColor, NSColor.systemBlue.withAlphaComponent(0.7).cgColor, NSColor.systemOrange.withAlphaComponent(0.8).cgColor]
-        shimmer.shadowColor = palette.ink.loading.cgColor
-        shimmer.shadowOpacity = 0.85
-        shimmer.shadowRadius = Metrics.sidebarTools.glowBlur.value
-        shimmer.cornerRadius = Metrics.sidebarTools.glowRadius.value
-        shimmer.isHidden = !pill.loading
-        if !pill.loading { shimmer.removeAllAnimations() }
+        label.textColor = text == nil ? palette.ink.placeholder : palette.ink.secondary
+        let radius = Metrics.urlPill.accessoryRadius.value
+        copyLink.render(.copyLink, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
+        siteInfo.render(.siteControls, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
         badge.render(pill.profile, palette: palette)
         stateChanged()
         needsLayout = true
@@ -369,35 +426,33 @@ final class URLPillView: HoverView {
     override func layout() {
         super.layout()
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
-        copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
-        siteInfo.frame = CGRect(x: inset, y: (bounds.height - size) / 2, width: size, height: size)
-        let leading = inset + size + Draw.pillTextLeading.value
-        var trailing = copyLink.alphaValue > 0 ? copyLink.frame.minX : bounds.width - inset
+        siteInfo.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
+        copyLink.frame = siteInfo.frame.offsetBy(dx: -(size + Draw.pillAccessoryGap.value), dy: 0)
+        let leading = Draw.pillTextLeading.value
+        var trailing = accessoriesShown ? copyLink.frame.minX : bounds.width - leading
         if !badge.isHidden {
+            if !accessoriesShown { trailing = bounds.width - inset }
             let width = min(badge.fittingWidth, max(0, (trailing - leading) / 2))
             badge.frame = CGRect(x: trailing - width, y: (bounds.height - BadgeDraw.height.value) / 2, width: width, height: BadgeDraw.height.value)
             trailing = badge.frame.minX - BadgeDraw.gap.value
-        } else if copyLink.alphaValue == 0 {
-            trailing = bounds.width - leading
         }
         let height = max(label.intrinsicContentSize.height, Metrics.urlPill.textMinHeight.value)
         label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
-        CATransaction.begin()
-        CATransaction.setAnimationDuration(Metrics.sidebarTools.glowDuration.value)
-        shimmer.frame = CGRect(x: 0, y: bounds.height - Metrics.sidebarTools.glowHeight.value, width: bounds.width * max(0.03, pill?.loadProgress ?? 0), height: Metrics.sidebarTools.glowHeight.value)
-        CATransaction.commit()
     }
+
+    /// Copy link and the site controls, shown while the pointer is over the sidebar and the tab has an address.
+    private var accessoriesShown: Bool { (sidebarHovered || isHovered) && pill?.text != nil }
 
     override func stateChanged() {
         guard let palette else { return }
         let fill = isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : palette.tokens.itemBackground
         layer?.backgroundColor = pill?.profile?.incognito == true && !isPressed && !isHovered
             ? ProfileBadgeView.incognitoPillBackground.cgColor : palette.color(fill).cgColor
-        copyLink.alphaValue = isHovered && pill?.text != nil ? 1 : 0
+        copyLink.alphaValue = accessoriesShown ? 1 : 0
+        siteInfo.alphaValue = accessoriesShown ? 1 : 0
         needsLayout = true
     }
 
-    @objc private func showSiteControls() { dispatch(.site(.controls)) }
     override func rightMouseDown(with event: NSEvent) { dispatch(.site(.controls)) }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }

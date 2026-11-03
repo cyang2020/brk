@@ -23,14 +23,17 @@ public enum SidebarLayout {
         return space
     }
 
-    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true) -> SidebarFrames {
+    /// With the toolbar shown the pill and the navigation buttons move to the toolbar: the pill is empty and the
+    /// favorites tray starts under the traffic lights (Metrics.sidebar.toolbarTrayTop).
+    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true,
+                               toolbarVisible: Bool = false) -> SidebarFrames {
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
         let lights = CGPoint(x: frame.minX + w.trafficLightLeft.value, y: frame.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
         let pill = CGRect(x: frame.minX + p.sideInset.value, y: titleRow.maxY + p.topGap.value,
-                          width: max(0, frame.width - 2 * p.sideInset.value), height: p.height.value)
-        let grid = FavoritesGrid.tiles(count: favorites.tiles.count, width: frame.width)
-        let tray = CGRect(x: frame.minX, y: pill.maxY, width: frame.width, height: grid.tray.height)
+                          width: max(0, frame.width - 2 * p.sideInset.value), height: toolbarVisible ? 0 : p.height.value)
+        let grid = FavoritesGrid.tiles(count: favorites.tiles.count, width: frame.width, hintDismissed: favorites.hintDismissed)
+        let tray = CGRect(x: frame.minX, y: toolbarVisible ? frame.minY + s.toolbarTrayTop.value : pill.maxY, width: frame.width, height: grid.tray.height)
         var tiles: [ItemID: CGRect] = [:]
         for (tile, rect) in zip(favorites.tiles, grid.tiles) { tiles[tile.id] = rect.offsetBy(dx: tray.minX, dy: tray.minY) }
         let dockRect = CGRect(x: frame.minX, y: frame.maxY - Metrics.dock.height.value, width: frame.width, height: Metrics.dock.height.value)
@@ -59,9 +62,10 @@ public enum FavoritesGrid {
     }
 
     /// Tile rects in tray coordinates (origin at the tray's top-left) and the tray's size. With no favorites the
-    /// tray is one tile tall for the empty-state copy.
-    public static func tiles(count: Int, width: Double) -> (tray: CGSize, tiles: [CGRect]) {
+    /// tray holds Arc's "Drag to add Favorites" box (Metrics.favorites.emptyTrayHeight), or nothing once dismissed.
+    public static func tiles(count: Int, width: Double, hintDismissed: Bool = false) -> (tray: CGSize, tiles: [CGRect]) {
         let f = Metrics.favorites
+        if count == 0 { return (CGSize(width: width, height: hintDismissed ? 0 : f.emptyTrayHeight.value), []) }
         let columns = columns(forWidth: width)
         let inner = width - 2 * f.inset.value
         let tileWidth = max(0, floor((inner - Double(columns - 1) * f.gap.value) / Double(columns)))

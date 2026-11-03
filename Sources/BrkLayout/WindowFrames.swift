@@ -118,6 +118,8 @@ public struct RowFrame: Sendable, Equatable, Codable {
 /// this enum, never typed by hand), and `WindowFrames.frame(of:)` is its computed frame when layout owns it.
 public enum ViewID: Hashable, Sendable, Codable {
     case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String), boostControl(String)
+    /// The page loading bar above the content card (Arc P06-a).
+    case loadingBar
     case siteInfo
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
@@ -151,6 +153,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         switch self {
         case .toolbar: "address-toolbar"
         case .toolbarAddress: "toolbar-address"
+        case .loadingBar: "loading-bar"
         case .toolbarButton(let name): "toolbar-\(name)"
         case .boostControl(let name): "boost-\(name)"
         case .spaceToolsControl(let name): "space-tools-\(name)"
@@ -229,7 +232,7 @@ extension WindowFrames {
         case .sidebar: return sidebarFloats ? nil : sidebar?.frame
         case .floatingSidebar: return sidebarFloats ? sidebar?.frame : nil
         case .titleRow: return sidebar?.titleRow
-        case .urlPill: return sidebar?.urlPill
+        case .urlPill: return sidebar.flatMap { $0.urlPill.height > 0 ? $0.urlPill : nil }   // empty while the toolbar has the address
         case .favoritesTray: return sidebar?.favoritesTray
         case .favorite(let id): return sidebar?.favoriteTiles[id]
         case .row(let id):
@@ -253,7 +256,7 @@ extension WindowFrames {
         case .libraryPage(let page): return library?.pageCells[page]
         case .archive: return library?.page   // the archive page fills the Library's page area while it is the open page
         case .peek: return peek
-        case .siteInfo, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+        case .siteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
              .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:

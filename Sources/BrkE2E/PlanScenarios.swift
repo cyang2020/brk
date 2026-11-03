@@ -37,7 +37,9 @@ enum PlanScenarios {
         let size = n.contentSize
         try expect(v.sidebar.width == sidebarWidth, "sidebar width \(v.sidebar.width), expected \(sidebarWidth)")
         let card = try visible(n, .card(0))
-        let expected = CGRect(x: sidebarWidth + inset, y: inset, width: size.width - sidebarWidth - 2 * inset, height: size.height - 2 * inset)
+        // Arc: the card starts at the sidebar's edge (Metrics.content.sidebarGap) and keeps the inset on the other sides.
+        let gap = Metrics.content.sidebarGap.value
+        let expected = CGRect(x: sidebarWidth + gap, y: inset, width: size.width - sidebarWidth - gap - inset, height: size.height - 2 * inset)
         try expect(near(card.frame, expected), "card-0 is at \(card.frame), expected \(expected)")
         try expect(card.cornerRadius == radius, "card-0 radius \(card.cornerRadius), expected \(radius)")
         let computed = n.computed.cards.first?.rect
@@ -180,7 +182,8 @@ enum PlanScenarios {
         try app.waitUntil("card-0 back beside the sidebar") {
             let n = try app.native()
             let card = try visible(n, .card(0))
-            try expect(card.frame.minX == sidebarWidth + inset, "card-0 x \(card.frame.minX), expected \(sidebarWidth + inset)")
+            let left = sidebarWidth + Metrics.content.sidebarGap.value
+            try expect(card.frame.minX == left, "card-0 x \(card.frame.minX), expected \(left)")
             try expect(card.frame.maxX == size.width - inset, "card-0 right edge \(card.frame.maxX), expected \(size.width - inset)")
             try expect(card.cornerRadius == radius, "card-0 radius \(card.cornerRadius), expected \(radius)")
             _ = try visible(n, .sidebar)

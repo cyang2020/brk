@@ -9,7 +9,7 @@ import Foundation
 
 /// The window's geometry as one pure function of (snapshot, content size). Every number comes from `Metrics`:
 /// - sidebar shown: the column spans the full height at its width, the resize handle is 8 wide centred on its edge
-///   from 11 below the top to 11 above the bottom, and the content area starts 10 right of it;
+///   from 11 below the top to 11 above the bottom, and the content area starts at its edge (10 from the other edges);
 /// - sidebar hidden: the content area is the window inset 10 on every side; peeking floats the column 5 in from
 ///   the left, top and bottom over the content (which does not move); otherwise the reveal strip runs from 2 x 10
 ///   outside the left edge to 1.5 x 10 inside it;
@@ -21,6 +21,7 @@ public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         let inset = Metrics.content.inset.value
         let m = Metrics.sidebar
+        let toolbarVisible = snapshot.sidebar.toolbarVisible
         var sidebar: SidebarFrames?
         var floats = false
         var handle: CGRect?
@@ -33,23 +34,25 @@ public enum WindowLayout {
         } else if snapshot.sidebar.visible {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible, toolbarVisible: toolbarVisible)
             handle = CGRect(x: frame.maxX - m.resizeHitWidth.value / 2, y: m.resizeHitTop.value,
                             width: m.resizeHitWidth.value, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
         } else if snapshot.sidebar.peek {
             floats = true
             let frame = CGRect(x: m.floatingInset.value, y: m.floatingInset.value, width: snapshot.sidebar.width,
                                height: contentSize.height - 2 * m.floatingInset.value)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible, toolbarVisible: toolbarVisible)
         } else {
             reveal = CGRect(x: -m.revealOutsideFactor.value * inset, y: 0,
                             width: (m.revealOutsideFactor.value + m.revealInsideFactor.value) * inset, height: contentSize.height)
         }
 
-        // The inset is kept when the sidebar is hidden (Arc keeps 10 pt).
-        let toolbarHeight = snapshot.sidebar.toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
-        let toolbar = toolbarHeight > 0 ? CGRect(x: anchoredWidth + inset, y: inset, width: max(0, contentSize.width - anchoredWidth - 2 * inset), height: toolbarHeight) : nil
-        let contentArea = CGRect(x: anchoredWidth + inset, y: inset + toolbarHeight, width: max(0, contentSize.width - anchoredWidth - 2 * inset),
+        // The inset is kept when the sidebar is hidden (Arc keeps 10 pt); beside an anchored sidebar the card starts at
+        // its edge (Metrics.content.sidebarGap). The toolbar is the top of the card: the cards start under it.
+        let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
+        let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
+        let toolbar = toolbarHeight > 0 ? CGRect(x: left, y: inset, width: max(0, contentSize.width - left - inset), height: toolbarHeight) : nil
+        let contentArea = CGRect(x: left, y: inset + toolbarHeight, width: max(0, contentSize.width - left - inset),
                                  height: max(0, contentSize.height - 2 * inset - toolbarHeight))
         let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
         let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
