@@ -90,9 +90,10 @@ private final class IconGridController: NSViewController {
             let button = NSButton(frame: CGRect(x: center.x - 13, y: center.y - 13, width: 26, height: 26))
             button.isBordered = false
             button.bezelStyle = .regularSquare
-            button.imagePosition = .imageOnly
+            button.title = ""
             button.image = NSImage(systemSymbolName: icon.systemSymbolName, accessibilityDescription: icon.rawValue)?
                 .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
+            button.imagePosition = .imageOnly
             button.contentTintColor = .secondaryLabelColor
             button.tag = i
             button.target = self
