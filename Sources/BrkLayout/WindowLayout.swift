@@ -14,11 +14,12 @@ import Foundation
 ///   the left, top and bottom over the content (which does not move); otherwise the reveal strip runs from 2 x 10
 ///   outside the left edge to 1.5 x 10 inside it;
 /// - cards: one per pane (`ContentLayout.cards`), radius 6; an empty card fills the area when nothing is shown;
-/// - command bar: `CommandBarLayout.frame`; Peek: the content area inset by Metrics.peek.inset;
+/// - command bar: `CommandBarLayout.frame`; Peek: `PeekLayout.card` (its round buttons: `PeekLayout.controls`);
 /// - Library open: its panel replaces the sidebar, shown or hidden (no sidebar, handle or reveal strip), and the
 ///   content area starts 10 right of the panel (`LibraryLayout`).
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
+        if snapshot.kind == .little { return LittleLayout.frames(snapshot, contentSize: contentSize) }
         let inset = Metrics.content.inset.value
         let m = Metrics.sidebar
         var sidebar: SidebarFrames?
@@ -33,14 +34,16 @@ public enum WindowLayout {
         } else if snapshot.sidebar.visible {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
+                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind))
             handle = CGRect(x: frame.maxX - m.resizeHitWidth.value / 2, y: m.resizeHitTop.value,
                             width: m.resizeHitWidth.value, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
         } else if snapshot.sidebar.peek {
             floats = true
             let frame = CGRect(x: m.floatingInset.value, y: m.floatingInset.value, width: snapshot.sidebar.width,
                                height: contentSize.height - 2 * m.floatingInset.value)
-            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible)
+            sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
+                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind))
         } else {
             reveal = CGRect(x: -m.revealOutsideFactor.value * inset, y: 0,
                             width: (m.revealOutsideFactor.value + m.revealInsideFactor.value) * inset, height: contentSize.height)
@@ -58,7 +61,11 @@ public enum WindowLayout {
         let cards: [CardFrame] = snapshot.content.panes.isEmpty
             ? [CardFrame(pane: 0, content: .blank, rect: contentArea, cornerRadius: radius)]
             : zip(visiblePanes, rects).map { pane, rect in
-                CardFrame(pane: pane.offset, content: pane.element.content, rect: rect, cornerRadius: radius)
+                var card = CardFrame(pane: pane.offset, content: pane.element.content, rect: rect, cornerRadius: radius)
+                if snapshot.content.split != nil {
+                    card.header = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: min(rect.height, Metrics.content.paneHeaderHeight.value))
+                }
+                return card
             }
 
         var commandBar: CGRect?
@@ -69,14 +76,14 @@ public enum WindowLayout {
         case .library?:
             library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height), page: contentArea,
                                            contentSize: contentSize)
-        case .peek?: peek = contentArea.insetBy(dx: Metrics.peek.inset.value, dy: Metrics.peek.inset.value)
+        case .peek?: peek = PeekLayout.card(in: contentArea)
         case nil: break
         }
 
         var result = WindowFrames(contentSize: contentSize, sidebar: sidebar, sidebarFloats: floats, resizeHandle: handle, revealStrip: reveal,
                             contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, library: library, peek: peek)
         if let find = snapshot.find,
-           let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.rect {
+           let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.page {
             result.find = FindLayout.compute(in: card, replacing: find.replacement)
         }
         result.toolbar = toolbar
@@ -122,6 +129,75 @@ public enum LibraryLayout {
     public static func closeButton(in panel: CGRect) -> CGRect {
         let d = Metrics.dock, size = d.buttonSize.value
         return CGRect(x: panel.minX + d.buttonInset.value, y: panel.maxY - d.libraryBottom.value - size, width: size, height: size)
+    }
+}
+
+/// Little Arc (Arc: `LittleBrowserWindow`), as on Arc 1.170 (the 2026-11-03 capture P21a-c). Without a page the
+/// window is the command bar alone: the bar fills it (Metrics.littleArc.commandBarSize). With a page, a header strip
+/// (Metrics.littleArc.headerHeight) carries the traffic lights, the host pill and "Open in <space>", and the page
+/// fills the rest edge to edge (no inset, no rounded card). No sidebar, no reveal strip, no Peek.
+public enum LittleLayout {
+    public static func frames(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
+        let bounds = CGRect(origin: .zero, size: contentSize)
+        let empty = snapshot.content.panes.isEmpty
+        let header = empty ? 0 : min(contentSize.height, Metrics.littleArc.headerHeight.value)
+        let area = CGRect(x: 0, y: header, width: contentSize.width, height: max(0, contentSize.height - header))
+        let cards = empty
+            ? [CardFrame(pane: 0, content: .blank, rect: area, cornerRadius: 0)]
+            : snapshot.content.panes.enumerated().filter(\.element.focused).prefix(1).map { CardFrame(pane: $0.offset, content: $0.element.content, rect: area, cornerRadius: 0) }
+        var commandBar: CGRect?
+        if case .commandBar(let bar)? = snapshot.overlay {
+            commandBar = empty ? bounds : CommandBarLayout.frame(placement: bar.placement, contentArea: area, urlPill: nil)
+        }
+        var result = WindowFrames(contentSize: contentSize, sidebar: nil, sidebarFloats: false, resizeHandle: nil, revealStrip: nil,
+                                  contentArea: area, cards: cards, dividers: [], commandBar: commandBar, library: nil, peek: nil)
+        if let find = snapshot.find, let card = cards.first(where: { $0.content == .page(find.page) })?.rect {
+            result.find = FindLayout.compute(in: card, replacing: find.replacement)
+        }
+        return result
+    }
+
+    /// The header's parts in window content coordinates (top-left origin): the traffic lights' origin, the host
+    /// pill and the "Open in" button for a window `width` wide whose button is `buttonWidth` wide.
+    public static func header(width: Double, buttonWidth: Double) -> (lights: CGPoint, pill: CGRect, openIn: CGRect) {
+        let m = Metrics.littleArc
+        let openIn = CGRect(x: width - m.openInTrailing.value - buttonWidth, y: m.controlTop.value, width: buttonWidth, height: m.openInHeight.value)
+        let pill = CGRect(x: m.pillLeading.value, y: m.controlTop.value, width: max(0, openIn.minX - m.pillGap.value - m.pillLeading.value),
+                          height: m.pillHeight.value)
+        let lights = CGPoint(x: m.lightsLeading.value, y: m.headerHeight.value / 2 - Metrics.window.trafficLightSize.value / 2)
+        return (lights, pill, openIn)
+    }
+
+    /// The "Open in" space picker, anchored at the window's top right over the button.
+    public static func picker(width: Double, rows: Int) -> CGRect {
+        let m = Metrics.littleArc
+        let height = m.pickerSearchHeight.value + Double(rows) * m.pickerRowHeight.value
+        return CGRect(x: width - m.pickerTrailing.value - m.pickerWidth.value, y: m.pickerTop.value, width: m.pickerWidth.value, height: height)
+    }
+}
+
+/// The Peek card (Arc: `modalV2`) and the column of round buttons beside it (close, open as tab, open in split),
+/// as measured on Arc: the card stands in the content area 105 pt from its left edge and 95 pt from its right, 2 pt
+/// from its top and bottom; the buttons sit 13 pt right of the card, the first 7 pt below its top, 44 pt apart. In a
+/// narrow content area the side insets shrink so the card keeps at least 300 pt.
+public enum PeekLayout {
+    public static func card(in area: CGRect) -> CGRect {
+        let m = Metrics.peek
+        let room = max(0, area.width - 300)
+        let total = m.leadingInset.value + m.trailingInset.value
+        let scale = total > 0 ? min(1, room / total) : 0
+        // Whole points, rounded down so the card never drops under its 300 pt.
+        let leading = (m.leadingInset.value * scale).rounded(.down), trailing = (m.trailingInset.value * scale).rounded(.down)
+        return CGRect(x: area.minX + leading, y: area.minY + m.verticalInset.value, width: max(0, area.width - leading - trailing),
+                      height: max(0, area.height - 2 * m.verticalInset.value))
+    }
+
+    /// Close, open as tab, open in split, top to bottom, beside `card`.
+    public static func controls(beside card: CGRect) -> [CGRect] {
+        let m = Metrics.peek, size = m.controlSize.value
+        return (0..<3).map { i in
+            CGRect(x: card.maxX + m.controlGap.value, y: card.minY + m.controlTop.value + Double(i) * m.controlPitch.value, width: size, height: size)
+        }
     }
 }
 

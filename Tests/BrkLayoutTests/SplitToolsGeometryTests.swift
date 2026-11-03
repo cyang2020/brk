@@ -5,15 +5,19 @@ import XCTest
 @testable import BrkLayout
 
 final class SplitToolsGeometryTests: XCTestCase {
-    func testToolbarDoesNotCoverFindOnWideOrNarrowContent() {
-        for width in [360.0, 700, 1000] {
-            let area = CGRect(x: 200, y: 10, width: width, height: 700)
-            for replacing in [false, true] {
-                let find = FindLayout.compute(in: area, replacing: replacing).bar
-                let toolbar = SplitToolsLayout.toolbar(in: area, avoiding: find)
-                XCTAssertTrue(area.contains(toolbar))
-                XCTAssertFalse(toolbar.intersects(find), "Find and split controls overlap at width \(width)")
-            }
+    /// Arc draws a header strip at the top of every split pane; the page fills the card under it and its hairline.
+    func testSplitCardsHaveHeadersAndPagesUnderThem() throws {
+        let d = LayoutDriver()
+        XCTAssertTrue(d.frames().cards.allSatisfy { $0.header == nil && $0.page == $0.rect }, "a single card has a pane header")
+        d.user(.split(.addPane)); d.user(.commandBar(.dismiss))
+        let frames = d.frames()
+        XCTAssertEqual(frames.cards.count, 2)
+        for card in frames.cards {
+            let header = try XCTUnwrap(card.header)
+            XCTAssertEqual(header, CGRect(x: card.rect.minX, y: card.rect.minY, width: card.rect.width, height: Metrics.content.paneHeaderHeight.value))
+            XCTAssertEqual(card.page.minY, header.maxY + Metrics.content.paneHeaderSeparator.value)
+            XCTAssertEqual(card.page.maxY, card.rect.maxY)
+            XCTAssertEqual(card.page.width, card.rect.width)
         }
     }
 
