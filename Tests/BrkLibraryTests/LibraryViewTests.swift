@@ -10,8 +10,9 @@ extension NSView {
     var descendants: [NSView] { subviews + subviews.flatMap(\.descendants) }
 }
 
-/// Owner: F5. The Library as the window shows it: the panel in place of the sidebar, the open page in the content
-/// area, and what each control dispatches. Frames come from the real layout of a real snapshot.
+/// Owner: F5. The Library as the window shows it (P32): the panel in place of the sidebar, a navigation column and
+/// the open page's column, the content area left to the page; and what each control dispatches. Frames come from
+/// the real layout of a real snapshot.
 @MainActor
 final class LibraryViewTests: XCTestCase {
     private var sent: [Command] = []
@@ -36,7 +37,6 @@ final class LibraryViewTests: XCTestCase {
 
     private func makeView() -> LibraryView {
         let view = LibraryView(dispatch: { [unowned self] in self.sent.append($0) })
-        view.history.calendar = utc
         view.downloads.calendar = utc
         return view
     }
@@ -54,65 +54,103 @@ final class LibraryViewTests: XCTestCase {
         return shown(root).compactMap { ($0 as? NSTextField)?.stringValue }.filter { !$0.isEmpty }
     }
 
-    private func library(_ page: LibraryPage, downloads: [DownloadRow] = [], history: [HistoryRow] = [], openID: Int = 1) -> LibrarySnapshot {
+    private func library(_ page: LibraryPage, downloads: [DownloadRow] = [], openID: Int = 1) -> LibrarySnapshot {
         LibrarySnapshot(openID: openID, page: page, archive: page == .archive ? ArchiveSnapshot(openID: openID, groups: [], threshold: .twelveHours) : nil,
-                        downloads: downloads, history: history)
+                        downloads: downloads)
     }
 
     // MARK: The panel
 
-    /// the panel lists every page with Arc's name and a glyph in the cells the layout computed; the open page is
-    /// selected; a row opens its page, the exit button (where the dock's Library button is) closes the Library
-    func testThePanelListsEveryPageWithArcsCopyAndAGlyph() throws {
+    /// the navigation column lists every page with Arc's name and a glyph in the cells the layout computed, in Arc's
+    /// order; the open page is selected; a cell opens its page, the exit button (where the dock's Library button is)
+    /// closes the Library; the panel is the `library` view and the page column sits beside the navigation
+    func testTheNavigationListsEveryPageWithArcsCopyAndAGlyph() throws {
         let view = makeView()
         let f = render(view, library(.downloads))
         XCTAssertFalse(view.isHidden)
         XCTAssertEqual(view.frame, CGRect(x: 0, y: 0, width: 1280, height: 776))
-        let rows = shown(view).compactMap { $0 as? LibraryPageButton }
-        XCTAssertEqual(rows.map(\.page), LibraryPage.allCases)
-        XCTAssertEqual(rows.map(\.titleText), ["Downloads", "History", "Archived Tabs", "Media", "Easels & Notes", "Boosts", "Spaces"])
-        XCTAssertTrue(rows.allSatisfy { $0.glyphImage != nil })
-        for row in rows {
-            XCTAssertEqual(row.frame, f.library?.pageCells[row.page])
-            XCTAssertEqual(row.accessibilityIdentifier(), ViewID.libraryPage(row.page).identifier)
+        XCTAssertEqual(self.view(.library, in: view)?.frame, CGRect(x: 0, y: 0, width: 417, height: 776))
+        let cells = shown(view).compactMap { $0 as? LibraryNavCell }
+        XCTAssertEqual(cells.map(\.page), LibraryPage.allCases)
+        XCTAssertEqual(cells.map(\.titleText), ["Media", "Downloads", "Easels", "Spaces", "Boosts", "Archived Tabs"])
+        XCTAssertTrue(cells.allSatisfy { $0.glyphImage != nil })
+        for cell in cells {
+            XCTAssertEqual(cell.frame, f.library?.pageCells[cell.page])
+            XCTAssertEqual(cell.accessibilityIdentifier(), ViewID.libraryPage(cell.page).identifier)
         }
-        XCTAssertEqual(rows.filter(\.isSelected).map(\.page), [.downloads])
-        rows.first { $0.page == .history }?.performClick(nil)
+        XCTAssertEqual(cells.filter(\.isSelected).map(\.page), [.downloads])
+        XCTAssertEqual(view.downloads.frame, f.library?.page)
+        XCTAssertEqual(view.downloads.frame, CGRect(x: 112, y: 0, width: 305, height: 776))
+        cells.first { $0.page == .archive }?.performClick(nil)
         let exit = try XCTUnwrap(self.view(.libraryClose, in: view) as? NSButton)
         XCTAssertEqual(exit.frame, CGRect(x: 8, y: 735, width: 32, height: 32))
         XCTAssertEqual(exit.toolTip, "Exit the Library")
         exit.performClick(nil)
-        XCTAssertEqual(sent, [.library(.open(.history)), .library(.close)])
+        XCTAssertEqual(sent, [.library(.open(.archive)), .library(.close)])
+        XCTAssertNil(view.hitTest(CGPoint(x: 800, y: 300)), "the content area beside the panel is the page's")
         view.render(nil, now: now, frames: f, palette: Palette(resolveTheme(.default)))
         XCTAssertTrue(view.isHidden)
     }
 
-    /// the open page fills the layout's page area beside the panel; only one page shows; a later wave's page says so
-    func testTheOpenPageFillsTheContentAreaAndLaterPagesShowAnEmptyState() {
+    /// the open page fills the page column; only one page shows; each has Arc's search field; Easels shows its empty
+    /// state, Boosts keeps Brk's own rows, Downloads its empty state
+    func testTheOpenPageFillsThePageColumnWithArcsSearchField() {
         let view = makeView()
         let f = render(view, library(.archive))
         XCTAssertEqual(view.archive.frame, f.library?.page)
-        XCTAssertEqual(view.archive.frame, f.contentArea)
-        XCTAssertTrue(view.downloads.isHidden && view.history.isHidden && view.later.isHidden)
+        XCTAssertTrue(view.downloads.isHidden && view.easels.isHidden && view.media.isHidden)
         XCTAssertTrue(texts(view.archive).contains("Hover your mouse over a tab and press the × to archive it."))
-        // Media and Boosts are real pages now; Easels & Notes is the one page still shown as a later version.
+        XCTAssertEqual(view.archive.filterField.placeholder, "Search Archive…")
         _ = render(view, library(.easelsAndNotes, openID: 2))
         XCTAssertTrue(view.archive.isHidden)
-        XCTAssertFalse(view.later.isHidden)
-        XCTAssertEqual(view.later.texts, [LibraryCopy.laterTitle(.easelsAndNotes), LibraryCopy.laterSubtitle(.easelsAndNotes)])
+        XCTAssertFalse(view.easels.isHidden)
+        XCTAssertEqual(view.easels.searchField.placeholder, "Search Easels…")
+        XCTAssertEqual(view.easels.texts, [LibraryCopy.nothingHereYet, LibraryCopy.easelsEmpty])
         _ = render(view, library(.media, openID: 2))
-        XCTAssertTrue(view.later.isHidden)
+        XCTAssertTrue(view.easels.isHidden)
         XCTAssertFalse(view.media.isHidden)
+        XCTAssertEqual(view.media.searchField.placeholder, "Search Media…")
         _ = render(view, library(.boosts, openID: 3))
-        XCTAssertTrue(view.later.isHidden)
         XCTAssertFalse(view.boosts.isHidden)
+        XCTAssertEqual(view.boosts.searchField.placeholder, "Search Boosts…")
         XCTAssertTrue(texts(view.boosts).contains("Nothing Boosted Yet!"))
         XCTAssertNotNil(self.view(.boostControl("new"), in: view))
         XCTAssertNotNil(self.view(.boostControl("import"), in: view))
         XCTAssertNotNil(self.view(.boostControl("preset-reader"), in: view))
         _ = render(view, library(.downloads, openID: 3))
-        XCTAssertTrue(view.later.isHidden)
-        XCTAssertEqual(texts(view.downloads).suffix(2), ["Nothing here yet!", "Come back after you've found some cool stuff to save."])
+        XCTAssertEqual(view.downloads.searchField.placeholder, "Search Downloads…")
+        XCTAssertEqual(texts(view.downloads).suffix(2), ["Nothing here yet!", "Come back after you’ve found some cool stuff to save."])
+    }
+
+    /// Media before the first capture: Arc's grey cards under "Your Media in the Library"; × puts the card away for
+    /// the session. With captures: a card per capture by day; a click previews it over the content card, whose ×
+    /// hides the preview; the card's menu holds the four actions
+    func testMediaShowsArcsIntroductionThenCaptureCardsAndAPreview() throws {
+        MediaPageView.introDismissed = false
+        let view = makeView()
+        _ = render(view, library(.media))
+        XCTAssertTrue(view.media.introShown)
+        XCTAssertTrue(texts(view.media).contains("Your Media in the Library"))
+        XCTAssertTrue(texts(view.media).contains("Today"))
+        let token = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("t")), generation: 1), sequence: 1)
+        let request = CaptureRequest(id: "c1", document: token, context: .profile(.default), mode: .area, title: "Visual fixture",
+                                     url: URL(string: "http://127.0.0.1:9/a")!, createdAt: Instant(milliseconds: Int64(Date().timeIntervalSince1970 * 1000)))
+        let record = CaptureRecord(request: request, profile: .default, image: CaptureImage(png: Data(), width: 400, height: 300, scale: 2))
+        var snapshot = library(.media, openID: 2)
+        snapshot.captures = [record]
+        let f = render(view, snapshot)
+        XCTAssertFalse(view.media.introShown)
+        let card = try XCTUnwrap(view.media.cards.first)
+        XCTAssertEqual(card.accessibilityIdentifier(), "tab-tools-capture-card-c1")
+        XCTAssertEqual(card.actions().items.map(\.title), ["Open", "Export…", "Remove", "Insert in Easel"])
+        XCTAssertTrue(view.preview.isHidden, "nothing previews before a pick")
+        card.click()
+        XCTAssertEqual(sent.last, .capture(.preview("c1")))
+        snapshot.capturePreview = "c1"
+        _ = render(view, snapshot)
+        XCTAssertFalse(view.preview.isHidden)
+        XCTAssertEqual(view.preview.frame, f.cards.first?.rect, "the preview covers the content card")
+        XCTAssertEqual(view.preview.captionText, "Visual fixture · 400 × 300 · 127.0.0.1")
     }
 
     // MARK: Downloads
@@ -161,55 +199,29 @@ final class LibraryViewTests: XCTestCase {
         report.pressAccessory("Show in Finder")
         big.pressAccessory("Cancel Download")
         broken.pressAccessory("Remove from List")
-        view.downloads.actionButton.performClick(nil)
+        view.downloads.clearDownloads()
         XCTAssertEqual(sent, [.assist(.renameDownload(DownloadID("1"))), .library(.revealDownload(DownloadID("1"))), .library(.cancelDownload(DownloadID("3"))),
                               .library(.removeDownload(DownloadID("5"))), .library(.clearDownloads)])
         view.downloads.searchField.stringValue = "ISO"
-        view.downloads.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        view.downloads.searchChanged()
         XCTAssertEqual(shown(view).compactMap { ($0 as? LibraryRowView)?.accessibilityIdentifier() }, ["download-3"])
         view.downloads.searchField.stringValue = "zzz"
-        view.downloads.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        view.downloads.searchChanged()
         XCTAssertTrue(texts(view.downloads).contains("No results found for “zzz”"))
     }
 
-    // MARK: History
-
-    /// visits grouped by day (Today, Yesterday, then the date) with title, host and time; a click opens the page in
-    /// a new tab; the search keeps each visit's `history-<i>`; Clear History asks first
-    func testTheHistoryPageListsVisitsAndSearches() throws {
+    /// the Filter menu narrows the list by state and holds Clear Downloads
+    func testTheDownloadsFilterMenu() throws {
         let view = makeView()
-        let day: Int64 = 86_400_000
-        let visits = [
-            HistoryRow(url: URL(string: "http://127.0.0.1:9/page2.html")!, title: "Fixture Page 2", visitedAt: now),
-            HistoryRow(url: URL(string: "https://swift.org/blog/")!, title: "", visitedAt: Instant(milliseconds: now.milliseconds - day)),
-            HistoryRow(url: URL(string: "https://resources.arc.net/notes")!, title: "Release notes", visitedAt: Instant(milliseconds: now.milliseconds - 4 * day)),
-        ]
-        _ = render(view, library(.history, history: visits))
-        let page = view.history
-        XCTAssertEqual(texts(page).filter { ["Today", "Yesterday", "Monday, October 26"].contains($0) }, ["Today", "Yesterday", "Monday, October 26"])
-        let first = try XCTUnwrap(self.view(.historyEntry(0), in: view) as? LibraryRowView)
-        XCTAssertEqual(first.texts, ["Fixture Page 2", "127.0.0.1 · 3:05 PM"])
-        XCTAssertEqual((self.view(.historyEntry(1), in: view) as? LibraryRowView)?.texts.first, "swift.org/blog", "an untitled visit shows its URL")
-        first.click()
-        (self.view(.historyEntry(2), in: view) as? LibraryRowView)?.pressAccessory("Remove from History")
-        XCTAssertEqual(sent, [.commandBar(.submit("http://127.0.0.1:9/page2.html")), .library(.removeHistory(URL(string: "https://resources.arc.net/notes")!))])
-        page.searchField.stringValue = "release"
-        page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-        XCTAssertEqual(shown(view).compactMap { ($0 as? LibraryRowView)?.accessibilityIdentifier() }, ["history-2"])
-        sent = []
-        page.actionButton.performClick(nil)
-        XCTAssertEqual(sent, [])
-        XCTAssertTrue(texts(page).contains("Clear this profile's browsing history?"))
-        page.cancelButton.performClick(nil)
-        XCTAssertFalse(texts(page).contains("Clear this profile's browsing history?"))
-        page.actionButton.performClick(nil)
-        page.actionButton.performClick(nil)
-        XCTAssertEqual(sent, [.library(.clearHistory)])
-        // The same opening keeps the search; a new one clears it.
-        _ = render(view, library(.history, history: visits))
-        XCTAssertEqual(page.searchField.stringValue, "release")
-        _ = render(view, library(.history, history: visits, openID: 2))
-        XCTAssertEqual(page.searchField.stringValue, "")
+        _ = render(view, library(.downloads, downloads: [
+            download("1", "report.pdf", .finished, received: 2048, total: 2048, path: "/tmp/d/report.pdf"),
+            download("3", "big.iso", .inProgress, received: 250, total: 1000, path: "/tmp/d/big.iso"),
+        ]))
+        let menu = view.downloads.filterMenu()
+        XCTAssertEqual(menu.items.map(\.title), ["All Downloads", "In Progress", "Completed", "Failed or Cancelled", "", "Clear Downloads"])
+        view.downloads.show(only: .inProgress)
+        XCTAssertEqual(shown(view).compactMap { ($0 as? LibraryRowView)?.accessibilityIdentifier() }, ["download-3"])
+        XCTAssertEqual(view.downloads.filterMenu().items.filter { $0.state == .on }.map(\.title), ["In Progress"])
     }
 
     /// day headers: today, yesterday, a date this year, a date with its year

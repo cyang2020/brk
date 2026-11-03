@@ -264,14 +264,26 @@ public struct PeekMetrics: MetricGroup {
     public let hintHeight = Metric(28.0, .guess("height of the Peek and Little Arc hint strip; not traced"))
 }
 
-/// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). Like Arc's, its panel replaces
-/// the sidebar (width: Metrics.sidebar.libraryMinWidth and .libraryWindowMargin) and the open page fills the content
-/// area. The panel lists the pages under the title row, one sidebar-sized row each (Metrics.tablist.selectionInset
-/// and .rowSpacing); its exit button is where the dock's Library button is (Metrics.dock).
+/// The Library (media, downloads, easels and notes, spaces, boosts, archive). Like Arc's, its panel replaces the
+/// sidebar (width: Metrics.sidebar.libraryMinWidth and .libraryWindowMargin; the Spaces page widens it to fit its
+/// cards) and the content area beside it keeps showing the page. The panel is a navigation column of icon cells and
+/// the open page's column. "P32-a" is a measurement of this round's Arc capture
+/// (verify/visual-pairs/run-20261103/P32, 1280 x 776 pt window).
 public struct LibraryMetrics: MetricGroup {
-    public let listTop = Metric(44.0, .derived(rule: "header top inset 4 + title row height 40: the page list starts under the traffic lights",
-                                               from: ["Sidebar header top inset", "Title row (window buttons and navigation buttons) height"]))
-    public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "a page row in the Library panel is a sidebar row"))
+    public let navWidth = Metric(112.0, .anatomy("P32-a: the navigation column spans x 0...112, a 1 pt edge after it"))
+    public let navCellLeading = Metric(9.5, .anatomy("P32-a: the selected cell's fill starts at x 9.5"))
+    public let navCellWidth = Metric(94.5, .anatomy("P32-a: the selected cell's fill ends at x 104"))
+    public let navCellHeight = Metric(78.0, .anatomy("P32-a/b/e/f: each cell's fill is 78 pt tall"))
+    public let navTop = Metric(94.0, .anatomy("P32-a: the Media cell's fill starts at y 94"))
+    public let navBottomReserve = Metric(104.0, .anatomy("P32-e: the Archived Tabs cell ends 104 above the bottom (y 672 of 776)"))
+    public let navGlyphCenter = Metric(30.0, .anatomy("P32-b: the Downloads glyph is centred 30 below its cell's top"))
+    public let navLabelCenter = Metric(55.0, .anatomy("P32-b: the Downloads label is centred 55 below its cell's top"))
+    public let giftTrailing = Metric(7.0, .anatomy("P32-a: the gift button's glyph is centred at x 89, a 32 pt button 7 from the column's edge"))
+    public let columnPadding = Metric(10.0, .anatomy("P32-b: the search field runs from x 122 to 407 in the 112...417 column"))
+    public let spacesCardWidth = Metric(240.0, .anatomy("P32-d: a Space card is 240 pt wide"))
+    public let spacesCardGap = Metric(24.0, .anatomy("P32-d: cards at x 140 and 404"))
+    public let spacesLeading = Metric(28.0, .anatomy("P32-d: the first card starts 28 after the navigation column"))
+    public let spacesTrailing = Metric(101.0, .anatomy("P32-d: the panel ends 101 after the last card (the + button centred 48 after it)"))
 }
 
 /// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar). Arc builds its

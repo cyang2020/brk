@@ -5,19 +5,23 @@ import BrkLayout
 import BrkUIKit
 
 /// The Downloads page (Arc: `HomeButton.DownloadsPage`, `ContextMenus.DownloadMenu`): the profile's downloads by
-/// day, newest first. A row shows the file's name, its size and host or its progress, and its state; a click opens a
-/// finished file with its app; the buttons and the context menu show it in the Finder, cancel a running one and
-/// remove it from the list. Clear Downloads drops every entry that is not running (the files stay on disk).
+/// day, newest first. A row shows the file's icon, its name and its size and host or its progress; a click opens a
+/// finished file with its app; the buttons (while hovered) and the context menu show it in the Finder, cancel a
+/// running one and remove it from the list. The Filter menu narrows the list by state and holds Clear Downloads,
+/// which drops every entry that is not running (the files stay on disk).
 @MainActor
 final class DownloadsPageView: LibraryListPage {
     private var rows: [DownloadRow] = []
+    /// Which downloads the Filter menu shows (view-local, like the search).
+    enum Shown: CaseIterable { case all, inProgress, completed, failed }
+    private(set) var shownStates = Shown.all
     /// Opens a finished file with its default app (the Finder's double-click); tests replace it.
     var openFile: (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// Whether a finished file is still where it was written; tests replace it.
     var fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
 
     init(dispatch: @escaping Dispatch) {
-        super.init(dispatch: dispatch, page: .downloads, search: LibraryCopy.searchDownloads, action: LibraryCopy.clearDownloads)
+        super.init(dispatch: dispatch, page: .downloads, filter: true)
     }
 
     func show(_ rows: [DownloadRow], openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {
@@ -27,14 +31,43 @@ final class DownloadsPageView: LibraryListPage {
     }
 
     override var hasRows: Bool { !rows.isEmpty }
-    override var actionEnabled: Bool { rows.contains { !$0.state.isActive } }
     override var emptySubtitle: String { LibraryCopy.downloadsEmpty }
     override var emptyGlyph: LibraryPage { .downloads }
-    override func performAction() { dispatch(.library(.clearDownloads)) }
+
+    /// The state filter, then Clear Downloads (enabled when something is not running).
+    override func filterMenu() -> NSMenu {
+        let menu = NSMenu()
+        let titles: [Shown: String] = [.all: LibraryCopy.allDownloads, .inProgress: LibraryCopy.inProgress,
+                                       .completed: LibraryCopy.completed, .failed: LibraryCopy.failedOrCancelled]
+        for shown in Shown.allCases {
+            menu.addItem(LibraryFilterButton.item(titles[shown]!, checked: shown == shownStates) { [weak self] in self?.show(only: shown) })
+        }
+        menu.addItem(.separator())
+        menu.addItem(LibraryFilterButton.item(LibraryCopy.clearDownloads, enabled: rows.contains { !$0.state.isActive }) { [weak self] in
+            self?.clearDownloads()
+        })
+        return menu
+    }
+
+    func show(only states: Shown) {
+        shownStates = states
+        rebuild()
+    }
+
+    func clearDownloads() { dispatch(.library(.clearDownloads)) }
+
+    private func matchesFilter(_ row: DownloadRow) -> Bool {
+        switch shownStates {
+        case .all: true
+        case .inProgress: row.state.isActive
+        case .completed: row.state == .finished
+        case .failed: row.state == .failed || row.state == .cancelled || row.state == .interrupted
+        }
+    }
 
     override func sections(matching query: String) -> [ListSection] {
-        let shown = query.isEmpty ? rows : rows.filter { row in
-            [row.filename, row.url.host ?? "", row.url.absoluteString].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        let shown = rows.filter(matchesFilter).filter { row in
+            query.isEmpty || [row.filename, row.url.host ?? "", row.url.absoluteString].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         }
         return LibraryDays.group(shown, at: \.startedAt, now: now, calendar: calendar).map { day in
             ListSection(title: day.title, rows: day.items.map(row))
@@ -103,66 +136,19 @@ final class DownloadsPageView: LibraryListPage {
     }
 }
 
-/// The History page: the profile's visits by day, newest first, each with its title, host and time. A click opens
-/// the page in a new tab of the window's space (the Library closes, as for any page that opens); the button and the
-/// context menu remove a visit. Clear History asks inline first and removes only this profile's visits.
+/// The Easels page (Arc: `HomeButton.EaselsAndNotesPage`): the search field over a grid of easel cards. Brk has no
+/// Easels yet, so the grid is empty and the page shows the empty state under the search field.
 @MainActor
-final class HistoryPageView: LibraryListPage {
-    private var rows: [HistoryRow] = []
+final class EaselsPageView: NSView {
+    let searchField = LibrarySearchField(placeholder: LibraryCopy.search(.easelsAndNotes))
+    private let empty = EmptyStateView()
+    private var scheme: Scheme?
 
     init(dispatch: @escaping Dispatch) {
-        super.init(dispatch: dispatch, page: .history, search: LibraryCopy.searchHistory, action: LibraryCopy.clearHistory,
-                   confirmation: LibraryCopy.clearHistoryConfirm)
-    }
-
-    func show(_ rows: [HistoryRow], openID: Int, in frame: CGRect, scheme: Scheme, now: Instant) {
-        let changed = rows != self.rows
-        self.rows = rows
-        present(openID: openID, in: frame, scheme: scheme, now: now, dataChanged: changed)
-    }
-
-    override var hasRows: Bool { !rows.isEmpty }
-    override var emptySubtitle: String { LibraryCopy.historyEmpty }
-    override var emptyGlyph: LibraryPage { .history }
-    override func performAction() { dispatch(.library(.clearHistory)) }
-
-    override func sections(matching query: String) -> [ListSection] {
-        // Rows keep their index in the projected list, so `history-<i>` names the same visit whatever the search.
-        let indexed = Array(rows.enumerated())
-        let shown = query.isEmpty ? indexed : indexed.filter { _, row in
-            [row.title, displayURL(row.url)].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
-        }
-        return LibraryDays.group(shown, at: \.element.visitedAt, now: now, calendar: calendar).map { day in
-            ListSection(title: day.title, rows: day.items.map { row($0.element, index: $0.offset) })
-        }
-    }
-
-    private func row(_ visit: HistoryRow, index: Int) -> LibraryRowView {
-        let url = visit.url
-        let open: () -> Void = { [weak self] in self?.dispatch(.commandBar(.submit(url.absoluteString))) }
-        let remove: () -> Void = { [weak self] in self?.dispatch(visit.id.map { .library(.removeHistoryVisit($0)) } ?? .library(.removeHistory(url))) }
-        let host = url.host ?? displayURL(url)
-        return LibraryRowView(id: .historyEntry(index), icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
-                              title: visit.title.isEmpty ? displayURL(url) : visit.title,
-                              detail: "\(host) · \(LibraryDays.time(visit.visitedAt, calendar: calendar))", progress: .none,
-                              accessories: [.init(symbol: "xmark", tooltip: LibraryCopy.removeFromHistory, action: remove)],
-                              menu: [(LibraryCopy.openInNewTab, open), (LibraryCopy.removeFromHistory, remove)], colors: colors, onClick: open)
-    }
-}
-
-/// A page of a later wave (Media and Captures, Easels and Notes, Boosts, Spaces): its glyph and an honest empty state.
-@MainActor
-final class LaterPageView: NSView {
-    private let empty = EmptyStateView()
-    private var shown: (LibraryPage, Scheme)?
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+        super.init(frame: .zero)
         isHidden = true
-        wantsLayer = true
-        layer?.cornerCurve = .continuous
-        layer?.cornerRadius = Metrics.content.cornerRadius.value
-        layer?.masksToBounds = true
+        searchField.onEscape = { dispatch(.library(.close)) }
+        addSubview(searchField)
         addSubview(empty)
     }
 
@@ -173,20 +159,28 @@ final class LaterPageView: NSView {
 
     var texts: [String] { empty.texts }
 
-    func hide() { isHidden = true }
+    func hide() {
+        isHidden = true
+        searchField.stringValue = ""
+    }
 
-    func show(_ page: LibraryPage, in frame: CGRect, scheme: Scheme) {
+    func show(in frame: CGRect, scheme: Scheme) {
         self.frame = frame
         isHidden = false
-        let colors = LibraryColors.of(scheme)
-        if shown?.0 != page || shown?.1 != scheme {
-            shown = (page, scheme)
-            layer?.backgroundColor = colors.page.cgColor
-            empty.show(glyph: page, title: LibraryCopy.laterTitle(page), subtitle: LibraryCopy.laterSubtitle(page), colors: colors)
+        if self.scheme != scheme {
+            self.scheme = scheme
+            let colors = LibraryColors.of(scheme)
+            appearance = .library(scheme)
+            searchField.apply(colors)
+            empty.show(glyph: .easelsAndNotes, title: LibraryCopy.nothingHereYet, subtitle: LibraryCopy.easelsEmpty, colors: colors)
         }
-        let m = LibraryDraw.list
-        let width = max(0, min(bounds.width - 2 * m.padding.value, m.columnMaxWidth.value))
-        let height = empty.height(for: width)
-        empty.frame = CGRect(x: ((bounds.width - width) / 2).rounded(), y: ((bounds.height - height) / 2).rounded(), width: width, height: height)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        searchField.frame = LibraryColumnLayout.top(in: bounds, filter: false).search
+        let top = LibraryDraw.list.listTop.value
+        empty.place(in: CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top)))
     }
 }

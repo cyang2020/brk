@@ -182,9 +182,9 @@ final class BrowserBasicTests: XCTestCase {
         XCTAssertEqual(ids.count, 503)
         d.user(.library(.removeHistoryVisit(try XCTUnwrap(ids.first))))
         XCTAssertEqual(d.state.doc.history.count, 502)
-        d.user(.library(.open(.history)))
-        guard case .library(let library)? = d.view.overlay else { return XCTFail("History missing") }
-        XCTAssertEqual(library.history.count, 502)
+        d.user(.library(.openHistory))
+        guard let history = d.view.history else { return XCTFail("History missing") }
+        XCTAssertEqual(history.count, 502)
         XCTAssertEqual((d.savedDoc["history"] as? [Any])?.count, 1)
     }
 

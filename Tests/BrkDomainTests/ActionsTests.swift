@@ -214,7 +214,7 @@ final class ActionsTests: XCTestCase {
         XCTAssertEqual(ActionID.quitArc.title(appName: "Brk"), "Quit Brk")
         XCTAssertEqual(ActionID.viewPreferences.spec.bindings.first?.chord, KeyChord(.command, .comma))
         XCTAssertEqual(ActionID.newWindow.spec.command, .window(.new))
-        XCTAssertEqual(ActionID.viewHistory.spec.command, .library(.open(.history)))
+        XCTAssertEqual(ActionID.viewHistory.spec.command, .library(.openHistory))
     }
 
     func testRepeatsOnlyWhereHoldingMakesSense() {

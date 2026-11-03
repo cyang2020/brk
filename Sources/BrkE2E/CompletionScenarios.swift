@@ -34,10 +34,11 @@ enum CompletionScenarios {
         try expect(try currentTab(app.view())?.title.hasPrefix("profile-storage:keep:") == true,
                    "control restart did not preserve localStorage before any history clear")
 
-        try app.dispatch(.library(.open(.history)))
+        _ = try historyRows(app, returning: false)
         try app.dispatch(.library(.clearHistory))
-        guard case .library(let history)? = try app.view().overlay else { throw Check(description: "history closed") }
-        try expect(history.history.isEmpty, "profile history was not cleared")
+        try expect(try app.view().history?.isEmpty == true, "profile history was not cleared")
+        try app.press("cmd+w")
+        try app.waitUntil("the History tab closed") { try app.view().history == nil }
         previous = try currentTab(app.view())?.title
         try app.flush()
         try app.restart()

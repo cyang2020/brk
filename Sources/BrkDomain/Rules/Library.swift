@@ -2,7 +2,24 @@ import BrkBase
 import Foundation
 
 // Owner: F5. The Library (the archive is one of its pages), downloads and history. A window's Library shows the data
-// of its space's profile (`libraryContext(in:)`); an incognito window's shows none, as its pages record none.
+// of its space's profile (`libraryContext(in:)`); an incognito window's shows none, as its pages record none. History
+// is a tab in the content area (`HistoryPage`), not a Library page.
+
+/// The History page (Arc: arc://history, a tab in Today). A tab at `url` has no browser: the card that shows it
+/// draws the page natively (`PaneContent.history`) from the window's profile's visits (`WindowSnapshot.history`).
+public enum HistoryPage {
+    public static let url = URL(string: "brk://history/")!
+    /// Observed: the tab's title in Arc's sidebar.
+    public static let title = "History"
+    /// The tab's favicon: a blue clock with a counter-clockwise arrow, like Arc's history tab (an SVG data URL, so the
+    /// sidebar's favicon loader draws it like any other).
+    public static let favicon = URL(string: "data:image/svg+xml;base64," + Data(#"""
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32"><g fill="none" stroke="#3478F6"         stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.2A5.6 5.6 0 1 1 2.4 9.4"/>        <path d="M1.8 3.4v3h3"/><path d="M8 5v3.2l2.2 1.4"/></g></svg>
+        """#.utf8).base64EncodedString())!
+
+    /// Whether `url` is the History page (any path or query under brk://history).
+    public static func shows(_ url: URL?) -> Bool { url?.scheme == "brk" && url?.host == "history" }
+}
 
 extension Work {
     mutating func library(_ command: LibraryCommand, in window: WindowID) {
@@ -17,7 +34,7 @@ extension Work {
                 state.session.windows[window]!.overlay = nil
                 return
             }
-            let page = requested ?? session.lastLibraryPage ?? .archive
+            let page = requested ?? session.lastLibraryPage ?? .media
             if page == .media, case .profile(let profile) = state.libraryContext(in: window), !state.session.captures.loaded.contains(profile) {
                 state.session.captures.loaded.insert(profile); effects.append(.capture(.load(profile)))
             }
@@ -26,6 +43,22 @@ extension Work {
             state.session.windows[window]!.lastLibraryPage = page
         case .close:
             if case .library? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
+        case .openHistory:
+            // The overlay rule has closed the Library. A standard window's space keeps one History tab: Cmd+Y shows it
+            // again, else opens it at the top of Today (Arc opens arc://history there).
+            guard let doc = state.doc.windows[window], doc.kind == .standard, let space = state.doc.spaces[doc.space] else { return }
+            let tree = state.doc.tree
+            if let existing = (tree.tabs(under: space.todayRoot) + tree.tabs(under: space.pinnedRoot))
+                .first(where: { HistoryPage.shows(state.address(of: $0, in: window, for: .visible)) }) {
+                focus(existing, in: window)
+                return
+            }
+            let id = ItemID(ctx.newID())
+            do {
+                try state.doc.tree.insert(id, .tab(Tab(url: HistoryPage.url, title: HistoryPage.title, favicon: HistoryPage.favicon, lastActiveAt: ctx.now)),
+                                          at: .into(parent: space.todayRoot, index: 0), createdAt: ctx.now)
+            } catch { return }
+            focus(id, in: window)
         case .cancelDownload(let id):
             guard let index = state.doc.downloads.firstIndex(where: { $0.id == id }),
                   state.doc.downloads[index].state == .inProgress || state.doc.downloads[index].state == .choosingDestination else { return }
@@ -53,6 +86,17 @@ extension Work {
         }
     }
 
+    /// A standard window's Today tab that never had an address (its only request became a download) is removed, not
+    /// archived; the window shows its previous tab again.
+    mutating func discardBlankTab(_ page: PageID) {
+        guard state.doc.windows[page.window]?.kind == .standard, state.role(of: page.item)?.kind == .today,
+              state.tab(page.item)?.url == nil, state.address(of: page.item, in: page.window, for: .visible) == nil,
+              state.session.live[page]?.requestedURL == nil else { return }
+        _ = removeItem(page.item)
+        unload(page.item)
+        replaceShown(page.item)
+    }
+
     mutating func downloadEvent(_ update: DownloadUpdate) {
         let page = update.owner.browser.page
         if case .terminal = update.stage { state.session.activeDownloadOwners[update.id] = nil }
@@ -65,6 +109,9 @@ extension Work {
             case .cancelling, .terminal: break
             }
         }
+        // A Today tab opened only for this address (typed into the command bar, a link to a new tab) leaves no blank
+        // tab behind once the file is accepted: Arc downloads it without a tab. The transfer outlives its browser.
+        if case .receiving = update.stage, state.session.live[page]?.browser == update.owner.browser { discardBlankTab(page) }
         // Provenance is the original browser, independent of current presentation or profile assignment.
         guard case .profile(let profile) = update.owner.context.context,
               state.doc.profiles[profile] != nil, !state.session.terminalDownloads.contains(update.id),

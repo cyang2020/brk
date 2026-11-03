@@ -52,18 +52,20 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     }
 }
 
-/// The Library host: the whole content area, a page strip along the top (one cell per `LibraryPage`, in
-/// `LibraryPage.allCases` order) and the page area under it, which the current page's view fills (the archive
-/// page, the downloads list, ...). Owner: F5 (SidebarLayout-style math in BrkLayout/LibraryLayout.swift).
+/// The Library panel (Arc: `HomeButton`), in the sidebar's place: `strip` (and `frame`) is the whole panel, `nav` its
+/// navigation column with one cell per `LibraryPage` (`pageCells`, in `LibraryPage.allCases` order), and `page` the
+/// open page's column beside it. The content area keeps showing the window's page. Owner: F5 (`LibraryLayout`).
 public struct LibraryFrames: Sendable, Equatable, Codable {
     public var frame: CGRect
     public var strip: CGRect
+    public var nav: CGRect
     public var pageCells: [LibraryPage: CGRect]
     public var page: CGRect
 
-    public init(frame: CGRect, strip: CGRect, pageCells: [LibraryPage: CGRect], page: CGRect) {
+    public init(frame: CGRect, strip: CGRect, nav: CGRect, pageCells: [LibraryPage: CGRect], page: CGRect) {
         self.frame = frame
         self.strip = strip
+        self.nav = nav
         self.pageCells = pageCells
         self.page = page
     }
@@ -136,8 +138,9 @@ public enum ViewID: Hashable, Sendable, Codable {
     case themeBackground
     case tabTool(String)
     // Wave 2
-    /// The Library host, its page strip cells, its close button; the Downloads and History rows (F5).
-    case library, libraryPage(LibraryPage), libraryClose, downloadEntry(DownloadID), historyEntry(Int)
+    /// The Library host, its navigation cells, its close button; the Downloads rows; the History page in its card
+    /// and its visits (F5).
+    case library, libraryPage(LibraryPage), libraryClose, downloadEntry(DownloadID), historyPage, historyEntry(Int)
     /// The Peek card, its close and "Open in" buttons (F3).
     case peek, peekClose, peekOpenIn
     /// The scratch section of an ephemeral window's sidebar and the Little Arc hint strip (F3).
@@ -204,6 +207,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .libraryPage(let page): "library-page-\(page.rawValue)"
         case .libraryClose: "library-close"
         case .downloadEntry(let id): "download-\(id)"
+        case .historyPage: "history-page"
         case .historyEntry(let i): "history-\(i)"
         case .peek: "peek"
         case .peekClose: "peek-close"
@@ -251,7 +255,8 @@ extension WindowFrames {
         case .commandBar: return commandBar
         case .library: return library?.frame
         case .libraryPage(let page): return library?.pageCells[page]
-        case .archive: return library?.page   // the archive page fills the Library's page area while it is the open page
+        case .archive: return library?.page   // the archive page fills the Library's page column while it is the open page
+        case .historyPage: return cards.first { if case .history = $0.content { true } else { false } }?.rect
         case .peek: return peek
         case .siteInfo, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
