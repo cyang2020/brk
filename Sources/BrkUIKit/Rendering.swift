@@ -26,14 +26,14 @@ extension NSView {
 public struct Palette: Equatable {
     public let scheme: Scheme
     public let tokens: SidebarTokens
-    /// The theme's first gradient stop (its primary color); overlays that follow the sidebar tint their selections
-    /// with it. White when the theme has no stops.
-    public let primary: RGBA
+    /// The space's primary color (the gradient's first stop). Arc tints the folder glyph and the empty favicon with
+    /// its hue.
+    public let accent: RGBA
 
     public init(_ theme: ResolvedTheme) {
         scheme = theme.scheme
         tokens = theme.tokens
-        primary = theme.gradient.first ?? RGBA(1, 1, 1, 1)
+        accent = theme.gradient.first ?? RGBA(0.5, 0.5, 0.5)
     }
 
     public func color(_ rgba: RGBA) -> NSColor {

@@ -158,6 +158,17 @@ extension Tab {
     }
 }
 
+/// The URL pill's resting text (Arc's `CommandBarPlaceholderView`): the host without a leading "www." or the port;
+/// a file URL shows its last path component; any other scheme is shown as `displayURL` shows it.
+public func displayHost(_ url: URL) -> String {
+    guard let scheme = url.scheme?.lowercased() else { return url.absoluteString }
+    if scheme == "file" { return url.lastPathComponent.isEmpty ? displayURL(url) : url.lastPathComponent }
+    guard scheme == "http" || scheme == "https", var host = URLComponents(url: url, resolvingAgainstBaseURL: false)?.host,
+          !host.isEmpty else { return displayURL(url) }
+    if host.lowercased().hasPrefix("www.") { host.removeFirst(4) }
+    return host
+}
+
 /// URL pill and fallback-title text: host and path without the scheme, a leading "www.", trailing slashes, the
 /// query or the fragment ("https://www.example.com/a/?q=1" shows "example.com/a"); a file URL shows its path; any
 /// other scheme (about:, chrome:) is shown as is.

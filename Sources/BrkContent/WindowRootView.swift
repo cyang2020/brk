@@ -42,6 +42,7 @@ public final class WindowRootView: NSView {
         get { thumbnails.capture }
         set { thumbnails.capture = newValue }
     }
+    private let loadingBar = LoadingBarView(frame: .zero)
 
     public init(dispatch: @escaping Dispatch) {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
@@ -61,8 +62,9 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, history, toolbar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, boostEditor, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
+        sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
@@ -118,6 +120,10 @@ public final class WindowRootView: NSView {
         history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
         history.layer?.cornerRadius = historyCard?.cornerRadius ?? 0
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
+        let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
+        loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,
+                          over: focusedCard.map { card in frames.toolbar.map { CGRect(x: card.minX, y: $0.minY, width: card.width, height: card.maxY - $0.minY) } ?? card },
+                          scheme: palette.scheme)
         var librarySnapshot: LibrarySnapshot?, barSnapshot: CommandBarSnapshot?, peekSnapshot: PeekSnapshot?
         switch snapshot.overlay {
         case .library(let l)?: librarySnapshot = l
@@ -135,7 +141,7 @@ public final class WindowRootView: NSView {
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output,
-                        exported: snapshot.exportOutcome, thumbnails: thumbnails.images)
+                        exported: snapshot.exportOutcome, contentArea: frames.contentArea, thumbnails: thumbnails.images)
         boostEditor.render(snapshot.boostEditor, in: frames.contentArea, scheme: palette.scheme)
         zapOverlay.render(snapshot.boostEditor, in: frames.contentArea)
         deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)

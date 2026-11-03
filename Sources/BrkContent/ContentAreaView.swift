@@ -65,11 +65,14 @@ public final class ContentAreaView: NSView {
             shadows.removeLast().removeFromSuperview()
         }
         for ((card, shadow), frame) in zip(zip(cards, shadows), frames.cards) {
-            shadow.frame = frame.rect
+            // Under the toolbar a card is the lower part of one white card: square top corners, one shadow for both.
+            let toolbar = frames.toolbar.flatMap { $0.maxY == frame.rect.minY ? $0 : nil }
+            shadow.frame = toolbar.map { frame.rect.union(CGRect(x: frame.rect.minX, y: $0.minY, width: frame.rect.width, height: $0.height)) } ?? frame.rect
             shadow.layer?.cornerRadius = frame.cornerRadius
             shadow.isHidden = !Metrics.content.showsShadow.value || frame.cornerRadius == 0   // an edge-to-edge page (Little Arc) casts none
             card.frame = frame.rect
             card.layer?.cornerRadius = frame.cornerRadius
+            card.layer?.maskedCorners = toolbar == nil ? CardView.allCorners : [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             card.identify(.card(frame.pane))
             let pane = content.panes.indices.contains(frame.pane) ? content.panes[frame.pane] : nil
             card.header(frame.header.flatMap { _ in pane }, orientation: content.orientation, expanded: content.expanded,
@@ -153,6 +156,7 @@ final class ShadowView: NSView {
 
 @MainActor
 final class CardView: NSView {
+    static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
     private let sad = SadTabView(frame: .zero)
     var retryAction: (() -> Void)? { didSet { sad.reloadAction = retryAction } }
     private weak var hosted: NSView?
@@ -268,4 +272,60 @@ final class DividerView: NSView {
         guard next.count == panes.count else { return }
         dispatch(.split(.resize(split, fractions: Dictionary(uniqueKeysWithValues: zip(panes, next)))))
     }
+}
+
+/// Arc's page loading indicator: a short dark capsule in the window margin above the content card, centred on it,
+/// that widens into a track with the progress filled as the page loads (P06-a, P06-b).
+@MainActor
+final class LoadingBarView: NSView {
+    private let track = CALayer()
+    private let fill = CALayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.addSublayer(track)
+        layer?.addSublayer(fill)
+        isHidden = true
+        identify(.loadingBar)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// `card` is the focused card's top edge region (with the toolbar, the toolbar's).
+    func render(loading: Bool, progress: Double, over card: CGRect?, scheme: Scheme) {
+        guard loading, let card else { isHidden = true; return }
+        isHidden = false
+        let m = LoadingBarDraw
+        let height = m.height.value
+        let started = progress >= m.trackFrom.value
+        let width = started ? m.trackWidth.value : m.width.value
+        frame = CGRect(x: card.midX - width / 2, y: card.minY - Metrics.content.inset.value + m.top.value, width: width, height: height)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let dark = scheme == .light
+        track.frame = bounds
+        track.cornerRadius = height / 2
+        track.backgroundColor = NSColor(white: dark ? 0 : 1, alpha: m.trackAlpha.value).cgColor
+        track.isHidden = !started
+        fill.frame = CGRect(x: 0, y: 0, width: started ? max(m.width.value, width * min(1, progress)) : width, height: height)
+        fill.cornerRadius = height / 2
+        fill.backgroundColor = NSColor(white: dark ? 0.24 : 0.85, alpha: 1).cgColor
+        CATransaction.commit()
+    }
+}
+
+let LoadingBarDraw = LoadingBarMetrics()
+
+struct LoadingBarMetrics: MetricGroup {
+    let width = Metric(48.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: a 48 pt dark capsule centred over the card"))
+    let trackWidth = Metric(128.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-b: later a 128 pt track with the progress filled dark"))
+    let height = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule spans y 3 to 7"))
+    let top = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule starts 3 below the window top"))
+    let trackAlpha = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-b: the track is #C4C0BD over #F2EDE9"))
+    let trackFrom = Metric(0.1, .guess("progress at which the capsule becomes a track; Arc's own threshold was not traced"))
 }

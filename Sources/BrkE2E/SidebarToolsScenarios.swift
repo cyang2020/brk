@@ -165,6 +165,8 @@ enum SidebarToolsScenarios {
         _ = try app.screenshot("glow-cleared")
     }
     private static func previewSetup(_ app: AppUnderTest, label: String) throws -> PageID {
+        // Previews are off by default, as in Arc; the user turns them on in settings.
+        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         var url = app.site.url("sidebar-preview-target")
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!; components.host = "preview.brk.test"; url = components.url!
         let cookieTab = try app.load(url); try app.waitForPageInput(page(app, cookieTab), at: url)

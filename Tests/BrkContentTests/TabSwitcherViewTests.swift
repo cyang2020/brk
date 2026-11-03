@@ -55,7 +55,7 @@ final class TabSwitcherViewTests: XCTestCase {
         XCTAssertEqual(switcher(1, of: 2).frame.width, 2 * 16 + 2 * 181.5)
     }
 
-    /// P43-a: a notice with a link is the top-right banner, a plain one the bottom toast
+    /// P43-a: a notice with a link is Arc's notice banner, a plain one Arc's toast; both at the content area's top-right
     func testANoticeWithALinkIsTheTopRightBanner() throws {
         let view = TabToolsOverlayView(dispatch: { _ in })
         view.frame = bounds
@@ -66,7 +66,7 @@ final class TabSwitcherViewTests: XCTestCase {
         let toast = try XCTUnwrap(view.subviews.first { $0.accessibilityIdentifier() == ViewID.tabTool("toast").identifier })
         XCTAssertFalse(banner.isHidden)
         XCTAssertTrue(toast.isHidden)
-        XCTAssertEqual(banner.frame.maxX, 1268)
-        XCTAssertEqual(banner.frame.minY, 6)
+        XCTAssertEqual(banner.frame.maxX, 1270, "the content area's right edge (the window less its 10 pt inset here)")
+        XCTAssertEqual(banner.frame.minY, 4)
     }
 }

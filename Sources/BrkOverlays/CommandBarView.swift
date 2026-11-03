@@ -133,7 +133,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         guard let bar, let frame = frames.commandBar else { return hide() }
         // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
         fillsWindow = frame.size == frames.contentSize
-        show(bar, in: frame, scheme: palette.scheme, primary: palette.primary, spaceless: window != .standard)
+        show(bar, in: frame, scheme: palette.scheme, primary: palette.accent, spaceless: window != .standard)
     }
 
     /// `render` once the slice and its frame are known. A new `openID` resets the query to `initialQuery` and the

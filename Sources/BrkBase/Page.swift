@@ -81,7 +81,8 @@ public struct PageSpec: Hashable, Sendable, Codable {
     public var isAIReader: Bool = false
     public let muted: Bool
     public var websitePolicy: WebsitePolicy = WebsitePolicy()
-    public var hoverPreviews = true
+    /// Off unless the user turned previews on (Arc's default).
+    public var hoverPreviews = false
     public var boostPolicy = BoostPolicy()
     public let downloadPolicy: DownloadPolicy
 

@@ -140,12 +140,21 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
 
     func status(_ tab: ItemID) -> RowStatus { tab == focusedPane ? .current : panes.contains(tab) ? .visible : .idle }
 
+    /// Loading a tab that has never committed a document and has no title of its own yet.
+    func awaitingFirstDocument(_ tab: ItemID, _ t: Tab) -> Bool {
+        guard let live = state.session.live[PageID(window: id, item: tab)], live.loading || live.requestedURL != nil,
+              doc.slots[tab]?.committedURL == nil, (t.customTitle ?? "").isEmpty, t.title.isEmpty else { return false }
+        return live.observedTitle == nil
+    }
+
     func tabRow(_ tab: ItemID, _ original: Tab, _ kind: SectionKind) -> TabRow {
         let t = state.displayedTab(tab, in: id) ?? original
         var row = TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
                loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
+        row.awaitingFirstDocument = awaitingFirstDocument(tab, t)
+        row.lastActiveAt = t.lastActiveAt
         row.documentPictureInPicture = state.session.live[PageID(window: id, item: tab)]?.documentPictureInPicture ?? false
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
@@ -208,10 +217,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     }
 
     let favoritesRoot = state.favoritesRoot(for: space) ?? space.pinnedRoot
-    let favorites = FavoritesSnapshot(root: favoritesRoot, tiles: tree.tabs(under: favoritesRoot).compactMap { tab in
+    var favorites = FavoritesSnapshot(root: favoritesRoot, tiles: tree.tabs(under: favoritesRoot).compactMap { tab in
         guard case .tab(let t)? = tree[tab]?.body else { return nil }
         return tabRow(tab, t, .favorites)
     })
+    favorites.hintDismissed = state.doc.tabPreferences.favoritesHintDismissed
     var spaceSnapshot = SpaceSnapshot(
         id: space.id, title: state.displayTitle(of: space.id), icon: space.icon,
         pinned: SectionSnapshot(root: space.pinnedRoot, kind: .pinned, collapsed: space.pinnedCollapsed, rows: rows(under: space.pinnedRoot, .pinned)),
@@ -256,7 +266,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     if let focusedPane, let t = state.displayedTab(focusedPane, in: id) {
         focusedTab = t
         pill.text = t.url.map(displayURL)
-        pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : displayURL($0) } : nil
+        pill.host = awaitingFirstDocument(focusedPane, t) ? "about:blank" : t.url.map(displayHost)
+        // The toolbar shows the host like the pill (Arc P01-b), or the whole address with "Show full URL in toolbar".
+        pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : pill.host ?? displayHost($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
             pill.loadProgress = live.loadProgress
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
@@ -359,6 +371,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                 pill.zoomPercent = live.zoomPercent
                 pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.loading = live.loading
                 pill.text = state.address(of: tab, in: id, for: .visible).map(displayURL)
+                pill.host = state.address(of: tab, in: id, for: .visible).map(displayHost)
             }
             overlay = .peek(PeekSnapshot(spaces: dock, folders: openInFolders(state), openID: openID, tab: tabRow(tab, t, .scratch), page: page))
         }
@@ -593,8 +606,10 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
         }
         result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
     }
+    // Only a fresh profile's first space explains auto-archive; a space made later does not (Arc 1.170).
     if !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
-       let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) {
+       let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }),
+       state.doc.spaceOrder.first(where: { state.doc.spaces[$0]?.profile == space.profile }) == space.id {
         let threshold = state.profileSettings(space.profile).autoArchive
         result.archiveEducation = threshold == .never ? "Auto-archive is off. Change it in Archive." : "Idle Today tabs archive after " + threshold.tabToolsLabel + ". Tabs on screen stay open."
     }

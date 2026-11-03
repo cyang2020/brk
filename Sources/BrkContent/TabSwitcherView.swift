@@ -42,8 +42,6 @@ struct NoticeMetricsTable: MetricGroup {
     let linkHeight = Metric(20.0, .anatomy("\(measured): the Preferences link's pill"))
     let linkRadius = Metric(6.0, .guess("the link pill's corners, the size of the command bar's key caps"))
     let linkFontSize = Metric(12.0, .anatomy("\(measured): \"Arc Max Preferences ↗\" is smaller than the message"))
-    let rightInset = Metric(12.0, .guess("in from the window's right edge; Arc's banner runs past it"))
-    let top = Metric(6.0, .anatomy("\(measured): the banner's top 4 below the window's"))
 }
 
 /// Owner: tab tools. The Ctrl+Tab switcher as Arc draws it (P09-a/b): a white strip with rounded corners and a shadow,
@@ -95,7 +93,7 @@ final class TabSwitcherView: NSView {
         }
         while cards.count > shown.count { cards.removeLast().removeFromSuperview() }
         // P09-a: the selection is the theme's primary color 10% darker (#F2EAE4 -> #DAD1CC).
-        let p = palette.primary
+        let p = palette.accent
         let selection = dark ? NSColor.white.withAlphaComponent(0.14) : NSColor(srgbRed: p.red * 0.9, green: p.green * 0.9, blue: p.blue * 0.9, alpha: 1)
         for (i, (card, item)) in zip(cards, shown).enumerated() {
             card.frame = CGRect(x: m.padding.value + Double(i) * m.slotWidth.value, y: m.padding.value, width: m.slotWidth.value, height: m.slotHeight.value)

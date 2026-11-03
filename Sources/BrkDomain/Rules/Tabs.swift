@@ -82,7 +82,8 @@ extension Work {
             guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
             let onScreen = state.onScreenTabs()
             let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.doc.tree.tabs(under: $0).contains(where: onScreen.contains) }
-            archiveTabs(idle, reason: .clearToday, in: window)
+            let entries = archiving { $0.archiveTabs(idle, reason: .clearToday, in: window) }
+            if !entries.isEmpty { undoToast("Cleared Tabs! Use", undo: .restore(entries), in: window) }
         }
     }
 

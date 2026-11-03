@@ -34,7 +34,8 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(grid.tiles, [CGRect(x: 8, y: 8, width: 101, height: 47), CGRect(x: 117, y: 8, width: 101, height: 47),
                                     CGRect(x: 8, y: 63, width: 101, height: 47), CGRect(x: 117, y: 63, width: 101, height: 47)])
         XCTAssertEqual(grid.tray, CGSize(width: 227, height: 118))
-        XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228).tray, CGSize(width: 228, height: 63), "one tile tall for the empty state")
+        XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228).tray, CGSize(width: 228, height: 114), "Arc's Drag to add Favorites box (P07-b)")
+        XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228, hintDismissed: true).tray, CGSize(width: 228, height: 0), "dismissed: no room")
     }
     /// Rows are 40 tall on a 41 pt pitch; the divider is 16; the top spacer is 2 (cra L748: 41, 17, 3).
     func testTablistRowPitch() throws {
@@ -69,11 +70,12 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(f.titleRow, CGRect(x: 0, y: 4, width: 228, height: 40))
         XCTAssertEqual(f.trafficLightsOrigin, CGPoint(x: 13, y: 17), "14 pt lights centred 24 from the top, 13 from the left")
         XCTAssertEqual(f.urlPill, CGRect(x: 8, y: 46, width: 212, height: 36))
-        XCTAssertEqual(f.favoritesTray, CGRect(x: 0, y: 82, width: 228, height: 63))
+        // No favorites: the tray holds Arc's 114 pt "Drag to add Favorites" box (P07-b).
+        XCTAssertEqual(f.favoritesTray, CGRect(x: 0, y: 82, width: 228, height: 114))
         XCTAssertEqual(f.favoriteTiles, [:])
-        // The space header strip (36) sits between the tray and the list: 145...181.
-        XCTAssertEqual(f.spaceHeader, CGRect(x: 0, y: 145, width: 228, height: 36))
-        XCTAssertEqual(f.tablistViewport, CGRect(x: 0, y: 181, width: 228, height: 545))
+        // The space header strip (36) sits between the tray and the list: 196...232.
+        XCTAssertEqual(f.spaceHeader, CGRect(x: 0, y: 196, width: 228, height: 36))
+        XCTAssertEqual(f.tablistViewport, CGRect(x: 0, y: 232, width: 228, height: 494))
         XCTAssertEqual(f.tablistViewport.minY, f.spaceHeader.maxY)
         XCTAssertEqual(f.dock, CGRect(x: 0, y: 726, width: 228, height: 50))
         XCTAssertEqual(f.libraryButton, CGRect(x: 8, y: 735, width: 32, height: 32))
@@ -100,7 +102,7 @@ final class ArcGeometryTests: XCTestCase {
         let d = LayoutDriver()
         d.user(.commandBar(.open(.newTab)))
         let frames = d.frames()
-        XCTAssertEqual(frames.contentArea, CGRect(x: 238, y: 10, width: 1032, height: 756))
+        XCTAssertEqual(frames.contentArea, CGRect(x: 228, y: 10, width: 1042, height: 756))
         XCTAssertEqual(frames.commandBar, CGRect(x: 257, y: 219, width: 766, height: 338))
         let area = { (w: Double, h: Double) in CGRect(x: 0, y: 0, width: w, height: h) }
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(800, 600), urlPill: nil).width, 640, "min(766, 800 - 160)")
@@ -112,11 +114,11 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 44.5, width: 720, height: 338))
         XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 44.5, width: 512, height: 331.5))
     }
-    /// Card inset 10 on every side with the sidebar shown or hidden; radius 6.
+    /// Card inset 10 on every side with the sidebar hidden; beside the sidebar the card starts at its edge; radius 6.
     func testContentCardInsetAndRadius() throws {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id
-        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 238, y: 10, width: 1032, height: 756), cornerRadius: 6)])
+        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 228, y: 10, width: 1042, height: 756), cornerRadius: 6)])
         d.user(.sidebar(.toggle))
         XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 10, y: 10, width: 1260, height: 756), cornerRadius: 6)])
         XCTAssertEqual(d.frames().frame(of: .card(0)), CGRect(x: 10, y: 10, width: 1260, height: 756))
@@ -144,10 +146,10 @@ final class ArcGeometryTests: XCTestCase {
         snapshot.content.panes[0].fraction = 1.0 / 3
         snapshot.content.panes[1].fraction = 2.0 / 3
         let frames = d.frames(snapshot)
-        XCTAssertEqual(frames.cards.map(\.rect), [CGRect(x: 238, y: 10, width: 341, height: 756), CGRect(x: 589, y: 10, width: 681, height: 756)])
-        XCTAssertEqual(frames.dividers, [CGRect(x: 579, y: 10, width: 10, height: 756)])
+        XCTAssertEqual(frames.cards.map(\.rect), [CGRect(x: 228, y: 10, width: 344, height: 756), CGRect(x: 582, y: 10, width: 688, height: 756)])
+        XCTAssertEqual(frames.dividers, [CGRect(x: 572, y: 10, width: 10, height: 756)])
         XCTAssertEqual(frames.cards.map(\.cornerRadius), [6, 6])
-        XCTAssertEqual(frames.frame(of: .divider(0)), CGRect(x: 579, y: 10, width: 10, height: 756))
+        XCTAssertEqual(frames.frame(of: .divider(0)), CGRect(x: 572, y: 10, width: 10, height: 756))
     }
     /// Drag: clamps to 164...500, snaps to 228 within 14, holds 0.5 s unless faster than 50 pt/s, hides below 82.
     func testSidebarResizeDragSnapsAndHides() throws {

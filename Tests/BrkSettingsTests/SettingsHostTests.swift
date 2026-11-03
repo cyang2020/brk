@@ -247,7 +247,7 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.click("resetTranslationExclusions"), [.settings(.max(.resetTranslationExclusions))])
         XCTAssertEqual(f.click("exportData"), [.sidebarData(.syncSettings)])
         XCTAssertEqual(f.click("moreSettings"), [])
-        XCTAssertEqual(f.click("numberedFavorites"), [.tabTools(.preferences(includeFavorites: false, previews: true))])
+        XCTAssertEqual(f.click("numberedFavorites"), [.tabTools(.preferences(includeFavorites: false, previews: false))])
         XCTAssertEqual(f.click("brk101"), [.sidebarData(.tour)])
         XCTAssertEqual(f.click("importBrowserFile"), [.sidebarData(.importFile)])
         XCTAssertEqual(f.click("subpageBack"), [])
@@ -278,10 +278,10 @@ final class SettingsHostTests: XCTestCase {
             return sheet.contentView.flatMap(walk)
         }
         let previews = try XCTUnwrap(find("tabHoverPreviews") as? NSButton)
-        XCTAssertEqual(previews.state, .on, "previews are on by default")
+        XCTAssertEqual(previews.state, .off, "previews are off by default, as in Arc")
         f.sent = []
         previews.performClick(nil)
-        XCTAssertEqual(f.sent, [.tabTools(.preferences(includeFavorites: true, previews: false))])
+        XCTAssertEqual(f.sent, [.tabTools(.preferences(includeFavorites: true, previews: true))])
         XCTAssertNotNil(find("previews-linkPreviews"))
         XCTAssertLessThanOrEqual(abs(sheet.frame.width - CardMetrics.sheetSize.value.width), 2, "Arc's 422-point sheet")
         // Return is Done's shortcut.
