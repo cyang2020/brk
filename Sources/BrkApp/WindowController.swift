@@ -67,6 +67,12 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onKeyEquivalent = { [weak self] event in
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
+            // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the Edit menu's Undo.
+            if let self, self.lastSnapshot?.tabTools.toast?.keycap != nil, event.charactersIgnoringModifiers?.lowercased() == "z",
+               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+                self.send(.user(self.id, .tabTools(.undoToast)))
+                return true
+            }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
@@ -125,7 +131,7 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
 
     /// Applies a snapshot: frames = `WindowLayout.compute(snapshot, contentSize)`; `root.render(...)` with
-    /// `engine.surface(for:)`; traffic lights to `frames.sidebar?.trafficLightsOrigin`, or the Library panel's (hidden
+    /// `engine.surface(for:)`; traffic lights to `frames.sidebar?.trafficLightsOrigin` (anchored or floating), or the Library panel's (hidden
     /// while the sidebar is hidden; Arc shows them on hover); keyboard focus only when `snapshot.focus` differs from the last one.
     /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
@@ -133,8 +139,9 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.level = window.styleMask.contains(.fullScreen) ? .normal : (snapshot.stayOnTop ? .floating : .normal)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
         root.render(snapshot, frames: frames, surface: { [engine, id] page in page.window == id ? engine.surface(for: page) : nil })
-        // The Library's panel keeps them where the sidebar had them (P32: Arc shows them over its navigation column).
-        window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin ?? frames.library.map { LibraryLayout.trafficLightsOrigin(in: $0.strip) })
+        // The floating sidebar keeps them too (Arc), and the Library's panel keeps them where the sidebar had them
+        // (P32: Arc shows them over its navigation column).
+        window.placeTrafficLights(origin: frames.sidebar?.trafficLightsOrigin ?? frames.library.map { LibraryLayout.trafficLightsOrigin(in: $0.strip) })
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)
         let repeatedFind = snapshot.focus == .findInput && snapshot.find?.focusRequest != lastSnapshot?.find?.focusRequest
@@ -358,5 +365,18 @@ public final class BrowserWindow: NSWindow, HostWindow {
         hostKeyEquivalent(event, handledByViews: super.performKeyEquivalent(with: event))
     }
 
-    public func placeTrafficLights(origin: CGPoint?) { placeArcTrafficLights(origin: origin) }
+    private var lightsOrigin: CGPoint?
+
+    /// Unhiding the buttons (the sidebar coming back, or floating in) makes AppKit lay the titlebar out once more
+    /// after this pass, back at its own spots; the lights are placed again after that.
+    public func placeTrafficLights(origin: CGPoint?) {
+        let wasHidden = lightsOrigin == nil
+        lightsOrigin = origin
+        placeArcTrafficLights(origin: origin)
+        guard wasHidden, origin != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.placeArcTrafficLights(origin: self.lightsOrigin)
+        }
+    }
 }

@@ -52,7 +52,8 @@ extension WindowRootViewTests {
         XCTAssertEqual(Row.folder(folder).hoverPreviewText, "Topic\n1 items")
         XCTAssertTrue(frames.sidebar?.rows.contains { $0.kind == .item(folderID) } == true)
         XCTAssertTrue(frames.sidebar?.rows.contains { $0.kind == .item(child) } == true)
-        let glow = try XCTUnwrap(identified[ViewID.urlPill.identifier]?.layer?.sublayers?.compactMap { $0 as? CAGradientLayer }.first)
+        // Arc shows loading as a short bar in the margin above the card (P06-a), not a glow in the pill.
+        let glow = try XCTUnwrap(identified["loading-bar"])
         XCTAssertFalse(glow.isHidden)
         XCTAssertGreaterThan(glow.bounds.width, 0)
         view.urlPill.loading = false

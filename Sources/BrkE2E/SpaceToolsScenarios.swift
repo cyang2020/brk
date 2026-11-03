@@ -219,7 +219,7 @@ enum SpaceToolsScenarios {
         try app.waitUntil("the delete dialog focused") { try app.native().firstResponder.contains("SpaceAlert") || app.native().firstResponder.contains("ArcDialog") }
         try app.press("return")
         try app.waitUntil("confirmed deletion removed the space") { try !app.view().dock.contains { $0.id == second } }
-        try expect(try app.view().tabTools.toast?.text == "Space deleted!", "no toast after the deletion")
+        try expect(try app.view().tabTools.toast?.text.hasPrefix("Space deleted!") == true, "no undo toast after the deletion")
         try app.flush(); try app.restart()
         try expect(try app.view().dock.map(\.id) == [third, first], "dock order did not persist")
         try app.screenshot("reordered-spaces")

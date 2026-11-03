@@ -21,9 +21,22 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // Row interior, measured from the sidebar edge: favicon centred at 26, title at 45 (cra L141, L180).
     let faviconLeading = Metric(10.0, .anatomy("cra L141: favicon 16 pt centred 26 pt from the sidebar edge = selection inset 8 + 10"))
-    let titleLeading = Metric(37.0, .anatomy("cra L141: row text starts at x 45 = selection inset 8 + 37"))
+    /// The label's frame; its cell draws the text 2 further in (Arc's text starts at x 44).
+    let titleLeading = Metric(34.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's row text starts 3 left of the cra L141 x 45"))
+    let spaceChevron = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P05-c: Arc's collapse chevron is 7 pt wide, centred in the icon slot"))
+    let spaceHeaderLeading = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's space name starts at x 16, 5 left of the row icon slot"))
+    let dividerInset = Metric(18.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the Pinned/Today hairline runs from x 18 to 18 before the sidebar edge"))
+    let clearTrailing = Metric(19.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: Clear ends 19 before the sidebar edge"))
+    let clearGap = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: the hairline stops 10 before Clear"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(6.0, .guess("the hover button's right padding inside the selection: (36 - 24) / 2"))
+    let emptyFavicon = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))
+    let emptyFaviconRadius = Metric(2.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the empty favicon's corners round over about 2.5 pt"))
+    let folderGlyphWidth = Metric(22.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's open folder spans x 16 to 38 in the 16 pt icon row"))
+    let folderClosedSide = Metric(18.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P13-a: Arc's closed folder is about 18 x 18, centred on the row"))
+    let folderClosedRadius = Metric(3.0, .guess("corner radius of the closed folder's body in P13-a"))
+    let folderGlyphShift = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the folder is centred at x 27, 1 right of the favicon slot's centre"))
+    let folderGlyphLine = Metric(1.4, .guess("the folder outline is about 1.4 pt wide in the P01-a capture (3 px at 2x)"))
     // Split rows: each pane a TabCellBackgroundChild box inside the row (measured on the 2026-11-03 Arc capture P23a/b).
     let splitSegmentInset = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane boxes 4 pt inside the row's selection"))
     let splitSegmentGap = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: 4 pt between pane boxes"))
@@ -37,20 +50,41 @@ struct SidebarDrawMetrics: MetricGroup {
     let navButton = Metric(32.0, .anatomy("cra L1215: Go back, Go forward and Reload are 32 x 32"))
     let navGap = Metric(2.0, .anatomy("cra L1215: the navigation buttons are 2 pt apart"))
     let toggleGap = Metric(4.0, .anatomy("cra L1215: sidebar toggle at x 77 = the third light's end (73) + 4"))
-    let navGlyph = Metric(13.0, .guess("navigation glyph point size inside the 32 pt button"))
+    let navButtonCompact = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P03-b: at 164 Arc's back, forward and … are centred 28 apart, ending 6 from the edge"))
+    let navGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: Arc's back arrow is 14.5 pt wide and its reload 15 pt"))
     let navButtonRadius = Metric(9.0, .guess("hover fill of the title-row buttons; reuses the URL pill accessory radius 9"))
 
+    // Toolbar (P01-b): grey glyphs and host on the white card top.
+    let toolbarGlyph = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the toolbar arrows are 13 pt wide, a size under the title row's"))
+    let toolbarHostSlack = Metric(2.0, .guess("the host label is a little wider than its cell so a short host never truncates"))
+    let toolbarLinkGap = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the host starts 5 after the link glyph"))
+    let toolbarGlyphAlpha = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: toolbar glyphs #7E7E7E on white"))
+    let toolbarDisabledAlpha = Metric(0.21, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: a disabled arrow is #C9C9C9 on white"))
+    let toolbarTextAlpha = Metric(0.56, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the host is #717171 on white"))
+    let toolbarHairlineAlpha = Metric(0.045, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: the hairline under the toolbar is #F4F4F4 on white"))
+
     // URL pill.
-    let pillTextLeading = Metric(12.0, .anatomy("cra L1219: pill at x 8, host text at x 20"))
+    /// The label's frame; its cell draws the text 2 further in, at x 21 in the sidebar.
+    let pillTextLeading = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: pill at x 8, host text at x 21"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
-    let pillLoadingSweep = Metric(1.2, .guess("seconds per pass of the loading shimmer across the pill"))
+    let pillAccessoryGap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: copy link and site controls centred 29 apart (cra L1222-1223)"))
+    let pillAccessoryGlyph = Metric(15.0, .guess("copy-link and site-control glyph size inside the 28 pt accessory"))
 
     // Favorites.
-    let tileFavicon = Metric(20.0, .guess("favicon size inside a 47 pt favorites tile"))
+    let tileFavicon = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's favicons are 16 pt in the 47 pt tiles"))
     let tileRingWidth = Metric(2.0, .anatomy("cra L475: the active favorite has a 2 pt rim inside the edge"))
     let tileRenameInset = Metric(4.0, .guess("side padding of the rename field across a favorites tile; Arc's favorite rename was not recovered"))
-    let emptyDash = Metric([4.0, 3.0], .guess("dash pattern of the empty favorites drop box"))
+    let emptyDash = Metric([5.0, 5.0], .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the empty favorites box is dashed 5 on, 5 off"))
+    let emptyBoxFillAlpha = Metric(0.35, .guess("the empty favorites box is a shade lighter than the sidebar (#F3EEEB over #F0EBE6 in P07-b)"))
+    let emptyBadge = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: a 16 pt star badge 12.5 below the box top"))
+    let emptyBadgeTop = Metric(12.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the badge spans y 101.5 to 117.5 in a box starting at 89"))
+    let emptyTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: Drag to add Favorites is bold, about 132 pt wide"))
+    let emptyTitleGap = Metric(6.0, .guess("space between the star badge and the bold title in the empty favorites box"))
+    let emptySubtitleGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the subtitle's first line is centred 18 under the title's"))
+    let emptyTextInset = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the subtitle wraps after \"most\", its first line about 136 wide"))
+    let emptyCloseSize = Metric(18.0, .guess("hit size of the × on the empty favorites box"))
+    let emptyCloseInset = Metric(15.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the × is centred 15 in from the box's top-right corner"))
 
     // Dock.
     let dockGlyph = Metric(15.0, .guess("space emoji or symbol size in a 34 x 32 dock cell (cra L115: tiny emoji)"))
@@ -67,13 +101,12 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragSourceAlpha = Metric(0.3, .guess("opacity of the row left behind while it is dragged"))
     let dragPreviewShadow = Metric(8.0, .guess("blur of the shadow under the dragged row or tile"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
-    let selectedShadowRadius = Metric(2.0, .guess("TabCellShadowSelected blur; Arc's radius was not recovered"))
-    let selectedShadowOffset = Metric(1.0, .guess("TabCellShadowSelected downward offset"))
+    let selectedShadowRadius = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's current tab card has a 1.5 pt shadow line under its lower edge, darkest at the edge"))
+    let selectedShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the shadow line sits under the card, not around it"))
     let floatingShadowRadius = Metric(16.0, .guess("floating sidebar shadow blur; not recovered (layout-constants.md, Not recovered)"))
     let floatingDismissPoll = Metric(1.0 / 30, .guess("seconds between pointer checks while the floating sidebar waits to close"))
     let autoScrollStep = Metric(8.0, .guess("points per drag sample when dragging near the list's top or bottom edge"))
     let hairline = Metric(1.0, .anatomy("cra L748: 1 pt hairlines (list edges); also the separator, the floating border and the empty favorites box"))
-    let pillShimmerAlpha = Metric(0.22, .guess("peak opacity of the LoadingPageBorder shimmer across the URL pill"))
     let floatingGradientAlpha = Metric(0.92, .guess("opacity of the theme gradient over the blurred page in the floating sidebar"))
 }
 
@@ -124,7 +157,12 @@ enum SidebarCopy {
     static let reload = "Reload"
     static let stop = "Stop"
     static let showHideSidebar = "Show/Hide Sidebar"
-    static let archive = "Archive"
+    /// The dock's left button opens the Library (Arc's `HomeButton`, "View Library").
+    static let library = "Library"
     static let copyLink = "Copy Link"
     static let newSpaceMenu = "New…"
+    /// Arc's title for a new tab before its first document commits.
+    static let untitled = "Untitled"
+    static let spaceOptions = "Space Options"
+    static let dismiss = "Dismiss"
 }

@@ -52,6 +52,41 @@ extension AppState {
 extension Work {
     mutating func toast(_ text: String, in window: WindowID) {
         state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(4)))
+        state.session.windows[window]?.toastUndo = nil
+    }
+
+    /// Arc's undo toast ("Cleared Tabs! Use ⌘Z to undo"), about 5 s; ⌘Z meanwhile runs `undo`.
+    mutating func undoToast(_ text: String, undo: ToastUndo, in window: WindowID) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(5)), keycap: "⌘Z", trailing: "to undo")
+        state.session.windows[window]?.toastUndo = undo
+    }
+
+    /// The archive entries `body` adds, oldest sidebar position first.
+    mutating func archiving(_ body: (inout Work) -> Void) -> [ArchiveID] {
+        let before = Set(state.doc.archive.map(\.id))
+        body(&self)
+        return state.doc.archive.filter { !before.contains($0.id) }.sorted { ($0.fromIndex ?? 0) < ($1.fromIndex ?? 0) }.map(\.id)
+    }
+
+    /// ⌘Z on an undo toast. Cleared tabs go back where they were; a deleted space comes back at its dock position
+    /// with its own roots, and its tabs return into it.
+    mutating func undoFromToast(in window: WindowID) {
+        guard let undo = state.session.windows[window]?.toastUndo else { return }
+        state.session.windows[window]?.toastUndo = nil
+        state.session.windows[window]?.toast = nil
+        switch undo {
+        case .restore(let entries):
+            for id in entries { _ = restoreEntry(id, in: window) }
+        case .space(let space, let index, let entries):
+            guard state.doc.spaces[space.id] == nil,
+                  state.doc.tree.makeRoot(space.pinnedRoot, .pinned(space.id), createdAt: ctx.now),
+                  state.doc.tree.makeRoot(space.todayRoot, .today(space.id), createdAt: ctx.now) else { return }
+            state.doc.spaces[space.id] = space
+            state.doc.spaceOrder.insert(space.id, at: min(index, state.doc.spaceOrder.count))
+            showSpace(space.id, in: window)
+            for id in entries { _ = restoreEntry(id, in: window) }
+            showSpace(space.id, in: window)
+        }
     }
     mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {
         guard let tree = state.tree(of: window), tree[id] != nil else { return }
@@ -151,9 +186,14 @@ extension Work {
             guard let id = state.resolveTab(ref, in: window), let scope = state.locate(id), let t = state.tab(id) else { return }
             let muted = !t.muted
             state.withTree(scope) { $0.updateTab(id) { $0.muted = muted } }
-        case .dismissToast: state.session.windows[window]?.toast = nil
+        case .dismissToast:
+            state.session.windows[window]?.toast = nil
+            state.session.windows[window]?.toastUndo = nil
+        case .undoToast: undoFromToast(in: window)
         case .dismissArchiveEducation:
             if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
+        case .dismissFavoritesHint:
+            if w.kind == .standard { state.doc.tabPreferences.favoritesHintDismissed = true }
         case .preferences(let favorites, let previews):
             guard w.kind == .standard else { return }
             state.doc.tabPreferences.includeFavoritesInNumbers = favorites

@@ -104,6 +104,9 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// incognito. F2.
     public var profile: ProfileBadge?
     public var toolbarText: String? = nil
+    /// What the pill shows at rest (Arc: the host only, "127.0.0.1" for "127.0.0.1:8764/visual.html";
+    /// "about:blank" while a new tab has not committed its first document). Nil shows "Search or Enter URL…".
+    public var host: String? = nil
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {
@@ -115,6 +118,8 @@ public struct ProfileBadge: Sendable, Equatable, Codable {
 public struct FavoritesSnapshot: Sendable, Equatable, Codable {
     public var root: ItemID
     public var tiles: [TabRow]
+    /// No tiles and the "Drag to add Favorites" box was dismissed: the tray takes no room.
+    public var hintDismissed = false
 }
 
 public struct SpaceSnapshot: Sendable, Equatable, Codable {
@@ -183,6 +188,10 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var audible: Bool = false
     public var muted: Bool = false
     public var canReset: Bool
+    /// A new tab whose first document has not committed yet (Arc titles it "Untitled" with the placeholder icon).
+    public var awaitingFirstDocument = false
+    /// When the tab was last shown: the folder preview's "44 minutes ago".
+    public var lastActiveAt: Instant? = nil
     /// The window's Peek was opened from this tab (it is the shown tab under the card): the row shows the peeked
     /// page's icon at its trailing end (Arc's Peek marker). `peekFavicon` is that page's favicon.
     public var peeking: Bool = false
@@ -514,7 +523,7 @@ public struct ProfileDeletionRow: Sendable, Equatable, Codable {
 
 public struct TabPreferenceSnapshot: Equatable, Sendable, Codable {
     public var includeFavoritesInNumbers = true
-    public var hoverPreviews = true
+    public var hoverPreviews = false
     public init() {}
     public init(includeFavoritesInNumbers: Bool, hoverPreviews: Bool) {
         self.includeFavoritesInNumbers = includeFavoritesInNumbers

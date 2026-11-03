@@ -62,6 +62,8 @@ enum ReviewFableScenarios {
 
     @Sendable static func hostile(_ app: AppUnderTest) throws {
         var findings: [String] = []
+        // Previews are off by default, as in Arc; the user turns them on in settings.
+        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         let target = previewTarget(app)
         try setCookie(app, label: "Public")
 
@@ -285,6 +287,8 @@ enum ReviewFableScenarios {
     }
 
     @Sendable static func polling(_ app: AppUnderTest) throws {
+        // Previews are off by default, as in Arc; the user turns them on in settings.
+        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         let item = try app.load(app.site.url("index.html")), id = page(app, item)
         try app.waitForPageInput(id, at: app.site.url("index.html"))
         let frame = try app.native().pages[id]!.surfaceFrame!

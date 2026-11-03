@@ -154,9 +154,9 @@ final class PolicySpecTests: XCTestCase {
         assertColor(resolved.windowColor, 41.85, 63.24, 96.72)
     }
 
-    /// gives the default mid-tone blue the light scheme (black text has the higher contrast)
-    func test_givesTheDefaultMidToneBlueTheLightSchemeBlackTextHasTheHigherContrast() throws {
-        XCTAssertEqual(SpaceTheme.default.colors, [RGBA(hex: "#7EB8D6")])
+    /// gives the default pink-beige (Arc's first Brand swatch) the light scheme (black text has the higher contrast)
+    func test_givesTheDefaultPinkBeigeTheLightSchemeBlackTextHasTheHigherContrast() throws {
+        XCTAssertEqual(SpaceTheme.default.colors, [RGBA(hex: "#F2EAE4")])
         XCTAssertEqual(resolveTheme(SpaceTheme.default).scheme, .light)
         // The cutoff is 0.1791: #767676 (0.1812) is light, #757575 (0.1779) is dark.
         let grey = { (hex: String) in resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0, appearance: .auto)).scheme }
@@ -226,8 +226,9 @@ final class PolicySpecTests: XCTestCase {
     // MARK: themeFromPrimary (a new space's theme is one primary; resolveTheme adds its companions)
     /// keeps the primary first and adds two analogous companions with grain 0.25 and auto appearance
     func test_keepsThePrimaryFirstAndAddsTwoAnalogousCompanionsWithGrain025AndAutoAppearance() throws {
-        let theme = SpaceTheme.default
+        var theme = SpaceTheme.default
         XCTAssertEqual([theme.texture.rawValue, theme.appearance.rawValue, theme.wheel.rawValue], ["grain", "auto", "analogous"])
+        theme.colors = [RGBA(hex: "#7EB8D6")]   // a saturated primary shows the companion math
         XCTAssertEqual(theme.intensity, 0.25)
         // #7EB8D6 is hue 200.7, s 0.5, l 0.667: hue 230.7 at l 0.727 and hue 170.7 at l 0.607.
         XCTAssertEqual(resolveTheme(theme).gradient.map(themeHex), ["#7EB8D6", "#95A1DD", "#67CFBE"])

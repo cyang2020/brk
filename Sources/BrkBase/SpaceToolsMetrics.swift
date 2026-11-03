@@ -6,10 +6,13 @@ public struct SpaceToolsMetrics: MetricGroup {
     public let folderExportPadding = Metric(20.0, .guess("native export form margin"))
     public let folderExportSpacing = Metric(12.0, .guess("separation between native export form rows"))
     public let folderExportTitle = Metric(18.0, .guess("native export sheet heading size"))
-    public let toolbarHeight = Metric(44.0, .guess("address toolbar height leaves a 32 pt control and card gap; no authenticated reference"))
+    /// The toolbar is the top of the content card: 32 pt of controls over a 1 pt hairline, then the page.
+    public let toolbarHeight = Metric(33.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: Arc's card top at 10, hairline at 42, page from 43"))
     public let controlSize = Metric(32.0, .guess("toolbar navigation controls reuse the existing title-row scale"))
-    public let controlPitch = Metric(34.0, .guess("two points between 32 point toolbar buttons"))
-    public let toolbarAddressLeading = Metric(140.0, .guess("four navigation controls before the toolbar address"))
+    /// Back, forward and reload centred 21, 58 and 95 from the card's left edge; the three right buttons centred
+    /// 22, 58 and 94 from its right edge.
+    public let controlPitch = Metric(37.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: toolbar glyph centres 37 apart"))
+    public let toolbarControlInset = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: first and last 32 pt buttons 5 and 6 from the card edges"))
     public let toolbarRadius = Metric(8.0, .guess("toolbar address rounding matches small library controls"))
     public let managerPadding = Metric(24.0, .guess("readable Spaces manager margin within the Library page"))
     public let managerGap = Metric(14.0, .guess("space between manager cards"))

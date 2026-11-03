@@ -25,7 +25,7 @@ final class DockView: NSView {
         super.init(frame: .zero)
         library.action = { _ in dispatch(.library(.open(nil))) }
         plus.action = { [weak self] _ in self?.plusMenu() }
-        library.toolTip = SidebarCopy.archive
+        library.toolTip = SidebarCopy.library
         library.identify(.dockLibrary)
         plus.identify(.dockPlus)
         addSubview(library)

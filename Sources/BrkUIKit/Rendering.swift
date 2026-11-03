@@ -26,10 +26,14 @@ extension NSView {
 public struct Palette: Equatable {
     public let scheme: Scheme
     public let tokens: SidebarTokens
+    /// The space's primary color (the gradient's first stop). Arc tints the folder glyph and the empty favicon with
+    /// its hue.
+    public let accent: RGBA
 
     public init(_ theme: ResolvedTheme) {
         scheme = theme.scheme
         tokens = theme.tokens
+        accent = theme.gradient.first ?? RGBA(0.5, 0.5, 0.5)
     }
 
     public func color(_ rgba: RGBA) -> NSColor {
