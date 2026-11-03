@@ -33,6 +33,10 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     case mute(ItemRef)
     case dismissToast
     case dismissArchiveEducation
+    /// The × on the empty favorites box (Arc's "Drag to add Favorites"): the box goes away for good.
+    case dismissFavoritesHint
+    /// ⌘Z while an undo toast shows: brings back what the cleared Today or the deleted space held.
+    case undoToast
     case preferences(includeFavorites: Bool, previews: Bool)
     /// Context menu "Copy Link", "Copy All Links" (a folder) and "Copy Links" (several rows): every address under
     /// the targets, one per line, on the pasteboard.
@@ -55,8 +59,32 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
 
 struct TabPreferences: Equatable, Sendable, Codable {
     var includeFavoritesInNumbers = true
-    var hoverPreviews = true
+    /// Off until turned on in settings, as Arc's Previews are.
+    var hoverPreviews = false
     var archiveEducationDismissed = false
+    var favoritesHintDismissed = false
+
+    private enum CodingKeys: String, CodingKey { case includeFavoritesInNumbers, hoverPreviews, archiveEducationDismissed, favoritesHintDismissed }
+
+    init() {}
+
+    /// Keys added later are absent from older state files.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        includeFavoritesInNumbers = try c.decodeIfPresent(Bool.self, forKey: .includeFavoritesInNumbers) ?? true
+        hoverPreviews = try c.decodeIfPresent(Bool.self, forKey: .hoverPreviews) ?? false
+        archiveEducationDismissed = try c.decodeIfPresent(Bool.self, forKey: .archiveEducationDismissed) ?? false
+        favoritesHintDismissed = try c.decodeIfPresent(Bool.self, forKey: .favoritesHintDismissed) ?? false
+    }
+
+    /// The newer key is written only once set, so an older file round-trips byte for byte.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(includeFavoritesInNumbers, forKey: .includeFavoritesInNumbers)
+        try c.encode(hoverPreviews, forKey: .hoverPreviews)
+        try c.encode(archiveEducationDismissed, forKey: .archiveEducationDismissed)
+        if favoritesHintDismissed { try c.encode(true, forKey: .favoritesHintDismissed) }
+    }
 }
 struct TabSelection: Equatable, Sendable {
     var items: [ItemID] = []
@@ -65,12 +93,23 @@ struct TabSelection: Equatable, Sendable {
 public struct ToastSnapshot: Equatable, Sendable, Codable {
     public var text: String
     public var expiresAt: Instant
+    /// Arc's undo toasts: "Cleared Tabs! Use", the key cap "⌘Z", then "to undo".
+    public var keycap: String? = nil
+    public var trailing: String? = nil
     /// One button on the toast (Arc: "Screenshot Copied to Clipboard" · Save).
     public var action: ToastAction? = nil
 }
 public struct ToastAction: Equatable, Sendable, Codable {
     public var title: String
     public var command: Command
+}
+
+/// What ⌘Z undoes while an undo toast shows (session only).
+enum ToastUndo: Sendable, Equatable {
+    /// Clear Today: the archive entries it made, in sidebar order.
+    case restore([ArchiveID])
+    /// Delete Space: the space, its dock position and the archive entries of its tabs.
+    case space(Space, index: Int, entries: [ArchiveID])
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]
@@ -89,7 +128,7 @@ public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     public var recent: RecentTabsSnapshot?
     public var toast: ToastSnapshot?
     public var archiveEducation: String?
-    public var hoverPreviews = true
+    public var hoverPreviews = false
     public var includeFavoritesInNumbers = true
 }
 

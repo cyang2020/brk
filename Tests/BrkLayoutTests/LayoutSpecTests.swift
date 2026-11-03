@@ -12,13 +12,13 @@ final class LayoutSpecTests: XCTestCase {
 
     // MARK: - electron-v1:src/main/layout.test.ts
     // MARK: computeLayout
-    /// sidebar visible: content.x = sidebar width + inset, inset on the other three sides, radius = LAYOUT.contentRadius
+    /// sidebar visible: content.x = sidebar width (Arc's card starts at the sidebar edge), inset on the other three sides, radius = LAYOUT.contentRadius
     func test_sidebarVisibleContentXSidebarWidthInsetInsetOnTheOtherThreeSidesRadiusLAYOUT() throws {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id
         let frames = d.frames()
         XCTAssertEqual(frames.contentSize, size)
-        XCTAssertEqual(frames.contentArea, CGRect(x: 238, y: 10, width: 1032, height: 756))
+        XCTAssertEqual(frames.contentArea, CGRect(x: 228, y: 10, width: 1042, height: 756))
         XCTAssertEqual(frames.cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: frames.contentArea, cornerRadius: 6)])
         XCTAssertEqual(frames.sidebar?.frame, CGRect(x: 0, y: 0, width: 228, height: 776))
         XCTAssertFalse(frames.sidebarFloats)
@@ -28,7 +28,7 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertNil(frames.library)
         XCTAssertEqual(frames.dividers, [])
         d.user(.sidebar(.resize(width: 300)))
-        XCTAssertEqual(d.frames().contentArea.minX, 310)
+        XCTAssertEqual(d.frames().contentArea.minX, 300)
     }
 
     /// sidebar hidden: the content card spans the window minus the inset on every side and keeps its radius
@@ -83,7 +83,7 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertEqual(ContentLayout.cards(in: area, fractions: []).cards, [])
         let empty = LayoutDriver(startURL: nil)
         empty.user(.commandBar(.dismiss))
-        XCTAssertEqual(empty.frames().cards, [CardFrame(pane: 0, content: .blank, rect: area, cornerRadius: 6)])
+        XCTAssertEqual(empty.frames().cards, [CardFrame(pane: 0, content: .blank, rect: CGRect(x: 228, y: 10, width: 1042, height: 756), cornerRadius: 6)])
         // A divider drag gives new fractions, each at least Metrics.content.minPaneFraction.
         XCTAssertEqual(ContentLayout.fractions(afterDragging: 0, to: 238 + 516, in: area, current: [1, 1]), [0.5, 0.5])
         let dragged = ContentLayout.fractions(afterDragging: 0, to: 238, in: area, current: [0.5, 0.5])
@@ -237,9 +237,10 @@ final class DropTargetTests: XCTestCase {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id
         let frames = d.frames()
-        // Viewport at y 181; the first Today row follows spacer (2+1), divider (16+1), New Tab (40+1): document y 61.
-        XCTAssertEqual(frames.frame(of: .row(a)), CGRect(x: 0, y: 242, width: 228, height: 40))
-        XCTAssertEqual(frames.frame(of: .todayNewTab), CGRect(x: 0, y: 201, width: 228, height: 40))
+        // Viewport at y 232 (under the empty favorites box); the first Today row follows spacer (2+1), divider (16+1),
+        // New Tab (40+1): document y 61.
+        XCTAssertEqual(frames.frame(of: .row(a)), CGRect(x: 0, y: 293, width: 228, height: 40))
+        XCTAssertEqual(frames.frame(of: .todayNewTab), CGRect(x: 0, y: 252, width: 228, height: 40))
         XCTAssertEqual(frames.frame(of: .urlPill), CGRect(x: 8, y: 46, width: 212, height: 36))
         XCTAssertEqual(frames.frame(of: .dockLibrary), CGRect(x: 8, y: 735, width: 32, height: 32))
         XCTAssertNil(frames.frame(of: .renameField), "view-owned")

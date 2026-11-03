@@ -68,8 +68,9 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
         self.appearance = appearance
     }
 
-    /// Arc's default theme for a new space is not in static data (guess: Brand 8, grain, noise 0.5, intensity 0.25).
-    public static let `default` = SpaceTheme(colors: [ThemePresets.brand[7]], texture: .grain, intensity: 0.25, appearance: .auto)
+    /// A fresh profile's first space in Arc 1.170 is the light pink-beige of the Brand page's first swatch (#F2EAE4,
+    /// verify/visual-pairs/run-20261103 P07-b); grain, noise 0.5 and intensity 0.25 are still guesses.
+    public static let `default` = SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto)
 }
 
 /// Arc's four 9-color picker sets (visual-and-copy.md, "Space theme preset palette"). Brand5 uses the rendered value

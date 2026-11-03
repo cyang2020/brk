@@ -114,6 +114,8 @@ public struct SidebarMetrics: MetricGroup {
     public let titleRowHeight = Metric(40.0, .arc("Title row (window buttons and navigation buttons) height"))
     public let titleRowRightInset = Metric(6.0, .arc("Title row right inset"))
     public let headerBackgroundOverhang = Metric(30.0, .arc("Sidebar header background reaches below the header by", .medium))
+    /// With the toolbar shown (Shift+Cmd+D) the favorites tray starts here; its tiles are 8 lower, at 45.
+    public let toolbarTrayTop = Metric(37.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: Arc's favorite tiles start 45 below the window top with the toolbar shown"))
     public let libraryMinWidth = Metric(417.0, .arc("Library (\"home\") panel width", note: "max(417, ...)"))
     public let libraryWindowMargin = Metric(56.0, .arc("Library (\"home\") panel width", note: "window width minus 56"))
 }
@@ -140,6 +142,11 @@ public struct FavoritesMetrics: MetricGroup {
     public let tileRadius = Metric(12.0, .arc("Favorites tile corner radius"))
     public let ringInset = Metric(1.0, .arc("Selected favorite ring", .medium, note: "inset 1"))
     public let ringRadius = Metric(11.0, .arc("Selected favorite ring", .medium, note: "corner radius 11"))
+    /// The empty tray: Arc's dashed "Drag to add Favorites" box 7.5 in from the sides, 7 below the pill, 94.5 tall,
+    /// with the space header 12.5 under it.
+    public let emptyTrayHeight = Metric(114.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: Arc's space header starts 114 below the pill when Favorites is empty"))
+    public let emptyBoxInset = Metric(CGSize(width: 7.5, height: 7.0), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box spans x 7.5 to 220.5 and starts 7 below the pill"))
+    public let emptyBoxHeight = Metric(94.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box is 94.5 tall"))
 }
 
 public struct TablistMetrics: MetricGroup {
@@ -176,6 +183,9 @@ public struct DockMetrics: MetricGroup {
 
 public struct ContentMetrics: MetricGroup {
     public let inset = Metric(10.0, .arc("Content card inset", note: "10"))
+    /// Between an anchored sidebar and the card: none, the card's left edge is the sidebar's right edge (164, 228 and
+    /// 500 wide alike); top, right and bottom keep `inset`.
+    public let sidebarGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a and P03-b/c: Arc's card starts at the sidebar width"))
     /// Continuous corners.
     public let cornerRadius = Metric(6.0, .arc("Content card corner radius"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))

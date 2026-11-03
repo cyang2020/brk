@@ -323,6 +323,7 @@ struct WindowSession: Sendable, Equatable {
     var revealItem: ItemID?
     var revealGeneration: UInt64 = 0
     var toast: ToastSnapshot?
+    var toastUndo: ToastUndo? = nil
 }
 
 /// What draws over the content card, at most one per window. The archive is one page of the Library; Peek holds a

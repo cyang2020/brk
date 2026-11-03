@@ -159,6 +159,46 @@ final class TabToolsTests: XCTestCase {
         d.user(.tabTools(.preferences(includeFavorites: false, previews: false)))
         XCTAssertFalse(Driver(file: d.savedFile).view.tabTools.hoverPreviews)
     }
+    /// Clear Today and Delete Space leave Arc's undo toast; ⌘Z (`.undoToast`) brings the tabs and the space back.
+    func testClearTodayAndDeleteSpaceToastsUndo() throws {
+        let d = Driver()
+        let idle = d.todayIDs[0]
+        let shown = d.open("example.com/shown")
+        d.user(.tab(.clearToday))
+        XCTAssertEqual(d.todayIDs, [shown])
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Cleared Tabs! Use")
+        XCTAssertEqual(d.view.tabTools.toast?.keycap, "⌘Z")
+        d.user(.tabTools(.undoToast))
+        XCTAssertEqual(d.todayIDs.count, 2)
+        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == idle } || d.view.space.today.rows.count == 2)
+        XCTAssertNil(d.view.tabTools.toast)
+
+        let first = d.view.space.id
+        let space = d.newSpace("Gone")
+        _ = d.open("example.com/in-gone")
+        d.user(.space(.delete(space)))
+        XCTAssertEqual(d.view.dock.map(\.id), [first])
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Space deleted! Use")
+        d.user(.tabTools(.undoToast))
+        XCTAssertEqual(d.view.dock.map(\.id), [first, space])
+        XCTAssertEqual(d.view.space.id, space)
+        XCTAssertEqual(d.view.space.today.rows.count, 1, "the deleted space's tab comes back into it")
+        // A second ⌘Z with no toast does nothing.
+        let before = d.view
+        d.user(.tabTools(.undoToast))
+        XCTAssertEqual(d.view.dock, before.dock)
+    }
+
+    /// The × on the empty favorites box dismisses it for good: the tray takes no room, across a restart.
+    func testDismissFavoritesHint() {
+        let d = Driver()
+        XCTAssertTrue(d.view.favorites.tiles.isEmpty)
+        XCTAssertFalse(d.view.favorites.hintDismissed)
+        d.user(.tabTools(.dismissFavoritesHint))
+        XCTAssertTrue(d.view.favorites.hintDismissed)
+        XCTAssertTrue(Driver(file: d.savedFile).view.favorites.hintDismissed)
+    }
+
     func testTitleRulesNeverOverrideUserTitleOrLookalikeHost() {
         XCTAssertEqual(TitleRules.shorten("Example · GitHub", url: url("https://github.com/a")), "Example")
         XCTAssertEqual(TitleRules.shorten("Example · GitHub", url: url("https://github.com.evil.test/a")), "Example · GitHub")
@@ -216,7 +256,7 @@ extension TabToolsTests {
         let restored = Driver(file: try JSONSerialization.data(withJSONObject: saved))
         XCTAssertFalse(restored.state.folderIsExpanded(folder, in: restored.window))
         XCTAssertTrue(restored.view.tabTools.includeFavoritesInNumbers)
-        XCTAssertTrue(restored.view.tabTools.hoverPreviews)
+        XCTAssertFalse(restored.view.tabTools.hoverPreviews, "previews are off by default, as in Arc")
         restored.user(.item(.beginRename(.item(folder))))
         XCTAssertEqual(restored.view.renaming, folder)
     }
