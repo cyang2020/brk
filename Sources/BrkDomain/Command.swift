@@ -293,12 +293,32 @@ public enum SettingsCommand: Hashable, Sendable, Codable {
     case advanced(AdvancedSetting)
     case openPane(SettingsPane)
     case closeWindow
+    /// A Chromium page in a new tab: Profiles' "Your Data and Settings" rows (in a space of `profile`) and the
+    /// About window's credit links (nil: the dispatching window's space). Closes the settings window.
+    case openBrowserPage(BrowserPage, profile: ProfileID?)
+}
+
+/// The Chromium pages the settings and About windows open in a tab (Arc opens its arc://settings pages the same way).
+public enum BrowserPage: String, Hashable, Sendable, Codable, CaseIterable {
+    case privacy, passwords, paymentMethods, notifications, credits, chromium
+
+    public var url: URL {
+        switch self {
+        case .privacy: URL(string: "chrome://settings/privacy")!
+        case .passwords: URL(string: "chrome://password-manager/passwords")!
+        case .paymentMethods: URL(string: "chrome://settings/payments")!
+        case .notifications: URL(string: "chrome://settings/content/notifications")!
+        case .credits: URL(string: "chrome://credits/")!
+        case .chromium: URL(string: "https://www.chromium.org/")!
+        }
+    }
 }
 
 public enum GeneralSetting: Hashable, Sendable, Codable {
     case warnBeforeQuitting(Bool)
     case dismissDefaultBrowserPrompt
     case webAppearance(WebAppearance)
+    case appIcon(AppIconChoice)
 }
 
 public enum ProfileSetting: Hashable, Sendable, Codable {
@@ -318,6 +338,7 @@ public enum LinkSetting: Hashable, Sendable, Codable {
     case shiftClickPeek(Bool)
     case peekFromPinnedAndFavorites(Bool)
     case littleArcAutoArchive(AutoArchiveThreshold)
+    case globalLittleArcShortcut(Bool)
     case defaultRoute(LinkDestination?)
     /// Air Traffic Control: a route is added at the end (the first match wins), edited in place, or removed.
     case addRoute(LinkRoute)
@@ -342,6 +363,10 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     case provider(AIProviderChoice)
     case renamePinnedTabs(Bool)
     case tidyTabs(Bool)
+    case autoEnableFutureFeatures(Bool)
+    /// "Turn On Max": the automatic provider when none is chosen, and every feature the user never switched on.
+    /// Off: the provider is `.off`.
+    case enable(Bool)
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {

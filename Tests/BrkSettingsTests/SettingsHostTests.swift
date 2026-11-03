@@ -77,12 +77,22 @@ final class SettingsHostTests: XCTestCase {
             return walk(host)
         }
 
-        /// Clicks a checkbox or button and returns what it sent.
+        /// Clicks a checkbox, switch, button or row and returns what it sent.
         func click(_ field: String, file: StaticString = #filePath, line: UInt = #line) -> [Command] {
-            guard let button: NSButton = view(field) else { XCTFail("no control \(field)", file: file, line: line); return [] }
+            guard let control: NSControl = view(field) else { XCTFail("no control \(field)", file: file, line: line); return [] }
             sent = []
-            button.performClick(nil)
+            if let toggle = control as? NSSwitch {
+                toggle.state = toggle.state == .on ? .off : .on
+                toggle.sendAction(toggle.action, to: toggle.target)
+            } else {
+                control.performClick(nil)
+            }
+            settle()
             return sent
+        }
+
+        func isOn(_ field: String) -> Bool? {
+            (view(field) as NSSwitch?).map { $0.state == .on } ?? (view(field) as NSButton?).map { $0.state == .on }
         }
 
         /// Picks a pop-up item by title and returns what it sent.
@@ -125,13 +135,14 @@ final class SettingsHostTests: XCTestCase {
         }
         let recorders = descendants(f.host, ChordRecorderView.self)
         XCTAssertEqual(recorders.count, ActionID.allCases.count, "the real editor must be mounted")
-        let scroller = try XCTUnwrap(descendants(f.host, NSScrollView.self).first)
+        // The list scrolls inside its box; the window keeps Arc's one size.
+        func nested<T: NSView>(_ view: NSView, _ type: T.Type) -> [T] {
+            ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { nested($0, type) }
+        }
+        let scroller = try XCTUnwrap(nested(f.host, NSScrollView.self).last { recorders.first!.isDescendant(of: $0) })
         let document = try XCTUnwrap(scroller.documentView)
         XCTAssertGreaterThan(document.frame.height, scroller.contentSize.height)
-        if let screen = f.window.screen {
-            XCTAssertGreaterThanOrEqual(f.window.frame.minY, screen.visibleFrame.minY)
-            XCTAssertLessThanOrEqual(f.window.frame.maxY, screen.visibleFrame.maxY)
-        }
+        XCTAssertEqual(f.window.frame.size, Metrics.settings.windowSize.value, "the window does not grow with the list")
         let last = try XCTUnwrap(recorders.last)
         last.scrollToVisible(last.bounds)
         f.settle()
@@ -153,8 +164,10 @@ final class SettingsHostTests: XCTestCase {
     }
 
     func testCopyNamesEveryPaneAndChoice() {
-        XCTAssertEqual(SettingsPane.allCases.map(SettingsCopy.title), ["General", "Max", "Profiles", "Shortcuts", "Links", "Advanced"])
+        XCTAssertEqual(SettingsPane.allCases.map(SettingsCopy.title), ["General", "Profiles", "Max", "Links", "Shortcuts", "Icon", "Advanced"])
         XCTAssertEqual(AutoArchiveThreshold.allCases.map(SettingsCopy.threshold), ["1 hour", "6 hours", "12 hours", "24 hours", "7 days", "30 days", "Never"])
+        XCTAssertEqual(SettingsCopy.threshold(.twelveHours, default: .twelveHours), "12 hours (default)")
+        XCTAssertEqual(SettingsCopy.threshold(.oneHour, default: .twelveHours), "1 hour")
         XCTAssertEqual(SettingsCopy.state(.unset), "None")
         XCTAssertEqual(SettingsCopy.state(.valid(KeyChord([.shift, .command], .t))), "⇧⌘T")
         XCTAssertEqual(SettingsCopy.state(.conflict(KeyChord([.shift, .command], .n), with: [.newFolder]), titles: { _ in "New Folder…" }),
@@ -165,31 +178,31 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(SettingsCopy.detected([], active: nil), "No local AI command-line tool found on PATH.")
     }
 
-    /// each checkbox, pop-up and button sends its one `.settings(...)` command and keeps showing the snapshot
+    /// each switch, pop-up and button sends its one `.settings(...)` command and keeps showing the snapshot
     func testEveryFieldDispatchesItsSettingsCommand() {
         let f = Fixture()
         f.render(snapshot(pane: .general))
         XCTAssertEqual(f.click("warnBeforeQuitting"), [.settings(.general(.warnBeforeQuitting(true)))])
-        XCTAssertEqual(f.view("warnBeforeQuitting", NSButton.self)?.state, .off, "the checkbox waits for the snapshot")
-        XCTAssertEqual(f.pick("webAppearance", "Dark"), [.settings(.general(.webAppearance(.dark)))])
-        XCTAssertEqual(f.view("webAppearance", NSPopUpButton.self)?.titleOfSelectedItem, "Automatic", "the pop-up waits for the snapshot")
-        XCTAssertEqual(f.pick("webAppearance", "Automatic"), [], "choosing the current value sends nothing")
+        XCTAssertEqual(f.isOn("warnBeforeQuitting"), false, "the switch waits for the snapshot")
         XCTAssertEqual(f.click("profileSettings"), [.settings(.openPane(.profiles))])
-        XCTAssertEqual(f.click("setAsDefaultBrowser"), [.app(.setAsDefaultBrowser)])
-        XCTAssertEqual(f.click("dismissDefaultBrowserPrompt"), [.settings(.general(.dismissDefaultBrowserPrompt))])
         var general = GeneralSettings.default
         general.warnBeforeQuitting = true
         f.render(snapshot(pane: .general, general: general))
-        XCTAssertEqual(f.view("warnBeforeQuitting", NSButton.self)?.state, .on, "the next snapshot shows the answer")
+        XCTAssertEqual(f.isOn("warnBeforeQuitting"), true, "the next snapshot shows the answer")
         XCTAssertEqual(f.click("warnBeforeQuitting"), [.settings(.general(.warnBeforeQuitting(false)))])
+        XCTAssertNil(f.view("webAppearance"), "Appearance is the View menu's")
 
         f.render(snapshot(pane: .max))
         XCTAssertEqual(f.pick("aiProvider", "codex"), [.settings(.max(.provider(.codex)))])
         XCTAssertEqual(f.click("renamePinnedTabs"), [.settings(.max(.renamePinnedTabs(true)))])
         XCTAssertEqual(f.click("tidyTabs"), [.settings(.max(.tidyTabs(true)))])
+        XCTAssertEqual(f.click("commandBar"), [.settings(.max(.feature(.commandBar, true)))])
+        XCTAssertEqual(f.click("autoEnableFutureFeatures"), [.settings(.max(.autoEnableFutureFeatures(true)))])
+        XCTAssertEqual(f.click("enableMax"), [.settings(.max(.enable(false)))], "the default tool is on: the button turns Max off")
 
         f.render(snapshot(pane: .profiles))
         XCTAssertEqual(f.pick("autoArchive-default", "1 hour"), [.settings(.profile(.default, .autoArchive(.oneHour)))])
+        XCTAssertEqual(f.view("autoArchive-default", NSPopUpButton.self)?.titleOfSelectedItem, "12 hours (default)")
         XCTAssertEqual(f.pick("searchEngine-default", "DuckDuckGo"), [.settings(.profile(.default, .searchEngine(SearchEngineID("duckduckgo"))))])
         XCTAssertEqual(f.click("searchSuggestions-default"), [.settings(.profile(.default, .searchSuggestions(false)))])
         XCTAssertEqual(f.view("downloadLocation-default", NSPopUpButton.self)?.itemTitles, ["Downloads", "Ask where to save each download", "", "Other…"])
@@ -201,12 +214,18 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(offered, [nil], "the folder panel starts at the current folder (the system Downloads)")
         f.host.chooseFolder = { _ in nil }
         XCTAssertEqual(f.pick("downloadLocation-default", "Other…"), [], "a cancelled panel sends nothing")
+        XCTAssertEqual(f.click("profileData-passwords-default"), [.settings(.openBrowserPage(.passwords, profile: .default))])
+        XCTAssertEqual(f.click("profileData-privacy-default"), [.settings(.openBrowserPage(.privacy, profile: .default))])
+        XCTAssertEqual(f.click("profileData-creditCards-default"), [.settings(.openBrowserPage(.paymentMethods, profile: .default))])
+        XCTAssertEqual(f.click("profileData-notifications-default"), [.settings(.openBrowserPage(.notifications, profile: .default))])
 
         f.render(snapshot(pane: .links))
         XCTAssertEqual(f.click("shiftClickPeek"), [.settings(.links(.shiftClickPeek(false)))])
         XCTAssertEqual(f.click("peekFromPinnedAndFavorites"), [.settings(.links(.peekFromPinnedAndFavorites(false)))])
         XCTAssertEqual(f.click("externalLinksInLittleArc"), [.settings(.links(.externalLinksInLittleArc(false)))])
         XCTAssertEqual(f.click("optionCommandClickLittleArc"), [.settings(.links(.optionCommandClickLittleArc(false)))])
+        XCTAssertEqual(f.click("globalLittleArcShortcut"), [.settings(.links(.globalLittleArcShortcut(false)))])
+        XCTAssertEqual(f.view("littleArcAutoArchive", NSPopUpButton.self)?.titleOfSelectedItem, "6 hours (default)")
         XCTAssertEqual(f.pick("littleArcAutoArchive", "7 days"), [.settings(.links(.littleArcAutoArchive(.sevenDays)))])
 
         f.render(snapshot(pane: .advanced))
@@ -219,6 +238,52 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.click("themeToCSS"), [.settings(.advanced(.themeToCSS(true)))])
         XCTAssertEqual(f.click("boostsEnabled"), [.settings(.advanced(.boostsEnabled(false)))])
         XCTAssertEqual(f.click("sharedQuotes"), [.settings(.advanced(.sharedQuotes(false)))])
+        XCTAssertNil(f.view("tabHoverPreviews"), "previews are General's sheet, not an Advanced row")
+        XCTAssertEqual(f.click("resetTranslationExclusions"), [.settings(.max(.resetTranslationExclusions))])
+        XCTAssertEqual(f.click("exportData"), [.sidebarData(.syncSettings)])
+        XCTAssertEqual(f.click("moreSettings"), [])
+        XCTAssertEqual(f.click("numberedFavorites"), [.tabTools(.preferences(includeFavorites: false, previews: true))])
+        XCTAssertEqual(f.click("brk101"), [.sidebarData(.tour)])
+        XCTAssertEqual(f.click("importBrowserFile"), [.sidebarData(.importFile)])
+        XCTAssertEqual(f.click("subpageBack"), [])
+        XCTAssertNotNil(f.view("soundEffects"), "Back returns to the cards")
+
+        f.render(snapshot(pane: .icon))
+        XCTAssertEqual(f.click("appIcon-original"), [], "the current icon is already chosen")
+        XCTAssertEqual(f.click("appIcon-neon"), [.settings(.general(.appIcon(.neon)))])
+    }
+
+    /// General's Previews Settings… opens Arc's "Show … Previews:" sheet; its boxes are Brk's previews; Done closes it
+    func testThePreviewsSheet() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .general))
+        f.window.orderFront(nil)
+        defer { f.window.orderOut(nil) }
+        XCTAssertEqual(f.click("previewsSettings"), [])
+        for _ in 0..<10 where f.window.attachedSheet == nil { f.settle() }
+        let sheet = try XCTUnwrap(f.window.attachedSheet, "the sheet is attached to the settings window")
+        func find(_ field: String) -> NSView? {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == ViewID.settingsField(field).identifier { return view }
+                for child in view.subviews { if let found = walk(child) { return found } }
+                return nil
+            }
+            return sheet.contentView.flatMap(walk)
+        }
+        let previews = try XCTUnwrap(find("tabHoverPreviews") as? NSButton)
+        XCTAssertEqual(previews.state, .on, "previews are on by default")
+        f.sent = []
+        previews.performClick(nil)
+        XCTAssertEqual(f.sent, [.tabTools(.preferences(includeFavorites: true, previews: false))])
+        XCTAssertNotNil(find("previews-linkPreviews"))
+        XCTAssertLessThanOrEqual(abs(sheet.frame.width - CardMetrics.sheetSize.value.width), 2, "Arc's 422-point sheet")
+        // Return is Done's shortcut.
+        let enter = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1, windowNumber: sheet.windowNumber, context: nil,
+                                     characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: Key.returnKey.code)!
+        _ = sheet.performKeyEquivalent(with: enter)
+        for _ in 0..<10 where f.window.attachedSheet != nil { f.settle() }
+        if let open = f.window.attachedSheet { f.window.endSheet(open) }
+        XCTAssertNil(f.window.attachedSheet, "Done closes the sheet")
     }
 
     /// Arc's pane toolbar: one selectable item per pane in Arc's enum order, with an icon; the window is titled
@@ -229,8 +294,9 @@ final class SettingsHostTests: XCTestCase {
         guard let toolbar = f.window.toolbar else { return XCTFail("no toolbar") }
         XCTAssertEqual(f.window.toolbarStyle, .preference)
         XCTAssertEqual(toolbar.items.map(\.itemIdentifier.rawValue),
-                       ["settings-pane-general", "settings-pane-max", "settings-pane-profiles", "settings-pane-shortcuts", "settings-pane-links", "settings-pane-advanced"])
-        XCTAssertEqual(toolbar.items.map(\.label), ["General", "Max", "Profiles", "Shortcuts", "Links", "Advanced"])
+                       ["settings-pane-general", "settings-pane-profiles", "settings-pane-max", "settings-pane-links", "settings-pane-shortcuts",
+                        "settings-pane-icon", "settings-pane-advanced"])
+        XCTAssertEqual(toolbar.items.map(\.label), ["General", "Profiles", "Max", "Links", "Shortcuts", "Icon", "Advanced"])
         XCTAssertTrue(toolbar.items.allSatisfy { $0.image != nil }, "every pane has its icon")
         XCTAssertEqual(toolbar.selectedItemIdentifier?.rawValue, "settings-pane-links")
         XCTAssertEqual(f.window.title, "Links")
@@ -238,7 +304,7 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertNil(f.find("settings-pane-general"))
 
         f.sent = []
-        let max = toolbar.items[1]
+        let max = toolbar.items[2]
         NSApp.sendAction(max.action!, to: max.target, from: max)
         XCTAssertEqual(f.sent, [.settings(.openPane(.max))])
         f.render(snapshot(pane: .max))
@@ -252,6 +318,7 @@ final class SettingsHostTests: XCTestCase {
         let f = Fixture()
         let route = LinkRoute(id: spotify, pattern: "open.spotify.com", destination: .space(personal))
         f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: route, destinationTitle: "Personal")]))
+        XCTAssertEqual(f.click("airTrafficControl"), [], "Air Traffic Control is one level down")
         func descendants<T: NSView>(_ view: NSView, _ type: T.Type) -> [T] {
             (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, type) }
         }
@@ -290,14 +357,19 @@ final class SettingsHostTests: XCTestCase {
     func testProfilesEditorCreatesRenamesAndProtectsDefaultProfile() throws {
         let f = Fixture()
         f.render(snapshot(pane: .profiles))
-        XCTAssertEqual(f.view("createProfile", NSButton.self)?.isEnabled, false)
         XCTAssertEqual(f.view("deleteProfile-default", NSButton.self)?.isEnabled, false)
-        XCTAssertEqual(f.view("deleteUnusedProfiles", NSButton.self)?.isEnabled, false)
+        XCTAssertNil(f.view("newProfileName"), "+ asks for the name")
+        XCTAssertEqual(f.click("addProfile"), [])
+        XCTAssertEqual(f.view("createProfile", NSButton.self)?.isEnabled, false)
         XCTAssertEqual(f.type("newProfileName", "Work", submit: false), [])
         f.settle()
         XCTAssertEqual(f.click("createProfile"), [.profile(.create(name: "Work", icon: nil))])
+        XCTAssertEqual(f.click("addProfile"), [])
         XCTAssertEqual(f.type("newProfileName", "Via Return"), [.profile(.create(name: "Via Return", icon: nil))])
+        XCTAssertNil(f.view("profileName-default"), "the pencil starts a rename")
+        XCTAssertEqual(f.click("editProfile"), [])
         XCTAssertEqual(f.type("profileName-default", "Personal"), [.profile(.rename(.default, name: "Personal"))])
+        XCTAssertTrue(ProfilesPane.unused(snapshot(pane: nil).profiles).isEmpty, "the default profile is never unused")
     }
 
     func testProfileSettingsStayScopedAndDownloadsCanReturnToDefault() {
@@ -307,19 +379,28 @@ final class SettingsHostTests: XCTestCase {
         settings.downloadsDirectory = "/Users/me/Inbox"
         settings.promptForDownloadLocation = true
         let row = ProfileSettingsRow(profile: ProfileRow(id: id, name: "Work", icon: nil, spaceTitles: [], isDefault: false), settings: settings)
-        f.render(snapshot(pane: .profiles, profiles: [snapshot(pane: nil).profiles[0], row]))
+        let rows = [snapshot(pane: nil).profiles[0], row]
+        f.render(snapshot(pane: .profiles, profiles: rows))
+        XCTAssertEqual(f.click("deleteProfile-default"), [], "the default profile cannot be deleted")
+        XCTAssertNil(f.view("autoArchive-work"), "the list's selection decides whose settings are shown")
+        XCTAssertEqual(f.click("profileRow-work"), [])
         XCTAssertEqual(f.pick("autoArchive-work", "7 days"), [.settings(.profile(id, .autoArchive(.sevenDays)))])
         XCTAssertEqual(f.pick("searchEngine-work", "Bing"), [.settings(.profile(id, .searchEngine(SearchEngineID("bing"))))])
         XCTAssertEqual(f.pick("downloadLocation-work", "Use Downloads"),
                        [.settings(.profile(id, .downloadsDirectory(nil))), .settings(.profile(id, .promptForDownloadLocation(false)))])
         XCTAssertEqual(f.view("deleteProfile-work", NSButton.self)?.isEnabled, true)
-        XCTAssertEqual(f.view("deleteUnusedProfiles", NSButton.self)?.isEnabled, true)
-        XCTAssertEqual(f.click("deleteProfile-default"), [])
+        XCTAssertEqual(ProfilesPane.unused(rows).map(\.id), [id])
+        XCTAssertEqual(f.click("searchSettings-work"), [])
+        XCTAssertNotNil(f.find("settings-pane-profiles"))
+        XCTAssertEqual(f.click("subpageBack"), [])
+        XCTAssertEqual(f.click("profileData-clearBrowsingData-work"), [])
+        XCTAssertEqual(f.view("clearProfileData-work", NSButton.self)?.isEnabled, true, "Clear Browsing Data is a sub-page")
     }
 
     func testProfileNameCommitsFromTheNativeFieldEditor() throws {
         let f = Fixture()
         f.render(snapshot(pane: .profiles))
+        _ = f.click("editProfile")
         let field = try XCTUnwrap(f.view("profileName-default", NSTextField.self))
         field.selectText(nil)
         let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
@@ -336,6 +417,7 @@ final class SettingsHostTests: XCTestCase {
         f.render(snapshot(pane: .profiles, profiles: [snapshot(pane: nil).profiles[0], row]))
         f.window.orderFront(nil)
         defer { f.window.orderOut(nil) }
+        XCTAssertEqual(f.click("profileRow-unused"), [])
         XCTAssertEqual(f.click("deleteProfile-unused"), [])
         f.settle()
         let sheet = try XCTUnwrap(f.window.attachedSheet, "the mounted editor presents its confirmation")
@@ -348,20 +430,21 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertNil(f.window.attachedSheet)
     }
 
-    /// " is not your default web browser." shows until the app is the default browser or the notice is dismissed
-    func testTheDefaultBrowserNoticeShowsUntilDismissedOrDefault() {
+    /// Advanced's More Settings… says whether the app is the default browser and offers to make it so
+    func testTheDefaultBrowserRowIsInMoreSettings() {
         let f = Fixture(defaultBrowser: false)
         f.render(snapshot(pane: .general))
+        XCTAssertNil(f.view("defaultBrowserNotice", NSTextField.self), "General shows Arc's two cards only")
+        f.render(snapshot(pane: .advanced))
+        _ = f.click("moreSettings")
         XCTAssertEqual(f.view("defaultBrowserNotice", NSTextField.self)?.stringValue, "\(Product.name) is not your default web browser.")
-        var dismissed = GeneralSettings.default
-        dismissed.defaultBrowserPromptDismissed = true
-        f.render(snapshot(pane: .general, general: dismissed))
-        XCTAssertNil(f.view("defaultBrowserNotice", NSTextField.self))
+        XCTAssertEqual(f.click("setAsDefaultBrowser"), [.app(.setAsDefaultBrowser)])
 
         let g = Fixture(defaultBrowser: true)
-        g.render(snapshot(pane: .general))
-        XCTAssertNil(g.view("defaultBrowserNotice", NSTextField.self), "no notice once the app is the default browser")
-        XCTAssertNotNil(g.view("warnBeforeQuitting", NSButton.self))
+        g.render(snapshot(pane: .advanced))
+        _ = g.click("moreSettings")
+        XCTAssertEqual(g.view("defaultBrowserNotice", NSTextField.self)?.stringValue, "\(Product.name) is your default web browser.")
+        XCTAssertEqual(g.view("setAsDefaultBrowser", NSButton.self)?.isEnabled, false)
     }
 
     /// Max shows what launch found on PATH and what the choice resolves to
