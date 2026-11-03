@@ -114,67 +114,73 @@ struct PreviewsSheet: View {
 struct LinksPane: View {
     let context: PaneContext
     @State private var showingRoutes = false
+    @State private var explainingRoutes = false
     private var links: LinkSettings { context.settings.links }
 
     private func send(_ setting: LinkSetting) { context.dispatch(.settings(.links(setting))) }
 
     var body: some View {
-        if showingRoutes {
-            CardPane {
-                Subpage(title: LinksRoutesCopy.title, back: { showingRoutes = false }) {
-                    SettingsCard {
-                        LinksRoutesEditor(routes: context.settings.routes, spaces: context.settings.spaces, links: links, dispatch: context.dispatch)
-                            .padding(C.rowPadding.value)
+        VStack(alignment: .leading, spacing: 0) {
+            LittleBrkBanner()
+            VStack(alignment: .leading, spacing: 0) {
+                Intro(text: SettingsCopy.littleArcDescription).padding(.top, C.introTop.value)
+                SettingsCard {
+                    SwitchRow(title: SettingsCopy.globalLittleArcShortcut(context.settings.shortcuts), field: "globalLittleArcShortcut",
+                              isOn: links.globalLittleArcShortcut != false) { send(.globalLittleArcShortcut($0)) }
+                    CardDivider()
+                    SwitchRow(title: SettingsCopy.optionCommandClickLittleArc, field: "optionCommandClickLittleArc",
+                              isOn: links.optionCommandClickLittleArc) { send(.optionCommandClickLittleArc($0)) }
+                    CardDivider()
+                    SwitchRow(title: SettingsCopy.externalLinksInLittleArc, field: "externalLinksInLittleArc",
+                              isOn: links.externalLinksInLittleArc) { send(.externalLinksInLittleArc($0)) }
+                    CardDivider()
+                    CardRow(height: C.popUpRowHeight.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
+                        SettingsPopUp(field: "littleArcAutoArchive",
+                                      entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: LinkSettings.default.littleArcAutoArchive), $0) },
+                                      selected: links.littleArcAutoArchive, width: .selected(minimum: 0)) { send(.littleArcAutoArchive($0)) }
+                            .padding(.trailing, C.popUpTrailing.value)
+                    }
+                }
+                .padding(.top, C.introToCard.value)
+                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
+                Intro(text: SettingsCopy.peekDescription)
+                SettingsCard {
+                    SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
+                    CardDivider()
+                    CardRow(height: C.twoLineRowHeight.value) {
+                        VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                            CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
+                            Text(SettingsCopy.peekNote).font(SettingsStyle.font.italic()).foregroundStyle(SettingsStyle.note)
+                        }
+                    } trailing: {
+                        SettingsSwitch(field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) { send(.peekFromPinnedAndFavorites($0)) }
+                    }
+                }
+                .padding(.top, C.introToCard.value)
+                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
+                SettingsCard {
+                    CardRow(height: C.buttonRowHeight.value) {
+                        HStack(spacing: C.infoGap.value) {
+                            CardLabel(SettingsCopy.routesSummary)
+                            Image(systemName: "info.circle").font(.system(size: C.infoSize.value)).foregroundStyle(SettingsStyle.text)
+                                .background(ClickArea(field: "airTrafficControlInfo") { explainingRoutes = true })
+                                .popover(isPresented: $explainingRoutes) {
+                                    Text(LinksRoutesCopy.explanation).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
+                                        .frame(width: C.popoverWidth.value).padding()
+                                }
+                        }
+                    } trailing: {
+                        SettingsButton(title: SettingsCopy.airTrafficControlButton, field: "airTrafficControl") { showingRoutes = true }
                     }
                 }
             }
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                LittleBrkBanner()
-                VStack(alignment: .leading, spacing: 0) {
-                    Intro(text: SettingsCopy.littleArcDescription).padding(.top, C.introTop.value)
-                    SettingsCard {
-                        SwitchRow(title: SettingsCopy.globalLittleArcShortcut(context.settings.shortcuts), field: "globalLittleArcShortcut",
-                                  isOn: links.globalLittleArcShortcut != false) { send(.globalLittleArcShortcut($0)) }
-                        CardDivider()
-                        SwitchRow(title: SettingsCopy.optionCommandClickLittleArc, field: "optionCommandClickLittleArc",
-                                  isOn: links.optionCommandClickLittleArc) { send(.optionCommandClickLittleArc($0)) }
-                        CardDivider()
-                        SwitchRow(title: SettingsCopy.externalLinksInLittleArc, field: "externalLinksInLittleArc",
-                                  isOn: links.externalLinksInLittleArc) { send(.externalLinksInLittleArc($0)) }
-                        CardDivider()
-                        CardRow(height: C.popUpRowHeight.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
-                            SettingsPopUp(field: "littleArcAutoArchive",
-                                          entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: LinkSettings.default.littleArcAutoArchive), $0) },
-                                          selected: links.littleArcAutoArchive, width: .selected(minimum: 0)) { send(.littleArcAutoArchive($0)) }
-                                .padding(.trailing, C.popUpTrailing.value)
-                        }
-                    }
-                    .padding(.top, C.introToCard.value)
-                    Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
-                    Intro(text: SettingsCopy.peekDescription)
-                    SettingsCard {
-                        SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
-                        CardDivider()
-                        CardRow(height: C.twoLineRowHeight.value) {
-                            VStack(alignment: .leading, spacing: C.subtitleGap.value) {
-                                CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
-                                Text(SettingsCopy.peekNote).font(SettingsStyle.font.italic()).foregroundStyle(SettingsStyle.note)
-                            }
-                        } trailing: {
-                            SettingsSwitch(field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) { send(.peekFromPinnedAndFavorites($0)) }
-                        }
-                    }
-                    .padding(.top, C.introToCard.value)
-                    SettingsCard {
-                        ButtonRow(title: SettingsCopy.routesSummary(context.settings.routes.count), button: SettingsCopy.airTrafficControlButton,
-                                  field: "airTrafficControl") { showingRoutes = true }
-                    }
-                    .padding(.top, C.cardSpacing.value)
-                }
-                .frame(width: S.contentWidth.value, alignment: .leading)
-                .padding(.horizontal, S.horizontalPadding.value)
-                .padding(.bottom, C.paneTop.value)
+            .frame(width: S.contentWidth.value, alignment: .leading)
+            .padding(.horizontal, S.horizontalPadding.value)
+            .padding(.bottom, C.linksBottom.value)
+        }
+        .sheet(isPresented: $showingRoutes) {
+            AirTrafficControlSheet(routes: context.settings.routes, spaces: context.settings.spaces, links: links, dispatch: context.dispatch) {
+                showingRoutes = false
             }
         }
     }

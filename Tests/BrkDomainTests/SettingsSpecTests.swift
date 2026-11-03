@@ -188,10 +188,19 @@ final class SettingsSpecTests: XCTestCase {
         d.user(.settings(.profile(.default, .downloadsDirectory(nil))))
         XCTAssertNil(folder())
 
-        assertUnchanged(d.state, d.user(.settings(.links(.defaultRoute(.mostRecentSpace)))))
-        d.user(.settings(.links(.defaultRoute(.littleArc))))
-        XCTAssertEqual(d.snapshot.settings.links.defaultRoute, .littleArc)
+        // Air Traffic Control's Default and "Links from other apps open in Little Arc" are one answer: Little Arc
+        // is the switch on, Most Recent Space the switch off, a space is saved and turns the switch off.
+        assertUnchanged(d.state, d.user(.settings(.links(.defaultRoute(.littleArc)))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .littleArc)
         d.user(.settings(.links(.defaultRoute(.mostRecentSpace))))
+        XCTAssertFalse(d.snapshot.settings.links.externalLinksInLittleArc, "Most Recent Space turns the switch off")
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .mostRecentSpace)
+        XCTAssertNil(d.snapshot.settings.links.defaultRoute)
+        let space = d.snapshot.settings.spaces[0].id
+        d.user(.settings(.links(.defaultRoute(.space(space)))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .space(space))
+        d.user(.settings(.links(.externalLinksInLittleArc(true))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .littleArc, "turning the switch on gives the default back to Little Arc")
         XCTAssertNil(d.snapshot.settings.links.defaultRoute)
 
         assertUnchanged(d.state, d.user(.settings(.links(.shiftClickPeek(true)))))

@@ -103,14 +103,12 @@ extension Work {
     }
 
     /// Links from other apps (Apple Event GetURL). The first matching route wins (Air Traffic Control, in the
-    /// user's order); else the Links settings decide: `defaultRoute`, then "Links from other apps open in Little
-    /// Arc", else the most recent standard window's current space. A url the bar may not open is ignored.
+    /// user's order); else Air Traffic Control's Default (`LinkSettings.externalDefault`: a chosen space, else "Links
+    /// from other apps open in Little Arc", else the most recent standard window's current space). A url the bar
+    /// may not open is ignored.
     mutating func externalURL(_ url: URL) {
         guard isAllowedURL(url) else { return }
-        let destination = state.doc.linkRoutes.first { $0.matches(url) }?.destination
-            ?? state.doc.settings.links.defaultRoute
-            ?? (state.doc.settings.links.externalLinksInLittleArc ? .littleArc : .mostRecentSpace)
-        open(url, at: destination)
+        open(url, at: state.doc.linkRoutes.first { $0.matches(url) }?.destination ?? state.doc.settings.links.externalDefault)
     }
 
     /// Opens `url` where a route says. A route naming a space that is gone falls back to the most recent space.
@@ -220,12 +218,19 @@ extension AppState {
         return focusedPane(in: window)
     }
 
-    /// An Air Traffic Control route as the editor accepts it: the pattern normalized (`LinkRoute.normalizedPattern`)
-    /// and a destination that names an existing space. Nil refuses the route.
+    /// An Air Traffic Control route as the editor accepts it, with a destination that names an existing space. A
+    /// `.matches` pattern is normalized to a host glob (`LinkRoute.normalizedPattern`) and refused when nothing usable
+    /// is left; a `.contains` text is trimmed and lowercased and may be empty (New Route adds an empty row, which
+    /// matches nothing until the user types). Nil refuses the route.
     func validRoute(_ route: LinkRoute) -> LinkRoute? {
-        guard let pattern = LinkRoute.normalizedPattern(route.pattern) else { return nil }
         if case .space(let id) = route.destination, doc.spaces[id] == nil { return nil }
-        return LinkRoute(id: route.id, pattern: pattern, destination: route.destination)
+        if route.match == .contains {
+            let text = route.pattern.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !text.contains(where: \.isWhitespace) else { return nil }
+            return LinkRoute(id: route.id, pattern: text, destination: route.destination, match: .contains)
+        }
+        guard let pattern = LinkRoute.normalizedPattern(route.pattern) else { return nil }
+        return LinkRoute(id: route.id, pattern: pattern, destination: route.destination, match: route.match)
     }
 }
 

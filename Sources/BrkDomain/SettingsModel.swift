@@ -80,28 +80,46 @@ public struct LinkSettings: Hashable, Sendable, Codable {
     /// "Open Little Arc when I press ⌥⌘N in any app": the system-wide New Little Arc Window shortcut; nil is on.
     public var globalLittleArcShortcut: Bool? = nil
 
+    /// Where a link from another app opens when no route matches: Air Traffic Control's "Default" pop-up. A space
+    /// (or an older file's saved Little Arc) wins; otherwise "Links from other apps open in Little Arc" decides
+    /// between Little Arc and the most recent space, so the switch and the pop-up always say the same thing.
+    public var externalDefault: LinkDestination {
+        if let defaultRoute, defaultRoute != .mostRecentSpace { return defaultRoute }
+        return externalLinksInLittleArc ? .littleArc : .mostRecentSpace
+    }
+
     /// Little Arcs archive after 6 hours by default ("6 hours (default)" in Arc 1.170's Links pane, P38-f).
     public static let `default` = LinkSettings(externalLinksInLittleArc: true, optionCommandClickLittleArc: true, shiftClickPeek: true,
                                                peekFromPinnedAndFavorites: true, littleArcAutoArchive: .sixHours, defaultRoute: nil)
 }
 
-/// One Air Traffic Control route (Arc: `StorableLinkRouting`): links whose host matches `pattern` open at
-/// `destination`. `pattern` is a host glob ("*.spotify.com", "open.spotify.com"); matching is `LinkRoute.matches`.
+/// One Air Traffic Control route (Arc: `StorableLinkRouting`, edited in `LinkRoutingDialog`): links whose URL
+/// matches `pattern` open at `destination`. How the text is compared is `match` (Arc's "URL [Contains ▾]" pop-up);
+/// matching is `LinkRoute.matches`.
 public struct LinkRoute: Hashable, Sendable, Codable {
     public let id: LinkRouteID
     public var pattern: String
     public var destination: LinkDestination
+    /// Nil (routes saved before the pop-up existed) is `.matches`.
+    public var match: LinkMatch? = nil
 
-    public init(id: LinkRouteID, pattern: String, destination: LinkDestination) {
+    public init(id: LinkRouteID, pattern: String, destination: LinkDestination, match: LinkMatch? = nil) {
         self.id = id
         self.pattern = pattern
         self.destination = destination
+        self.match = match
     }
 
-    /// Case-insensitive host match (F3): "spotify.com" matches that host only; "*.spotify.com" matches the bare host
-    /// and any subdomain depth. The stored pattern is already normalized (`normalizedPattern`, Rules/Windows.swift);
-    /// a pattern typed with a scheme or path still matches because it is normalized here too. No host: no match.
+    /// `.contains`: the URL, lowercased, contains the text (an empty text, a fresh New Route row, matches nothing).
+    /// `.matches`: a case-insensitive host match (F3): "spotify.com" matches that host only; "*.spotify.com" matches
+    /// the bare host and any subdomain depth. The stored pattern is already normalized (`normalizedPattern`,
+    /// Rules/Windows.swift); a pattern typed with a scheme or path still matches because it is normalized here too.
+    /// No host: no match.
     public func matches(_ url: URL) -> Bool {
+        if match == .contains {
+            let text = pattern.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return !text.isEmpty && url.absoluteString.lowercased().contains(text)
+        }
         guard let host = url.host?.lowercased(), let pattern = LinkRoute.normalizedPattern(pattern) else { return false }
         if pattern.hasPrefix("*.") {
             let base = String(pattern.dropFirst(2))
@@ -109,6 +127,12 @@ public struct LinkRoute: Hashable, Sendable, Codable {
         }
         return host == pattern
     }
+}
+
+/// How a route compares its text with a link (Arc: `LinkRoutingURLMatchType`, cases `matches` and `contains`, in
+/// that order).
+public enum LinkMatch: String, Hashable, Sendable, Codable, CaseIterable {
+    case matches, contains
 }
 
 /// Where a routed link opens. Arc: `LinkDestination` space(...) | littleArc(...), plus "Most Recent Space".

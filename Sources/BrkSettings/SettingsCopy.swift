@@ -186,13 +186,8 @@ public enum SettingsCopy {
     }
     /// Air Traffic Control moved one level down (observed button "Air Traffic Control…").
     public static let airTrafficControlButton = "Air Traffic Control…"
-    public static func routesSummary(_ count: Int) -> String {
-        switch count {
-        case 0: "Choose where specific sites open"
-        case 1: "1 route chooses where a site opens"
-        default: "\(count) routes choose where sites open"
-        }
-    }
+    /// Observed (Q06-links-bottom: "Choose where links open inside Arc." with an ⓘ).
+    public static var routesSummary: String { "Choose where links open inside \(Product.name)." }
 
     // MARK: Shortcuts
 

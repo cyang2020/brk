@@ -224,6 +224,36 @@ final class WindowsSpecTests: XCTestCase {
         assertUnchanged(d.state, d.system(.externalURL(url("javascript:alert(1)"))))
     }
 
+    /// Air Traffic Control's two-line rows (Q06-a): a "Contains" route matches any link whose URL contains its text, an
+    /// empty New Route row matches nothing, "Matches" keeps the host glob; the Default pop-up decides the rest
+    func test_containsRoutesAndTheDefaultDestination() throws {
+        let d = Driver()
+        let work = d.newSpace("Work")
+        d.user(.space(.focus(d.snapshot.settings.spaces[0].id)))
+        let id = LinkRouteID("meet")
+        d.user(.settings(.links(.addRoute(LinkRoute(id: id, pattern: "", destination: .space(work), match: .contains)))))
+        XCTAssertEqual(d.snapshot.settings.routes.map(\.route.pattern), [""], "New Route adds an empty row")
+        d.system(.externalURL(url("https://meet.google.com/abc")))
+        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .little }.count, 1, "the empty row matches nothing; the default is Little Arc")
+        d.user(.settings(.links(.updateRoute(LinkRoute(id: id, pattern: " Meet.Google.com ", destination: .space(work), match: .contains)))))
+        let route = try XCTUnwrap(d.snapshot.settings.routes.first?.route)
+        XCTAssertEqual(route.pattern, "meet.google.com")
+        XCTAssertTrue(route.matches(url("https://meet.google.com/abc-defg")))
+        XCTAssertTrue(route.matches(url("https://accounts.google.com/?continue=https://meet.google.com/x")), "Contains looks at the whole URL")
+        XCTAssertFalse(route.matches(url("https://google.com/meet")))
+        assertUnchanged(d.state, d.user(.settings(.links(.updateRoute(LinkRoute(id: id, pattern: "two words", destination: .space(work), match: .contains))))))
+        d.system(.externalURL(url("https://meet.google.com/abc")))
+        XCTAssertEqual(d.view.space.id, work, "the Contains route sent the link to Work")
+        d.user(.settings(.links(.updateRoute(LinkRoute(id: id, pattern: "meet.google.com", destination: .space(work), match: .matches)))))
+        XCTAssertFalse(try XCTUnwrap(d.snapshot.settings.routes.first?.route).matches(url("https://x.com/?u=meet.google.com")), "Matches compares the host")
+        d.user(.settings(.links(.removeRoute(id))))
+        d.user(.settings(.links(.defaultRoute(.mostRecentSpace))))
+        let littles = d.snapshot.windows.values.filter { $0.kind == .little }.count
+        d.system(.externalURL(url("https://example.com/most-recent")))
+        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .little }.count, littles, "Default: Most Recent Space opens no Little Arc")
+        XCTAssertEqual(d.current?.url, url("https://example.com/most-recent"))
+    }
+
     /// a Little Arc's layout starts from Arc's default size before AppKit reports a frame; the next Little Arc cascades by 30 from the last one's frame; neither is saved
     func test_littleArcStartsAtArcsDefaultSizeAndCascades() throws {
         let d = Driver()

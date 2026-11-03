@@ -45,7 +45,13 @@ extension Work {
             }
         case .links(let setting):
             switch setting {
-            case .externalLinksInLittleArc(let on): state.doc.settings.links.externalLinksInLittleArc = on
+            case .externalLinksInLittleArc(let on):
+                // The switch and Air Traffic Control's Default say the same thing (`LinkSettings.externalDefault`):
+                // on means Little Arc, so a chosen default space gives way; off leaves a chosen space alone.
+                var links = state.doc.settings.links
+                links.externalLinksInLittleArc = on
+                if on || links.defaultRoute == .littleArc { links.defaultRoute = nil }
+                if state.doc.settings.links != links { state.doc.settings.links = links }
             case .optionCommandClickLittleArc(let on): state.doc.settings.links.optionCommandClickLittleArc = on
             case .shiftClickPeek(let on): state.doc.settings.links.shiftClickPeek = on
             case .peekFromPinnedAndFavorites(let on): state.doc.settings.links.peekFromPinnedAndFavorites = on
@@ -53,8 +59,15 @@ extension Work {
             case .globalLittleArcShortcut(let on): state.doc.settings.links.globalLittleArcShortcut = on ? nil : false
             case .defaultRoute(let destination):
                 if case .space(let id)? = destination, state.doc.spaces[id] == nil { return }
-                // nil and `.mostRecentSpace` say the same; the saved value has one spelling.
-                state.doc.settings.links.defaultRoute = destination == .mostRecentSpace ? nil : destination
+                // Air Traffic Control's Default. Little Arc and Most Recent Space are the "Links from other apps open
+                // in Little Arc" switch (on, off); only a space is saved as the default route.
+                var links = state.doc.settings.links
+                switch destination ?? .mostRecentSpace {
+                case .littleArc: links.defaultRoute = nil; links.externalLinksInLittleArc = true
+                case .mostRecentSpace: links.defaultRoute = nil; links.externalLinksInLittleArc = false
+                case .space(let id): links.defaultRoute = .space(id); links.externalLinksInLittleArc = false
+                }
+                if state.doc.settings.links != links { state.doc.settings.links = links }
             case .addRoute(let route):
                 // F3: the pattern is normalized to the host glob `LinkRoute.matches` compares (`normalizedPattern`); an
                 // unusable pattern or a destination naming a missing space is refused (`AppState.validRoute`).
