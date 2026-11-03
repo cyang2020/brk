@@ -227,7 +227,7 @@ enum PageBrowsingScenarios {
         try? app.hold("ctrl", "space", times: 0)                         // ends a Ctrl+Tab walk
         if action == .printPage || action == .savePageAs {
             try app.waitUntil("\(action!) sheet", timeout: 20) { try app.native(main).sheetClass != nil }
-            if action == .printPage { try app.perform(.cancelPrintPanel(window: main)) } else { try app.perform(.answerSavePanel(window: main, path: nil)) }
+            if action == .printPage { try app.perform(.cancelPrintPanel(window: main)) } else { try app.perform(.sheetButton(title: "Cancel")) }
             try app.waitUntil("output sheet gone", timeout: 10) { try app.native(main).sheetClass == nil }
         }
         app.sleep(0.2)
