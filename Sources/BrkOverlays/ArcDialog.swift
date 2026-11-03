@@ -26,7 +26,9 @@ struct ArcDialogMetrics: MetricGroup {
     let buttonRadius = Metric(9.0, .guess("button corner radius, measured on P26 a"))
     let buttonPadding = Metric([15.0, 9.0, 6.0], .guess("button padding: before the label, label to key cap, after the key cap; fits 108 pt Cancel and Rename"))
     let keyCap = Metric([34.0, 26.0, 21.0], .guess("ESC cap width, ↵ cap width, cap height, measured on P26 a"))
-    let dim = Metric([0.2, 0.4], .guess("black over the window behind the dialog in light and dark, measured on P26 a (#FFFFFF -> #D2D2D2)"))
+    /// Arc's dim desaturates: a grey, not black, over the window. Fitted to two samples of P26 a (white #FFFFFF ->
+    /// #D2D2D2, the fixture's blue #A6C0ED -> #AEB9CB); dark is ours (no dark capture).
+    let dim = Metric([0.706, 0.59, 0.0, 0.4], .guess("grey level and alpha over the window in light (#B4B4B4 at 59%), then dark (black at 40%), fitted to P26 a"))
     let primary = Metric(RGBAValue(0x31, 0x39, 0xFB), .guess("confirm button blue #3139FB, sampled on P26 a (Arc's PrimaryButton)"))
     let destructive = Metric(RGBAValue(0xF5, 0x37, 0x15), .guess("Delete button red #F53715, sampled on P27 a"))
     let fieldRadius = Metric(8.0, .guess("text field corner radius, measured on P26 a"))
@@ -86,7 +88,8 @@ final class ArcDialogView: NSView {
         appearance = .of(scheme)
         wantsLayer = true
         dim.wantsLayer = true
-        dim.layer?.backgroundColor = NSColor.black.withAlphaComponent(ArcDialog.dim.value[scheme == .light ? 0 : 1]).cgColor
+        let shade = ArcDialog.dim.value, at = scheme == .light ? 0 : 2
+        dim.layer?.backgroundColor = NSColor(srgbRed: shade[at], green: shade[at], blue: shade[at], alpha: shade[at + 1]).cgColor
         addSubview(dim)
         card.wantsLayer = true
         card.layer?.backgroundColor = colors.popover.cgColor

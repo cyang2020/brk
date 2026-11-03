@@ -212,58 +212,128 @@ extension Work {
         }
     }
 
-    /// The popup menus (Electron `menuFor`, labels from the action table and Arc's copy):
-    /// - plus button: New Tab, New Folder, New Space;
-    /// - space: Rename Space (the rename dialog), Change Space Icon… (the icon popover), Edit Theme Color… (the theme
-    ///   panel), Delete Space
-    ///   (disabled for the last space);
-    /// - folder: Rename Current Item, Collapse or Expand Folder, Delete Folder;
-    /// - split: Pin/Unpin Tab, then "Move to Pinned in X" / "Move to Today in X" for every other space;
-    /// - tab: Pin/Unpin Tab, Rename Current Item, Reset Tab to Original URL (when it drifted), the moves, then
-    ///   Today: Archive Tab (`.tab(.close)`); Pinned or Favorites: Close and Keep Pinned (`.tab(.close)`) and Archive
-    ///   Tab (`.tab(.archive)`).
+    /// The popup menus, item for item as Arc 1.170 shows them (verify/visual-pairs/run-20261103 P12, P11-b):
+    /// - Today tab: Copy Link, Share ▸ | Change Icon…, Rename…, Mute, Customize Page… | Open in Split View,
+    ///   Duplicate, Move to ▸ | Archive Tab, Archive Tabs Below. Pinned and Favorites add Edit Pinned Page ▸ after
+    ///   Customize Page… and end with Remove Pin or Remove Favorite instead of the archive rows;
+    /// - folder: Share Folder… | New Nested Folder…, Turn “X” into Space, Copy All Links | Change Icon…, Rename… |
+    ///   Duplicate, Move to ▸ | Delete;
+    /// - split: Share Split View… | Separate All Tabs, Add Tab…, Convert to Vertical (or Horizontal) Split View |
+    ///   the grey caption Tab Options and one submenu per pane | Change Icon…, Rename… | Duplicate, Move to ▸ |
+    ///   Archive Item, Archive Tabs Below;
+    /// - several selected rows: Copy Links, Share N Items… | Change Icon…, Mute (both disabled) | Open in Split View,
+    ///   Duplicate, Move to ▸, New Folder with N Items | Archive Tabs, Archive Tabs Below (disabled);
+    /// - space (its name, the dock and the sidebar's empty area): Change Space Icon…, Rename Space…, Edit Theme
+    ///   Color…, Set Profile ▸ | New Folder, Live Folders ▸ | Share Space…, Export “X” into Folder ▸ | Manage Spaces… |
+    ///   Delete Space;
+    /// - plus button: New Tab, New Folder, New Space, the live folder sources.
+    /// Share is a file export (user decision), so each Share row writes the same document the old Export rows did.
     func menuModel(for request: PopupMenuRequest, in window: WindowID) -> MenuModel {
         func entry(_ title: String, _ command: Command, enabled: Bool = true) -> MenuEntry {
             .action(title: title, command: command, enabled: enabled)
         }
+        let standard = state.doc.windows[window]?.kind == .standard
+        /// Every folder of `space` (Pinned, then Today, depth first) that `unit` may move into.
+        func folders(in space: SpaceID, excluding unit: [ItemID]) -> [(ItemID, String)] {
+            guard let s = state.doc.spaces[space] else { return [] }
+            let tree = state.doc.tree
+            func walk(_ id: ItemID) -> [(ItemID, String)] {
+                (tree[id]?.children ?? []).flatMap { child -> [(ItemID, String)] in
+                    guard case .folder(let f)? = tree[child]?.body, !unit.contains(child) else { return [] }
+                    return [(child, f.title)] + walk(child)
+                }
+            }
+            return walk(s.pinnedRoot) + walk(s.todayRoot)
+        }
+        /// Move to ▸: every space in dock order (the item's own one disabled, so the row stays usable with one space,
+        /// as Arc's does), then the folders of the item's own space.
+        func moves(_ units: [ItemID], home: SpaceID?, scope: ContainerScope?, command: (Destination) -> Command) -> MenuEntry {
+            guard scope == .global, standard else { return .submenu(title: "Move to", entries: []) }
+            let spaces = state.doc.spaceOrder.filter { state.doc.spaces[$0] != nil }.map {
+                entry(state.displayTitle(of: $0), command(.space($0)), enabled: $0 != home)
+            }
+            let parents = Set(units.compactMap { state.doc.tree[$0]?.parent })
+            let inside = home.map { folders(in: $0, excluding: units) }?.filter { folder in
+                !parents.contains(folder.0) && !units.contains { state.doc.tree.isDescendant(folder.0, of: $0) }
+            } ?? []
+            let into = inside.map { entry($0.1, command(.into(parent: $0.0, index: 0))) }
+            return .submenu(title: "Move to", entries: spaces + (spaces.isEmpty || into.isEmpty ? [] : [.separator]) + into)
+        }
+        func hasItemsBelow(_ id: ItemID, in tree: SidebarTree) -> Bool {
+            guard let siblings = tree[id]?.parent.flatMap({ tree[$0]?.children }), let i = siblings.firstIndex(of: id) else { return false }
+            return i + 1 < siblings.count
+        }
+        func link(_ tab: ItemID) -> URL? { state.displayedTab(tab, in: window)?.url }
         switch request {
         case .selection(let ids):
-            let publicIDs = ids.filter { state.locate($0) == .global }
-            return MenuModel(entries: publicIDs.isEmpty ? [] : [entry("Export Selected Tabs…", .app(.export(.items(publicIDs))))])
+            guard let tree = state.tree(of: window) else { return MenuModel(entries: []) }
+            let rows = ids.filter { tree[$0] != nil && tree[$0]?.kind != .section }
+            guard !rows.isEmpty else { return MenuModel(entries: []) }
+            let publicIDs = rows.filter { state.locate($0) == .global }
+            let n = rows.count
+            let home = rows.compactMap { tree.role(of: $0)?.space }.first ?? state.doc.windows[window]?.space
+            return MenuModel(entries: [
+                entry("Copy Links", .tabTools(.copyLinks(.items(rows))), enabled: rows.contains { tree.tabs(under: $0).contains { link($0) != nil } }),
+                entry("Share \(n) Items…", .app(.export(.items(publicIDs))), enabled: !publicIDs.isEmpty), .separator,
+                entry("Change Icon…", .tabTools(.chooseIcon(rows[0])), enabled: false),
+                entry("Mute", .tabTools(.mute(.item(rows[0]))), enabled: false), .separator,
+                entry("Open in Split View", .tabTools(.openInSplit(.items(rows))), enabled: standard),
+                entry("Duplicate", .tabTools(.bulk(.items(rows), .duplicate(nil)))),
+                moves(rows, home: home, scope: publicIDs.count == n ? .global : nil) { .tabTools(.bulk(.items(rows), .move($0))) },
+                entry("New Folder with \(n) Items", .tabTools(.bulk(.items(rows), .newFolder(group: false))), enabled: standard && publicIDs.count == n), .separator,
+                entry("Archive Tabs", .tabTools(.bulk(.items(rows), .archive))),
+                entry("Archive Tabs Below", .tabTools(.bulk(.below(rows[n - 1]), .archive)), enabled: false),
+            ])
         case .plusButton:
             return MenuModel(entries: [
                 entry("New Tab", .commandBar(.open(.newTab))),
-                entry("New Folder", .item(.newFolder), enabled: state.doc.windows[window]?.kind == .standard),
+                entry("New Folder", .item(.newFolder), enabled: standard),
                 entry("New Space", .sidebar(.openDialog(.newSpace))),
-                entry("New GitHub Live Folder…", .tabTools(.site(.connectGitHub(favorite: nil))), enabled: state.doc.windows[window]?.kind == .standard),
-                entry("Connect Calendar File…", .tabTools(.site(.connectCalendar)), enabled: state.doc.windows[window]?.kind == .standard),
+                entry("New GitHub Live Folder…", .tabTools(.site(.connectGitHub(favorite: nil))), enabled: standard),
+                entry("Connect Calendar File…", .tabTools(.site(.connectCalendar)), enabled: standard),
             ])
         case .spaceControls(let id):
             var model = menuModel(for: .space(id), in: window)
-            guard !model.entries.isEmpty else { return model }
             model.entries = model.entries.map { entry in
                 if case .action(let title, .space(.delete(let id)), let enabled) = entry {
                     return .action(title: title, command: .space(.requestDelete(id)), enabled: enabled)
                 }
                 return entry
             }
-            model.entries.insert(contentsOf: [
-                entry(state.doc.windows[window]?.spaceHeaderVisible == true ? "Hide Space Header" : "Show Space Header", .sidebar(.toggleSpaceHeader)),
-                entry("Manage Spaces…", .library(.open(.spaces))),
-            ], at: model.entries.count - 1)
             return model
         case .space(let id):
-            guard state.doc.spaces[id] != nil else { return MenuModel(entries: []) }
-            return MenuModel(entries: [
-                entry("Rename Space", .sidebar(.openDialog(.rename(.space(id))))),
+            guard let space = state.doc.spaces[id] else { return MenuModel(entries: []) }
+            let title = state.displayTitle(of: id)
+            let current = standard && state.doc.windows[window]?.space == id
+            let profiles = state.doc.profiles.values.filter { state.doc.deletingProfiles[$0.id] == nil }
+                .sorted { ($0.id == .default ? 0 : 1, $0.name) < ($1.id == .default ? 0 : 1, $1.name) }
+            let profileRows: [MenuEntry] = profiles.map {
+                .choice(title: $0.name, command: .profile(.assign(.space(id), to: $0.id)), on: $0.id == space.profile)
+            } + [.separator, entry("New Profile…", .profile(.openDialog(.create)))]
+            let others = state.doc.spaceOrder.filter { $0 != id && state.doc.spaces[$0] != nil }.map {
+                entry(state.displayTitle(of: $0), .tabTools(.spaceIntoFolder(id, into: $0)))
+            }
+            var entries: [MenuEntry] = [
                 entry("Change Space Icon…", .sidebar(.openDialog(.icon(.space(id))))),
-                entry("Edit Theme Color…", .sidebar(.openDialog(.theme(.space(id))))), .separator,
-                entry("Reset All Pinned Tabs", .tabTools(.resetPinned), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
-                entry("Collapse All Folders", .tabTools(.folders(expanded: false)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
-                entry("Expand All Folders", .tabTools(.folders(expanded: true)), enabled: state.doc.windows[window]?.kind == .standard && state.doc.windows[window]?.space == id),
-                entry("Export Space…", .app(.export(.space(.space(id))))),
+                entry("Rename Space…", .sidebar(.openDialog(.rename(.space(id))))),
+                entry("Edit Theme Color…", .sidebar(.openDialog(.theme(.space(id))))),
+                .submenu(title: "Set Profile", entries: standard ? profileRows : []), .separator,
+                entry("New Folder", .item(.newFolder), enabled: current),
+                .submenu(title: "Live Folders", entries: current ? [
+                    entry("New GitHub Live Folder…", .tabTools(.site(.connectGitHub(favorite: nil)))),
+                    entry("Connect Calendar File…", .tabTools(.site(.connectCalendar))),
+                ] : []), .separator,
+                entry("Share Space…", .app(.export(.space(.space(id))))),
+                .submenu(title: "Export “\(title)” into Folder", entries: standard ? others + (others.isEmpty ? [] : [.separator])
+                    + [entry("Bookmarks Folder on Disk…", .space(.exportIntoFolder(id)))] : []), .separator,
+                entry("Manage Spaces…", .library(.open(.spaces))), .separator,
                 entry("Delete Space", .space(.delete(id)), enabled: state.doc.spaceOrder.count > 1),
-            ])
+            ]
+            // Arc 1.170 has no way to hide the space header (P05-e); a header hidden before can still come back.
+            if state.doc.windows[window]?.spaceHeaderVisible == false {
+                entries.insert(contentsOf: [entry("Show Space Header", .sidebar(.toggleSpaceHeader))], at: entries.count - 3)
+            }
+            return MenuModel(entries: entries)
         case .item(let id):
             guard let scope = state.locate(id), let tree = state.tree(scope), let node = tree[id], let role = tree.role(of: id) else {
                 return MenuModel(entries: [])
@@ -272,66 +342,77 @@ extension Work {
             case .section:
                 return MenuModel(entries: [])
             case .folder(let f):
-                return MenuModel(entries: (f.liveRepository == nil ? [] : [entry("Refresh GitHub Folder", .tabTools(.site(.refreshFolder(id))))]) + [
-                    entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))),
-                    entry(f.collapsed ? "Expand Folder" : "Collapse Folder", .item(.toggleFolder(id))), .separator,
+                return MenuModel(entries: (f.liveRepository == nil ? [] : [entry("Refresh GitHub Folder", .tabTools(.site(.refreshFolder(id)))), .separator]) + [
+                    entry("Share Folder…", .app(.export(.items([id]))), enabled: scope == .global), .separator,
+                    entry("New Nested Folder…", .tabTools(.newNestedFolder(id))),
+                    entry("Turn “\(f.title)” into Space", .tabTools(.folderToSpace(id)), enabled: scope == .global && standard),
+                    entry("Copy All Links", .tabTools(.copyLinks(.items([id]))), enabled: tree.tabs(under: id).contains { link($0) != nil }), .separator,
                     entry("Change Icon…", .tabTools(.chooseIcon(id))),
-                    entry(f.isGroup ? "Archive Group" : "Archive Folder", .tabTools(.bulk(.items([id]), .archive))),
-                    entry("Duplicate Folder", .tabTools(.bulk(.items([id]), .duplicate(nil)))),
-                    entry("Export Folder…", .app(.export(.items([id]))), enabled: scope == .global),
-                    entry("Delete Folder", .item(.deleteFolder(id))),
+                    entry("Rename…", .item(.beginRename(.item(id)))), .separator,
+                    entry("Duplicate", .tabTools(.bulk(.items([id]), .duplicate(nil)))),
+                    moves([id], home: role.space, scope: scope) { .item(.move(id, to: $0)) }, .separator,
+                    entry("Delete", .item(.deleteFolder(id))),
                 ])
             case .tab, .split:
                 let unit = tree.splitContaining(id) ?? id
                 let unitRole = tree.role(of: unit) ?? role
                 let home = unitRole.space ?? state.doc.windows[window]?.space
-                let prefix = unitRole.kind == .pinned ? "Move to Pinned in " : "Move to Today in "
-                let moves = state.doc.spaceOrder.filter { scope == .global && $0 != home && state.doc.spaces[$0] != nil }.map {
-                    entry(prefix + state.displayTitle(of: $0), .item(.move(unit, to: .space($0))))
-                }
-                let pinTarget: ItemID
-                if case .split(let s) = node.body { pinTarget = s.panes.ids[0] } else { pinTarget = id }
-                var entries = [entry("Export…", .app(.export(.items([id]))), enabled: scope == .global),
-                    entry(ActionID.pinTab.spec.title, .tab(.togglePin(.item(pinTarget))), enabled: role.kind != .scratch),
-                    entry("Change Icon…", .tabTools(.chooseIcon(id))),
-                    entry("Duplicate", .tabTools(.bulk(.items([unit]), .duplicate(nil)))),
-                    entry("Archive Item", .tabTools(.bulk(.items([unit]), .archive))),
-                    entry("Archive Other Items", .tabTools(.bulk(.other(unit), .archive))),
-                    entry("Archive Items Below", .tabTools(.bulk(.below(unit), .archive))),
-                    entry("New Group from Selection", .tabTools(.bulk(.selected, .newFolder(group: true))), enabled: scope == .global),
-                    entry("New Folder from Selection", .tabTools(.bulk(.selected, .newFolder(group: false))), enabled: scope == .global)]
-                if (state.session.windows[window]?.tabSelection.items.count ?? 0) > 1 {
-                    entries += [entry("Archive Selected", .tabTools(.bulk(.selected, .archive))),
-                                entry("Duplicate Selected", .tabTools(.bulk(.selected, .duplicate(nil))))]
-                    entries += state.doc.spaceOrder.map { entry("Move Selected to " + state.displayTitle(of: $0), .tabTools(.bulk(.selected, .move(.space($0))))) }
-                }
-                entries += state.doc.spaceOrder.filter { _ in scope == .global }.map { entry("Duplicate in " + state.displayTitle(of: $0), .tabTools(.bulk(.items([unit]), .duplicate(.space($0))))) }
+                let move = moves([unit], home: home, scope: scope) { .item(.move(unit, to: $0)) }
                 if case .split(let split)? = tree[unit]?.body {
                     let current = state.shownItem(in: window) == unit
-                    let pane = node.kind == .tab ? id : (state.focusedPane(of: unit, in: window) ?? split.panes.ids[0])
-                    entries += [.separator,
-                        entry("Split Side by Side", .split(.setOrientation(unit, .horizontal))),
-                        entry("Split Top and Bottom", .split(.setOrientation(unit, .vertical))),
-                        entry("Separate Page from Split View", .split(.separatePane(.item(pane)))),
-                        entry("Separate All Split Panes", .split(.separateAll), enabled: current),
-                        entry(state.session.windows[window]?.expandedSplit == unit ? "Restore Split Panes" : "Expand Current Split", .split(.toggleExpanded), enabled: current),
-                    ]
+                    let other: SplitOrientation = split.orientation == .vertical ? .horizontal : .vertical
+                    let panes: [MenuEntry] = split.panes.ids.map { pane in
+                        .submenu(title: state.displayedTab(pane, in: window)?.displayTitle ?? "Tab", entries: [
+                            entry("Copy Link", .tabTools(.copyLinks(.items([pane]))), enabled: link(pane) != nil),
+                            entry("Rename…", .item(.beginRename(.item(pane)))),
+                            entry("Separate Page from Split View", .split(.separatePane(.item(pane)))),
+                            entry("Close this Split Pane", .split(.closePaneAt(pane))),
+                        ])
+                    }
+                    return MenuModel(entries: [
+                        entry("Share Split View…", .app(.export(.items([unit]))), enabled: scope == .global), .separator,
+                        entry("Separate All Tabs", .split(.separateAll), enabled: current),
+                        entry("Add Tab…", .tabTools(.addToSplit(unit)), enabled: split.panes.ids.count < Metrics.content.maxPanes.value),
+                        entry(other == .vertical ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", .split(.setOrientation(unit, other))),
+                        .separator, .header("Tab Options"),
+                    ] + panes + [.separator,
+                        entry("Change Icon…", .tabTools(.chooseIcon(unit))),
+                        entry("Rename…", .item(.beginRename(.item(node.kind == .tab ? id : split.panes.ids[0])))), .separator,
+                        entry("Duplicate", .tabTools(.bulk(.items([unit]), .duplicate(nil)))),
+                        move, .separator,
+                        entry("Archive Item", .tabTools(.bulk(.items([unit]), .archive))),
+                        entry("Archive Tabs Below", .tabTools(.bulk(.below(unit), .archive)), enabled: hasItemsBelow(unit, in: tree)),
+                    ])
                 }
-                guard case .tab(let tab) = node.body else {
-                    return MenuModel(entries: moves.isEmpty ? entries : entries + [.separator] + moves)
+                guard case .tab(let tab) = node.body else { return MenuModel(entries: []) }
+                let audible = state.session.live[PageID(window: window, item: id)]?.audible ?? false
+                var entries: [MenuEntry] = [
+                    entry("Copy Link", .tabTools(.copyLinks(.items([id]))), enabled: link(id) != nil),
+                    .submenu(title: "Share", entries: [entry("Export…", .app(.export(.items([id]))), enabled: scope == .global)]), .separator,
+                    entry("Change Icon…", .tabTools(.chooseIcon(id))),
+                    entry("Rename…", .item(.beginRename(.item(id)))),
+                    entry(tab.muted ? "Unmute" : "Mute", .tabTools(.mute(.item(id))), enabled: audible || tab.muted),
+                    entry("Customize Page…", .tabTools(.customize(id)), enabled: state.boostProfile(in: window) != nil && link(id) != nil),
+                ]
+                if role.kind == .pinned || role.kind == .favorites {
+                    let drifted = tab.pinnedURL.map { $0 != state.address(of: id, in: window, for: .visible) } ?? false
+                    entries.append(.submenu(title: "Edit Pinned Page", entries: [
+                        entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))), enabled: drifted),
+                        entry("Close and Keep Pinned", .tab(.close(.item(id))), enabled: state.session.loaded.contains(PageID(window: window, item: id))),
+                    ]))
                 }
-                entries.append(entry(ActionID.rename.spec.title, .item(.beginRename(.item(id)))))
-                if role.kind == .favorites { entries.append(entry("Connect GitHub Badge…", .tabTools(.site(.connectGitHub(favorite: id))))) }
-                entries.append(entry(tab.muted ? "Unmute Tab" : "Mute Tab", .tabTools(.mute(.item(id)))))
-                if let pinned = tab.pinnedURL, pinned != state.address(of: id, in: window, for: .visible) { entries.append(entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))))) }
-                if !moves.isEmpty { entries += [.separator] + moves }
-                entries.append(.separator)
+                entries += [.separator,
+                    entry("Open in Split View", .tabTools(.openInSplit(.items([id]))), enabled: role.kind != .scratch),
+                    entry("Duplicate", .tabTools(.bulk(.items([unit]), .duplicate(nil)))),
+                    move, .separator]
                 switch role.kind {
                 case .today, .scratch:
                     entries.append(entry(ActionID.archiveTab.spec.title, .tab(.close(.item(id)))))
-                case .pinned, .favorites:
-                    entries.append(entry("Close and Keep Pinned", .tab(.close(.item(id)))))
-                    entries.append(entry(ActionID.archiveTab.spec.title, .tab(.archive(.item(id)))))
+                    entries.append(entry("Archive Tabs Below", .tabTools(.bulk(.below(unit), .archive)), enabled: hasItemsBelow(unit, in: tree)))
+                case .pinned:
+                    entries.append(entry("Remove Pin", .tab(.togglePin(.item(id)))))
+                case .favorites:
+                    entries.append(entry("Remove Favorite", .tab(.togglePin(.item(id)))))
                 }
                 return MenuModel(entries: entries)
             }

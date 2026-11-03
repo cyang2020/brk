@@ -41,7 +41,9 @@ enum CommandInventory {
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
         .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation),
-        .tabTools(.preferences(includeFavorites: true, previews: false)),
+        .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
+        .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
+        .tabTools(.spaceIntoFolder(space, into: space)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
@@ -269,6 +271,13 @@ enum CommandInventory {
             case .dismissToast: "dismissToast"
             case .dismissArchiveEducation: "dismissArchiveEducation"
             case .preferences: "preferences"
+            case .copyLinks: "copyLinks"
+            case .openInSplit: "openInSplit"
+            case .newNestedFolder: "newNestedFolder"
+            case .folderToSpace: "folderToSpace"
+            case .customize: "customize"
+            case .addToSplit: "addToSplit"
+            case .spaceIntoFolder: "spaceIntoFolder"
             }
         case .page(let c):
             switch c {
