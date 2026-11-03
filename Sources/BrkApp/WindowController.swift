@@ -65,11 +65,14 @@ public class WindowController: NSObject, NSWindowDelegate {
             self.send(.user(self.id, .tab(.focus(page.item))))
         }
         window.onKeyEquivalent = { [weak self] event in
+            if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
         window.onEscapeBeforePage = { [weak self] event in
+            // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
+            if TabIconPicker.isOpen { TabIconPicker.close(); return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
