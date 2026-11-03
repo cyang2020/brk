@@ -96,7 +96,8 @@ public final class AddressToolbarView: NSView {
         link.isHidden = text == nil
         // The glyph and the host together are centred on the card, within the address area.
         let glyph = Draw.toolbarGlyph.value + Draw.toolbarLinkGap.value
-        let textWidth = min(ceil(host.intrinsicContentSize.width), max(0, area.width - glyph))
+        // The cell's own size includes its inset; the intrinsic width alone clips a short host ("12…0.1").
+        let textWidth = min(ceil(host.cell?.cellSize.width ?? host.intrinsicContentSize.width) + 2, max(0, area.width - glyph))
         let total = (link.isHidden ? 0 : glyph) + textWidth
         let x = min(max(area.minX, bounds.midX - total / 2), max(area.minX, area.maxX - total))
         link.frame = CGRect(x: x, y: area.midY - Draw.toolbarGlyph.value / 2, width: Draw.toolbarGlyph.value, height: Draw.toolbarGlyph.value)
