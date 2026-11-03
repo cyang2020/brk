@@ -149,6 +149,16 @@ enum PageBrowsingScenarios {
         // 2. The page consumes nothing: app-first chords never reach it; page-first chords reach it and then the app.
         page = try load(app, "key-coverage.html")
         for entry in entries where !unpressedForApp.contains(entry.action) {
+            if entry.action == .archiveTab {
+                // Archive Tab closes the page that would hold the receipts: the proof is the tab leaving for the archive.
+                try app.press(entry.chord.description)
+                try app.waitUntil("\(entry.chord) archived the focused tab") { tab(page.item, in: try app.view()) == nil }
+                results.append(ChordResult(chord: entry.chord.description, action: entry.action.rawValue, priority: entry.priority.rawValue, page: "pass",
+                                           press: 1, pre: nil, post: nil, dispatched: [entry.action.rawValue], pageReceived: nil, chromeCommands: [],
+                                           expected: "app archives the tab before the page; the page closes with it"))
+                page = try restore(app, page, path: "key-coverage.html", after: entry.action)
+                continue
+            }
             let count = try keyCount(app, page) ?? 0
             let app1 = entry.priority == .app
             let observed = try observe(app, page, entry.chord, seen: seen, expectPost: !app1)
