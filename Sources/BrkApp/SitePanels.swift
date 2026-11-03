@@ -197,6 +197,12 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
         popovers[id] = popover
         let (rect, edge) = SitePanels.anchor(in: window, content: content)
         popover.show(relativeTo: rect, of: content, preferredEdge: edge)
+        // The same opaque fill as the site controls: the system material greys over the window while it is not key.
+        if let frame = view.superview {
+            let background = PopoverBackground(frame: frame.bounds)
+            background.autoresizingMask = [.width, .height]
+            frame.addSubview(background, positioned: .below, relativeTo: view)
+        }
         monitors[id] = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self, weak popover] event in
             let own = popover?.contentViewController?.view.window
             // A key event without a window goes to the key window.
