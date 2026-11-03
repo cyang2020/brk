@@ -85,6 +85,8 @@ extension Work {
             showSpace(space.id, in: window)
             for id in entries { _ = restoreEntry(id, in: window) }
             showSpace(space.id, in: window)
+        case .regroup(let id, let folder, let parent, let children):
+            restoreGroupHeader(id: id, folder: folder, parent: parent, children: children)
         }
     }
     mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {
@@ -195,6 +197,14 @@ extension Work {
             guard w.kind == .standard else { return }
             state.doc.tabPreferences.includeFavoritesInNumbers = favorites
             state.doc.tabPreferences.hoverPreviews = previews
+        case .siteDisplay(let host, let option, let on):
+            guard w.kind == .standard else { return }
+            siteDisplay(host: host, option, on: on)
+        case .closeGroup(let id): closeGroup(id, in: window)
+        case .removeGroupHeader(let id): removeGroupHeader(id, in: window)
+        case .openFolder(let id): openFolder(id, in: window)
+        case .replacePinned(let id): replacePinned(id, in: window)
+        case .muteAll(let mute): muteAll(mute, in: window)
         case .copyLinks(let targets):
             let urls = state.requestedItems(targets, in: window).flatMap { tree.tabs(under: $0) }
                 .compactMap { state.displayedTab($0, in: window)?.url?.absoluteString }

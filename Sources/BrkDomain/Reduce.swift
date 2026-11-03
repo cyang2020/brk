@@ -159,7 +159,7 @@ struct Work {
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
-        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
+        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .globalShortcut: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -206,6 +206,7 @@ struct Work {
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
+        case .globalShortcut(let status): if state.session.globalShortcut != status { state.session.globalShortcut = status }
         case .aiResult(let id, let outcome): aiResult(id, outcome)
         case .aiPartial(let id, let text): aiPartial(id, text)
         case .aiPageRead(let id, let page, let content): aiReadResult(id, page: page, content: content)

@@ -316,6 +316,9 @@ public enum Suggest {
                 candidates.append(("Move to \(folder.title)", [], "folder", nil, .item(.move(focused, to: .into(parent: folder.id, index: Int.max)))))
             }
         }
+        for travel in bar.travel {
+            candidates.append((travel.title, travel.triggers, travel.symbol, nil, travel.command))
+        }
         let scored = candidates.enumerated().compactMap { index, c -> (Int, Int, Scored)? in
             guard let score = score(needle, title: c.title, triggers: c.triggers) else { return nil }
             return (score, index, Scored(score: score, suggestion: Suggestion(kind: .action, title: c.title, subtitle: nil, symbol: c.symbol,

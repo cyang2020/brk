@@ -52,6 +52,7 @@ extension Work {
             // Refused (no-op) for roots, cycles and what Placement forbids. A window whose shown item left its space
             // is repaired by normalize; a split the move dissolved is replaced by its pane.
             let wasPinned = state.role(of: id)?.kind == .pinned || state.role(of: id)?.kind == .favorites
+            if mergeGroup(id, into: parent, at: index) { return }
             if moveItem(id, to: .into(parent: parent, index: index)), !wasPinned,
                state.role(of: id)?.kind == .pinned || state.role(of: id)?.kind == .favorites {
                 setPinnedAddresses(under: id, in: window)
@@ -80,6 +81,8 @@ extension Work {
             guard state.tree(of: window)?[id] != nil else { return }
             let expanded = !state.folderIsExpanded(id, in: window)
             state.doc.windows[window]?.folderExpansion[id] = expanded
+            // Opening a Live Folder whose rows are old (or from before launch) refreshes it.
+            if expanded, state.liveFolderNeedsRefresh(id, now: ctx.now) { siteTools(.refreshFolder(id), in: window) }
         case .deleteFolder(let id):
             // "Deleting this folder will archive the tabs inside it."
             guard let scope = state.locate(id), case .folder? = state.tree(scope)?[id]?.body else { return }
@@ -343,6 +346,8 @@ extension Work {
             switch node.body {
             case .section:
                 return MenuModel(entries: [])
+            case .folder(let f) where f.isGroup:
+                return MenuModel(entries: state.groupMenu(id, folder: f, tree: tree, links: tree.tabs(under: id).contains { link($0) != nil }))
             case .folder(let f):
                 return MenuModel(entries: (f.liveRepository == nil ? [] : [entry("Refresh GitHub Folder", .tabTools(.site(.refreshFolder(id)))), .separator]) + [
                     entry("Share Folder…", .app(.export(.items([id]))), enabled: scope == .global), .separator,
@@ -400,8 +405,11 @@ extension Work {
                     let drifted = tab.pinnedURL.map { $0 != state.address(of: id, in: window, for: .visible) } ?? false
                     entries.append(.submenu(title: "Edit Pinned Page", entries: [
                         entry(ActionID.resetTab.spec.title, .tab(.reset(.item(id))), enabled: drifted),
+                        entry("Replace Pinned URL with Current", .tabTools(.replacePinned(id)), enabled: drifted),
                         entry("Close and Keep Pinned", .tab(.close(.item(id))), enabled: state.session.loaded.contains(PageID(window: window, item: id))),
                     ]))
+                    let display = state.siteDisplayEntries(url: tab.url, favorite: role.kind == .favorites)
+                    if !display.isEmpty { entries += [.separator] + display }
                 }
                 entries += [.separator,
                     entry("Open in Split View", .tabTools(.openInSplit(.items([id]))), enabled: role.kind != .scratch),

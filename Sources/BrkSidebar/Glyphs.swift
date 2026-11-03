@@ -11,7 +11,7 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted, more, close
+    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted, more, close, warning
 
     var symbol: String {
         switch self {
@@ -35,6 +35,7 @@ enum Glyph {
         case .speakerMuted: "speaker.slash.fill"
         case .more: "ellipsis"
         case .close: "xmark"
+        case .warning: "exclamationmark.triangle.fill"
         }
     }
 

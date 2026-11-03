@@ -805,3 +805,17 @@ extension SidebarTree {
         return (root, inserted)
     }
 }
+
+extension SidebarTree {
+    /// Puts `pane` at `index` among its split's panes (Add Left Split, Add Top Split). False when `pane` is not a pane.
+    @discardableResult
+    mutating func placePane(_ pane: ItemID, at index: Int) -> Bool {
+        guard let split = items[pane]?.parent, case .split(var s)? = items[split]?.body else { return false }
+        var ids = s.panes.ids.filter { $0 != pane }
+        ids.insert(pane, at: min(max(0, index), ids.count))
+        guard let panes = SplitPanes(ids) else { return false }
+        s.panes = panes
+        items[split]!.body = .split(s)
+        return true
+    }
+}

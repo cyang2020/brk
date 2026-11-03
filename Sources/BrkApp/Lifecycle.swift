@@ -128,7 +128,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
-        let entryPoints = LittleEntryPoints(target: menuTarget)
+        let entryPoints = LittleEntryPoints(target: menuTarget) { [weak store] status in store?.dispatch(.system(.globalShortcut(status))) }
         littleEntryPoints = entryPoints
         store.didPublish = { [weak entryPoints] in entryPoints?.update($0) }
         store.start()

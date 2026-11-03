@@ -24,6 +24,7 @@ func normalize(_ state: inout AppState) -> [String] {
     repairProfiles(&state, &repairs)
     normalizeSitePolicies(&state)
     repairSpaces(&state, &repairs)
+    removeEmptyGroups(&state)
     repairShownItems(&state, &repairs)
     repairSessionTargets(&state)
     repairTabTools(&state)
@@ -239,5 +240,14 @@ private func repairTabTools(_ state: inout AppState) {
     state.session.siteRequests = state.session.siteRequests.filter { state.siteRequestIsCurrent($0.value) }
     state.session.calendars = state.session.calendars.filter { state.doc.profiles[$0.key] != nil }
     state.session.favoriteFeeds = state.session.favoriteFeeds.filter { state.role(of: $0.key) == .favorites($0.value.profile) }
-    state.session.liveFolderStatus = state.session.liveFolderStatus.filter { state.doc.tree[$0.key] != nil }
+    state.session.liveFolders = state.session.liveFolders.filter { state.doc.tree[$0.key] != nil }
+}
+
+/// Arc has no empty tab group: a group whose last tab was closed, archived or moved out goes.
+private func removeEmptyGroups(_ state: inout AppState) {
+    let empty = state.doc.tree.items.values.filter { item in
+        if case .folder(let f) = item.body { return f.isGroup && item.children.isEmpty }
+        return false
+    }.map(\.id)
+    for id in empty { _ = state.doc.tree.removeSubtree(id) }
 }

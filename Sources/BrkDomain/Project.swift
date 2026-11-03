@@ -116,7 +116,8 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         shortcuts: shortcuts,
         max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active),
         advanced: doc.settings.advanced,
-        tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews)
+        tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
+        littleArcShortcut: state.session.globalShortcut
     )
 }
 
@@ -163,6 +164,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             row.peekFavicon = state.displayedTab(peeked, in: id)?.favicon
         }
         if kind == .favorites, doc.kind == .standard {
+            // Source status is the tooltip and the context menu's business; the tile itself shows Arc's one overlay.
             let pending = state.session.siteRequests.values.contains { $0.target == .favorite(tab) }
             if pending { row.sourceStatus = "Connecting…" }
             else if let feed = state.session.favoriteFeeds[tab], feed.profile == space.profile {
@@ -171,24 +173,24 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                     if ctx.now.since(feed.fetchedAt) < .seconds(300) {
                         row.badge = feed.badge
                         row.sourceStatus = "Updated · first 50 notifications · token used once"
-                        row.subtitle = "GitHub notifications"
                     } else { row.sourceStatus = "Expired · reconnect" }
-                case .failed: row.sourceStatus = "Access failed · reconnect"; row.subtitle = feed.subtitle
+                case .failed: row.sourceStatus = "Access failed · reconnect"
                 case .cancelled: row.sourceStatus = "Connect notifications"
                 }
             } else if t.url?.host == "github.com" { row.sourceStatus = "Connect notifications" }
-            if ["calendar.google.com", "outlook.office.com", "outlook.live.com", "calendar.notion.so"].contains(t.url?.host ?? "") {
+            if TopApp.of(t.url)?.isCalendar == true {
                 if state.session.siteRequests.values.contains(where: { $0.target == .calendar(space.profile) }) {
                     row.sourceStatus = "Selecting calendar…"
                 } else if let feed = state.session.calendars[space.profile] {
-                    if case .failed(let message) = feed.access { row.sourceStatus = "Calendar unavailable · select again"; row.subtitle = message }
+                    if case .failed = feed.access { row.sourceStatus = "Calendar unavailable · select again" }
                     else if ctx.now.since(feed.fetchedAt) < .seconds(300) {
-                        let next = feed.meetings.filter { $0.end > ctx.now }.sorted { $0.start < $1.start }.first
-                        row.subtitle = next.map { $0.title } ?? "No upcoming meetings"
                         row.sourceStatus = "Selected export · expires in \(max(1, (300_000 - (ctx.now.milliseconds - feed.fetchedAt.milliseconds)) / 60_000))m"
                     } else { row.sourceStatus = "Calendar expired · select again" }
                 } else { row.sourceStatus = "Select calendar export" }
             }
+        }
+        if (kind == .favorites || kind == .pinned), doc.kind == .standard {
+            state.topAppDecoration(&row, tab: tab, url: t.url, profile: space.profile, favorite: kind == .favorites, now: ctx.now)
         }
         return row
     }
@@ -200,9 +202,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             case .tab(let t):
                 return .tab(tabRow(child, t, kind))
             case .folder(let f):
-                var liveStatus = state.session.liveFolderStatus[child]
-                if let updated = state.session.liveFolderUpdated[child], ctx.now.since(updated) >= .seconds(300) { liveStatus = "Refresh to update" }
-                return .folder(FolderRow(group: f.isGroup, id: child, section: kind, title: liveStatus.map { f.title + " · " + $0 } ?? f.title, collapsed: !state.folderIsExpanded(child, in: id), icon: f.icon, children: rows(under: child, kind)))
+                var folder = FolderRow(group: f.isGroup, id: child, section: kind, title: f.title, collapsed: !state.folderIsExpanded(child, in: id), icon: f.icon, children: rows(under: child, kind))
+                folder.live = state.liveFolderSnapshot(child, f, now: ctx.now)
+                return .folder(folder)
             case .split(let s):
                 let paneRows = s.panes.ids.compactMap { p -> TabRow? in
                     guard case .tab(let t)? = tree[p]?.body else { return nil }
@@ -334,7 +336,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             suggestedFor: session.suggestions?.query,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
             createsTab: target == .newTab,
-            fillsPane: { if case .fillPane = target { true } else { false } }()
+            fillsPane: { if case .fillPane = target { true } else { false } }(),
+            travel: state.travelCandidates(window: id, space: space, focused: state.resolveTab(.focused, in: id))
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).

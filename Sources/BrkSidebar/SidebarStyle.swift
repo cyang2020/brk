@@ -14,6 +14,7 @@ let Draw = SidebarDrawMetrics()
 struct SidebarDrawMetrics: MetricGroup {
     // Type: one family, the system font (visual-and-copy.md, Fonts: the default UI font is `system`).
     let rowTitleFont = Metric(14.0, .anatomy("cra L115: sidebar rows have 14 pt titles"))
+    let groupTitleFont = Metric(12.0, .guess("tab group header title; Arc's TabGroupHeaderCellView was not captured, drawn as a section label"))
     let spaceHeaderFont = Metric(14.0, .anatomy("cra L180: space header 14 pt medium, secondary color"))
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
@@ -149,6 +150,34 @@ extension Palette {
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).
 enum SidebarCopy {
     static let closeKeepPinned = "Close and Keep Pinned"
+    /// The group header's × (Arc: "Tooltip for the button to close a group of tabs in the sidebar"; the text itself
+    /// is not in the static strings).
+    static let closeTabGroup = "Close Tab Group"
+    static let refreshLiveFolder = "Refresh Live Folder"
+
+    /// The note in an open Live Folder without rows.
+    static func liveFolderNote(_ state: LiveFolderState) -> String {
+        switch state {
+        case .loading: "Loading pull requests…"
+        case .empty, .ready: "No open pull requests"
+        case .failed: "Couldn’t refresh. Try Again"
+        case .notLoaded: "Not refreshed yet. Refresh"
+        case .stale: "Refresh to update"
+        }
+    }
+
+    /// The Live Folder row's tooltip: its source and how fresh it is.
+    static func liveFolderTip(_ live: LiveFolderSnapshot) -> String {
+        let state: String = switch live.state {
+        case .loading: "Refreshing…"
+        case .ready(let n): n == 1 ? "1 open pull request" : "\(n) open pull requests"
+        case .empty: "No open pull requests"
+        case .stale: "Refresh to update"
+        case .notLoaded: "Not refreshed since launch"
+        case .failed(let message): message
+        }
+        return "GitHub · \(live.source)\n\(state)"
+    }
     static let collapsePinned = "Collapse Pinned Tabs"
     static let expandPinned = "Expand Pinned Tabs"
     /// cra L1215: the title-row buttons' accessibility names.

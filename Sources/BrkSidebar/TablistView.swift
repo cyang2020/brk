@@ -36,6 +36,8 @@ final class TablistView: NSScrollView {
     /// The pointer is over the sidebar: Today's Clear shows (Arc).
     var sidebarHovered = false { didSet { divider.sidebarHovered = sidebarHovered } }
     private lazy var folderPreview = FolderPreview(dispatch: dispatch)
+    /// Open Live Folders without rows: their one-line note, by folder.
+    private var livePlaceholders: [ItemID: LivePlaceholderView] = [:]
     private var now = Instant(milliseconds: 0)
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
@@ -131,7 +133,8 @@ final class TablistView: NSScrollView {
             switch frame.kind {
             case .topSpacer: spacer = frame.rect
             case .item(let id) where rows[id]?.section == .pinned: pinnedRect = pinnedRect?.union(frame.rect) ?? frame.rect
-            case .item, .divider, .newTab: todayRect = todayRect?.union(frame.rect) ?? frame.rect
+            case .livePlaceholder(let id) where rows[id]?.section == .pinned: pinnedRect = pinnedRect?.union(frame.rect) ?? frame.rect
+            case .item, .divider, .newTab, .livePlaceholder: todayRect = todayRect?.union(frame.rect) ?? frame.rect
             }
         }
         pinnedSection.frame = pinnedRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
@@ -161,11 +164,33 @@ final class TablistView: NSScrollView {
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette, current: newTabCurrent)
+            case .livePlaceholder(let id):
+                guard case .folder(let folder)? = rows[id]?.row, let live = folder.live else { continue }
+                seen.insert(LivePlaceholderView.key(id))
+                let container = rows[id]?.section == .pinned ? pinnedSection : todaySection
+                let view = livePlaceholders[id] ?? {
+                    let made = LivePlaceholderView(dispatch: dispatch)
+                    livePlaceholders[id] = made
+                    return made
+                }()
+                if view.superview !== container { container.addSubview(view) }
+                view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
+                view.render(folder: id, live: live, depth: frame.depth, palette: palette)
             case .topSpacer:
                 break
             }
         }
-        folderPreview.validate { id in if case .folder(let folder)? = rows[id]?.row { folder.collapsed } else { false } }
+        for (id, view) in livePlaceholders where !seen.contains(LivePlaceholderView.key(id)) {
+            view.removeFromSuperview()
+            livePlaceholders[id] = nil
+        }
+        folderPreview.validate { id in
+            switch rows[id]?.row {
+            case .folder(let folder)?: folder.collapsed
+            case .tab(let tab)?: tab.hoverCard != nil
+            default: false
+            }
+        }
         for (id, view) in rowViews where !seen.contains(id) {
             view.retire()
             view.removeFromSuperview()
@@ -197,14 +222,18 @@ final class TablistView: NSScrollView {
         return view
     }
 
-    /// Arc Previews: a collapsed folder shows its pages beside the sidebar; tabs and open folders show nothing.
+    /// Arc Previews: a collapsed folder shows its pages beside the sidebar, a supported Pinned tab its site's card
+    /// (a calendar's meetings, Linear, Notion or Figma's recent pages); other tabs and open folders show nothing.
     private func rowHovered(_ view: RowView, _ hovered: Bool) {
-        guard hovered, tools?.hoverPreviews == true, case .folder(let folder)? = view.row, folder.collapsed, !view.isEditingName,
-              let palette = last?.palette else {
+        guard hovered, tools?.hoverPreviews == true, !view.isEditingName, let palette = last?.palette else {
             folderPreview.pointerLeft(view)
             return
         }
-        folderPreview.hover(folder, over: view, now: now, palette: palette)
+        switch view.row {
+        case .folder(let folder)? where folder.collapsed: folderPreview.hover(folder, over: view, now: now, palette: palette)
+        case .tab(let tab)?: if let card = tab.hoverCard { folderPreview.hover(tab: tab, card: card, over: view, now: now) } else { folderPreview.pointerLeft(view) }
+        default: folderPreview.pointerLeft(view)
+        }
     }
 
     private func toggleMultiselect(_ id: ItemID) { dispatch(.tabTools(.select(id, .toggle))) }
@@ -390,6 +419,10 @@ final class RowView: HoverView {
     private var segments: [SplitSegmentView] = []
     /// The peeked page's icon at the row's trailing end while the window's Peek was opened from this tab.
     private let peekMarker = PeekMarkerView()
+    /// A Live Folder refreshing: a small spinner where the hover button goes.
+    private let spinner = NSProgressIndicator()
+    /// A Live Folder whose last refresh failed: a warning mark (its tooltip says why).
+    private let liveMark = NSImageView()
     private var renameField: RenameField?
     /// A split row with a custom icon starts its panes after the icon; without one they start in the icon slot.
     private var splitIcon = false
@@ -413,8 +446,13 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, audio, media, button, peekMarker] as [NSView] { addSubview(view) }
+        for view in [background, icon, title, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         peekMarker.isHidden = true
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+        spinner.isHidden = true
+        liveMark.isHidden = true
         audio.action = { [weak self] _ in self?.toggleMute() }
         audio.isHidden = true
         button.action = { [weak self] _ in self?.closeTapped() }
@@ -432,6 +470,7 @@ final class RowView: HoverView {
         button.identify(.rowClose(row.id))
         var dimmed = false
         media.isHidden = true
+        renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
             media.render(tab)
@@ -449,11 +488,29 @@ final class RowView: HoverView {
             setSegments([], palette: palette)
             peekMarker.isHidden = !tab.peeking
             if tab.peeking { peekMarker.render(favicon: tab.peekFavicon, palette: palette) }
+        case .folder(let folder) where folder.group:
+            // Arc's `TabGroupHeaderCellView`: the group's title over its tabs, no folder glyph, and a × that closes
+            // the group while the pointer is on the header.
+            title.stringValue = folder.title
+            title.font = .systemFont(ofSize: Draw.groupTitleFont.value, weight: .semibold)
+            icon.render(.none, tint: palette.ink.secondary)
+            button.isHidden = false
+            button.toolTip = SidebarCopy.closeTabGroup
+            button.render(.archiveTab, size: Draw.smallFont.value, palette: palette,
+                          radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+            setSegments([], palette: palette)
+            peekMarker.isHidden = true
         case .folder(let folder):
-            title.stringValue = (folder.group ? "Group · " : "") + folder.title
+            title.stringValue = folder.title
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value, weight: .semibold)
             icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary, palette: palette)
-            button.isHidden = true
+            // A Live Folder's hover button refreshes it (none while it is already refreshing).
+            button.isHidden = folder.live == nil || folder.live?.state == .loading
+            if folder.live != nil {
+                button.toolTip = SidebarCopy.refreshLiveFolder
+                button.render(.reload, size: Draw.smallFont.value, palette: palette,
+                              radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+            }
             setSegments([], palette: palette)
             peekMarker.isHidden = true
         case .split(let split):
@@ -464,11 +521,27 @@ final class RowView: HoverView {
             setSegments(split.panes, palette: palette)
             peekMarker.isHidden = true
         }
-        title.textColor = palette.ink.text
+        if case .folder(let folder) = row, folder.group { title.textColor = palette.ink.secondary } else { title.textColor = palette.ink.text }
         for view in [icon, title] as [NSView] { view.alphaValue = dimmed ? Draw.unloadedAlpha.value : 1 }
         if renaming, row.kind != .split { showRenameField(palette: palette) } else { retire() }
         stateChanged()
         needsLayout = true
+    }
+
+    private func renderLive(_ row: Row, palette: Palette) {
+        let live: LiveFolderSnapshot? = if case .folder(let folder) = row { folder.live } else { nil }
+        let id = row.id.rawValue
+        spinner.identifier = NSUserInterfaceItemIdentifier("live-folder-spinner-" + id)
+        liveMark.identifier = NSUserInterfaceItemIdentifier("live-folder-failed-" + id)
+        if live?.state == .loading { spinner.isHidden = false; spinner.startAnimation(nil) } else { spinner.stopAnimation(nil); spinner.isHidden = true }
+        if case .failed(let message)? = live?.state {
+            liveMark.isHidden = false
+            liveMark.image = Glyph.warning.image(size: Draw.smallFont.value)
+            liveMark.contentTintColor = NSColor.systemOrange
+            liveMark.toolTip = message
+            liveMark.setAccessibilityLabel(message)
+        } else { liveMark.isHidden = true }
+        toolTip = live.map { SidebarCopy.liveFolderTip($0) }
     }
 
     private func configureButton(tab: TabRow, palette: Palette) {
@@ -502,9 +575,12 @@ final class RowView: HoverView {
         media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
         peekMarker.frame = g.button
+        spinner.frame = g.button.insetBy(dx: (g.button.width - 16) / 2, dy: (g.button.height - 16) / 2)
+        liveMark.frame = (button.alphaValue > 0 && !button.isHidden ? g.button.offsetBy(dx: -g.button.width, dy: 0) : g.button)
         // The hover button takes room from the title only while it shows (Arc truncates at the selection's end).
         let buttonShown = !button.isHidden && button.alphaValue > 0
-        let trailing = !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
+        let trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
+            : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
             : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
@@ -613,6 +689,8 @@ final class RowView: HoverView {
 
     private func closeTapped() {
         guard let row else { return }
+        if case .folder(let folder) = row, folder.group { dispatch(.tabTools(.closeGroup(folder.id))); return }
+        if case .folder(let folder) = row, folder.live != nil { dispatch(.tabTools(.site(.refreshFolder(folder.id)))); return }
         dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), .close)))
         onClearMultiselect?()
     }
@@ -1005,5 +1083,67 @@ final class SpaceHeaderView: HoverView {
     private func showMenu() {
         guard let space else { return }
         dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(of: CGPoint(x: more.frame.minX, y: more.frame.maxY)))))
+    }
+}
+
+/// The note inside an open Live Folder that has no rows (A092): "Loading pull requests…", "No open pull requests",
+/// the failure with Try Again, or a not-yet-refreshed folder's Refresh. A click refreshes, except while loading.
+@MainActor
+final class LivePlaceholderView: HoverView {
+    private let dispatch: Dispatch
+    private let label = NSTextField(labelWithString: "")
+    private let spinner = NSProgressIndicator()
+    private var folder: ItemID?
+    private var live: LiveFolderSnapshot?
+    private var depth = 0
+    private var palette: Palette?
+
+    static func key(_ folder: ItemID) -> ItemID { ItemID("live-placeholder-" + folder.rawValue) }
+
+    init(dispatch: @escaping Dispatch) {
+        self.dispatch = dispatch
+        super.init(frame: .zero)
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        label.font = .systemFont(ofSize: Draw.smallFont.value)
+        label.lineBreakMode = .byTruncatingTail
+        label.isSelectable = false
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+        for view in [label, spinner] as [NSView] { addSubview(view) }
+    }
+
+    func render(folder: ItemID, live: LiveFolderSnapshot, depth: Int, palette: Palette) {
+        self.folder = folder
+        self.live = live
+        self.depth = depth
+        self.palette = palette
+        identifier = NSUserInterfaceItemIdentifier("live-folder-note-" + folder.rawValue)
+        label.stringValue = SidebarCopy.liveFolderNote(live.state)
+        label.textColor = palette.ink.secondary
+        setAccessibilityLabel(label.stringValue)
+        if live.state == .loading { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
+        stateChanged()
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let g = RowGeometry(bounds: bounds, depth: depth)
+        spinner.frame = g.icon.insetBy(dx: (g.icon.width - 14) / 2, dy: (g.icon.height - 14) / 2)
+        let height = label.intrinsicContentSize.height
+        label.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
+    }
+
+    override func stateChanged() {
+        guard let palette else { return }
+        let clickable = live?.state != .loading
+        layer?.backgroundColor = isHovered && clickable ? palette.color(palette.tokens.itemHover).cgColor : nil
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let folder, live?.state != .loading, bounds.contains(local(event)) else { return }
+        dispatch(.tabTools(.site(.refreshFolder(folder))))
     }
 }

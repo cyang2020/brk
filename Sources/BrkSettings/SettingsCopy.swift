@@ -184,6 +184,14 @@ public enum SettingsCopy {
         let chord: String = if case .valid(let key)? = state { KeyGlyphs.text(key) } else { "its shortcut" }
         return "Open Little \(Product.name) when I press \(chord) in any app"
     }
+    /// Under the switch when the system-wide shortcut could not be taken (Brk's wording; Arc's was not recovered).
+    public static func globalShortcutNote(_ status: GlobalShortcutStatus?) -> String? {
+        switch status {
+        case .unavailable(let chord, _)?: "\(KeyGlyphs.text(chord)) is used by another app, so it only works inside \(Product.name). Choose another shortcut in Shortcuts."
+        case .needsModifier(let chord)?: "\(KeyGlyphs.text(chord)) has no modifier key, so it only works inside \(Product.name)."
+        case .registered?, .off?, nil: nil
+        }
+    }
     /// Air Traffic Control moved one level down (observed button "Air Traffic Control…").
     public static let airTrafficControlButton = "Air Traffic Control…"
     public static func routesSummary(_ count: Int) -> String {

@@ -52,7 +52,7 @@ final class SidebarToolsTests: XCTestCase {
         XCTAssertEqual(d.view.favorites.tiles.first?.sourceStatus, "Select calendar export")
         let selected = try request(d.user(.tabTools(.site(.connectCalendar))))
         d.system(.siteResult(selected.id, .calendar([CalendarMeeting(title: "Planning", url: url("https://example.com/meet"), start: T0, end: T0.advanced(by: hour))])))
-        XCTAssertEqual(d.view.favorites.tiles.first?.subtitle, "Planning")
+        XCTAssertEqual(d.view.favorites.tiles.first?.subtitle, "Now", "a running meeting reads Now (Show Time to Next Meeting)")
         d.advance(.seconds(300))
         XCTAssertNil(d.view.favorites.tiles.first?.subtitle)
         XCTAssertEqual(d.view.favorites.tiles.first?.sourceStatus, "Calendar expired · select again")

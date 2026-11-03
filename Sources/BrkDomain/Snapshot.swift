@@ -181,8 +181,14 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var loaded: Bool
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
     public var sourceStatus: String? = nil
+    /// The unread count a source reported (tooltip and accessibility; the tile draws a dot, `badgeTint`).
     public var badge: Int? = nil
+    /// Arc's unread dot on a top-app Favorite, in that site's color; nil when there is none to show.
+    public var badgeTint: BadgeTint? = nil
+    /// A calendar Favorite's time to its next meeting ("Now", "in 12m").
     public var subtitle: String? = nil
+    /// The site's hover card (Arc Previews on, a supported Favorite or Pinned tab).
+    public var hoverCard: HoverCardSnapshot? = nil
     public var documentPictureInPicture = false
     public var mediaPlayers: [MediaPlayer] = []
     public var mediaError: String? = nil
@@ -207,6 +213,30 @@ public struct FolderRow: Sendable, Equatable, Codable {
     public var collapsed: Bool
     public var icon: CustomIcon?
     public var children: [Row]
+    /// A Live Folder's source and refresh state (nil for an ordinary folder or group).
+    public var live: LiveFolderSnapshot? = nil
+}
+
+/// Arc's Live Folders (`AutomaticLiveFolderData`, GitHub pull requests): what the folder row says about its rows.
+public struct LiveFolderSnapshot: Sendable, Equatable, Codable {
+    /// "owner/repository".
+    public var source: String
+    public var state: LiveFolderState
+    /// The last refresh this session.
+    public var updatedAt: Instant?
+}
+
+public enum LiveFolderState: Sendable, Equatable, Codable {
+    /// Not refreshed since launch: the saved rows show, and opening the folder refreshes it.
+    case notLoaded
+    case loading
+    /// Refreshed within five minutes, with this many open pull requests.
+    case ready(Int)
+    /// Refreshed: no open pull requests.
+    case empty
+    /// The last good refresh is older than five minutes.
+    case stale
+    case failed(String)
 }
 
 public struct SplitRow: Sendable, Equatable, Codable {
@@ -378,6 +408,8 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
     /// even when a tab already shows that address (Arc opens the page in the new pane).
     public var fillsPane: Bool = false
+    /// Type travel results that are not menu rows, panes, spaces or folder moves (`TypeTravel.swift`).
+    public var travel: [TravelCandidate] = []
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
@@ -484,6 +516,8 @@ public struct SettingsSnapshot: Sendable, Equatable, Codable {
     public var max: MaxSnapshot
     public var advanced: AdvancedSettings
     public var tabPreferences: TabPreferenceSnapshot = TabPreferenceSnapshot()
+    /// The system-wide Little Arc shortcut's registration (the Links pane says when another app holds it).
+    public var littleArcShortcut: GlobalShortcutStatus? = nil
 }
 
 public struct ProfileSettingsRow: Sendable, Equatable, Codable {

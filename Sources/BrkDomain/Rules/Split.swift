@@ -39,6 +39,14 @@ extension Work {
             state.session.windows[window]?.expandedSplit = nil
             focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)
+        case .addPaneAt(let edge):
+            splits(.addPane, in: window)
+            guard let shown = state.shownItem(in: window), let scope = state.locate(shown), case .split? = state.tree(scope)?[shown]?.body,
+                  let pane = state.focusedPane(of: shown, in: window), state.tab(pane)?.url == nil else { return }
+            state.withTree(scope) { tree in
+                if edge == .left || edge == .top { tree.placePane(pane, at: 0) }
+                tree.updateSplit(shown) { if $0.orientation != edge.orientation { $0.orientation = edge.orientation } }
+            }
         case .closePane:
             // The focused pane leaves: archived from Today; moved out to sit right after the split and unloaded
             // from Pinned; an empty pane (no URL) is removed either way without an archive entry. A split left with
