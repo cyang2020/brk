@@ -371,6 +371,17 @@ public final class CEFEngine: WebEngine {
         live[page]?.browser.executeJavaScript(script)
     }
 
+    /// Shared Quotes: the focused frame's highlighted text (same-origin iframes followed), through DevTools.
+    public func selectedText(_ page: PageID) async -> String? {
+        guard phase == .running, let browser = live[page]?.browser, let transport = CefDevTools(browser: browser) else { return nil }
+        defer { transport.invalidate() }
+        let script = "(()=>{try{let d=document;while(d.activeElement?.tagName==='IFRAME'&&d.activeElement.contentDocument)d=d.activeElement.contentDocument;return d.getSelection().toString().slice(0,4000)}catch{return ''}})()"
+        guard let result = try? await transport.call("Runtime.evaluate", parameters: ["expression": script, "returnByValue": true]),
+              let json = try? JSONSerialization.jsonObject(with: result) as? [String: Any],
+              let text = (json["result"] as? [String: Any])?["value"] as? String, !text.isEmpty else { return nil }
+        return text
+    }
+
     public func facts(for id: PageID) -> PageFacts? {
         guard let page = live[id] else { return nil }
         var facts = page.facts

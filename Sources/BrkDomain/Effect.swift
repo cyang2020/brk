@@ -20,6 +20,9 @@ public enum Effect: Hashable, Sendable {
     case output(OutputRequest)
     case cancelOutput(OutputID)
     case copyToPasteboard(String)
+    /// Shared Quotes: read the page's highlighted text, then copy `SharedQuote.text` for it (the plain copy when
+    /// nothing is highlighted).
+    case copySharedQuote(PageID, url: URL, title: String, format: CopyURLFormat)
     case window(WindowID, WindowEffect)
     case app(AppEffect)
     /// A native popup menu built from state; each entry carries the command it dispatches when chosen.

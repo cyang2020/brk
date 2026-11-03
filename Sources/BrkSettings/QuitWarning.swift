@@ -1,13 +1,14 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkLayout
 import BrkUIKit
 
-/// "Warn before quitting" (General). Arc asks in `applicationShouldTerminate(_:)` with a dialog whose suppression
-/// button is "Quit, and don’t ask again" (observed), so every way of quitting is covered (Cmd+Q, the Dock menu,
-/// the app menu). The reducer keeps quitting an ordered effect; this is the question the terminate handler asks
-/// before it starts. Wiring: `Lifecycle.applicationShouldTerminate` calls `shouldQuit` first (not for SIGTERM or the
-/// control socket's quit), see the F1 report.
+/// "Warn before quitting" (General). Arc asks with a dialog whose suppression button is "Quit, and don’t ask again"
+/// (observed), so every way of quitting is covered. Wiring (BrkApp): Cmd+Q and Brk > Quit reach `AppEffect.quit`,
+/// which asks before anything is torn down (`AppStore.confirmQuit`); a quit that reaches
+/// `Lifecycle.applicationShouldTerminate` without it (the Dock menu, a quit Apple event) asks there. SIGTERM, the
+/// control socket's quit and a logout, restart or shut down never ask.
 @MainActor
 public enum QuitWarning {
     /// The user's answer: quit or not, and whether to stop asking.
@@ -28,6 +29,29 @@ public enum QuitWarning {
         return answer.quit
     }
 
+    /// The same question without a nested run loop: on `window` as a sheet (the app keeps running while it is open,
+    /// and the ordered quit that may follow does not start inside a modal session), else as a modal alert. `answer`
+    /// gets whether to go on quitting; it is called at once when the setting is off.
+    public static func confirm(_ general: GeneralSettings, on window: NSWindow?, dispatch: @escaping Dispatch,
+                               ask: @MainActor (NSAlert, NSWindow?, @escaping @MainActor (Answer) -> Void) -> Void = QuitWarning.present,
+                               answer: @escaping @MainActor (Bool) -> Void) {
+        guard general.warnBeforeQuitting else { answer(true); return }
+        ask(alert(), window) { reply in
+            if reply.quit, reply.dontAskAgain { dispatch(.settings(.general(.warnBeforeQuitting(false)))) }
+            answer(reply.quit)
+        }
+    }
+
+    /// Shows `alert` as a sheet on `window` when it can take one, else modally.
+    public static func present(_ alert: NSAlert, on window: NSWindow?, _ done: @escaping @MainActor (Answer) -> Void) {
+        guard let window, window.isVisible, window.attachedSheet == nil else { done(run(alert)); return }
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                done(Answer(quit: response == .alertFirstButtonReturn, dontAskAgain: alert.suppressionButton?.state == .on))
+            }
+        }
+    }
+
     /// Arc's dialog: its title and message are short strings that did not survive in the binary; the suppression
     /// button's text did.
     static func alert() -> NSAlert {
@@ -38,6 +62,10 @@ public enum QuitWarning {
         alert.addButton(withTitle: SettingsCopy.cancelButton)
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = SettingsCopy.quitDontAskAgain
+        // The control socket clicks these by identifier (the e2e scenario answers the real dialog).
+        alert.buttons.first?.identify(.settingsField("quitWarning-quit"))
+        alert.buttons.last?.identify(.settingsField("quitWarning-cancel"))
+        alert.suppressionButton?.identify(.settingsField("quitWarning-dontAsk"))
         return alert
     }
 

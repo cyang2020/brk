@@ -381,4 +381,15 @@ final class SuggestWave2Tests: XCTestCase {
             "history:https://other.example.com/b",
         ])
     }
+
+    /// Profiles > New documents: the profile's app is a type-travel row ("New Google Doc"); "——" has none
+    func test_theNewDocumentRowFollowsTheProfilesDocumentApp() {
+        var bar = commandBar([], [])
+        XCTAssertFalse(Suggest.rank(query: "new doc", bar: bar, appName: "Brk").contains { $0.command == .tab(.newDocument) })
+        bar.newDocument = .googleDocs
+        let row = Suggest.rank(query: "new doc", bar: bar, appName: "Brk").first { $0.command == .tab(.newDocument) }
+        XCTAssertEqual(row?.title, "New Google Doc")
+        XCTAssertEqual(row?.kind, .action)
+    }
 }
+

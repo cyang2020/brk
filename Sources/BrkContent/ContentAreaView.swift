@@ -99,16 +99,21 @@ public final class ContentAreaView: NSView {
             switch frame.content {
             case .page(let page):
                 card.host(surface(page), placeholder: nil)
+                card.dragStrip(content.windowDragging && toolbar == nil && frame.header == nil && frame.rect.minY <= frames.contentArea.minY + 0.5
+                               ? frame.pane : nil)
             case .easel:
                 // The board is drawn over its card by the root (`EaselBoardView`), on its own white.
                 card.host(nil, placeholder: nil)
+                card.dragStrip(nil)
             case .blank, .history:
                 // The History page is drawn over its card by the root (`HistoryPageView`).
                 card.host(nil, placeholder: nil)
+                card.dragStrip(nil)
                 // Arc's empty content area is a #FCFCFC card, not the theme (Q02 b); dark keeps the empty color above.
                 if palette.scheme == .light { card.layer?.backgroundColor = Self.blankLight.cgColor }
             case .crashed(let page):
                 card.host(nil, placeholder: "This tab has crashed")
+                card.dragStrip(nil)
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
             }
         }
@@ -194,6 +199,7 @@ final class CardView: NSView {
     var retryAction: (() -> Void)? { didSet { sad.reloadAction = retryAction } }
     private weak var hosted: NSView?
     private var paneHeader: PaneHeaderView?
+    private var drag: PageDragStrip?
     /// The card's color where no page draws (an empty card, a page still loading).
     var emptyColor = NSColor.white
 
@@ -276,7 +282,22 @@ final class CardView: NSView {
         frame = rect
         holdsPage = false
         autoresizesSubviews = true
+    /// The window-drag band over the top of the page (`PageDragStrip`) for pane `pane`; nil removes it.
+    func dragStrip(_ pane: Int?) {
+        guard let pane else { drag?.removeFromSuperview(); drag = nil; return }
+        let strip = drag ?? PageDragStrip(frame: .zero)
+        drag = strip
+        strip.identify(.pageDragStrip(pane))
+        strip.frame = dragBounds
+        if subviews.last !== strip { addSubview(strip, positioned: .above, relativeTo: nil) }
+    }
+
+    private var dragBounds: CGRect {
+        CGRect(x: 0, y: pageBounds.minY, width: bounds.width, height: min(pageBounds.height, Metrics.content.pageDragHeight.value))
+    }
+
         if hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
+        drag?.frame = dragBounds
         sad.frame = pageBounds
     }
 
@@ -284,6 +305,7 @@ final class CardView: NSView {
         super.layout()
         if !holdsPage, hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
         if !holdsPage { sad.frame = pageBounds }
+        drag?.frame = dragBounds
         if let paneHeader { paneHeader.frame.size.width = bounds.width }
     }
 }

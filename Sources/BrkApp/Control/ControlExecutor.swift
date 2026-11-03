@@ -4,6 +4,7 @@ import BrkControl
 import BrkDomain
 import BrkEngine
 import BrkLayout
+import BrkSettings
 
 /// Executes control ops against the running app, on the main actor, through the same paths a user takes:
 /// `dispatch` and `load` -> `AppStore.dispatch`; `press`/`hold`/`type`/`click`/`hover` -> in-process NSEvents into
@@ -35,6 +36,8 @@ final class ControlExecutor {
     /// The ordered quit, started after `quit`'s reply is written (ControlServer).
     func startQuit() {
         guard let controller = store.windowController(nil) else { return }
+        // The runner's ordered quit never waits on "Warn before quitting".
+        Quit.confirmed = true
         store.dispatch(.user(controller.id, .app(.quit)))
     }
 
@@ -529,6 +532,8 @@ final class ControlExecutor {
         facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
+        // AppKit keeps its own copy of the image it was given, so the store says which drawing it set.
+        facts.dockIcon = NSApp.applicationIconImage?.size == CGSize(width: AppStore.dockIconSide, height: AppStore.dockIconSide) ? store.shownIcon?.rawValue : nil
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts

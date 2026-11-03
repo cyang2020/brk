@@ -133,6 +133,9 @@ public enum TabCommand: Hashable, Sendable, Codable {
     case reset(ItemRef)
     /// Cmd+Shift+K and Today's Clear: archive every Today item not on screen in any window.
     case clearToday
+    /// The command bar's New document row: a new tab in the current space at the profile's "New documents" app
+    /// (`ProfileSettings.documentApp`); nothing without one.
+    case newDocument
 }
 
 /// Browsing actions on a tab's page. Each resolves the target and becomes `Effect.page`; an unloaded target is a no-op.
@@ -383,6 +386,9 @@ public enum GeneralSetting: Hashable, Sendable, Codable {
     case javaScriptFromAppleEvents(Bool)
     /// The menu row: flips the setting above.
     case toggleJavaScriptFromAppleEvents
+    /// The app-wide ad blocker and cookie banners (`GeneralSettings.blockAds`, `hideCookieBanners`).
+    case blockAds(Bool)
+    case hideCookieBanners(Bool)
 }
 
 public enum ProfileSetting: Hashable, Sendable, Codable {
@@ -394,6 +400,8 @@ public enum ProfileSetting: Hashable, Sendable, Codable {
     /// Nil: the system Downloads folder.
     case downloadsDirectory(String?)
     case promptForDownloadLocation(Bool)
+    /// "New documents"; nil is "——".
+    case documentApp(DocumentApp?)
 }
 
 public enum LinkSetting: Hashable, Sendable, Codable {

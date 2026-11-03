@@ -259,6 +259,9 @@ public struct ContentSnapshot: Sendable, Equatable, Codable {
     public var split: ItemID?
     /// How the panes are laid out (`.horizontal` for a single pane).
     public var orientation: SplitOrientation
+    /// Advanced > "Allow window dragging from the top of webpages", in a standard window with the toolbar hidden:
+    /// the top of a page card that touches the window's top edge drags the window.
+    public var windowDragging: Bool = false
     public var presentedPanes: [Pane] { panes.filter { !expanded || $0.focused } }
 }
 
@@ -404,6 +407,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
     /// even when a tab already shows that address (Arc opens the page in the new pane).
     public var fillsPane: Bool = false
+    /// The profile's "New documents" app (Profiles pane): type travel offers its "New Google Doc" row
+    /// (`.tab(.newDocument)`). Nil (Arc's "——"): no such row.
+    public var newDocument: DocumentApp? = nil
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {

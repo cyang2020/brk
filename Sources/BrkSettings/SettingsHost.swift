@@ -17,7 +17,7 @@ import SwiftUI
 ///
 /// Public surface (what BrkApp may call): `init(dispatch:)`, `render(_:)`.
 ///
-/// The feature editors are `ProfilesPane` (F2), `LinksRoutesEditor` (F3), and `ShortcutsPane` (F4).
+/// The feature editors are `ProfilesPane` (F2), `AirTrafficControlSheet` (F3), and `ShortcutsPane` (F4).
 @MainActor
 public final class SettingsHost: NSView {
     let dispatch: Dispatch

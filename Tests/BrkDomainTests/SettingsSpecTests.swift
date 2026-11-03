@@ -188,10 +188,19 @@ final class SettingsSpecTests: XCTestCase {
         d.user(.settings(.profile(.default, .downloadsDirectory(nil))))
         XCTAssertNil(folder())
 
-        assertUnchanged(d.state, d.user(.settings(.links(.defaultRoute(.mostRecentSpace)))))
-        d.user(.settings(.links(.defaultRoute(.littleArc))))
-        XCTAssertEqual(d.snapshot.settings.links.defaultRoute, .littleArc)
+        // Air Traffic Control's Default and "Links from other apps open in Little Arc" are one answer: Little Arc
+        // is the switch on, Most Recent Space the switch off, a space is saved and turns the switch off.
+        assertUnchanged(d.state, d.user(.settings(.links(.defaultRoute(.littleArc)))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .littleArc)
         d.user(.settings(.links(.defaultRoute(.mostRecentSpace))))
+        XCTAssertFalse(d.snapshot.settings.links.externalLinksInLittleArc, "Most Recent Space turns the switch off")
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .mostRecentSpace)
+        XCTAssertNil(d.snapshot.settings.links.defaultRoute)
+        let space = d.snapshot.settings.spaces[0].id
+        d.user(.settings(.links(.defaultRoute(.space(space)))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .space(space))
+        d.user(.settings(.links(.externalLinksInLittleArc(true))))
+        XCTAssertEqual(d.snapshot.settings.links.externalDefault, .littleArc, "turning the switch on gives the default back to Little Arc")
         XCTAssertNil(d.snapshot.settings.links.defaultRoute)
 
         assertUnchanged(d.state, d.user(.settings(.links(.shiftClickPeek(true)))))
@@ -259,5 +268,100 @@ final class SettingsSpecTests: XCTestCase {
         let lonely = d.user(.settings(.openBrowserPage(.privacy, profile: ProfileID("nobody"))))
         XCTAssertTrue(lonely.effects.contains(.app(.beep)))
         XCTAssertEqual(d.todayIDs.count, before + 1)
+    }
+}
+
+/// Advanced > Shared Quotes: on, Copy URL on a loaded page asks BrkApp to link to the highlight; off, the plain copy.
+/// The link is a text fragment Chromium scrolls to.
+final class SharedQuoteTests: XCTestCase {
+    func test_theLinkPointsAtTheHighlight() throws {
+        let url = URL(string: "https://example.com/a?b=1#top")!
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: nil, format: .plain), url.absoluteString)
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "  ", format: .quote), "> A\n\(url.absoluteString)")
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "Hello,\n  world - again", format: .plain),
+                       "https://example.com/a?b=1#top:~:text=Hello%2C%20world%20%2D%20again")
+        XCTAssertEqual(SharedQuote.text(url: URL(string: "https://example.com/a")!, title: "A", selection: "quoted words", format: .quote),
+                       "> quoted words\nhttps://example.com/a#:~:text=quoted%20words")
+        let long = (1...14).map { "w\($0)" }.joined(separator: " ")
+        XCTAssertEqual(SharedQuote.link(to: long, in: URL(string: "https://example.com/a#:~:text=old")!)?.absoluteString,
+                       "https://example.com/a#:~:text=w1%20w2%20w3%20w4%20w5,w10%20w11%20w12%20w13%20w14", "a long highlight is named by its ends")
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "x", format: .markdown), "[A](\(url.absoluteString))", "Markdown keeps its shape")
+    }
+
+    func test_theSwitchDecidesWhetherCopyURLReadsTheHighlight() throws {
+        let d = Driver()
+        let tab = d.todayIDs[0], page = PageID(window: d.window, item: tab)
+        let document = DocumentToken(browser: try XCTUnwrap(d.state.session.live[page]?.browser), sequence: 1)
+        d.page(tab, .documentChanged(.loading(document))); d.page(tab, .documentChanged(.ready(document)))
+        let url = try XCTUnwrap(d.current?.url)
+        let title = try XCTUnwrap(d.state.displayedTab(tab, in: d.window)?.displayTitle)
+        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copySharedQuote(page, url: url, title: title, format: .plain)], "on by default, as in Arc")
+        d.user(.settings(.advanced(.sharedQuotes(false))))
+        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copyToPasteboard(url.absoluteString)])
+        XCTAssertEqual(d.user(.page(.copyURL(.quote))).effects, [.copyToPasteboard("> \(title)\n\(url.absoluteString)")])
+    }
+}
+
+/// The settings whose consumers R3-2 wired: each switch changes what the app does, not only what is saved.
+final class SettingsBehaviourTests: XCTestCase {
+    /// the app-wide ad blocker and cookie banners are the default rule of every site without its own; a site's own
+    /// choice wins; nothing of the default is saved into a site's record
+    func test_adBlockingDefaultsReachEveryPolicy() throws {
+        let d = Driver()
+        let page = PageID(window: d.window, item: d.todayIDs[0])
+        let origin = try XCTUnwrap(SiteOrigin(URL(string: "https://example.com/")!))
+        func rule() -> SiteRule { d.state.websitePolicy(for: page).preferences.rule(for: origin) }
+        XCTAssertTrue(rule().blocking, "on by default")
+        XCTAssertFalse(rule().hideCookieBanners)
+        d.user(.settings(.general(.blockAds(false))))
+        d.user(.settings(.general(.hideCookieBanners(true))))
+        XCTAssertFalse(rule().blocking, "off: pages without their own rule load unblocked")
+        XCTAssertTrue(rule().hideCookieBanners)
+        XCTAssertFalse(Driver(file: d.savedFile).state.websitePolicy(for: page).preferences.rule(for: origin).blocking, "saved")
+        var own = SiteRule(); own.blocking = true
+        let target = SiteTarget(document: DocumentToken(browser: try XCTUnwrap(d.state.session.live[page]?.browser), sequence: 1),
+                                context: .profile(.default), origin: origin)
+        var preferences = SitePreferences(); preferences.rules[origin.value] = own
+        XCTAssertTrue(preferences.rule(for: origin).blocking, "a site's own rule wins over the default")
+        _ = target
+        d.user(.settings(.general(.blockAds(true))))
+        XCTAssertNil(d.state.doc.settings.general.blockAds, "on is the saved default")
+        XCTAssertNil(d.state.doc.sitePreferences[.default]?.defaultRule)
+    }
+
+    /// Profiles > New documents: "——" offers nothing; a chosen app is the command bar's New document row, which opens
+    /// the app's new-document address in a new tab of the current space
+    func test_newDocumentsOpensTheProfilesDocumentApp() throws {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        guard case .commandBar(let bar)? = d.view.overlay else { return XCTFail("no command bar") }
+        XCTAssertNil(bar.newDocument)
+        d.user(.commandBar(.dismiss))
+        let before = d.todayIDs
+        assertUnchanged(d.state, d.user(.tab(.newDocument)))
+        d.user(.settings(.profile(.default, .documentApp(.googleDocs))))
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.settings.profiles.first?.settings.documentApp, .googleDocs)
+        d.user(.commandBar(.open(.newTab)))
+        guard case .commandBar(let shown)? = d.view.overlay else { return XCTFail("no command bar") }
+        XCTAssertEqual(shown.newDocument, .googleDocs)
+        d.user(.tab(.newDocument))
+        XCTAssertEqual(d.todayIDs.count, before.count + 1)
+        XCTAssertEqual(d.current?.url, URL(string: "https://doc.new"), "a new focused tab at Google Docs' new document")
+        d.user(.settings(.profile(.default, .documentApp(nil))))
+        XCTAssertNil(d.snapshot.settings.profiles.first?.settings.documentApp)
+    }
+
+    /// Max > Translate Pages: off, Translate Page… asks nothing of the page; on, it reads the page to translate it
+    func test_translationFollowsItsSwitch() throws {
+        let d = Driver()
+        let page = try XCTUnwrap(d.state.findPage(in: d.window))
+        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
+        let document = DocumentToken(browser: browser, sequence: 1)
+        d.page(page.item, .documentChanged(.loading(document))); d.page(page.item, .documentChanged(.ready(document)))
+        d.user(.settings(.max(.provider(.auto))))
+        d.user(.settings(.max(.feature(.translation, false))))
+        XCTAssertFalse(d.user(.assist(.translate("English"))).effects.contains { if case .aiRead = $0 { true } else { false } }, "off: no read")
+        d.user(.settings(.max(.feature(.translation, true))))
+        XCTAssertTrue(d.user(.assist(.translate("English"))).effects.contains { if case .aiRead = $0 { true } else { false } }, "on: the page is read")
     }
 }

@@ -37,6 +37,11 @@ public struct GeneralSettings: Hashable, Sendable, Codable {
     /// View > Developer > "Allow JavaScript from Apple Events": AppleScript's `execute` runs only while this is on.
     /// Nil (older files) is off, as in Arc and Chrome.
     public var javaScriptFromAppleEvents: Bool? = nil
+    /// Arc's ad blocker ("Use Arc's built-in protection against ads, pop-ups, and trackers"): Brk's blocking rules
+    /// on every site without its own choice in Website Controls. Nil is on.
+    public var blockAds: Bool? = nil
+    /// Arc's "Block Cookie Banners": hide matching cookie banners on every site without its own choice. Nil is off.
+    public var hideCookieBanners: Bool? = nil
 
     public static let `default` = GeneralSettings(warnBeforeQuitting: false, defaultBrowserPromptDismissed: false, webAppearance: .automatic)
 }
@@ -61,9 +66,58 @@ public struct ProfileSettings: Hashable, Sendable, Codable {
     public var downloadsDirectory: String?
     /// Ask where to save every download (`promptForDownloadFilePath`).
     public var promptForDownloadLocation: Bool
+    /// "New documents" (Arc: Default Document App, `defaultDocumentsApp`): what the command bar's New document row
+    /// opens in this profile's spaces. Nil is Arc's "——" (none).
+    public var documentApp: DocumentApp? = nil
 
     public static let `default` = ProfileSettings(searchEngine: SearchEngine.google.id, searchSuggestions: true, autoArchive: .default,
                                                   downloadsDirectory: nil, promptForDownloadLocation: false)
+}
+
+/// A web app the Profiles pane's "New documents" can name (Arc: `NoteDocument`'s web document types with their
+/// `newDocURL`; the addresses are Arc's own table, `BaseModels`: doc.new, sheet.new, slide.new, word.new,
+/// app.notion.com/new, figma.new, figjam.new). Arc's own note (`arcNote`) is not one: Brk has no Notes.
+public enum DocumentApp: String, Hashable, Sendable, Codable, CaseIterable {
+    case googleDocs, googleSheets, googleSlides, microsoftWord, notion, figma, figjam
+
+    /// Where a new document of this app starts.
+    public var newDocumentURL: URL {
+        switch self {
+        case .googleDocs: URL(string: "https://doc.new")!
+        case .googleSheets: URL(string: "https://sheet.new")!
+        case .googleSlides: URL(string: "https://slide.new")!
+        case .microsoftWord: URL(string: "https://word.new")!
+        case .notion: URL(string: "https://app.notion.com/new")!
+        case .figma: URL(string: "https://figma.new")!
+        case .figjam: URL(string: "https://figjam.new")!
+        }
+    }
+
+    /// The pop-up's name for the app.
+    public var title: String {
+        switch self {
+        case .googleDocs: "Google Docs"
+        case .googleSheets: "Google Sheets"
+        case .googleSlides: "Google Slides"
+        case .microsoftWord: "Microsoft Word"
+        case .notion: "Notion"
+        case .figma: "Figma"
+        case .figjam: "FigJam"
+        }
+    }
+
+    /// The command bar row (Arc's comment on its string: "Action to create a new document; e.g. 'New Google Doc'").
+    public var newDocumentTitle: String {
+        switch self {
+        case .googleDocs: "New Google Doc"
+        case .googleSheets: "New Google Sheet"
+        case .googleSlides: "New Google Slides"
+        case .microsoftWord: "New Word Document"
+        case .notion: "New Notion Page"
+        case .figma: "New Figma File"
+        case .figjam: "New FigJam Board"
+        }
+    }
 }
 
 /// Arc's Links pane (anatomy-m 4.2, visual-and-copy.md "Little Arc", "Peek", "Air Traffic Control").
@@ -83,28 +137,46 @@ public struct LinkSettings: Hashable, Sendable, Codable {
     /// "Open Little Arc when I press ⌥⌘N in any app": the system-wide New Little Arc Window shortcut; nil is on.
     public var globalLittleArcShortcut: Bool? = nil
 
+    /// Where a link from another app opens when no route matches: Air Traffic Control's "Default" pop-up. A space
+    /// (or an older file's saved Little Arc) wins; otherwise "Links from other apps open in Little Arc" decides
+    /// between Little Arc and the most recent space, so the switch and the pop-up always say the same thing.
+    public var externalDefault: LinkDestination {
+        if let defaultRoute, defaultRoute != .mostRecentSpace { return defaultRoute }
+        return externalLinksInLittleArc ? .littleArc : .mostRecentSpace
+    }
+
     /// Little Arcs archive after 6 hours by default ("6 hours (default)" in Arc 1.170's Links pane, P38-f).
     public static let `default` = LinkSettings(externalLinksInLittleArc: true, optionCommandClickLittleArc: true, shiftClickPeek: true,
                                                peekFromPinnedAndFavorites: true, littleArcAutoArchive: .sixHours, defaultRoute: nil)
 }
 
-/// One Air Traffic Control route (Arc: `StorableLinkRouting`): links whose host matches `pattern` open at
-/// `destination`. `pattern` is a host glob ("*.spotify.com", "open.spotify.com"); matching is `LinkRoute.matches`.
+/// One Air Traffic Control route (Arc: `StorableLinkRouting`, edited in `LinkRoutingDialog`): links whose URL
+/// matches `pattern` open at `destination`. How the text is compared is `match` (Arc's "URL [Contains ▾]" pop-up);
+/// matching is `LinkRoute.matches`.
 public struct LinkRoute: Hashable, Sendable, Codable {
     public let id: LinkRouteID
     public var pattern: String
     public var destination: LinkDestination
+    /// Nil (routes saved before the pop-up existed) is `.matches`.
+    public var match: LinkMatch? = nil
 
-    public init(id: LinkRouteID, pattern: String, destination: LinkDestination) {
+    public init(id: LinkRouteID, pattern: String, destination: LinkDestination, match: LinkMatch? = nil) {
         self.id = id
         self.pattern = pattern
         self.destination = destination
+        self.match = match
     }
 
-    /// Case-insensitive host match (F3): "spotify.com" matches that host only; "*.spotify.com" matches the bare host
-    /// and any subdomain depth. The stored pattern is already normalized (`normalizedPattern`, Rules/Windows.swift);
-    /// a pattern typed with a scheme or path still matches because it is normalized here too. No host: no match.
+    /// `.contains`: the URL, lowercased, contains the text (an empty text, a fresh New Route row, matches nothing).
+    /// `.matches`: a case-insensitive host match (F3): "spotify.com" matches that host only; "*.spotify.com" matches
+    /// the bare host and any subdomain depth. The stored pattern is already normalized (`normalizedPattern`,
+    /// Rules/Windows.swift); a pattern typed with a scheme or path still matches because it is normalized here too.
+    /// No host: no match.
     public func matches(_ url: URL) -> Bool {
+        if match == .contains {
+            let text = pattern.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return !text.isEmpty && url.absoluteString.lowercased().contains(text)
+        }
         guard let host = url.host?.lowercased(), let pattern = LinkRoute.normalizedPattern(pattern) else { return false }
         if pattern.hasPrefix("*.") {
             let base = String(pattern.dropFirst(2))
@@ -112,6 +184,12 @@ public struct LinkRoute: Hashable, Sendable, Codable {
         }
         return host == pattern
     }
+}
+
+/// How a route compares its text with a link (Arc: `LinkRoutingURLMatchType`, cases `matches` and `contains`, in
+/// that order).
+public enum LinkMatch: String, Hashable, Sendable, Codable, CaseIterable {
+    case matches, contains
 }
 
 /// Where a routed link opens. Arc: `LinkDestination` space(...) | littleArc(...), plus "Most Recent Space".
