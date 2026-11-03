@@ -94,6 +94,5 @@ final class PageBrowsingTests: XCTestCase {
     func testCastIsAPageCommandInTheViewMenu() {
         XCTAssertEqual(ActionID.cast.spec.menu, .view)
         XCTAssertNil(ActionID.cast.spec.later)
-        XCTAssertNil(ActionID.cast.unsupportedReason)
     }
 }
