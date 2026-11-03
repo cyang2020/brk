@@ -190,7 +190,7 @@ extension Work {
             switch request {
             case nil: dialog = nil
             case .newSpace?: dialog = .newSpace
-            case .editSpace(let ref)?, .rename(let ref)?, .icon(let ref)?, .theme(let ref)?:
+            case .rename(let ref)?, .icon(let ref)?, .theme(let ref)?:
                 let id: SpaceID = switch ref {
                 case .current: state.doc.windows[window]!.space
                 case .space(let id): id
@@ -199,8 +199,7 @@ extension Work {
                 dialog = switch request {
                 case .rename?: .rename(id)
                 case .icon?: .icon(id)
-                case .theme?: .theme(id)
-                default: .editSpace(id)
+                default: .theme(id)
                 }
             }
             if state.session.windows[window]?.dialog != dialog { state.session.windows[window]!.dialog = dialog }

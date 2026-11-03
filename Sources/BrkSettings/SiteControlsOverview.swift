@@ -64,9 +64,10 @@ final class SiteControlsOverview: NSView {
         }
         developer.subtitle = value.rule.developerMode == true ? "On" : "Off"
         developer.isOn = value.rule.developerMode == true
-        // Only web pages have the row (Arc's History page has none); certificate errors are not reported here yet.
+        // Only web pages have the row (Arc's History page has none). Secure needs https with a clean certificate and
+        // no insecure content (`SiteControlSnapshot.secure`, from Chromium's SSL status).
         let web = value.target != nil
-        security.secure = value.target?.origin.url.scheme == "https"
+        security.secure = value.secure
         for view in [divider, security, more] as [NSView] { view.isHidden = !web }
         needsLayout = true
     }

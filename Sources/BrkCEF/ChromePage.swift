@@ -85,6 +85,8 @@ final class ChromePage: CefBrowserDelegate {
     var autoDark: (document: DocumentToken, enabled: Bool)?
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
+    /// The last security report, so a document is reported once and again only when Chromium's view of it changes.
+    private var reportedSecurity: PageSecurity?
 
     private func emit(_ events: [PageEvent]) {
         for event in events {
@@ -367,6 +369,7 @@ final class ChromePage: CefBrowserDelegate {
         setMuted(desiredMuted)
         emit(mainDocument.finished(url))
         reportZoom()
+        reportSecurity()
         refreshWebsitePolicy()
         if case .ready(let document) = mainDocument.availability,
            let request = reloadSequence.finished(documentSequence: document.sequence) {
@@ -385,7 +388,18 @@ final class ChromePage: CefBrowserDelegate {
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
         emit(mainDocument.loadingChanged(isLoading))
         if isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
-        else { currentLoadProgress = 0 }
+        else { currentLoadProgress = 0; reportSecurity() }
+    }
+
+    /// The site controls' Secure / Insecure: Chromium's SSL status of the visible entry, read when the main document
+    /// is ready and again when loading stops (insecure subresources arrive after the document).
+    private func reportSecurity() {
+        guard let document = mainDocument.readyDocument, let status = browser.visibleSSLStatus() else { return }
+        let security = PageSecurity(document: document, secureConnection: status.isSecureConnection,
+                                    certificateError: status.hasCertificateError, insecureContent: status.hasInsecureContent)
+        guard security != reportedSecurity else { return }
+        reportedSecurity = security
+        engine.pageDidEmit(self, .securityChanged(security))
     }
 
     func browser(_ b: CefBrowser, didChangeProgress progress: Double) {

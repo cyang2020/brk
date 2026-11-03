@@ -26,19 +26,24 @@ final class F3WindowRegressionTests: XCTestCase {
             func cycle(_ press: UInt64) {
                 XCTAssertTrue(h.store.dispatchKey(h.window, h.key("ctrl+tab", stage: .menu, id: press)))
             }
+            func shown() -> ItemID? { h.store.snapshot.windows[h.window]?.content.panes.first?.tab }
+            func selected() -> ItemID? { h.store.snapshot.windows[h.window]?.tabTools.recent?.selected }
             try flags(.control)
             cycle(101)
-            XCTAssertEqual(h.store.snapshot.windows[h.window]?.content.panes.first?.tab, b)
+            XCTAssertEqual(selected(), b)
+            XCTAssertEqual(shown(), c, "a press moves only the switcher's selection")
             let click = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: .zero, modifierFlags: .control,
                 timestamp: 2, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
             _ = window.hostEvent(click)
             cycle(102)
-            XCTAssertEqual(h.store.snapshot.windows[h.window]?.content.panes.first?.tab, a, "\(type) restarted the walk")
+            XCTAssertEqual(selected(), a, "\(type) restarted the walk")
+            XCTAssertEqual(shown(), c)
             try flags([])
+            XCTAssertEqual(shown(), a, "release shows the final selection")
             try flags(.control)
             cycle(103)
-            XCTAssertEqual(h.store.snapshot.windows[h.window]?.content.panes.first?.tab, c, "release must commit the final selection; intermediate B was only previewed")
             try flags([])
+            XCTAssertEqual(shown(), c, "the next walk starts from A; intermediate B was only selected, never shown")
         }
     }
 

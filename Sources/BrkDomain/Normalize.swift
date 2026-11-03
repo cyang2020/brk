@@ -162,8 +162,7 @@ private func repairSessionTargets(_ state: inout AppState) {
             let order = cycle.order.filter { tree?[$0] != nil }
             if order.count < 2 { session.recentCycle = nil }
             else if order != cycle.order {
-                let original = cycle.original.flatMap { tree?[$0] != nil ? $0 : order.first }
-                session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline, original: original)
+                session.recentCycle = RecentCycle(order: order, index: min(cycle.index, order.count - 1), baseline: cycle.baseline)
             }
         }
         if session != before { state.session.windows[id] = session }

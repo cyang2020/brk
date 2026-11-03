@@ -360,7 +360,6 @@ enum CommandBarTarget: Sendable, Equatable {
 
 enum SpaceDialog: Sendable, Equatable {
     case newSpace
-    case editSpace(SpaceID)
     case rename(SpaceID)
     case icon(SpaceID)
     case theme(SpaceID)
@@ -368,19 +367,18 @@ enum SpaceDialog: Sendable, Equatable {
     var space: SpaceID? {
         switch self {
         case .newSpace: nil
-        case .editSpace(let id), .rename(let id), .icon(let id), .theme(let id): id
+        case .rename(let id), .icon(let id), .theme(let id): id
         }
     }
 }
 
-/// Ctrl+Tab in progress: a frozen recent order and a cursor. Focus moves without stamping `lastActiveAt` until the
-/// cycle commits (Control released, or any other command).
+/// Ctrl+Tab in progress: a frozen recent order and the switcher's selection. The window keeps showing what it showed
+/// until the cycle commits (Control released, or any other command), which shows the selected item.
 struct RecentCycle: Sendable, Equatable {
     var order: [ItemID]
     var index: Int
     /// Tabs on screen when the cycle began, so the net on-screen change is stamped once at commit.
     var baseline: Set<ItemID>
-    var original: ItemID? = nil
 }
 
 struct SavedSlot: Sendable, Equatable, Codable {
@@ -392,6 +390,8 @@ struct SavedSlot: Sendable, Equatable, Codable {
 struct LivePage: Sendable, Equatable {
     /// Admission is handled once per originating browser, independently of the public download ledger.
     var websitePolicyStatus: WebsitePolicyStatus? = nil
+    /// The engine's last security report; it describes only the document it names.
+    var security: PageSecurity? = nil
     var admittedDownloads: Set<DownloadID> = []
     var requestedURL: URL? = nil
     var requestContext: BrowsingContext? = nil

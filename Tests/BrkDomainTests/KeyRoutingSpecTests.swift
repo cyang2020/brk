@@ -100,9 +100,10 @@ final class KeyRoutingSpecTests: XCTestCase {
         let b = d.open("127.0.0.1:9/b")
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
         XCTAssertTrue(d.key(ctrlTab, stage: .beforePage, pressID: 3).keyHandled)
-        XCTAssertEqual(d.paneIDs, [a])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, a)
         XCTAssertTrue(d.key(ctrlTab, stage: .beforePage, pressID: 4, isRepeat: true).keyHandled)
-        XCTAssertEqual(d.paneIDs, [b])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, b, "a repeat of Ctrl+Tab steps the switcher again")
+        XCTAssertEqual(d.paneIDs, [b], "nothing switches before Control is released")
     }
 
     /// A menu-stage key (native view focused) dispatches whatever its priority.
@@ -143,8 +144,8 @@ final class KeyRoutingSpecTests: XCTestCase {
         guard case .commandBar? = d.view.overlay else { return XCTFail("the bar opens for the new pane") }
     }
 
-    /// Control released (WindowEvent.modifiersChanged) commits a Ctrl+Tab cycle; Control pressed again with a cycle
-    /// still pending (lost release) commits it before the new walk starts.
+    /// Control released (WindowEvent.modifiersChanged) commits a Ctrl+Tab cycle, showing the switcher's selection;
+    /// Control pressed again with a cycle still pending (lost release) commits it before the new walk starts.
     func testControlReleaseCommitsTheCycle() throws {
         let d = Driver()
         d.advance(hour)
@@ -155,22 +156,27 @@ final class KeyRoutingSpecTests: XCTestCase {
         // Recency: c (shown), b, a.
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
         d.key(ctrlTab, stage: .beforePage, pressID: 1)
-        XCTAssertEqual(d.paneIDs, [b])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, b)
+        XCTAssertEqual(d.paneIDs, [c], "the press moves only the switcher's selection")
         // Shift joining the hold (Ctrl+Shift+Tab) keeps the same walk: back to c, not a fresh walk from b (which
         // would go back to its last entry, a).
         d.system(.window(d.window, .modifiersChanged(held: [.control, .shift])))
         d.key(KeyChord([.control, .shift], .tab), stage: .beforePage, pressID: 2)
-        XCTAssertEqual(d.paneIDs, [c])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, c)
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
         d.system(.window(d.window, .modifiersChanged(held: [])))  // released: committed on c
+        XCTAssertNil(d.view.tabTools.recent)
+        XCTAssertEqual(d.paneIDs, [c])
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
         d.key(ctrlTab, stage: .beforePage, pressID: 3)
-        XCTAssertEqual(d.paneIDs, [b], "a fresh walk from c")
+        XCTAssertEqual(d.view.tabTools.recent?.selected, b, "a fresh walk from c")
         // The release is lost (delivered elsewhere); the next press reports Control held again: the walk commits on
-        // b and a fresh one starts there (c is now the most recent other), instead of stepping on to a.
+        // b (b is shown) and a fresh one starts there (c is now the most recent other), instead of stepping on to a.
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
+        XCTAssertEqual(d.paneIDs, [b])
         d.key(ctrlTab, stage: .beforePage, pressID: 4)
-        XCTAssertEqual(d.paneIDs, [c])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, c)
+        XCTAssertEqual(d.paneIDs, [b])
     }
 
     // MARK: Press identity (PressID rule) through reduce

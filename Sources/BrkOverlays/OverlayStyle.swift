@@ -204,14 +204,7 @@ struct ArchiveOverlayMetrics: MetricGroup {
 }
 
 struct DialogOverlayMetrics: MetricGroup {
-    let width = Metric(420.0, .guess("space dialog width"))
-    let cornerRadius = Metric(Metrics.urlPill.cornerRadius.value, .derived(
-        rule: "same popover radius as the command bar", from: ["URL pill corner radius"]))
-    let padding = Metric(20.0, .guess("space dialog inner margin"))
-    let previewHeight = Metric(64.0, .guess("live theme preview tile height"))
     let swatchSize = Metric(24.0, .guess("preset swatch diameter; nine fit one row of the dialog"))
-    let iconButtonSize = Metric(28.0, .guess("icon choice button size"))
-    let ringWidth = Metric(2.0, .guess("ring around the chosen swatch or icon, in the FocusRing color"))
     let ringGap = Metric(3.0, .guess("gap between a chosen swatch and its ring"))
     let dotSize = Metric(8.0, .guess("the theme-color dot drawn for a space without an icon"))
 }
@@ -274,14 +267,9 @@ enum OverlayCopy {
 
     /// "New Space" is the observed menu title without the ellipsis; the rest GUESS (short labels).
     static let newSpaceTitle = "New Space"
-    static let editSpaceTitle = "Edit Space"
-    static let spaceName = "Name"
-    static let spaceNamePlaceholder = "Space Name"
     static let icon = "Icon"
-    static let emojiPlaceholder = "Emoji"
     static let color = "Color"
     static let createSpace = "Create Space"
-    static let save = "Save"
     /// Observed: "Default Space Icon", "Set space color to ", "Cycle noise texture" (tooltip), "Automatic
     /// Appearance", "Light Appearance".
     static let noIcon = "Default Space Icon"

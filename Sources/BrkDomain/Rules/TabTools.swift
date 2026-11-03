@@ -166,11 +166,8 @@ extension Work {
             }
             if expanded { state.doc.spaces[s.id]?.pinnedCollapsed = false }
         case .cancelRecent:
-            suppressActivityStamp = true
-            guard let cycle = state.session.windows[window]?.recentCycle else { return }
+            // Esc: the switcher closes and the window keeps what it shows (a walk switches nothing until it commits).
             state.session.windows[window]?.recentCycle = nil
-            if let original = cycle.original { focus(original, in: window) }
-            else { select(nil, in: window, space: w.space) }
         case .chooseIcon(let id):
             guard tree[id] != nil, tree[id]?.kind != .section else { return }
             let icon: CustomIcon? = switch tree[id]?.body {

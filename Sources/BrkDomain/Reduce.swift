@@ -34,7 +34,8 @@ public struct Transition: Sendable {
 /// Order inside one transition:
 /// 1. `.user` and `.key`: if a Ctrl+Tab cycle is pending and the command is not `cycleRecent`, commit it first
 ///    (robust against a lost Control key-up); apply the overlay rule (`Command.keepsCommandBar`/`keepsArchive`).
-///    `.system(.clockTick)` commits every window's pending cycle first.
+///    `.system(.clockTick)` first commits the pending cycle of every window whose Control key is not held (its
+///    release went missing); a window still holding Control keeps its switcher open.
 /// 2. Run the area's rules (Rules/*.swift), which change state and append effects.
 /// 3. `normalize` (every cross-entity invariant; repairs only, never fills an absent active item).
 /// 4. Stamp `lastActiveAt = now` on every tab that entered or left the screen (any window) during this input. This
@@ -79,7 +80,6 @@ struct Work {
     var effects: [Effect] = []
     var keyShortcut = false
     var keyHandled = false
-    var suppressActivityStamp = false
     /// Tabs on screen right before the first rule of this input ran (after the cycle commit and the overlay rule).
     /// Nil until a command or event starts; `finish` stamps the difference.
     private var screenBefore: Set<ItemID>?
@@ -100,6 +100,13 @@ struct Work {
         if command == .app(.exit), state.session.windows[window]?.recentCycle != nil {
             begin(window: window)
             tabTools(.cancelRecent, in: window)
+            return
+        }
+        // A space dialog opened from the Library (its Spaces card's Edit Space…: the theme panel) sits above it, so
+        // Esc closes the dialog and the Library stays.
+        if command == .app(.exit), case .library? = state.session.windows[window]?.overlay, state.session.windows[window]?.dialog != nil {
+            begin(window: window)
+            state.session.windows[window]!.dialog = nil
             return
         }
         if command == .app(.exit), state.session.windows[window]?.capture != nil { captures(.cancel, in: window); return }
@@ -146,7 +153,9 @@ struct Work {
 
     mutating func observe(_ event: SystemEvent) {
         if case .clockTick = event {
-            for window in state.doc.windows.keys.sorted() { commitCycle(in: window) }
+            for window in state.doc.windows.keys.sorted() where state.session.windows[window]?.heldModifiers.contains(.control) != true {
+                commitCycle(in: window)
+            }
         }
         switch event {
         case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
@@ -223,10 +232,12 @@ struct Work {
         commitCycle(in: window)
     }
 
-    /// Ends a Ctrl+Tab cycle: tabs that entered or left the screen relative to the cycle's baseline are stamped once.
+    /// Ends a Ctrl+Tab cycle: the switcher's selection is shown (Arc switches when Control is released), then tabs that
+    /// entered or left the screen relative to the cycle's baseline are stamped once.
     mutating func commitCycle(in window: WindowID) {
         guard let cycle = state.session.windows[window]?.recentCycle else { return }
         state.session.windows[window]!.recentCycle = nil
+        if cycle.order.indices.contains(cycle.index) { focus(cycle.order[cycle.index], in: window) }
         stamp(state.onScreenTabs().symmetricDifference(cycle.baseline))
     }
 
@@ -266,7 +277,7 @@ struct Work {
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
-            if !walking && !suppressActivityStamp { stamp(before.symmetricDifference(state.onScreenTabs())) }
+            if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }
         }
         let changed = state != input
         if changed { state.session.rev += 1 }

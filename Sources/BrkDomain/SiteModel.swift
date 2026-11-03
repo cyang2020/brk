@@ -42,6 +42,11 @@ public struct SiteControlSnapshot: Sendable, Equatable, Codable {
     public let appearance: WebsiteAppearance
     public let clearing: Bool
     public let result: ClearSiteDataResult?
+    /// The security row's Secure (else the red Insecure): an https page whose certificate and content Chromium found
+    /// clean. An https page the engine has not reported on yet (still loading) counts as secure; http never does.
+    public var secure: Bool = false
+    /// The engine's report for this document, nil until it has made one (the details page says why it is insecure).
+    public var security: PageSecurity? = nil
 }
 
 struct SiteSession: Sendable, Equatable {

@@ -25,8 +25,9 @@ extension Work {
             focus(stops[index], in: window)
         case .cycleRecent(let step):
             // First press freezes the order (the shown item, then the space's tabs and splits by recency, ties in
-            // sidebar order) and the on-screen baseline; each press moves the cursor and shows that item. Nothing is
-            // stamped until the walk commits (Control released, or any other input). Fewer than two items: no-op.
+            // sidebar order) and the on-screen baseline; each press only moves the switcher's selection. As in Arc,
+            // nothing is shown or stamped until the walk commits (Control released, or any other input), which shows
+            // the selected item. Fewer than two items: no-op.
             guard state.doc.windows[window] != nil, state.session.windows[window] != nil else { return }
             var cycle: RecentCycle
             if let pending = state.session.windows[window]!.recentCycle {
@@ -41,12 +42,11 @@ extension Work {
                     .map(\.element)
                 let order = (shown.map { [$0] } ?? []) + rest
                 guard order.count >= 2 else { return }
-                cycle = RecentCycle(order: order, index: 0, baseline: state.onScreenTabs(), original: shown)
+                cycle = RecentCycle(order: order, index: 0, baseline: state.onScreenTabs())
             }
             let n = cycle.order.count
             cycle.index = ((cycle.index + (step == .next ? 1 : -1)) % n + n) % n
             state.session.windows[window]!.recentCycle = cycle
-            focus(cycle.order[cycle.index], in: window)
         case .close(let ref):
             guard let tab = state.resolveTab(ref, in: window) else { return }
             closeTab(tab, in: window)
@@ -238,6 +238,10 @@ extension Work {
         case .websitePolicyApplied(let status):
             guard live.document == .ready(status.document), status.document.browser == token else { return }
             live.websitePolicyStatus = status
+        case .securityChanged(let security):
+            guard live.document == .ready(security.document) || live.document == .loading(security.document),
+                  security.document.browser == token else { return }
+            live.security = security
         case .rendererGone:
             live.audible = false
             live.loading = false

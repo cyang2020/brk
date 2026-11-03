@@ -104,30 +104,10 @@ final class ThemeDraftTests: XCTestCase {
     }
 }
 
-final class SpaceDraftTests: XCTestCase {
-    func testEditSpaceSavesTheNameAndIconOnly() {
-        var draft = SpaceDraft(.editSpace(id: SpaceID("s2"), title: "Work", icon: .custom(.named(.briefcase)), theme: editTheme))!
-        draft.title = " Work 2 "
-        draft.icon = SpaceIcon.none
-        XCTAssertEqual(draft.saveCommand, .space(.update(SpaceID("s2"), title: "Work 2", icon: SpaceIcon.none, theme: nil)))
-        XCTAssertNil(SpaceDraft(.newSpace))
-    }
-
-    func testTheLastEmojiTypedBecomesTheIconAndClearingItGoesBackToNone() {
-        var draft = SpaceDraft(.editSpace(id: SpaceID("s2"), title: "Work", icon: .none, theme: editTheme))!
-        draft.setEmoji("🚀")
-        XCTAssertEqual(draft.icon, .custom(.emoji("🚀")))
-        draft.setEmoji("🚀👨‍👩‍👧")
-        XCTAssertEqual(draft.icon, .custom(.emoji("👨‍👩‍👧")), "one emoji, even when it is several code points")
-        draft.setEmoji("")
-        XCTAssertEqual(draft.icon, SpaceIcon.none)
-        draft.icon = .custom(.named(.star))
-        draft.setEmoji("")
-        XCTAssertEqual(draft.icon, .custom(.named(.star)), "an empty emoji field leaves a named icon alone")
-    }
-
+final class EmojiCatalogTests: XCTestCase {
     func testTheEmojiSearchUsesUnicodeNames() {
         XCTAssertTrue(EmojiCatalog.matching("blue book").contains("📘"))
+        XCTAssertEqual(EmojiCatalog.matching("cactus").first, "🌵", "SidebarToolsIcons picks the space icon by this search")
         XCTAssertEqual(EmojiCatalog.categories.first?.emoji.prefix(8).joined(), "😀😃😄😁😆😅🤣😂", "P10 c's first row")
         XCTAssertEqual(EmojiCatalog.categories.count, 8)
     }
@@ -242,16 +222,6 @@ final class SpaceDialogHostTests: XCTestCase {
         XCTAssertEqual(sent.last, .space(.create(title: "流程", icon: .none, theme: SpaceCreateDraft.defaultTheme, profile: .default)))
         host.render(nil, deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
         XCTAssertNil(drafts.last!, "closing the flow clears the draft")
-    }
-
-    func testEditSpaceIsTheNameAndIconFormCentredInTheContentArea() throws {
-        let (window, host, frames) = harness()
-        defer { window.orderOut(nil) }
-        host.render(.editSpace(id: SpaceID("s2"), title: "Work", icon: .none, theme: editTheme), deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
-        let card = try XCTUnwrap(host.editCardFrame)
-        XCTAssertEqual(card.width, 420)
-        XCTAssertEqual(card.midX, frames.contentArea.midX, accuracy: 1)
-        XCTAssertTrue(host.focusForm())
     }
 
     func testNewProfileIsTwoStepsInArcsCentredCard() throws {

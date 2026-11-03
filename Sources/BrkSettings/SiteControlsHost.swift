@@ -118,13 +118,20 @@ private struct SiteControlsView: View {
             form
         }
     }
+    /// Why the overview's security row says Secure or Insecure.
+    static func connectionNote(_ target: SiteTarget, secure: Bool, security: PageSecurity?) -> String {
+        if target.origin.url.scheme != "https" { return "Connection is not secure: this site uses plain HTTP." }
+        if secure { return "Connection is secure (HTTPS)." }
+        if security?.certificateError == true { return "Connection is not secure: the site's certificate is not valid." }
+        return "Connection is not secure: this page loaded content over plain HTTP."
+    }
+
     private var form: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
                 if let target = value.target {
-                    Text(target.origin.url.scheme == "https" ? "Connection is secure (HTTPS)." : "Connection is not secure: this site uses plain HTTP.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(Self.connectionNote(target, secure: value.secure, security: value.security)).font(.caption).foregroundStyle(.secondary)
                 }
                 Text(value.profileName).foregroundStyle(.secondary)
                 if value.target != nil {

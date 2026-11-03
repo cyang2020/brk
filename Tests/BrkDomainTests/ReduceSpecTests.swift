@@ -364,18 +364,21 @@ final class ReduceSpecTests: XCTestCase {
         // Recency: c (shown), b (left the screen at T0+2h), a (left at T0+1h).
         d.advance(.seconds(3 * 3_600))  // T0 + 5h
         d.system(.window(d.window, .modifiersChanged(held: [.control])))
+        // Each press moves the switcher's selection; c stays on screen until Control is released (Arc).
         d.user(.tab(.cycleRecent(.next)))
-        XCTAssertEqual(d.paneIDs, [b])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, b)
         d.user(.tab(.cycleRecent(.next)))
-        XCTAssertEqual(d.paneIDs, [a])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, a)
         d.user(.tab(.cycleRecent(.next)))
-        XCTAssertEqual(d.paneIDs, [c])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, c)
         d.user(.tab(.cycleRecent(.previous)))
-        XCTAssertEqual(d.paneIDs, [a])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, a)
+        XCTAssertEqual(d.paneIDs, [c])
         d.system(.window(d.window, .modifiersChanged(held: [])))  // Control released: commit
+        XCTAssertEqual(d.paneIDs, [a])
         assertUnchanged(d.state, d.system(.window(d.window, .modifiersChanged(held: []))))
-        // The walk is provisional: no stamp per step. At commit the net change is stamped against the pre-cycle
-        // screen: c (shown when the walk began) left and a (chosen) entered, both at T0+5h. b keeps its T0+2h stamp.
+        // Nothing is stamped per step. At commit the net change is stamped against the pre-cycle screen: c (shown
+        // when the walk began) left and a (chosen) entered, both at T0+5h. b keeps its T0+2h stamp.
         // So at T0+14h b is 12h idle and archived, while c (stamped T0+5h) and the on-screen a survive.
         d.advance(.seconds(9 * 3_600))  // T0 + 14h
         d.system(.clockTick)
@@ -395,13 +398,15 @@ final class ReduceSpecTests: XCTestCase {
         d.advance(hour)
         let b = d.open("127.0.0.1:9/b")
         d.advance(hour)
-        d.user(.tab(.cycleRecent(.next)))  // provisional walk to a
+        d.user(.tab(.cycleRecent(.next)))  // the switcher selects a; b stays shown
+        XCTAssertEqual(d.paneIDs, [b])
+        d.user(.sidebar(.toggle))  // an unrelated command commits the cycle: a is shown
         XCTAssertEqual(d.paneIDs, [a])
-        d.user(.sidebar(.toggle))  // an unrelated command commits the cycle
         // Nothing left to commit: Control was never reported down, and releasing it changes nothing.
         assertUnchanged(d.state, d.system(.window(d.window, .modifiersChanged(held: []))))
         d.user(.tab(.cycleRecent(.next)))  // a fresh walk from the now-shown tab
-        XCTAssertEqual(d.paneIDs, [b])
+        XCTAssertEqual(d.view.tabTools.recent?.selected, b)
+        XCTAssertEqual(d.paneIDs, [a])
     }
 
     /// .page events for an archived or unknown tab is ignored: same state object
@@ -1148,13 +1153,12 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.dock.map(\.id), [s3, s1, s2])
     }
 
-    /// .space(.update) patches title, icon and theme and closes the edit dialog; the same values change nothing
-    func test_spaceUpdatePatchesTitleIconAndThemeAndClosesTheEditDialogTheSameValuesChange() throws {
+    /// .space(.update) patches title, icon and theme and closes the rename dialog; the same values change nothing
+    func test_spaceUpdatePatchesTitleIconAndThemeAndClosesTheRenameDialogTheSameValuesChange() throws {
         let d = Driver()
         let space = d.view.space.id
-        d.user(.sidebar(.openDialog(.editSpace(.current))))
-        // The dialog carries the raw stored title (empty for a fallback-named space); the UI shows "Space 1" as placeholder.
-        XCTAssertEqual(d.view.dialog, .editSpace(id: space, title: "", icon: .none, theme: .default))
+        d.user(.sidebar(.openDialog(.rename(.current))))
+        guard case .rename(space, _)? = d.view.dialog else { return XCTFail("no rename dialog") }
         let theme = SpaceTheme(colors: [ThemePresets.greyscale[7]], wheel: .complementary, texture: .denim, noise: 0.3, intensity: 0.6, appearance: .dark)
         d.user(.space(.update(space, title: "Home", icon: .custom(.emoji("🏠")), theme: theme)))
         XCTAssertNil(d.view.dialog)
@@ -1427,12 +1431,12 @@ final class ReduceSpecTests: XCTestCase {
     func test_sidebarOpenDialogOpensTheSpaceDialogPeekingAHiddenSidebarMovesFocusToThe() throws {
         let d = Driver()
         d.user(.sidebar(.toggle))
-        d.user(.sidebar(.openDialog(.editSpace(.current))))
-        guard case .editSpace? = d.view.dialog else { return XCTFail("no dialog") }
+        d.user(.sidebar(.openDialog(.rename(.current))))
+        guard case .rename? = d.view.dialog else { return XCTFail("no dialog") }
         XCTAssertTrue(d.view.sidebar.peek)
         XCTAssertEqual(d.view.focus, .spaceDialog)
-        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.editSpace(.current)))))
-        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.editSpace(.space(SpaceID("ghost")))))))
+        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.rename(.current)))))
+        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.rename(.space(SpaceID("ghost")))))))
         d.user(.sidebar(.openDialog(nil)))
         XCTAssertNil(d.view.dialog)
         XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: d.todayIDs[0])))
@@ -1806,7 +1810,7 @@ final class ReduceSpecTests: XCTestCase {
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
         XCTAssertEqual(CommandInventory.commands.count, 230, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 50, "a SystemEvent case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.events.count, 51, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
             .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }

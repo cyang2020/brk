@@ -94,7 +94,7 @@ enum SpaceToolsScenarios {
     }
 
     /// A control in a popover or the theme panel (its own window) once it is on screen and settled.
-    private static func clickWhenShown(_ app: AppUnderTest, _ name: String) throws {
+    static func clickWhenShown(_ app: AppUnderTest, _ name: String) throws {
         let start = uptime()
         try app.waitUntil("\(name) settled") { uptime() - start >= 0.6 }
         try app.waitUntil("\(name) on screen") { (try? app.click(.spaceToolsControl(name))) != nil }
@@ -170,6 +170,21 @@ enum SpaceToolsScenarios {
         try expect(isShown(try app.native(), .spaceToolsControl("manager-open-\(created)")), "the created space has no card")
         guard case .library(let manager)? = try app.view().overlay else { throw Check(description: "Space manager closed") }
         try expect(manager.spaces.contains { $0.id == created && $0.title == "Native Work Edited" }, "the card lost the edited name")
+        // The card's Edit Space… (its … menu) and its pencil open the theme panel beside the Library, as Arc does.
+        try managerMenu(app, created, choose: "Edit Space…")
+        try app.waitUntil("Edit Space… opened the theme panel") { if case .theme(created, _)? = try app.view().dialog { return true } else { return false } }
+        try clickWhenShown(app, "theme-appearance-light")
+        try app.waitUntil("the panel edits the card's space") { try app.view().theme.scheme == .light }
+        guard case .library? = try app.view().overlay else { throw Check(description: "the theme panel closed the Library") }
+        try app.press("escape")
+        try app.waitUntil("Esc closed the card's theme panel and kept the Library") {
+            let v = try app.view()
+            if case .library? = v.overlay { return v.dialog == nil } else { return false }
+        }
+        try app.click(.spaceToolsControl("manager-edit-\(created)"))
+        try app.waitUntil("the pencil opened the theme panel") { if case .theme(created, _)? = try app.view().dialog { return true } else { return false } }
+        try app.press("escape")
+        try app.waitUntil("Esc closed the pencil's theme panel") { try app.view().dialog == nil }
         try app.click(.spaceToolsControl("manager-new"))
         try app.waitUntil("the Create a Space flow from the manager") { try app.view().dialog == .newSpace }
         try app.type("Cancelled Space")
