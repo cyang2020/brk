@@ -121,10 +121,14 @@ extension ChromePage {
                 _ = try await self.browser.protocolSession.call("Emulation.setEmulatedMedia", ["features": features])
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 // Arc's Dark (P19-b) also darkens pages without a dark style: Chromium's automatic dark mode. Light and
-                // Automatic leave pages as their own styles draw them.
-                let dark = policy.appearance == .dark
-                _ = try await self.browser.protocolSession.call("Emulation.setAutoDarkModeOverride", dark ? ["enabled": true] : [:])
-                guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
+                // Automatic leave pages as their own styles draw them. Sent when it changes and once per document while
+                // on, so the refreshes of a hidden page (which wait on these round trips before freezing it) do not grow.
+                let dark = policy.appearance == .dark, sent = self.autoDark
+                if (sent?.enabled ?? false) != dark || dark && sent?.document != document {
+                    _ = try await self.browser.protocolSession.call("Emulation.setAutoDarkModeOverride", dark ? ["enabled": true] : [:])
+                    self.autoDark = (document, dark)
+                    guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
+                }
                 let frameTree = try await self.browser.protocolSession.call("Page.getFrameTree")
                 guard let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any], let frameID = frame["id"] as? String,
                       self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
