@@ -3,11 +3,17 @@ import BrkBase
 import BrkEngine
 import CefKit
 
-/// Native controls and CEF references belonging to one page's original request context.
+/// Native controls and CEF references for one page's Cast panel. A page in an owned profile uses its own request
+/// context's router. The Default profile's pages use the engine's receiver-service context (`CEFEngine.castService`):
+/// the pinned CEF global context's router traps inside `cef_shutdown` (verify/completion/batch2-browser-ops/
+/// CAST-LIFETIME.md), while an owned context drains like any custom profile. A presentation route's source is a
+/// Cast or DIAL address, not the page, so the context that discovers receivers does not change what is cast.
 @MainActor final class PageCast: NSObject {
     let id = UUID().uuidString
-    let router: CefMediaRouting?
-    let unavailableReason: String?
+    private(set) var router: CefMediaRouting?
+    private(set) var unavailableReason: String?
+    /// The receiver-service context is still loading (Default profile, first Cast of the run).
+    private(set) var startingService: Bool
     var visibleWindowNumber: Int? { panel.isVisible ? panel.windowNumber : nil }
     private let panel: NSPanel
     private let receivers = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -16,15 +22,8 @@ import CefKit
     private let connectButton = NSButton(title: "Connect", target: nil, action: nil)
     private let stopButton = NSButton(title: "Stop Casting", target: nil, action: nil)
 
-    init(browser: CefBrowser, context: BrowsingContext) {
-        // The pinned CEF global router traps during runtime shutdown; an owned profile drains safely.
-        if context == .profile(.default) {
-            router = nil
-            unavailableReason = "Cast is unavailable in the Default profile because this Chromium build cannot close its receiver service safely. Use a separate profile for Cast presentations."
-        } else {
-            router = CefMediaRouting(browser: browser)
-            unavailableReason = router == nil ? "The receiver service is unavailable for this page." : nil
-        }
+    init(browser: CefBrowser, startingService: Bool) {
+        self.startingService = startingService
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 540, height: 260),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
@@ -47,6 +46,13 @@ import CefKit
             stack.topAnchor.constraint(equalTo: panel.contentView!.topAnchor, constant: 20),
             source.widthAnchor.constraint(equalTo: stack.widthAnchor), receivers.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
+        render()
+    }
+    /// Installs the router once its context exists (nil: none could be created).
+    func attach(_ router: CefMediaRouting?, unavailableReason: String?) {
+        startingService = false
+        self.router = router
+        self.unavailableReason = router == nil ? (unavailableReason ?? "The receiver service is unavailable for this page.") : nil
         router?.onChange = { [weak self] in self?.render() }
         router?.refresh()
         render()
@@ -63,7 +69,7 @@ import CefKit
         source.isEnabled = router != nil
         receivers.isEnabled = router != nil
         stopButton.isEnabled = (router?.ownedRouteCount ?? 0) > 0
-        status.stringValue = unavailableReason ?? router?.lastError ?? ((router?.sinks.isEmpty ?? true) ? "No receivers found on this network." : "\(router?.sinks.count ?? 0) receiver(s), \(router?.routes.count ?? 0) route(s)")
+        status.stringValue = startingService ? "Starting the receiver service…" : unavailableReason ?? router?.lastError ?? ((router?.sinks.isEmpty ?? true) ? "No receivers found on this network." : "\(router?.sinks.count ?? 0) receiver(s), \(router?.routes.count ?? 0) route(s)")
     }
     @objc private func connect() {
         guard let id = receivers.selectedItem?.representedObject as? String else { return }
@@ -71,28 +77,41 @@ import CefKit
     }
     @objc private func stopRoutes() { router?.terminateOwnedRoutes(); router?.refresh() }
     @objc private func refresh() { router?.refresh() }
-    func stop() { panel.close(); router?.stop() }
+    func stop() { panel.close(); startingService = false; router?.stop() }
 }
 
 extension ChromePage {
     func showCast() {
         guard engine.isLive(self), surface.window?.isVisible == true else { return }
         if cast == nil {
-            let controller = PageCast(browser: browser, context: context)
-            let lease = BrowserResources<ChromePage>.Lease.auxiliary("cast-" + controller.id)
-            controller.router?.onPendingChange = { [weak self, weak controller] pending in
-                guard let self else { return }
-                if pending { _ = self.engine.resources.acquire(lease, browser: self.incarnation) }
-                else {
-                    self.drainingCasts.removeAll { $0 === controller }
-                    self.engine.resources.release(lease, browser: self.incarnation)
-                    self.engine.closeIfUnowned(self.incarnation)
-                }
-            }
+            let shared = context == .profile(.default)
+            let controller = PageCast(browser: browser, startingService: shared)
             cast = controller
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let url = browser.url { controller.router?.validateSource(url.absoluteString) }
+            if shared {
+                engine.castServiceContext { [weak self, weak controller] context in
+                    guard let self, let controller, self.cast === controller, self.engine.isLive(self) else { return }
+                    self.attachCast(context.flatMap { CefMediaRouting(context: $0) }, to: controller,
+                                    reason: "The receiver service could not start in this session.")
+                }
+            } else {
+                attachCast(CefMediaRouting(browser: browser), to: controller, reason: nil)
+            }
         }
         cast?.show()
+    }
+    private func attachCast(_ router: CefMediaRouting?, to controller: PageCast, reason: String?) {
+        let lease = BrowserResources<ChromePage>.Lease.auxiliary("cast-" + controller.id)
+        router?.onPendingChange = { [weak self, weak controller] pending in
+            guard let self else { return }
+            if pending { _ = self.engine.resources.acquire(lease, browser: self.incarnation) }
+            else {
+                self.drainingCasts.removeAll { $0 === controller }
+                self.engine.resources.release(lease, browser: self.incarnation)
+                self.engine.closeIfUnowned(self.incarnation)
+            }
+        }
+        controller.attach(router, unavailableReason: reason)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, let url = browser.url { router?.validateSource(url.absoluteString) }
     }
     func stopCasting() {
         guard let cast else { return }

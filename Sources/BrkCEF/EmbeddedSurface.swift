@@ -23,6 +23,11 @@ final class EmbeddedSurface: PageSurfaceView {
     private var observedWindow: NSWindow?
     private var nativeFullscreenOwnsFrame = false
     var editableSelection = false
+    /// The focused element of the page is a text field or an editing host / an editing host (rich text).
+    var editableFocused = false
+    var richEditableFocused = false
+    /// Edit-menu services carried out on this page (EmbeddedSurface+TextServices.swift), newest last.
+    var textServiceLog: [String] = []
     var editingMenuTransport: CefDevTools?
     override var editingMenuResponder: NSResponder? { editingBrowser == nil ? nil : self }
     override func prepareEditingMenu() async { await refreshEditingSupport() }
@@ -81,6 +86,7 @@ final class EmbeddedSurface: PageSurfaceView {
     private func waitForInputView(attempt: Int) {
         guard !retired else { return }
         if isReadyForFocus {
+            if let input = Self.find("RenderWidgetHostViewCocoa", in: self) { PanelActionRouting.install(on: input) }
             log.notice("page \(self.page.description, privacy: .public): input view ready after \(attempt, privacy: .public) polls")
             onReadyForFocus?()
             return
@@ -146,6 +152,8 @@ final class EmbeddedSurface: PageSurfaceView {
             syncHostFrame()
             chrome?.browser.wasHidden(false)
             NotificationCenter.default.addObserver(self, selector: #selector(windowDidMove(_:)), name: NSWindow.didMoveNotification, object: window)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowBecameVisible(_:)), name: NSWindow.didChangeOcclusionStateNotification, object: window)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowBecameVisible(_:)), name: NSApplication.didUnhideNotification, object: nil)
             observedWindow = window
         } else {
             chrome?.browser.wasHidden(true)
@@ -164,8 +172,33 @@ final class EmbeddedSurface: PageSurfaceView {
 
     @objc private func windowDidMove(_ note: Notification) { syncHostFrame() }
 
+    /// Chromium decides whether the page is shown from its own (empty, transparent) host window. After Hide and
+    /// Show the window server reports that window as occluded, Chromium hides its input view, and AppKit then skips
+    /// it for key equivalents and clicks: Cmd shortcuts went to the menu and clicks to this surface. When our
+    /// window is visible again, the page is shown again.
+    /// Chromium hides the view a moment after the notification sometimes, so the check runs again for 1.5 s.
+    @objc private func windowBecameVisible(_ note: Notification) {
+        for delay in [0, 0.15, 0.4, 0.8, 1.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.showInputViewIfHidden() }
+        }
+    }
+    private func showInputViewIfHidden() {
+        guard !retired, isEmbedded, !nativeFullscreenOwnsFrame, !NSApp.isHidden, let window, let host, window.isVisible, window.occlusionState.contains(.visible),
+              !isHiddenOrHasHiddenAncestor, Self.find("RenderWidgetHostViewCocoa", in: self)?.isHiddenOrHasHiddenAncestor == true else { return }
+        log.notice("page \(self.page.description, privacy: .public): input view hidden after the window came back; showing the host again")
+        window.removeChildWindow(host)
+        host.orderOut(nil)
+        window.addChildWindow(host, ordered: .above)
+        syncHostFrame()
+        chrome?.browser.wasHidden(false)
+    }
+
     private func stopObservingMoves() {
-        if let observedWindow { NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: observedWindow) }
+        if let observedWindow {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: observedWindow)
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: observedWindow)
+            NotificationCenter.default.removeObserver(self, name: NSApplication.didUnhideNotification, object: nil)
+        }
         observedWindow = nil
     }
 

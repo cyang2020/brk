@@ -22,6 +22,7 @@ extension Work {
         guard case .dispatch(let action) = decision else { return remembered || keyShortcut }
         run(action.spec.command, in: window)
         keyHandled = true
+        keyAction = action
         return true
     }
 }

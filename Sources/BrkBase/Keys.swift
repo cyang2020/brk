@@ -212,5 +212,7 @@ public struct PressID: Hashable, Sendable, Codable, CustomStringConvertible {
 public struct KeyHandling: Sendable, Equatable {
     public let handled: Bool
     public let shortcut: Bool
-    public init(handled: Bool, shortcut: Bool) { self.handled = handled; self.shortcut = shortcut }
+    /// The table action (`ActionID` raw value) this delivery dispatched, nil when it dispatched none.
+    public let action: String?
+    public init(handled: Bool, shortcut: Bool, action: String? = nil) { self.handled = handled; self.shortcut = shortcut; self.action = action }
 }

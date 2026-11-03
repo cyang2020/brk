@@ -269,7 +269,7 @@ public final class AppStore {
             publish(docChanged: t.docChanged && !checkpointed)
         }
         run(t.effects)
-        return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut)
+        return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
     }
 
     /// Project, save, reconcile pages, then windows: closed ones go, new ones are placed and
@@ -468,7 +468,7 @@ public final class AppStore {
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }
                 switch effect {
-                case .toggleFullScreen: window.toggleFullScreen(nil)
+                case .toggleFullScreen: windows[id]?.toggleFullScreen()
                 case .pageFullScreen(let on): windows[id]?.setPageFullScreen(on)
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
                 case .miniaturize: window.miniaturize(nil)

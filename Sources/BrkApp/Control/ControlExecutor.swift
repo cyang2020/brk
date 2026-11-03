@@ -140,7 +140,17 @@ final class ControlExecutor {
         case .activate(let window):
             let c = try controller(window)
             store.inputWindow = c.window
+            if NSApp.isHidden { NSApp.unhide(nil) }
             if c.window.isMiniaturized { c.window.deminiaturize(nil) }
+            c.window.makeKeyAndOrderFront(nil)
+            return .ok
+
+        case .activateApp(let window):
+            let c = try controller(window)
+            store.inputWindow = c.window
+            if NSApp.isHidden { NSApp.unhide(nil) }
+            if c.window.isMiniaturized { c.window.deminiaturize(nil) }
+            NSApp.activate(ignoringOtherApps: true)
             c.window.makeKeyAndOrderFront(nil)
             return .ok
 
@@ -221,6 +231,10 @@ final class ControlExecutor {
                 guard NSApp.sendAction(action, to: responder, from: item) else { throw Failure(message: "Native menu action failed: " + name) }
             }
             return .ok
+        case .sendAction(let name, let text):
+            let sender = NSTextField(string: text ?? "")
+            guard NSApp.sendAction(NSSelectorFromString(name), to: nil, from: sender) else { throw Failure(message: "No responder handled " + name) }
+            return .ok
         case .pasteboard(let text):
             NSPasteboard.general.clearContents()
             if let text { NSPasteboard.general.setString(text, forType: .string) }
@@ -255,6 +269,11 @@ final class ControlExecutor {
             try events.press(chord, in: keyTarget())
             return .ok
 
+        case .pressHeld(let text, let repeats):
+            guard let chord = KeyChord(parsing: text) else { throw Failure(message: "unknown chord \"\(text)\"") }
+            try events.pressHeld(chord, repeats: max(0, repeats), in: keyTarget())
+            return .ok
+
         case .hold(let modifierText, let chordText, let times):
             guard let held = EventInjector.modifiers(modifierText) else { throw Failure(message: "unknown modifiers \"\(modifierText)\"") }
             guard let chord = KeyChord(parsing: chordText) else { throw Failure(message: "unknown chord \"\(chordText)\"") }
@@ -284,6 +303,22 @@ final class ControlExecutor {
         case .sheetButton(let title):
             guard let sheet = try controller(nil).window.attachedSheet, let content = sheet.contentView else { throw Failure(message: "no attached sheet") }
             if let panel = sheet as? NSSavePanel, title == "Cancel" { panel.cancel(nil); return .ok }
+            var selected: NSButton?
+            ViewTree.walk(content) { view in
+                if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }
+            }
+            guard let selected else { throw Failure(message: "sheet button not found: \(title)") }
+            selected.performClick(nil)
+            return .ok
+        case .focusAppWindow(let number):
+            guard let window = NSApp.windows.first(where: { $0.windowNumber == number && $0.isVisible }), window.canBecomeKey else {
+                throw Failure(message: "window \(number) cannot become key")
+            }
+            window.makeKeyAndOrderFront(nil)
+            return .ok
+        case .windowSheetButton(let number, let title):
+            guard let owner = NSApp.windows.first(where: { $0.windowNumber == number }), let sheet = owner.attachedSheet,
+                  let content = sheet.contentView else { throw Failure(message: "no sheet on window \(number)") }
             var selected: NSButton?
             ViewTree.walk(content) { view in
                 if let button = view as? NSButton, button.title == title, button.isEnabled, !button.isHiddenOrHasHiddenAncestor { selected = button }

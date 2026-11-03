@@ -435,7 +435,7 @@ final class BrowserClient {
             }
             return MainActor.assumeIsolated {
                 let decision = CefDownloadDecisionCallback(taking: callback)
-                guard let cefBrowser = client.browser, let delegate = cefBrowser.delegate else {
+                guard let cefBrowser = client.browser, let delegate = client.forwardingDelegate else {
                     decision.resolve(nil)
                     return 1
                 }
@@ -454,7 +454,7 @@ final class BrowserClient {
             MainActor.assumeIsolated {
                 let control = callback.map { CefDownloadControl(taking: $0) }
                 guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)),
-                      let cefBrowser = client.browser, let delegate = cefBrowser.delegate else {
+                      let cefBrowser = client.browser, let delegate = client.forwardingDelegate else {
                     if download.isInProgress { control?.cancel() }
                     control?.release()
                     return
@@ -669,8 +669,8 @@ extension BrowserClient {
                 origin: CefStringUtil.string(from: originURL)
             )
             let wrapper = CefJSDialogCallback(raw: callback)  // owns the +1
-            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                if cefBrowser.delegate?.browser(cefBrowser, runJSDialog: dialog, callback: wrapper) == true {
+            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { client, cefBrowser in
+                if client.forwardingDelegate?.browser(cefBrowser, runJSDialog: dialog, callback: wrapper) == true {
                     return 1  // app presents + resolves the callback itself
                 }
                 CefJSDialogPresenter.present(dialog, callback: wrapper)
@@ -683,8 +683,8 @@ extension BrowserClient {
             let message = CefStringUtil.string(from: messageText)
             let reload = isReload != 0
             let wrapper = CefJSDialogCallback(raw: callback)
-            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { _, cefBrowser in
-                if cefBrowser.delegate?.browser(cefBrowser, runBeforeUnloadDialog: message, isReload: reload, callback: wrapper) == true {
+            return BrowserClientCallbacks.run(handlerSelf, default: Int32(0)) { client, cefBrowser in
+                if client.forwardingDelegate?.browser(cefBrowser, runBeforeUnloadDialog: message, isReload: reload, callback: wrapper) == true {
                     return 1
                 }
                 CefJSDialogPresenter.presentBeforeUnload(message: message, isReload: reload, callback: wrapper)

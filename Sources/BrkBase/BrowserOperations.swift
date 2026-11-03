@@ -36,9 +36,14 @@ public struct PageKeyReceipt: Hashable, Sendable, Codable {
     public let handled: Bool
     public let shortcut: Bool?
     public let chromeCommand: Int?
-    public init(stage: String, chord: String? = nil, press: UInt64? = nil, handled: Bool, shortcut: Bool? = nil, chromeCommand: Int? = nil) {
+    /// The table action the app dispatched for this delivery (`KeyHandling.action`).
+    public let action: String?
+    /// The press was a key auto-repeat.
+    public let isRepeat: Bool?
+    public init(stage: String, chord: String? = nil, press: UInt64? = nil, handled: Bool, shortcut: Bool? = nil, chromeCommand: Int? = nil,
+                action: String? = nil, isRepeat: Bool? = nil) {
         self.stage = stage; self.chord = chord; self.press = press; self.handled = handled
-        self.shortcut = shortcut; self.chromeCommand = chromeCommand
+        self.shortcut = shortcut; self.chromeCommand = chromeCommand; self.action = action; self.isRepeat = isRepeat
     }
 }
 

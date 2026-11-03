@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pb</title>
+<style>body{font:20px -apple-system,sans-serif;margin:30px;background:#fff;color:#111}
+#rich,#field{display:block;margin:12px 0;padding:8px;border:1px solid #789;width:640px;min-height:44px;font:22px -apple-system,sans-serif}
+#targets div{display:inline-block;width:180px;height:90px;margin:10px;background:#cde;line-height:90px;text-align:center}</style></head>
+<body>
+<div id="rich" contenteditable="true" spellcheck="true">Rich editor</div>
+<textarea id="field" spellcheck="true"></textarea>
+<div id="targets"><div id="target-a">Target A</div><div id="target-b">Target B</div></div>
+<script>
+// R3-7 fixture (PB4, PB5, PB7). The title is the report: popups opened from here post their geometry back.
+window.addEventListener('message', e => {
+  if (e.origin === location.origin && e.data && e.data.kind === 'popup-report') document.title = 'popup:' + JSON.stringify(e.data.value);
+});
+</script></body></html>

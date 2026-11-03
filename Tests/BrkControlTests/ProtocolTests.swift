@@ -17,6 +17,7 @@ final class ProtocolTests: XCTestCase {
         case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer, appleScript
+        case activateApp, sendAction, pressHeld, focusAppWindow, windowSheetButton
     }
 
     static func tag(of op: ControlOp) -> Tag {
@@ -75,6 +76,11 @@ final class ProtocolTests: XCTestCase {
         case .openSettings: .openSettings
         case .externalURL: .externalURL
         case .appleScript: .appleScript
+        case .activateApp: .activateApp
+        case .sendAction: .sendAction
+        case .pressHeld: .pressHeld
+        case .focusAppWindow: .focusAppWindow
+        case .windowSheetButton: .windowSheetButton
         }
     }
 
@@ -142,6 +148,11 @@ final class ProtocolTests: XCTestCase {
         case .openSettings: return [.openSettings(pane: .links)]
         case .externalURL: return [.externalURL(url: URL(string: "https://example.com/from-another-app")!)]
         case .appleScript: return [.appleScript(script: "tell me to return 1")]
+        case .activateApp: return [.activateApp(window: WindowID("w"))]
+        case .sendAction: return [.sendAction(selector: "changeSpelling:", text: "sentence"), .sendAction(selector: "checkTextInDocument:", text: nil)]
+        case .pressHeld: return [.pressHeld(chord: "cmd+=", repeats: 3)]
+        case .focusAppWindow: return [.focusAppWindow(number: 12)]
+        case .windowSheetButton: return [.windowSheetButton(number: 12, title: "OK")]
         }
     }
 
