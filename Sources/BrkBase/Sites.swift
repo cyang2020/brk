@@ -38,6 +38,8 @@ public struct SiteRule: Hashable, Sendable, Codable {
     public var keepAlive = false
     public var excludeSuspension = false
     public var permissions: [SiteCapability: SitePermission] = [:]
+    /// Arc's per-site Developer Mode row in the site controls popover. Nil (older profiles) reads as off.
+    public var developerMode: Bool? = nil
     public init() {}
 }
 

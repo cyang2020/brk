@@ -81,6 +81,8 @@ final class ChromePage: CefBrowserDelegate {
     var permissionRequests: [String: PagePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
     var policyRevision: UInt64 = 0
     var websiteError: String?
+    /// The automatic dark mode last sent to this page's DevTools session, and for which document (nil: never sent).
+    var autoDark: (document: DocumentToken, enabled: Bool)?
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
 

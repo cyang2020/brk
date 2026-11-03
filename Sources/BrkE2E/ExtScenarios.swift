@@ -19,9 +19,14 @@ enum ExtScenarios {
     static func catalogValue(_ app: AppUnderTest, _ id: String) throws -> BrowserExtension? {
         try SitePolicyScenarios.controls(app).extensions.first { $0.id == id }
     }
+    /// The full site form is the popover's second page: open it from the Settings title first, as a user would.
     static func control(_ app: AppUnderTest, _ field: String, _ action: SiteControlAction) throws {
         guard let owner = app.window else { throw Check(description: "site-controls owner missing") }
-        try app.perform(.siteControlInput(window: owner, field: field, action: action))
+        if (try? app.perform(.siteControlInput(window: owner, field: field, action: action))) != nil { return }
+        try app.perform(.siteControlInput(window: owner, field: "siteSettingsDetails", action: .press))
+        try app.waitUntil("site settings page shows \(field)") {
+            (try? app.perform(.siteControlInput(window: owner, field: field, action: action))) != nil
+        }
     }
     @Sendable static func catalog(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
