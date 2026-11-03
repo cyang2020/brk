@@ -65,11 +65,14 @@ public class WindowController: NSObject, NSWindowDelegate {
             self.send(.user(self.id, .tab(.focus(page.item))))
         }
         window.onKeyEquivalent = { [weak self] event in
+            if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
         window.onEscapeBeforePage = { [weak self] event in
+            // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
+            if TabIconPicker.isOpen { TabIconPicker.close(); return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
@@ -122,15 +125,16 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
 
     /// Applies a snapshot: frames = `WindowLayout.compute(snapshot, contentSize)`; `root.render(...)` with
-    /// `engine.surface(for:)`; traffic lights to `frames.sidebar?.trafficLightsOrigin` (hidden while the sidebar is
-    /// hidden; Arc shows them on hover); keyboard focus only when `snapshot.focus` differs from the last one.
+    /// `engine.surface(for:)`; traffic lights to `frames.sidebar?.trafficLightsOrigin`, or the Library panel's (hidden
+    /// while the sidebar is hidden; Arc shows them on hover); keyboard focus only when `snapshot.focus` differs from the last one.
     /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
         place(snapshot)
         window.level = window.styleMask.contains(.fullScreen) ? .normal : (snapshot.stayOnTop ? .floating : .normal)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
         root.render(snapshot, frames: frames, surface: { [engine, id] page in page.window == id ? engine.surface(for: page) : nil })
-        window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin)
+        // The Library's panel keeps them where the sidebar had them (P32: Arc shows them over its navigation column).
+        window.placeTrafficLights(origin: frames.sidebarFloats ? nil : frames.sidebar?.trafficLightsOrigin ?? frames.library.map { LibraryLayout.trafficLightsOrigin(in: $0.strip) })
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)
         let repeatedFind = snapshot.focus == .findInput && snapshot.find?.focusRequest != lastSnapshot?.find?.focusRequest

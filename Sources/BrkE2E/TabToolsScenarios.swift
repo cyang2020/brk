@@ -178,7 +178,11 @@ enum TabToolsScenarios {
         let item = try app.load(url)
         try ready(app, item, url)
         let row = try app.native().actual[ViewID.row(item).identifier]!.frame
-        _ = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: row.midX, y: row.midY), choose: "Mute Tab"))
+        // Arc greys Mute out until the tab plays sound (P12-a): start the fixture's tone first.
+        let card = try app.native().computed.cards[0].rect
+        try app.click(at: CGPoint(x: card.minX + 80, y: card.minY + 50))
+        try app.waitUntil("audible before the menu") { try tab(item, in: app.view())?.audible == true }
+        _ = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: row.midX, y: row.midY), choose: "Mute"))
         try app.waitUntil("native CEF mute") { try app.native().pages[PageID(window: app.window!, item: item)]?.audioMuted == true }
         try app.click(.tabTool("audio-" + item.rawValue))
         try app.waitUntil("native CEF unmute") { try app.native().pages[PageID(window: app.window!, item: item)]?.audioMuted == false }
@@ -241,7 +245,8 @@ enum TabToolsScenarios {
         _ = try app.screenshot("TabTools6-clear-confirmation")
         try app.click(.tabTool("archive-cancel-clear"))
         try expect(try app.native().actual[ViewID.archiveEntry(entry.id).identifier] != nil, "cancel clear removed data")
-        try app.click(.archiveClear)
+        // Clear Archive is in the Filter menu; it asks in the bar under the search field, whose button confirms.
+        try app.dispatch(ActionID.clearArchive.spec.command)
         app.sleep(0.6)
         try app.click(.archiveClear)
         guard case .library(let cleared)? = try app.view().overlay else { throw Check(description: "archive closed") }

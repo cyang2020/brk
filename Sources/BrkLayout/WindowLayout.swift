@@ -16,7 +16,7 @@ import Foundation
 /// - cards: one per pane (`ContentLayout.cards`), radius 6; an empty card fills the area when nothing is shown;
 /// - command bar: `CommandBarLayout.frame`; Peek: `PeekLayout.card` (its round buttons: `PeekLayout.controls`);
 /// - Library open: its panel replaces the sidebar, shown or hidden (no sidebar, handle or reveal strip), and the
-///   content area starts 10 right of the panel (`LibraryLayout`).
+///   content area, still showing the page, starts 10 right of the panel (`LibraryLayout`).
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         if snapshot.kind == .little { return LittleLayout.frames(snapshot, contentSize: contentSize) }
@@ -29,8 +29,9 @@ public enum WindowLayout {
         var anchoredWidth = 0.0
 
         let libraryOpen: Bool = if case .library? = snapshot.overlay { true } else { false }
-        if libraryOpen {
-            anchoredWidth = LibraryLayout.panelWidth(windowWidth: contentSize.width, sidebarWidth: snapshot.sidebar.width)
+        if case .library(let library)? = snapshot.overlay {
+            anchoredWidth = LibraryLayout.panelWidth(windowWidth: contentSize.width, sidebarWidth: snapshot.sidebar.width,
+                                                     page: library.page, spaces: library.spaces.count)
         } else if snapshot.sidebar.visible {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
@@ -74,8 +75,7 @@ public enum WindowLayout {
         switch snapshot.overlay {
         case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: toolbar.map(AddressToolbarLayout.address(in:)) ?? sidebar?.urlPill)
         case .library?:
-            library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height), page: contentArea,
-                                           contentSize: contentSize)
+            library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height))
         case .peek?: peek = PeekLayout.card(in: contentArea)
         case nil: break
         }
@@ -92,30 +92,39 @@ public enum WindowLayout {
 }
 
 /// The Library (Arc: `HomeButton`). Owner: F5. While it is open its panel replaces the sidebar at the window's left
-/// edge, full height, and the open page fills the content area beside it, where the web page was: Arc's panel is
-/// max(417, min(window width - 56, stored width)) wide (layout-constants.md "Library (\"home\") panel width"; cra
-/// L1548 sees a 347 pt sidebar widen to 417). The panel lists the pages from under the title row, one sidebar row
-/// per page in `LibraryPage.allCases` order; its exit button is where the dock's Library button is, so the same
-/// spot opens and closes it. `LibraryFrames.frame` is the whole window (the Library takes it over), `strip` the
-/// panel, `page` the content area.
+/// edge, full height, and the content area beside it keeps showing the page. Arc's panel is max(417, min(window
+/// width - 56, stored width)) wide (layout-constants.md "Library (\"home\") panel width"; cra L1548 sees a 347 pt
+/// sidebar widen to 417); the Spaces page widens it to hold a card per space and the + button, up to the window
+/// minus 56. The panel is a 112 pt navigation column (one 78 pt cell per page, spread evenly between 94 from the top
+/// and 104 from the bottom, 100 apart in a 776 pt window; the exit and gift buttons at its foot, the exit where the
+/// dock's Library button is, so the same spot opens and closes it) and the open page's column.
 public enum LibraryLayout {
     /// The panel's width in a window `windowWidth` wide whose sidebar is `sidebarWidth` wide (its stored width,
-    /// also while hidden).
-    public static func panelWidth(windowWidth: Double, sidebarWidth: Double) -> Double {
-        let s = Metrics.sidebar
-        return max(s.libraryMinWidth.value, min(windowWidth - s.libraryWindowMargin.value, sidebarWidth))
+    /// also while hidden), showing `page`; `spaces` is how many cards the Spaces page shows.
+    public static func panelWidth(windowWidth: Double, sidebarWidth: Double, page: LibraryPage = .media, spaces: Int = 0) -> Double {
+        let s = Metrics.sidebar, l = Metrics.library
+        let base = max(s.libraryMinWidth.value, min(windowWidth - s.libraryWindowMargin.value, sidebarWidth))
+        guard page == .spaces else { return base }
+        let cards = Double(max(1, spaces))
+        let wanted = l.navWidth.value + l.spacesLeading.value + cards * l.spacesCardWidth.value + (cards - 1) * l.spacesCardGap.value
+            + l.spacesTrailing.value
+        return max(base, min(wanted, windowWidth - s.libraryWindowMargin.value))
     }
 
-    /// `panel` at the window's left edge and `page` the content area right of it (WindowLayout.compute).
-    public static func frames(panel: CGRect, page: CGRect, contentSize: CGSize) -> LibraryFrames {
-        let m = Metrics.library, inset = Metrics.tablist.selectionInset.value
-        let pitch = m.rowHeight.value + Metrics.tablist.rowSpacing.value
+    /// `panel` at the window's left edge (WindowLayout.compute): the navigation column, its cells and the page column.
+    public static func frames(panel: CGRect) -> LibraryFrames {
+        let l = Metrics.library
+        let nav = CGRect(x: panel.minX, y: panel.minY, width: min(l.navWidth.value, panel.width), height: panel.height)
+        let count = Double(LibraryPage.allCases.count)
+        let span = panel.height - l.navTop.value - l.navBottomReserve.value - l.navCellHeight.value
+        let pitch = max(l.navCellHeight.value, (span / max(1, count - 1)).rounded())
         var cells: [LibraryPage: CGRect] = [:]
         for (i, libraryPage) in LibraryPage.allCases.enumerated() {
-            cells[libraryPage] = CGRect(x: panel.minX + inset, y: panel.minY + m.listTop.value + Double(i) * pitch,
-                                        width: max(0, panel.width - 2 * inset), height: m.rowHeight.value)
+            cells[libraryPage] = CGRect(x: nav.minX + l.navCellLeading.value, y: nav.minY + l.navTop.value + Double(i) * pitch,
+                                        width: l.navCellWidth.value, height: l.navCellHeight.value)
         }
-        return LibraryFrames(frame: CGRect(origin: .zero, size: contentSize), strip: panel, pageCells: cells, page: page)
+        let page = CGRect(x: nav.maxX, y: panel.minY, width: max(0, panel.maxX - nav.maxX), height: panel.height)
+        return LibraryFrames(frame: panel, strip: panel, nav: nav, pageCells: cells, page: page)
     }
 
     /// The traffic lights over the panel: where the sidebar puts them (`SidebarLayout`), so they do not move when the
@@ -129,6 +138,13 @@ public enum LibraryLayout {
     public static func closeButton(in panel: CGRect) -> CGRect {
         let d = Metrics.dock, size = d.buttonSize.value
         return CGRect(x: panel.minX + d.buttonInset.value, y: panel.maxY - d.libraryBottom.value - size, width: size, height: size)
+    }
+
+    /// The gift button (Arc's invitation button) at the bottom right of the navigation column, level with the exit.
+    public static func giftButton(in nav: CGRect) -> CGRect {
+        let d = Metrics.dock, size = d.buttonSize.value
+        return CGRect(x: nav.maxX - Metrics.library.giftTrailing.value - size, y: nav.maxY - d.libraryBottom.value - size,
+                      width: size, height: size)
     }
 }
 

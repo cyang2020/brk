@@ -8,9 +8,9 @@ import Foundation
 /// R2 to R10: electron-v1:e2e/regression.spec.ts (the interrogate findings) on the control socket.
 enum RegressionScenarios {
     /// R2: sidebar hidden, the Library opened on the archive: its panel takes the sidebar's place (Arc's Library
-    /// replaces the sidebar, shown or hidden) and the archive fills the content area beside it. The pointer at the
-    /// window's left edge, where the reveal strip was, keeps the Library open and peeks nothing over it; Esc closes
-    /// the Library and the sidebar is still hidden, its reveal strip back.
+    /// replaces the sidebar, shown or hidden), the archive fills the panel's page column, and the page's card stays
+    /// beside it. The pointer at the window's left edge, where the reveal strip was, keeps the Library open and peeks
+    /// nothing over it; Esc closes the Library and the sidebar is still hidden, its reveal strip back.
     @Sendable static func peekKeepsArchive(_ app: AppUnderTest) throws {
         try app.press("cmd+s")
         try app.waitUntil("Cmd+S to hide the sidebar") { try !app.view().sidebar.visible }
@@ -21,9 +21,10 @@ enum RegressionScenarios {
             guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
             try expect(n.computed.revealStrip == nil, "a reveal strip under the Library panel")
             try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
-            try expect(near(library.page, n.computed.contentArea), "library page area \(library.page), content area \(n.computed.contentArea)")
+            try expect(library.strip.contains(library.page) && library.page.minX == library.nav.maxX, "library page column \(library.page), panel \(library.strip)")
             let page = try visible(n, .archive), cell = try visible(n, .libraryPage(.archive))
-            try expect(near(page.frame, library.page), "archive at \(page.frame), library page area \(library.page)")
+            try expect(near(page.frame, library.page), "archive at \(page.frame), library page column \(library.page)")
+            try expect(n.computed.cards.first.map { $0.rect.minX > library.strip.maxX } == true, "the page's card is not beside the Library")
             try expect(near(cell.frame, library.pageCells[.archive] ?? .zero), "archive row at \(cell.frame)")
             try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "the sidebar shows with the Library open")
             return true

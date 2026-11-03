@@ -85,9 +85,9 @@ final class SettingsSpecTests: XCTestCase {
         XCTAssertEqual(r.snapshot.settings.profiles.map(\.profile.id), [.default])
         XCTAssertEqual(r.snapshot.settings.profiles.first?.settings.autoArchive, .sevenDays)
         XCTAssertEqual(r.saved["version"] as? Int, 3)
-        r.user(.library(.open(.history)))
-        guard case .library(let library)? = r.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(library.history.map(\.url), [start])
+        r.user(.library(.openHistory))
+        guard let library = r.view.history else { return XCTFail("no library") }
+        XCTAssertEqual(library.map(\.url), [start])
     }
 
     /// unknown profiles, engines and routes are ignored, never trapped

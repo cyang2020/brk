@@ -302,6 +302,7 @@ final class FavoriteTileView: HoverView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        preview.cancel()
         dispatch(.sidebar(.popupMenu(.item(id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 }

@@ -68,6 +68,9 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var profileDialog: ProfileDialogSnapshot?
     public var find: FindSnapshot? = nil
     public var overlay: OverlaySnapshot?
+    /// The visits a History card lists (`PaneContent.history`): the window's profile's, newest first; none in an
+    /// incognito window. Nil while no card shows the History page. F5.
+    public var history: [HistoryRow]? = nil
     /// Who should have keyboard focus. Applied by the window controller only when it changes.
     public var focus: FocusTarget
     /// Shortcut-table actions that apply right now (menu validation greys out the others).
@@ -75,6 +78,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var tabTools = TabToolsSnapshot()
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// What View > Appearance applies to this window's site (the check mark of Automatic, Light or Dark).
+    public var websiteAppearance: WebsiteAppearance = .automatic
 }
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {
@@ -246,6 +251,8 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case blank
     /// The page crashed and is being recovered; the card shows Arc's sad-tab placeholder.
     case crashed(PageID)
+    /// The History page (`HistoryPage`): no browser; the card draws `WindowSnapshot.history`.
+    case history(PageID)
 }
 
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
@@ -287,8 +294,6 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var archive: ArchiveSnapshot?
     /// Newest first, the current space's profile only. F5.
     public var downloads: [DownloadRow]
-    /// Newest first, the current space's profile only. F5.
-    public var history: [HistoryRow]
     public var boosts: [Boost] = []
     public var boostMessage: String? = nil
     public var canManageBoosts = true
