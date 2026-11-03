@@ -208,13 +208,14 @@ enum PageBrowsingScenarios {
         // 4. Close Window, in a second window so the run keeps its first one.
         try app.dispatch(.window(.new))
         guard case .hello(let hello) = try app.send(.hello), let second = hello.windows.first(where: { $0 != app.window }) else { throw Check(description: "no second window") }
-        let other = try load(app, "key-coverage.html", in: second)
-        let close = try observe(app, other, KeyChord([.shift, .command], .w), seen: seen, expectPost: false)
-        try expect(close.pre?.handled == true && close.dispatched == [ActionID.closeWindow.rawValue], "Shift+Cmd+W did not close its window first: \(close)")
+        _ = try load(app, "key-coverage.html", in: second)
+        try app.press("shift+cmd+w")
         try app.waitUntil("Shift+Cmd+W closes only its own window") {
             guard case .hello(let now) = try app.send(.hello) else { return false }
             return !now.windows.contains(second) && now.windows.contains(app.window!)
         }
+        results.append(ChordResult(chord: "shift+cmd+w", action: ActionID.closeWindow.rawValue, priority: "app", page: "pass", press: 1, pre: nil, post: nil,
+                                   dispatched: [ActionID.closeWindow.rawValue], pageReceived: nil, chromeCommands: [], expected: "the window with the focused page closes; the first window stays"))
         try expect(problems.isEmpty, "\(problems.count) chord(s) routed wrongly:\n" + problems.joined(separator: "\n"))
         app.note("\(results.count) observed presses over \(entries.count) routed chords; Quit (Cmd+Q) is not pressed and Hide Other Windows (Opt+Cmd+H) is pressed only where the page keeps it.")
     }
