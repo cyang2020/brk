@@ -90,7 +90,9 @@ final class TablistView: NSScrollView {
         return window.makeFirstResponder(document)
     }
 
-    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot) {
+    /// `newTabCurrent`: the New Tab row draws as the current row (a blank window showing nothing, as Arc's does).
+    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot,
+                newTabCurrent: Bool = false) {
         self.tools = tools
         multiselection = tools.selected
         let previousSpace = last?.space.id
@@ -145,7 +147,7 @@ final class TablistView: NSScrollView {
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
-                newTab.render(palette: palette)
+                newTab.render(palette: palette, current: newTabCurrent)
             case .topSpacer:
                 break
             }
@@ -357,7 +359,8 @@ final class RowView: HoverView {
     private let audio = GlyphButton()
     private let button = GlyphButton()
     private var segments: [SplitSegmentView] = []
-    private var slashes: [CAShapeLayer] = []
+    /// The peeked page's icon at the row's trailing end while the window's Peek was opened from this tab.
+    private let peekMarker = PeekMarkerView()
     private var renameField: RenameField?
     /// A split row with a custom icon starts its panes after the icon; without one they start in the icon slot.
     private var splitIcon = false
@@ -381,7 +384,8 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, audio, media, button] as [NSView] { addSubview(view) }
+        for view in [background, icon, title, audio, media, button, peekMarker] as [NSView] { addSubview(view) }
+        peekMarker.isHidden = true
         audio.action = { [weak self] _ in self?.toggleMute() }
         audio.isHidden = true
         button.action = { [weak self] _ in self?.closeTapped() }
@@ -410,15 +414,18 @@ final class RowView: HoverView {
             title.stringValue = tab.title
             toolTip = tab.title
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, loading: tab.loading)
-            dimmed = !tab.loaded && section != .today
+            dimmed = !tab.loaded && section != .today && section != .scratch
             configureButton(tab: tab, palette: palette)
             setSegments([], palette: palette)
+            peekMarker.isHidden = !tab.peeking
+            if tab.peeking { peekMarker.render(favicon: tab.peekFavicon, palette: palette) }
         case .folder(let folder):
             title.stringValue = (folder.group ? "Group · " : "") + folder.title
             toolTip = folder.title
             icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary)
             button.isHidden = true
             setSegments([], palette: palette)
+            peekMarker.isHidden = true
         case .split(let split):
             title.stringValue = ""
             toolTip = split.panes.map(\.title).joined(separator: " / ")
@@ -426,6 +433,7 @@ final class RowView: HoverView {
             splitIcon = split.icon != nil
             button.isHidden = true
             setSegments(split.panes, palette: palette)
+            peekMarker.isHidden = true
         }
         title.textColor = palette.ink.text
         for view in [icon, title] as [NSView] { view.alphaValue = dimmed ? Draw.unloadedAlpha.value : 1 }
@@ -435,7 +443,8 @@ final class RowView: HoverView {
     }
 
     private func configureButton(tab: TabRow, palette: Palette) {
-        let today = section == .today
+        // A window's own tabs (blank and incognito windows) archive like Today's.
+        let today = section == .today || section == .scratch
         button.isHidden = !today && !tab.loaded
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
         button.render(today ? .archiveTab : .closeKeepPinned, size: Draw.smallFont.value, palette: palette,
@@ -449,18 +458,7 @@ final class RowView: HoverView {
             addSubview(segment)
         }
         while segments.count > panes.count { segments.removeLast().removeFromSuperview() }
-        while slashes.count < max(0, panes.count - 1) {
-            let slash = CAShapeLayer()
-            slash.lineCap = .round
-            layer?.addSublayer(slash)
-            slashes.append(slash)
-        }
-        while slashes.count > max(0, panes.count - 1) { slashes.removeLast().removeFromSuperlayer() }
         for (segment, pane) in zip(segments, panes) { segment.render(pane, palette: palette) }
-        for slash in slashes {
-            slash.strokeColor = palette.ink.slash.cgColor
-            slash.lineWidth = Draw.hairline.value
-        }
         title.isHidden = !panes.isEmpty
     }
 
@@ -473,31 +471,28 @@ final class RowView: HoverView {
         audio.frame = g.button.offsetBy(dx: -g.button.width, dy: 0)
         media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
-        let trailing = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
+        peekMarker.frame = g.button
+        let trailing = !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
+            : button.isHidden ? g.selection.maxX - Draw.titleTrailing.value : g.button.minX
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
     }
 
-    /// Panes share the row from the icon slot (or after a custom split icon) to the selection's end, a slash between.
+    /// Arc's split row: each pane a box inside the row's selection (Draw.splitSegment*), side by side with a gap,
+    /// after the custom split icon when there is one. Boxes too narrow for a title show only the icon.
     private func layoutSegments(_ g: RowGeometry) {
         guard !segments.isEmpty else { return }
-        let start = splitIcon ? g.icon.maxX : g.icon.minX - Draw.faviconLeading.value / 2
-        let end = g.selection.maxX - Draw.closeTrailing.value / 2
-        let gap = Draw.splitSlashSlant.value * 2
+        let inset = Draw.splitSegmentInset.value, gap = Draw.splitSegmentGap.value
+        let start = splitIcon ? g.icon.maxX + inset : g.selection.minX + inset
+        let end = g.selection.maxX - inset
         let width = (end - start - gap * Double(segments.count - 1)) / Double(segments.count)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (i, segment) in segments.enumerated() {
-            let x = start + Double(i) * (width + gap)
-            segment.frame = CGRect(x: x, y: g.selection.minY, width: max(0, width), height: g.selection.height)
-            if i < slashes.count {
-                let mid = x + width + gap / 2, h = Draw.splitSlashHeight.value / 2, s = Draw.splitSlashSlant.value / 2
-                let path = CGMutablePath()
-                path.move(to: CGPoint(x: mid - s, y: bounds.midY + h))
-                path.addLine(to: CGPoint(x: mid + s, y: bounds.midY - h))
-                slashes[i].path = path
-            }
+            segment.frame = CGRect(x: start + Double(i) * (width + gap), y: g.selection.minY + inset,
+                                   width: max(0, width), height: max(0, g.selection.height - 2 * inset))
+            segment.showsTitle = width >= Draw.splitSegmentTitleMinWidth.value
         }
         CATransaction.commit()
     }
@@ -615,10 +610,12 @@ final class RowView: HoverView {
     }
 }
 
-/// One pane inside a split row: favicon and title; hovering shows its own × (Arc: per-child close).
-/// Clicks go to the row (the pane under the pointer gets focus).
+/// One pane inside a split row (Arc 1.170): a TabCellBackgroundChild box with the pane's favicon and title (the
+/// icon alone when the box is narrow); hovering shows its own × (Arc: per-child close). Clicks go to the row (the
+/// pane under the pointer gets focus).
 @MainActor
 final class SplitSegmentView: HoverView {
+    var showsTitle = true { didSet { if showsTitle != oldValue { title.isHidden = !showsTitle; needsLayout = true } } }
     private let dispatch: Dispatch
     private(set) var pane: TabRow?
     private let icon = IconView()
@@ -632,7 +629,7 @@ final class SplitSegmentView: HoverView {
         self.dispatch = dispatch
         super.init(frame: .zero)
         layer?.cornerCurve = .continuous
-        layer?.cornerRadius = Metrics.tablist.hoverButtonRadius.value
+        layer?.cornerRadius = Draw.splitSegmentRadius.value
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
@@ -669,13 +666,14 @@ final class SplitSegmentView: HoverView {
     override func layout() {
         super.layout()
         let t = Metrics.tablist
-        let side = t.favicon.value, size = min(2 * t.hoverButtonRadius.value, bounds.width / 3)
-        icon.frame = CGRect(x: Draw.faviconLeading.value / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        let side = t.favicon.value, size = min(2 * t.hoverButtonRadius.value, bounds.width / 3, bounds.height)
+        let iconX = showsTitle ? Draw.splitSegmentIconLeading.value : max(0, min(Draw.splitSegmentIconLeading.value, (bounds.width - side) / 2))
+        icon.frame = CGRect(x: iconX, y: (bounds.height - side) / 2, width: side, height: side)
         close.frame = CGRect(x: bounds.width - size, y: (bounds.height - size) / 2, width: size, height: size)
         audio.frame = close.frame.offsetBy(dx: -size, dy: 0)
         media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
-        let start = icon.frame.maxX + Draw.faviconLeading.value / 2
+        let start = Draw.splitSegmentTitleLeading.value
         let end = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
         title.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, end - start), height: height)
     }
@@ -684,14 +682,48 @@ final class SplitSegmentView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        layer?.backgroundColor = (isHovered || pane?.status == .current) ? palette.color(palette.tokens.tabChild).cgColor : nil
-        close.alphaValue = isHovered ? 1 : 0
+        layer?.backgroundColor = palette.color(isHovered ? palette.tokens.itemHover : palette.tokens.tabChild).cgColor
+        close.alphaValue = isHovered && showsTitle ? 1 : 0
         needsLayout = true
     }
 
     override func rightMouseDown(with event: NSEvent) {
         guard let pane else { return }
         dispatch(.sidebar(.popupMenu(.item(pane.id), at: rootPoint(fromWindow: event.locationInWindow))))
+    }
+}
+
+/// Arc's Peek marker at the trailing end of the row a Peek was opened from: the peeked page's icon in a
+/// TabCellBackgroundChild box the size of the row's hover button.
+@MainActor
+final class PeekMarkerView: NSView {
+    private let icon = IconView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        addSubview(icon)
+        setAccessibilityLabel("Peek")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func render(favicon: URL?, palette: Palette) {
+        layer?.backgroundColor = palette.color(palette.tokens.tabChild).cgColor
+        icon.render(.favicon(favicon), tint: palette.ink.secondary)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = Metrics.content.cornerRadius.value
+        let side = Draw.peekMarkerIcon.value
+        icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
     }
 }
 
@@ -812,10 +844,14 @@ final class NewTabRowView: HoverView {
         identify(.todayNewTab)
     }
 
-    func render(palette: Palette) {
-        guard palette != self.palette else { return }
+    private var current = false
+
+    /// `current` draws the row like the current tab (white, shadowed) with the text in the row ink.
+    func render(palette: Palette, current: Bool = false) {
+        guard palette != self.palette || current != self.current else { return }
         self.palette = palette
-        let color = palette.color(palette.tokens.foregroundStrong)
+        self.current = current
+        let color = current ? palette.ink.text : palette.color(palette.tokens.foregroundStrong)
         label.textColor = color
         icon.render(.glyph(.plus), tint: color)
         stateChanged()
@@ -831,8 +867,13 @@ final class NewTabRowView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        let fill = isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : nil
+        let tokens = palette.tokens
+        let fill = current ? tokens.tabCurrent : isPressed ? tokens.tabPressed : isHovered ? tokens.itemHover : nil
         background.layer?.backgroundColor = fill.map { palette.color($0).cgColor }
+        background.layer?.shadowColor = palette.color(tokens.tabShadow).cgColor
+        background.layer?.shadowOpacity = current ? 1 : 0
+        background.layer?.shadowRadius = Draw.selectedShadowRadius.value
+        background.layer?.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
     }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }
@@ -864,10 +905,14 @@ final class SpaceHeaderView: HoverView {
         for view in [icon, label, chevron] as [NSView] { addSubview(view) }
     }
 
-    func render(_ space: SpaceSnapshot, palette: Palette) {
-        if space == self.space, palette == self.palette { return }
+    /// False for a blank window's "This Window" header: no Pinned to collapse, no space menu.
+    private var interactive = true
+
+    func render(_ space: SpaceSnapshot, palette: Palette, interactive: Bool = true) {
+        if space == self.space, palette == self.palette, interactive == self.interactive { return }
         self.space = space
         self.palette = palette
+        self.interactive = interactive
         let color = palette.color(palette.tokens.foregroundStrong)
         label.stringValue = space.title
         label.textColor = color
@@ -891,14 +936,14 @@ final class SpaceHeaderView: HoverView {
         label.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, chevron.frame.minX - start), height: height)
     }
 
-    override func stateChanged() { chevron.alphaValue = isHovered ? 1 : 0 }
+    override func stateChanged() { chevron.alphaValue = isHovered && interactive ? 1 : 0 }
 
     override func mouseUp(with event: NSEvent) {
-        if bounds.contains(local(event)) { dispatch(.space(.togglePinnedSection(.current))) }
+        if interactive, bounds.contains(local(event)) { dispatch(.space(.togglePinnedSection(.current))) }
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        guard let space else { return }
+        guard interactive, let space else { return }
         dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
 }

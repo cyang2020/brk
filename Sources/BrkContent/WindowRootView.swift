@@ -11,7 +11,7 @@ import BrkUIKit
 /// Owner: W2 (the Library slot: F5). A window's content view. Bottom to top: themed background, anchored sidebar,
 /// content cards (page surfaces inside), the History page over its card, the Library (its panel in place of the
 /// sidebar; the archive is one of its pages), the Peek card, floating sidebar (only while peeking a hidden sidebar),
-/// command bar, space dialog (SwiftUI in an NSHostingView). TODO(F2): the profile dialog host; TODO(F3): Arc's Peek card chrome.
+/// command bar, space dialog (SwiftUI in an NSHostingView). TODO(F2): the profile dialog host.
 /// Native views above Chromium's moved views draw and take focus normally (spike unknown 2, embed mode).
 @MainActor
 public final class WindowRootView: NSView {
@@ -101,7 +101,7 @@ public final class WindowRootView: NSView {
         }
         sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
         content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil
-        content.render(snapshot.content, frames: frames, palette: palette, surface: surface)
+        content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         let historyCard = frames.cards.first { if case .history = $0.content { true } else { false } }
         let historyPage: PageID? = if case .history(let page)? = historyCard?.content { page } else { nil }
         history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
@@ -115,8 +115,7 @@ public final class WindowRootView: NSView {
         case nil: break
         }
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
-        peek.render(peekSnapshot, frames: frames, palette: palette, surface: surface)
-        peek.setFindVisible(snapshot.find != nil)
+        peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
@@ -133,56 +132,41 @@ public final class WindowRootView: NSView {
     }
 }
 
-/// Owner: F3. The Peek card (Arc: `modalV2`; visual-and-copy.md "Peek"): the peeked page's surface in a rounded,
-/// shadowed card over the content area (`WindowFrames.peek`, the content area inset Metrics.peek.inset), with a
-/// strip under it carrying the hint ("Click “Open in” to move this page in a full window, or ⌘W to close"), "Open
-/// in tab" (promotes the page to the current space's Today, `.window(.openIn(.current))`) and "Close"
-/// (`.peek(.close)`, what Esc does). The view's frame is exactly the peek rect, so the control socket reads it; the
-/// radius, shadow and strip height are the labeled guesses in Metrics.peek until Arc's are measured. No backdrop
-/// dims the content (that would need a sibling view in W2's root).
+/// Owner: F3. The Peek card (Arc: `modalV2`; visual-and-copy.md "Peek"), as on Arc 1.170: the peeked page's surface in
+/// a white rounded, shadowed card over the content area (`WindowFrames.peek`, `PeekLayout.card`), and beside its top
+/// right corner a column of three round buttons (`PeekLayout.controls`): close (`.peek(.close)`, what Esc does), open
+/// as a tab (`.peek(.openAsTab)`: the last tab of Today, same live page) and open in a split (`.peek(.openInSplit)`).
+/// Under the card the page stays where it is, washed toward the window color (Metrics.peek.backdropAlpha); a click
+/// on that wash closes the Peek. The card's frame is exactly the peek rect, so the control socket reads it; the
+/// wash and the buttons are sibling views installed beside the card in the root.
 @MainActor
 public final class PeekCardView: NSView {
     private let dispatch: Dispatch
     private let card = CardView(frame: .zero)
-    private let strip = NSView(frame: .zero)
-    private let hint = NSTextField(labelWithString: PeekCopy.hint)
-    private let close = NSButton(title: PeekCopy.close, target: nil, action: nil)
-    private let openIn = NSButton(title: PeekCopy.openInTab, target: nil, action: nil)
+    private let backdrop = PeekBackdropView(frame: .zero)
+    private let buttons: [PeekRoundButton]
     private var last: PeekSnapshot?
-    private let destinations = NSPopUpButton(frame: .zero, pullsDown: true)
-    private var destinationCommands: [Command] = []
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
+        buttons = [
+            PeekRoundButton(symbol: "xmark", tip: PeekCopy.close, id: .peekClose) { dispatch(.peek(.close)) },
+            PeekRoundButton(symbol: "arrow.up.left.and.arrow.down.right", tip: PeekCopy.openInTab, id: .peekOpenIn) { dispatch(.peek(.openAsTab)) },
+            PeekRoundButton(symbol: "rectangle.split.2x1", tip: PeekCopy.openInSplit, id: .peekSplit) { dispatch(.peek(.openInSplit)) },
+        ]
         super.init(frame: .zero)
         wantsLayer = true
         identify(.peek)
         layer?.masksToBounds = false
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.35
+        layer?.shadowOpacity = 0.18
         layer?.shadowRadius = Metrics.peek.shadowRadius.value
-        layer?.shadowOffset = CGSize(width: 0, height: -Metrics.peek.shadowRadius.value / 3)
+        layer?.shadowOffset = CGSize(width: 0, height: -Metrics.peek.shadowRadius.value / 4)
         card.layer?.cornerRadius = Metrics.peek.cornerRadius.value
         addSubview(card)
-        strip.wantsLayer = true
-        addSubview(strip)
-        hint.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        hint.textColor = .secondaryLabelColor
-        hint.lineBreakMode = .byTruncatingTail
-        strip.addSubview(hint)
-        for (button, id, action) in [(close, ViewID.peekClose, #selector(closeClicked)), (openIn, ViewID.peekOpenIn, #selector(openInClicked))] {
-            button.bezelStyle = .rounded
-            button.controlSize = .small
-            button.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-            button.target = self
-            button.action = action
-            button.identify(id)
-            strip.addSubview(button)
-        }
-        destinations.target = self; destinations.action = #selector(destinationChosen)
-        destinations.controlSize = .small
-        strip.addSubview(destinations)
-        close.keyEquivalent = "\u{1b}"   // the card's Close is Esc's "Exit", also reachable by mouse
+        backdrop.onClick = { dispatch(.peek(.close)) }
+        backdrop.isHidden = true
+        for button in buttons { button.isHidden = true }
         isHidden = true
     }
 
@@ -191,48 +175,143 @@ public final class PeekCardView: NSView {
 
     public override var isFlipped: Bool { true }
 
-    public func render(_ peek: PeekSnapshot?, frames: WindowFrames, palette: Palette, surface: (PageID) -> NSView?) {
+    /// The wash goes under the card and the buttons over it, as siblings in the root.
+    public override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        guard let superview else { return }
+        superview.addSubview(backdrop, positioned: .below, relativeTo: self)
+        for button in buttons { superview.addSubview(button, positioned: .above, relativeTo: self) }
+    }
+
+    public func render(_ peek: PeekSnapshot?, frames: WindowFrames, theme: ResolvedTheme, palette: Palette, surface: (PageID) -> NSView?) {
         guard let peek, let rect = frames.peek else {
             isHidden = true
+            backdrop.isHidden = true
+            for button in buttons { button.isHidden = true }
             last = nil
             card.host(nil, placeholder: nil)
             return
         }
         isHidden = false
         frame = rect
-        let hintHeight = Metrics.peek.hintHeight.value
-        card.frame = CGRect(x: 0, y: 0, width: rect.width, height: max(0, rect.height - hintHeight))
-        layer?.shadowPath = CGPath(roundedRect: card.frame, cornerWidth: Metrics.peek.cornerRadius.value, cornerHeight: Metrics.peek.cornerRadius.value, transform: nil)
+        card.frame = bounds
+        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: Metrics.peek.cornerRadius.value, cornerHeight: Metrics.peek.cornerRadius.value, transform: nil)
         card.host(peek.page.flatMap(surface), placeholder: peek.page == nil ? peek.tab.title : nil)
-        strip.frame = CGRect(x: 0, y: card.frame.maxY, width: rect.width, height: hintHeight)
-        let buttonHeight = min(22, hintHeight - 4), y = (hintHeight - buttonHeight) / 2
-        close.frame = CGRect(x: rect.width - 72, y: y, width: 64, height: buttonHeight)
-        openIn.frame = CGRect(x: close.frame.minX - 8 - 104, y: y, width: 104, height: buttonHeight)
-        hint.frame = CGRect(x: 8, y: 0, width: max(0, openIn.frame.minX - 16), height: hintHeight)
-        let entries = OpenInMenu.model(spaces: peek.spaces, folders: peek.folders).entries
-        destinationCommands = entries.compactMap { if case .action(_, let command, _) = $0 { command } else { nil } }
-        let titles = entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } }
-        destinations.removeAllItems(); destinations.addItems(withTitles: ["Move to…"] + titles)
-        destinations.frame = CGRect(x: max(8, openIn.frame.minX - 126), y: y, width: 118, height: buttonHeight)
-        destinations.toolTip = "Reopens the committed address in the destination profile; unsaved form state stays in the temporary page until moved."
-        hint.frame.size.width = max(0, destinations.frame.minX - 16)
+        backdrop.isHidden = false
+        backdrop.frame = frames.contentArea
+        backdrop.render(color: NSColor(srgbRed: theme.windowColor.red, green: theme.windowColor.green, blue: theme.windowColor.blue,
+                                       alpha: Metrics.peek.backdropAlpha.value))
+        let tint = ThemeAccent.peekGlyph(theme)
+        for (button, place) in zip(buttons, PeekLayout.controls(beside: rect)) {
+            button.isHidden = false
+            button.frame = place
+            button.render(tint: tint, scheme: palette.scheme)
+        }
         last = peek
     }
+}
 
-    func setFindVisible(_ visible: Bool) { close.keyEquivalent = visible ? "" : "\u{1b}" }
+/// The wash over the page under a Peek; a click on it closes the Peek.
+@MainActor
+final class PeekBackdropView: NSView {
+    var onClick: (() -> Void)?
 
-    @objc private func destinationChosen() {
-        let index = destinations.indexOfSelectedItem - 1
-        if destinationCommands.indices.contains(index) { dispatch(destinationCommands[index]) }
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Metrics.content.cornerRadius.value
     }
-    @objc private func closeClicked() { dispatch(.peek(.close)) }
-    @objc private func openInClicked() { dispatch(.window(.openIn(.current))) }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    func render(color: NSColor) { layer?.backgroundColor = color.cgColor }
+
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
+    }
+}
+
+/// One of the Peek's round buttons: a white circle with a soft shadow and the theme-tinted glyph.
+@MainActor
+final class PeekRoundButton: NSView {
+    private let glyph = NSImageView()
+    private let symbol: String
+    private let action: () -> Void
+    private var pressed = false
+
+    init(symbol: String, tip: String, id: ViewID, action: @escaping () -> Void) {
+        self.symbol = symbol
+        self.action = action
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.12
+        layer?.shadowRadius = 3
+        layer?.shadowOffset = CGSize(width: 0, height: -1)
+        toolTip = tip
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(tip)
+        identify(id)
+        addSubview(glyph)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    /// The button takes the click itself, not its glyph or label (an image view would swallow the mouse-up).
+    override func hitTest(_ point: NSPoint) -> NSView? { !isHidden && frame.contains(point) ? self : nil }
+
+    func render(tint: NSColor, scheme: Scheme) {
+        layer?.cornerRadius = bounds.width / 2
+        layer?.backgroundColor = (scheme == .dark ? NSColor(white: 0.2, alpha: 1) : NSColor.white).cgColor
+        let size = Metrics.peek.controlGlyph.value
+        glyph.image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .medium))
+        glyph.contentTintColor = tint
+        glyph.frame = bounds.insetBy(dx: (bounds.width - size - 2) / 2, dy: (bounds.height - size - 2) / 2)
+    }
+
+    override func mouseDown(with event: NSEvent) { pressed = true; alphaValue = 0.8 }
+    override func mouseUp(with event: NSEvent) {
+        alphaValue = 1
+        defer { pressed = false }
+        if pressed, bounds.contains(convert(event.locationInWindow, from: nil)) { action() }
+    }
+}
+
+/// Shades of the space's primary color, same hue, for chrome Arc tints with the theme: the split view's focus ring
+/// (#725137 under the #F2EAE4 capture theme) and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
+enum ThemeAccent {
+    static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
+        shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: theme.scheme == .dark ? 0.8 : 0.45)
+    }
+
+    static func peekGlyph(_ theme: ResolvedTheme) -> NSColor {
+        shade(theme, saturationScale: 6, saturationCap: 0.35, brightness: theme.scheme == .dark ? 0.85 : 0.76)
+    }
+
+    private static func shade(_ theme: ResolvedTheme, saturationScale: Double, saturationCap: Double, brightness: Double) -> NSColor {
+        let primary = theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1)
+        let color = NSColor(srgbRed: primary.red, green: primary.green, blue: primary.blue, alpha: 1)
+        var hue: CGFloat = 0, saturation: CGFloat = 0, value: CGFloat = 0, alpha: CGFloat = 0
+        color.getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
+        return NSColor(hue: hue, saturation: min(saturationCap, saturation * saturationScale), brightness: brightness, alpha: 1)
+    }
 }
 
 /// Arc's Peek and Little Arc copy shared by the card and the Little Arc panel (visual-and-copy.md "Little Arc").
 public enum PeekCopy {
     /// `bin:0x103a05b60`, Arc's Little Arc hint; the Peek strip reads the same, since both close with ⌘W and move with "Open in".
     public static let hint = "Click “Open in” to move this page in a full window, or ⌘W to close"
-    public static let openInTab = "Open in tab"
+    public static let openInTab = "Open as Tab"
+    public static let openInSplit = "Open in Split View"
     public static let close = "Close"
 }

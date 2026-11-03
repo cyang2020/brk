@@ -160,12 +160,13 @@ enum Wave2Scenarios {
             return row.title == "Fixture Page 2"
         }
         try expect(try app.view(incognito!).urlPill.profile?.incognito == true, "no incognito badge")
-        try app.waitUntil("the incognito badge on screen") {
+        try app.waitUntil("the incognito chrome on screen") {
             guard case .native(let n) = try app.send(.native(window: incognito)) else { return false }
             let v = try app.view(incognito!)
             guard let row = v.scratch?.rows.first else { return false }
             try expect(v.theme.scheme == .dark && relativeLuminance(v.theme.windowColor) < 0.18, "incognito chrome is not dark")
-            return try isShown(n, .profileBadge) && contains(visible(n, .section(.scratch)), visible(n, .row(row.id)))
+            // Arc's incognito pill has no badge: the window's dark chrome and "Incognito Tabs" say it.
+            return try !isShown(n, .profileBadge) && contains(visible(n, .section(.scratch)), visible(n, .row(row.id)))
         }
         try app.screenshot("incognito", window: incognito)
         let privateTab = try app.view(incognito!).scratch!.rows[0].id
@@ -232,9 +233,10 @@ enum Wave2Scenarios {
         try expect(h.windows.count == 2, "\(h.windows.count) windows after restart, expected 2")
     }
 
-    /// W2-5 (F3): Cmd+Opt+N opens a Little Arc window (`kind == .little`, no sidebar, content size
-    /// Metrics.littleArc.defaultSize) with the command bar; a URL typed there is its one tab; Cmd+O "Open in" moves
-    /// the tab to the top of the current space's Today in the standard window and closes the Little Arc.
+    /// W2-5 (F3): Cmd+Opt+N opens a Little Arc window (`kind == .little`, no sidebar) that is the command bar alone
+    /// (content size Metrics.littleArc.commandBarSize); a URL typed there is its one tab and the window grows to
+    /// Metrics.littleArc.defaultSize; Cmd+O "Open in" moves the tab to the top of the current space's Today in the
+    /// standard window and closes the Little Arc.
     @Sendable static func littleArc(_ app: AppUnderTest) throws {
         try app.press("cmd+opt+n")
         var little: WindowID?
@@ -248,9 +250,9 @@ enum Wave2Scenarios {
         try expect(isCommandBar(v.overlay), "Little Arc did not open with the command bar")
         let n = try app.send(.native(window: little))
         guard case .native(let facts) = n else { throw Check(description: "no native facts for the Little Arc window") }
-        let size = Metrics.littleArc.defaultSize.value
-        try expect(near(CGRect(origin: .zero, size: facts.contentSize), CGRect(origin: .zero, size: size), tolerance: 1),
-                   "Little Arc content size \(facts.contentSize), expected \(size)")
+        let compact = Metrics.littleArc.commandBarSize.value
+        try expect(near(CGRect(origin: .zero, size: facts.contentSize), CGRect(origin: .zero, size: compact), tolerance: 1),
+                   "Little Arc without a page has content size \(facts.contentSize), expected \(compact)")
         try dispatch(app, window: little, .commandBar(.submit(app.site.url("page2.html").absoluteString)))
         try app.waitUntil("the Little Arc's one tab") { try app.view(little!).scratch?.rows.count == 1 }
         try app.waitUntil("the Little Arc page loaded with keyboard focus") {
@@ -258,6 +260,11 @@ enum Wave2Scenarios {
                   case .native(let native) = try app.send(.native(window: little)) else { return false }
             return row.title == "Fixture Page 2" && native.focusedPage == PageID(window: little!, item: row.id)
                 && native.pages[PageID(window: little!, item: row.id)] != nil && !isShown(native, .sidebar)
+        }
+        let size = Metrics.littleArc.defaultSize.value
+        try app.waitUntil("the Little Arc grown to Arc's default size") {
+            guard case .native(let native) = try app.send(.native(window: little)) else { return false }
+            return near(CGRect(origin: .zero, size: native.contentSize), CGRect(origin: .zero, size: size), tolerance: 1)
         }
         try app.screenshot("little-arc", window: little)
         let before = todayIDs(try app.view())
@@ -276,7 +283,7 @@ enum Wave2Scenarios {
     }
 
     /// W2-6 (F3): Shift+click on fixture home's link opens a Peek on page2: `view().overlay` is `.peek`, the `peek`
-    /// view's frame equals `computed.peek` (the content area inset Metrics.peek.inset), the peeked page is live and
+    /// view's frame equals `computed.peek` (`PeekLayout.card` in the content area), the peeked page is live and
     /// has focus; Esc closes it, its page leaves `native().pages`, and Today did not grow.
     @Sendable static func peek(_ app: AppUnderTest) throws {
         let before = todayIDs(try app.view())
@@ -294,7 +301,7 @@ enum Wave2Scenarios {
             let card = try visible(n, .peek)
             guard let rect = n.computed.peek else { throw Check(description: "computed frames have no peek") }
             try expect(near(card.frame, rect), "peek at \(card.frame), computed \(rect)")
-            try expect(near(rect, n.computed.contentArea.insetBy(dx: Metrics.peek.inset.value, dy: Metrics.peek.inset.value)), "peek inset is not \(Metrics.peek.inset.value)")
+            try expect(near(rect, PeekLayout.card(in: n.computed.contentArea)), "peek is not PeekLayout.card")
             try expect(n.pages[page!] != nil, "the peeked page has no surface")
             try expect(n.focusedPage == page, "focus is on \(n.focusedPage?.description ?? "nothing"), not the peek")
             guard case .peek(let p)? = try app.view().overlay else { return false }
