@@ -117,9 +117,6 @@ public final class AppStore {
     /// Every user command, system event and page event enters here.
     public func dispatch(_ input: Input) {
         if isTerminating, case .user = input { return }
-        if case .user(_, .boost(let command)) = input, ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
-            fputs("[boost] dispatch \(String(describing: command).prefix(60)) behind=\(dispatching) queued=\(queue.count)\n", stderr)
-        }
         queue.append(input)
         guard !dispatching else { return }
         drain()
