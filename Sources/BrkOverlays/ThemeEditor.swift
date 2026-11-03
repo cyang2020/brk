@@ -196,8 +196,11 @@ final class ThemeEditorModel: ObservableObject {
         self.onChange = onChange
     }
 
+    /// The first pick in a fresh draft starts from that one color: Arc's window turns the picked preset alone (P24
+    /// flow), the default's second color does not stay.
     func update(_ change: (inout ThemeDraft) -> Void) {
         var next = draft
+        if !chosen { next.edit { if $0.colors.count > 1 { $0.colors = [$0.colors[0]] } } }
         change(&next)
         chosen = true
         guard next != draft else { return }
@@ -226,6 +229,9 @@ struct ThemeEditorView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             pad.frame(width: m.padSide.value, height: m.padSide.value).position(x: m.card.value.width / 2, y: m.padInset.value + m.padSide.value / 2)
+            // Over the pad but not in it, so the pad's tap never competes with these buttons.
+            appearanceButtons.position(x: m.card.value.width / 2, y: m.padInset.value + m.appearanceY.value)
+            steppers.position(x: m.card.value.width / 2, y: m.padInset.value + m.stepperY.value)
             presets.frame(width: m.card.value.width, height: m.presetDot.value + 8).position(x: m.card.value.width / 2, y: m.presetY.value)
             WaveSlider(value: model.draft.style.intensity, ink: ink, enabled: model.chosen) { value in model.update { $0.setIntensity(value) } }
                 .frame(width: m.sliderX.value[1] - m.sliderX.value[0], height: m.handle.value.height)
@@ -276,8 +282,6 @@ struct ThemeEditorView: View {
                 Text("Tap to pick a color for this space").font(.system(size: 13, weight: .semibold)).foregroundStyle(ink.opacity(0.6))
                     .allowsHitTesting(false)
             }
-            appearanceButtons.position(x: side / 2, y: m.appearanceY.value)
-            steppers.position(x: side / 2, y: m.stepperY.value)
         }
     }
 

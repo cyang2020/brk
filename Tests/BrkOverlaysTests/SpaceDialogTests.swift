@@ -32,7 +32,9 @@ final class SpaceCreateDraftTests: XCTestCase {
         XCTAssertFalse(model.theme.chosen, "the pad says \"Tap to pick a color for this space\" until a color is picked")
         model.theme.update { $0.setColor(ThemePresets.greyscale[0], at: 0) }
         XCTAssertTrue(model.draft.themeChosen)
-        XCTAssertEqual(ThemeDraft(theme: model.draft.theme).colors.first, ThemePresets.greyscale[0])
+        XCTAssertEqual(ThemeDraft(theme: model.draft.theme).colors, [ThemePresets.greyscale[0]], "the first pick is the one color, as Arc's window")
+        model.theme.update { $0.addColor() }
+        XCTAssertEqual(ThemeDraft(theme: model.draft.theme).colors.count, 2)
         model.draft.name = "流程"
         guard case .space(.create(_, _, let theme, _))? = model.draft.createCommand else { return XCTFail("no create command") }
         XCTAssertEqual(resolveTheme(theme).gradient.first, ThemePresets.greyscale[0])

@@ -137,7 +137,8 @@ enum SpaceToolsScenarios {
             let v = try app.view()
             if case .theme? = v.dialog { return v.theme.scheme == .dark } else { return false }
         }
-        try clickWhenShown(app, "theme-presets-next"); try clickWhenShown(app, "theme-presets-next")
+        // The panel opens on the page of the space's color (Pastel); the next page is Drab.
+        try clickWhenShown(app, "theme-presets-next")
         try clickWhenShown(app, "theme-preset-8")
         try app.waitUntil("the Drab preset applied") {
             guard case .theme(_, let t)? = try app.view().dialog else { return false }
