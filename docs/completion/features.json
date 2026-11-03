@@ -6654,7 +6654,8 @@
       "remaining": [
         "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency.",
         "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据",
-        "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。"
+        "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。",
+        "R3-3（2026-11-04，合并 662007f2）：Library 的 Easels 页改成真实的 Easel 卡片列表（旧的占位页删掉）。Easels 图标若要更贴近 Arc（带波浪线的小窗口）归 Library 图标工作。"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -8232,7 +8233,8 @@
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "No complete user-facing workflow is implemented in current source."
+        "No complete user-facing workflow is implemented in current source.",
+        "R3-3（2026-11-04）：Note 没做。Arc 1.170 的菜单和命令栏都没有 New Note 入口（results.tsv Q09-b），菜单里的三项 Note 已隐藏；要不要做 Brk 自己的 Note 等用户定。"
       ]
     },
     {
@@ -8242,13 +8244,14 @@
       "arc_evidence": "rows 30, 172; `ARC_EaselUI`",
       "description": "A canvas for captures, drawing and text",
       "historical_status": "planned",
-      "status": "missing",
+      "status": "implemented",
       "acceptance": "Create and reopen an Easel with captures, drawing and text; edit its objects and export the result.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "No complete user-facing workflow is implemented in current source."
+        "No complete user-facing workflow is implemented in current source.",
+        "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。"
       ]
     },
     {

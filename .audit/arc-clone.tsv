@@ -170,3 +170,5 @@ ts	phase	decision	why	evidence	result
 2026-11-03T18:46:19Z	gate	合并后 main：单元测试 943/0 失败/1 跳过（第一次跑 1 个失败，重跑未复现）；站台 Q02、P23、P27、P24、P30 与任务报告一致	验收规矩	/tmp/station-parent/r3-1/sheet.tsv；/tmp/r3-1-tests.log	通过；A073/A076/A060/A008 的 remaining 更新
 2026-11-03T19:18:21Z	merge	R3-5 菜单栏/Help/Dock/AppleScript 分支合进 main（e9f5e87d）；第一次合并提交 2a4eb956 误含主检出的 2957 个未跟踪文件和 16 个脏文件，已重写	任务自己的门：948 单元测试、5 个原生场景、站台 P19/P43；父任务 git add 用了目录，教训记入记忆	分支 t3/r3-5-menus-dock-applescript（44f4408b、647c3f60）；verify/completion/r3-5-menus/	合并提交 e9f5e87d（两个父提交，只含分支改动）
 2026-11-03T19:18:21Z	gate	合并后 main：单元测试 964/0 失败/1 跳过（station2 干净工作树）；站台 P19、P43、P36、P38 与上一轮持平	验收规矩	/tmp/station-parent/r3-5/sheet.tsv；/tmp/r3-5-tests.log	通过；A125 partial→implemented，A131/A133 missing→partial，A041/A130 的 remaining 更新
+2026-11-03T19:34:34Z	merge	R3-3 Easel 分支合进 main（662007f2）；六处冲突两边保留；占位测试修正 f989c39b	任务自己的门：945 单元测试、5 个原生场景、站台 Q09/P32-c	分支 t3/r3-3-easel（57a2dec3）	合并提交 662007f2
+2026-11-03T19:34:34Z	gate	合并后 main：单元测试 982/0 失败/1 跳过（第一次跑测试进程崩过一次，未复现）；站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%，P30/P19 持平	验收规矩	/tmp/station-parent/r3-3/sheet.tsv；/tmp/r3-3-tests-3.log	通过；A101 missing→implemented；A100、A081 的 remaining 更新
