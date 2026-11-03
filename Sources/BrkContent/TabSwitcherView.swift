@@ -24,6 +24,23 @@ struct SwitcherMetricsTable: MetricGroup {
     let textInset = Metric(23.0, .anatomy("\(measured): titles start 27 in from the page image's left edge (a label draws 2 in)"))
     let titleFontSize = Metric(14.0, .anatomy("\(measured): titles have a 10 pt cap height"))
     let windowMargin = Metric(24.0, .guess("the strip keeps 24 from the window's sides, dropping cards in a narrow window"))
+    let placeholderRadius = Metric(3.0, .guess("the grey square for a tab without a favicon, a sidebar row's placeholder at 14 pt"))
+}
+
+/// The top-right notice (P43-a, Arc's "ChatGPT in the Command Bar not enabled").
+let NoticeMetrics = NoticeMetricsTable()
+
+struct NoticeMetricsTable: MetricGroup {
+    private static let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc capture P43-a"
+    let height = Metric(42.0, .anatomy("\(measured): the banner is about 42 tall"))
+    let radius = Metric(12.0, .anatomy("\(measured): the banner's corners"))
+    let padding = Metric(16.0, .anatomy("\(measured): the message starts about 18 in, a label drawing 2 in"))
+    let fontSize = Metric(15.0, .anatomy("\(measured): the message's 11 pt capitals"))
+    let linkHeight = Metric(20.0, .anatomy("\(measured): the Preferences link's pill"))
+    let linkRadius = Metric(6.0, .guess("the link pill's corners, the size of the command bar's key caps"))
+    let linkFontSize = Metric(12.0, .anatomy("\(measured): \"Arc Max Preferences ↗\" is smaller than the message"))
+    let rightInset = Metric(12.0, .guess("in from the window's right edge; Arc's banner runs past it"))
+    let top = Metric(6.0, .anatomy("\(measured): the banner's top 4 below the window's"))
 }
 
 /// Owner: tab tools. The Ctrl+Tab switcher as Arc draws it (P09-a/b): a white strip with rounded corners and a shadow,
@@ -113,7 +130,7 @@ private final class SwitcherCard: NSView {
         page.imageScaling = .scaleAxesIndependently
         icon.imageScaling = .scaleProportionallyUpOrDown
         placeholder.wantsLayer = true
-        placeholder.layer?.cornerRadius = 3
+        placeholder.layer?.cornerRadius = SwitcherMetrics.placeholderRadius.value
         title.lineBreakMode = .byTruncatingTail
         title.cell?.truncatesLastVisibleLine = true
         for view in [pageShadow, page, placeholder, icon, title] { addSubview(view) }

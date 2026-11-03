@@ -59,6 +59,8 @@ public final class SidebarView: NSView {
         var resizeHandle: CGRect?
         var revealStrip: CGRect?
         var palette: Palette
+        /// The command bar is opening a new tab (the New Tab row shows as selected).
+        var newTabActive: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -112,9 +114,11 @@ public final class SidebarView: NSView {
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
         canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
+        let newTabActive: Bool = if case .commandBar(let bar)? = snapshot.overlay { bar.createsTab } else { false }
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
-                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
+                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
+                          newTabActive: newTabActive)
         guard slice != last else { return }
         let previous = last
         last = slice
@@ -145,7 +149,7 @@ public final class SidebarView: NSView {
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette)
         tablist.frame = local(f.tablistViewport)
-        if case .commandBar(let bar)? = snapshot.overlay { tablist.newTabActive = bar.createsTab } else { tablist.newTabActive = false }
+        tablist.newTabActive = newTabActive
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled

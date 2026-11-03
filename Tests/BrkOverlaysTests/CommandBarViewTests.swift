@@ -183,7 +183,11 @@ final class CommandBarViewTests: XCTestCase {
     }
 
     func testEscapeDismissesAndReturnWithNothingToChooseDispatchesNothing() {
-        let view = makeBar(commandBar([], []))
+        // An empty bar always lists Arc's Contact the Team (Q01-a); Ask Max with nothing typed lists nothing.
+        var ask = commandBar([], [])
+        ask.aiMode = .question
+        let view = makeBar(ask)
+        XCTAssertTrue(view.results.isEmpty)
         XCTAssertTrue(press(#selector(NSResponder.insertNewline(_:)), in: view))
         XCTAssertTrue(press(#selector(NSResponder.cancelOperation(_:)), in: view))
         XCTAssertEqual(sent, [.commandBar(.dismiss)])

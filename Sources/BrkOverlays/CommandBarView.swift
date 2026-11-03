@@ -401,7 +401,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let needed = o.textX.value + textWidth + o.offerGap.value + accessoryWidth + o.accessoryRightInset.value
         let width = attached ? min(bounds.width, max(m.attachedCardWidth.value, needed)) : bounds.width
         card.frame = CGRect(x: 0, y: 0, width: width, height: min(bounds.height, inputHeight + listHeight))
-        card.layer?.shadowPath = nil
+        card.layer?.shadowPath = CGPath(roundedRect: card.bounds, cornerWidth: o.cornerRadius.value, cornerHeight: o.cornerRadius.value, transform: nil)
 
         let mid = inputHeight / 2
         let iconSide = o.iconSize.value
@@ -450,7 +450,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
         card.layer?.backgroundColor = colors.card.cgColor
         card.layer?.borderColor = colors.border.cgColor
-        card.shadow = .popover(OverlayColors.of(scheme))
+        card.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(scheme == .light ? o.cardShadowAlpha.value : 0.6)
+            shadow.shadowBlurRadius = o.cardShadowRadius.value
+            shadow.shadowOffset = NSSize(width: 0, height: -o.cardShadowOffset.value)
+            return shadow
+        }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor
         sitePill.layer?.backgroundColor = colors.accessory.cgColor
         siteLabel.textColor = colors.accessoryText

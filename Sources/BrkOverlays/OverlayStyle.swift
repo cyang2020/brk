@@ -168,6 +168,10 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let hintHeight = Metric(20.0, .guess("hint pill height"))
     let hintRadius = Metric(6.0, .anatomy("\(measured): the Tab key and the arrow square have about 6 pt corners"))
     let shadowRadius = Metric(24.0, .guess("popover shadow blur; the color is PopoverShadow"))
+    /// The command bar's own shadow is much wider (P02-b: 32% black at the card's edge, fading over about 90 pt).
+    let cardShadowRadius = Metric(96.0, .anatomy("\(measured): the shadow fades like a 48 pt Gaussian"))
+    let cardShadowAlpha = Metric(0.32, .anatomy("\(measured): 15% black just outside the card's edge"))
+    let cardShadowOffset = Metric(6.0, .guess("a small drop under the wide shadow, as popovers have"))
     let shadowOffset = Metric(8.0, .guess("popover shadow drop"))
     /// A spring from Metrics.commandBar.openBounceFrom to 1 (Arc: `arc_commandBarBounce`, scale only, no fade).
     let bounceStiffness = Metric(420.0, .guess("spring stiffness of the opening bounce; settles in about 0.3 s"))

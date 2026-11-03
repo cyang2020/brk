@@ -91,7 +91,7 @@ final class TabToolsOverlayView: NSView {
         toast.sizeToFit()
         toast.frame.origin = NSPoint(x: (bounds.width - toast.frame.width) / 2, y: bounds.height - 58)
         banner.isHidden = notice == nil
-        if let notice, let link = notice.link { banner.show(notice.text, link: link, right: bounds.width - 12, top: 6) }
+        if let notice, let link = notice.link { banner.show(notice.text, link: link, right: bounds.width - NoticeMetrics.rightInset.value, top: NoticeMetrics.top.value) }
         education.isHidden = true
         education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
         education.cell?.wraps = true
@@ -115,7 +115,7 @@ final class NoticeBanner: NSView {
         super.init(frame: .zero)
         body.wantsLayer = true
         body.layer?.cornerCurve = .continuous
-        body.layer?.cornerRadius = 12
+        body.layer?.cornerRadius = NoticeMetrics.radius.value
         body.layer?.borderWidth = 0.5
         body.layer?.borderColor = NSColor.black.withAlphaComponent(0.25).cgColor
         // P43-a samples #E7F7F7 to #F0FDFD inside the banner.
@@ -127,11 +127,11 @@ final class NoticeBanner: NSView {
             shadow.shadowOffset = NSSize(width: 0, height: -3)
             return shadow
         }()
-        text.font = .systemFont(ofSize: 15, weight: .medium)
+        text.font = .systemFont(ofSize: NoticeMetrics.fontSize.value, weight: .medium)
         text.textColor = NSColor.black.withAlphaComponent(0.88)
         link.isBordered = false
         link.wantsLayer = true
-        link.layer?.cornerRadius = 6
+        link.layer?.cornerRadius = NoticeMetrics.linkRadius.value
         link.layer?.backgroundColor = NSColor(srgbRed: 0xE3 / 255.0, green: 0xEF / 255.0, blue: 0xEF / 255.0, alpha: 1).cgColor
         link.target = self
         link.action = #selector(follow)
@@ -149,15 +149,16 @@ final class NoticeBanner: NSView {
         command = link.command
         text.stringValue = message
         self.link.attributedTitle = NSAttributedString(string: link.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: NSColor.black.withAlphaComponent(0.85),
+            .font: NSFont.systemFont(ofSize: NoticeMetrics.linkFontSize.value, weight: .medium), .foregroundColor: NSColor.black.withAlphaComponent(0.85),
         ])
         let textSize = CGSize(width: ceil(text.intrinsicContentSize.width) + 4, height: text.intrinsicContentSize.height)
-        let bodySize = CGSize(width: textSize.width + 32, height: 42)
-        let linkSize = CGSize(width: ceil(self.link.intrinsicContentSize.width) + 14, height: 20)
+        let pad = NoticeMetrics.padding.value
+        let bodySize = CGSize(width: textSize.width + 2 * pad, height: NoticeMetrics.height.value)
+        let linkSize = CGSize(width: ceil(self.link.intrinsicContentSize.width) + 14, height: NoticeMetrics.linkHeight.value)
         let size = CGSize(width: bodySize.width, height: bodySize.height + 2 + linkSize.height)
         frame = CGRect(x: right - size.width, y: top, width: size.width, height: size.height)
         body.frame = CGRect(origin: .zero, size: bodySize)
-        text.frame = CGRect(x: 16, y: ((bodySize.height - textSize.height) / 2).rounded(), width: textSize.width, height: textSize.height)
+        text.frame = CGRect(x: pad, y: ((bodySize.height - textSize.height) / 2).rounded(), width: textSize.width, height: textSize.height)
         self.link.frame = CGRect(x: size.width - linkSize.width - 8, y: bodySize.height + 2, width: linkSize.width, height: linkSize.height)
     }
 

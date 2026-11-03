@@ -29,7 +29,7 @@ final class ArcCaptureSuggestTests: XCTestCase {
         XCTAssertEqual(list[0].title, "Visual fixture")
         XCTAssertEqual(list[3].command, .settings(.openPane(.links)), "Air Traffic Control is the Links pane")
         XCTAssertEqual(list[4].command, ActionID.gettingStarted.spec.command)
-        XCTAssertEqual(rows(Suggest.rank(query: visual + "x", bar: bar, appName: "Brk", resolve: fakeResolve)).first, "open:\(visual)x",
+        XCTAssertEqual(rows(Suggest.rank(query: visual + "x", bar: bar, appName: "Brk", resolve: fakeResolve)).first, "open:127.0.0.1:8764/visual.htmlx",
                        "an edited address is ranked like any other")
     }
 

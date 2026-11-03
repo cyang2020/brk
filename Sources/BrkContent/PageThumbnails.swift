@@ -5,8 +5,9 @@ import BrkLayout
 
 /// The last look of each shown tab or split, for the Ctrl+Tab switcher's cards (Arc shows the pages, P09-a). A view
 /// cannot draw Chromium's pixels itself, so the window's own image is taken (`capture`, BrkApp's window-server call)
-/// and cropped to the card: once the window has been still for `settle` seconds with nothing over the content, and
-/// once more as the switcher opens, before its first frame (the screen still shows the page it started from).
+/// and cropped to the card: once the window has been still for `settle` (a short look at a tab is enough) with
+/// nothing over the content, and once more as the switcher opens, before its first frame (the screen still shows the
+/// page it started from).
 @MainActor
 final class PageThumbnails {
     /// The window's image as the window server shows it; nil when the app gives none (tests).
@@ -15,7 +16,7 @@ final class PageThumbnails {
     /// What the last render showed: the item a switcher card stands for and its rect in the window.
     private var shown: (item: ItemID, rect: CGRect)?
     private var pending: Task<Void, Never>?
-    private let settle: Duration = .seconds(1)
+    private let settle: Duration = .milliseconds(350)
     /// Card images are kept at twice the switcher's 157.5 x 105 pt.
     private let size = CGSize(width: 315, height: 210)
 
