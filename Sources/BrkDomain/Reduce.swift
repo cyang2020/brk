@@ -188,6 +188,7 @@ struct Work {
             for window in state.session.windows.keys {
                 if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now {
                     state.session.windows[window]?.toast = nil
+                    if state.session.windows[window]?.copiedCapture?.action == nil { state.session.windows[window]?.copiedCapture = nil }
                     state.session.windows[window]?.toastUndo = nil
                 }
             }

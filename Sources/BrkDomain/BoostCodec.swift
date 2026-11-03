@@ -12,6 +12,7 @@ public enum BoostCodec {
                   boost.name.count <= 200, boost.css.utf8.count <= 500_000, boost.javascript.utf8.count <= 500_000 else {
                 throw invalid("Boosts need a name and at most 500 KB each of CSS and JavaScript.")
             }
+            guard boost.style?.valid ?? true else { throw invalid("Unsupported Boost style values.") }
             if case .host(let host) = boost.scope {
                 guard let url = URL(string: "https://" + host), let origin = SiteOrigin(url), origin.url.host == host,
                       origin.value == "https://" + host else { throw invalid("Use an exact lowercase hostname without a path or port.") }

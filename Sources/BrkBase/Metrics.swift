@@ -70,6 +70,8 @@ public struct MetricsTable: MetricGroup {
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
     public let find = FindMetrics()
+    public let boostPanel = BoostPanelMetrics()
+    public let capture = CaptureMetrics()
     public let siteControls = SiteControlsMetrics()
 }
 
@@ -508,4 +510,32 @@ public struct AIMetrics: MetricGroup {
     public let bodyFont = Metric(13.0, .guess("selectable answer body font"))
     public let cornerRadius = Metric(12.0, .guess("answer document rounded corners"))
     public let borderWidth = Metric(1.0, .guess("answer panel hairline"))
+}
+
+/// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).
+public struct BoostPanelMetrics: MetricGroup {
+    public let size = Metric(CGSize(width: 183, height: 588), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the panel window, 366 x 1176 px"))
+    public let codeWidth = Metric(480.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the Code page widens the panel to 960 px"))
+    public let cornerRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: transparent panel corners"))
+    public let headerHeight = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: header with its hairline at y 79 px"))
+    public let tileHeight = Metric(38.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tiles 76 px tall"))
+    public let tileRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tile corners"))
+    public let settingsRadius = Metric(10.0, .guess("My Boost settings card: matches the tiles; Arc's menu was not captured"))
+    public let zapHintHeight = Metric(55.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 Zap strip, hairline at 1416 px to the card bottom at 1526 px"))
+    public let zapOutline = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 the page card's #575757 outline while Zap is on, 6 px"))
+}
+
+/// Arc's capture mode, measured on this run's 2x shots (P33-a/b/c/d-arc.png).
+public struct CaptureMetrics: MetricGroup {
+    public let pageDim = Metric(0.224, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: white page under the mask reads #C6C6C6"))
+    public let sidebarFade = Metric(0.55, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: sidebar text #1A1A1A reads #959594 on an unchanged background"))
+    public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
+    public let hintCardRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
+    public let hintCardBottom = Metric(35.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card ends 70 px above the page bottom"))
+    public let lessonHeight = Metric(46.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip, 92 px"))
+    public let lessonRadius = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip corners"))
+    public let menuCard = Metric(CGSize(width: 273, height: 354), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card, 546 x 708 px"))
+    public let menuRadius = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card corners"))
+    public let menuGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card starts 6 px right of the selection"))
+    public let menuRowPitch = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c rows 80 px apart"))
 }
