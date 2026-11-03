@@ -56,7 +56,7 @@ final class SitePanels: NSObject, NSPopoverDelegate {
         entry.value = value
         popover.contentSize = host.preferredSize
         host.onResize = { [weak popover] size in popover?.contentSize = size }
-        let (rect, edge) = anchor(in: parent, content: content)
+        let (rect, edge) = Self.anchor(in: parent, content: content)
         popover.show(relativeTo: rect, of: content, preferredEdge: edge)
         // Arc's popover is a flat PopoverBackground, not the system's translucent material (which also takes on
         // whatever window is behind it).
@@ -73,7 +73,7 @@ final class SitePanels: NSObject, NSPopoverDelegate {
     /// Where Arc's arrow points (P36-a): at the site icon 19 pt in from the URL pill's right edge, the body 8 pt under the
     /// pill; under a split pane's own button when that opened it. Then the site button wherever it is; the content
     /// area's top-left corner when the sidebar is hidden.
-    private func anchor(in window: NSWindow, content: NSView) -> (CGRect, NSRectEdge) {
+    static func anchor(in window: NSWindow, content: NSView) -> (CGRect, NSRectEdge) {
         let below: NSRectEdge = content.isFlipped ? .maxY : .minY
         let m = Metrics.siteControls
         func visible(_ id: ViewID) -> CGRect? {
@@ -137,11 +137,12 @@ final class SitePanels: NSObject, NSPopoverDelegate {
 }
 
 @MainActor
-final class SiteDialogs {
+final class SiteDialogs: NSObject, NSPopoverDelegate {
     private struct Prompt {
-        let alert: NSAlert
         let target: SiteTarget
         let allowLoading: Bool
+        /// Takes the prompt off screen without answering.
+        let close: @MainActor () -> Void
         let cancel: () -> Void
     }
     private var prompts: [String: Prompt] = [:]
@@ -162,35 +163,68 @@ final class SiteDialogs {
         let key = ViewID.settingsField("confirmSiteClear").identifier
         alert.buttons[0].identifier = NSUserInterfaceItemIdentifier(key)
         alert.buttons[0].setAccessibilityIdentifier(key)
-        prompts[request.id] = Prompt(alert: alert, target: request.target, allowLoading: false, cancel: { reply(false) })
+        prompts[request.id] = Prompt(target: request.target, allowLoading: false, close: { [weak alert] in
+            guard let window = alert?.window else { return }
+            window.sheetParent?.endSheet(window, returnCode: .cancel); window.orderOut(nil)
+        }, cancel: { reply(false) })
         alert.beginSheetModal(for: window) { [weak self] response in
             guard self?.prompts.removeValue(forKey: request.id) != nil else { return }
             reply(response == .alertFirstButtonReturn)
         }
     }
+    /// Brk's own prompt (`SitePermissionPromptView`) in a popover under the address, attached to the page's window.
+    /// Escape or a click elsewhere in the window closes it unanswered; a newer document dismisses it (`validate`).
     func permission(_ prompt: SitePermissionPrompt, in window: NSWindow?, answer: @escaping (SitePermission, Bool) -> Void) {
-        guard let window, window.attachedSheet == nil else { answer(.ask, false); return }
-        let alert = NSAlert()
-        alert.messageText = "\(prompt.requestingOrigin.value) requests access"
-        alert.informativeText = prompt.capabilities.map(\.rawValue).sorted().joined(separator: ", ").capitalized + "\n\nPage: \(prompt.target.origin.value)\nmacOS authorization is also required for protected devices."
-        alert.addButton(withTitle: "Allow"); alert.addButton(withTitle: "Deny"); alert.addButton(withTitle: "Dismiss")
-        for (index, name) in ["sitePermissionAllow", "sitePermissionDeny", "sitePermissionDismiss"].enumerated() {
-            let key = ViewID.settingsField(name).identifier
-            alert.buttons[index].identifier = NSUserInterfaceItemIdentifier(key)
-            alert.buttons[index].setAccessibilityIdentifier(key)
+        guard let window, window.isVisible, let content = window.contentView else { answer(.ask, false); return }
+        let view = SitePermissionPromptView(prompt: prompt)
+        let controller = NSViewController()
+        controller.view = view
+        let popover = NSPopover()
+        popover.behavior = .applicationDefined
+        popover.animates = false
+        popover.contentViewController = controller
+        popover.contentSize = view.preferredSize
+        popover.delegate = self
+        let id = prompt.id
+        view.answer = { [weak self] decision, remember in
+            guard let self, self.prompts.removeValue(forKey: id) != nil else { return }
+            self.release(id)?.close()
+            answer(decision, remember)
         }
-        alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Remember for this origin in this profile"
-        prompts[prompt.id] = Prompt(alert: alert, target: prompt.target, allowLoading: true, cancel: { answer(.ask, false) })
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard self?.prompts.removeValue(forKey: prompt.id) != nil else { return }
-            answer(response == .alertFirstButtonReturn ? .allow : response == .alertSecondButtonReturn ? .deny : .ask, alert.suppressionButton?.state == .on)
+        prompts[id] = Prompt(target: prompt.target, allowLoading: true, close: { [weak self] in self?.release(id)?.close() },
+                             cancel: { answer(.ask, false) })
+        popovers[id] = popover
+        let (rect, edge) = SitePanels.anchor(in: window, content: content)
+        popover.show(relativeTo: rect, of: content, preferredEdge: edge)
+        monitors[id] = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self, weak popover] event in
+            let own = popover?.contentViewController?.view.window
+            let escape = event.type == .keyDown && event.keyCode == 53 && (event.window === own || event.window === window)
+            guard escape || event.type != .keyDown && event.window === window else { return event }
+            self?.dismiss(id)
+            return escape ? nil : event
         }
     }
+    private var popovers: [String: NSPopover] = [:]
+    private var monitors: [String: Any] = [:]
+    /// Forgets a prompt's popover and event monitor; returns the popover so the caller can close it.
+    private func release(_ id: String) -> NSPopover? {
+        if let monitor = monitors.removeValue(forKey: id) { NSEvent.removeMonitor(monitor) }
+        return popovers.removeValue(forKey: id)
+    }
+    func popoverDidClose(_ notification: Notification) {
+        guard let popover = notification.object as? NSPopover, let id = popovers.first(where: { $0.value === popover })?.key else { return }
+        _ = release(id)
+        prompts.removeValue(forKey: id)?.cancel()
+    }
+    /// The open permission prompt's window for a browser window, for the control socket.
+    func permissionWindow(for window: WindowID) -> NSWindow? {
+        popovers.first { prompts[$0.key]?.target.page.window == window }?.value.contentViewController?.view.window
+    }
+
     func dismiss(_ id: String) {
         guard let prompt = prompts.removeValue(forKey: id) else { return }
-        if let window = prompt.alert.window.sheetParent { window.endSheet(prompt.alert.window, returnCode: .cancel) }
-        prompt.alert.window.orderOut(nil)
+        popovers[id] = nil
+        prompt.close()
         prompt.cancel()
     }
 }

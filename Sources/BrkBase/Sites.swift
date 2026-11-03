@@ -27,7 +27,16 @@ public struct SiteOrigin: Hashable, Sendable, Codable, CustomStringConvertible {
 }
 
 public enum WebsiteAppearance: String, Hashable, Sendable, Codable, CaseIterable { case automatic, light, dark }
-public enum SiteCapability: String, Hashable, Sendable, Codable, CaseIterable { case camera, microphone, location, notifications, desktopCapture, other }
+public enum SiteCapability: String, Hashable, Sendable, Codable, CaseIterable {
+    case camera, microphone, location, notifications, desktopCapture, other
+    /// Requests macOS has no authorization for: only Brk's own prompt and the remembered choice decide them.
+    case clipboard, midi, windowManagement, storageAccess, sensors, automaticDownloads, pointerLock
+    /// The capabilities Brk asks about and remembers (screen capture needs a source picker; `other` is refused).
+    public static let prompted: [SiteCapability] = [.camera, .microphone, .location, .notifications, .clipboard, .midi, .windowManagement,
+                                                    .storageAccess, .sensors, .automaticDownloads, .pointerLock]
+    /// macOS must also authorize these (camera, microphone, location, notifications); the system prompt is the OS's.
+    public var needsOSAuthorization: Bool { [.camera, .microphone, .location, .notifications].contains(self) }
+}
 public enum SitePermission: String, Hashable, Sendable, Codable, CaseIterable { case ask, allow, deny }
 
 public struct SiteRule: Hashable, Sendable, Codable {

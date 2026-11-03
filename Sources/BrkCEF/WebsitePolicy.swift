@@ -44,7 +44,10 @@ extension ChromePage {
 
     func applyWebsitePolicy(_ policy: WebsitePolicy) {
         let changed = websitePolicy != policy
+        let permissionsChanged = websitePolicy.preferences.rules.mapValues(\.permissions) != policy.preferences.rules.mapValues(\.permissions)
+            || websitePolicy.preferences.embeddedPermissions != policy.preferences.embeddedPermissions
         websitePolicy = policy
+        if permissionsChanged, let origin = browser.url.flatMap(SiteOrigin.init) { syncPermissions(top: origin) }
         configureRequestFilter(browser.url)
         if changed || (frozen && websiteOperationProtected()) { refreshWebsitePolicy() }
     }
@@ -193,7 +196,10 @@ extension ChromePage {
         }
         if request.kinds.contains(.geolocation) { kinds.insert(.location) }
         if request.kinds.contains(.notifications) { kinds.insert(.notifications) }
-        let supported: CefPermissionKind = [.camera, .microphone, .geolocation, .notifications]
+        let unprompted: [(CefPermissionKind, SiteCapability)] = [(.clipboard, .clipboard), (.midi, .midi), (.windowManagement, .windowManagement),
+            (.storageAccess, .storageAccess), (.sensors, .sensors), (.downloads, .automaticDownloads), (.pointerLock, .pointerLock)]
+        for (kind, capability) in unprompted where request.kinds.contains(kind) { kinds.insert(capability) }
+        let supported: CefPermissionKind = [.camera, .microphone, .geolocation, .notifications, .clipboard, .midi, .windowManagement, .storageAccess, .sensors, .downloads, .pointerLock]
         if !request.kinds.subtracting(supported).isEmpty || kinds.isEmpty { kinds.insert(.other) }
         // Screen capture needs a source picker; never describe it as device camera access.
         if kinds.contains(.desktopCapture) || kinds.contains(.other) { callback.resolve(.deny); return }
@@ -223,7 +229,58 @@ extension ChromePage {
         guard let owner = permissionRequests.removeValue(forKey: id) else { return }
         let valid = engine.isLive(self) && matchesPermission(owner.prompt.target)
         engine.dismissPermission(id)
+        let prompt = owner.prompt
+        if valid && decision == .allow {
+            permissionGrants.append((prompt.target.document, prompt.requestingOrigin, prompt.target.origin, prompt.capabilities))
+        }
         owner.callback.resolve(valid && decision == .allow ? .allow : decision == .ask ? .dismiss : .deny)
+    }
+
+    /// Chromium stores every request Brk accepts or blocks. When the document that was allowed ends, its grants go back
+    /// to what Brk remembers: an Allow this time returns to asking.
+    func settlePermissionGrants(keeping document: DocumentToken?) {
+        let ended = permissionGrants.filter { $0.document != document }
+        permissionGrants.removeAll { $0.document != document }
+        for grant in ended { pushPermissions(grant.capabilities, requesting: grant.requesting, top: grant.top) }
+    }
+
+    /// Writes Brk's remembered choices for a top-level site (and what it embeds) into Chromium's store, so a choice
+    /// changed in the site settings takes effect: allow, block, or back to asking. Grants of the live document stay.
+    func syncPermissions(top: SiteOrigin) {
+        let live = Set(permissionGrants.filter { $0.top == top }.flatMap(\.capabilities))
+        pushPermissions(Set(SiteCapability.prompted).subtracting(live), requesting: top, top: top)
+        for key in (websitePolicy.preferences.embeddedPermissions ?? [:]).keys {
+            let parts = key.split(separator: "\n").map(String.init)
+            guard parts.count == 2, parts[0] == top.value, let url = URL(string: parts[1]), let requesting = SiteOrigin(url) else { continue }
+            pushPermissions(Set(SiteCapability.prompted), requesting: requesting, top: top)
+        }
+    }
+
+    private func pushPermissions(_ capabilities: Set<SiteCapability>, requesting: SiteOrigin, top: SiteOrigin) {
+        let remembered = websitePolicy.preferences.permissions(for: requesting, embeddedIn: top)
+        for capability in capabilities {
+            guard let kind = Self.permissionKind(capability) else { continue }
+            // A remembered allow of a device macOS must authorize stays with Brk (asking), so the OS check runs first.
+            let allowed: Bool? = switch remembered[capability] { case .allow?: capability.needsOSAuthorization ? nil : true; case .deny?: false; default: nil }
+            browser.setPermission(kind, requesting: requesting.url, topLevel: top.url, allowed: allowed)
+        }
+    }
+
+    static func permissionKind(_ capability: SiteCapability) -> CefPermissionKind? {
+        switch capability {
+        case .camera: .camera
+        case .microphone: .microphone
+        case .location: .geolocation
+        case .notifications: .notifications
+        case .clipboard: .clipboard
+        case .midi: .midi
+        case .windowManagement: .windowManagement
+        case .storageAccess: .storageAccess
+        case .sensors: .sensors
+        case .automaticDownloads: .downloads
+        case .pointerLock: .pointerLock
+        case .desktopCapture, .other: nil
+        }
     }
 
     func cancelPermissions(frame: String? = nil) {

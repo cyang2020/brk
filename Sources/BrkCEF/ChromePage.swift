@@ -79,6 +79,9 @@ final class ChromePage: CefBrowserDelegate {
     var boostPickerGeneration: UInt64 = 0
     var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
     var permissionRequests: [String: PagePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
+    /// Requests allowed in the current document, so Chromium's stored grant can follow Brk's remembered choice once
+    /// the document ends (Allow this time is not remembered; Chromium stores every accepted request).
+    var permissionGrants: [(document: DocumentToken, requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
     var policyRevision: UInt64 = 0
     var websiteError: String?
     /// The automatic dark mode last sent to this page's DevTools session, and for which document (nil: never sent).
@@ -252,6 +255,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        settlePermissionGrants(keeping: nil)
         captureRevision &+= 1
         closeDocumentPiP()
         fullscreenTransition.cancelPending()
@@ -360,6 +364,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         closeDocumentPiP()
+        settlePermissionGrants(keeping: nil)
         emit(mainDocument.started(url))
         refreshBoosts()
         if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }

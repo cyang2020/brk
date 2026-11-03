@@ -131,7 +131,7 @@ private struct SiteControlsView: View {
                     }
                     }
                 }
-                Text("Use the manager to change permissions or enable and disable extensions. Opening action popups is currently unavailable.").font(.caption).foregroundStyle(.secondary)
+                Text("Use the manager to change permissions or enable and disable extensions. Brk can't open extension popups: Chromium opens them only from its own toolbar, which Brk does not show. Extension shortcuts still work.").font(.caption).foregroundStyle(.secondary)
                 Button("Manage extensions…") { dispatch(.site(.extensions)) }.disabled(privateSession)
                 Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }.disabled(privateSession)
         }
@@ -191,8 +191,8 @@ private struct SiteControlsView: View {
                         SettingsButton(title: "Update now", field: "filterUpdateNow") { dispatch(.site(.updateFilterLists)) }.disabled(!value.filterUpdates)
                     }
                     Divider()
-                    ForEach([SiteCapability.camera, .microphone, .location, .notifications], id: \.self) { capability in
-                        Picker(capability.rawValue.capitalized, selection: Binding(get: { value.rule.permissions[capability] ?? .ask }, set: { answer in change { $0.permissions[capability] = answer } })) {
+                    ForEach(SiteCapability.prompted, id: \.self) { capability in
+                        Picker(SitePermissionPromptView.title(capability), selection: Binding(get: { value.rule.permissions[capability] ?? .ask }, set: { answer in change { $0.permissions[capability] = answer } })) {
                             ForEach(SitePermission.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                         }
                     }
@@ -201,7 +201,7 @@ private struct SiteControlsView: View {
                             Text("macOS " + capability.rawValue + ": " + (authorization[capability] ?? "unknown")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Text("macOS may also require authorization. Screen capture needs a separate source picker.").font(.caption).foregroundStyle(.secondary)
+                    Text("Camera, microphone, location and notifications also need macOS authorization, which macOS asks for itself. Screen capture needs a source picker.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Toggle("Suspend this site while its tab is hidden", isOn: Binding(get: { value.rule.suspendWhenHidden }, set: { on in change { $0.suspendWhenHidden = on } }))
                     Toggle("Keep this site alive", isOn: Binding(get: { value.rule.keepAlive }, set: { on in change { $0.keepAlive = on } }))

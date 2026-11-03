@@ -48,8 +48,11 @@ extension CEFEngine {
                     guard let name = command["name"] as? String, let key = command["keybinding"] as? String else { return nil }
                     return BrowserExtensionCommand(name: name, description: command["description"] as? String ?? name, keybinding: key, active: command["isActive"] as? Bool ?? false)
                 }
+                // developerPrivate gives the icon as a PNG data URL.
+                let prefix = "data:image/png;base64,"
+                let icon = (row["iconUrl"] as? String).flatMap { $0.hasPrefix(prefix) ? Data(base64Encoded: String($0.dropFirst(prefix.count))) : nil }
                 return BrowserExtension(id: id, name: name, version: version, enabled: row["state"] as? String == "ENABLED",
-                    incognitoAllowed: access?["isActive"] as? Bool, canChangeIncognito: access?["isEnabled"] as? Bool, commands: commands)
+                    incognitoAllowed: access?["isActive"] as? Bool, canChangeIncognito: access?["isEnabled"] as? Bool, commands: commands, icon: icon)
             }.sorted { ($0.name, $0.id) < ($1.name, $1.id) }
             return ExtensionCatalog(context: context, extensions: values, error: nil)
         } catch { return ExtensionCatalog(context: context, extensions: [], error: error.localizedDescription) }

@@ -105,6 +105,16 @@ final class ControlExecutor {
                 throw Failure(message: "Site controls are closed")
             }
             return .menuItems(Self.accessibilityTexts(root))
+        case .sitePrompt(let id, let path):
+            guard let window = store.siteDialogs.permissionWindow(for: id), window.isVisible, let root = window.contentView else {
+                throw Failure(message: "No permission prompt is open")
+            }
+            if let path {
+                let image = try capture(window)
+                guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { throw Failure(message: "PNG encoding failed") }
+                try png.write(to: URL(fileURLWithPath: path))
+            }
+            return .menuItems(Self.accessibilityTexts(root))
         case .hello:
             return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))

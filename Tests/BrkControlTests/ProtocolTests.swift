@@ -14,7 +14,7 @@ final class ProtocolTests: XCTestCase {
         case chooseOutputFixture, cancelCurrentOutput, selectLinkExportFixture, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case mediaWindowScreenshot, mediaSounds, captureProbe, sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts
+        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
     }
@@ -42,6 +42,7 @@ final class ProtocolTests: XCTestCase {
         case .siteControls: .siteControls
         case .siteControlInput: .siteControlInput
         case .siteControlTexts: .siteControlTexts
+        case .sitePrompt: .sitePrompt
         case .hello: .hello
         case .view: .view
         case .activate: .activate
@@ -99,6 +100,7 @@ final class ProtocolTests: XCTestCase {
         case .siteControlsScreenshot: return [.siteControlsScreenshot(window: WindowID("w"), path: "/tmp/panel.png")]
         case .siteControls: return [.siteControls]
         case .siteControlTexts: return [.siteControlTexts(window: WindowID("w"))]
+        case .sitePrompt: return [.sitePrompt(window: WindowID("w"), path: "/tmp/prompt.png"), .sitePrompt(window: WindowID("w"), path: nil)]
         case .siteControlInput: return [.siteControlInput(window: WindowID("w"), field: "extension-shortcut-fixture-run", action: .focus), .siteControlInput(window: WindowID("w"), field: "siteExportLink", action: .press)]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]
