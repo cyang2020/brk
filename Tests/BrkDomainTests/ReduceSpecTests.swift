@@ -1388,7 +1388,8 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(layout(menu), ["Copy Link", "Share ▸", "|", "Change Icon…", "Rename…", "Mute", "Customize Page…", "|",
                                       "Open in Split View", "Duplicate", "Move to ▸", "|", "Archive Tab", "Archive Tabs Below"])
         XCTAssertEqual(isEnabled(menu, "Archive Tabs Below"), false, "nothing below the only tab")
-        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Move to"))), ["Work"])
+        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Move to"))), ["Space 1", "Work"])
+        XCTAssertEqual(isEnabled(menu, "Space 1"), false, "the tab's own space")
         d.user(try XCTUnwrap(command(menu, "Work")))
         d.user(.space(.focus(work)))
         XCTAssertEqual(d.todayIDs, [a])

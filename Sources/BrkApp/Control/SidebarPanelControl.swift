@@ -60,7 +60,7 @@ enum SidebarPanelControl {
             })
         case .button(let title):
             if sheet is NSSavePanel, title == "Cancel" { try press("escape", in: sheet); return .ok }
-            guard let button = views.compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) else {
+            guard let button = views.compactMap({ $0 as? NSButton }).first(where: { ($0.title == title || $0.title.isEmpty && $0.accessibilityLabel() == title) && $0.isEnabled }) else {
                 throw Invalid(message: "Native button not found: " + title)
             }
             button.performClick(nil)

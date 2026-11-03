@@ -644,7 +644,11 @@ final class PopupTarget: NSObject, NSMenuDelegate {
             case .separator:
                 menu.addItem(.separator())
             case .header(let title):
-                menu.addItem(.sectionHeader(title: title))
+                // Arc draws its captions as plain grey rows at the menu's own size (P12-e), not AppKit's smaller
+                // section headers.
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
             case .action(let title, let command, let enabled):
                 let item = row(title, command)
                 item.isEnabled = enabled

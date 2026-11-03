@@ -439,6 +439,9 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.remove(.goBack) }
         if state.session.live[PageID(window: window, item: id)]?.canGoForward != true { enabled.remove(.goForward) }
+        // Arc greys Stop Loading on a page that is not loading and Zoom to Actual Size at 100% (P19-a).
+        if state.session.live[PageID(window: window, item: id)]?.loading != true { enabled.remove(.stopLoading) }
+        if (state.session.live[PageID(window: window, item: id)]?.zoomPercent ?? 100) == 100 { enabled.remove(.resetZoom) }
         if tab.url == nil { enabled.remove(.copyCurrentURL) }
         if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
     } else {

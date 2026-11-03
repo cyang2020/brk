@@ -106,4 +106,16 @@ final class ContextMenuTests: XCTestCase {
         XCTAssertEqual(d.current?.id, a)
         XCTAssertNotNil(d.view.boostEditor)
     }
+
+    /// View > Stop Loading and Zoom to Actual Size are grey while there is nothing to stop or reset (P19-a).
+    func testStopLoadingAndActualSizeFollowThePage() throws {
+        let d = Driver()
+        let a = d.todayIDs[0]
+        XCTAssertFalse(d.view.enabledActions.contains(.stopLoading))
+        XCTAssertFalse(d.view.enabledActions.contains(.resetZoom))
+        d.page(a, .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false))
+        d.page(a, .zoomChanged(110))
+        XCTAssertTrue(d.view.enabledActions.contains(.stopLoading))
+        XCTAssertTrue(d.view.enabledActions.contains(.resetZoom))
+    }
 }

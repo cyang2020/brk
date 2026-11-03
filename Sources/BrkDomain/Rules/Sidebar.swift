@@ -236,11 +236,12 @@ extension Work {
             }
             return walk(s.pinnedRoot) + walk(s.todayRoot)
         }
-        /// Move to ▸: the other spaces (in dock order), then the folders of the item's own space.
+        /// Move to ▸: every space in dock order (the item's own one disabled, so the row stays usable with one space,
+        /// as Arc's does), then the folders of the item's own space.
         func moves(_ units: [ItemID], home: SpaceID?, scope: ContainerScope?, command: (Destination) -> Command) -> MenuEntry {
             guard scope == .global, standard else { return .submenu(title: "Move to", entries: []) }
-            let spaces = state.doc.spaceOrder.filter { $0 != home && state.doc.spaces[$0] != nil }.map {
-                entry(state.displayTitle(of: $0), command(.space($0)))
+            let spaces = state.doc.spaceOrder.filter { state.doc.spaces[$0] != nil }.map {
+                entry(state.displayTitle(of: $0), command(.space($0)), enabled: $0 != home)
             }
             let parents = Set(units.compactMap { state.doc.tree[$0]?.parent })
             let inside = home.map { folders(in: $0, excluding: units) }?.filter { folder in

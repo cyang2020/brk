@@ -50,7 +50,11 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         self.engineKind = engineKind
     }
 
-    public func applicationWillFinishLaunching(_ notification: Notification) { installURLHandler() }
+    public func applicationWillFinishLaunching(_ notification: Notification) {
+        // macOS would add its own "Enter Full Screen" (fn F) under View's table row; Arc's View menu has one (P19-a).
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
+        installURLHandler()
+    }
 
     private func installURLHandler() {
         guard getURL == nil else { return }

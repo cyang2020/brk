@@ -68,7 +68,8 @@ import CefKit
 
     private static func trimmed(_ items: [Item], link: Bool) -> [Item] {
         let kept = items.filter { item in
-            item.separator || (!removed.contains(item.title) && (!link || linkRows.contains(item.title)))
+            let title = item.title.replacingOccurrences(of: "...", with: "…")
+            return item.separator || (!removed.contains(title) && (!link || linkRows.contains(title)))
         }
         var out: [Item] = []
         for item in kept {
