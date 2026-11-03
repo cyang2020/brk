@@ -77,7 +77,7 @@ enum PageBrowsingScenarios {
                         physical: Bool = false, settle: Double = 0.35) throws -> Observation {
         let name = chord.description
         let before = (try? facts(app, page).keyReceipts) ?? []
-        if physical { try PhysicalKeys.press(app, chord, window: page.window) } else { try app.press(name) }
+        if physical { try WindowServerKeys.press(app, chord, window: page.window) } else { try app.press(name) }
         var receipts: [PageKeyReceipt] = []
         var pre: PageKeyReceipt?
         try app.waitUntil("\(name) reached the page's key handler", timeout: 4) {
@@ -334,9 +334,9 @@ enum PageBrowsingScenarios {
             if ok { recovered = true; if index == 0 { break } }
             if recovered { break }
         }
-        if PhysicalKeys.allowed {
+        if WindowServerKeys.allowed {
             let before = Set(((try? facts(app, page).keyReceipts) ?? []).compactMap(\.press))
-            try PhysicalKeys.press(app, KeyChord(.command, .zero), window: page.window)
+            try WindowServerKeys.press(app, KeyChord(.command, .zero), window: page.window)
             app.sleep(1)
             let physical = ((try? facts(app, page).keyReceipts) ?? []).contains { $0.stage == "pre" && $0.chord == "cmd+0" && $0.press.map { !before.contains($0) } == true }
             steps.append("physical Cmd+0: reached=\(physical)")
@@ -394,7 +394,7 @@ enum PageBrowsingScenarios {
         app.passed("held keys: repeating zoom and Next Tab step per key-down; Show/Hide Sidebar toggles once")
 
         // Window-server input: the same routes for keys the system delivers to the active app.
-        guard PhysicalKeys.allowed else { app.note("Posting window-server events is not permitted for this runner; physical presses not run."); return }
+        guard WindowServerKeys.allowed else { app.note("Posting window-server events is not permitted for this runner; physical presses not run."); return }
         let physical = try load(app, "key-coverage.html?swallow=1")
         let first = try observe(app, physical, KeyChord(.command, .s), seen: seen, expectPost: false, physical: true)
         let second = try observe(app, physical, KeyChord(.command, .s), seen: seen, expectPost: false, physical: true)
@@ -410,7 +410,7 @@ enum PageBrowsingScenarios {
         try app.waitUntil("physical Cmd+L opened the command bar") { isCommandBar(try app.view().overlay) }
         try app.dispatch(.commandBar(.dismiss))
         try app.waitForPageInput(physical, at: app.site.url("key-coverage.html?swallow=1"))
-        try PhysicalKeys.hold(app, KeyChord(.command, .equals), repeats: 3, window: physical.window)
+        try WindowServerKeys.hold(app, KeyChord(.command, .equals), repeats: 3, window: physical.window)
         try app.waitUntil("physical held Cmd+= reached the page four times") { (try title(app, physical) ?? "").contains(":repeat") }
         app.sleep(0.4)
         let held = (try facts(app, physical).keyReceipts ?? []).filter { $0.chord == "cmd+=" }
@@ -425,7 +425,7 @@ enum PageBrowsingScenarios {
 /// the active application exactly as a keyboard's, with real timestamps and the autorepeat field for held keys. They
 /// are only posted while this run's Brk window is the key window of the active app, checked right before each
 /// event, so nothing typed here can land in another application.
-enum PhysicalKeys {
+enum WindowServerKeys {
     static var allowed: Bool { CGPreflightPostEventAccess() }
 
     static func ensureFrontmost(_ app: AppUnderTest, _ window: WindowID) throws {

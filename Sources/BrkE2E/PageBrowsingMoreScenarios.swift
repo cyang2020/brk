@@ -44,11 +44,11 @@ extension PageBrowsingScenarios {
         let page = try load(app, "key-coverage.html")
 
         // Window-server Ctrl+Cmd+F: page first (not consumed), then the app toggles; the same press again leaves.
-        if PhysicalKeys.allowed {
-            try PhysicalKeys.press(app, KeyChord([.control, .command], .f), window: page.window)
+        if WindowServerKeys.allowed {
+            try WindowServerKeys.press(app, KeyChord([.control, .command], .f), window: page.window)
             try app.waitUntil("physical Ctrl+Cmd+F enters", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning != true }
             try app.screenshot("physical-shortcut-entered")
-            try PhysicalKeys.press(app, KeyChord([.control, .command], .f), window: page.window)
+            try WindowServerKeys.press(app, KeyChord([.control, .command], .f), window: page.window)
             try expect(try !settledFullscreen(app), "physical Ctrl+Cmd+F did not leave fullscreen")
             trace["physical-shortcut"] = "entered and left"
 
@@ -65,7 +65,7 @@ extension PageBrowsingScenarios {
             try PhysicalPointer.click(app, at: point, window: page.window)
             try app.waitUntil("green button enters fullscreen", timeout: 15) { try app.native().fullscreen && app.native().fullscreenTransitioning != true }
             try app.screenshot("green-button-entered")
-            try PhysicalKeys.press(app, KeyChord([], .escape), window: page.window)
+            try WindowServerKeys.press(app, KeyChord([], .escape), window: page.window)
             try expect(try !settledFullscreen(app), "physical Escape did not leave green-button fullscreen")
             trace["green-button"] = "entered at \(point); Escape left"
             app.passed("window-server Ctrl+Cmd+F, green button and Escape")
@@ -438,7 +438,7 @@ enum PhysicalPointer {
     /// Refuses (throws) unless this run's Brk window is the frontmost window at the point, so a click never lands on
     /// another application's window or on another Brk process's always-on-top window.
     static func click(_ app: AppUnderTest, at point: CGPoint, window: WindowID) throws {
-        try PhysicalKeys.ensureFrontmost(app, window)
+        try WindowServerKeys.ensureFrontmost(app, window)
         guard case .hello(let hello) = try app.send(.hello), let front = frontmost(at: point), front.pid == hello.pid else {
             throw Check(description: "another window is in front of Brk at \(point) (\(String(describing: frontmost(at: point)))); physical click not posted")
         }
