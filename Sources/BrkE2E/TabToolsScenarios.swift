@@ -245,7 +245,8 @@ enum TabToolsScenarios {
         _ = try app.screenshot("TabTools6-clear-confirmation")
         try app.click(.tabTool("archive-cancel-clear"))
         try expect(try app.native().actual[ViewID.archiveEntry(entry.id).identifier] != nil, "cancel clear removed data")
-        try app.click(.archiveClear)
+        // Clear Archive is in the Filter menu; it asks in the bar under the search field, whose button confirms.
+        try app.dispatch(ActionID.clearArchive.spec.command)
         app.sleep(0.6)
         try app.click(.archiveClear)
         guard case .library(let cleared)? = try app.view().overlay else { throw Check(description: "archive closed") }

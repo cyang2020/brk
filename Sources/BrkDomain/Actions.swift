@@ -432,7 +432,7 @@ extension ActionID {
         case .goForward:
             entry(159, "Go Forward", .archive, 0, [key(cmd, .rightBracket, .app), key(cmd, .rightArrow, .page)], .page(.forward(.focused)),
                   bar: listing("arrow.right", "Go Forward", "Forward", "Navigate Forward"), repeats: true)
-        case .viewHistory: entry(161, "View History", .archive, 1, [key(cmd, .y, .page)], .library(.open(.history)), bar: listing("book", "Show History", "History"))
+        case .viewHistory: entry(161, "View History", .archive, 1, [key(cmd, .y, .page)], .library(.openHistory), bar: listing("book", "Show History", "History"))
         case .viewArchive: entry(162, "View Archive", .archive, 1, [], .library(.open(.archive)), bar: listing("archivebox", "Archive"))
         case .clearArchive: entry(163, "Clear Archive", .archive, 1, [], .archive(.requestClear), bar: listing("archivebox", "Clear Archive", "Delete Archive"))
 

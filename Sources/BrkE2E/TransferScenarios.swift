@@ -58,9 +58,8 @@ enum TransferScenarios {
         try expect(observations[page]?.requestedURL == pending, "old progress erased the newer navigation")
         try app.evaluate(page, "document.title='Provisional transfer title'")
         try app.waitUntil("provisional title") { try tab(page.item, in: app.view())?.title == "Provisional transfer title" }
-        try app.dispatch(.library(.open(.history)))
-        guard case .library(let history)? = try app.view().overlay else { throw Check(description: "no history") }
-        try expect(history.history.first { $0.url == app.site.url("index.html") }?.title == "Fixture Home", "provisional title rewrote the prior History record")
+        let history = try historyRows(app)
+        try expect(history.first { $0.url == app.site.url("index.html") }?.title == "Fixture Home", "provisional title rewrote the prior History record")
         try app.recordWindows("navigation-history")
         app.site.releaseHeldDocument()
         released = true

@@ -152,9 +152,14 @@ final class IdentityIntegrationTests: XCTestCase {
         d.user(.commandBar(.submit("https://example.com/attachment-only")))
         let blank = try XCTUnwrap(d.current?.id)
         d.download(blank, DownloadID("d"), .receiving(TransferProgress(received: 0, total: nil)), details: DownloadDetails(url: url("https://example.com/attachment-only"), suggestedName: "x"))
+        // The attachment-only tab goes once its file is accepted (Arc downloads a typed address without a tab).
+        XCTAssertFalse(d.todayIDs.contains(blank))
+        XCTAssertEqual(d.current?.id, tab, "the window shows its previous tab again")
         d.user(.profile(.assign(.current, to: .default)))
         XCTAssertNil(d.snapshot.pages.first { $0.id.item == blank }?.initialURL)
-        XCTAssertEqual(Driver(file: d.savedFile).view.content.panes.first?.content, .blank)
+        let restored = Driver(file: d.savedFile)
+        XCTAssertFalse(restored.todayIDs.contains(blank))
+        XCTAssertEqual(restored.view.content.panes.first?.tab, tab)
     }
 
     func testArchiveExportAndPinUseInitiatingCommittedAddress() throws {

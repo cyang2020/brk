@@ -1232,7 +1232,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertTrue(t.docChanged)
         XCTAssertEqual(d.view.overlay, .library(LibrarySnapshot(openID: page.openID, page: .archive,
                                                                 archive: ArchiveSnapshot(openID: page.openID, groups: [], threshold: .twelveHours),
-                                                                downloads: [], history: [])))
+                                                                downloads: [])))
         XCTAssertFalse(d.view.enabledActions.contains(.clearArchive))
         assertUnchanged(d.state, d.user(.archive(.clear)))
     }
@@ -1739,7 +1739,7 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 224, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 225, "a Command case was added: add its sample and a behavior test")
         XCTAssertEqual(CommandInventory.events.count, 50, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
