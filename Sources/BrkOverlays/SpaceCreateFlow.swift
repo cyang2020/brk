@@ -330,10 +330,10 @@ final class ThemePopover: NSObject, NSPopoverDelegate {
 
     init(model: ThemeEditorModel) {
         super.init()
-        popover.behavior = .transient
+        popover.behavior = .semitransient
         popover.animates = false
         popover.contentSize = ThemePanel.card.value
-        popover.contentViewController = NSHostingController(rootView: ThemeEditorView(model: model))
+        popover.contentViewController = .firstClick(ThemeEditorView(model: model).frame(width: ThemePanel.card.value.width, height: ThemePanel.card.value.height))
         popover.delegate = self
     }
 

@@ -508,7 +508,7 @@ final class ThemePanelWindow {
         effect.blendingMode = .behindWindow
         effect.state = .active
         effect.maskImage = .roundedMask(radius: m.cornerRadius.value)
-        let hosting = NSHostingView(rootView: ThemeEditorView(model: model))
+        let hosting = FirstClickHostingView(rootView: ThemeEditorView(model: model))
         hosting.frame = effect.bounds
         effect.addSubview(hosting)
         container.addSubview(effect)
@@ -555,5 +555,21 @@ extension NSImage {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+}
+
+/// SwiftUI content that takes the first click: Arc's popovers and panel act on it, where a plain hosting view in a
+/// window that is not key only makes that window key.
+final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+extension NSViewController {
+    /// A controller whose view is `FirstClickHostingView(rootView:)`, for an NSPopover.
+    @MainActor
+    static func firstClick<Content: View>(_ root: Content) -> NSViewController {
+        let controller = NSViewController()
+        controller.view = FirstClickHostingView(rootView: root)
+        return controller
     }
 }

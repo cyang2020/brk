@@ -247,10 +247,11 @@ final class IconPickerPopover: NSObject, NSPopoverDelegate {
         model = IconPickerModel(icon: icon) { icon in pick(icon); finish?() }
         super.init()
         finish = { [weak self] in self?.popover.performClose(nil) }
-        popover.behavior = .transient
+        // Closes on a click elsewhere in the browser window, not when the app is merely activated or left.
+        popover.behavior = .semitransient
         popover.animates = false
         popover.contentSize = IconPicker.size.value
-        popover.contentViewController = NSHostingController(rootView: SpaceIconPickerView(model: model))
+        popover.contentViewController = .firstClick(SpaceIconPickerView(model: model))
         popover.delegate = self
     }
 

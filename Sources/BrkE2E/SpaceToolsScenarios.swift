@@ -93,8 +93,10 @@ enum SpaceToolsScenarios {
         try app.recordWindows("shell-final")
     }
 
-    /// A control in a popover or the theme panel (its own window) once it is on screen.
+    /// A control in a popover or the theme panel (its own window) once it is on screen and settled.
     private static func clickWhenShown(_ app: AppUnderTest, _ name: String) throws {
+        let start = uptime()
+        try app.waitUntil("\(name) settled") { uptime() - start >= 0.6 }
         try app.waitUntil("\(name) on screen") { (try? app.click(.spaceToolsControl(name))) != nil }
     }
 
@@ -110,8 +112,8 @@ enum SpaceToolsScenarios {
         try app.type("Native Work")
         try app.click(.spaceToolsControl("theme"))
         try clickWhenShown(app, "theme-presets-next")
-        try app.click(.spaceToolsControl("theme-preset-6"))
-        try app.click(.spaceToolsControl("theme-add"))
+        try clickWhenShown(app, "theme-preset-6")
+        try clickWhenShown(app, "theme-add")
         try finishAnimation(app)
         try app.screenshot("theme-stage")
         let pill = try control(app, "profile")
@@ -135,8 +137,8 @@ enum SpaceToolsScenarios {
             let v = try app.view()
             if case .theme? = v.dialog { return v.theme.scheme == .dark } else { return false }
         }
-        try app.click(.spaceToolsControl("theme-presets-next")); try app.click(.spaceToolsControl("theme-presets-next"))
-        try app.click(.spaceToolsControl("theme-preset-8"))
+        try clickWhenShown(app, "theme-presets-next"); try clickWhenShown(app, "theme-presets-next")
+        try clickWhenShown(app, "theme-preset-8")
         try app.waitUntil("the Drab preset applied") {
             guard case .theme(_, let t)? = try app.view().dialog else { return false }
             return t.variants?.dark.colors.first?.color == ThemePresets.drab[8]
