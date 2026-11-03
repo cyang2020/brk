@@ -112,7 +112,7 @@ final class BoostPanelWindow: NSWindow {
 enum BoostInk {
     static let header = rgb(0xF6F6F8), hairline = rgb(0xE6E6E8), body = rgb(0xFCFDFF), tile = rgb(0xECEEEF)
     static let tileActive = rgb(0x393A3A), glyph = rgb(0x3A3A3B), glyphActive = rgb(0xDBDBDB), title = rgb(0x2A2A2B)
-    static let disabled = rgb(0xB4B4B5), fontCell = rgb(0x8E8E90), squareInner = rgb(0xF5F5F5), squareDot = rgb(0xE5E5E5)
+    static let disabled = rgb(0xB4B4B5), fontCell = rgb(0xA0A0A2), squareInner = rgb(0xF5F5F5), squareDot = rgb(0xE5E5E5)
     static let blue = rgb(0x3039FF), introBottom = rgb(0xCDDBFC), introMuted = rgb(0x8387A3), introText = rgb(0x9E9BA5)
     static let codeBackground = rgb(0xF6F7F9), segment = rgb(0xE6E6E8), segmentOn = rgb(0xC9C9CB)
     static func rgb(_ value: Int, alpha: CGFloat = 1) -> NSColor {
@@ -243,7 +243,6 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         square.render(tint: style.tint, text: style.text)
         invert.active = style.inverted
         invert.symbolName = style.inverted ? "lightbulb.fill" : "lightbulb"
-        intensity.isEnabled = style.tint != nil
         intensity.toolTip = "Tint strength \(style.intensity + 1) of \(BoostStyle.intensities.count)"
         clearColor.isEnabled = style.tint != nil || style.text != nil
         fonts.selected = style.font
@@ -434,7 +433,7 @@ final class BoostIconButton: BoostPressable {
 final class BoostTitleButton: BoostPressable {
     var title = "" { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: BoostInk.title])
+        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13.5, weight: .semibold), .foregroundColor: BoostInk.title])
         let size = text.size(), chevron: CGFloat = 16
         let width = min(size.width, bounds.width - chevron - 4)
         let x = (bounds.width - width - chevron - 4) / 2
@@ -589,7 +588,7 @@ final class BoostFontGrid: NSView {
         }
     }
     static func font(_ font: BoostFonts.Font) -> NSFont {
-        let size: CGFloat = 13.5
+        let size: CGFloat = 13
         let weight: NSFont.Weight = font.weight >= 700 ? .bold : font.weight >= 500 ? .medium : font.weight <= 300 ? .light : .regular
         if font.family == ".AppleSystemUIFont" { return .systemFont(ofSize: size, weight: weight) }
         if font.family == "SF Pro Rounded" {

@@ -5,12 +5,10 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
-/// Owner: F1. The settings window's content, laid out the way Arc's is: Arc builds its settings with the
-/// sindresorhus/Settings package (`Settings.SettingsWindowController`, `ToolbarItemStyleViewController`,
-/// `Settings.Container`, `Settings.Section` are in its binary), so the panes are toolbar items in Arc's enum order
-/// (General, Max, Profiles, Shortcuts, Links, Advanced; anatomy-m 4.1), the window is titled with the pane, and the
-/// window fits each pane's height. The panes are SwiftUI in an `NSHostingController`, like Arc's
-/// `PaneHostingController`.
+/// Owner: F1. The settings window's content, laid out the way Arc 1.170's is (the P38 captures): the panes are
+/// toolbar items in Arc's order (General, Profiles, Max, Links, Shortcuts, Icon, Advanced; Brk has no account pane),
+/// the window is titled with the pane and keeps one size for every pane (684 x 650 points); a pane taller than that
+/// scrolls. The panes are SwiftUI in an `NSHostingController`, like Arc's `PaneHostingController`.
 ///
 /// BrkApp hosts this view as the content of its one settings NSWindow (SettingsWindowController) and feeds it
 /// `AppSnapshot.settings` after every change. The host installs its toolbar on that window. Every control dispatches
@@ -119,7 +117,7 @@ public final class SettingsHost: NSView {
     private func update() {
         let context = settings.map { settings in
             PaneContext(settings: settings, dispatch: dispatch, isDefaultBrowser: isDefaultBrowser,
-                        chooseFolder: { [weak self] current in self?.chooseFolder(current) ?? nil })
+                        chooseFolder: { [weak self] current in self?.chooseFolder(current) ?? nil }, size: paneSize)
         }
         controller.rootView = SettingsRootView(context: context, pane: shownPane)
         toolbar.show(shownPane)
@@ -134,30 +132,29 @@ public final class SettingsHost: NSView {
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
-    /// Fits the window to the pane, keeping its top edge where it is (the Settings package resizes per pane).
+    /// The area under the toolbar: the fixed window frame less the title bar and toolbar.
+    private var paneSize: CGSize {
+        let frame = Metrics.settings.windowSize.value
+        guard let window, let content = window.contentView else { return CardMetrics.paneSize }
+        return CGSize(width: frame.width, height: frame.height - (window.frame.height - content.frame.height))
+    }
+
+    /// Keeps the window at Arc's one size (its top edge where it is) and sizes the pane's document: a pane taller
+    /// than the window scrolls.
     private func fitWindow() {
         guard let window, let content = window.contentView else { return }
-        let width = Metrics.settings.contentWidth.value + 2 * Metrics.settings.horizontalPadding.value
-        // Never taller than the screen leaves room for: a pane that stretches (a flexible view added to it) gets
-        // the screen's height instead of an infinite window.
         let chrome = window.frame.height - content.frame.height
-        let tallest = (window.screen ?? NSScreen.main).map { $0.visibleFrame.height - chrome } ?? Metrics.settings.windowSize.value.height
-        let fitted = controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
-        let size = CGSize(width: width, height: min(fitted.height, tallest).rounded(.up))
-        controller.view.setFrameSize(CGSize(width: width, height: max(size.height, fitted.height.rounded(.up))))
-        guard size.height > 0, size != content.frame.size else { return }
+        let pane = CGSize(width: Metrics.settings.windowSize.value.width, height: Metrics.settings.windowSize.value.height - chrome)
+        let fitted = controller.sizeThatFits(in: CGSize(width: pane.width, height: .greatestFiniteMagnitude))
+        controller.view.setFrameSize(CGSize(width: pane.width, height: max(pane.height, fitted.height.rounded(.up))))
+        guard pane != content.frame.size else { return }
         var frame = window.frame
-        frame.size.width += size.width - content.frame.width
-        frame.size.height += size.height - content.frame.height
+        frame.size = Metrics.settings.windowSize.value
         frame.origin.y = window.frame.maxY - frame.height
         if let screen = window.screen ?? NSScreen.main {
             frame.origin.y = max(screen.visibleFrame.minY, min(frame.origin.y, screen.visibleFrame.maxY - frame.height))
         }
-        if window.isVisible {
-            NSAnimationContext.runAnimationGroup { _ in window.animator().setFrame(frame, display: true) }
-        } else {
-            window.setFrame(frame, display: false)
-        }
+        window.setFrame(frame, display: window.isVisible)
     }
 
     // MARK: System
@@ -188,6 +185,8 @@ struct PaneContext {
     let dispatch: Dispatch
     let isDefaultBrowser: Bool
     let chooseFolder: @MainActor (String?) -> String?
+    /// The pane's area under the toolbar (panes that fill the window, like Profiles and Shortcuts, lay out in it).
+    var size: CGSize = CardMetrics.paneSize
 }
 
 struct SettingsRootView: View {
@@ -196,20 +195,21 @@ struct SettingsRootView: View {
 
     var body: some View {
         if let context {
-            SettingsContainer {
+            SettingsContainer(minHeight: context.size.height) {
                 switch pane {
                 case .general: GeneralPane(context: context)
-                case .max: MaxPane(context: context)
                 case .profiles: ProfilesPane(context: context)
-                case .shortcuts: ShortcutsPane(rows: context.settings.shortcuts, dispatch: context.dispatch)
+                case .max: MaxPane(context: context)
                 case .links: LinksPane(context: context)
+                case .shortcuts: ShortcutsPane(rows: context.settings.shortcuts, dispatch: context.dispatch, height: context.size.height)
+                case .icon: IconPane(context: context)
                 case .advanced: AdvancedPane(context: context)
                 }
             }
             .background(IdentifiedRegion(id: .settingsPane(pane), label: SettingsCopy.paneDescription(pane)))
             .onExitCommand { context.dispatch(.settings(.closeWindow)) }
         } else {
-            Color.clear.frame(width: Metrics.settings.windowSize.value.width, height: Metrics.settings.windowSize.value.height)
+            Color.clear.frame(width: CardMetrics.paneSize.width, height: CardMetrics.paneSize.height)
         }
     }
 }
