@@ -11,8 +11,8 @@ import BrkUIKit
 @MainActor
 public final class AddressToolbarView: NSView {
     private let address = NSButton()
-    private let link = NSImageView()
-    private let host = NSTextField(labelWithString: "")
+    private let link = PassthroughImageView()
+    private let host = PassthroughLabel(labelWithString: "")
     private let hairline = NSView()
     private var buttons: [NSButton] = []
     private var trailing: [NSButton] = []
@@ -123,4 +123,13 @@ public final class AddressToolbarView: NSView {
         default: dispatch(.split(.addPane))
         }
     }
+}
+
+/// The toolbar's host and link glyph draw over the address button; clicks go through them to it.
+final class PassthroughLabel: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+final class PassthroughImageView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
