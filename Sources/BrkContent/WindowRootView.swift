@@ -344,10 +344,50 @@ final class PeekRoundButton: NSView {
 }
 
 /// Shades of the space's primary color, same hue, for chrome Arc tints with the theme: the split view's focus ring
-/// (#725137 under the #F2EAE4 capture theme) and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
+/// and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
 enum ThemeAccent {
+    /// Light: the primary's hue and saturation (HSL) at the lightness whose relative luminance is Arc's 0.097. That is
+    /// the ring in both Arc captures, which is also Arc's folder outline there: #725137 under the #F2EAE4 theme
+    /// (P23-a) and #006362 under the cyan one (P23-c, the round-2 Arc space). Dark keeps a light shade.
     static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
-        shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: theme.scheme == .dark ? 0.8 : 0.45)
+        guard theme.scheme == .light else { return shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: 0.8) }
+        return luminanceMatched(theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1), luminance: ThemeAccentDraw.ringLuminance.value)
+    }
+
+    /// `color`'s hue and HSL saturation at the HSL lightness (at most 0.5) that gives `luminance`.
+    static func luminanceMatched(_ color: RGBA, luminance target: Double) -> NSColor {
+        let hi = max(color.red, color.green, color.blue), lo = min(color.red, color.green, color.blue), l = (hi + lo) / 2
+        var hue = 0.0, saturation = 0.0
+        if hi > lo {
+            let d = hi - lo
+            saturation = l > 0.5 ? d / (2 - hi - lo) : d / (hi + lo)
+            if hi == color.red { hue = (color.green - color.blue) / d + (color.green < color.blue ? 6 : 0) }
+            else if hi == color.green { hue = (color.blue - color.red) / d + 2 }
+            else { hue = (color.red - color.green) / d + 4 }
+            hue /= 6
+        }
+        func rgb(_ l: Double) -> (Double, Double, Double) {
+            let q = l < 0.5 ? l * (1 + saturation) : l + saturation - l * saturation, p = 2 * l - q
+            func channel(_ t: Double) -> Double {
+                let t = t < 0 ? t + 1 : t > 1 ? t - 1 : t
+                if t < 1.0 / 6 { return p + (q - p) * 6 * t }
+                if t < 0.5 { return q }
+                if t < 2.0 / 3 { return p + (q - p) * (2.0 / 3 - t) * 6 }
+                return p
+            }
+            return (channel(hue + 1.0 / 3), channel(hue), channel(hue - 1.0 / 3))
+        }
+        func luminance(_ c: (Double, Double, Double)) -> Double {
+            func linear(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            return 0.2126 * linear(c.0) + 0.7152 * linear(c.1) + 0.0722 * linear(c.2)
+        }
+        var low = 0.0, high = 0.5
+        for _ in 0..<30 {
+            let mid = (low + high) / 2
+            if luminance(rgb(mid)) < target { low = mid } else { high = mid }
+        }
+        let c = rgb((low + high) / 2)
+        return NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: 1)
     }
 
     static func peekGlyph(_ theme: ResolvedTheme) -> NSColor {
@@ -361,6 +401,12 @@ enum ThemeAccent {
         color.getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
         return NSColor(hue: hue, saturation: min(saturationCap, saturation * saturationScale), brightness: brightness, alpha: 1)
     }
+}
+
+let ThemeAccentDraw = ThemeAccentMetrics()
+
+struct ThemeAccentMetrics: MetricGroup {
+    let ringLuminance = Metric(0.097, .anatomy("verify/visual-pairs/run-20261103/P23: the split focus ring #725137 (P23-a) and #006362 (P23-c) both have relative luminance 0.096 to 0.098"))
 }
 
 /// Arc's Peek and Little Arc copy shared by the card and the Little Arc panel (visual-and-copy.md "Little Arc").

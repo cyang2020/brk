@@ -204,6 +204,12 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     /// Ctrl+Shift+=. A tab becomes a split of [tab, empty pane]; a split gains a pane (max Metrics.content.maxPanes).
     /// The command bar opens to fill the new pane.
     case addPane
+    /// Arc's split menu "Add Left Split" ("Add Top Split" when stacked): `addPane` with the empty pane before the
+    /// focused one (a shown tab becomes [empty pane, tab]).
+    case addPaneBefore
+    /// Arc's split menu "Move Left" / "Move Right" ("Move Up" / "Move Down" when stacked): the focused pane trades
+    /// places with its neighbour; at the end it is a no-op. Its width and focus go with it.
+    case movePane(Step)
     /// Ctrl+Shift+-. Closes the focused pane; a split left with one pane dissolves into that tab.
     case closePane
     /// Close one sidebar pane without selecting or loading its background split.

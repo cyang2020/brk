@@ -144,6 +144,7 @@ final class TablistView: NSScrollView {
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
 
         multiselection.removeAll { rows[$0] == nil }
+        divider.isHidden = !f.rows.contains { $0.kind == .divider }
         var seen: Set<ItemID> = []
         for frame in f.rows {
             switch frame.kind {
@@ -396,6 +397,11 @@ final class RowView: HoverView {
     var multiselected = false { didSet { if multiselected != oldValue { stateChanged() } } }
     var dropInto = false { didSet { if dropInto != oldValue { stateChanged() } } }
     var dragSource = false { didSet { alphaValue = dragSource ? Draw.dragSourceAlpha.value : 1 } }
+    /// The row a tab drag left while the pointer is over the content: Arc keeps it in place on the selected-row card
+    /// with its × showing (P23-d), and the white drag card follows the pointer instead.
+    var dragLifted = false { didSet { if dragLifted != oldValue { stateChanged() } } }
+    /// Whether this row has a hover × at all (Today tabs, loaded Pinned tabs).
+    private var hasButton = false
     var onRangeSelect: ((ItemID) -> Void)?
     var onSelect: ((ItemID) -> Void)?
     var onToggleMultiselect: ((ItemID) -> Void)?
@@ -453,6 +459,7 @@ final class RowView: HoverView {
             title.stringValue = (folder.group ? "Group · " : "") + folder.title
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value, weight: .semibold)
             icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary, palette: palette)
+            hasButton = false
             button.isHidden = true
             setSegments([], palette: palette)
             peekMarker.isHidden = true
@@ -460,6 +467,7 @@ final class RowView: HoverView {
             title.stringValue = ""
             icon.render(split.icon.map(IconContent.custom) ?? .none, tint: palette.ink.secondary)
             splitIcon = split.icon != nil
+            hasButton = false
             button.isHidden = true
             setSegments(split.panes, palette: palette)
             peekMarker.isHidden = true
@@ -474,7 +482,8 @@ final class RowView: HoverView {
     private func configureButton(tab: TabRow, palette: Palette) {
         // A window's own tabs (blank and incognito windows) archive like Today's.
         let today = section == .today || section == .scratch
-        button.isHidden = !today && !tab.loaded
+        hasButton = today || tab.loaded
+        button.isHidden = !hasButton && !dragLifted
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
         // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
         button.render(.archiveTab, size: Draw.smallFont.value, palette: palette,
@@ -541,7 +550,7 @@ final class RowView: HoverView {
         }
         let fill: RGBA?
         if dropInto { fill = tokens.itemHover }
-        else if status == .current { fill = tokens.tabCurrent }
+        else if dragLifted || status == .current { fill = tokens.tabCurrent }
         else if status == .visible { fill = tokens.tabVisible }
         else if isPressed { fill = tokens.tabPressed }
         else if multiselected || isHovered { fill = tokens.itemHover }
@@ -551,7 +560,7 @@ final class RowView: HoverView {
         layer?.borderColor = palette.color(tokens.dragHintStrong).cgColor
         layer?.borderWidth = dropInto ? Draw.hairline.value : 0
         // AppKit owns a layer-backed view's shadow (`NSView.shadow`); its offset is not flipped, so negative is down.
-        if status == .current && !dropInto {
+        if status == .current && !dropInto && !dragLifted {
             let shadow = NSShadow()
             shadow.shadowColor = palette.color(tokens.tabShadow)
             shadow.shadowBlurRadius = Draw.selectedShadowRadius.value
@@ -560,7 +569,8 @@ final class RowView: HoverView {
         } else {
             background.shadow = nil
         }
-        let shown = isHovered && !isEditingName
+        if case .tab = row { button.isHidden = !hasButton && !dragLifted }
+        let shown = (isHovered || dragLifted) && !isEditingName
         if (button.alphaValue > 0) != shown { needsLayout = true }
         button.alphaValue = shown ? 1 : 0
     }

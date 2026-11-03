@@ -63,6 +63,16 @@ final class ArcGeometryTests: XCTestCase {
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .divider, .newTab, .item(e), .item(c)])
     }
+    /// Q02 b: with Today empty Arc draws no Pinned/Today divider; New Tab sits right under Pinned.
+    func testNoDividerWhileTodayIsEmpty() throws {
+        let d = LayoutDriver()
+        let a = d.view.space.today.rows[0].id
+        d.user(.tab(.togglePin(.item(a))))
+        XCTAssertTrue(d.view.space.today.rows.isEmpty)
+        XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(a), .newTab])
+        let b = d.open("b.example.com")
+        XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(a), .divider, .newTab, .item(b)])
+    }
     /// Title row 40 at y 4; URL pill 36 tall, 8 from each side; dock 50 at the bottom.
     func testSidebarColumnStack() throws {
         let f = try XCTUnwrap(LayoutDriver().frames().sidebar)

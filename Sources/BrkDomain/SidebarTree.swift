@@ -185,6 +185,16 @@ enum SectionRole: Sendable, Equatable, Hashable {
         }
     }
 
+    /// Whether a tab under `self` may join a split under `other` (`groupTab`): the same section, or Pinned and Today
+    /// of one space, as Arc takes a pinned folder's tab beside a Today tab (P23-d). Never Favorites.
+    func joinsSplit(in other: SectionRole) -> Bool {
+        switch (self, other) {
+        case (.favorites, _), (_, .favorites): false
+        case (.pinned(let a), .today(let b)), (.today(let a), .pinned(let b)): a == b
+        default: self == other
+        }
+    }
+
     /// The tree this root may live in.
     var scope: ContainerScope {
         switch self {
@@ -320,11 +330,11 @@ struct SidebarTree: Sendable, Equatable {
 
     /// Ctrl+Shift+= on a tab: a new split item takes the tab's place and holds [tab, newPane]. The tab must sit
     /// directly in a Pinned or Today section or folder (never Favorites, never already a pane).
-    mutating func splitInPlace(_ tab: ItemID, splitID: ItemID, newPane: ItemID, _ pane: Tab, createdAt: Instant) throws(TreeError) {
+    mutating func splitInPlace(_ tab: ItemID, splitID: ItemID, newPane: ItemID, _ pane: Tab, leading: Bool = false, createdAt: Instant) throws(TreeError) {
         guard let item = items[tab], case .tab = item.body, let parent = item.parent else { throw .itemNotFound }
         guard items[splitID] == nil, items[newPane] == nil else { throw .invalidHierarchy }
         try checkPlacement(.split, under: parent)
-        guard let panes = SplitPanes([tab, newPane]) else { throw .invalidHierarchy }
+        guard let panes = SplitPanes(leading ? [newPane, tab] : [tab, newPane]) else { throw .invalidHierarchy }
         let index = items[parent]!.children.firstIndex(of: tab) ?? 0
         detach(tab, from: parent)
         let split = Split(panes: panes, widths: [:], orientation: .horizontal, lastActiveAt: createdAt, icon: nil)
@@ -335,15 +345,29 @@ struct SidebarTree: Sendable, Equatable {
         stampPinnedURLs(under: newPane)
     }
 
-    /// Ctrl+Shift+= on a split: a new pane after `after` (a current pane). Throws `splitFull` at the cap.
-    mutating func addPane(to splitID: ItemID, newPane: ItemID, _ pane: Tab, after: ItemID, createdAt: Instant) throws(TreeError) {
+    /// Ctrl+Shift+= on a split: a new pane after `after` (a current pane), or before it when `leading`. Throws
+    /// `splitFull` at the cap.
+    mutating func addPane(to splitID: ItemID, newPane: ItemID, _ pane: Tab, after: ItemID, leading: Bool = false, createdAt: Instant) throws(TreeError) {
         guard let item = items[splitID], case .split(var split) = item.body else { throw .itemNotFound }
         guard items[newPane] == nil, let at = split.panes.ids.firstIndex(of: after) else { throw .invalidHierarchy }
-        guard let panes = split.panes.inserting(newPane, at: at + 1) else { throw .splitFull }
+        guard let panes = split.panes.inserting(newPane, at: leading ? at : at + 1) else { throw .splitFull }
         split.panes = panes
         items[splitID]!.body = .split(split)
         items[newPane] = Item(id: newPane, createdAt: createdAt, parent: splitID, body: .tab(pane))
         stampPinnedURLs(under: newPane)
+    }
+
+    /// Swaps `pane` with the pane before it (`.previous`) or after it (`.next`) in its split. Throws at either end.
+    mutating func movePane(_ pane: ItemID, _ step: Step) throws(TreeError) {
+        guard let splitID = items[pane]?.parent, case .split(var split)? = items[splitID]?.body,
+              let at = split.panes.ids.firstIndex(of: pane) else { throw .itemNotFound }
+        let to = step == .next ? at + 1 : at - 1
+        guard split.panes.ids.indices.contains(to) else { throw .invalidHierarchy }
+        var ids = split.panes.ids
+        ids.swapAt(at, to)
+        guard let panes = SplitPanes(ids) else { throw .invalidHierarchy }
+        split.panes = panes
+        items[splitID]!.body = .split(split)
     }
 
     /// Groups an existing standalone tab without replacing either tab or its live window slots.
@@ -351,7 +375,7 @@ struct SidebarTree: Sendable, Equatable {
     mutating func groupTab(_ tab: ItemID, with target: ItemID, splitID: ItemID, edge: SplitEdge, createdAt: Instant) throws(TreeError) -> ItemID {
         guard tab != target, let source = items[tab], source.kind == .tab, let oldParent = source.parent,
               items[oldParent]?.kind != .split, let destination = items[target], let parent = destination.parent,
-              let sourceRole = role(of: tab), sourceRole == role(of: target), sourceRole.kind != .favorites else { throw .forbiddenPlacement }
+              let sourceRole = role(of: tab), let targetRole = role(of: target), sourceRole.joinsSplit(in: targetRole) else { throw .forbiddenPlacement }
         var split: Split
         let result: ItemID
         switch destination.body {
