@@ -43,6 +43,10 @@ public protocol WebEngine: AnyObject {
     /// `document.title`) and, later, Boosts' user scripts. A no-op for a page that is not live.
     func evaluate(_ script: String, in page: PageID)
 
+    /// The text highlighted in a live page's focused frame (nil when nothing is, or the page is not live). For
+    /// Shared Quotes' Copy Link to Highlight.
+    func selectedText(_ page: PageID) async -> String?
+
     /// The browser engine's version as the About window shows it ("154.0.8037.98" for Chromium); nil without one.
     var engineVersion: String? { get }
 
@@ -120,6 +124,7 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func selectedText(_ page: PageID) async -> String? { nil }
     public func cancelBoostPick(_ target: SiteTarget) {}
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }

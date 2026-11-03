@@ -129,12 +129,15 @@ extension Work {
         case .developer(let operation): emit(.focused, .developer(operation))
         case .copyURL(let format):
             guard let tab = state.resolveTab(.focused, in: window), let t = state.displayedTab(tab, in: window), let url = t.url else { return }
-            let text: String = switch format {
-            case .plain: url.absoluteString
-            case .markdown: "[\(markdownTitle(t.displayTitle))](\(url.absoluteString.replacingOccurrences(of: "(", with: "%28").replacingOccurrences(of: ")", with: "%29")))"
-            case .quote: "> \(t.displayTitle)\n\(url.absoluteString)"
+            // Advanced > Shared Quotes: on a loaded page, Copy URL and Copy URL as Quote link to the highlighted text
+            // (BrkApp reads the highlight, `SharedQuote.text` builds the link); off, or with nothing highlighted,
+            // the plain copy.
+            let page = PageID(window: window, item: tab)
+            if state.doc.settings.advanced.sharedQuotes, format != .markdown, case .ready? = state.session.live[page]?.document {
+                effects.append(.copySharedQuote(page, url: url, title: t.displayTitle, format: format))
+            } else {
+                effects.append(.copyToPasteboard(SharedQuote.plain(url: url, title: t.displayTitle, format: format)))
             }
-            effects.append(.copyToPasteboard(text))
         }
     }
 

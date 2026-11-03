@@ -91,14 +91,18 @@ public final class ContentAreaView: NSView {
             switch frame.content {
             case .page(let page):
                 card.host(surface(page), placeholder: nil)
+                card.dragStrip(content.windowDragging && toolbar == nil && frame.header == nil && frame.rect.minY <= frames.contentArea.minY + 0.5
+                               ? frame.pane : nil)
             case .blank, .history:
                 // The History page is drawn over its card by the root (`HistoryPageView`).
                 card.host(nil, placeholder: nil)
+                card.dragStrip(nil)
                 // Arc's empty content area is the theme under a white wash (P24 e), not a white page; dark keeps the
                 // empty color above.
                 if palette.scheme == .light { card.layer?.backgroundColor = NSColor.white.withAlphaComponent(Self.blankAlpha(palette)).cgColor }
             case .crashed(let page):
                 card.host(nil, placeholder: "This tab has crashed")
+                card.dragStrip(nil)
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
             }
         }
@@ -169,6 +173,7 @@ final class CardView: NSView {
     var retryAction: (() -> Void)? { didSet { sad.reloadAction = retryAction } }
     private weak var hosted: NSView?
     private var paneHeader: PaneHeaderView?
+    private var drag: PageDragStrip?
     /// The card's color where no page draws (an empty card, a page still loading).
     var emptyColor = NSColor.white
 
@@ -235,9 +240,24 @@ final class CardView: NSView {
         if let paneHeader, subviews.last !== paneHeader { addSubview(paneHeader, positioned: .above, relativeTo: nil) }
     }
 
+    /// The window-drag band over the top of the page (`PageDragStrip`) for pane `pane`; nil removes it.
+    func dragStrip(_ pane: Int?) {
+        guard let pane else { drag?.removeFromSuperview(); drag = nil; return }
+        let strip = drag ?? PageDragStrip(frame: .zero)
+        drag = strip
+        strip.identify(.pageDragStrip(pane))
+        strip.frame = dragBounds
+        if subviews.last !== strip { addSubview(strip, positioned: .above, relativeTo: nil) }
+    }
+
+    private var dragBounds: CGRect {
+        CGRect(x: 0, y: pageBounds.minY, width: bounds.width, height: min(pageBounds.height, Metrics.content.pageDragHeight.value))
+    }
+
     override func layout() {
         super.layout()
         if hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
+        drag?.frame = dragBounds
         sad.frame = pageBounds
         if let paneHeader { paneHeader.frame.size.width = bounds.width }
     }

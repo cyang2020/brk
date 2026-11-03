@@ -142,6 +142,9 @@ public enum ViewID: Hashable, Sendable, Codable {
     case dock, dockSpace(SpaceID), dockLibrary, dockPlus
     case resizeHandle, revealStrip
     case card(Int), divider(Int)
+    /// The clear band over the top of page card i that drags the window ("Allow window dragging from the top of
+    /// webpages").
+    case pageDragStrip(Int)
     case findBar, findQuery, findReplacement, findStatus, findNext, findPrevious, findClose, findReplace, findReplaceAll, findCapture
     case splitTool(ActionID), splitSegment(ItemID), splitDropPreview
     case commandBar, commandBarInput, commandBarResult(Int)
@@ -192,6 +195,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .revealStrip: "reveal-strip"
         case .card(let i): "card-\(i)"
         case .divider(let i): "split-divider-\(i)"
+        case .pageDragStrip(let i): "page-drag-\(i)"
         case .findBar: "find-bar"
         case .findQuery: "find-query"
         case .findReplacement: "find-replacement"
@@ -276,7 +280,7 @@ extension WindowFrames {
         case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
-             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:
+             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool, .pageDragStrip:
             return nil   // view-owned: reported by `actual` only
         }
     }

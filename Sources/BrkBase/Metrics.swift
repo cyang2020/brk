@@ -202,6 +202,10 @@ public struct ContentMetrics: MetricGroup {
     public let paneHeaderEdge = Metric(21.0, .guess("measured on the 2026-11-03 Arc capture P23a: the first and last button centres 21 pt in from the card edges"))
     public let paneHeaderFont = Metric(13.0, .guess("measured on the 2026-11-03 Arc capture P23a: the host reads at the sidebar's 13 pt"))
     public let maxPanes = Metric(4, .anatomy("visual-and-copy.md, Split view: first to fourth Split View page"))
+    /// "Allow window dragging from the top of webpages": the band over the page's top edge, and how far the pointer
+    /// moves before a press there is a window drag rather than a click on the page.
+    public let pageDragHeight = Metric(10.0, .guess("Arc's band height was not recovered; about a title bar's grab strip"))
+    public let pageDragThreshold = Metric(3.0, .guess("AppKit's usual drag slop"))
     public let minPaneFraction = Metric(0.15, .guess("narrowest a pane may be dragged, as a fraction of the content width; Arc's minimum was not traced"))
 }
 

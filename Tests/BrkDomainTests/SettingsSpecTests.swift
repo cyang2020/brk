@@ -270,3 +270,34 @@ final class SettingsSpecTests: XCTestCase {
         XCTAssertEqual(d.todayIDs.count, before + 1)
     }
 }
+
+/// Advanced > Shared Quotes: on, Copy URL on a loaded page asks BrkApp to link to the highlight; off, the plain copy.
+/// The link is a text fragment Chromium scrolls to.
+final class SharedQuoteTests: XCTestCase {
+    func test_theLinkPointsAtTheHighlight() throws {
+        let url = URL(string: "https://example.com/a?b=1#top")!
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: nil, format: .plain), url.absoluteString)
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "  ", format: .quote), "> A\n\(url.absoluteString)")
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "Hello,\n  world - again", format: .plain),
+                       "https://example.com/a?b=1#top:~:text=Hello%2C%20world%20%2D%20again")
+        XCTAssertEqual(SharedQuote.text(url: URL(string: "https://example.com/a")!, title: "A", selection: "quoted words", format: .quote),
+                       "> quoted words\nhttps://example.com/a#:~:text=quoted%20words")
+        let long = (1...14).map { "w\($0)" }.joined(separator: " ")
+        XCTAssertEqual(SharedQuote.link(to: long, in: URL(string: "https://example.com/a#:~:text=old")!)?.absoluteString,
+                       "https://example.com/a#:~:text=w1%20w2%20w3%20w4%20w5,w10%20w11%20w12%20w13%20w14", "a long highlight is named by its ends")
+        XCTAssertEqual(SharedQuote.text(url: url, title: "A", selection: "x", format: .markdown), "[A](\(url.absoluteString))", "Markdown keeps its shape")
+    }
+
+    func test_theSwitchDecidesWhetherCopyURLReadsTheHighlight() throws {
+        let d = Driver()
+        let tab = d.todayIDs[0], page = PageID(window: d.window, item: tab)
+        let document = DocumentToken(browser: try XCTUnwrap(d.state.session.live[page]?.browser), sequence: 1)
+        d.page(tab, .documentChanged(.loading(document))); d.page(tab, .documentChanged(.ready(document)))
+        let url = try XCTUnwrap(d.current?.url)
+        let title = try XCTUnwrap(d.state.displayedTab(tab, in: d.window)?.displayTitle)
+        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copySharedQuote(page, url: url, title: title, format: .plain)], "on by default, as in Arc")
+        d.user(.settings(.advanced(.sharedQuotes(false))))
+        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copyToPasteboard(url.absoluteString)])
+        XCTAssertEqual(d.user(.page(.copyURL(.quote))).effects, [.copyToPasteboard("> \(title)\n\(url.absoluteString)")])
+    }
+}

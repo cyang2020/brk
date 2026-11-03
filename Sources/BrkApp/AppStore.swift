@@ -440,6 +440,17 @@ public final class AppStore {
             case .copyToPasteboard(let text):
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
+            case .copySharedQuote(let page, let url, let title, let format):
+                // The plain copy at once (nothing highlighted is the common case), then the link to the highlight
+                // once the page answers, unless something else was copied in between.
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(SharedQuote.plain(url: url, title: title, format: format), forType: .string)
+                let copied = NSPasteboard.general.changeCount
+                Task { @MainActor [engine] in
+                    guard let selection = await engine.selectedText(page), NSPasteboard.general.changeCount == copied else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(SharedQuote.text(url: url, title: title, selection: selection, format: format), forType: .string)
+                }
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }
                 switch effect {

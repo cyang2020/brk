@@ -217,18 +217,21 @@ final class EventInjector {
         NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
         guard let target = window.contentView?.superview?.hitTest(from) ?? window.contentView?.hitTest(from) else { throw InjectionError("no drag source") }
         let down = try mouse(.leftMouseDown, at: from, modifiers: [], clickCount: 1, in: window)
+        // A physical pointer moves in screen space: when the drag moves the window (the page-top drag band), each
+        // later point is the same screen point in the moved window's coordinates. Unchanged for a still window.
+        let screenFrom = window.convertPoint(toScreen: from), screenTo = window.convertPoint(toScreen: to)
         target.mouseDown(with: Self.dequeue(down))
         for i in 1...12 {
             let t = Double(i) / 12
-            let point = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
-            target.mouseDragged(with: try mouse(.leftMouseDragged, at: point, modifiers: [], clickCount: 1, in: window))
+            let screen = CGPoint(x: screenFrom.x + (screenTo.x - screenFrom.x) * t, y: screenFrom.y + (screenTo.y - screenFrom.y) * t)
+            target.mouseDragged(with: try mouse(.leftMouseDragged, at: window.convertPoint(fromScreen: screen), modifiers: [], clickCount: 1, in: window))
         }
         if cancel {
             NSApp.sendEvent(Self.dequeue(try event(code: 53, down: true, flags: [])))
             // A physical drag continues to deliver movement until release, even after Escape.
-            target.mouseDragged(with: try mouse(.leftMouseDragged, at: to, modifiers: [], clickCount: 1, in: window))
+            target.mouseDragged(with: try mouse(.leftMouseDragged, at: window.convertPoint(fromScreen: screenTo), modifiers: [], clickCount: 1, in: window))
         }
-        target.mouseUp(with: try mouse(.leftMouseUp, at: to, modifiers: [], clickCount: 1, in: window))
+        target.mouseUp(with: try mouse(.leftMouseUp, at: window.convertPoint(fromScreen: screenTo), modifiers: [], clickCount: 1, in: window))
     }
 
     func scroll(at point: CGPoint, horizontal: Double, vertical: Double, cancel: Bool, in window: NSWindow) throws {

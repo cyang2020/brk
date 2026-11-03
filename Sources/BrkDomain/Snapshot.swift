@@ -237,6 +237,9 @@ public struct ContentSnapshot: Sendable, Equatable, Codable {
     public var split: ItemID?
     /// How the panes are laid out (`.horizontal` for a single pane).
     public var orientation: SplitOrientation
+    /// Advanced > "Allow window dragging from the top of webpages", in a standard window with the toolbar hidden:
+    /// the top of a page card that touches the window's top edge drags the window.
+    public var windowDragging: Bool = false
     public var presentedPanes: [Pane] { panes.filter { !expanded || $0.focused } }
 }
 
