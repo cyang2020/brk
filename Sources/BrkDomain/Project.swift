@@ -43,7 +43,22 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
                                                   browser: live?.browser, document: live?.document ?? .unavailable,
                                                   requestedURL: live?.requestedURL ?? loadingURL, committedURL: committed,
                                                   websitePolicyStatus: live?.websitePolicyStatus))
-                       }))
+                       }), dockTile: dockTile(state))
+}
+
+/// The Dock tile: downloads in progress (choosing a destination does not count; cancelling still does), their
+/// combined progress when every one knows its size, and the newest finished files (newest 20; `doc.downloads` is
+/// newest first).
+func dockTile(_ state: AppState) -> DockTileSnapshot {
+    let active = state.doc.downloads.filter { $0.state == .inProgress || $0.state == .cancelling }
+    var progress: Double?
+    if !active.isEmpty, active.allSatisfy({ ($0.total ?? 0) > 0 }) {
+        let total = active.reduce(Int64(0)) { $0 + ($1.total ?? 0) }
+        progress = min(1, max(0, Double(active.reduce(Int64(0)) { $0 + $1.received }) / Double(total)))
+    }
+    var finished: [DownloadID: String] = [:]
+    for download in state.doc.downloads.lazy.filter({ $0.state == .finished && $0.path != nil }).prefix(20) { finished[download.id] = download.path }
+    return DockTileSnapshot(active: active.count, progress: progress, finished: finished)
 }
 
 /// Every demanded window/tab slot, sorted by composite id (stable for the engine's reconcile), in the request context of its
@@ -270,6 +285,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         // and path included; off, the host only.
         let developer = t.url.flatMap(SiteOrigin.init).map { state.sitePreferences(state.browsingContext(of: focusedPane)).rule(for: $0).developerMode == true } ?? false
         pill.host = awaitingFirstDocument(focusedPane, t) ? "about:blank" : t.url.map { developer ? $0.absoluteString : displayHost($0) }
+        pill.developerMode = developer
         // The toolbar shows the host like the pill (Arc P01-b), or the whole address with "Show full URL in toolbar".
         pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : pill.host ?? displayHost($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
@@ -478,7 +494,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
-    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
+    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache, .toggleDeveloperMode]) }
     if state.boostProfile(in: window) == nil { enabled.subtract([.newBoost, .editBoost, .newLegacyBoost, .boostGallery]) }
     let pageActions: [ActionID] = [.capturePage, .captureFullPage, .capturePrettyScreenshot, .videoPictureInPicture, .documentPictureInPicture, .closePictureInPicture, .stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .developerTools, .cast, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goForward]
     if let (id, tab) = focused {

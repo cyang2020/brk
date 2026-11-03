@@ -88,18 +88,6 @@ public enum MenuName: String, Hashable, Sendable, Codable, CaseIterable {
 /// Format > Font, Services) are built there too.
 public enum Submenu: String, Hashable, Sendable, Codable, CaseIterable { case find, appearance, developer, troubleshooting }
 
-extension ActionID {
-    public var unsupportedReason: String? {
-        switch self {
-        case .allowJavaScriptFromAppleEvents:
-            "Brk's Apple Events scripting bridge is not integrated. Chromium's native permission alone cannot execute JavaScript on a Brk page."
-        case .toggleDeveloperMode:
-            "Arc's Developer Mode behavior has no verified Brk implementation. DevTools and element inspection are available separately."
-        default: nil
-        }
-    }
-}
-
 public struct CommandBarListing: Hashable, Sendable {
     /// Extra search words (Arc: `arcTypeTravelTriggers`). `{app}` is replaced with `Product.name`.
     public let triggers: [String]
@@ -176,7 +164,7 @@ extension ActionID {
             entry(6, "Import from Another Browser…", .app, 2, [], .sidebarData(.importFile),
                   bar: listing("arrow.turn.right.down", "Import Bookmarks", "Import Settings", "Import Logins", "Import Passwords", "Transfer Bookmarks",
                                "Transfer Settings", "Transfer Logins", "Transfer Passwords", "Bookmarks"))
-        case .checkForUpdates: entry(7, "Check for Updates…", .app, 2, [], .later(.updater), bar: listing("sparkles", "Download", "Update", "Check for Updates"))
+        case .checkForUpdates: entry(7, "Check for Updates…", .app, 2, [], .app(.help(.checkForUpdates)), bar: listing("sparkles", "Download", "Update", "Check for Updates"))
         case .hideArc: entry(10, "Hide {app}", .app, 4, [key(cmd, .h, .app)], .app(.hide), bar: listing("macwindow", "Hide {app}"))
         case .hideOthers: entry(11, "Hide Other Windows", .app, 4, [key([opt, cmd], .h, .page)], .app(.hideOthers), bar: listing("macwindow", "Hide Others"))
         case .quitArc: entry(14, "Quit {app}", .app, 6, [key(cmd, .q, .app)], .app(.quit), bar: listing("hand.wave", "Quit App"))
@@ -321,9 +309,13 @@ extension ActionID {
                   bar: listing("terminal", "Toggle console", "Console", "Javascript Console", "JS console"))
         case .networkInspector:
             entry(118, "Network Inspector", .view, 0, [], .page(.developer(.network)), in: .developer, bar: listing("wifi", "Network Inspector"))
-        case .allowJavaScriptFromAppleEvents: entry(119, "Allow JavaScript from Apple Events", .view, 0, [], .later(.developerMenu), in: .developer)
+        case .allowJavaScriptFromAppleEvents:
+            entry(119, "Allow JavaScript from Apple Events", .view, 0, [], .settings(.general(.toggleJavaScriptFromAppleEvents)), in: .developer,
+                  bar: listing("applescript", "AppleScript", "Apple Events JavaScript"))
         case .toggleDeveloperMode:
-            entry(120, "Toggle Developer Mode", .view, 0, [key(ctrl, .d, .pageThenApp)], .later(.developerMenu), in: .developer,
+            // Arc's nib calls the row "Toggle Developer Mode"; Arc 1.170 shows "Turn on Developer Mode for this site", "Turn
+            // off …" while the site's switch is on (MainMenu.presentation). It is the site controls' Developer Mode.
+            entry(120, "Toggle Developer Mode", .view, 0, [key(ctrl, .d, .pageThenApp)], .site(.toggleDeveloperMode), in: .developer,
                   bar: listing("hammer.fill", "Developer Mode", "Enable Developer Mode", "Disable Developer Mode"))
         case .fullscreen:
             entry(121, "Enter/Exit Full Screen", .view, 7, [key([ctrl, cmd], .f, .pageThenApp)], .app(.toggleFullScreen),
@@ -464,23 +456,24 @@ extension ActionID {
             entry(178, "Essential Keyboard Shortcuts", .help, 0, [], .settings(.openPane(.shortcuts)),
                   bar: listing("keyboard", "Essential Keyboard Shortcuts", "keyboard", "shortcuts"))
         case .releaseNotes:
-            entry(179, "Release Notes", .help, 0, [], .later(.help), bar: listing("clock", "Changelog", "Whats new", "What's new", "{app} updates"))
+            entry(179, "Release Notes", .help, 0, [], .app(.help(.releaseNotes)), bar: listing("clock", "Changelog", "Whats new", "What's new", "{app} updates"))
         case .contactTheTeam:
-            entry(180, "Contact the Team", .help, 0, [], .later(.help),
+            entry(180, "Contact the Team", .help, 0, [], .app(.help(.contactTeam)),
                   bar: listing("ellipsis.message", "Idea", "Feedback", "Request", "Feature Request", "Send Feedback", "Report Bug", "Bug", "Question"))
         case .visitHelpCenter:
-            entry(181, "Visit Help Center", .help, 0, [], .later(.help), bar: listing("heart.circle", "Question", "Inquiry", "Help Center", "Help", "Resources"))
-        case .restoreData: entry(182, "Restore Data", .help, 0, [], .later(.restoreData), bar: listing("opticaldiscdrive", "Restore", "Backup"))
+            entry(181, "Visit Help Center", .help, 0, [], .app(.help(.helpCenter)), bar: listing("heart.circle", "Question", "Inquiry", "Help Center", "Help", "Resources"))
+        case .restoreData: entry(182, "Restore Data", .help, 0, [], .app(.help(.restoreData)), bar: listing("opticaldiscdrive", "Restore", "Backup"))
         case .exportArcNotes:
+            // Notes are not built (Arc 1.170 shows no Note entry either); the row is hidden at runtime (MainMenu).
             entry(183, "Export {app} Notes", .help, 0, [], .later(.notes), bar: listing("arrow.down.doc", "Export Notes", "Backup Notes", "Download Notes"))
-        case .recordTrace: entry(185, "Record Trace", .help, 0, [], .later(.troubleshooting), in: .troubleshooting, bar: listing("flag"))
+        case .recordTrace: entry(185, "Record Trace", .help, 0, [], .app(.help(.trace)), in: .troubleshooting, bar: listing("flag"))
         case .cancelTrace:
-            entry(186, "Cancel Trace", .help, 0, [], .later(.troubleshooting), in: .troubleshooting, bar: listing("exclamationmark.triangle"), hidden: true)
+            entry(186, "Cancel Trace", .help, 0, [], .app(.help(.cancelTrace)), in: .troubleshooting, bar: listing("exclamationmark.triangle"), hidden: true)
         case .openTaskManager:
-            entry(187, "Open Task Manager", .help, 0, [], .later(.troubleshooting), in: .troubleshooting,
+            entry(187, "Open Task Manager", .help, 0, [], .app(.help(.taskManager)), in: .troubleshooting,
                   bar: listing("exclamationmark.triangle", "Task", "Manager", "Task Manager", "Cpu", "Memory: RAM"))
         case .revealArcData: entry(188, "Reveal {app} Data", .help, 1, [], .app(.revealDataDirectory), in: .troubleshooting, bar: listing("list.clipboard"))
-        case .copyArcInfo: entry(189, "Copy {app} Info", .help, 1, [], .later(.troubleshooting), in: .troubleshooting, bar: listing("list.clipboard"))
+        case .copyArcInfo: entry(189, "Copy {app} Info", .help, 1, [], .app(.help(.copyInfo)), in: .troubleshooting, bar: listing("list.clipboard"))
         }
     }
 

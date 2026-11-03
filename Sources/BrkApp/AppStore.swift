@@ -27,7 +27,8 @@ import os
 @MainActor
 public final class AppStore {
     public private(set) var snapshot: AppSnapshot
-    private var state: AppState
+    /// Read by the AppleScript objects (BrkApp/Scripting) through `AppState.script…`; only `apply` changes it.
+    private(set) var state: AppState
     private let clock: any Clock
     let engine: any WebEngine
     private let stateFile: StateFile
@@ -72,6 +73,10 @@ public final class AppStore {
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
+    /// Check for Updates… and the Help menu (`AppEffect.help`).
+    private(set) lazy var help = HelpActions(engine: engine, send: { [weak self] window, command in
+        self?.dispatch(.user(window, command))
+    }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window })
     let siteDialogs = SiteDialogs()
     lazy var sitePanels: SitePanels = {
         let panels = SitePanels()
@@ -450,6 +455,7 @@ public final class AppStore {
                         alert.beginSheetModal(for: owner)
                     }
                 case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
+                case .help(let action, let owner): help.run(action, owner: owner)
                 }
             case .popupMenu(let id, let model, let at):
                 guard let controller = windows[id] else { continue }

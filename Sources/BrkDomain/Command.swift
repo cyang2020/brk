@@ -62,10 +62,9 @@ public enum Command: Hashable, Sendable, Codable {
 /// Features behind the greyed-out menu rows. One case per feature, not per row, so a wave that ships a feature
 /// replaces every `.later(x)` in the table with real commands and deletes the case.
 public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
-    case importer, updater, blankWindow, boosts, notes, easels, captures, savePage, print, toolbar
-    case sidebarKeyboardFocus, siteData, cast, developerMenu, spaceManager, aiCommandBar, joinMeeting
-    case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding, help, restoreData
-    case troubleshooting
+    case importer, blankWindow, boosts, notes, easels, captures, savePage, print, toolbar
+    case sidebarKeyboardFocus, siteData, cast, spaceManager, aiCommandBar, joinMeeting
+    case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding
 }
 
 /// "What the user is looking at" or an explicit item.
@@ -150,6 +149,8 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case developer(DeveloperOperation)
     /// Cmd+Shift+C (plain), Opt+Shift+Cmd+C (Markdown), Ctrl+Shift+Cmd+C (quote: Arc rows 45 to 47).
     case copyURL(CopyURLFormat)
+    /// AppleScript's `set URL of tab`: the tab's page goes to `url` in place (an address the bar could open).
+    case navigate(ItemRef, URL)
 }
 
 public enum CopyURLFormat: String, Hashable, Sendable, Codable {
@@ -279,6 +280,33 @@ public enum AppCommand: Hashable, Sendable, Codable {
     case export(ExportSubject)
     /// Help > Troubleshooting > "Reveal {app} Data": the data directory in the Finder.
     case revealDataDirectory
+    /// The Help menu's other rows and Check for Updates (`HelpAction`).
+    case help(HelpAction)
+}
+
+/// Check for Updates… and the Help menu (Arc rows 7, 179 to 189). Most run in BrkApp (`AppEffect.help`); `open` is
+/// the page BrkApp resolved for one of them, opened as a new tab of the dispatching window.
+public enum HelpAction: Hashable, Sendable, Codable {
+    /// Brk has no update feed: an alert names the running build and says how a new one is made.
+    case checkForUpdates
+    /// The release notes bundled with this build (made from the build's git history).
+    case releaseNotes
+    /// Arc's help center (the command bar's Help Center row opens the same page).
+    case helpCenter
+    /// A new issue on Brk's repository, its body filled with Copy {app} Info's text.
+    case contactTeam
+    /// The Restore Data window: pick a saved copy of the state file, check it, restore and relaunch.
+    case restoreData
+    /// Record Trace: starts a Chromium trace; while one records, the row stops it and saves the file.
+    case trace
+    /// Cancel Trace: stops the recording and discards it.
+    case cancelTrace
+    /// Open Task Manager: Brk's window listing the browser's processes (CPU, memory, End Process).
+    case taskManager
+    /// Copy {app} Info: version, build, Chromium, macOS and the data directory, on the pasteboard.
+    case copyInfo
+    /// A page one of the rows above resolved: a new tab in the dispatching window.
+    case open(URL)
 }
 
 /// What "Share…" exports. Arc shares spaces, folders, tab sets and Easels by link.
@@ -327,6 +355,10 @@ public enum GeneralSetting: Hashable, Sendable, Codable {
     case dismissDefaultBrowserPrompt
     case webAppearance(WebAppearance)
     case appIcon(AppIconChoice)
+    /// View > Developer > "Allow JavaScript from Apple Events" (AppleScript's `execute`).
+    case javaScriptFromAppleEvents(Bool)
+    /// The menu row: flips the setting above.
+    case toggleJavaScriptFromAppleEvents
 }
 
 public enum ProfileSetting: Hashable, Sendable, Codable {

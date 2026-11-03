@@ -143,3 +143,8 @@ CCEF_SYM(cef_window_t*, cef_window_create_top_level,
 // Frame-scoped browser/renderer requests.
 CCEF_SYM(cef_process_message_t*, cef_process_message_create, (const cef_string_t* name), (name))
 CCEF_SYM(cef_v8_value_t*, cef_v8_value_create_string, (const cef_string_t* value), (value))
+
+// Diagnostics: Brk's Help > Troubleshooting (Record Trace, Open Task Manager).
+CCEF_SYM(int, cef_begin_tracing, (const cef_string_t* categories, struct _cef_completion_callback_t* callback), (categories, callback))
+CCEF_SYM(int, cef_end_tracing, (const cef_string_t* tracing_file, cef_end_tracing_callback_t* callback), (tracing_file, callback))
+CCEF_SYM(cef_task_manager_t*, cef_task_manager_get, (void), ())

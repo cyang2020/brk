@@ -59,6 +59,7 @@ enum CommandInventory {
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
         .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
+        .app(.help(.copyInfo)), .page(.navigate(.focused, example)), .site(.toggleDeveloperMode),
         .settings(.autoArchive(.sevenDays)), .settings(.general(.warnBeforeQuitting(true))), .settings(.profile(.default, .searchSuggestions(false))),
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
@@ -302,6 +303,7 @@ enum CommandInventory {
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"
+            case .navigate: "navigate"
             }
         case .item(let c):
             switch c {
@@ -354,6 +356,7 @@ enum CommandInventory {
             case .setAsDefaultBrowser: "setAsDefaultBrowser"
             case .export: "export"
             case .revealDataDirectory: "revealDataDirectory"
+            case .help: "help"
             }
         case .settings(let c):
             switch c {
@@ -415,6 +418,7 @@ enum CommandInventory {
             case .controls: "controls"
             case .closeControls: "closeControls"
             case .rule: "rule"
+            case .toggleDeveloperMode: "toggleDeveloperMode"
             case .permission: "permission"
             case .appearance: "appearance"
             case .clear: "clear"
