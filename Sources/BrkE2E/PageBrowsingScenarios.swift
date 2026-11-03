@@ -266,6 +266,17 @@ enum PageBrowsingScenarios {
         try app.dispatch(.tab(.focus(page.item)))
         try app.waitForPageInput(page, at: app.site.url(path))
         try app.waitUntil("coverage overlay-free") { try app.view().overlay == nil }
+        if action == .hideArc || action == .minimize {
+            // After the window comes back, typing must reach the page again.
+            let before = try keyCount(app, page) ?? 0, start = uptime()
+            var arrived = false
+            while uptime() - start < 8, !arrived {
+                try app.type("x"); app.sleep(0.25)
+                arrived = (try keyCount(app, page) ?? 0) > before
+            }
+            app.note("after \(action!) and return, keys reached the page again after \(String(format: "%.2f", uptime() - start)) s")
+            try expect(arrived, "after \(action!) and return, keys no longer reach the page (8 s)")
+        }
         return page
     }
 
