@@ -121,6 +121,7 @@ struct LibrarySpacesMetrics: MetricGroup {
     let dividerHeight = Metric(17.0, .anatomy("P32-d: Interface comparison at y 276.5, the line at 304.5, Inbox at 334.5: 41 + 17"))
     let footerCenter = Metric(22.0, .anatomy("P32-d: the move handle and … are centred 22 above the card's bottom"))
     let footerButton = Metric(24.0, .guess("the footer buttons' size"))
+    let footerInset = Metric(22.0, .anatomy("P30-a: the move handle and … are centred 22 in from the card's left and right edges, #888989"))
     let plusSize = Metric(31.0, .anatomy("P32-d: the + button is 31 pt across"))
     let plusGap = Metric(48.0, .anatomy("P32-d: the + button is centred 48 after the last card"))
     let shadowRadius = Metric(12.0, .anatomy("P30-a: no outline; the panel darkens from #ECECEC at a card's edge back to #FCFCFC about 22 pt out"))

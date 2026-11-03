@@ -183,6 +183,8 @@ private final class SpaceCardView: NSView {
 
     private let dispatch: Dispatch
     private let colors: LibraryColors
+    /// The soft shadow, on a layer of its own (AppKit owns the shadow of a view's backing layer).
+    private let shade = CALayer()
     private let gradient = CAGradientLayer()
     private let open = NSButton()
     private let edit = NSButton()
@@ -198,13 +200,18 @@ private final class SpaceCardView: NSView {
         self.colors = colors
         super.init(frame: .zero)
         wantsLayer = true
+        clipsToBounds = false
         let s = LibraryDraw.spaces
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = s.cardRadius.value
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = Float(s.shadowOpacity.value)
-        layer?.shadowRadius = s.shadowRadius.value
-        layer?.shadowOffset = .zero
+        shade.backgroundColor = colors.panel.cgColor
+        shade.cornerRadius = s.cardRadius.value
+        shade.cornerCurve = .continuous
+        shade.shadowColor = NSColor.black.cgColor
+        shade.shadowOpacity = Float(s.shadowOpacity.value)
+        shade.shadowRadius = s.shadowRadius.value
+        shade.shadowOffset = .zero
+        layer?.addSublayer(shade)
         gradient.cornerRadius = s.cardRadius.value
         gradient.cornerCurve = .continuous
         layer?.addSublayer(gradient)
@@ -222,11 +229,11 @@ private final class SpaceCardView: NSView {
         edit.target = self
         edit.action = #selector(editSpace)
         handle.image = LibraryIcon.symbol("arrow.up.and.down.and.arrow.left.and.right", size: 14, label: LibraryCopy.moveSpace)
-        handle.contentTintColor = colors.navInkSelected
+        handle.contentTintColor = colors.navInk
         handle.toolTip = LibraryCopy.moveSpace
         handle.onMove = { [weak self] in self?.onMove($0) }
         more.image = LibraryIcon.symbol("ellipsis", size: 14, weight: .semibold, label: LibraryCopy.more)
-        more.contentTintColor = colors.navInkSelected
+        more.contentTintColor = colors.navInk
         more.toolTip = LibraryCopy.more
         more.showMenu = { [weak self] at in self?.showMenu(at: at) }
         for view in [open, edit, rows, handle, more] as [NSView] { addSubview(view) }
@@ -281,15 +288,16 @@ private final class SpaceCardView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         gradient.frame = bounds
-        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: s.cardRadius.value, cornerHeight: s.cardRadius.value, transform: nil)
+        shade.frame = bounds
+        shade.shadowPath = CGPath(roundedRect: bounds, cornerWidth: s.cardRadius.value, cornerHeight: s.cardRadius.value, transform: nil)
         CATransaction.commit()
         let edgeButton = 22.0
         edit.frame = CGRect(x: bounds.width - pad - edgeButton, y: s.headerCenter.value - edgeButton / 2, width: edgeButton, height: edgeButton)
         let titleHeight = 24.0
         open.frame = CGRect(x: pad - 2, y: s.headerCenter.value - titleHeight / 2, width: max(0, edit.frame.minX - pad), height: titleHeight)
         let footer = bounds.height - s.footerCenter.value, b = s.footerButton.value
-        handle.frame = CGRect(x: pad + 2, y: footer - b / 2, width: b, height: b)
-        more.frame = CGRect(x: bounds.width - pad - b, y: footer - b / 2, width: b, height: b)
+        handle.frame = CGRect(x: s.footerInset.value - b / 2, y: footer - b / 2, width: b, height: b)
+        more.frame = CGRect(x: bounds.width - s.footerInset.value - b / 2, y: footer - b / 2, width: b, height: b)
         rows.frame = CGRect(x: 0, y: s.rowTop.value - s.rowPitch.value / 2, width: bounds.width,
                             height: max(0, footer - b - (s.rowTop.value - s.rowPitch.value / 2)))
         var y = 0.0
