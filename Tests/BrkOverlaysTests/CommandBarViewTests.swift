@@ -80,6 +80,29 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(chosen.last, .commandBar(.submit("bing.com")))
     }
 
+    /// P20-a, Q01-b: titles are whole and the address after them is whole when the row has room; in a narrow row
+    /// the title stays whole and the address gives way from its middle
+    func testTitlesStayWholeAndOnlyTheAddressGivesWay() throws {
+        let view = CommandBarView(dispatch: { _ in })
+        view.show(commandBar([], []), in: box, scheme: .light, spaceless: true)
+        let rows = view.descendants.compactMap { $0 as? ResultRowView }.filter { !$0.isHidden }
+        XCTAssertEqual(rows.count, 5)
+        for row in rows {
+            row.layoutSubtreeIfNeeded()
+            let labels = row.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden && !$0.attributedStringValue.string.isEmpty }
+            for label in labels.prefix(2) {
+                let text = label.attributedStringValue
+                XCTAssertGreaterThanOrEqual(label.frame.width, ceil(text.size().width), "\(text.string) is cut in a 746 pt row")
+            }
+        }
+        let browser = try XCTUnwrap(rows.first { $0.accessibilityLabel() == "The Browser Company" })
+        browser.frame.size.width = 240
+        browser.layoutSubtreeIfNeeded()
+        let fields = browser.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden && !$0.attributedStringValue.string.isEmpty }
+        XCTAssertGreaterThanOrEqual(fields[0].frame.width, ceil(fields[0].attributedStringValue.size().width), "the title stays whole")
+        XCTAssertLessThan(fields[1].frame.width, ceil(fields[1].attributedStringValue.size().width), "the address gives way")
+    }
+
     /// P20-a, P21-a, Q03-a: a window without a space highlights in Arc's blue-violet (#8F95FF light, #424ADD dark);
     /// a space's centered bar in grey (Q01-a)
     func testWindowsWithoutASpaceHighlightInBlueViolet() throws {

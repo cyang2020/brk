@@ -735,11 +735,13 @@ final class ResultRowView: NSView {
         }
         let x = o.textX.value - o.rowInset.value - 2
         let height = label.intrinsicContentSize.height
-        let titleWidth = min(ceil(label.intrinsicContentSize.width), max(0, right - x))
+        // Widths from the text itself (a label pads 2 on each side): the title is whole unless the row cannot hold it,
+        // and only the address after it gives way, from its middle (P20-a, Q01-b).
+        let titleWidth = min(ceil(label.attributedStringValue.size().width) + 4, max(0, right - x))
         label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: titleWidth, height: height)
         // The label pads 2 on each side, so the detail starts 4 back to sit right after the title's text.
         let detailX = label.frame.maxX - 4
-        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.intrinsicContentSize.width), right - detailX)), height: height)
+        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX)), height: height)
     }
 
     // Hover follows pointer motion (not entry), so rows sliding under a still pointer keep the keyboard highlight.
