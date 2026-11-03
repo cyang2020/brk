@@ -152,6 +152,8 @@ final class EmbeddedSurface: PageSurfaceView {
             syncHostFrame()
             chrome?.browser.wasHidden(false)
             NotificationCenter.default.addObserver(self, selector: #selector(windowDidMove(_:)), name: NSWindow.didMoveNotification, object: window)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowBecameVisible(_:)), name: NSWindow.didChangeOcclusionStateNotification, object: window)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowBecameVisible(_:)), name: NSApplication.didUnhideNotification, object: nil)
             observedWindow = window
         } else {
             chrome?.browser.wasHidden(true)
@@ -170,8 +172,27 @@ final class EmbeddedSurface: PageSurfaceView {
 
     @objc private func windowDidMove(_ note: Notification) { syncHostFrame() }
 
+    /// Chromium decides whether the page is shown from its own (empty, transparent) host window. After Hide and
+    /// Show the window server reports that window as occluded, Chromium hides its input view, and AppKit then skips
+    /// it for key equivalents and clicks: Cmd shortcuts went to the menu and clicks to this surface. When our
+    /// window is visible again, the page is shown again.
+    @objc private func windowBecameVisible(_ note: Notification) {
+        guard !retired, isEmbedded, !nativeFullscreenOwnsFrame, let window, let host, window.isVisible, window.occlusionState.contains(.visible),
+              !isHiddenOrHasHiddenAncestor, Self.find("RenderWidgetHostViewCocoa", in: self)?.isHiddenOrHasHiddenAncestor == true else { return }
+        log.notice("page \(self.page.description, privacy: .public): input view hidden after the window came back; showing the host again")
+        window.removeChildWindow(host)
+        host.orderOut(nil)
+        window.addChildWindow(host, ordered: .above)
+        syncHostFrame()
+        chrome?.browser.wasHidden(false)
+    }
+
     private func stopObservingMoves() {
-        if let observedWindow { NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: observedWindow) }
+        if let observedWindow {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: observedWindow)
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: observedWindow)
+            NotificationCenter.default.removeObserver(self, name: NSApplication.didUnhideNotification, object: nil)
+        }
         observedWindow = nil
     }
 

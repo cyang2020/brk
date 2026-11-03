@@ -226,6 +226,8 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var keyReceipts: [PageKeyReceipt]? = nil
     /// Edit-menu services the page's surface carried out ("spelling:<word>", "format:bold", "speak:true:<text>").
     public var textServices: [String]? = nil
+    /// Chromium's input view, or one of its ancestors, is hidden (AppKit skips hidden views for key equivalents).
+    public var inputViewHidden: Bool? = nil
     public var hasDevTools: Bool? = nil
     public var auxiliaryBrowsers: [Int]? = nil
     public var auxiliaryWindows: [Int]? = nil

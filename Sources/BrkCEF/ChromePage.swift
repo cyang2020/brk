@@ -236,6 +236,7 @@ final class ChromePage: CefBrowserDelegate {
         facts.boostError = boostError
         facts.keyReceipts = keyReceipts
         facts.textServices = surface.textServiceLog
+        facts.inputViewHidden = EmbeddedSurface.find("RenderWidgetHostViewCocoa", in: surface)?.isHiddenOrHasHiddenAncestor
         facts.hasDevTools = browser.hasDevTools
         facts.auxiliaryBrowsers = browser.nativeAuxiliaries.map { Int($0.browser.id) }
         facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }

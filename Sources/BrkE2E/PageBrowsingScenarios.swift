@@ -11,6 +11,7 @@ enum PageBrowsingScenarios {
     static let all = core + more
     static let core = [
         Scenario("PB1", "every routed chord through CEF: app first, page first, press twice, exactly once; Chrome-only accelerators consumed", cefOnly: "CEF keys", keyCoverage),
+        Scenario("PB1H", "after Hide Brk and coming back, Cmd chords reach the page's key handler again", cefOnly: "CEF keys", keysAfterHide),
         Scenario("PB1R", "held keys repeat only repeating actions; window-server key presses take the same routes", cefOnly: "CEF keys", keyRepeat),
     ]
 
@@ -278,6 +279,59 @@ enum PageBrowsingScenarios {
             try expect(arrived, "after \(action!) and return, keys no longer reach the page (8 s)")
         }
         return page
+    }
+
+    /// Presses Cmd+0 (Zoom to Actual Size, page priority) and reports whether CEF's before-page handler saw it within `timeout`.
+    static func reaches(_ app: AppUnderTest, _ page: PageID, _ seen: Seen, timeout: Double = 2) throws -> Bool {
+        let before = Set(((try? facts(app, page).keyReceipts) ?? []).compactMap(\.press))
+        try app.press("cmd+0")
+        let deadline = uptime() + timeout
+        while uptime() < deadline {
+            if ((try? facts(app, page).keyReceipts) ?? []).contains(where: { $0.stage == "pre" && $0.chord == "cmd+0" && $0.press.map { !before.contains($0) } == true }) {
+                return true
+            }
+            app.sleep(0.1)
+        }
+        return false
+    }
+
+    @Sendable static func keysAfterHide(_ app: AppUnderTest) throws {
+        let seen = Seen()
+        var steps: [String] = []
+        defer { try? record(app, "after-hide", steps) }
+        let page = try load(app, "key-coverage.html")
+        try expect(try reaches(app, page, seen), "Cmd+0 did not reach the page before Hide")
+        try app.waitForPageInput(page, at: app.site.url("key-coverage.html"))
+        try app.press("cmd+h")
+        try app.waitUntil("Brk hidden") { try app.native().appHidden }
+        try app.perform(.activateApp(window: page.window))
+        try app.waitForPageInput(page, at: app.site.url("key-coverage.html"))
+        var recovered = false
+        for (index, remedy) in ["none", "wait 1 s", "focus the tab", "click the page", "activate the window", "wait 3 s"].enumerated() {
+            switch remedy {
+            case "wait 1 s": app.sleep(1)
+            case "focus the tab": try app.dispatch(.tab(.focus(page.item)))
+            case "click the page":
+                if let frame = try facts(app, page).surfaceFrame { try app.click(at: CGPoint(x: frame.midX, y: frame.midY)) }
+            case "activate the window": _ = try app.send(.activate(window: page.window))
+            case "wait 3 s": app.sleep(3)
+            default: break
+            }
+            let n = try app.native()
+            let ok = try reaches(app, page, seen)
+            steps.append("\(index) \(remedy): reached=\(ok) key=\(n.isKey) focused=\(n.focusedPage == page) inputHidden=\(String(describing: n.pages[page]?.inputViewHidden)) responder=\(n.firstResponder.prefix(40))")
+            if ok { recovered = true; if index == 0 { break } }
+            if recovered { break }
+        }
+        if PhysicalKeys.allowed {
+            let before = Set(((try? facts(app, page).keyReceipts) ?? []).compactMap(\.press))
+            try PhysicalKeys.press(app, KeyChord(.command, .zero), window: page.window)
+            app.sleep(1)
+            let physical = ((try? facts(app, page).keyReceipts) ?? []).contains { $0.stage == "pre" && $0.chord == "cmd+0" && $0.press.map { !before.contains($0) } == true }
+            steps.append("physical Cmd+0: reached=\(physical)")
+        }
+        app.note(steps.joined(separator: " | "))
+        try expect(recovered && steps.first?.contains("reached=true") == true, "after Hide and return Cmd chords did not reach the page at once: " + steps.joined(separator: " | "))
     }
 
     // MARK: PB1R held keys and window-server input
