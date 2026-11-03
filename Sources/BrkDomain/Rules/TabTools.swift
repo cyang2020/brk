@@ -34,8 +34,8 @@ extension AppState {
 }
 
 extension Work {
-    mutating func toast(_ text: String, in window: WindowID) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(4)))
+    mutating func toast(_ text: String, in window: WindowID, action: ToastAction? = nil) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(action == nil ? 4 : 6)), action: action)
     }
     mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {
         guard let tree = state.tree(of: window), tree[id] != nil else { return }
@@ -135,7 +135,9 @@ extension Work {
             guard let id = state.resolveTab(ref, in: window), let scope = state.locate(id), let t = state.tab(id) else { return }
             let muted = !t.muted
             state.withTree(scope) { $0.updateTab(id) { $0.muted = muted } }
-        case .dismissToast: state.session.windows[window]?.toast = nil
+        case .dismissToast:
+            state.session.windows[window]?.toast = nil
+            if state.session.windows[window]?.copiedCapture?.action == nil { state.session.windows[window]?.copiedCapture = nil }
         case .dismissArchiveEducation:
             if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
         case .preferences(let favorites, let previews):

@@ -6,7 +6,7 @@ import Foundation
 
 enum BoostScenarios {
     static let all = [
-        Scenario("Boost-CSS", "native editor preview, cancel, persisted CSS, Library disable/remove, local presets and restart", cefOnly: "actual CSS injection", css),
+        Scenario("Boost-CSS", "intro card, font grid and Code-page preview, reset, save on close, Library disable/remove, local presets and restart", cefOnly: "actual CSS injection", css),
         Scenario("Boost-JavaScript", "native per-Boost confirmation, once per document, trust-free export/import, origin/profile/private boundaries", cefOnly: "actual isolated world JavaScript", javascript),
         Scenario("Boost-Zap", "click-to-hide selector, live preview and durable CSS after reload", cefOnly: "native page click and isolated picker", zap)
     ]
@@ -34,25 +34,52 @@ enum BoostScenarios {
     private static func typeField(_ app: AppUnderTest, _ id: String, _ value: String) throws {
         try app.click(.boostControl(id)); try app.press("cmd+a"); try app.type(value)
     }
+    /// Arc's first Boost opens on its intro card; Make a Boost shows the editor.
+    private static func start(_ app: AppUnderTest) throws {
+        try app.waitUntil("Boost intro card") { try app.view().boostEditor?.page == .intro }
+        try app.click(.boostControl("start"))
+        try app.waitUntil("Boost editor page") { try app.view().boostEditor?.page == .style }
+    }
+    /// The name, scope and switches live under My Boost ▾.
+    private static func rename(_ app: AppUnderTest, _ name: String) throws {
+        try app.click(.boostControl("menu")); try typeField(app, "name", name)
+        try app.waitUntil("Boost renamed") { try editor(app).draft.name == name }
+    }
+    private static func code(_ app: AppUnderTest, _ page: BoostEditorPage) throws {
+        if try editor(app).page == .style { try app.click(.boostControl("code")) }
+        if page == .javascript { try app.click(.boostControl("tab-javascript")) }
+        try app.waitUntil("Boost Code page") { try editor(app).page == page }
+    }
     @Sendable static func css(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("boost.html"))
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("boost.html"))
         try app.dispatch(.boost(.create))
-        try typeField(app, "name", "Violet text")
+        try start(app)
+        try rename(app, "Violet text")
+        try app.click(.boostControl("font-8"))
+        try app.waitUntil("font grid restyles the page") { (try report(app, item)["font"] as? String)?.contains("Georgia") == true }
+        try code(app, .css)
         try typeField(app, "css", "#style-target { color: rgb(134, 14, 255) !important; }")
         try app.waitUntil("live CSS preview") { try report(app, item)["color"] as? String == "rgb(134, 14, 255)" }
         try app.screenshot("editor-live-preview")
-        try typeField(app, "scope-value", "invalid-origin")
-        try app.click(.boostControl("save"))
-        try expect(try app.view().boostEditor != nil, "invalid origin input silently saved a previous value")
-        try app.click(.boostControl("cancel"))
-        try app.waitUntil("cancel restores original CSS") { try report(app, item)["color"] as? String == "rgb(20, 30, 40)" }
+        try app.click(.boostControl("back"))
+        try app.click(.boostControl("menu")); try typeField(app, "scope-value", "invalid-origin")
+        try app.click(.boostControl("close"))
+        try expect(try app.view().boostEditor != nil, "closing with an invalid origin silently saved a previous value")
+        try app.click(.boostControl("reset"))
+        try app.waitUntil("reset restores the page's own CSS") { try report(app, item)["color"] as? String == "rgb(20, 30, 40)" }
+        try app.click(.boostControl("close"))
+        try app.waitUntil("a blank Boost closes without saving") { try app.view().boostEditor == nil }
+        try expect(try library(app).boosts.isEmpty, "a blank Boost was saved"); try app.dispatch(.library(.close))
         try app.dispatch(.boost(.create))
-        try typeField(app, "name", "Violet text")
+        try start(app)
+        try rename(app, "Violet text")
+        try code(app, .css)
         try typeField(app, "css", "#style-target { color: rgb(134, 14, 255) !important; }")
         let id = try editor(app).draft.id
-        try app.click(.boostControl("save"))
-        try app.waitUntil("durable save closes editor") { try app.view().boostEditor == nil }
+        try app.click(.boostControl("back"))
+        try app.click(.boostControl("close"))
+        try app.waitUntil("closing saves and closes the panel") { try app.view().boostEditor == nil }
         try expect(try library(app).boosts.contains { $0.id == id }, "saved boost missing from Library")
         try app.screenshot("library")
         try app.click(.boostControl("toggle-" + id))
@@ -66,20 +93,22 @@ enum BoostScenarios {
         try expect(try library(app).boosts.isEmpty, "remove did not update Library")
         try app.click(.boostControl("preset-reader"))
         try expect(try editor(app).draft.name == "Comfortable reading", "local preset did not open editable draft")
-        try app.click(.boostControl("save"))
+        try app.click(.boostControl("close"))
+        try app.waitUntil("preset saved on close") { try app.view().boostEditor == nil }
         try expect(try library(app).boosts.count == 1, "preset did not install")
         try app.click(.boostControl("import"))
         try app.waitUntil("native import panel") { try app.native().sheetClass != nil }
         try app.screenshotSheet("import-panel")
         try app.perform(.sheetButton(title: "Cancel"))
         try app.waitUntil("import panel cancelled") { try app.native().sheetClass == nil }
-        app.note("Native typing, CSS preview/cancel, enable/disable/remove, local preset, Library and process restart checked against actual DOM.")
+        app.note("Intro card, font grid and Code-page CSS previewed live; invalid origin refused on close; reset, save on close, enable/disable/remove, local preset, Library and restart checked against actual DOM.")
     }
     @Sendable static func javascript(_ app: AppUnderTest) throws {
         let document = app.site.url("boost.html?js"), item = try app.load(document)
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
         try app.dispatch(.boost(.legacy))
-        try typeField(app, "name", "Count committed documents")
+        try rename(app, "Count committed documents")
+        try code(app, .javascript)
         try typeField(app, "javascript", "document.documentElement.dataset.boostRuns=String(Number(document.documentElement.dataset.boostRuns||0)+1);")
         let id = try editor(app).draft.id
         try expect(try report(app, item)["runs"] as? Int == 0, "unconfirmed JavaScript ran during preview")
@@ -87,7 +116,10 @@ enum BoostScenarios {
         try app.waitUntil("per-Boost JavaScript confirmation") { try app.native().sheetClass != nil }
         try app.screenshotSheet("javascript-confirmation")
         try app.perform(.sheetButton(title: "Allow JavaScript & Save"))
-        try app.waitUntil("approved JavaScript ran once") { try report(app, item)["runs"] as? Int == 1 }
+        try app.waitUntil("approved JavaScript ran once with the panel still open") { try report(app, item)["runs"] as? Int == 1 }
+        try expect(try app.view().boostEditor != nil, "the hammer closed the panel")
+        try app.click(.boostControl("back")); try app.click(.boostControl("close"))
+        try app.waitUntil("panel closed") { try app.view().boostEditor == nil }
         for _ in 0..<4 { try app.dispatch(.sidebar(.toggleSpaceHeader)) }
         try expect(try report(app, item)["runs"] as? Int == 1, "reconcile reran JavaScript")
         let file = app.dataDirectory.appendingPathComponent("owned-export.brkboost.json")
@@ -120,13 +152,15 @@ enum BoostScenarios {
         try app.dispatch(.tab(.focus(item)))
         try app.waitForPageInput(PageID(window: publicWindow, item: item), at: document)
         try app.dispatch(.boost(.edit(id)))
-        let privateToggle = try visible(app.native(), .boostControl("private")).frame
-        try app.click(at: CGPoint(x: privateToggle.minX + 8, y: privateToggle.midY))
-        try expect(try editor(app).draft.allowPrivate && !editor(app).draft.javascriptApproved, "native private checkbox did not revoke JavaScript approval")
+        try app.click(.boostControl("menu")); try app.click(.boostControl("private"))
+        try app.waitUntil("native private checkbox revokes JavaScript approval") { try editor(app).draft.allowPrivate && !editor(app).draft.javascriptApproved }
+        try code(app, .javascript)
         try app.click(.boostControl("save"))
         try app.waitUntil("private permission change re-confirms JavaScript") { try app.native().sheetClass != nil }
         try app.perform(.sheetButton(title: "Allow JavaScript & Save"))
-        try app.waitUntil("editor saved") { try app.view().boostEditor == nil }
+        try app.waitUntil("re-approval saved") { try editor(app).message == "JavaScript allowed and saved." }
+        try app.dispatch(.app(.exit))
+        try app.waitUntil("Exit closes the saved panel") { try app.view().boostEditor == nil }
         try app.dispatch(.window(.newIncognito))
         guard case .hello(let again) = try app.send(.hello), let opted = again.windows.first(where: { (try? app.view($0).kind) == .incognito }) else { throw Check(description: "opted private window missing") }
         app.window = opted
@@ -142,13 +176,13 @@ enum BoostScenarios {
     @Sendable static func zap(_ app: AppUnderTest) throws {
         let document = app.site.url("boost.html?zap"), item = try app.load(document)
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
-        try app.dispatch(.boost(.create)); try typeField(app, "name", "Zap banner")
+        try app.dispatch(.boost(.create)); try start(app); try rename(app, "Zap banner")
         try app.click(.boostControl("zap"))
         try app.waitUntil("first Zap attempt starts") { try app.view().boostEditor?.picking == true }
         try app.press("escape")
         try app.waitUntil("Escape cancels Zap and keeps the draft") { try app.view().boostEditor?.picking == false }
         try app.click(.boostControl("zap"))
-        try app.waitUntil("Zap picker hides editor") { try app.view().boostEditor?.picking == true }
+        try app.waitUntil("Zap is on again") { try app.view().boostEditor?.picking == true }
         // DOM installation is asynchronous. A fixture mouseover confirms the listener before the native click.
         let card = try app.native().computed.contentArea
         try app.waitUntil("isolated Zap picker installed") {
@@ -159,10 +193,13 @@ enum BoostScenarios {
         try waitForTitle(app, item, "zap-synthetic-click")
         try expect(try app.view().boostEditor?.picking == true && app.view().boostEditor?.draft.css.isEmpty == true, "page-generated click completed Zap")
         try app.click(at: CGPoint(x: card.minX + 100, y: card.minY + 155))
-        try app.waitUntil("Zap returned selector") { try app.view().boostEditor?.picking == false && app.view().boostEditor?.draft.css.contains("#zap-target") == true }
+        try app.waitUntil("Zap returned selector") { try app.view().boostEditor?.draft.css.contains("#zap-target") == true }
         try app.waitUntil("Zap CSS preview hides selected element") { try report(app, item)["display"] as? String == "none" }
+        try app.waitUntil("Zap stays on for the next element") { try app.view().boostEditor?.picking == true }
         try app.screenshot("zap-preview")
-        try app.click(.boostControl("save")); try app.waitUntil("Zap saved") { try app.view().boostEditor == nil }
+        try app.click(.boostControl("zap"))
+        try app.waitUntil("Zap button turns it off") { try app.view().boostEditor?.picking == false }
+        try app.click(.boostControl("close")); try app.waitUntil("Zap saved on close") { try app.view().boostEditor == nil }
         try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
         try app.waitUntil("Zap CSS survives reload") { try report(app, item)["display"] as? String == "none" }

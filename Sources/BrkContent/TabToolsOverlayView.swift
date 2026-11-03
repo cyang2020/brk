@@ -10,6 +10,8 @@ final class TabToolsOverlayView: NSView {
     private let dispatch: Dispatch
     private let recent = NSView()
     private let toast = NSButton(title: "", target: nil, action: nil)
+    private let toastAction = NSButton(title: "", target: nil, action: nil)
+    private var toastCommand: Command?
     private let education = NSButton(title: "", target: nil, action: nil)
     private let outputStatus = NSTextField(labelWithString: "")
     private var outputTask: Task<Void, Never>?
@@ -22,7 +24,7 @@ final class TabToolsOverlayView: NSView {
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
-        for view in [recent, toast, education, outputStatus] as [NSView] { addSubview(view) }
+        for view in [recent, toast, toastAction, education, outputStatus] as [NSView] { addSubview(view) }
         outputStatus.isHidden = true
         outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         outputStatus.lineBreakMode = .byTruncatingMiddle
@@ -35,6 +37,10 @@ final class TabToolsOverlayView: NSView {
         recent.layer?.cornerRadius = Metrics.content.cornerRadius.value
         toast.target = self
         toast.action = #selector(dismissToast)
+        toastAction.identify(.tabTool("toast-action"))
+        toastAction.target = self
+        toastAction.action = #selector(toastActionPressed)
+        toastAction.bezelStyle = .rounded
         education.target = self
         education.action = #selector(dismissEducation)
         education.font = .systemFont(ofSize: 11)
@@ -101,12 +107,19 @@ final class TabToolsOverlayView: NSView {
         toast.isHidden = tools.toast == nil
         toast.title = tools.toast.map { $0.text + "   ×" } ?? ""
         toast.sizeToFit()
-        toast.frame.origin = NSPoint(x: (bounds.width - toast.frame.width) / 2, y: bounds.height - 58)
+        toastCommand = tools.toast?.action?.command
+        toastAction.isHidden = tools.toast?.action == nil
+        toastAction.title = tools.toast?.action?.title ?? ""
+        toastAction.sizeToFit()
+        let actionWidth = toastAction.isHidden ? 0 : toastAction.frame.width + 6
+        toast.frame.origin = NSPoint(x: (bounds.width - toast.frame.width - actionWidth) / 2, y: bounds.height - 58)
+        toastAction.frame.origin = NSPoint(x: toast.frame.maxX + 6, y: toast.frame.midY - toastAction.frame.height / 2)
         education.isHidden = true
         education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
         education.cell?.wraps = true
         education.frame = NSRect(x: 8, y: bounds.height - 130, width: max(0, sidebarWidth - 16), height: 68)
     }
     @objc private func dismissToast() { dispatch(.tabTools(.dismissToast)) }
+    @objc private func toastActionPressed() { if let toastCommand { dispatch(toastCommand) } }
     @objc private func dismissEducation() { dispatch(.tabTools(.dismissArchiveEducation)) }
 }

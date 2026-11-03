@@ -17,8 +17,9 @@ extension ChromePage {
         return SiteTarget(document: document, context: context, origin: origin)
     }
 
-    func boostWorld(_ target: SiteTarget, revision: UInt64) async throws -> Int {
-        @MainActor func valid() -> Bool { engine.isLive(self) && matches(target) && boostRevision == revision }
+    /// `revision` nil: the caller does not care whether the injected CSS changes meanwhile (the Zap picker).
+    func boostWorld(_ target: SiteTarget, revision: UInt64?) async throws -> Int {
+        @MainActor func valid() -> Bool { engine.isLive(self) && matches(target) && (revision.map { boostRevision == $0 } ?? true) }
         guard valid() else { throw CocoaError(.userCancelled) }
         let frameTree = try await browser.protocolSession.call("Page.getFrameTree")
         guard valid(), let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any],
@@ -80,33 +81,37 @@ extension ChromePage {
         guard matches(target), engine.isLive(self), case .profile = context else { throw CocoaError(.userCancelled) }
         boostPickerGeneration &+= 1
         let picker = boostPickerGeneration
-        let revision = boostRevision
-        let world = try await boostWorld(target, revision: revision)
+        // Zap's own CSS changes the Boost policy between picks; the picker only needs the same document.
+        let world = try await boostWorld(target, revision: nil)
         guard matches(target), engine.isLive(self), picker == boostPickerGeneration else { throw CocoaError(.userCancelled) }
         let pickToken = UUID().uuidString
         boostPickerWorld = (target, world, pickToken)
         defer { if boostPickerWorld?.token == pickToken { boostPickerWorld = nil } }
+        // Arc's Zap: the element under the pointer turns into a yellow block (P37-c2); a click hides it. Clicks on the
+        // page background are ignored, Escape ends picking (null). The native side cancels a pick it no longer wants.
         let script = """
         new Promise(resolve=>{
           if(location.origin!==\(Self.jsString(target.origin.value))){resolve(null);return;}
           if(globalThis.__brkZapCancel)globalThis.__brkZapCancel();
-          let timer;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;border:3px solid #860eff;box-sizing:border-box;display:none';document.documentElement.append(highlight);
-          const restore=()=>highlight.remove();
-          const finish=value=>{restore();clearTimeout(timer);window.removeEventListener('mouseover',over,true);window.removeEventListener('click',click,true);window.removeEventListener('keydown',key,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
-          const over=e=>{if(e.target instanceof Element){const r=e.target.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});}};
+          let current=null;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#f2c524;mix-blend-mode:multiply;border-radius:4px;box-sizing:border-box;display:none';document.documentElement.append(highlight);
+          const place=()=>{if(!current||!current.isConnected){highlight.style.display='none';return;}const r=current.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:(r.left-2)+'px',top:(r.top-2)+'px',width:(r.width+4)+'px',height:(r.height+4)+'px'});};
+          const ignored=t=>!t||t===document.documentElement||t===document.body||t===highlight;
+          const finish=value=>{highlight.remove();for(const [n,f] of listeners)window.removeEventListener(n,f,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
+          const over=e=>{const t=e.target instanceof Element?e.target:null;current=ignored(t)?null:t;place();};
           const selector=el=>{const parts=[];while(el&&el.nodeType===1){
             if(el.id){const id='#'+CSS.escape(el.id);if(document.querySelectorAll(id).length===1){parts.unshift(id);break;}}
             const tag=el.localName;const siblings=el.parentElement?Array.from(el.parentElement.children).filter(x=>x.localName===tag):[el];
             parts.unshift(CSS.escape(tag)+':nth-of-type('+(siblings.indexOf(el)+1)+')');el=el.parentElement;
           }return parts.join(' > ');};
-          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();const t=e.target instanceof Element?e.target:null;if(!t||t===document.documentElement||t===document.body){finish(null);return;}finish(selector(t));};
+          const swallow=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();};
+          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();const t=e.target instanceof Element?e.target:null;if(ignored(t))return;finish(selector(t));};
           const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(null);}};
+          const listeners=[['mouseover',over],['scroll',place],['resize',place],['mousedown',swallow],['mouseup',swallow],['pointerdown',swallow],['auxclick',swallow],['click',click],['keydown',key]];
           globalThis.__brkZapToken=\(Self.jsString(pickToken));globalThis.__brkZapCancel=()=>finish(null);
-          window.addEventListener('mouseover',over,true);window.addEventListener('click',click,true);window.addEventListener('keydown',key,true);
-          timer=setTimeout(()=>finish(null),30000);
+          for(const [n,f] of listeners)window.addEventListener(n,f,true);
         })
         """
-        let result = try await browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true, "awaitPromise": true], timeout: 31)
+        let result = try await browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true, "awaitPromise": true], timeout: 3600)
         guard matches(target), engine.isLive(self) else { throw CocoaError(.userCancelled) }
         return (result["result"] as? [String: Any])?["value"] as? String
     }

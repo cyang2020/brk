@@ -24,6 +24,7 @@ enum CommandInventory {
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
+        .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
@@ -75,7 +76,8 @@ enum CommandInventory {
         .site(.installSelectedExtension(URL(fileURLWithPath: "/tmp/fixture"))), .site(.executeExtensionInstall(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))),
         .site(.extensions), .site(.extensionShortcuts), .site(.addExtension),
         .boost(.create), .boost(.legacy), .boost(.editCurrent), .boost(.edit("ghost")), .boost(.gallery), .boost(.preset("reader")),
-        .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.cancel), .boost(.discard), .boost(.zap),
+        .boost(.update(Boost(id: "ghost", name: "Ghost", scope: .allSites))), .boost(.save), .boost(.close), .boost(.discard), .boost(.zap),
+        .boost(.inspect), .boost(.page(.css)),
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
@@ -162,9 +164,11 @@ enum CommandInventory {
             case .preset: "preset"
             case .update: "update"
             case .save: "save"
-            case .cancel: "cancel"
+            case .close: "close"
             case .discard: "discard"
             case .zap: "zap"
+            case .inspect: "inspect"
+            case .page: "page"
             case .enable: "enable"
             case .remove: "remove"
             case .export: "export"
@@ -195,6 +199,7 @@ enum CommandInventory {
             case .begin: "begin"
             case .select: "select"
             case .cancel: "cancel"
+            case .act: "act"
             case .preview: "preview"
             case .export: "export"
             case .remove: "remove"

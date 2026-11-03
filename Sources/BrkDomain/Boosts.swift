@@ -10,11 +10,18 @@ public struct Boost: Hashable, Sendable, Codable {
     public var enabled: Bool
     public var allowPrivate: Bool
     public var javascriptApproved: Bool
+    /// The editor's visual controls (colour dots, light/dark, font, size, case). nil until one is touched; older
+    /// Boost files have no such key and decode as nil.
+    public var style: BoostStyle?
     public init(id: String, name: String, scope: BoostScope, css: String = "", javascript: String = "", enabled: Bool = true,
-                allowPrivate: Bool = false, javascriptApproved: Bool = false) {
+                allowPrivate: Bool = false, javascriptApproved: Bool = false, style: BoostStyle? = nil) {
         self.id = id; self.name = name; self.scope = scope; self.css = css; self.javascript = javascript
-        self.enabled = enabled; self.allowPrivate = allowPrivate; self.javascriptApproved = javascriptApproved
+        self.enabled = enabled; self.allowPrivate = allowPrivate; self.javascriptApproved = javascriptApproved; self.style = style
     }
+    /// What the page receives: the visual controls first, then the Code page's CSS, which can override them.
+    public var injectedCSS: String { [style?.css ?? "", css].filter { !$0.isEmpty }.joined(separator: "\n") }
+    /// Nothing made yet: closing such a never-saved draft creates no Boost.
+    public var isBlank: Bool { (style ?? BoostStyle()) == BoostStyle() && css.isEmpty && javascript.isEmpty }
 }
 
 public struct BoostCatalog: Hashable, Sendable, Codable {
@@ -23,21 +30,30 @@ public struct BoostCatalog: Hashable, Sendable, Codable {
     public init(boosts: [Boost] = []) { self.boosts = boosts }
 }
 
+/// Arc's Boost panel pages: the first-run card, the visual editor, and the Code page with its CSS / JS segments.
+public enum BoostEditorPage: String, Hashable, Sendable, Codable { case intro, style, css, javascript }
+
+/// What a page pick is for: Zap hides each clicked element (and keeps picking); the Code page's eyedropper
+/// inserts one element's selector.
+public enum BoostPickPurpose: String, Hashable, Sendable, Codable { case zap, selector }
+
 public struct BoostEditor: Equatable, Sendable, Codable {
     public let id: String
     public let profile: ProfileID
     public let target: SiteTarget?
     public var draft: Boost
+    public var page: BoostEditorPage = .style
     public var picking = false
+    public var pickPurpose: BoostPickPurpose = .zap
     public var pickID: String? = nil
     public var message: String? = nil
-    /// Set by the first Escape on a dirty draft; the next Escape closes.
-    public var confirmDiscard = false
 }
 
+/// Arc edits live and saves on close: `.close` (× and Escape) keeps the edits, `.discard` (Maybe Later) drops them,
+/// `.save` (the Code page's hammer) writes now and asks before JavaScript may run.
 public enum BoostCommand: Hashable, Sendable, Codable {
     case create, legacy, editCurrent, edit(String), gallery, preset(String)
-    case update(Boost), save, cancel, discard, zap
+    case update(Boost), save, close, discard, zap, inspect, page(BoostEditorPage)
     case enable(String, Bool), remove(String), export(String), importFile
     /// Selected-file commands also serve automation; both are restricted to the invoking public profile.
     case importSelected(URL), exportSelected(String, URL)

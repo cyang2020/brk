@@ -75,6 +75,23 @@ public class WindowController: NSObject, NSWindowDelegate {
             return routeKey(input)
         }
         window.onScrollWheel = { [weak root] event in root?.handleScrollWheel(event) ?? false }
+        if let browser = window as? BrowserWindow {
+            browser.canStartCaptureDrag = { [weak self, weak browser] event in
+                guard let self, let browser, let snapshot = self.lastSnapshot, snapshot.capture == nil, snapshot.overlay == nil,
+                      let hit = browser.contentView?.superview?.hitTest(event.locationInWindow) ?? browser.contentView?.hitTest(event.locationInWindow),
+                      let surface = BrowserWindow.surface(containing: hit),
+                      snapshot.content.presentedPanes.contains(where: { $0.focused && $0.content == .page(surface.page) }) else { return false }
+                return true
+            }
+            browser.startCaptureDrag = { [weak self] in
+                guard let self else { return false }
+                self.root.expectCaptureShortcut(true)
+                self.send(.user(self.id, .capture(.begin(.area))))
+                let started = self.lastSnapshot?.capture != nil
+                if !started { self.root.expectCaptureShortcut(false) }
+                return started
+            }
+        }
         window.onFlagsChanged = { [weak self] flags in
             guard let self else { return }
             let held = Modifiers(rawValue: flags.intersection(.deviceIndependentFlagsMask).rawValue
@@ -344,8 +361,34 @@ public final class BrowserWindow: NSWindow, HostWindow {
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
+    /// Arc's ⇧⌘-drag capture: whether this ⇧⌘ mouse-down is over the focused page, and, once it moves, starting
+    /// the capture (true when the overlay is up to take the held mouse-down).
+    var canStartCaptureDrag: ((NSEvent) -> Bool)?
+    var startCaptureDrag: (() -> Bool)?
+    private var heldCaptureDown: NSEvent?
 
     public override func sendEvent(_ event: NSEvent) {
+        if let held = heldCaptureDown {
+            switch event.type {
+            case .leftMouseDragged:
+                guard hypot(event.locationInWindow.x - held.locationInWindow.x, event.locationInWindow.y - held.locationInWindow.y) >= 3 else { return }
+                heldCaptureDown = nil
+                if startCaptureDrag?() == true { super.sendEvent(held); super.sendEvent(event); return }
+                deliver(held)
+            case .leftMouseUp:
+                // A ⇧⌘-click, not a drag: the page gets it as usual (open the link in a new tab).
+                heldCaptureDown = nil; deliver(held)
+            default: break
+            }
+        } else if event.type == .leftMouseDown,
+                  event.modifierFlags.intersection([.shift, .command, .option, .control]) == [.shift, .command],
+                  canStartCaptureDrag?(event) == true {
+            heldCaptureDown = event
+            return
+        }
+        deliver(event)
+    }
+    private func deliver(_ event: NSEvent) {
         if hostEvent(event) { return }
         super.sendEvent(event)
     }

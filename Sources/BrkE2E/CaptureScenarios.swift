@@ -5,23 +5,21 @@ import Foundation
 
 enum CaptureScenarios {
     static let all = [Scenario("CaptureScale", "zoomed full-page and scrolled area pixels match independent DOM metrics", cefOnly:"embedded pixel scale", scale),
-        Scenario("CaptureProduct", "area, full-page, portrait, real library export/restart/remove and private memory", cefOnly: "embedded captures", product),
+        Scenario("CaptureProduct", "area menu card, full-page clipboard toast, portrait, real library export/restart/remove and private memory", cefOnly: "embedded captures", product),
         Scenario("CapturePiPOwnership", "specific players, activation failure, per-site exemption and private PiP retirement", cefOnly:"embedded media ownership", pipOwnership),
         Scenario("CapturePiP", "explicit video/document PiP, automatic video and source lifecycle", cefOnly: "embedded PiP", pictureInPicture),
         Scenario("CaptureProbe", "embedded Chrome capture and separate video/document PiP probes", cefOnly: "embedded DevTools", probe)]
     static func library(_ app: AppUnderTest) throws -> LibrarySnapshot? { if case .library(let value)? = try app.view().overlay { value } else { nil } }
     static func pngSize(_ bytes: Data) -> [Int] { [16,20].map { offset in bytes[offset..<(offset+4)].reduce(0) { $0*256+Int($1) } } }
+    /// Waits for the capture's Library write (Save to Library, or the copied toast's Save), then reads Media.
     static func captureRecord(_ app: AppUnderTest, mode: CaptureMode, previous: Int) throws -> CaptureRecord {
         var failure: String?
         do { try app.waitUntil("capture reaches Media as a real indexed PNG", timeout:20) {
-            if try library(app)?.captures.count == previous + 1 { return true }
             let view = try app.view()
-            if view.capture == nil, let toast = view.tabTools.toast { failure = toast.text; return true }
-            if view.capture == nil, view.overlay == nil {
-                try app.dispatch(.library(.open(.media)))
-                failure = try library(app)?.captureMessage ?? "Capture was cancelled while its source remained selected"; return true
-            }
-            return false
+            if let toast = view.tabTools.toast, toast.text.hasPrefix("Capture failed") { failure = toast.text; return true }
+            guard view.capture == nil else { return false }
+            if try library(app) == nil { try app.dispatch(.library(.open(.media))) }
+            return try library(app)?.captures.count == previous + 1
         }
             if let failure { throw Check(description:failure) }
         } catch {
@@ -35,28 +33,57 @@ enum CaptureScenarios {
         try bytes.write(to:app.shotsDirectory.appendingPathComponent("product-"+mode.rawValue+".png"))
         return record
     }
+    /// A selection captures on release and opens the menu card beside it.
+    static func menuCard(_ app: AppUnderTest) throws {
+        try app.waitUntil("menu card beside the captured selection", timeout:15) { try app.view().capture?.image != nil }
+    }
+    /// Arc copies a full-page capture and offers Save on its toast.
+    static func copiedToast(_ app: AppUnderTest) throws {
+        try app.waitUntil("Screenshot Copied to Clipboard toast", timeout:20) {
+            try app.view().capture == nil && app.view().tabTools.toast?.text == "Screenshot Copied to Clipboard"
+        }
+    }
+    static func clipboardHoldsPNG() -> Bool {
+        let process = Process(); let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); process.arguments = ["-e", "clipboard info"]
+        process.standardOutput = pipe
+        guard (try? process.run()) != nil else { return false }
+        process.waitUntilExit()
+        return String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("PNGf")
+    }
     @Sendable static func product(_ app: AppUnderTest) throws {
         try app.dispatch(.settings(.advanced(.autoPictureInPicture(false))))
         let url=app.site.url("capture-media.html"), item=try app.load(app.site.url("capture-media.html"))
         let page=PageID(window:app.window!,item:item)
         try app.waitForPageInput(page,at:url)
         try app.perform(.menuAction(ActionID.captureFullPage.rawValue))
+        try copiedToast(app)
+        try expect(clipboardHoldsPNG(),"full-page capture did not reach the clipboard as PNG")
+        try expect(try app.view().overlay == nil,"full-page capture left the page")
+        _ = try app.screenshot("product-full-copied-toast")
+        try app.click(.tabTool("toast-action"))
         let full=try captureRecord(app,mode:.fullPage,previous:0)
         try expect(full.height == Int(3050 * full.scale),"full page omitted long content")
         _ = try app.screenshot("product-media-full")
         try app.dispatch(.library(.close))
         try app.perform(.menuAction(ActionID.capturePage.rawValue))
         try app.waitUntil("selection overlay appears") { try app.view().capture?.request.mode == .area }
+        _ = try app.screenshot("product-area-hint")
         let card=try app.native().computed.cards[0].rect
         _ = try app.send(.pointerDrag(from:CGPoint(x:card.minX+card.width*0.4,y:card.minY+card.height*0.4),to:CGPoint(x:card.minX+card.width*0.65,y:card.minY+card.height*0.65),cancel:false))
-        _ = try app.screenshot("product-area-selection")
-        try app.click(.tabTool("capture-confirm"))
+        try menuCard(app)
+        _ = try app.screenshot("product-area-menu")
+        try app.click(.tabTool("capture-menu-library"))
         let area=try captureRecord(app,mode:.area,previous:1)
         try expect(abs(Double(area.width)-Double(full.width)*0.25)<=2,"area pixels do not match pointer selection")
+        try expect(try app.view().tabTools.toast?.text == "Saved to Library" || library(app) != nil,"Save to Library gave no feedback")
         try app.dispatch(.library(.close))
         try app.perform(.menuAction(ActionID.capturePrettyScreenshot.rawValue))
+        try app.waitUntil("portrait frame appears") { try app.view().capture?.request.mode == .portrait }
         _ = try app.screenshot("product-portrait-framing")
-        try app.click(.tabTool("capture-confirm"))
+        try app.click(at:CGPoint(x:card.midX,y:card.midY))
+        try menuCard(app)
+        try app.click(.tabTool("capture-menu-library"))
         let portrait=try captureRecord(app,mode:.portrait,previous:2)
         try expect(abs(Double(portrait.width)/Double(portrait.height)-9.0/16)<0.01,"portrait framing is not 9:16")
         try app.dispatch(.capture(.preview(area.id)))
@@ -97,8 +124,8 @@ enum CaptureScenarios {
         let privateItem=try app.load(url); try app.waitForPageInput(PageID(window:privateWindow,item:privateItem),at:url)
         let diskBefore=try FileManager.default.subpathsOfDirectory(atPath:app.dataDirectory.appendingPathComponent("Captures").path)
         try app.dispatch(.capture(.begin(.fullPage)))
-        try app.waitUntil("private capture exists only in memory") { try app.view().capture?.image != nil }
-        _ = try app.screenshot("product-private-memory-preview")
+        try copiedToast(app)
+        _ = try app.screenshot("product-private-copied")
         try expect(try FileManager.default.subpathsOfDirectory(atPath:app.dataDirectory.appendingPathComponent("Captures").path)==diskBefore,"private capture wrote a file")
         try app.dispatch(.capture(.cancel)); try app.dispatch(.window(.close))
         app.window=publicWindow; _ = try app.send(.activate(window:publicWindow))
@@ -113,7 +140,8 @@ enum CaptureScenarios {
         try expect(try app.view().capture?.request.document.browser.page == peekPage,"Capture switched from Peek to the underlying tab")
         let peekRect = try app.native().computed.peek!
         _ = try app.send(.pointerDrag(from:CGPoint(x:peekRect.minX+peekRect.width*0.4,y:peekRect.minY+peekRect.height*0.4),to:CGPoint(x:peekRect.minX+peekRect.width*0.65,y:peekRect.minY+peekRect.height*0.65),cancel:false))
-        try app.click(.tabTool("capture-confirm"))
+        try menuCard(app)
+        try app.click(.tabTool("capture-menu-library"))
         try app.waitUntil("Peek capture reaches its public profile library") { try library(app)?.captures.count == 3 }
         guard let peekCapture = try library(app)?.captures.first, let peekFile = try library(app)?.captureFiles[peekCapture.id] else { throw Check(description:"Peek capture missing") }
         try expect(peekCapture.url == url,"Peek capture has the underlying tab's address")
@@ -128,7 +156,8 @@ enum CaptureScenarios {
         try app.dispatch(.library(.close))
         let isolatedItem = try app.load(url); try app.waitForPageInput(PageID(window:app.window!,item:isolatedItem),at:url)
         try app.dispatch(.capture(.begin(.fullPage)))
-        try app.waitUntil("isolated profile capture is indexed") { try library(app)?.captures.count == 1 }
+        try copiedToast(app); try app.dispatch(.capture(.act(.library)))
+        _ = try captureRecord(app,mode:.fullPage,previous:0)
         guard let isolated = try library(app)?.captures.first, let isolatedFile = try library(app)?.captureFiles[isolated.id] else { throw Check(description:"isolated artifact missing") }
         try expect(isolated.profile == profile,"capture stored under the wrong profile")
         try app.dispatch(.profile(.assign(.current,to:.default)))
@@ -154,9 +183,9 @@ enum CaptureScenarios {
         try Data(text.utf8).write(to:app.shotsDirectory.appendingPathComponent("zoom-metrics.json"))
         try app.dispatch(.capture(.begin(.fullPage)))
         let observation = try app.send(.pageObservations)
-        try expect(try app.view().capture != nil,"Capture begin was not admitted after zoom: \(observation)")
+        try expect(try app.view().capture != nil || app.view().tabTools.toast != nil,"Capture begin was not admitted after zoom: \(observation)")
         let record: CaptureRecord
-        do { record = try captureRecord(app,mode:.fullPage,previous:0) }
+        do { try copiedToast(app); try app.dispatch(.capture(.act(.library))); record = try captureRecord(app,mode:.fullPage,previous:0) }
         catch {
             try? app.dispatch(.library(.close)); try? app.waitForPageInput(page,at:url)
             let raw = app.dataDirectory.appendingPathComponent("zoom-raw")
@@ -171,6 +200,7 @@ enum CaptureScenarios {
         try app.evaluate(page,"scrollTo(0,1400);document.title='scrolled:'+scrollY")
         try app.waitUntil("page scrolled beyond first band") { try tab(item,in:app.view())?.title.hasPrefix("scrolled:1400") == true }
         try app.dispatch(.capture(.begin(.area)));try app.dispatch(.capture(.select(CaptureRegion(x:0.4,y:0.4,width:0.25,height:0.25))))
+        try menuCard(app); try app.dispatch(.capture(.act(.library)))
         let scrolled=try captureRecord(app,mode:.area,previous:1)
         if let file=try library(app)?.captureFiles[scrolled.id] { try Data(contentsOf:file).write(to:app.shotsDirectory.appendingPathComponent("scrolled-area.png")) }
         try JSONEncoder().encode([record,scrolled]).write(to:app.shotsDirectory.appendingPathComponent("scale-records.json"))

@@ -48,6 +48,12 @@ struct TabSelection: Equatable, Sendable {
 public struct ToastSnapshot: Equatable, Sendable, Codable {
     public var text: String
     public var expiresAt: Instant
+    /// One button on the toast (Arc: "Screenshot Copied to Clipboard" · Save).
+    public var action: ToastAction? = nil
+}
+public struct ToastAction: Equatable, Sendable, Codable {
+    public var title: String
+    public var command: Command
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]

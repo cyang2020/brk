@@ -186,7 +186,10 @@ struct Work {
         case .clockTick:
             sweepAutoArchive()
             for window in state.session.windows.keys {
-                if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now { state.session.windows[window]?.toast = nil }
+                if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now {
+                    state.session.windows[window]?.toast = nil
+                    if state.session.windows[window]?.copiedCapture?.action == nil { state.session.windows[window]?.copiedCapture = nil }
+                }
             }
             requestSidebarSync()
         case .window(let window, let e): windowEvent(e, in: window)
