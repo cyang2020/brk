@@ -65,9 +65,10 @@ final class Wave2AppTests: XCTestCase {
         h.store.start()
         h.store.dispatch(.user(h.window, .settings(.openPane(.links))))
         XCTAssertEqual(h.store.snapshot.settings.pane, .links)
-        let settings = NSApp.windows.first { $0.contentView?.accessibilityIdentifier() == "settings" }
-        XCTAssertNotNil(settings, "the settings window exists once a pane opened")
-        XCTAssertEqual(settings?.isVisible, true)
+        // Visible: the settings tests leave hidden settings windows of their own in NSApp.windows (their panes'
+        // sheet and popover modifiers keep them alive), as ControlInputRegressionTests notes too.
+        let settings = NSApp.windows.first { $0.isVisible && $0.contentView?.accessibilityIdentifier() == "settings" }
+        XCTAssertNotNil(settings, "the settings window exists and is shown once a pane opened")
         h.store.dispatch(.user(h.window, .settings(.closeWindow)))
         XCTAssertEqual(settings?.isVisible, false)
     }

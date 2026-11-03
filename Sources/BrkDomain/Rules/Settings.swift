@@ -17,6 +17,7 @@ extension Work {
             case .warnBeforeQuitting(let on): state.doc.settings.general.warnBeforeQuitting = on
             case .dismissDefaultBrowserPrompt: state.doc.settings.general.defaultBrowserPromptDismissed = true
             case .webAppearance(let appearance): state.doc.settings.general.webAppearance = appearance
+            case .appIcon(let icon): state.doc.settings.general.appIcon = icon == .original ? nil : icon
             }
         case .profile(let profile, let setting):
             guard state.doc.profiles[profile] != nil else { return }
@@ -49,6 +50,7 @@ extension Work {
             case .shiftClickPeek(let on): state.doc.settings.links.shiftClickPeek = on
             case .peekFromPinnedAndFavorites(let on): state.doc.settings.links.peekFromPinnedAndFavorites = on
             case .littleArcAutoArchive(let threshold): state.doc.settings.links.littleArcAutoArchive = threshold
+            case .globalLittleArcShortcut(let on): state.doc.settings.links.globalLittleArcShortcut = on ? nil : false
             case .defaultRoute(let destination):
                 if case .space(let id)? = destination, state.doc.spaces[id] == nil { return }
                 // nil and `.mostRecentSpace` say the same; the saved value has one spelling.
@@ -94,6 +96,20 @@ extension Work {
             case .provider(let choice): state.doc.settings.max.provider = choice
             case .renamePinnedTabs(let on): state.doc.settings.max.renamePinnedTabs = on
             case .tidyTabs(let on): state.doc.settings.max.tidyTabs = on
+            case .autoEnableFutureFeatures(let on): state.doc.settings.max.autoEnableFutureFeatures = on ? true : nil
+            case .enable(let on):
+                var max = state.doc.settings.max
+                if on {
+                    if max.provider == .off { max.provider = .auto }
+                    // Tidy Tab Titles and Tidy Tabs are plain switches: on only the first time Max is turned on.
+                    if max.features == nil { max.renamePinnedTabs = true; max.tidyTabs = true }
+                    var features = max.features ?? [:]
+                    for feature in AIFeature.allCases where features[feature] == nil { features[feature] = true }
+                    max.features = features
+                } else {
+                    max.provider = .off
+                }
+                if state.doc.settings.max != max { state.doc.settings.max = max }
             }
         case .advanced(let setting):
             switch setting {
@@ -113,6 +129,17 @@ extension Work {
             if state.session.settingsPane != pane { state.session.settingsPane = pane }
             effects.append(.app(.showSettings))
         case .closeWindow:
+            if state.session.settingsPane != nil { state.session.settingsPane = nil }
+        case .openBrowserPage(let page, let profile):
+            // A standard window's space of that profile: the one it shows, else the first in dock order. An
+            // incognito window or a profile no space uses has nowhere to open the page.
+            guard let shown = state.doc.windows[window], shown.kind == .standard else { effects.append(.app(.beep)); return }
+            let wanted = profile ?? state.doc.spaces[shown.space]?.profile
+            let space = state.doc.spaces[shown.space]?.profile == wanted ? shown.space
+                : state.doc.spaceOrder.first { state.doc.spaces[$0]?.profile == wanted }
+            guard let space else { effects.append(.app(.beep)); return }
+            showSpace(space, in: window)
+            openTab(page.url, inSpace: space, window: window, focus: true)
             if state.session.settingsPane != nil { state.session.settingsPane = nil }
         }
     }

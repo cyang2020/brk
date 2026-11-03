@@ -7,9 +7,10 @@ import Foundation
 // Every value is saved (`Doc.settings`), changed only through `.settings(...)` commands, and read by the projection
 // into `SettingsSnapshot`. Defaults are ours where Arc ships none (anatomy-m 4.1: no defaults plist).
 
-/// The panes of the settings window, in Arc's toolbar order (anatomy-m 4.1 enum order, minus account and staff).
+/// The panes of the settings window, in Arc 1.170's toolbar order (P38 captures: account, General, Profiles, Max,
+/// Links, Shortcuts, Icon, Advanced), minus the account pane (no account) and staff.
 public enum SettingsPane: String, Hashable, Sendable, Codable, CaseIterable {
-    case general, max, profiles, shortcuts, links, advanced
+    case general, profiles, max, links, shortcuts, icon, advanced
 }
 
 struct Settings: Sendable, Equatable {
@@ -31,11 +32,18 @@ public struct GeneralSettings: Hashable, Sendable, Codable {
     public var defaultBrowserPromptDismissed: Bool
     /// View > Appearance: "Websites, Easels, and Notes will use:" (rows 88 to 90).
     public var webAppearance: WebAppearance
+    /// The Icon pane's choice for the Dock and the About window; nil is `.original`.
+    public var appIcon: AppIconChoice? = nil
 
     public static let `default` = GeneralSettings(warnBeforeQuitting: false, defaultBrowserPromptDismissed: false, webAppearance: .automatic)
 }
 
 public enum WebAppearance: String, Hashable, Sendable, Codable, CaseIterable { case automatic, light, dark }
+
+/// The app icons the Icon pane offers (Arc: the alternate app icons of its Icon pane). Brk draws its own set.
+public enum AppIconChoice: String, Hashable, Sendable, Codable, CaseIterable {
+    case original, candy, neon, graphite, schoolbook, colorful
+}
 
 /// Arc: `ProfilePreferences.State` (anatomy-m 1.12) plus the profile's auto-archive threshold (anatomy-m 4.3,
 /// `AutoArchiveTimeThresholdsPerProfile`).
@@ -69,9 +77,12 @@ public struct LinkSettings: Hashable, Sendable, Codable {
     public var littleArcAutoArchive: AutoArchiveThreshold
     /// Where an external link with no matching route lands; nil is "Most Recent Space".
     public var defaultRoute: LinkDestination?
+    /// "Open Little Arc when I press ⌥⌘N in any app": the system-wide New Little Arc Window shortcut; nil is on.
+    public var globalLittleArcShortcut: Bool? = nil
 
+    /// Little Arcs archive after 6 hours by default ("6 hours (default)" in Arc 1.170's Links pane, P38-f).
     public static let `default` = LinkSettings(externalLinksInLittleArc: true, optionCommandClickLittleArc: true, shiftClickPeek: true,
-                                               peekFromPinnedAndFavorites: true, littleArcAutoArchive: .twelveHours, defaultRoute: nil)
+                                               peekFromPinnedAndFavorites: true, littleArcAutoArchive: .sixHours, defaultRoute: nil)
 }
 
 /// One Air Traffic Control route (Arc: `StorableLinkRouting`): links whose host matches `pattern` open at
@@ -117,6 +128,8 @@ public struct MaxSettings: Hashable, Sendable, Codable {
     public var tidyTabs: Bool
     public var features: [AIFeature: Bool]? = nil
     public var translationExclusions: [ProfileID: AITranslationExclusions]? = nil
+    /// "Automatically enable future Arc Max features": a feature the user never switched follows this; nil is off.
+    public var autoEnableFutureFeatures: Bool? = nil
 
     public static let `default` = MaxSettings(provider: .auto, renamePinnedTabs: false, tidyTabs: false)
 }

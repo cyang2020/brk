@@ -34,7 +34,9 @@ import Carbon
     }
 
     func update(_ snapshot: AppSnapshot) {
-        let state = snapshot.settings.shortcuts.first { $0.action == .showLittleArc }?.state
+        // Links' "Open Little Arc when I press ⌥⌘N in any app" off: the shortcut works only inside the app (its menu).
+        let state = snapshot.settings.links.globalLittleArcShortcut == false ? nil
+            : snapshot.settings.shortcuts.first { $0.action == .showLittleArc }?.state
         let chord: KeyChord? = if case .valid(let key)? = state { key } else { nil }
         guard chord != registered else { return }
         if let hotKey { UnregisterEventHotKey(hotKey); self.hotKey = nil }

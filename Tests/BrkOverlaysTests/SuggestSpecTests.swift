@@ -287,7 +287,7 @@ final class SuggestWave2Tests: XCTestCase {
         XCTAssertEqual(list.first?.command, .settings(.openPane(.general)))
         XCTAssertEqual(list.first?.hint, "⌘,")
         XCTAssertEqual(rows(list), ["action:Preferences…:⌘,", "open:preferences", "action:General Preferences:-",
-                                    "action:Max Preferences:-", "action:Profile Preferences:-"])
+                                    "action:Profile Preferences:-", "action:Max Preferences:-"])
         XCTAssertEqual(rows(suggest("quit")), ["action:Quit Brk:⌘Q", "open:quit"])
         XCTAssertEqual(suggest("air traffic").first?.command, .settings(.openPane(.links)), "Arc's trigger phrase for the Links pane")
     }
