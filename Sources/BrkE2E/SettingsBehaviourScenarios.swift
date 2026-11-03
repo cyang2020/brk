@@ -20,6 +20,11 @@ enum SettingsBehaviourScenarios {
         return s
     }
 
+    /// SwiftUI's sheet window over the settings window.
+    private static func sheetShown(_ app: AppUnderTest) throws -> Bool {
+        try app.native().appWindows.contains { $0.isVisible && $0.className.contains("SheetPresentation") }
+    }
+
     private static func alertShown(_ app: AppUnderTest) throws -> Bool {
         try app.native().appWindows.contains { $0.isVisible && $0.className.contains("Alert") }
     }
@@ -64,7 +69,8 @@ enum SettingsBehaviourScenarios {
         guard case .dispatched = try app.send(.openSettings(pane: .links)) else { throw Check(description: "openSettings did not dispatch") }
         try app.settle()
         try app.click(.settingsField("airTrafficControl"))
-        try app.waitUntil("the sheet's New Route button", timeout: 8) { (try? app.click(.settingsField("route-new"))) != nil }
+        try app.waitUntil("Air Traffic Control opens as a sheet", timeout: 8) { try sheetShown(app) }
+        try app.click(.settingsField("route-new"))
         try app.waitUntil("New Route adds an empty Contains row") { try settings(app).routes.count == 1 }
         let route = try XCTUnwrap(settings(app).routes.first?.route, "no route")
         try expect(route.pattern.isEmpty && route.match == .contains && route.destination == .mostRecentSpace, "New Route's row: \(route)")
@@ -72,10 +78,8 @@ enum SettingsBehaviourScenarios {
         try app.type("page2.html")
         try app.waitUntil("the typed text is the route's") { try settings(app).routes.first?.route.pattern == "page2.html" }
         try app.click(.settingsField("routes-close"))
-        try app.waitUntil("× closes the sheet and keeps the filled row") {
-            let closed = (try? app.click(.settingsField("route-new"))) == nil
-            return try closed && settings(app).routes.count == 1
-        }
+        try app.waitUntil("× closes the sheet") { try !sheetShown(app) }
+        try expect(try settings(app).routes.count == 1, "× dropped the filled row")
         app.passed("the sheet adds, fills and keeps a Contains route through its own controls")
 
         let windowsBefore = try standardAndLittle(app)

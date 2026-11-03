@@ -163,7 +163,7 @@ struct LinksPane: View {
                         HStack(spacing: C.infoGap.value) {
                             CardLabel(SettingsCopy.routesSummary)
                             Image(systemName: "info.circle").font(.system(size: C.infoSize.value)).foregroundStyle(SettingsStyle.text)
-                                .background(ClickArea(field: "airTrafficControlInfo") { explainingRoutes = true })
+                                .overlay(ClickArea(field: "airTrafficControlInfo") { explainingRoutes = true })
                                 .popover(isPresented: $explainingRoutes) {
                                     Text(LinksRoutesCopy.explanation).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
                                         .frame(width: C.popoverWidth.value).padding()

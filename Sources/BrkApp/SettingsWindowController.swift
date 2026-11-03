@@ -49,6 +49,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Ends a sheet open on the settings window (Air Traffic Control, Previews Settings…) so it cannot hold up a quit.
+    func endSheets() {
+        while let sheet = window.attachedSheet { window.endSheet(sheet) }
+    }
+
     func present() {
         guard pane != nil else { return }
         if let key = NSApp.keyWindow, key !== window { previousKeyWindow = key }

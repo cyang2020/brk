@@ -211,6 +211,12 @@ final class EventInjector {
             handle(down)
             if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) { handle(up) }
         }
+        // A modal session (an NSAlert's runModal) notices that a button stopped it only after its next event; a
+        // physical click is followed by more events, this injected one by none, so it ends with an empty one.
+        if NSApp.modalWindow != nil, let wake = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
+                                                                   windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) {
+            NSApp.postEvent(wake, atStart: false)
+        }
     }
 
     func drag(from: CGPoint, to: CGPoint, cancel: Bool, in window: NSWindow) throws {

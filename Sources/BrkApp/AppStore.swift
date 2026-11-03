@@ -37,7 +37,8 @@ public final class AppStore {
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
-    private var shownIcon: AppIconChoice?
+    /// The Icon pane's drawing last set as `NSApp.applicationIconImage` (the Dock icon); nil before the first render.
+    private(set) var shownIcon: AppIconChoice?
     /// The "Warn before quitting" dialog is open (or about to be).
     private var askingQuit = false
     static let dockIconSide: CGFloat = 512
@@ -197,6 +198,7 @@ public final class AppStore {
     func prepareForTermination() {
         guard !isTerminating else { return }
         isTerminating = true
+        settingsWindow?.endSheets()
         aiServices.cancelAll()
         cancelExports()
         for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
