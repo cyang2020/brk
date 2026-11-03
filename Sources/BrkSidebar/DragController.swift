@@ -56,6 +56,9 @@ final class DragController {
     private let dispatch: Dispatch
     weak var sidebar: SidebarView?
     var context: Context?
+    /// Advanced > "Haptic feedback when reordering tabs": a tick each time the drop slot under the pointer changes.
+    var hapticsEnabled = true
+    var haptic: @MainActor () -> Void = { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
     private var pressed: (item: Item, source: NSView, start: CGPoint)?
     private var session: Session?
     private var escapeMonitor: Any?
@@ -87,7 +90,9 @@ final class DragController {
         session.preview.setFrameOrigin(CGPoint(x: local.x - session.grab.x, y: local.y - session.grab.y))
         let root = sidebar.rootPoint(fromWindow: event.locationInWindow)
         if context.frames.tablistViewport.contains(root) { sidebar.tablist.autoScroll(at: root, frames: context.frames) }
+        let previous = session.target
         session.target = target(at: root, item: session.item, context: context)
+        if hapticsEnabled, session.target?.destination != nil, session.target?.destination != previous?.destination { haptic() }
         show(session.target, item: session.item, context: context)
         self.session = session
         return true

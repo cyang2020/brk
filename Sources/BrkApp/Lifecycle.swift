@@ -220,7 +220,11 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
-    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// Closing the window is not a quit asked for with Cmd+Q, so "Warn before quitting" does not ask.
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        Quit.confirmed = true
+        return true
+    }
 
     /// Steps 2 and 3 of the quit, free of AppKit so a test can run them with a fake engine: `store.flush()` (state is
     /// on disk before anything risky), `await engine.shutdown()`, then the records in the data directory:

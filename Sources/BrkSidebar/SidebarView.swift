@@ -204,6 +204,7 @@ public final class SidebarView: NSView {
         if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
         else { tablist.isHidden = false }
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
+        drag.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
 

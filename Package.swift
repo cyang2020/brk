@@ -88,7 +88,7 @@ let package = Package(
         .testTarget(name: "BrkOverlaysTests", dependencies: ["BrkBase", "BrkDomain", "BrkOverlays"], swiftSettings: strict),
         .testTarget(name: "BrkLibraryTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkLibrary"], swiftSettings: strict),
         .testTarget(name: "BrkSettingsTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkSettings"], swiftSettings: strict),
-        .testTarget(name: "BrkContentTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkContent"], swiftSettings: strict),
+        .testTarget(name: "BrkContentTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkContent", "BrkSidebar"], swiftSettings: strict),
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
