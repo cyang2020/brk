@@ -39,18 +39,18 @@ extension Work {
             }
         }
         archiveTabs(victims, reason: .auto)
-        // Little Arc windows (Arc: `AutoArchiveType.littleArc`, one global threshold in the Links pane; F3): a Little Arc
-        // whose tabs have all been idle for the threshold closes with its tabs archived. Idle counts from a tab's
-        // `lastActiveAt` (set when it opened or was last shown); being the key window does not refresh it, because the
-        // contract has no key-window event. A Little Arc without a tab (its bar still open) is left alone.
+        // Little Arc windows (Arc: `AutoArchiveType.littleArc`, one global threshold in the Links pane; F3; A086): a
+        // Little Arc nobody has used for the threshold closes with its tabs archived. Use is real input: a key, click
+        // or scroll in the panel (`WindowEvent.activity`, page included) or the panel becoming or leaving key; being
+        // the key window alone is not use. Never archived while it plays media (sound, a running video, picture in
+        // picture) or downloads, nor while its tabs were shown within the threshold. A Little Arc without a tab (its
+        // bar still open) is left alone.
         if let threshold = state.doc.settings.links.littleArcAutoArchive.interval {
             for id in state.doc.windows.keys.sorted() where state.doc.windows[id]?.kind == .little {
                 let tabs = state.session.scratch[id]?.allTabs() ?? []
-                let session = state.session.windows[id]
-                let activeDownload = state.session.activeDownloadOwners.values.contains { $0.window == id }
-                guard session?.isKey != true, !activeDownload,
-                      session?.lastInteraction.map({ ctx.now.since($0) >= threshold }) ?? true,
-                      !tabs.isEmpty, tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
+                guard !tabs.isEmpty, !state.littleArcIsBusy(id, tabs: tabs),
+                      state.session.windows[id]?.lastInteraction.map({ ctx.now.since($0) >= threshold }) ?? true,
+                      tabs.allSatisfy({ ctx.now.since(state.lastActiveOf($0)) >= threshold }) else { continue }
                 archiveTabs(tabs, reason: .auto, in: id)
                 removeWindow(id)
             }
@@ -164,5 +164,18 @@ extension Work {
         state.doc.windows[window]?.slots[tabID] = SavedSlot(committedURL: tab.url, observedTitle: tab.title, favicon: tab.favicon)
         state.doc.archive.remove(at: index)
         return tabID
+    }
+}
+
+extension AppState {
+    /// A Little Arc doing work its user is waiting on: a download in flight, or a page playing sound, a running
+    /// video or picture in picture.
+    func littleArcIsBusy(_ window: WindowID, tabs: [ItemID]) -> Bool {
+        if session.activeDownloadOwners.values.contains(where: { $0.window == window }) { return true }
+        return tabs.contains { tab in
+            guard let live = session.live[PageID(window: window, item: tab)] else { return false }
+            return live.audible || live.documentPictureInPicture
+                || live.mediaPlayers.contains { $0.pictureInPicture || (!$0.paused && !$0.ended) }
+        }
     }
 }

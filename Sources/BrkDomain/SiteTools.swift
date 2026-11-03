@@ -77,7 +77,7 @@ extension Work {
             guard case .folder(let f)? = state.doc.tree[id]?.body, let repository = f.liveRepository,
                   state.role(of: id)?.space == space.id else { return }
             folder = id
-            state.session.liveFolderStatus[id] = "Refreshing…"
+            state.session.liveFolders[id, default: LiveFolderSession()].phase = .loading
             kind = .github(repository: repository, favorite: nil)
         case .selectCalendar(let file, let join):
             guard file.isFileURL, file.pathExtension.lowercased() == "ics" else { toast("Select an iCalendar (.ics) file", in: window); return }
@@ -106,7 +106,7 @@ extension Work {
         effects.append(.siteRequest(request))
         if case .calendar(join: true) = kind, state.session.calendars[space.profile] != nil {
             toast("Calendar expired. Select the export again.", in: window)
-        } else { toast("Loading selected source…", in: window) }
+        } else if folder == nil { toast("Loading selected source…", in: window) }   // a Live Folder shows its own spinner
     }
     mutating func siteResult(_ id: String, _ outcome: SiteOutcome) {
         guard let pending = state.session.siteRequests.removeValue(forKey: id), state.siteRequestIsCurrent(pending),
@@ -114,7 +114,7 @@ extension Work {
         let window = w.id
         switch outcome {
         case .cancelled:
-            if let folder = pending.folder { state.session.liveFolderStatus[folder] = "Refresh cancelled" }
+            if let folder = pending.folder { state.session.liveFolders[folder]?.phase = .idle }
             if case .favorite(let favorite) = pending.target {
                 state.session.favoriteFeeds[favorite] = SiteFeed(access: .cancelled, profile: pending.request.profile, fetchedAt: ctx.now, badge: 0, subtitle: "Selection cancelled. Connect again.")
             }
@@ -123,11 +123,11 @@ extension Work {
             if case .calendar(let profile) = pending.target {
                 state.session.calendars[profile] = CalendarFeed(access: .failed(message), fetchedAt: ctx.now, meetings: [])
             }
-            if let folder = pending.folder { state.session.liveFolderStatus[folder] = "Could not refresh. " + message }
+            if let folder = pending.folder { state.session.liveFolders[folder, default: LiveFolderSession()].phase = .failed(message) }
             if case .favorite(let favorite) = pending.target {
                 state.session.favoriteFeeds[favorite] = SiteFeed(access: .failed(message), profile: pending.request.profile, fetchedAt: ctx.now, badge: 0, subtitle: message)
             }
-            toast(message, in: window)
+            if pending.folder == nil { toast(message, in: window) }
         case .unread(_, let count):
             guard case .github(_, let favorite?) = pending.request.kind, state.role(of: favorite)?.kind == .favorites else { return }
             state.session.favoriteFeeds[favorite] = SiteFeed(profile: pending.request.profile, fetchedAt: ctx.now, badge: max(0, count), subtitle: "Unread GitHub notifications (up to 50) · updated now")
@@ -164,10 +164,11 @@ extension Work {
                     try? state.doc.tree.insert(id, .tab(Tab(url: link.url, title: link.title, lastActiveAt: ctx.now)), at: .into(parent: folder, index: index), createdAt: ctx.now)
                 }
             }
-            state.session.liveFolderUpdated[folder] = ctx.now
-            state.session.liveFolderStatus[folder] = links.isEmpty ? "No open pull requests" : "\(links.count) open pull requests · updated now"
-            reveal(folder, in: window)
-            toast("GitHub folder updated", in: window)
+            state.session.liveFolders[folder] = LiveFolderSession(phase: .idle, updatedAt: ctx.now)
+            if pending.folder == nil {
+                reveal(folder, in: window)
+                toast("Live Folder Created", in: window)
+            }
         }
     }
     private mutating func joinNextMeeting(_ meetings: [CalendarMeeting], in window: WindowID) {
@@ -201,5 +202,44 @@ extension AppState {
         case .calendar: return true
         case .newFolder: return window.space == pending.space
         }
+    }
+}
+
+/// One Live Folder's refresh state this session.
+struct LiveFolderSession: Equatable, Sendable {
+    enum Phase: Equatable, Sendable { case idle, loading, failed(String) }
+    var phase: Phase = .idle
+    /// The last refresh that came back; nil until one does this session (the saved rows are from an earlier one).
+    var updatedAt: Instant? = nil
+}
+
+/// After this long a Live Folder's rows count as old: the row offers a refresh and opening the folder refreshes it.
+let liveFolderFreshness: Duration = .seconds(300)
+
+extension AppState {
+    /// What the sidebar shows for a Live Folder: loading, failed, empty, stale, never refreshed this session, fresh.
+    func liveFolderSnapshot(_ id: ItemID, _ folder: Folder, now: Instant) -> LiveFolderSnapshot? {
+        guard let repository = folder.liveRepository else { return nil }
+        let session = session.liveFolders[id] ?? LiveFolderSession()
+        let count = doc.tree[id]?.children.count ?? 0
+        let state: LiveFolderState
+        switch session.phase {
+        case .loading: state = .loading
+        case .failed(let message): state = .failed(message)
+        case .idle:
+            if let updated = session.updatedAt {
+                if now.since(updated) >= liveFolderFreshness { state = .stale }
+                else { state = count == 0 ? .empty : .ready(count) }
+            } else { state = .notLoaded }
+        }
+        return LiveFolderSnapshot(source: repository, state: state, updatedAt: session.updatedAt)
+    }
+
+    func liveFolderNeedsRefresh(_ id: ItemID, now: Instant) -> Bool {
+        guard case .folder(let f)? = doc.tree[id]?.body, f.liveRepository != nil else { return false }
+        let session = session.liveFolders[id] ?? LiveFolderSession()
+        if session.phase == .loading { return false }
+        guard let updated = session.updatedAt else { return true }
+        return now.since(updated) >= liveFolderFreshness
     }
 }

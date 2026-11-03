@@ -38,6 +38,19 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     /// ⌘Z while an undo toast shows: brings back what the cleared Today or the deleted space held.
     case undoToast
     case preferences(includeFavorites: Bool, previews: Bool)
+    /// A Favorite's or Pinned tab's per-site switch ("Show Unread Badge", "Show Time to Next Meeting", "Show Hover
+    /// Preview"), kept by host like Arc's `topAppsBadgingDisabledHosts`.
+    case siteDisplay(host: String, SiteDisplayOption, on: Bool)
+    /// A tab group header's ×: archives the group's tabs as one unit.
+    case closeGroup(ItemID)
+    /// Group menu "Remove Group Header": the tabs stay, the header goes (⌘Z on the toast puts it back).
+    case removeGroupHeader(ItemID)
+    /// Command bar "Open <folder>": opens the folder and shows it in the sidebar.
+    case openFolder(ItemID)
+    /// "Replace Pinned Tab with the Current Site" / "Replace Pinned URL with Current".
+    case replacePinned(ItemID)
+    /// Command bar "Mute All Tabs" (true) / "Unmute All Tabs" (false).
+    case muteAll(Bool)
     /// Context menu "Copy Link", "Copy All Links" (a folder) and "Copy Links" (several rows): every address under
     /// the targets, one per line, on the pasteboard.
     case copyLinks(TabTargets)
@@ -63,8 +76,16 @@ struct TabPreferences: Equatable, Sendable, Codable {
     var hoverPreviews = false
     var archiveEducationDismissed = false
     var favoritesHintDismissed = false
+    /// Hosts whose Favorite hides its unread dot (Arc: `topAppsBadgingDisabledHosts`).
+    var badgeHiddenHosts: Set<String> = []
+    /// Hosts whose calendar Favorite hides the time to the next meeting (Arc: `topAppsSubtitleDisabledHosts`).
+    var subtitleHiddenHosts: Set<String> = []
+    /// Hosts whose hover card is off ("Show Hover Preview").
+    var previewHiddenHosts: Set<String> = []
 
-    private enum CodingKeys: String, CodingKey { case includeFavoritesInNumbers, hoverPreviews, archiveEducationDismissed, favoritesHintDismissed }
+    private enum CodingKeys: String, CodingKey {
+        case includeFavoritesInNumbers, hoverPreviews, archiveEducationDismissed, favoritesHintDismissed, badgeHiddenHosts, subtitleHiddenHosts, previewHiddenHosts
+    }
 
     init() {}
 
@@ -75,6 +96,9 @@ struct TabPreferences: Equatable, Sendable, Codable {
         hoverPreviews = try c.decodeIfPresent(Bool.self, forKey: .hoverPreviews) ?? false
         archiveEducationDismissed = try c.decodeIfPresent(Bool.self, forKey: .archiveEducationDismissed) ?? false
         favoritesHintDismissed = try c.decodeIfPresent(Bool.self, forKey: .favoritesHintDismissed) ?? false
+        badgeHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .badgeHiddenHosts) ?? []
+        subtitleHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .subtitleHiddenHosts) ?? []
+        previewHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .previewHiddenHosts) ?? []
     }
 
     /// The newer key is written only once set, so an older file round-trips byte for byte.
@@ -84,6 +108,9 @@ struct TabPreferences: Equatable, Sendable, Codable {
         try c.encode(hoverPreviews, forKey: .hoverPreviews)
         try c.encode(archiveEducationDismissed, forKey: .archiveEducationDismissed)
         if favoritesHintDismissed { try c.encode(true, forKey: .favoritesHintDismissed) }
+        if !badgeHiddenHosts.isEmpty { try c.encode(badgeHiddenHosts.sorted(), forKey: .badgeHiddenHosts) }
+        if !subtitleHiddenHosts.isEmpty { try c.encode(subtitleHiddenHosts.sorted(), forKey: .subtitleHiddenHosts) }
+        if !previewHiddenHosts.isEmpty { try c.encode(previewHiddenHosts.sorted(), forKey: .previewHiddenHosts) }
     }
 }
 struct TabSelection: Equatable, Sendable {
@@ -117,6 +144,8 @@ enum ToastUndo: Sendable, Equatable {
     case restore([ArchiveID])
     /// Delete Space: the space, its dock position and the archive entries of its tabs.
     case space(Space, index: Int, entries: [ArchiveID])
+    /// Remove Group Header: the header and the tabs it held.
+    case regroup(id: ItemID, folder: Folder, parent: ItemID, children: [ItemID])
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]

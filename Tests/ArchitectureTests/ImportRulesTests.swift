@@ -118,7 +118,9 @@ final class ImportRulesTests: XCTestCase {
 
     static func importViolations(target: String, path: String, text: String) -> [String] {
         var allowed = allowedImports[target] ?? []
-        if target == "BrkE2E", path == "BrkE2E/NativePickerInput.swift" { allowed.insert("ApplicationServices") }
+        // The one file that drives the system: file panels and the status item through Accessibility, window-server key
+        // presses and a held Carbon hot key (R3-6's Little Arc entry points).
+        if target == "BrkE2E", path == "BrkE2E/NativePickerInput.swift" { allowed.formUnion(["ApplicationServices", "Carbon"]) }
         return imports(in: text).filter { !allowed.contains($0) }.map { "\(path): imports \($0), not allowed in \(target)" }
     }
 

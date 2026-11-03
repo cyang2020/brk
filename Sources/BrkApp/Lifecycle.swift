@@ -138,7 +138,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         }
         NSApp.mainMenu = MainMenu.build(target: menuTarget)
 
-        let entryPoints = LittleEntryPoints(target: menuTarget)
+        let entryPoints = LittleEntryPoints(target: menuTarget) { [weak store] status in store?.dispatch(.system(.globalShortcut(status))) }
         littleEntryPoints = entryPoints
         let dockTile = DockTile()
         self.dockTile = dockTile

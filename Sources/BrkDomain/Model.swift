@@ -268,8 +268,10 @@ struct Session: Sendable, Equatable {
     /// AI requests in flight (`Effect.ai` sent, `SystemEvent.aiResult` not yet received), so a result can be
     /// applied to the item its task names.
     var siteRequests: [String: PendingSiteRequest] = [:]
-    var liveFolderStatus: [ItemID: String] = [:]
-    var liveFolderUpdated: [ItemID: Instant] = [:]
+    /// The system-wide Little Arc shortcut as last registered (nil before the app reported it).
+    var globalShortcut: GlobalShortcutStatus? = nil
+    /// Live Folders' refresh state this session (A092): loading, the last good refresh, a failure.
+    var liveFolders: [ItemID: LiveFolderSession] = [:]
     var favoriteFeeds: [ItemID: SiteFeed] = [:]
     var calendars: [ProfileID: CalendarFeed] = [:]
     var pendingAI: [AIRequestID: AITask]

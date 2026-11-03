@@ -118,6 +118,8 @@ public struct RowFrame: Sendable, Equatable, Codable {
         case divider
         /// Today's "New Tab" row (Arc: `newTabButton`).
         case newTab
+        /// The one-line note inside an open Live Folder that has no rows: loading, empty, failed or not refreshed.
+        case livePlaceholder(ItemID)
     }
     public var kind: Kind
     /// Document coordinates of the tab list.

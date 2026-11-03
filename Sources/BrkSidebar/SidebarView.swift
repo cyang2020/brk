@@ -190,7 +190,7 @@ public final class SidebarView: NSView {
         urlPill.render(snapshot.urlPill, palette: palette, searchField: true)
         favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
-        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
+        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette, now: snapshot.now)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         spaceHeader.frame = local(f.spaceHeader)
         spaceHeader.render(space, palette: palette, interactive: !thisWindow)

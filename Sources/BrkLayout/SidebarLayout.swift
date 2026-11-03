@@ -129,7 +129,12 @@ public enum TablistLayout {
         func addRows(_ rows: [Row], depth: Int) {
             for row in rows {
                 add(.item(row.id), height: t.rowHeight.value, depth: depth)
-                if case .folder(let folder) = row, !folder.collapsed { addRows(folder.children, depth: depth + 1) }
+                // A tab group's tabs sit under its header unindented (Arc's `TabGroupHeaderCellView` is a header, not a
+                // folder level).
+                if case .folder(let folder) = row, !folder.collapsed { addRows(folder.children, depth: folder.group ? depth : depth + 1) }
+                if case .folder(let folder) = row, !folder.collapsed, folder.live != nil, folder.children.isEmpty {
+                    add(.livePlaceholder(folder.id), height: t.rowHeight.value, depth: depth + 1)
+                }
             }
         }
         add(.topSpacer, height: t.topSpacerHeight.value)
@@ -173,6 +178,9 @@ public enum TablistLayout {
             target = upper ? (space.pinned.root, space.pinned.rows.count, .pinned, .section) : (space.today.root, 0, space.today.kind, .section)
         case .newTab?:
             target = (space.today.root, 0, space.today.kind, .section)
+        case .livePlaceholder(let folder)?:
+            guard let place = places[folder] else { return nil }
+            target = (folder, 0, place.section, .folder)
         case .item(let id)?:
             guard let place = places[id] else { return nil }
             let f = (point.y - hit!.rect.minY) / max(hit!.rect.height, 1)

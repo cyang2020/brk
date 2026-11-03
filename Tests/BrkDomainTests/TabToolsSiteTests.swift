@@ -22,10 +22,11 @@ final class TabToolsSiteTests: XCTestCase {
         let empty = try request(d.user(.tabTools(.site(.refreshFolder(folder.id)))))
         d.system(.siteResult(empty.id, .pullRequests(repository: "fixture/repo", [])))
         XCTAssertEqual(d.state.doc.tree[folder.id]?.children, [])
-        XCTAssertEqual(d.state.session.liveFolderStatus[folder.id], "No open pull requests")
+        func live() -> LiveFolderState? { if case .folder(let f)? = d.view.space.pinned.rows.first { f.live?.state } else { nil } }
+        XCTAssertEqual(live(), .empty)
         let failed = try request(d.user(.tabTools(.site(.refreshFolder(folder.id)))))
         d.system(.siteResult(failed.id, .failed("Fixture error")))
-        XCTAssertTrue(d.state.session.liveFolderStatus[folder.id]?.contains("Fixture error") ?? false)
+        XCTAssertEqual(live(), .failed("Fixture error"))
         let restarted = Driver(file: d.savedFile)
         guard case .folder(let restored)? = restarted.state.doc.tree[folder.id]?.body else { return XCTFail("live config lost") }
         XCTAssertEqual(restored.liveRepository, "fixture/repo")

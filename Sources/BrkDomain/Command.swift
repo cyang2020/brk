@@ -218,6 +218,9 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     /// Arc's split menu "Move Left" / "Move Right" ("Move Up" / "Move Down" when stacked): the focused pane trades
     /// places with its neighbour; at the end it is a no-op. Its width and focus go with it.
     case movePane(Step)
+    /// Command bar "Add Left/Right/Top/Bottom Split": `addPane` with the new pane on that side; the split takes
+    /// that edge's orientation.
+    case addPaneAt(SplitEdge)
     /// Ctrl+Shift+-. Closes the focused pane; a split left with one pane dissolves into that tab.
     case closePane
     /// Close one sidebar pane without selecting or loading its background split.
@@ -559,6 +562,8 @@ public enum SystemEvent: Sendable, Equatable {
     case suggestions(WindowID, query: String, [String])
     /// Which local AI command-line tools BrkApp found on PATH at launch (`AIProviderSeam.detect`).
     case aiProvidersDetected([AIProviderKind])
+    /// What registering the system-wide New Little Arc Window shortcut came to (BrkApp/LittleEntryPoints.swift).
+    case globalShortcut(GlobalShortcutStatus)
     /// The provider answered (or could not) an `Effect.ai` request.
     case aiResult(AIRequestID, AIOutcome)
     case aiPartial(AIRequestID, String)
@@ -618,4 +623,15 @@ extension Command {
         default: false
         }
     }
+}
+
+/// The system-wide Little Arc shortcut ("Open Little Arc when I press …", A085), as the app last registered it.
+public enum GlobalShortcutStatus: Hashable, Sendable, Codable {
+    /// The Links switch is off, or the shortcut is unset or in conflict in Shortcuts.
+    case off
+    case registered(KeyChord)
+    /// Another app holds the combination (Carbon `eventHotKeyExistsErr`) or registration failed with `code`.
+    case unavailable(KeyChord, code: Int32)
+    /// A combination without Command, Option, Control or Shift is never taken system-wide.
+    case needsModifier(KeyChord)
 }

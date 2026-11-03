@@ -23,6 +23,9 @@ final class FavoritesView: NSView {
     private var last: (FavoritesSnapshot, ItemID?, SidebarFrames, Palette)?
     private var palette: Palette?
     private var dropHighlight = false
+    /// Arc Previews over a supported Favorite (a calendar's meetings, a site's recent pages).
+    private lazy var cards = FolderPreview(dispatch: dispatch)
+    private var now = Instant(milliseconds: 0)
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -56,7 +59,17 @@ final class FavoritesView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func render(_ favorites: FavoritesSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette) {
+    private func tileHovered(_ tile: FavoriteTileView, _ hovered: Bool) {
+        guard hovered, !tile.isEditingName, let row = tile.shownRow, let card = row.hoverCard else {
+            cards.pointerLeft(tile)
+            return
+        }
+        cards.hover(tab: row, card: card, over: tile, now: now)
+    }
+
+    func render(_ favorites: FavoritesSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette, now: Instant) {
+        self.now = now
+        cards.validateCards { id in favorites.tiles.first { $0.id == id }?.hoverCard }
         if let last, last.0 == favorites, last.1 == renaming, last.2 == frames, last.3 == palette { return }
         last = (favorites, renaming, frames, palette)
         self.palette = palette
@@ -70,6 +83,7 @@ final class FavoritesView: NSView {
         for row in favorites.tiles {
             let tile = tiles[row.id] ?? {
                 let t = FavoriteTileView(dispatch: dispatch, drag: drag, id: row.id)
+                t.onHover = { [weak self] tile, hovered in self?.tileHovered(tile, hovered) }
                 tiles[row.id] = t
                 section.addSubview(t)
                 return t
@@ -166,9 +180,10 @@ final class FavoritesView: NSView {
 @MainActor
 final class FavoriteTileView: HoverView {
     let id: ItemID
-    private let badge = NSTextField(labelWithString: "")
-    private let source = NSView()
-    private let subtitle = NSTextField(labelWithString: "")
+    /// Arc's unread dot (`AppTrayItemBadgeView`), in the site's badge color.
+    private let badge = NSView()
+    /// Arc's subtitle capsule (`AppTrayItemSubtitleView`): the time to the next meeting under a calendar.
+    private let subtitle = SubtitleCapsule()
     private let dispatch: Dispatch
     private let drag: DragController
     private let icon = IconView()
@@ -176,6 +191,9 @@ final class FavoriteTileView: HoverView {
     private var row: TabRow?
     private var palette: Palette?
     private var renameField: RenameField?
+    var onHover: ((FavoriteTileView, Bool) -> Void)?
+    var shownRow: TabRow? { row }
+    private var reportedHover = false
 
     init(dispatch: @escaping Dispatch, drag: DragController, id: ItemID) {
         self.dispatch = dispatch
@@ -187,43 +205,32 @@ final class FavoriteTileView: HoverView {
         ring.fillColor = nil
         layer?.addSublayer(ring)
         addSubview(icon)
-        for label in [badge, subtitle] { label.font = .systemFont(ofSize: 10); label.alignment = .center; addSubview(label) }
-        source.wantsLayer = true
-        source.layer?.cornerRadius = Metrics.sidebarTools.sourceRadius.value
-        source.identifier = NSUserInterfaceItemIdentifier("favorite-source-\(id.rawValue)")
-        source.setAccessibilityIdentifier("favorite-source-\(id.rawValue)")
-        addSubview(source)
+        badge.wantsLayer = true
+        badge.layer?.cornerRadius = Metrics.sidebarTools.unreadDot.value / 2
+        for view in [badge, subtitle] as [NSView] { addSubview(view) }
         badge.identifier = NSUserInterfaceItemIdentifier("favorite-badge-\(id.rawValue)")
         badge.setAccessibilityIdentifier("favorite-badge-\(id.rawValue)")
+        badge.setAccessibilityRole(.image)
         subtitle.identifier = NSUserInterfaceItemIdentifier("favorite-subtitle-\(id.rawValue)")
         subtitle.setAccessibilityIdentifier("favorite-subtitle-\(id.rawValue)")
-        badge.wantsLayer = true
-        badge.layer?.backgroundColor = NSColor.black.cgColor
-        badge.layer?.cornerRadius = Metrics.sidebarTools.unreadRadius.value
-        badge.font = .systemFont(ofSize: 10, weight: .semibold)
         identify(.favorite(id))
     }
 
     func render(_ row: TabRow, renaming: Bool, palette: Palette) {
         self.row = row
         self.palette = palette
-        toolTip = [row.title, row.subtitle, row.sourceStatus].compactMap { $0 }.joined(separator: "\n")
-        // An idle invitation ("Connect notifications") is a menu item in Arc, not a mark on the tile.
-        let status = Self.invitations.contains(row.sourceStatus ?? "") ? nil : row.sourceStatus
-        source.isHidden = status == nil
-        source.toolTip = row.sourceStatus
-        source.setAccessibilityLabel(row.sourceStatus)
-        source.layer?.backgroundColor = (row.sourceStatus?.hasPrefix("Updated") == true || row.sourceStatus?.hasPrefix("Selected export") == true ? NSColor.systemGreen : NSColor.systemOrange).cgColor
-        badge.stringValue = row.badge.map { $0 > 99 ? "99+" : String($0) } ?? ""
-        badge.isHidden = row.badge == nil || row.badge == 0
-        subtitle.stringValue = row.subtitle ?? status ?? ""
-        subtitle.toolTip = toolTip
-        subtitle.isHidden = row.subtitle == nil && status == nil
-        subtitle.lineBreakMode = .byTruncatingTail
-        if row.sourceStatus?.hasPrefix("Access failed") == true { subtitle.stringValue = "Access" }
-        if row.sourceStatus?.hasPrefix("Expired") == true || row.sourceStatus?.hasPrefix("Calendar expired") == true { subtitle.stringValue = "Expired" }
-        badge.textColor = .white
-        subtitle.textColor = palette.ink.secondary
+        let unread = row.badge.flatMap { $0 > 0 ? ($0 > 99 ? "99+ unread" : "\($0) unread") : nil }
+        // Arc shows no tip over a Favorite; Brk keeps one only for a source that needs the user (failed, expired,
+        // not connected), since that state has no mark on the tile.
+        let attention = row.sourceStatus.flatMap { $0.hasPrefix("Updated") || $0.hasPrefix("Selected export") || $0.hasSuffix("…") ? nil : $0 }
+        toolTip = attention
+        setAccessibilityHelp([unread, row.sourceStatus].compactMap { $0 }.joined(separator: ", "))
+        // One overlay at a time (Arc's `AppTrayItemOverlay`: a subtitle or a badge); source states stay in the tip.
+        badge.isHidden = row.badgeTint == nil
+        badge.layer?.backgroundColor = row.badgeTint.map { FavoriteOverlayStyle.tint($0, scheme: palette.scheme).cgColor }
+        badge.setAccessibilityLabel(unread)
+        subtitle.isHidden = row.subtitle == nil
+        subtitle.render(row.subtitle ?? "", selected: row.status == .current, scheme: palette.scheme)
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, palette: palette)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
         if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
@@ -260,11 +267,15 @@ final class FavoriteTileView: HoverView {
 
     override func layout() {
         super.layout()
-        source.frame = NSRect(x: 4, y: 4, width: 6, height: 6)
-        badge.frame = NSRect(x: bounds.width - 22, y: 2, width: 20, height: 16)
-        subtitle.frame = NSRect(x: 2, y: bounds.height - 16, width: bounds.width - 4, height: 14)
-        let side = Draw.tileFavicon.value
-        icon.frame = CGRect(x: (bounds.width - side) / 2, y: subtitle.isHidden ? (bounds.height - side) / 2 : 5, width: side, height: side)
+        let side = Draw.tileFavicon.value, tools = Metrics.sidebarTools
+        let dot = tools.unreadDot.value
+        // The dot sits on the favicon's top-right corner, the way Arc marks an unread top app.
+        let iconY = subtitle.isHidden ? (bounds.height - side) / 2 : tools.subtitleIconTop.value
+        icon.frame = CGRect(x: (bounds.width - side) / 2, y: iconY, width: side, height: side)
+        badge.frame = NSRect(x: icon.frame.maxX - dot / 2, y: icon.frame.minY - dot / 2, width: dot, height: dot)
+        let capsule = subtitle.fittingSize
+        let width = min(bounds.width - 2 * tools.subtitleInset.value, capsule.width)
+        subtitle.frame = NSRect(x: (bounds.width - width) / 2, y: bounds.height - tools.subtitleBottom.value - capsule.height, width: width, height: capsule.height)
         if let field = renameField {
             let inset = Draw.tileRenameInset.value, height = field.intrinsicContentSize.height
             field.frame = CGRect(x: inset, y: (bounds.height - height) / 2, width: bounds.width - 2 * inset, height: height)
@@ -278,11 +289,12 @@ final class FavoriteTileView: HoverView {
         CATransaction.commit()
     }
 
-    /// Status lines that only invite a connection; the tile shows nothing for them.
-    static let invitations: Set<String> = ["Connect notifications", "Select calendar export"]
-
-    /// Hovering darkens the tile one step (Arc shows no card or tip over a favorite unless Arc Previews is on).
+    /// Hovering darkens the tile one step; a supported site's card opens beside the sidebar when Arc Previews is on.
     override func stateChanged() {
+        if isHovered != reportedHover, !isPressed {
+            reportedHover = isHovered
+            onHover?(self, isHovered)
+        }
         guard let palette, let row else { return }
         let current = row.status == .current
         let fill: NSColor
@@ -314,6 +326,69 @@ final class FavoriteTileView: HoverView {
 
     override func rightMouseDown(with event: NSEvent) {
         dispatch(.sidebar(.popupMenu(.item(id), at: rootPoint(fromWindow: event.locationInWindow))))
+    }
+}
+
+/// Arc's subtitle capsule under a calendar Favorite (ARC_AppTray GCalSubtitle* colors).
+@MainActor
+final class SubtitleCapsule: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        label.font = .systemFont(ofSize: Metrics.sidebarTools.subtitleFont.value, weight: .medium)
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+
+    var text: String { label.stringValue }
+
+    func render(_ text: String, selected: Bool, scheme: Scheme) {
+        label.stringValue = text
+        let style = FavoriteOverlayStyle.subtitle(selected: selected, scheme: scheme)
+        layer?.backgroundColor = style.background.cgColor
+        label.textColor = style.text
+        setAccessibilityLabel(text)
+        needsLayout = true
+    }
+
+    override var fittingSize: NSSize {
+        let m = Metrics.sidebarTools, text = label.intrinsicContentSize
+        return NSSize(width: ceil(text.width) + 2 * m.subtitlePadding.value - 4, height: m.subtitleHeight.value)
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
+        // The label spans the capsule (centred): its cell has its own inset, so a width of the bare text truncates.
+        let h = label.intrinsicContentSize.height
+        label.frame = CGRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h)
+    }
+}
+
+/// ARC_AppTray's colors (visual-and-copy.md): badge tints and the calendar subtitle's capsule.
+enum FavoriteOverlayStyle {
+    static func tint(_ tint: BadgeTint, scheme: Scheme) -> NSColor {
+        switch tint {
+        case .black: NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)                              // GithubBadgeBlack
+        case .red: NSColor(srgbRed: 0xEA / 255, green: 0x43 / 255, blue: 0x35 / 255, alpha: 1)      // GMailBadgeRed, WhatsAppBadgeRed
+        case .gray: scheme == .dark ? .white : NSColor(srgbRed: 0x44 / 255, green: 0x44 / 255, blue: 0x44 / 255, alpha: 1) // TwitterBadgeGray
+        }
+    }
+
+    static func subtitle(selected: Bool, scheme: Scheme) -> (background: NSColor, text: NSColor) {
+        if selected, scheme != .dark {
+            // GCalSubtitleBackgroundSelected #F6F9FE @ 0.9, GCalSubtitleTextColorSelected #212121
+            return (NSColor(srgbRed: 0xF6 / 255, green: 0xF9 / 255, blue: 0xFE / 255, alpha: 0.9), NSColor(srgbRed: 0x21 / 255, green: 0x21 / 255, blue: 0x21 / 255, alpha: 1))
+        }
+        // GCalSubtitleBackgroundSecondary #000000 @ 0.07 / #FFFFFF @ 0.07; GCalSubtitleTextColorSecondary #212121 / #DEE3EB @ 0.7
+        return scheme == .dark
+            ? (NSColor(white: 1, alpha: 0.07), NSColor(srgbRed: 0xDE / 255, green: 0xE3 / 255, blue: 0xEB / 255, alpha: 0.7))
+            : (NSColor(white: 0, alpha: 0.07), NSColor(srgbRed: 0x21 / 255, green: 0x21 / 255, blue: 0x21 / 255, alpha: 1))
     }
 }
 

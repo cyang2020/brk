@@ -30,22 +30,27 @@ enum SidebarToolsScenarios {
         try panel(app, .button("Connect"))
     }
     @Sendable static func sources(_ app: AppUnderTest) throws {
-        let item = try currentTab(app.view())!.id
-        try app.waitForPageInput(page(app, item), at: app.site.url("index.html"))
-        try app.dispatch(.tab(.togglePin(.focused)))
+        let home = try currentTab(app.view())!.id
+        try app.waitForPageInput(page(app, home), at: app.site.url("index.html"))
+        // Arc's unread dot belongs to the GitHub Favorite (a top app); the page itself is never loaded here.
+        let item = try app.load(URL(string: "https://github.com/")!)
+        try app.dispatch(.page(.stop(.focused)))
         // Favorites is profile-owned; its root is projected.
         let root = try app.view().favorites.root
         try app.dispatch(.item(.move(item, to: .into(parent: root, index: 0))))
+        try app.dispatch(.tab(.focus(home)))
         try connect(app, item)
         try app.waitUntil("HTTP unread badge") { try app.view().favorites.tiles.first?.badge == 2 }
         try expect(app.site.requestCount("/repos/fixture/repo/notifications") == 1, "notification endpoint not read")
         try expect(try app.native().actual["favorite-badge-" + item.rawValue]?.hidden == false, "native badge missing")
         _ = try app.screenshot("fresh-badge")
+        // Arc shows no card over an ordinary Favorite (only calendars, mail and Linear/Notion/Figma have one, R36-HoverCards).
+        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
         let tile = try app.native().actual[ViewID.favorite(item).identifier]!.frame
         try app.hover(CGPoint(x: tile.midX, y: tile.midY))
-        try app.waitUntil("native Favorite metadata card") { try app.native().appWindows.contains { $0.isVisible && $0.className.contains("Popover") } }
+        app.sleep(1)
+        try expect(try app.native().actual["sidebar-hover-card"] == nil, "an ordinary Favorite opened a hover card")
         try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: false)))
-        try expect(try !app.native().appWindows.contains { $0.isVisible && $0.className.contains("Popover") }, "disabled setting left a Favorite hover card open")
         _ = try app.advanceClock(seconds: 301)
         try expect(try app.view().favorites.tiles.first?.badge == nil, "expired count remained fresh")
         try expect(try app.view().favorites.tiles.first?.sourceStatus == "Expired · reconnect", "expiry not visible")
@@ -74,7 +79,7 @@ enum SidebarToolsScenarios {
         let ics = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:\(date(-60))\r\nDTEND:\(date(60))\r\nSUMMARY:Planning fixture\r\nURL:\(destination.absoluteString)\r\nEND:VEVENT\r\nEND:VCALENDAR"
         try Data(ics.utf8).write(to: file)
         try app.dispatch(.tabTools(.site(.selectCalendar(file, join: false))))
-        try app.waitUntil("calendar favorite subtitle") { try app.view().favorites.tiles.first { $0.id == calendar }?.subtitle == "Planning fixture" }
+        try app.waitUntil("calendar favorite subtitle") { try app.view().favorites.tiles.first { $0.id == calendar }?.subtitle == "Now" }
         _ = try app.screenshot("calendar-subtitle")
         try app.press("ctrl+cmd+j")
         let joined = try currentTab(app.view())!.id

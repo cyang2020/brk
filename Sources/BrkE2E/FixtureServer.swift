@@ -182,6 +182,21 @@ final class FixtureServer: @unchecked Sendable {
             let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []
             guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/repos/fixture/r36/notifications" {
+            let body = Data("[{\"unread\":true},{\"unread\":true},{\"unread\":true}]".utf8)
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/repos/fixture/states/pulls" {
+            // R36-LiveStates: 1 a pull request; 2 slow (2.5 s, so the spinner shows) then a server error; 3 none; 4+ one again.
+            let round = requestCount(path)
+            if round == 2 {
+                Thread.sleep(forTimeInterval: 2.5)
+                let body = Data("{\"message\":\"fixture outage\"}".utf8)
+                response = Data("HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+            } else {
+                let rows: [[String: String]] = round == 3 ? [] : [["title": "Fixture state pull", "html_url": url("page2.html?pull=states").absoluteString]]
+                guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }
+                response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+            }
         } else if path.hasPrefix("/suggest") {
             let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
             guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }

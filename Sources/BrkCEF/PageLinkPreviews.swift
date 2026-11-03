@@ -264,29 +264,91 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
     """#
 }
 
+/// The hovered link's card (Arc Previews; ARC colors from visual-and-copy.md: PreviewBackgroundColor #FFFFFF /
+/// #212222, PreviewToolbarButtonBackground #596069 @ 0.7 / #FFFFFF @ 0.5): the site's icon and host, the page title,
+/// its address, a line for the summary, Summarize, and × to dismiss.
 @MainActor
 private final class LinkPreviewCard: NSView {
     var dismiss: (() -> Void)?
     var summary: (() -> Void)?
     private let note = NSTextField(wrappingLabelWithString: "")
+    private let icon = NSImageView()
+    private let host = NSTextField(labelWithString: "")
+    private let heading = NSTextField(wrappingLabelWithString: "")
+    private let address = NSTextField(labelWithString: "")
+    private let close = NSButton()
+    private let summarize = NSButton()
+
     init(title: String, url: URL, image: NSImage?, status: String) {
         super.init(frame: NSRect(origin: .zero, size: Metrics.sidebarTools.previewSize.value))
         identifier = NSUserInterfaceItemIdentifier("web-link-preview")
         setAccessibilityIdentifier("web-link-preview")
-        let icon = NSImageView(frame: NSRect(x: 14, y: 136, width: 24, height: 24))
+        wantsLayer = true
         icon.image = image ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let heading = NSTextField(wrappingLabelWithString: title); heading.font = .systemFont(ofSize: 14, weight: .semibold)
-        heading.frame = NSRect(x: 48, y: 118, width: 242, height: 44)
-        let address = NSTextField(wrappingLabelWithString: url.absoluteString); address.font = .systemFont(ofSize: 11)
-        address.textColor = .secondaryLabelColor; address.frame = NSRect(x: 14, y: 78, width: 300, height: 34)
-        note.stringValue = status; note.font = .systemFont(ofSize: 11); note.frame = NSRect(x: 14, y: 34, width: 300, height: 40)
-        let close = NSButton(title: "×", target: self, action: #selector(closeCard)); close.frame = NSRect(x: 294, y: 142, width: 26, height: 26)
-        let summarize = NSButton(title: "Summarize", target: self, action: #selector(summarizeCard)); summarize.frame = NSRect(x: 12, y: 6, width: 110, height: 28); summarize.bezelStyle = .rounded
-        for view in [icon, heading, address, note, close, summarize] { addSubview(view) }
+        host.stringValue = url.host ?? url.absoluteString
+        host.font = .systemFont(ofSize: 12, weight: .medium)
+        host.lineBreakMode = .byTruncatingMiddle
+        heading.stringValue = title
+        heading.font = .systemFont(ofSize: 14, weight: .semibold)
+        heading.maximumNumberOfLines = 2
+        heading.lineBreakMode = .byTruncatingTail
+        address.stringValue = url.absoluteString
+        address.font = .systemFont(ofSize: 11)
+        address.lineBreakMode = .byTruncatingMiddle
+        note.stringValue = status
+        note.font = .systemFont(ofSize: 11)
+        note.maximumNumberOfLines = 3
+        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")?
+            .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
+        close.isBordered = false
+        close.target = self; close.action = #selector(closeCard)
+        summarize.title = "Summarize"
+        summarize.isBordered = false
+        summarize.wantsLayer = true
+        summarize.layer?.cornerRadius = Metrics.sidebarTools.previewButtonRadius.value
+        summarize.font = .systemFont(ofSize: 12, weight: .medium)
+        summarize.target = self; summarize.action = #selector(summarizeCard)
+        for view in [icon, host, heading, address, note, close, summarize] as [NSView] { addSubview(view) }
+        restyle()
     }
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        let w = bounds.width, inset = 14.0
+        icon.frame = NSRect(x: inset, y: 14, width: 16, height: 16)
+        close.frame = NSRect(x: w - inset - 20, y: 12, width: 20, height: 20)
+        host.frame = NSRect(x: inset + 24, y: 14, width: close.frame.minX - inset - 32, height: 16)
+        let titleHeight = min(heading.sizeThatFits(NSSize(width: w - 2 * inset, height: 60)).height, 40)
+        heading.frame = NSRect(x: inset, y: 40, width: w - 2 * inset, height: titleHeight)
+        address.frame = NSRect(x: inset, y: heading.frame.maxY + 4, width: w - 2 * inset, height: 15)
+        note.frame = NSRect(x: inset, y: address.frame.maxY + 6, width: w - 2 * inset, height: max(0, bounds.height - address.frame.maxY - 46))
+        let s = summarize.intrinsicContentSize
+        summarize.frame = NSRect(x: inset - 2, y: bounds.height - 12 - 22, width: s.width + 20, height: 22)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        restyle()
+    }
+
+    private func restyle() {
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        layer?.backgroundColor = (dark ? NSColor(srgbRed: 0x21 / 255, green: 0x22 / 255, blue: 0x22 / 255, alpha: 1) : .white).cgColor
+        let secondary = NSColor.secondaryLabelColor
+        host.textColor = secondary
+        address.textColor = secondary
+        note.textColor = secondary
+        heading.textColor = .labelColor
+        close.contentTintColor = secondary
+        summarize.layer?.backgroundColor = (dark ? NSColor(white: 1, alpha: 0.5) : NSColor(srgbRed: 0x59 / 255, green: 0x60 / 255, blue: 0x69 / 255, alpha: 0.7)).cgColor
+        summarize.contentTintColor = .white
+        summarize.attributedTitle = NSAttributedString(string: "Summarize", attributes: [.foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 12, weight: .medium)])
+    }
+
     func feedback(_ text: String) { note.stringValue = String(text.prefix(240)) }
     @objc private func closeCard() { dismiss?() }
     @objc private func summarizeCard() { feedback("Summarizing…"); summary?() }

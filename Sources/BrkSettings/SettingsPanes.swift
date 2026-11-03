@@ -127,6 +127,11 @@ struct LinksPane: View {
                 SettingsCard {
                     SwitchRow(title: SettingsCopy.globalLittleArcShortcut(context.settings.shortcuts), field: "globalLittleArcShortcut",
                               isOn: links.globalLittleArcShortcut != false) { send(.globalLittleArcShortcut($0)) }
+                    if let note = SettingsCopy.globalShortcutNote(context.settings.littleArcShortcut) {
+                        Text(note).font(.system(size: C.noteFontSize.value)).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("globalLittleArcShortcutNote")
+                            .padding(.horizontal, C.rowPadding.value).padding(.bottom, C.rowPadding.value / 2)
+                    }
                     CardDivider()
                     SwitchRow(title: SettingsCopy.optionCommandClickLittleArc, field: "optionCommandClickLittleArc",
                               isOn: links.optionCommandClickLittleArc) { send(.optionCommandClickLittleArc($0)) }
