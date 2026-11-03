@@ -109,9 +109,15 @@ final class ControlExecutor {
                 throw Failure(message: "Site controls are closed")
             }
             return .menuItems(Self.accessibilityTexts(root))
-        case .sitePrompt(let id, let path):
+        case .sitePrompt(let id, let path, let press):
             guard let window = store.siteDialogs.permissionWindow(for: id), window.isVisible, let root = window.contentView else {
                 throw Failure(message: "No permission prompt is open")
+            }
+            if let press {
+                guard let button = ViewTree.find(ViewID.settingsField(press).identifier, in: window) as? NSButton, button.isEnabled,
+                      !button.isHiddenOrHasHiddenAncestor else { throw Failure(message: "The prompt has no answer " + press) }
+                button.performClick(nil)
+                return .ok
             }
             if let path {
                 let image = try capture(window)

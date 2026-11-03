@@ -199,7 +199,9 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
         popover.show(relativeTo: rect, of: content, preferredEdge: edge)
         monitors[id] = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self, weak popover] event in
             let own = popover?.contentViewController?.view.window
-            let escape = event.type == .keyDown && event.keyCode == 53 && (event.window === own || event.window === window)
+            // A key event without a window goes to the key window.
+            let target = event.window ?? NSApp.keyWindow
+            let escape = event.type == .keyDown && event.keyCode == 53 && (target === own || target === window)
             guard escape || event.type != .keyDown && event.window === window else { return event }
             if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-prompt] \(escape ? "escape" : "outside click") dismisses \(id)") }
             self?.dismiss(id)

@@ -42,7 +42,7 @@ public final class SitePermissionPromptView: NSView {
             ("Never allow", "sitePermissionDeny", .deny, true),
         ]
         for (index, (text, field, decision, remember)) in buttons.enumerated() {
-            let button = NSButton(title: text, target: self, action: #selector(choose(_:)))
+            let button = PromptButton(title: text, target: self, action: #selector(choose(_:)))
             button.bezelStyle = .rounded
             button.tag = index
             button.identify(.settingsField(field))
@@ -71,6 +71,11 @@ public final class SitePermissionPromptView: NSView {
     }
 
     static let width = 320.0, inset = 16.0, spacing = 8.0
+
+    /// The popover is not the key window (the page keeps the keyboard), so its answers take the first click.
+    private final class PromptButton: NSButton {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    }
 
     /// "127.0.0.1:8764 wants to": the requesting site as Chromium names it (host, and the port when there is one).
     public static func heading(_ prompt: SitePermissionPrompt) -> String { site(prompt.requestingOrigin) + " wants to" }

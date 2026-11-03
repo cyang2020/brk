@@ -100,7 +100,7 @@ final class ProtocolTests: XCTestCase {
         case .siteControlsScreenshot: return [.siteControlsScreenshot(window: WindowID("w"), path: "/tmp/panel.png")]
         case .siteControls: return [.siteControls]
         case .siteControlTexts: return [.siteControlTexts(window: WindowID("w"))]
-        case .sitePrompt: return [.sitePrompt(window: WindowID("w"), path: "/tmp/prompt.png"), .sitePrompt(window: WindowID("w"), path: nil)]
+        case .sitePrompt: return [.sitePrompt(window: WindowID("w"), path: "/tmp/prompt.png"), .sitePrompt(window: WindowID("w"), path: nil, press: "sitePermissionDeny")]
         case .siteControlInput: return [.siteControlInput(window: WindowID("w"), field: "extension-shortcut-fixture-run", action: .focus), .siteControlInput(window: WindowID("w"), field: "siteExportLink", action: .press)]
         case .hello: return [.hello]
         case .view: return [.view(window: nil), .view(window: WindowID("w1"))]

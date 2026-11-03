@@ -287,7 +287,8 @@ public final class CEFEngine: WebEngine {
                 audioObservers[context] = observer
             }
             for page in pages { await page.resolveAudioTarget() }
-            let requests = pages.compactMap { page in page.audio.ticket.map { (page, $0) } }
+            // A frozen page cannot change until it is thawed, and reading it would stall the whole context's reading.
+            let requests = pages.filter { !$0.frozen }.compactMap { page in page.audio.ticket.map { (page, $0) } }
             do {
                 let readings = try await observer.read(targets: requests.map { $0.1.target })
                 guard phase == .running, contexts.permitsWork(context), audioObservers[context] === observer else { continue }

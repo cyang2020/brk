@@ -24,10 +24,9 @@ enum SitePermissionScenarios {
             if case .menuItems(let texts)? = try? app.send(.sitePrompt(window: owner, path: nil)) { return texts }
             return nil
         }
-        /// Clicks one of the prompt's answers once the popover has settled on screen.
+        /// Presses one of the prompt's answers (the button's own click, as the site controls tests press theirs).
         func answer(_ field: String) throws {
-            app.sleep(0.4)
-            try app.click(.settingsField(field))
+            try app.perform(.sitePrompt(window: owner, path: nil, press: field))
         }
         func reload() throws {
             try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
@@ -68,7 +67,9 @@ enum SitePermissionScenarios {
         try app.dispatch(.site(.closeControls))
         try press("screens")
         try app.waitUntil("back to Ask: Chromium's block was cleared and Brk asks") { texts()?.contains("Manage windows on all your displays") == true }
-        try app.press("escape")
+        // Escape as a keyboard sends it: through the window server into Brk's event queue.
+        guard let pid = app.hello?.pid else { throw Check(description: "app pid missing") }
+        PhysicalKeys.press(KeyChord([], .escape), pid: pid)
         try waitForTitle(app, item, "screens:denied:NotAllowedError")
         try app.waitUntil("Escape closes the prompt") { texts() == nil }
         try expect(try remembered(.windowManagement) == .ask, "closing the prompt decided something")

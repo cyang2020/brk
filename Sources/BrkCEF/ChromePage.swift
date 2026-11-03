@@ -197,6 +197,8 @@ final class ChromePage: CefBrowserDelegate {
         }
         audioObserverID = observer
         audioError = nil
+        // While the page is visible its cross-origin frames' playing state is current; hidden, the last one stands.
+        if websitePolicy.visible { subframeMediaIntent = mediaPlayers.contains { $0.id.frame != 0 && !$0.paused && !$0.ended } }
         if changed { emit([.audioChanged(reading.audible)]) }
         // Entering or leaving video picture in picture changes what keeps a hidden page running.
         if changed || pictureInPicture != mediaPlayers.contains(where: \.pictureInPicture) { refreshWebsitePolicy() }

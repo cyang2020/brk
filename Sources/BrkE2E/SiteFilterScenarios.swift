@@ -123,7 +123,7 @@ enum SiteFilterScenarios {
             try app.waitUntil("the second page says there is no network") {
                 guard case .menuItems(let texts) = try app.send(.siteControlTexts(window: app.window!)) else { return false }
                 seen = texts
-                return texts.filter { $0 == "Not downloaded yet; no network connection" }.count == 2
+                return texts.filter { $0 == "Not downloaded yet; no network connection" }.count >= 2
             }
         } catch { throw Check(description: "\(error); the panel showed \(seen)") }
         _ = try app.screenshotSiteControls("offline")

@@ -97,8 +97,9 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Every label, title and value the owner's open site-controls panel exposes to accessibility, in tree order
     /// (what the panel shows: Secure or Insecure, the connection note, button titles). Reply: `menuItems`.
     case siteControlTexts(window: WindowID)
-    /// The texts of Brk's open permission prompt for the window (`menuItems`); with `path`, also a PNG of it.
-    case sitePrompt(window: WindowID, path: String?)
+    /// The texts of Brk's open permission prompt for the window (`menuItems`); with `path`, also a PNG of it; with
+    /// `press`, clicks that answer (a `settingsField` name) as `siteControlInput` does.
+    case sitePrompt(window: WindowID, path: String?, press: String? = nil)
     case mediaSounds
     case mediaWindowScreenshot(number: Int, path: String)
     case captureProbe(page: PageID, directory: URL)

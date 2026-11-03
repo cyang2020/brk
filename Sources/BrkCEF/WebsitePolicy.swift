@@ -331,7 +331,7 @@ extension ChromePage {
 
     func cancelPermissions(frame: String? = nil) {
         let ids = permissionRequests.filter { frame == nil || $0.value.prompt.frame == nil || $0.value.prompt.frame == frame }.map(\.key)
-        if !ids.isEmpty, ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] cancel frame=\(frame ?? "all") ids=\(ids)\n" + Thread.callStackSymbols.prefix(8).joined(separator: "\n")) }
+        if !ids.isEmpty, ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] cancel frame=\(frame ?? "all") ids=\(ids)") }
         for id in ids { answerPermission(id, .ask) }
     }
     func browser(_ b: CefBrowser, willNavigateFrame identifier: String) { cancelPermissions(frame: identifier) }
