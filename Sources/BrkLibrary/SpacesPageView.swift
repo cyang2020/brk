@@ -59,6 +59,7 @@ final class SpacesPageView: NSView {
         feedback.isHidden = feedback.stringValue.isEmpty
         let keep = Set(library.spaces.map(\.id))
         for (id, card) in cards where !keep.contains(id) || restyle {
+            card.backdrop.removeFromSuperview()
             card.removeFromSuperview()
             cards[id] = nil
         }
@@ -66,6 +67,7 @@ final class SpacesPageView: NSView {
             let card = cards[row.id] ?? SpaceCardView(dispatch: dispatch, colors: colors)
             if cards[row.id] == nil {
                 cards[row.id] = card
+                strip.addSubview(card.backdrop)
                 strip.addSubview(card)
                 card.onMove = { [weak self, id = row.id] phase in self?.move(id, phase) }
             }
@@ -100,7 +102,10 @@ final class SpacesPageView: NSView {
         switch phase {
         case .changed(let dx):
             dragging = (id, dragging?.from ?? from, dx)
-            if let card = cards[id] { strip.addSubview(card, positioned: .above, relativeTo: nil) }
+            if let card = cards[id] {
+                strip.addSubview(card.backdrop, positioned: .above, relativeTo: nil)
+                strip.addSubview(card, positioned: .above, relativeTo: nil)
+            }
             needsLayout = true
         case .ended(let dx):
             let start = dragging?.from ?? from
@@ -116,7 +121,7 @@ final class SpacesPageView: NSView {
     func hide() {
         isHidden = true
         snapshot = nil
-        for card in cards.values { card.removeFromSuperview() }
+        for card in cards.values { card.backdrop.removeFromSuperview(); card.removeFromSuperview() }
         cards = [:]
     }
 
@@ -134,7 +139,9 @@ final class SpacesPageView: NSView {
         for (index, id) in slots.enumerated() {
             var x = l.spacesLeading.value + Double(index) * pitch
             if let dragging, dragging.id == id { x = l.spacesLeading.value + Double(dragging.from) * pitch + dragging.dx }
-            cards[id]?.frame = CGRect(x: x.rounded(), y: s.cardTop.value, width: l.spacesCardWidth.value, height: cardHeight)
+            let frame = CGRect(x: x.rounded(), y: s.cardTop.value, width: l.spacesCardWidth.value, height: cardHeight)
+            cards[id]?.frame = frame
+            cards[id]?.backdrop.frame = frame
         }
         let last = l.spacesLeading.value + Double(order.count) * pitch - l.spacesCardGap.value, plus = s.plusSize.value
         create.frame = CGRect(x: (last + s.plusGap.value - plus / 2).rounded(), y: ((bounds.height - plus) / 2).rounded(), width: plus, height: plus)
@@ -183,8 +190,8 @@ private final class SpaceCardView: NSView {
 
     private let dispatch: Dispatch
     private let colors: LibraryColors
-    /// The soft shadow, on a layer of its own (AppKit owns the shadow of a view's backing layer).
-    private let shade = CALayer()
+    /// The soft shadow: a sibling under the card in the strip (a view's own layer clips the shadow it casts).
+    let backdrop = SpaceCardShadow()
     private let gradient = CAGradientLayer()
     private let open = NSButton()
     private let edit = NSButton()
@@ -200,18 +207,10 @@ private final class SpaceCardView: NSView {
         self.colors = colors
         super.init(frame: .zero)
         wantsLayer = true
-        clipsToBounds = false
         let s = LibraryDraw.spaces
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = s.cardRadius.value
-        shade.backgroundColor = colors.panel.cgColor
-        shade.cornerRadius = s.cardRadius.value
-        shade.cornerCurve = .continuous
-        shade.shadowColor = NSColor.black.cgColor
-        shade.shadowOpacity = Float(s.shadowOpacity.value)
-        shade.shadowRadius = s.shadowRadius.value
-        shade.shadowOffset = .zero
-        layer?.addSublayer(shade)
+        backdrop.layer?.backgroundColor = colors.panel.cgColor
         gradient.cornerRadius = s.cardRadius.value
         gradient.cornerCurve = .continuous
         layer?.addSublayer(gradient)
@@ -288,8 +287,6 @@ private final class SpaceCardView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         gradient.frame = bounds
-        shade.frame = bounds
-        shade.shadowPath = CGPath(roundedRect: bounds, cornerWidth: s.cardRadius.value, cornerHeight: s.cardRadius.value, transform: nil)
         CATransaction.commit()
         let edgeButton = 22.0
         edit.frame = CGRect(x: bounds.width - pad - edgeButton, y: s.headerCenter.value - edgeButton / 2, width: edgeButton, height: edgeButton)
@@ -310,6 +307,23 @@ private final class SpaceCardView: NSView {
 
     @objc private func focus() { if let row { dispatch(.space(.focus(row.id))) } }
     @objc private func editSpace() { if let row { dispatch(.sidebar(.openDialog(.theme(.space(row.id))))) } }
+}
+
+/// Under a card: an opaque rounded panel that casts Arc's soft all-round shadow (P30-a) and takes no clicks.
+@MainActor final class SpaceCardShadow: NSView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        let s = LibraryDraw.spaces
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = s.cardRadius.value
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = Float(s.shadowOpacity.value)
+        layer?.shadowRadius = s.shadowRadius.value
+        layer?.shadowOffset = .zero
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// The … button: a click opens the card's menu at the pointer (Arc opens it where the … was clicked, P30-c); without
