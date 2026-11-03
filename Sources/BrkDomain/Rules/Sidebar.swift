@@ -204,6 +204,8 @@ extension Work {
                 }
             }
             if state.session.windows[window]?.dialog != dialog { state.session.windows[window]!.dialog = dialog }
+            // Create a Space takes the sidebar's place, so the Library (New Space on the Space manager) closes.
+            if dialog == .newSpace, case .library? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
             if dialog != nil { peekIfHidden(window) }
         case .popupMenu(let request, let at):
             // A native menu built from state; each entry carries the real command it dispatches. A menu with no

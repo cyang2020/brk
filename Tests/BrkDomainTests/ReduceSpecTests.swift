@@ -1052,6 +1052,16 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.tabTools.toast?.text.hasPrefix("Space deleted!"), true, "Arc's undo toast")
     }
 
+    /// New Space on the Space manager closes the Library: Create a Space takes the sidebar's place.
+    func test_newSpaceFromTheSpaceManagerClosesTheLibrary() {
+        let d = Driver()
+        d.user(.library(.open(.spaces)))
+        guard case .library? = d.view.overlay else { return XCTFail("no Library") }
+        d.user(.sidebar(.openDialog(.newSpace)))
+        XCTAssertEqual(d.view.dialog, .newSpace)
+        XCTAssertNil(d.view.overlay)
+    }
+
     /// A profile dialog opened over Create a Space takes focus and Esc closes it first.
     func test_aProfileDialogOverCreateASpaceTakesFocusAndEscFirst() {
         let d = Driver()

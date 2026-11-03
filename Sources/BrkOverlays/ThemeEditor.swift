@@ -17,6 +17,7 @@ struct ThemePanelMetrics: MetricGroup {
     let window = Metric(CGSize(width: 382, height: 534), .guess("Arc's theme panel window, measured on P28-a-arc-editor.png (764 x 1068 px at 2x)"))
     let card = Metric(CGSize(width: 356, height: 508), .guess("the visible rounded panel inside that window, 13 pt from each edge, measured on P28-a"))
     let margin = Metric(13.0, .guess("transparent shadow margin around the visible panel, measured on P28-a"))
+    let top = Metric(322.5, .guess("panel window's top below the browser window's top (the visible panel at 335.5), measured on the retaken P28-a-arc.png (main 3aa00986)"))
     let cornerRadius = Metric(20.0, .guess("visible panel corner radius, measured on P28-a"))
     let padInset = Metric(8.0, .guess("color pad inset from the panel edge, measured on P28-a"))
     let padSide = Metric(340.0, .guess("the square color pad, measured on P28-a"))
@@ -483,8 +484,8 @@ private struct NoiseKnob: View {
     }
 }
 
-/// The Edit Theme panel: a borderless panel beside the sidebar, its top at the window's middle (where Arc opens it,
-/// P28 b), over the window but never key, so Esc still reaches the browser window's menu.
+/// The Edit Theme panel: a borderless panel beside the sidebar where Arc opens it (P28 a), over the window but never
+/// key, so Esc still reaches the browser window's menu.
 @MainActor
 final class ThemePanelWindow {
     private let panel: NSPanel
@@ -522,12 +523,12 @@ final class ThemePanelWindow {
 
     func update(_ draft: ThemeDraft) { if model.draft != draft { model.draft = draft } }
 
-    /// Shows the panel over `window`, its left edge at the sidebar's right edge and its top at the window's middle,
-    /// moved up as far as needed to stay on the screen.
+    /// Shows the panel over `window`, its left edge at the sidebar's right edge and its top where Arc's is (it hangs
+    /// past the window's bottom, P28 a), moved up as far as needed to stay on the screen.
     func show(over window: NSWindow, sidebarMaxX: Double, scheme: Scheme) {
         panel.appearance = .of(scheme)
         let size = ThemePanel.window.value
-        var origin = CGPoint(x: window.frame.minX + sidebarMaxX, y: window.frame.midY - size.height)
+        var origin = CGPoint(x: window.frame.minX + sidebarMaxX, y: window.frame.maxY - ThemePanel.top.value - size.height)
         if let screen = window.screen?.visibleFrame { origin.y = max(origin.y, screen.minY) }
         if panel.frame.origin != origin { panel.setFrameOrigin(origin) }
         if !shown {
