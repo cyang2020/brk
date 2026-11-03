@@ -19,6 +19,10 @@ final class DockView: NSView {
     private var draggingSpace: SpaceID?
     private var dragTarget: SpaceID?
     private var cancelMonitor: Any?
+    /// Arc's reorder drag (P27-b): the space's icon leaves its cell and rides the pointer along the dock in a light
+    /// capsule the size of a cell; the other cells stay put and nothing is drawn on them.
+    private let capsule = DockCapsuleView()
+    private var grab: (cell: CGRect, x: CGFloat)?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -30,6 +34,8 @@ final class DockView: NSView {
         plus.identify(.dockPlus)
         addSubview(library)
         addSubview(plus)
+        capsule.isHidden = true
+        addSubview(capsule)
         identify(.dock)
     }
 
@@ -73,7 +79,14 @@ final class DockView: NSView {
     private func updateReorder(_ id: SpaceID, at point: CGPoint) {
         if draggingSpace == nil {
             draggingSpace = id
-            cells[id]?.alphaValue = 0.5
+            if let cell = cells[id], let last, let item = last.0.first(where: { $0.id == id }) {
+                grab = (cell.frame, cell.pressRoot?.x ?? point.x)
+                capsule.render(item, palette: last.2, cellWidth: cell.frame.width)
+                capsule.frame = cell.frame
+                capsule.isHidden = false
+                addSubview(capsule, positioned: .above, relativeTo: nil)
+                cell.alphaValue = 0
+            }
             cancelMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard event.keyCode == 53 else { return event }
                 MainActor.assumeIsolated { self?.cancelReorder() }
@@ -81,8 +94,13 @@ final class DockView: NSView {
             }
         }
         guard draggingSpace == id, let last else { return }
+        if let grab {
+            // Along the dock only, between the Library and + buttons.
+            let local = { (r: CGRect) in r.offsetBy(dx: -last.1.dock.minX, dy: -last.1.dock.minY) }
+            let low = local(last.1.libraryButton).maxX, high = local(last.1.plusButton).minX - grab.cell.width
+            capsule.frame.origin.x = min(max(grab.cell.minX + point.x - grab.x, low), max(low, high)).rounded()
+        }
         dragTarget = last.1.dockSpaces.first { $0.value.contains(point) }?.key
-        showDrop(space: dragTarget)
     }
     private func finishReorder(_ id: SpaceID, at point: CGPoint) {
         guard draggingSpace == id, let last else { cancelReorder(); return }
@@ -97,7 +115,8 @@ final class DockView: NSView {
     func cancelReorder() -> Bool {
         let active = draggingSpace != nil || cells.values.contains { $0.isPressed }
         for cell in cells.values { cell.alphaValue = 1; cell.cancelPress() }
-        draggingSpace = nil; dragTarget = nil
+        draggingSpace = nil; dragTarget = nil; grab = nil
+        capsule.isHidden = true
         showDrop(space: nil)
         if let cancelMonitor { NSEvent.removeMonitor(cancelMonitor); self.cancelMonitor = nil }
         return active
@@ -122,7 +141,9 @@ final class DockCellView: HoverView {
     var reorderChanged: ((CGPoint) -> Void)?
     var reorderEnded: ((CGPoint) -> Void)?
     private var pressPoint: CGPoint?
-    private var didDrag = false
+    /// Where the press started, in the sidebar's coordinates (the reorder capsule keeps the pointer's grab on it).
+    private(set) var pressRoot: CGPoint?
+    private var didDrag = false { didSet { if didDrag != oldValue { stateChanged() } } }
     private let dispatch: Dispatch
     private let icon = IconView()
     private var item: DockItem?
@@ -175,7 +196,8 @@ final class DockCellView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        let fill: RGBA? = dropTarget ? palette.tokens.dragHint : (isPressed || isHovered) ? palette.tokens.itemBackground : nil
+        // A reorder drag hides the pressed cell (its icon rides the capsule), so only a hover or a row drop fills one.
+        let fill: RGBA? = dropTarget ? palette.tokens.dragHint : (isPressed || isHovered) && !didDrag ? palette.tokens.itemBackground : nil
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
         needsLayout = true
     }
@@ -183,6 +205,7 @@ final class DockCellView: HoverView {
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
         pressPoint = event.locationInWindow; didDrag = false
+        pressRoot = rootPoint(fromWindow: event.locationInWindow)
         isPressed = true
     }
 
@@ -205,5 +228,45 @@ final class DockCellView: HoverView {
 
     override func rightMouseDown(with event: NSEvent) {
         dispatch(.sidebar(.popupMenu(.spaceControls(id), at: rootPoint(fromWindow: event.locationInWindow))))
+    }
+}
+
+/// The capsule a space's icon rides during a dock reorder (P27-b): a cell-sized rounded fill in the hover color
+/// with the cell's icon, drawn as the cell draws it.
+@MainActor
+final class DockCapsuleView: NSView {
+    private let icon = IconView()
+    private var showsDot = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Metrics.dock.cellRadius.value
+        addSubview(icon)
+        identify(.tabTool("dock-reorder-capsule"))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func render(_ item: DockItem, palette: Palette, cellWidth: Double) {
+        let compact = cellWidth < Metrics.dock.compactBelow.value
+        showsDot = compact || item.icon == .none
+        let ink = palette.scheme == .light ? NSColor.black : NSColor.white
+        let tint = ink.withAlphaComponent(item.active ? Draw.dockActiveInk.value : Draw.dockInactiveInk.value)
+        let dot = tint.usingColorSpace(.sRGB).map { RGBA($0.redComponent, $0.greenComponent, $0.blueComponent, $0.alphaComponent) } ?? item.color
+        icon.render(compact ? .dot(dot) : IconContent(space: item.icon, color: dot), tint: tint)
+        layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let side = min(showsDot ? Draw.dockDot.value : Draw.dockGlyph.value, bounds.width)
+        icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
     }
 }

@@ -51,6 +51,9 @@ final class DragController {
         let preview: NSView
         let grab: CGPoint
         var target: Target?
+        /// Arc's drag card for a tab row over the content (P23-d); nil for anything else.
+        let card: ContentDragCard?
+        var overContent = false
     }
 
     private let dispatch: Dispatch
@@ -86,6 +89,15 @@ final class DragController {
         let local = session.preview.superview?.convert(event.locationInWindow, from: nil) ?? sidebar.convert(event.locationInWindow, from: nil)
         session.preview.setFrameOrigin(CGPoint(x: local.x - session.grab.x, y: local.y - session.grab.y))
         let root = sidebar.rootPoint(fromWindow: event.locationInWindow)
+        if let card = session.card {
+            // Past the sidebar a tab row stays in place lifted and the card rides the pointer instead of its image.
+            session.overContent = !context.frames.frame.contains(root)
+            card.center(on: local)
+            card.isHidden = !session.overContent
+            session.preview.isHidden = session.overContent
+            (session.source as? RowView)?.dragSource = !session.overContent
+            (session.source as? RowView)?.dragLifted = session.overContent
+        }
         if context.frames.tablistViewport.contains(root) { sidebar.tablist.autoScroll(at: root, frames: context.frames) }
         session.target = target(at: root, item: session.item, context: context)
         show(session.target, item: session.item, context: context)
@@ -156,7 +168,14 @@ final class DragController {
         }
         host.addSubview(preview)
         let local = host.convert(event.locationInWindow, from: nil)
-        session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY))
+        var contentCard: ContentDragCard?
+        if let row = source as? RowView, case .tab(let tab)? = row.row {
+            let made = ContentDragCard(tab: tab, palette: palette)
+            made.isHidden = true
+            host.addSubview(made)
+            contentCard = made
+        }
+        session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY), card: contentCard)
         (source as? RowView)?.dragSource = true
         if !(source is RowView) { source.alphaValue = Draw.dragSourceAlpha.value }
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -170,7 +189,9 @@ final class DragController {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor); self.escapeMonitor = nil }
         sidebar?.endContentDrop?()
         session.preview.removeFromSuperview()
+        session.card?.removeFromSuperview()
         (session.source as? RowView)?.dragSource = false
+        (session.source as? RowView)?.dragLifted = false
         session.source.alphaValue = 1
         if let context { show(nil, item: session.item, context: context) }
         self.session = nil
@@ -228,5 +249,55 @@ final class DragController {
             sidebar.tablist.showDrop(nil, dragging: nil, at: nil, frames: f, space: context.space)
         }
         if case .dock(let space)? = target { sidebar.dock.showDrop(space: space) } else { sidebar.dock.showDrop(space: nil) }
+    }
+}
+
+/// Arc's drag image while a tab is over the content (P23-d): a white rounded card centred on the pointer, the tab's
+/// icon above its title in bold, over a soft shadow (Draw.dragCard*).
+@MainActor
+final class ContentDragCard: NSView {
+    private let icon = IconView()
+    private let title = NSTextField(labelWithString: "")
+
+    init(tab: TabRow, palette: Palette) {
+        super.init(frame: CGRect(x: 0, y: 0, width: Draw.dragCardWidth.value, height: Draw.dragCardHeight.value))
+        wantsLayer = true
+        layer?.backgroundColor = (palette.scheme == .dark ? NSColor(white: 0.17, alpha: 1) : .white).cgColor
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Draw.dragCardRadius.value
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = Float(Draw.dragCardShadowOpacity.value)
+        layer?.shadowRadius = Draw.dragCardShadow.value
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
+        title.stringValue = tab.awaitingFirstDocument ? SidebarCopy.untitled : tab.title
+        title.font = .systemFont(ofSize: Draw.dragCardTitleFont.value, weight: .bold)
+        title.textColor = palette.ink.text
+        title.alignment = .center
+        title.usesSingleLineMode = false
+        title.cell?.wraps = true
+        title.cell?.truncatesLastVisibleLine = true
+        title.lineBreakMode = .byWordWrapping
+        title.maximumNumberOfLines = 2
+        title.isSelectable = false
+        addSubview(icon)
+        addSubview(title)
+        identify(.tabTool("content-drag-card"))
+        let side = Draw.dragCardIcon.value
+        icon.frame = CGRect(x: (bounds.width - side) / 2, y: Draw.dragCardIconCenter.value - side / 2, width: side, height: side)
+        let inset = Draw.dragCardInset.value
+        let fit = title.sizeThatFits(CGSize(width: bounds.width - 2 * inset, height: .greatestFiniteMagnitude))
+        title.frame = CGRect(x: inset, y: Draw.dragCardTitleTop.value, width: bounds.width - 2 * inset, height: ceil(fit.height))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// `point` in the superview's coordinates.
+    func center(on point: CGPoint) {
+        setFrameOrigin(CGPoint(x: (point.x - bounds.width / 2).rounded(), y: (point.y - bounds.height / 2).rounded()))
     }
 }

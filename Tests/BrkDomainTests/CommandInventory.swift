@@ -53,7 +53,7 @@ enum CommandInventory {
         .space(.delete(space)), .space(.move(space, index: 0)), .space(.focus(space)), .space(.step(.previous)),
         .space(.togglePinnedSection(.current)), .space(.requestDelete(space)), .space(.confirmDelete(space, token: "ghost", confirmed: false)), .space(.exportIntoFolder(space)),
         .space(.inSpace(space, .newFolder)),
-        .split(.addPane), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
+        .split(.addPane), .split(.addPaneBefore), .split(.movePane(.previous)), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
         .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)),
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
@@ -329,7 +329,7 @@ enum CommandInventory {
             case .inSpace: "inSpace"
             }
         case .split(let c): switch c {
-            case .addPane: "addPane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
+            case .addPane: "addPane"; case .addPaneBefore: "addPaneBefore"; case .movePane: "movePane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
             case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
             case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
             case .restore: "restore"; case .dropTab: "dropTab"

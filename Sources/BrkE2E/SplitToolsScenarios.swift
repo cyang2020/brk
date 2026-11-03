@@ -230,9 +230,10 @@ enum SplitToolsScenarios {
         try app.type(app.site.url("split-tools.html?private-two").absoluteString); try app.press("return")
         let second = try app.view(owner).content.panes[1].tab
         try app.waitForPageInput(PageID(window: owner, item: second), at: app.site.url("split-tools.html?private-two"))
-        try SplitParentScenarios.splitTool(app, .splitVertical)
+        // The split's own controls act on the private window (the scenario's main window is the public one).
+        try send(app, owner, ActionID.splitVertical.spec.command)
         try expect(try app.view(owner).content.orientation == .vertical, "private orientation control failed")
-        try SplitParentScenarios.splitTool(app, .maximizeSplitPane); try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
+        try send(app, owner, .split(.toggleExpanded)); try send(app, owner, .split(.restore))
         try app.press("ctrl+alt+1")
         try app.press("ctrl+shift+-")
         try expect(try app.view(owner).content.split == nil, "private singleton did not dissolve")
