@@ -9,6 +9,9 @@ public struct SpaceManagerRow: Sendable, Equatable, Codable, Identifiable {
     public let theme: ResolvedTheme
     public let tabCount: Int
     public let active: Bool
+    /// The space's Pinned and Today rows, as its sidebar lists them: the Library's Spaces card draws them small.
+    public var pinned: [Row] = []
+    public var today: [Row] = []
 }
 
 public struct SpaceDeletionRequest: Sendable, Equatable, Codable {

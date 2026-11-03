@@ -186,7 +186,7 @@ enum BrowserOpsScenarios {
                 try app.evaluate(page, "boVideo.play().then(()=>document.title='video-playing:'+(!boVideo.paused&&boVideo.readyState>=2))")
                 try app.waitUntil("actual captured video playback") { try title(app, page) == "video-playing:true" }
             }
-            try app.dispatch(.library(.open(.history)))
+            try app.dispatch(.library(.open(.downloads)))
             try app.waitUntil("Library is visible before fullscreen Escape") {
                 if case .library? = try app.view().overlay { return true }; return false
             }

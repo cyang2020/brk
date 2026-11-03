@@ -163,11 +163,10 @@ enum SpaceToolsScenarios {
         try expect(isShown(try app.native(), .spaceToolsControl("manager")), "Spaces destination missing")
         try finishAnimation(app)
         try app.screenshot("library-spaces")
-        try app.click(.spaceToolsControl("manager-search"))
-        try app.type("No such fixture space")
-        try expect(!isShown(try app.native(), .spaceToolsControl("manager-open-\(created)")), "manager search did not filter cards")
-        try app.press("cmd+a"); try app.type("Native Work Edited")
-        try expect(isShown(try app.native(), .spaceToolsControl("manager-open-\(created)")), "manager did not restore the matching card")
+        // Arc's Space manager has no search: every space has its card, with its name.
+        try expect(isShown(try app.native(), .spaceToolsControl("manager-open-\(created)")), "the created space has no card")
+        guard case .library(let manager)? = try app.view().overlay else { throw Check(description: "Space manager closed") }
+        try expect(manager.spaces.contains { $0.id == created && $0.title == "Native Work Edited" }, "the card lost the edited name")
         try app.click(.spaceToolsControl("manager-new"))
         try app.waitUntil("the Create a Space flow from the manager") { try app.view().dialog == .newSpace }
         try app.type("Cancelled Space")
@@ -209,12 +208,12 @@ enum SpaceToolsScenarios {
             try expect(try app.view().space.id == second, "rapid keyboard switch did not reach the next Space")
         }
         try app.dispatch(.library(.open(.spaces)))
-        try app.click(.spaceToolsControl("manager-delete-\(second)"))
+        try managerMenu(app, second, choose: "Delete Space…")
         try expect(try app.view().pendingSpaceDeletion?.id == second, "Delete did not ask for confirmation")
         try app.click(.spaceToolsControl("alert-cancel"))
         try app.waitUntil("cancel preserved the space") { try app.view().pendingSpaceDeletion == nil }
         try expect(try app.view().dock.contains { $0.id == second }, "Cancel deleted the space")
-        try app.click(.spaceToolsControl("manager-delete-\(second)"))
+        try managerMenu(app, second, choose: "Delete Space…")
         try app.waitUntil("the delete dialog focused") { try app.native().firstResponder.contains("SpaceAlert") || app.native().firstResponder.contains("ArcDialog") }
         try app.press("return")
         try app.waitUntil("confirmed deletion removed the space") { try !app.view().dock.contains { $0.id == second } }
@@ -225,12 +224,21 @@ enum SpaceToolsScenarios {
         try app.recordWindows("gestures-final")
     }
 
+    /// Chooses `item` from a Space card's … menu (the card's actions, P32-d), through the native menu.
+    private static func managerMenu(_ app: AppUnderTest, _ space: SpaceID, choose item: String) throws {
+        let more = try visible(app.native(), .spaceToolsControl("manager-more-\(space)")).frame
+        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: more.midX, y: more.midY), choose: item)) else {
+            throw Check(description: "the card's … menu did not open")
+        }
+        try expect(titles.contains(item), "the card's menu has \(titles), not \(item)")
+    }
+
     @Sendable static func export(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("page2.html?space-export"))
         try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("page2.html?space-export"))
         let space = try app.view().space.id
         try app.dispatch(.library(.open(.spaces)))
-        try app.click(.spaceToolsControl("manager-export-\(space)"))
+        try managerMenu(app, space, choose: "Export into Folder…")
         try perform(app, .sheetButton(title: "Cancel"))
         try app.waitUntil("export cancellation settled") {
             guard case .library(let library)? = try app.view().overlay else { return false }
@@ -239,7 +247,7 @@ enum SpaceToolsScenarios {
         let destination = app.dataDirectory.appendingPathComponent("owned-export", isDirectory: true)
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         try perform(app, .selectSheetDirectory(path: destination.path))
-        try app.click(.spaceToolsControl("manager-export-\(space)"))
+        try managerMenu(app, space, choose: "Export into Folder…")
         try app.waitUntil("folder export sheet is responsive") { try app.view().overlay != nil }
         try app.click(.spaceToolsControl("folder-export-path"))
         try app.press("cmd+a"); try app.type(destination.appendingPathComponent("missing").path)

@@ -51,7 +51,7 @@ extension AppState {
 
     func visiblePages() -> Set<PageID> {
         Set(doc.windows.keys.flatMap { window -> [PageID] in
-            if case .library? = session.windows[window]?.overlay { return [] }
+            // The Library opens beside the page (its panel replaces the sidebar), so the page stays visible.
             let shown = shownItem(in: window)
             let items: [ItemID]
             if let shown, session.windows[window]?.expandedSplit == shown,

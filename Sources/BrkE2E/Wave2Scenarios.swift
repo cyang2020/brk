@@ -28,7 +28,7 @@ enum Wave2Scenarios {
         Scenario("W2-10a", "a typed URL opens its exact destination; an exact open-tab URL still switches across spaces",
                  cefOnly: "cookie fixture titles from real pages", CommandBarScenarios.exactURL),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
-        Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", history),
+        Scenario("W2-12", "Cmd+Y opens the History page as a Today tab listing the visits", history),
         Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
         Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
         Scenario("W2-11P", "incognito downloads keep their files and leave no saved download or history records", cefOnly: "private downloads", LibraryScenarios.privacy),
@@ -192,10 +192,8 @@ enum Wave2Scenarios {
         try app.restart()
         guard case .hello(let h) = try app.send(.hello) else { throw Check(description: "no hello after restart") }
         try expect(h.windows.count == 1, "\(h.windows.count) windows after restart, expected the standard one only")
-        try app.dispatch(.library(.open(.history)))
-        try app.waitUntil("the History page") { isLibrary(try app.view().overlay, page: .history) }
-        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "no library") }
-        try expect(!library.history.contains { $0.url == app.site.url("page2.html") }, "the incognito visit is in history")
+        let history = try historyRows(app)
+        try expect(!history.contains { $0.url == app.site.url("page2.html") }, "the incognito visit is in history")
         try app.dispatch(.library(.open(.archive)))
         guard case .library(let archived)? = try app.view().overlay else { throw Check(description: "no archive") }
         let urls = archived.archive?.groups.flatMap(\.entries).map(\.url) ?? []
@@ -470,28 +468,32 @@ enum Wave2Scenarios {
         }
     }
 
-    /// W2-12 (F5): after visiting page2, Cmd+Y opens the Library on History with both visits newest first; the
-    /// history rows are on screen inside the Library's page area (the content area beside its panel).
+    /// W2-12 (F5): after visiting page2, Cmd+Y opens the History page in the content area (Arc's arc://history) as a
+    /// History tab at the top of Today, listing both visits newest first; the sidebar stays, and the rows are on
+    /// screen inside the History card. Cmd+Y again shows the same tab.
     @Sendable static func history(_ app: AppUnderTest) throws {
         try openTab(app, app.site.url("page2.html"))
         try app.settle()
         try app.press("cmd+y")
-        try app.waitUntil("the History page") { isLibrary(try app.view().overlay, page: .history) }
-        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "no library") }
-        try expect(library.history.map(\.url) == [app.site.url("page2.html"), app.site.url("index.html")],
-                   "history is \(library.history.map(\.url.absoluteString))")
-        try app.waitUntil("the rows inside the Library's page area") {
+        try app.waitUntil("the History page") { try app.view().history != nil }
+        let v = try app.view(), rows = v.history ?? []
+        try expect(rows.map(\.url) == [app.site.url("page2.html"), app.site.url("index.html")], "history is \(rows.map(\.url.absoluteString))")
+        guard case .tab(let tab)? = v.space.today.rows.first, tab.url == HistoryPage.url, tab.title == HistoryPage.title, tab.status == .current else {
+            throw Check(description: "the History tab is not the current tab at the top of Today: \(v.space.today.rows.first.map(String.init(describing:)) ?? "none")")
+        }
+        try expect(v.overlay == nil, "Cmd+Y opened an overlay")
+        try app.waitUntil("the rows inside the History card") {
             let n = try app.native()
-            guard let area = n.computed.library?.page else { throw Check(description: "computed frames have no library") }
-            try expect(n.computed.library?.strip.width == 417, "the Library panel is not 417 pt wide")
-            try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "Library did not replace the sidebar")
-            try expect(near(area, n.computed.contentArea), "Library page does not fill the content area")
-            let host = try visible(n, .library), row = try visible(n, .historyEntry(0))
-            try expect(contains(host, row), "history row \(row.frame) outside the library \(host.frame)")
-            try expect(area.insetBy(dx: -0.5, dy: -0.5).contains(row.frame), "history row \(row.frame) outside the page area \(area)")
+            try expect(isShown(n, .sidebar), "the sidebar is not shown beside the History page")
+            let card = try visible(n, .historyPage), row = try visible(n, .historyEntry(0))
+            try expect(near(card.frame, n.computed.cards.first?.rect ?? .zero), "History page \(card.frame) is not its card \(String(describing: n.computed.cards.first?.rect))")
+            try expect(contains(card, row), "history row \(row.frame) outside the History page \(card.frame)")
             return true
         }
         try app.screenshot("history")
+        try app.press("cmd+y")
+        try expect(try app.view().space.today.rows.filter { if case .tab(let t) = $0 { t.url == HistoryPage.url } else { false } }.count == 1,
+                   "a second Cmd+Y opened another History tab")
     }
 }
 

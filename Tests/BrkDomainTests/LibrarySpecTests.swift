@@ -20,9 +20,9 @@ final class LibrarySpecTests: XCTestCase {
             XCTAssertFalse(result.effects.contains { if case .disposeContext = $0 { return true }; return false },
                            "clearing history must not schedule profile disposal")
             XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), profiles)
-            d.user(.library(.open(.history)))
-            guard case .library(let page)? = d.view.overlay else { return XCTFail("history did not open") }
-            XCTAssertTrue(page.history.isEmpty)
+            d.user(.library(.openHistory))
+            guard let page = d.view.history else { return XCTFail("history did not open") }
+            XCTAssertTrue(page.isEmpty)
         }
     }
 
@@ -75,13 +75,14 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertEqual(d.state.doc.history.first { $0.profile == profile }?.title, "Work")
     }
 
-    /// .library(.open(nil)) opens the archive first and the window's last page after; the same page is a no-op
+    /// .library(.open(nil)) opens Media first (Arc's first page) and the window's last page after; the same page is a
+    /// no-op
     func test_openRemembersTheLastPage() {
         let d = Driver()
         d.user(.library(.open(nil)))
         guard case .library(let first)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(first.page, .archive)
-        XCTAssertNotNil(first.archive)
+        XCTAssertEqual(first.page, .media)
+        XCTAssertNil(first.archive)
         XCTAssertEqual(d.view.focus, FocusTarget.none)
         d.user(.library(.open(.downloads)))
         guard case .library(let downloads)? = d.view.overlay else { return XCTFail("no library") }
@@ -141,15 +142,15 @@ final class LibrarySpecTests: XCTestCase {
         d.page(a, .committed(url("http://127.0.0.1:9/one")))
         d.advance(minute)
         d.page(a, .committed(url("http://127.0.0.1:9/two")))
-        d.user(.library(.open(.history)))
-        guard case .library(let library)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(library.history.map(\.url), [url("http://127.0.0.1:9/two"), url("http://127.0.0.1:9/one")])
+        d.user(.library(.openHistory))
+        guard let library = d.view.history else { return XCTFail("no library") }
+        XCTAssertEqual(library.map(\.url), [url("http://127.0.0.1:9/two"), url("http://127.0.0.1:9/one")])
         d.user(.library(.removeHistory(url("http://127.0.0.1:9/two"))))
-        guard case .library(let fewer)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(fewer.history.map(\.url), [url("http://127.0.0.1:9/one")])
+        guard let fewer = d.view.history else { return XCTFail("the History page closed") }
+        XCTAssertEqual(fewer.map(\.url), [url("http://127.0.0.1:9/one")])
         d.user(.library(.clearHistory))
-        guard case .library(let none)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(none.history, [])
+        guard let none = d.view.history else { return XCTFail("the History page closed") }
+        XCTAssertEqual(none, [])
     }
 
     /// the dock's Library button and the Window menu's actions all land on the Library
@@ -162,19 +163,53 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertEqual(ActionID.viewEaselsAndNotes.spec.command, .library(.open(.easelsAndNotes)))
     }
 
-    /// Shift+Cmd+L and the dock's Library button (.open(nil)) toggle the Library; an explicit page never closes it
+    /// Shift+Cmd+L and the dock's Library button (.open(nil)) toggle the Library, first on Media; an explicit page
+    /// never closes it; Cmd+Y closes it and shows the History page instead
     func test_theLibraryButtonToggles() {
         let d = Driver()
-        d.user(.library(.open(.history)))
+        d.user(.library(.open(nil)))
+        guard case .library(let first)? = d.view.overlay else { return XCTFail("no library") }
+        XCTAssertEqual(first.page, .media, "the first opening shows Media, as Arc's does")
+        d.user(.library(.open(.downloads)))
         d.user(.library(.open(nil)))
         XCTAssertNil(d.view.overlay, "nil closes an open Library")
         d.user(.library(.open(nil)))
         guard case .library(let reopened)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(reopened.page, .history, "and reopens it on the last page")
-        assertUnchanged(d.state, d.user(.library(.open(.history))))
+        XCTAssertEqual(reopened.page, .downloads, "and reopens it on the last page")
+        assertUnchanged(d.state, d.user(.library(.open(.downloads))))
         d.key(KeyChord(.command, .y), stage: .menu, pressID: 1)
-        guard case .library(let history)? = d.view.overlay else { return XCTFail("Cmd+Y closed the Library") }
-        XCTAssertEqual(history.page, .history)
+        XCTAssertNil(d.view.overlay, "Cmd+Y closes the Library")
+        XCTAssertNotNil(d.view.history, "and shows the History page")
+    }
+
+    /// Cmd+Y opens the History page as a tab at the top of Today (Arc opens arc://history there): titled History, with
+    /// its favicon, drawn natively in its card (no browser page); Cmd+Y again shows the same tab; navigating it away
+    /// gives it a browser again
+    func test_cmdYOpensTheHistoryTabInToday() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        d.page(home, .committed(url("http://127.0.0.1:9/one")))
+        d.user(.library(.openHistory))
+        let tab = try XCTUnwrap(d.todayIDs.first)
+        XCTAssertNotEqual(tab, home)
+        guard case .tab(let row)? = d.view.space.today.rows.first else { return XCTFail("no History row") }
+        XCTAssertEqual([row.url, row.favicon], [HistoryPage.url, HistoryPage.favicon])
+        XCTAssertEqual(row.title, "History")
+        XCTAssertEqual(row.status, .current)
+        XCTAssertEqual(d.view.content.panes.map(\.content), [.history(PageID(window: d.window, item: tab))])
+        XCTAssertFalse(d.snapshot.pages.contains { $0.id.item == tab }, "the History page has no browser")
+        XCTAssertEqual(d.view.history?.first?.url, url("http://127.0.0.1:9/one"), "newest first")
+        d.user(.tab(.focus(home)))
+        XCTAssertNil(d.view.history, "no card shows the History page")
+        d.user(.library(.openHistory))
+        XCTAssertEqual(d.todayIDs.filter { $0 == tab }.count, 1)
+        XCTAssertEqual(d.todayIDs.count, 2, "Cmd+Y again shows the same History tab")
+        XCTAssertEqual(d.view.content.panes.first?.tab, tab)
+        d.user(.commandBar(.open(.editCurrent)))
+        d.user(.commandBar(.submit("http://127.0.0.1:9/two")))
+        XCTAssertEqual(d.view.content.panes.map(\.content), [.page(PageID(window: d.window, item: tab))], "a page again")
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id.item == tab && $0.initialURL == url("http://127.0.0.1:9/two") })
+        XCTAssertNil(d.view.history)
     }
 
     /// the Downloads page lists the window's profile's downloads with their progress; Clear acts on that profile only
@@ -224,26 +259,27 @@ final class LibrarySpecTests: XCTestCase {
         d.advance(minute)
         let tab = d.open("http://127.0.0.1:9/shared")
         d.page(tab, .committed(url("http://127.0.0.1:9/shared")))
-        d.user(.library(.open(.history)))
-        guard case .library(let inWork)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(inWork.history.map(\.url), [url("http://127.0.0.1:9/shared")])
+        d.user(.library(.openHistory))
+        guard let inWork = d.view.history else { return XCTFail("no library") }
+        XCTAssertEqual(inWork.map(\.url), [url("http://127.0.0.1:9/shared")])
         XCTAssertEqual(d.user(.library(.clearHistory)).effects, [], "history removal does not dispose the profile")
-        guard case .library(let clearedWork)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(clearedWork.history, [])
+        guard let clearedWork = d.view.history else { return XCTFail("the History page closed") }
+        XCTAssertEqual(clearedWork, [])
         d.user(.space(.step(.previous)))
-        d.user(.library(.open(.history)))
-        guard case .library(let inHome)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(inHome.history.map(\.url), [url("http://127.0.0.1:9/home"), url("http://127.0.0.1:9/shared")],
+        d.user(.library(.openHistory))
+        guard let inHome = d.view.history else { return XCTFail("no library") }
+        XCTAssertEqual(inHome.map(\.url), [url("http://127.0.0.1:9/home"), url("http://127.0.0.1:9/shared")],
                        "the visit to the same URL in Work neither moved nor removed the default profile's")
         d.user(.library(.removeHistory(url("http://127.0.0.1:9/shared"))))
-        guard case .library(let fewer)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(fewer.history.map(\.url), [url("http://127.0.0.1:9/home")])
+        guard let fewer = d.view.history else { return XCTFail("the History page closed") }
+        XCTAssertEqual(fewer.map(\.url), [url("http://127.0.0.1:9/home")])
 
         d.user(.window(.newIncognito))
         let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
-        d.user(.library(.open(.history)), in: incognito)
-        guard case .library(let offTheRecord)? = d.view(of: incognito).overlay else { return XCTFail("no library in the incognito window") }
-        XCTAssertEqual(offTheRecord.history, [])
+        let rows = d.view(of: incognito).scratch?.rows.count
+        d.user(.library(.openHistory), in: incognito)
+        XCTAssertNil(d.view(of: incognito).history, "an incognito window keeps no History page")
+        XCTAssertEqual(d.view(of: incognito).scratch?.rows.count, rows)
         assertUnchanged(d.state, d.user(.library(.clearHistory), in: incognito))
     }
 

@@ -46,7 +46,7 @@ public final class ContentAreaView: NSView {
     }
 
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
-    /// i hosts the surface for pane i (`.page`), a white card (`.blank`) or the sad-tab placeholder (`.crashed`).
+    /// i hosts the surface for pane i (`.page`), a white card (`.blank`, `.history`) or the sad-tab placeholder (`.crashed`).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
     /// White over the theme for an empty card in light: #FCFCFC over Arc's #F7F7F8 window (P24 e).
     static func blankAlpha(_ palette: Palette) -> Double { 0.75 }
@@ -88,7 +88,8 @@ public final class ContentAreaView: NSView {
             switch frame.content {
             case .page(let page):
                 card.host(surface(page), placeholder: nil)
-            case .blank:
+            case .blank, .history:
+                // The History page is drawn over its card by the root (`HistoryPageView`).
                 card.host(nil, placeholder: nil)
                 // Arc's empty content area is the theme under a white wash (P24 e), not a white page; dark keeps the
                 // empty color above.

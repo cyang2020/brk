@@ -388,14 +388,17 @@ public enum AdvancedSetting: Hashable, Sendable, Codable {
     case sharedQuotes(Bool)
 }
 
-/// The Library: its panel replaces the sidebar and the open page fills the content area. Searching within a page
-/// is view-local (like the archive's filter).
+/// The Library: its panel replaces the sidebar, a navigation column beside the open page's column, and the content
+/// area keeps showing the page. Searching within a page is view-local (like the archive's filter).
 public enum LibraryCommand: Hashable, Sendable, Codable {
-    /// Shift+Cmd+L, the dock's Library button, View Archive, View Downloads, Cmd+Y. Nil toggles (Arc's
-    /// `toggleLibrary:`): it closes an open Library, else reopens the window's last page, else the archive. An
-    /// explicit page already open is a no-op that keeps its `openID`.
+    /// Shift+Cmd+L, the dock's Library button, View Archive, View Downloads. Nil toggles (Arc's `toggleLibrary:`): it
+    /// closes an open Library, else reopens the window's last page, else Media. An explicit page already open is a
+    /// no-op that keeps its `openID`.
     case open(LibraryPage?)
     case close
+    /// Cmd+Y, View History: the space's History tab (`HistoryPage`) is shown, or a new one at the top of Today.
+    /// Closes the Library.
+    case openHistory
     case cancelDownload(DownloadID)
     /// Reveal the file in the Finder (`Effect.revealFile`).
     case revealDownload(DownloadID)
@@ -526,7 +529,7 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .capture(.begin): false
+        case .capture(.begin), .library(.openHistory): false
         case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         default: false
