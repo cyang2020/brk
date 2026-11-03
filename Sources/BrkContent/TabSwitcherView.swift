@@ -23,6 +23,7 @@ struct SwitcherMetricsTable: MetricGroup {
     let iconSize = Metric(14.0, .anatomy("\(measured): 14 pt icons before the titles"))
     let textInset = Metric(23.0, .anatomy("\(measured): titles start 27 in from the page image's left edge (a label draws 2 in)"))
     let titleFontSize = Metric(14.0, .anatomy("\(measured): titles have a 10 pt cap height"))
+    let titleRightInset = Metric(10.0, .anatomy("\(measured): \"Long title for tru…\" ends about 10 before the page image's right edge"))
     let windowMargin = Metric(24.0, .guess("the strip keeps 24 from the window's sides, dropping cards in a narrow window"))
     let placeholderRadius = Metric(3.0, .guess("the grey square for a tab without a favicon, a sidebar row's placeholder at 14 pt"))
 }
@@ -171,7 +172,7 @@ private final class SwitcherCard: NSView {
         }
         let x = pageRect.minX + m.textInset.value
         let height = title.intrinsicContentSize.height
-        title.frame = CGRect(x: x, y: (centreY - height / 2).rounded(), width: max(0, pageRect.maxX - x), height: height)
+        title.frame = CGRect(x: x, y: (centreY - height / 2).rounded(), width: max(0, pageRect.maxX - m.titleRightInset.value - x), height: height)
         setAccessibilityElement(true)
         setAccessibilityLabel(item.title)
         setAccessibilitySelected(selected)

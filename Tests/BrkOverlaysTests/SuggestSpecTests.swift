@@ -95,30 +95,30 @@ func rows(_ list: [Suggestion]) -> [String] {
 final class SuggestSpecTests: XCTestCase {
     // MARK: - electron-v1:src/renderer/overlay/suggest.test.ts
     // MARK: suggest
-    /// empty query: open tabs in view order without the focused one, then newest history, one row per URL, no open-tab
-    /// URLs, four in all; then Arc's Contact the Team (Q01-a: four recent tabs, then Contact the Team)
+    /// empty query: open tabs in view order without the focused one (at most four), then Arc's own entries fill the
+    /// five rows; history is for typed text (Q01-a: four recent tabs, then Contact the Team; P21-a, no tabs: Arc's
+    /// five entries)
     func test_emptyQueryOpenTabsInViewOrderWithoutTheFocusedOneThenNewestHistoryOneRow() {
         XCTAssertEqual(rows(suggest("")), [
             "switch:t1",
             "switch:t2",
             "switch:t3",
-            "history:https://news.ycombinator.com/",
             "suggested:Contact the Team",
+            "suggested:The Browser Company",
         ])
-        // With fewer tabs three history rows fit: GitHub (newest, but open as t1) is left out and Hacker News
-        // shows once although it was visited twice.
         let fewer = commandBar(Array(fixtureBar.tabs.prefix(2)), fixtureBar.history)
         XCTAssertEqual(rows(suggest("", fewer)), [
             "switch:t1",
-            "history:https://news.ycombinator.com/",
-            "history:https://status.example.com/hub",
-            "history:https://old.example.com/",
             "suggested:Contact the Team",
+            "suggested:The Browser Company",
+            "suggested:Air Traffic Control",
+            "suggested:Tips for Organizing",
         ])
-        let contact = suggest("").last
-        XCTAssertEqual(contact?.command, ActionID.contactTheTeam.spec.command, "the Help menu's Contact the Team")
-        XCTAssertEqual(contact?.tile, true)
-        XCTAssertTrue(suggest("").allSatisfy { $0.subtitle == nil }, "rows carry no address under the title")
+        XCTAssertEqual(rows(suggest("", commandBar([], fixtureBar.history))).last, "suggested:Help Center")
+        let contact = suggest("")[3]
+        XCTAssertEqual(contact.command, ActionID.contactTheTeam.spec.command, "the Help menu's Contact the Team")
+        XCTAssertEqual(contact.tile, true)
+        XCTAssertTrue(suggest("").prefix(3).allSatisfy { $0.subtitle == nil }, "tabs carry no address under the title")
     }
 
     /// whitespace-only query behaves like an empty one

@@ -19,8 +19,9 @@ public struct Suggestion: Equatable, Sendable {
     }
     public let kind: Kind
     public let title: String
-    /// Dimmed text after the title, after an em dash: a top domain's domain ("Wikimedia — wikimedia.org"). Other rows
-    /// show their title only (Arc 1.170: P02-c, Q01-a, Q01-b of the 2026-11-03 captures).
+    /// Dimmed text after the title, after an em dash: a top domain's domain ("Wikimedia — wikimedia.org"), the address
+    /// of one of Arc's own entries (P21-a). Tabs and history show their title only (P02-c, Q01-a, Q01-b). The card over
+    /// the URL pill shows titles only (P02-b).
     public let subtitle: String?
     /// SF Symbol drawn when there is no favicon.
     public let symbol: String?
@@ -49,8 +50,8 @@ public enum Suggest {
 
     /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows (Arc shows 5). The page being edited
     /// (`query` is `bar.initialQuery`, the focused tab's URL, untouched): that page, then Arc's own entries (P02-b).
-    /// A blank query: the recent tabs without the focused one (at most 4, recent history fills up to 4), then Contact
-    /// the Team (Q01-a). With `completing` (the domain the input completes the query to, `completion`): that site
+    /// A blank query: the recent tabs without the focused one (at most 4), then Arc's own entries fill the five rows
+    /// (Q01-a: four tabs and Contact the Team; P21-a, a Little window with no tabs: all five entries). With `completing` (the domain the input completes the query to, `completion`): that site
     /// first (its tab's switch row when it is open, else its top-domain row), the typed row, then tabs, history, up to
     /// three more top domains, the engine's suggestions and type travel (P02-c, Q01-b). Otherwise, a non-blank query:
     /// 1. the top hit: the best type-travel result when the query is its title or the start of its title or of one
@@ -96,15 +97,13 @@ public enum Suggest {
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
-            let recent = tabs.prefix(emptyTabCap).map(switchRow)
-            let history = recentHistory(bar.history, excluding: taken).prefix(max(0, emptyTabCap - recent.count)).map(historyRow)
-            return Array((recent + history + [contactRow]).prefix(limit))
+            return Array((tabs.prefix(emptyTabCap).map(switchRow) + arcRows).prefix(limit))
         }
         if let current = bar.tabs.first(where: \.isFocused), text == bar.initialQuery.trimmingCharacters(in: .whitespacesAndNewlines),
            current.url.absoluteString == text {
             let row = Suggestion(kind: .current, title: current.title, subtitle: nil, symbol: "globe", favicon: current.favicon, hint: nil,
                                  command: .commandBar(.submit(text)))
-            return Array(([row] + editingRows).prefix(limit))
+            return Array(([row] + arcRows).prefix(limit))
         }
 
         let selectedEngine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
@@ -229,17 +228,21 @@ public enum Suggest {
     static let contactRow = Suggestion(kind: .suggested, title: ActionID.contactTheTeam.spec.title, subtitle: nil, symbol: "ellipsis.message",
                                        favicon: nil, hint: nil, command: ActionID.contactTheTeam.spec.command, tile: true)
 
-    /// Under the page being edited Arc lists Contact the Team, The Browser Company (its YouTube channel, from Arc's
-    /// starter content), Air Traffic Control and Tips for Organizing (P02-b). Ours open the same channel, the Links
-    /// preferences (Air Traffic Control's pane, also its type-travel trigger) and Getting Started.
-    static let editingRows: [Suggestion] = [
+    /// Arc's own entries, which fill an empty list after the recent tabs and follow the page being edited: Contact
+    /// the Team, The Browser Company (its YouTube channel, from Arc's starter content), Air Traffic Control, Tips for
+    /// Organizing and Help Center (P02-b, Q01-a, P21-a). Arc's last three are its help articles; ours open the Links
+    /// preferences (Air Traffic Control's pane, also its type-travel trigger), Getting Started and the Help menu's
+    /// Visit Help Center.
+    static let arcRows: [Suggestion] = [
         contactRow,
-        Suggestion(kind: .suggested, title: "The Browser Company", subtitle: nil, symbol: "play.rectangle.fill", favicon: nil, hint: nil,
-                   command: .commandBar(.submit("https://www.youtube.com/@TheBrowserCompany")), accent: RGBA(hex: "#FF0033")),
+        Suggestion(kind: .suggested, title: "The Browser Company", subtitle: "youtube.com/@TheBrowserCompany", symbol: "play.rectangle.fill",
+                   favicon: nil, hint: nil, command: .commandBar(.submit("https://www.youtube.com/@TheBrowserCompany")), accent: RGBA(hex: "#FF0033")),
         Suggestion(kind: .suggested, title: "Air Traffic Control", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
                    command: .settings(.openPane(.links))),
         Suggestion(kind: .suggested, title: "Tips for Organizing", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
                    command: ActionID.gettingStarted.spec.command),
+        Suggestion(kind: .suggested, title: "Help Center", subtitle: nil, symbol: "globe", favicon: nil, hint: nil,
+                   command: ActionID.visitHelpCenter.spec.command),
     ]
 
     /// The engine's suggestions that still answer `text`: all of them while they were asked for exactly this text,

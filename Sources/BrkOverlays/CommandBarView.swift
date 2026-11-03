@@ -673,7 +673,8 @@ final class ResultRowView: NSView {
         let title = NSMutableAttributedString(string: suggestion.title, attributes: [
             .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium), .foregroundColor: ink,
         ])
-        if let subtitle = suggestion.subtitle, !subtitle.isEmpty {
+        // Over the URL pill (captions off) rows are titles only, P02-b.
+        if captions, let subtitle = suggestion.subtitle, !subtitle.isEmpty {
             title.append(NSAttributedString(string: " — " + subtitle, attributes: [
                 .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
                 .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
