@@ -19,13 +19,19 @@ import Foundation
 /// - Bold and Italic (NSFontManager's `changeFont:`) and Underline run the editor's formatting commands.
 /// Toggle states are app-wide, start from the system's text settings, and are kept in the data directory.
 @MainActor enum WebTextServices {
-    struct State: Codable, Equatable {
+    struct State: Equatable {
         var quotes = NSSpellChecker.isAutomaticQuoteSubstitutionEnabled
         var dashes = NSSpellChecker.isAutomaticDashSubstitutionEnabled
         var replacement = NSSpellChecker.isAutomaticTextReplacementEnabled
         var links = false
         var correction = NSSpellChecker.isAutomaticSpellingCorrectionEnabled
         var grammar = false
+        var flags: [String: Bool] { ["quotes": quotes, "dashes": dashes, "replacement": replacement, "links": links, "correction": correction, "grammar": grammar] }
+        init() {}
+        init(_ flags: [String: Bool]) {
+            quotes = flags["quotes"] ?? quotes; dashes = flags["dashes"] ?? dashes; replacement = flags["replacement"] ?? replacement
+            links = flags["links"] ?? links; correction = flags["correction"] ?? correction; grammar = flags["grammar"] ?? grammar
+        }
     }
     private static var file: URL? {
         CefRuntime.shared.configuration?.rootCachePath?.deletingLastPathComponent().appendingPathComponent("web-text-services.json")
@@ -34,13 +40,14 @@ import Foundation
     static var state: State {
         get {
             if let cached { return cached }
-            let loaded = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode(State.self, from: $0) } ?? State()
+            let flags = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Bool] }
+            let loaded = flags.map(State.init) ?? State()
             cached = loaded
             return loaded
         }
         set {
             cached = newValue
-            if let file, let data = try? JSONEncoder().encode(newValue) { try? data.write(to: file, options: .atomic) }
+            if let file, let data = try? JSONSerialization.data(withJSONObject: newValue.flags, options: [.sortedKeys]) { try? data.write(to: file, options: .atomic) }
         }
     }
     static let speech = NSSpeechSynthesizer()
@@ -126,7 +133,8 @@ extension EmbeddedSurface {
         """) as? Bool == true
     }
     @discardableResult private func run(_ browser: CefBrowser, command: String, value: String? = nil) async -> Bool {
-        let argument = value.map { String(decoding: (try? JSONEncoder().encode($0)) ?? Data("\"\"".utf8), as: UTF8.self) } ?? "undefined"
+        // A JSON array of one string is a JavaScript array literal; its element is the escaped string.
+        let argument = value.map { String(decoding: (try? JSONSerialization.data(withJSONObject: [$0])) ?? Data("[\"\"]".utf8), as: UTF8.self) + "[0]" } ?? "undefined"
         return await evaluate(browser, "const f=find();if(f.kind==='none')return false;return f.d.execCommand('\(command)',false,\(argument))") as? Bool == true
     }
     private func note(_ entry: String) {
