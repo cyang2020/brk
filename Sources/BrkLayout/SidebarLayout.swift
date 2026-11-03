@@ -11,28 +11,42 @@ import Foundation
 /// each side), favorites tray (insets 8), the space header strip (36, full width), the tab list viewport, and the
 /// dock (50) at the bottom.
 public enum SidebarLayout {
-    /// The list shown in the sidebar. Incognito uses its scratch section in the unpinned list's position;
-    /// the snapshot's saved space and the scratch section's identity remain unchanged.
+    /// The list shown in the sidebar. Incognito and blank windows use their scratch section in the unpinned list's
+    /// position; the snapshot's saved space and the scratch section's identity remain unchanged. A blank window
+    /// (Arc's standalone sidebar) titles its list "This Window", an incognito window "Incognito Tabs".
     public static func space(in snapshot: WindowSnapshot) -> SpaceSnapshot {
         var space = snapshot.space
-        if snapshot.kind == .incognito, let scratch = snapshot.scratch {
-            space.title = ProfileCopy.incognito
+        if snapshot.kind == .incognito || snapshot.kind == .blank, let scratch = snapshot.scratch {
+            space.title = snapshot.kind == .blank ? thisWindowTitle : incognitoTabsTitle
             space.icon = .none
             space.today = scratch
         }
         return space
     }
 
-    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true) -> SidebarFrames {
+    /// The header of a blank window's list (Arc 1.170, the 2026-11-03 capture P20a).
+    public static let thisWindowTitle = "This Window"
+    /// The header of an incognito window's list (Arc 1.170, the 2026-11-03 capture Q03a).
+    public static let incognitoTabsTitle = "Incognito Tabs"
+
+    /// Windows whose sidebar is their own list of tabs (blank and incognito): `compute(thisWindow:)`.
+    public static func listsOwnTabs(_ kind: WindowKind) -> Bool { kind == .blank || kind == .incognito }
+
+    /// `thisWindow` lays out a blank or incognito window's sidebar as Arc does: no favorites tray, no Pinned/Today
+    /// divider and an empty dock (only the Library and + buttons), the header ("This Window", "Incognito Tabs") over
+    /// the window's own tabs.
+    public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true,
+                               thisWindow: Bool = false) -> SidebarFrames {
+        let dock = thisWindow ? [] : dock
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
         let lights = CGPoint(x: frame.minX + w.trafficLightLeft.value, y: frame.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
         let pill = CGRect(x: frame.minX + p.sideInset.value, y: titleRow.maxY + p.topGap.value,
                           width: max(0, frame.width - 2 * p.sideInset.value), height: p.height.value)
         let grid = FavoritesGrid.tiles(count: favorites.tiles.count, width: frame.width)
-        let tray = CGRect(x: frame.minX, y: pill.maxY, width: frame.width, height: grid.tray.height)
+        let tray = CGRect(x: frame.minX, y: pill.maxY, width: frame.width, height: thisWindow ? 0 : grid.tray.height)
         var tiles: [ItemID: CGRect] = [:]
-        for (tile, rect) in zip(favorites.tiles, grid.tiles) { tiles[tile.id] = rect.offsetBy(dx: tray.minX, dy: tray.minY) }
+        if !thisWindow { for (tile, rect) in zip(favorites.tiles, grid.tiles) { tiles[tile.id] = rect.offsetBy(dx: tray.minX, dy: tray.minY) } }
         let dockRect = CGRect(x: frame.minX, y: frame.maxY - Metrics.dock.height.value, width: frame.width, height: Metrics.dock.height.value)
         let cells = DockLayout.cells(count: dock.count, in: dockRect)
         var dockSpaces: [SpaceID: CGRect] = [:]
@@ -40,7 +54,7 @@ public enum SidebarLayout {
         let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: headerVisible ? Metrics.tablist.spaceHeaderHeight.value : 0)
         let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, dockRect.minY - header.maxY))
         return SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
-                             favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width),
+                             favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width, divider: !thisWindow),
                              dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus)
     }
 }
@@ -96,11 +110,11 @@ public enum FavoritesGrid {
 }
 
 /// The tab list: spacer (2), Pinned rows (none while the section is collapsed; a collapsed folder's children are not
-/// laid out), the Pinned/Today divider (16; none while Pinned is empty, as Arc's new space, P24 e), Today's New Tab
-/// row, then Today's rows. Rows are 40 tall on a 41 pitch
-/// (1 pt between rows); a split is one row; `depth` is the folder nesting for the indent.
+/// laid out), the Pinned/Today divider (16; not in a blank window, which has no Pinned, nor while Pinned is empty, as
+/// Arc's new space, P24 e), Today's New Tab row, then Today's rows. Rows are 40 tall on a 41 pitch (1 pt between
+/// rows); a split is one row; `depth` is the folder nesting for the indent.
 public enum TablistLayout {
-    public static func rows(_ space: SpaceSnapshot, width: Double) -> [RowFrame] {
+    public static func rows(_ space: SpaceSnapshot, width: Double, divider: Bool = true) -> [RowFrame] {
         let t = Metrics.tablist
         var out: [RowFrame] = []
         var y = 0.0
@@ -116,7 +130,7 @@ public enum TablistLayout {
         }
         add(.topSpacer, height: t.topSpacerHeight.value)
         if !space.pinned.collapsed || space.pinned.peeked { addRows(space.pinned.rows, depth: 0) }
-        if !space.pinned.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value) }
+        if divider && !space.pinned.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value) }
         add(.newTab, height: t.rowHeight.value)
         addRows(space.today.rows, depth: 0)
         return out

@@ -102,9 +102,11 @@ final class Wave2AppTests: XCTestCase {
         throw XCTSkip("wave 2 contract, F1 or F5 to verify on the display: ShareExport's save panel writes JSON or HTML by extension (no headless save panel)")
     }
 
-    /// a .little window is hosted by LittleWindowController: an NSPanel whose page area is Metrics.littleArc.defaultSize
-    /// with the hint strip under it, titled "Little <app> — <page>", with an "Open in" pull-down listing every space;
-    /// a second Little Arc cascades by Metrics.littleArc.cascade; the standard window stays a BrowserWindow
+    /// a .little window is hosted by LittleWindowController: an NSPanel of Metrics.littleArc.defaultSize with a page,
+    /// its header strip (host pill, "Open in <space>") over the page, titled "Little <app> — <page>", whose chevron opens
+    /// a picker listing every space; a second Little Arc cascades by Metrics.littleArc.cascade; "Open in" moves the tab
+    /// out and the panel goes; without a page the panel is the command bar alone at Metrics.littleArc.commandBarSize;
+    /// the standard window stays a BrowserWindow
     func test_littleWindowControllerIsAPanel() throws {
         let h = Harness()
         defer { h.cleanUp() }
@@ -115,21 +117,24 @@ final class Wave2AppTests: XCTestCase {
         defer { h.store.windowController(little.id)?.window.orderOut(nil) }
         let controller = try XCTUnwrap(h.store.windowController(little.id) as? LittleWindowController)
         XCTAssertTrue(controller.window is NSPanel)
-        XCTAssertEqual(controller.root.bounds.size, Metrics.littleArc.defaultSize.value, "the page area is Arc's default size")
-        XCTAssertEqual(controller.window.contentView?.bounds.height, Metrics.littleArc.defaultSize.value.height + Metrics.peek.hintHeight.value)
+        XCTAssertEqual(controller.root.bounds.size, Metrics.littleArc.defaultSize.value, "a Little Arc with a page is Arc's default size")
         XCTAssertEqual(controller.window.title, "Little \(Product.name) — example.com/little", "the page has no title yet, so its display URL")
-        XCTAssertFalse(controller.hint.isHiddenOrHasHiddenAncestor)
-        XCTAssertEqual(controller.hint.accessibilityIdentifier(), "little-hint")
-        XCTAssertEqual(controller.hint.stringValue, LittleArcCopy.hint)
+        XCTAssertFalse(controller.header.isHiddenOrHasHiddenAncestor)
+        XCTAssertEqual(controller.header.accessibilityIdentifier(), "little-hint")
+        XCTAssertEqual(controller.header.frame.height, Metrics.littleArc.headerHeight.value)
         let dock = h.store.snapshot.windows[little.id]!.dock
-        XCTAssertEqual(controller.openIn.menu?.items.first?.title, "Open in \(dock[0].title)")
-        XCTAssertEqual(controller.openIn.menu?.items.dropFirst().filter { !$0.isSeparatorItem }.map(\.title), dock.map(\.title) + [OpenInMenu.currentSpaceTitle])
-        XCTAssertTrue(controller.openIn.isEnabled)
+        XCTAssertEqual(controller.header.openIn.accessibilityLabel(), OpenInMenu.buttonTitle(space: dock[0].title))
+        XCTAssertTrue(controller.picker.isHidden)
+        controller.header.openIn.onChoose?()
+        XCTAssertFalse(controller.picker.isHidden, "the chevron opens the space picker")
+        XCTAssertEqual(controller.picker.subviews.compactMap { $0.accessibilityLabel() }.filter { label in dock.contains { $0.title == label } }, dock.map(\.title))
         XCTAssertTrue(controller.window.isVisible)
-        // The engine was asked to focus the Little Arc's page (its surface sits in the panel's root).
+        // The engine was asked to focus the Little Arc's page (its surface sits in the panel's root, under the header).
         let page = PageID(window: little.id, item: try XCTUnwrap(little.scratch?.rows.first?.id))
         XCTAssertEqual(h.engine.focused.last, page)
-        XCTAssertTrue(try XCTUnwrap(h.engine.surface(for: page)).isDescendant(of: controller.root))
+        let surface = try XCTUnwrap(h.engine.surface(for: page))
+        XCTAssertTrue(surface.isDescendant(of: controller.root))
+        XCTAssertEqual(controller.root.convert(surface.bounds, from: surface).minY, Metrics.littleArc.headerHeight.value, "the page starts under the header")
         // The reducer reports the first panel's frame; the next Little Arc cascades from it.
         let first = controller.window.frame
         h.store.dispatch(.user(h.window, .window(.newLittle(URL(string: "https://example.com/second")!))))
@@ -137,12 +142,19 @@ final class Wave2AppTests: XCTestCase {
         defer { h.store.windowController(second.id)?.window.orderOut(nil) }
         let step = Metrics.littleArc.cascade.value
         XCTAssertEqual(h.store.windowController(second.id)?.window.frame, first.offsetBy(dx: step, dy: -step))
-        // Choosing a menu entry moves the tab out and the panel goes.
-        let item = try XCTUnwrap(controller.openIn.menu?.items.last)
-        _ = (item.target as AnyObject).perform(item.action!, with: item)
-        XCTAssertNil(h.store.snapshot.windows[little.id], "Open in current Space closed the Little Arc")
+        // "Open in <space>" moves the tab out and the panel goes.
+        controller.header.openIn.onOpen?()
+        XCTAssertNil(h.store.snapshot.windows[little.id], "Open in closed the Little Arc")
         XCTAssertNil(h.store.windowController(little.id))
         XCTAssertEqual(h.store.snapshot.windows[h.window]?.space.today.rows.count, 2, "the tab is in the standard window's Today")
+        // Opt+Cmd+N: no page yet, so the panel is the command bar alone.
+        h.store.dispatch(.user(h.window, .window(.newLittle(nil))))
+        let empty = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .little && $0.id != second.id })
+        defer { h.store.windowController(empty.id)?.window.orderOut(nil) }
+        let bar = try XCTUnwrap(h.store.windowController(empty.id) as? LittleWindowController)
+        XCTAssertEqual(bar.root.bounds.size, Metrics.littleArc.commandBarSize.value)
+        XCTAssertTrue(bar.header.isHidden)
+        XCTAssertFalse(bar.closeButton.isHidden)
     }
 
     /// a key CEF delivers from the peeked page routes to the window whose Peek shows it (the page is in the overlay,

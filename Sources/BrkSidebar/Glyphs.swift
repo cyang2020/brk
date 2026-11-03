@@ -11,7 +11,7 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case siteControls, globe, chevronDown, chevronRight, speaker, speakerMuted, search
+    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted
 
     var symbol: String {
         switch self {
