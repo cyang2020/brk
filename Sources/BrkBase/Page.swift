@@ -224,10 +224,14 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var linkPreviewTitle: String? = nil
     public var linkPreviewURL: URL? = nil
     public var keyReceipts: [PageKeyReceipt]? = nil
+    /// Edit-menu services the page's surface carried out ("spelling:<word>", "format:bold", "speak:true:<text>").
+    public var textServices: [String]? = nil
     public var hasDevTools: Bool? = nil
     public var auxiliaryBrowsers: [Int]? = nil
     public var auxiliaryWindows: [Int]? = nil
     public var popupRequests: [PageOpenMetadata]? = nil
+    /// Dialogs and downloads native children (popups) forwarded to this page ("dialog:alert:<window>:<message>").
+    public var auxiliaryEvents: [String]? = nil
     public var developerResult: String? = nil
     public var castAvailable: Bool? = nil
     public var castSinkNotifications: Int? = nil

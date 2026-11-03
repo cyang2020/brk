@@ -19,6 +19,13 @@ extension BrowserClient {
         while let parent = root.auxiliaryParent { root = parent }
         return root
     }
+    /// The delegate for the calls a native child forwards to the page that owns it: downloads and JavaScript
+    /// dialogs. A child has no delegate of its own; the owner receives the child as the browser argument, so it can
+    /// attribute the download to itself and present the dialog on the child's window. Other callbacks (title,
+    /// loading, keys) stay the child's own and are not forwarded.
+    var forwardingDelegate: CefBrowserDelegate? {
+        browser?.delegate ?? (auxiliaryParent == nil ? nil : auxiliaryRoot.browser?.delegate)
+    }
     var auxiliaryCount: Int { nativeAuxiliaries.values.reduce(0) { $0 + 1 + $1.auxiliaryCount } }
     var auxiliaryBrowsers: [(browser: CefBrowser, kind: CefAuxiliaryKind)] {
         nativeAuxiliaries.values.flatMap { child in

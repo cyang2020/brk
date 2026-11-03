@@ -23,6 +23,11 @@ final class EmbeddedSurface: PageSurfaceView {
     private var observedWindow: NSWindow?
     private var nativeFullscreenOwnsFrame = false
     var editableSelection = false
+    /// The focused element of the page is a text field or an editing host / an editing host (rich text).
+    var editableFocused = false
+    var richEditableFocused = false
+    /// Edit-menu services carried out on this page (EmbeddedSurface+TextServices.swift), newest last.
+    var textServiceLog: [String] = []
     var editingMenuTransport: CefDevTools?
     override var editingMenuResponder: NSResponder? { editingBrowser == nil ? nil : self }
     override func prepareEditingMenu() async { await refreshEditingSupport() }

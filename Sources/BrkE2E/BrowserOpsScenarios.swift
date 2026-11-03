@@ -10,7 +10,7 @@ enum BrowserOpsScenarios {
         Scenario("BO3", "page source, DevTools panels and auxiliary closure with the owning page", cefOnly: "native developer windows", developer),
         Scenario("BO4", "DOM/video and native fullscreen, overlay-first Escape and focus return", cefOnly: "native fullscreen", fullscreen),
         Scenario("BO4N", "isolated native fullscreen shortcut and Escape", cefOnly: "native fullscreen", nativeFullscreen),
-        Scenario("BO5", "Default-profile Cast reports its shutdown limitation without starting the unsafe router", cefOnly: "CEF media router", cast),
+        Scenario("BO5", "Default-profile Cast enumerates through the owned receiver-service context and quits cleanly", cefOnly: "CEF media router", cast),
         Scenario("BO5C", "custom-profile media-router enumeration and source-close drain", cefOnly: "CEF media router context lifetime", castCustomProfile),
         Scenario("BO6", "transformations execute in native fields and web editing contexts", cefOnly: "real responder chain", transformations),
     ]
@@ -218,14 +218,8 @@ enum BrowserOpsScenarios {
         defer { try? record(app, "media-router", facts(app, page)) }
         try app.perform(.menuAction("Cast"))
         try app.waitUntil("Cast panel reports availability") { try facts(app, page).castAvailable != nil }
-        if try facts(app, page).castAvailable == false {
-            try expect(app.scenarioID == "BO5", "Owned profile unexpectedly lacks a router")
-            try expect(try facts(app, page).castError?.contains("cannot close") == true, "Missing Default-profile Cast explanation")
-            try expect(try facts(app, page).castSinkNotifications == nil, "Unsafe router was initialized")
-            try app.recordWindows("cast-unavailable")
-            app.note("Default-profile Cast explicitly unavailable before get_media_router; pinned CEF shutdown trap retained in prior runs. This is a partial feature, not receiver enumeration.")
-            return
-        }
+        let availability = try facts(app, page)
+        try expect(availability.castAvailable == true, "Cast has no receiver service: \(availability.castError ?? "no reason")")
         try app.waitUntil("real media-router enumeration", timeout: 15) {
             let f = try facts(app, page)
             return (f.castSinkNotifications ?? 0) > 0 && (f.castRouteNotifications ?? 0) > 0 && f.castSourceSupported != nil
@@ -233,7 +227,7 @@ enum BrowserOpsScenarios {
         let result = try facts(app, page)
         try expect(result.castSourceSupported == false, "The pinned router unexpectedly accepted arbitrary HTTP page mirroring")
         try app.recordWindows("cast-receivers")
-        app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []). GetSource rejected HTTP page mirroring. No native route creation or termination is claimed without a receiver. ABI callback/termination ownership is covered separately by raw unit fixtures.")
+        app.note("Real request-context sink/route enumeration returned \(result.castSinks ?? []) (\(app.scenarioID == "BO5" ? "Default profile, owned receiver-service context" : "custom profile context")). GetSource rejected HTTP page mirroring. No native route creation or termination is claimed without a receiver; the clean quit after the scenario is the shutdown check. ABI callback/termination ownership is covered separately by raw unit fixtures.")
     }
     @Sendable static func castCustomProfile(_ app: AppUnderTest) throws {
         try app.dispatch(.profile(.create(name: "Cast owner", icon: nil)))

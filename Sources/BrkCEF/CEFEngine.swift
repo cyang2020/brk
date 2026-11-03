@@ -56,6 +56,12 @@ public final class CEFEngine: WebEngine {
     private var audioLoop: Task<Void, Never>?
     /// Persistent profiles Chromium is loading or has loaded (`ProfileLoader`); a page in one waits for `ready`.
     private var loaders: [ProfileID: ProfileLoader] = [:]
+    /// Cast receiver discovery for Default-profile pages (`PageCast`): an owned persistent context of its own,
+    /// `<rootCachePath>/Profile-brk-cast-receivers`, created on the first Cast and released with the profiles at
+    /// shutdown. Nil context until Chromium reports it initialized.
+    private var castService: ProfileLoader?
+    private var castServiceReady = false
+    private var castServiceWaiters: [@MainActor (UnsafeMutablePointer<cef_request_context_t>?) -> Void] = []
     /// The last `reconcile` input, replayed when a profile finishes loading.
     var wanted: [PageSpec] = []
     private let reconciliation = PageReconciliation()
@@ -321,7 +327,12 @@ public final class CEFEngine: WebEngine {
             Task { @MainActor [weak self, weak live] in
                 var error: String?
                 do {
-                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: request.userInitiated)
+                    // Automatic entry (Arc's "auto picture in picture" when the user leaves a playing video tab) is
+                    // the browser acting on that user's tab switch, as Chromium's own automatic entry is: it runs
+                    // with the browser's gesture, so it no longer depends on the page's transient activation, which
+                    // expires five seconds after the user last touched the page. The page itself never gains one.
+                    let gesture = request.userInitiated || request.operation == .enterPictureInPicture
+                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: gesture)
                     if !request.userInitiated, request.operation == .enterPictureInPicture, let self, let live,
                        !self.isLive(live) || live.readyDocument != request.document || live.websitePolicy.visible {
                         try? await observer.control(target: target, tab: tab, player: request.player, operation: .exitPictureInPicture, userInitiated: false)
@@ -471,6 +482,24 @@ public final class CEFEngine: WebEngine {
         return false
     }
 
+    /// The receiver-service request context, after Chromium has initialized it; nil when the engine is not running.
+    func castServiceContext(_ done: @escaping @MainActor (UnsafeMutablePointer<cef_request_context_t>?) -> Void) {
+        guard phase == .running, let root = CefRuntime.shared.configuration?.rootCachePath else { done(nil); return }
+        if castServiceReady { done(castService?.context); return }
+        castServiceWaiters.append(done)
+        guard castService == nil else { return }
+        let path = root.appendingPathComponent(ProfileDirectories.directoryName(ProfileID("brk-cast-receivers")), isDirectory: true)
+        castService = ProfileLoader(cachePath: path) { [weak self] in
+            // The readiness callback can arrive inside the loader's initializer; finish after it is installed.
+            Task { @MainActor [weak self] in
+                guard let self, self.castService != nil else { return }
+                self.castServiceReady = true
+                let waiters = self.castServiceWaiters; self.castServiceWaiters = []
+                for waiter in waiters { waiter(self.phase == .running ? self.castService?.context : nil) }
+            }
+        }
+    }
+
     func dataStore(for profile: ProfileID) async throws -> ProfileDataStore {
         let context = BrowsingContext.profile(profile)
         let deadline = ProcessInfo.processInfo.systemUptime + 15
@@ -564,6 +593,9 @@ public final class CEFEngine: WebEngine {
         profiles.removeAll()
         for loader in loaders.values { loader.release() }
         loaders.removeAll()
+        let castWaiters = castServiceWaiters; castServiceWaiters = []
+        for waiter in castWaiters { waiter(nil) }
+        castService?.release(); castService = nil; castServiceReady = false
         HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
         CefRuntime.shared.shutdown()

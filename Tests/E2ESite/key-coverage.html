@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>kc:0</title>
+<style>body{font:15px -apple-system,sans-serif;margin:24px;min-height:1600px}</style></head>
+<body><p>Key coverage (R3-7). Every key-down that reaches this document is counted.</p>
+<script>
+// The title is the report to the e2e runner (PB1): "kc:<count>:<chord>[:repeat]", count = key-downs this document
+// received, chord in the page's own order (ctrl, alt, shift, cmd, then KeyboardEvent.code). With ?swallow=1 every
+// key-down is preventDefault()ed, so the page consumes it. No editable element has focus, so editing never takes a
+// chord the page did not choose to take.
+var swallow = location.search.indexOf('swallow=1') >= 0, count = 0;
+window.__kc = [];
+window.addEventListener('keydown', function (e) {
+  if (['Control', 'Alt', 'Shift', 'Meta'].indexOf(e.key) >= 0) return;
+  var c = (e.ctrlKey ? 'ctrl+' : '') + (e.altKey ? 'alt+' : '') + (e.shiftKey ? 'shift+' : '') + (e.metaKey ? 'cmd+' : '') + e.code;
+  count++; window.__kc.push({chord: c, repeat: e.repeat});
+  if (swallow) e.preventDefault();
+  document.title = 'kc:' + count + ':' + c + (e.repeat ? ':repeat' : '');
+}, true);
+</script></body></html>

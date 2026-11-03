@@ -42,6 +42,14 @@ final class EventInjector {
         try sendKey(code: chord.key.code, flags: chord.modifiers, text: nil, in: window)
     }
 
+    /// One key-down, `repeats` auto-repeat key-downs (the keyboard's autorepeat field set, as a held key sends
+    /// them), one key-up.
+    func pressHeld(_ chord: KeyChord, repeats: Int, in window: NSWindow) throws {
+        try deliver(try event(code: chord.key.code, down: true, flags: chord.modifiers), to: window)
+        for _ in 0..<repeats { try deliver(try event(code: chord.key.code, down: true, flags: chord.modifiers, autorepeat: true), to: window) }
+        try deliver(try event(code: chord.key.code, down: false, flags: chord.modifiers), to: window)
+    }
+
     /// Modifier down (one flagsChanged per modifier, as a keyboard sends them), `times` presses, modifiers up.
     func hold(_ held: Modifiers, chord: KeyChord, times: Int, in window: NSWindow) throws {
         let order: [(Modifiers, UInt16)] = [(.control, 59), (.option, 58), (.shift, 56), (.command, 55)]
@@ -71,8 +79,9 @@ final class EventInjector {
         try deliver(try event(code: code, down: false, flags: flags, text: text), to: window)
     }
 
-    private func event(code: UInt16, down: Bool, flags: Modifiers, text: String? = nil, type: CGEventType? = nil) throws -> NSEvent {
+    private func event(code: UInt16, down: Bool, flags: Modifiers, text: String? = nil, type: CGEventType? = nil, autorepeat: Bool = false) throws -> NSEvent {
         guard let cg = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { throw InjectionError("CGEvent for key \(code)") }
+        if autorepeat { cg.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
         cg.flags = CGEventFlags(rawValue: UInt64(flags.rawValue))
         // A CGEvent from a private source has timestamp 0; the press id is minted from the timestamp, so every press
         // would look like the same press to the duplicate guard. Real events carry uptime in nanoseconds.

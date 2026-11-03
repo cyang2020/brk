@@ -33,6 +33,20 @@ extension Work {
             effects.append(.page(page,.media(MediaControl(document:document,player:player,operation:.exitPictureInPicture,userInitiated:false))))
         }
     }
+    /// A page in document fullscreen that leaves the screen (another tab, Space, or its tab closed) leaves
+    /// fullscreen, and its window returns to how it was before the page asked, as Chrome does when a fullscreen tab
+    /// is deactivated. Without this the window stayed fullscreen around another tab and the hidden page kept its
+    /// fullscreen element.
+    mutating func reconcileFullscreen(from before: AppState) {
+        let visible = state.visiblePages()
+        for page in before.visiblePages().subtracting(visible) where before.session.live[page]?.fullscreen == true {
+            if state.session.live[page] != nil {
+                state.session.live[page]?.fullscreen = false
+                effects.append(.page(page, .exitFullscreen))
+            }
+            if state.doc.windows[page.window] != nil { effects.append(.window(page.window, .pageFullScreen(false))) }
+        }
+    }
     private func permitsAutomaticPiP(_ page: PageID) -> Bool {
         guard state.doc.settings.advanced.autoPictureInPicture, case .profile = state.session.live[page]?.requestContext,
               let url = state.address(of:page.item,in:page.window,for:.savedDocument), let origin = SiteOrigin(url) else { return false }

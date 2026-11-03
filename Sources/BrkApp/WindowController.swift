@@ -113,6 +113,25 @@ public class WindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Enter/Exit Full Screen while AppKit animates a transition: AppKit drops a toggle sent mid-animation, so a
+    /// second press would be lost and the window would end where the user did not ask. The presses are counted and
+    /// an odd count is applied once the transition finishes.
+    private var queuedToggles = 0
+    func toggleFullScreen() {
+        guard !pageFullscreen.isTransitioning else { queuedToggles += 1; tracePageFullscreen("queued toggle \(queuedToggles)"); return }
+        window.toggleFullScreen(nil)
+    }
+    private func applyQueuedToggles() {
+        guard queuedToggles > 0 else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.pageFullscreen.isTransitioning, self.queuedToggles > 0 else { return }
+            let odd = self.queuedToggles % 2 == 1
+            self.queuedToggles = 0
+            self.tracePageFullscreen("apply queued toggle \(odd)")
+            if odd { self.window.toggleFullScreen(nil) }
+        }
+    }
+
     func setPageFullScreen(_ on: Bool) {
         tracePageFullscreen("page \(on)")
         pageFullscreen.pageChanged(on, nativeFullscreen: window.styleMask.contains(.fullScreen))
@@ -222,12 +241,13 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
     public func windowDidEnterFullScreen(_ notification: Notification) {
         tracePageFullscreen("did enter")
-        pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen()
+        pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen(); applyQueuedToggles()
     }
     public func windowDidFailToEnterFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
     public func windowDidFailToExitFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
     private func fullscreenTransitionFailed() {
         tracePageFullscreen("failed")
+        defer { applyQueuedToggles() }
         if pageFullscreen.nativeFailed(nativeFullscreen: window.styleMask.contains(.fullScreen)) {
             for pane in lastSnapshot?.content.presentedPanes ?? [] {
                 if case .page(let page) = pane.content { engine.perform(.exitFullscreen, on: page) }
@@ -242,6 +262,7 @@ public class WindowController: NSObject, NSWindowDelegate {
             }
         }
         applyPageFullscreen()
+        applyQueuedToggles()
         window.level = lastSnapshot?.stayOnTop == true ? .floating : .normal
     }
 

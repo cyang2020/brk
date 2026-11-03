@@ -30,6 +30,10 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case view(window: WindowID?)
     /// Activate a specific native window before physical input.
     case activate(window: WindowID)
+    /// Makes the app the active application and the window key, for input posted through the window server (a
+    /// physical key or click); `activate` alone keeps whatever app is frontmost. Replies with the real outcome:
+    /// `.native` of the window, whose `isKey` is true only when the app became active.
+    case activateApp(window: WindowID)
     /// Operate actual app-owned UI; available only on the opt-in control socket.
     case chooseOutputFixture(window: WindowID?, path: String)
     case cancelCurrentOutput(window: WindowID?)
@@ -40,6 +44,10 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case cancelPrintPanel(window: WindowID?)
     case screenshotSheet(window: WindowID?, path: String)
     case menuAction(String)
+    /// Sends `selector` to the first responder chain of the key window (nil target), from a text field holding
+    /// `text`: what an AppKit panel button does (the spelling panel's Change sends `changeSpelling:` from the
+    /// control whose selected cell holds the guess; the Substitutions panel's Replace sends `checkTextInDocument:`).
+    case sendAction(selector: String, text: String?)
     case pasteboard(String?)
     case readPasteboard
     /// Computed frames, actual AppKit frames by view identifier, page facts, focus. See `NativeFacts`.
@@ -53,6 +61,8 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// (no Accessibility permission), so they take the same path a real press takes: into Chromium and CEF's key
     /// handler when a page has focus, into the menu when a native view has focus.
     case press(chord: String)
+    /// One key-down of `chord`, `repeats` auto-repeat key-downs (a held key), one key-up, in process like `press`.
+    case pressHeld(chord: String, repeats: Int)
     /// Holds `modifiers` down, presses `chord` `times` times, then releases (Ctrl+Tab cycling, finding 6).
     case hold(modifiers: String, chord: String, times: Int)
     /// Types text into the first responder (command bar, rename field, or a focused page field).
@@ -70,6 +80,10 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case pointerDrag(from: CGPoint, to: CGPoint, cancel: Bool)
     case scrollGesture(at: CGPoint, horizontal: Double, vertical: Double, cancel: Bool)
     case sheetButton(title: String)
+    /// Makes this app's window `number` key (a DevTools or popup window), so `press` and `type` go to it.
+    case focusAppWindow(number: Int)
+    /// Clicks a button of the sheet attached to this app's window `number` (a popup's dialog, for example).
+    case windowSheetButton(number: Int, title: String)
     /// Select an owned fixture directory in the actual native folder panel.
     case selectSheetDirectory(path: String)
     /// CGWindowListCreateImage of the window (works without screen recording permission, spike unknown 8), PNG.

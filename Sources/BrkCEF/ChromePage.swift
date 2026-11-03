@@ -26,9 +26,13 @@ final class ChromePage: CefBrowserDelegate {
     var developerResult: String?
     var toolsBrowser: CefBrowser?
     var requestedDeveloperPanel: String?
+    /// Inspect Elements is waiting for DevTools to enter its element picker.
+    var inspectPickRequested = false
     var developerPanelTask: Task<Void, Never>?
     var developerTransport: CefDevTools?
     private var popupRequests: [PageOpenMetadata] = []
+    /// Dialogs and downloads that native children forwarded to this page, for the e2e harness.
+    var auxiliaryEvents: [String] = []
     var cast: PageCast?
     var drainingCasts: [PageCast] = []
     private func recordKey(_ receipt: PageKeyReceipt) {
@@ -231,17 +235,19 @@ final class ChromePage: CefBrowserDelegate {
         facts.websitePolicyError = websiteError
         facts.boostError = boostError
         facts.keyReceipts = keyReceipts
+        facts.textServices = surface.textServiceLog
         facts.hasDevTools = browser.hasDevTools
         facts.auxiliaryBrowsers = browser.nativeAuxiliaries.map { Int($0.browser.id) }
         facts.auxiliaryWindows = browser.nativeAuxiliaries.compactMap { $0.browser.nativeView?.window?.windowNumber }
         facts.popupRequests = popupRequests
+        facts.auxiliaryEvents = auxiliaryEvents
         facts.developerResult = developerResult
         facts.castSinkNotifications = cast?.router?.sinkNotifications
         facts.castRouteNotifications = cast?.router?.routeNotifications
         facts.castSinks = cast?.router?.sinks.map(\.name)
         facts.castRoutes = cast?.router?.routes
         facts.castResult = cast?.router?.lastResult
-        facts.castAvailable = cast.map { $0.router != nil }
+        facts.castAvailable = cast.flatMap { $0.startingService ? nil : $0.router != nil }
         facts.castError = cast?.unavailableReason ?? cast?.router?.lastError
         facts.castSourceSupported = cast?.router?.sourceSupported
         if let number = cast?.visibleWindowNumber { facts.auxiliaryWindows?.append(number) }
@@ -441,6 +447,11 @@ final class ChromePage: CefBrowserDelegate {
         popupRequests.append(openMetadata(request))
         if popupRequests.count > 16 { popupRequests.removeFirst() }
         let namedWindow = !request.frameName.isEmpty && !["_blank", "_self", "_parent", "_top"].contains(request.frameName.lowercased())
+        // A popup (window features: size or position) from the page in front opens as its own native window, as
+        // Arc's popups do: the child keeps `window.opener` and the requested geometry, and its downloads and
+        // dialogs come back to this page. A hidden source has no window to anchor one; its popup becomes a tab.
+        let onScreen = surface.window?.isVisible == true && !surface.isHiddenOrHasHiddenAncestor
+        if request.disposition == .newPopup, onScreen, request.targetURL.map({ !$0.absoluteString.isEmpty }) == true { return .allowNativePopup }
         if !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
            url.absoluteString != "about:blank", [.newForegroundTab, .newBackgroundTab, .newPopup].contains(request.disposition) {
             engine.pageDidEmit(self, .openRequested(url, request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,
@@ -448,6 +459,30 @@ final class ChromePage: CefBrowserDelegate {
             return .handled
         }
         return .allowNativePopup
+    }
+
+    /// A JavaScript dialog of a native child this page opened (forwarded by CefKit, `b` is the child): a sheet on
+    /// the child's own window, so it neither blocks the app nor appears over the opener. The page's own dialogs
+    /// keep CefKit's presenter.
+    func browser(_ b: CefBrowser, runJSDialog dialog: CefJSDialog, callback: CefJSDialogCallback) -> Bool {
+        guard b !== browser, engine.isLive(self), let window = b.nativeView?.window, window.isVisible else { return false }
+        let alert = NSAlert()
+        alert.messageText = dialog.origin
+        alert.informativeText = dialog.message
+        alert.addButton(withTitle: "OK")
+        var field: NSTextField?
+        if dialog.kind != .alert { alert.addButton(withTitle: "Cancel") }
+        if dialog.kind == .prompt {
+            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24)); input.stringValue = dialog.defaultPromptText
+            alert.accessoryView = input; field = input
+        }
+        auxiliaryEvents.append("dialog:\(dialog.kind):\(window.windowNumber):" + dialog.message)
+        alert.beginSheetModal(for: window) { [weak self] response in
+            let ok = response == .alertFirstButtonReturn
+            self?.auxiliaryEvents.append("dialog-answered:\(ok)")
+            callback.continue(success: ok, userInput: ok ? field?.stringValue : nil)
+        }
+        return true
     }
 
     func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {
@@ -499,6 +534,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback) {
         guard !isAIReader else { decision.resolve(nil); return }
+        if b !== browser { auxiliaryEvents.append("download:" + suggestedName) }
         engine.download(self, item: download, name: suggestedName, decision: decision)
     }
     func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?) {
@@ -511,9 +547,14 @@ final class ChromePage: CefBrowserDelegate {
     /// `PressCorrelator`. Modifier-only keys and character events are not routed (Control reaches BrkApp as
     /// `WindowEvent.modifiersChanged` from the window's `flagsChanged` events).
     func browser(_ b: CefBrowser, preKeyEvent event: CefKeyEvent) -> CefKeyDisposition { route(event, before: true) }
+    /// Chrome's own accelerators (CEF `OnChromeCommand`) reach a page only for chords the table left unbound or
+    /// that both the app and the page declined. Arc has no Chrome tab strip, toolbar, avatar menu, tab search or
+    /// downloads page for those commands to act on, so they are consumed here: the key either belongs to the table
+    /// (and routing already dispatched it) or to the page. The receipt keeps the command id as evidence.
     func browser(_ b: CefBrowser, chromeCommand id: Int, disposition: CefWindowOpenDisposition) -> Bool {
-        recordKey(PageKeyReceipt(stage: "chrome", handled: false, chromeCommand: id))
-        return false
+        recordKey(PageKeyReceipt(stage: "chrome", handled: true, chromeCommand: id))
+        log.notice("cef.chrome-command page \(self.id.description, privacy: .public) id=\(id, privacy: .public) consumed")
+        return true
     }
     func browser(_ b: CefBrowser, handleKeyEvent event: CefKeyEvent, isBeforePage: Bool) -> Bool { route(event, before: isBeforePage).handled }
     private func route(_ event: CefKeyEvent, before isBeforePage: Bool) -> CefKeyDisposition {
@@ -538,7 +579,7 @@ final class ChromePage: CefBrowserDelegate {
         if isBeforePage { presses.beforePage(press, id: pressID, handled: handled, at: now) }
         if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
             recordKey(PageKeyReceipt(stage: isBeforePage ? "pre" : "post", chord: press.chord.description,
-                                     press: pressID.raw, handled: handled, shortcut: result.shortcut))
+                                     press: pressID.raw, handled: handled, shortcut: result.shortcut, action: result.action, isRepeat: press.isRepeat))
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
         }
         return CefKeyDisposition(handled: handled, shortcutIntent: handled ? .unchanged : (result.shortcut ? .enabled : .disabled))

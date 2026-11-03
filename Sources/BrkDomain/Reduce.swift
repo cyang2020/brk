@@ -24,6 +24,8 @@ public struct Transition: Sendable {
     /// For `Input.key`: the key was an app shortcut and was consumed. CEF's key handler returns this.
     public let keyShortcut: Bool
     public let keyHandled: Bool
+    /// For `Input.key`: the table action the key dispatched.
+    public var keyAction: ActionID? = nil
     /// This transition must reach the local atomic checkpoint before publication. Failure leaves its state unapplied.
     public var checkpointFailure: SystemEvent? = nil
 }
@@ -80,6 +82,7 @@ struct Work {
     var effects: [Effect] = []
     var keyShortcut = false
     var keyHandled = false
+    var keyAction: ActionID?
     /// Tabs on screen right before the first rule of this input ran (after the cycle commit and the overlay rule).
     /// Nil until a command or event starts; `finish` stamps the difference.
     private var screenBefore: Set<ItemID>?
@@ -272,6 +275,7 @@ struct Work {
         reconcileAI(from: input)
         reconcileCaptures(from: input)
         reconcilePictureInPicture(from: input)
+        reconcileFullscreen(from: input)
         if let archived = state.doc.archive.first, !input.doc.archive.contains(where: { $0.id == archived.id }) { playSound(.tabsArchived) }
         captureSidebarChanges()
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
@@ -281,6 +285,7 @@ struct Work {
         }
         let changed = state != input
         if changed { state.session.rev += 1 }
-        return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyShortcut: keyShortcut, keyHandled: keyHandled)
+        return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyShortcut: keyShortcut, keyHandled: keyHandled,
+                          keyAction: keyAction)
     }
 }

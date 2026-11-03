@@ -38,6 +38,12 @@ import Foundation
         self.init(taking: router)
     }
 
+    /// The router of a request context the caller owns (borrowed: the context keeps its own reference).
+    public convenience init?(context: UnsafeMutablePointer<cef_request_context_t>) {
+        guard let router = context.pointee.get_media_router?(context, nil) else { return nil }
+        self.init(taking: router)
+    }
+
     init(taking raw: UnsafeMutablePointer<cef_media_router_t>) {
         self.raw = raw
         let observer = cefAllocate(cef_media_observer_t.self, owner: Observer(self))

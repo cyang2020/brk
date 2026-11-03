@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Popup child</title></head>
+<body style="font:18px -apple-system,sans-serif;margin:20px">Popup child (R3-7 PB5)
+<script>
+// Reports what the popup got: its opener and its geometry (screen position, outer and inner size).
+setTimeout(() => {
+  const value = {opener: !!window.opener && window.opener !== window, sx: screenX, sy: screenY, ow: outerWidth, oh: outerHeight, iw: innerWidth, ih: innerHeight};
+  if (window.opener) window.opener.postMessage({kind: 'popup-report', value}, location.origin);
+  document.title = 'child:' + JSON.stringify(value);
+}, 300);
+</script></body></html>
