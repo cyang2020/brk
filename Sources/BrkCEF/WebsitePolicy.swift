@@ -44,10 +44,12 @@ extension ChromePage {
 
     func applyWebsitePolicy(_ policy: WebsitePolicy) {
         let changed = websitePolicy != policy
-        let permissionsChanged = websitePolicy.preferences.rules.mapValues(\.permissions) != policy.preferences.rules.mapValues(\.permissions)
-            || websitePolicy.preferences.embeddedPermissions != policy.preferences.embeddedPermissions
+        let before = websitePolicy.preferences
         websitePolicy = policy
-        if permissionsChanged, let origin = browser.url.flatMap(SiteOrigin.init) { syncPermissions(top: origin) }
+        if let origin = browser.url.flatMap(SiteOrigin.init) {
+            permissionSync += Self.changedPermissions(before, policy.preferences, top: origin)
+            flushPermissionSync()
+        }
         configureRequestFilter(browser.url)
         if changed || (frozen && websiteOperationProtected()) { refreshWebsitePolicy() }
     }
@@ -234,6 +236,8 @@ extension ChromePage {
             permissionGrants.append((prompt.target.document, prompt.requestingOrigin, prompt.target.origin, prompt.capabilities))
         }
         owner.callback.resolve(valid && decision == .allow ? .allow : decision == .ask ? .dismiss : .deny)
+        // A choice remembered with this answer reached the policy before the answer; write it once Chromium has the answer.
+        Task { @MainActor [weak self] in self?.flushPermissionSync() }
     }
 
     /// Chromium stores every request Brk accepts or blocks. When the document that was allowed ends, its grants go back
@@ -244,15 +248,33 @@ extension ChromePage {
         for grant in ended { pushPermissions(grant.capabilities, requesting: grant.requesting, top: grant.top) }
     }
 
-    /// Writes Brk's remembered choices for a top-level site (and what it embeds) into Chromium's store, so a choice
-    /// changed in the site settings takes effect: allow, block, or back to asking. Grants of the live document stay.
-    func syncPermissions(top: SiteOrigin) {
-        let live = Set(permissionGrants.filter { $0.top == top }.flatMap(\.capabilities))
-        pushPermissions(Set(SiteCapability.prompted).subtracting(live), requesting: top, top: top)
-        for key in (websitePolicy.preferences.embeddedPermissions ?? [:]).keys {
-            let parts = key.split(separator: "\n").map(String.init)
-            guard parts.count == 2, parts[0] == top.value, let url = URL(string: parts[1]), let requesting = SiteOrigin(url) else { continue }
-            pushPermissions(Set(SiteCapability.prompted), requesting: requesting, top: top)
+    /// The remembered choices that differ between two preference values for a top-level site and what it embeds.
+    static func changedPermissions(_ old: SitePreferences, _ new: SitePreferences, top: SiteOrigin) -> [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] {
+        func differing(_ a: [SiteCapability: SitePermission], _ b: [SiteCapability: SitePermission]) -> Set<SiteCapability> {
+            Set(SiteCapability.prompted.filter { (a[$0] ?? .ask) != (b[$0] ?? .ask) })
+        }
+        var out: [(SiteOrigin, SiteOrigin, Set<SiteCapability>)] = []
+        let own = differing(old.rule(for: top).permissions, new.rule(for: top).permissions)
+        if !own.isEmpty { out.append((top, top, own)) }
+        let prefix = top.value + "\n"
+        for key in Set((old.embeddedPermissions ?? [:]).keys).union((new.embeddedPermissions ?? [:]).keys) where key.hasPrefix(prefix) {
+            guard let url = URL(string: String(key.dropFirst(prefix.count))), let requesting = SiteOrigin(url) else { continue }
+            let embedded = differing(old.embeddedPermissions?[key] ?? [:], new.embeddedPermissions?[key] ?? [:])
+            if !embedded.isEmpty { out.append((requesting, top, embedded)) }
+        }
+        return out.map { (requesting: $0.0, top: $0.1, capabilities: $0.2) }
+    }
+
+    /// Writes changed remembered choices into Chromium's store, so a choice changed in the site settings takes effect
+    /// (allow, block, or back to asking). Waits while a request is open: Chromium settles it from the same store.
+    func flushPermissionSync() {
+        guard permissionRequests.isEmpty, !permissionSync.isEmpty else { return }
+        let work = permissionSync
+        permissionSync = []
+        let live = permissionGrants.filter { $0.document == mainDocument.readyDocument }
+        for change in work {
+            let granted = Set(live.filter { $0.requesting == change.requesting && $0.top == change.top }.flatMap(\.capabilities))
+            pushPermissions(change.capabilities.subtracting(granted), requesting: change.requesting, top: change.top)
         }
     }
 
@@ -273,13 +295,14 @@ extension ChromePage {
         case .location: .geolocation
         case .notifications: .notifications
         case .clipboard: .clipboard
-        case .midi: .midi
         case .windowManagement: .windowManagement
         case .storageAccess: .storageAccess
         case .sensors: .sensors
         case .automaticDownloads: .downloads
         case .pointerLock: .pointerLock
-        case .desktopCapture, .other: nil
+        // Chromium 154 traps on writing the MIDI settings (probed: CEF_CONTENT_SETTING_TYPE_MIDI / _MIDI_SYSEX), so a
+        // MIDI choice is applied when Chromium asks Brk, and Chromium's own stored MIDI decision is left alone.
+        case .midi, .desktopCapture, .other: nil
         }
     }
 

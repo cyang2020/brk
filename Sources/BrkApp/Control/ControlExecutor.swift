@@ -61,8 +61,12 @@ final class ControlExecutor {
         case .siteControlInput(let owner, let field, let action):
             guard let panel = store.sitePanels.window(for: owner), panel.isVisible,
                   let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel) as? NSControl,
-                  !control.isHiddenOrHasHiddenAncestor, !control.visibleRect.intersection(control.bounds).isEmpty,
-                  control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+                  !control.isHiddenOrHasHiddenAncestor, control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+            // A control below the fold of the second page is scrolled to, as a user would before using it.
+            if control.visibleRect.intersection(control.bounds).isEmpty, control.enclosingScrollView != nil {
+                control.scrollToVisible(control.bounds); panel.displayIfNeeded()
+            }
+            guard !control.visibleRect.intersection(control.bounds).isEmpty else { throw Failure(message: "The owned site control is off screen: " + field) }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             store.inputWindow = panel
@@ -527,8 +531,8 @@ final class ControlExecutor {
         return image
     }
 
-    /// The visible accessibility tree under `root` (AppKit controls and SwiftUI's elements alike), label, title and
-    /// string value of each element, in order, without repeats of the same string on one element.
+    /// The visible accessibility tree and view tree under `root` (AppKit controls and SwiftUI's elements alike): label,
+    /// title and string value of each, in order, without repeats of the same string on one element.
     static func accessibilityTexts(_ root: NSView) -> [String] {
         var out: [String] = [], seen = Set<ObjectIdentifier>()
         func visit(_ element: Any, depth: Int) {
@@ -541,9 +545,8 @@ final class ControlExecutor {
             }
             out += own
             for child in node.accessibilityChildren() ?? [] { visit(child, depth: depth + 1) }
-            if let view = object as? NSView, node.accessibilityChildren()?.isEmpty ?? true {
-                for subview in view.subviews { visit(subview, depth: depth + 1) }
-            }
+            // AppKit leaves custom-drawn, untitled buttons out of a view's accessibility children; walk the views too.
+            if let view = object as? NSView { for subview in view.subviews { visit(subview, depth: depth + 1) } }
         }
         visit(root, depth: 0)
         return out

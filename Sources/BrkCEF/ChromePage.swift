@@ -82,6 +82,8 @@ final class ChromePage: CefBrowserDelegate {
     /// Requests allowed in the current document, so Chromium's stored grant can follow Brk's remembered choice once
     /// the document ends (Allow this time is not remembered; Chromium stores every accepted request).
     var permissionGrants: [(document: DocumentToken, requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
+    /// Remembered choices changed in Brk and not yet written to Chromium's store (`flushPermissionSync`).
+    var permissionSync: [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
     var policyRevision: UInt64 = 0
     var websiteError: String?
     /// The automatic dark mode last sent to this page's DevTools session, and for which document (nil: never sent).

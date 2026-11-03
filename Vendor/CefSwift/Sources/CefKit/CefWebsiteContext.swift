@@ -21,7 +21,6 @@ extension CefBrowser {
         if kind.contains(.geolocation) { types.append(CEF_CONTENT_SETTING_TYPE_GEOLOCATION) }
         if kind.contains(.notifications) { types.append(CEF_CONTENT_SETTING_TYPE_NOTIFICATIONS) }
         if kind.contains(.clipboard) { types.append(CEF_CONTENT_SETTING_TYPE_CLIPBOARD_READ_WRITE) }
-        if kind.contains(.midi) { types += [CEF_CONTENT_SETTING_TYPE_MIDI, CEF_CONTENT_SETTING_TYPE_MIDI_SYSEX] }
         if kind.contains(.pointerLock) { types.append(CEF_CONTENT_SETTING_TYPE_POINTER_LOCK) }
         if kind.contains(.storageAccess) { types.append(CEF_CONTENT_SETTING_TYPE_STORAGE_ACCESS) }
         if kind.contains(.sensors) { types.append(CEF_CONTENT_SETTING_TYPE_SENSORS) }

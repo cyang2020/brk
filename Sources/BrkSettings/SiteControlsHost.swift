@@ -153,7 +153,7 @@ private struct SiteControlsView: View {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
                 if let target = value.target {
-                    Text(SiteControlsHost.connectionNote(target, secure: value.secure, security: value.security)).font(.caption).foregroundStyle(.secondary)
+                    SettingsCaption(text: SiteControlsHost.connectionNote(target, secure: value.secure, security: value.security), field: "siteConnectionNote")
                 }
                 Text(value.profileName).foregroundStyle(.secondary)
                 if value.target != nil {
@@ -183,7 +183,7 @@ private struct SiteControlsView: View {
                     ForEach(value.filterLists) { list in
                         VStack(alignment: .leading, spacing: 2) {
                             SettingsCheckbox(title: list.title, field: "filterList-" + list.id, isOn: list.enabled) { dispatch(.site(.filterList(list.id, $0))) }
-                            Text(SiteControlsHost.filterListStatus(list)).font(.caption).foregroundStyle(.secondary)
+                            SettingsCaption(text: SiteControlsHost.filterListStatus(list), field: "filterListStatus-" + list.id)
                         }
                     }
                     HStack {
