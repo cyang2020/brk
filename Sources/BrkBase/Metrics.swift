@@ -70,6 +70,7 @@ public struct MetricsTable: MetricGroup {
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
     public let find = FindMetrics()
+    public let siteControls = SiteControlsMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -378,12 +379,98 @@ public struct KeyMetrics: MetricGroup {
 }
 
 public struct FindMetrics: MetricGroup {
-    public let width = Metric(540.0, .guess("Native find controls sized for one page card; Arc pixel parity remains unmeasured"))
-    public let padding = Metric(8.0, .guess("Native find bar inset"))
-    public let row = Metric(28.0, .guess("Native small text controls plus vertical breathing room"))
+    private static let capture = "verify/visual-pairs/run-20261103/REPORT.md, P18-a/b/d Arc captures measured at 2x"
+    /// The Cmd+F bar floats at the card's top-right corner and keeps this width however wide the card is.
+    public let width = Metric(300.0, .anatomy(capture))
+    public let inset = Metric(10.0, .anatomy(capture + ": bar to the card's top and right edges"))
+    public let row = Metric(32.0, .anatomy(capture))
+    public let cornerRadius = Metric(5.0, .anatomy(capture))
+    public let shadowRadius = Metric(12.0, .anatomy(capture + ": shadow fades over 7 pt below, 4 pt above"))
+    public let shadowOffset = Metric(2.0, .anatomy(capture))
+    public let shadowOpacity = Metric(0.5, .anatomy(capture + ": the shadow darkens white to #D3D4D8 at the lower edge"))
+    public let iconLeading = Metric(10.0, .anatomy(capture + ": magnifier"))
+    public let iconSize = Metric(12.0, .anatomy(capture + ": magnifier"))
+    public let textLeading = Metric(33.0, .anatomy(capture + ": query text starts"))
+    public let queryFont = Metric(13.0, .anatomy(capture + ": query ascender 9.75 pt"))
+    public let statusFont = Metric(10.0, .anatomy(capture + ": count and NOT FOUND cap height 7 pt"))
+    /// Distances from the bar's right edge.
+    public let statusTrailing = Metric(94.5, .anatomy(capture + ": count 1/6 ends 94.5 pt before the right edge"))
+    public let notFoundTrailing = Metric(35.5, .anatomy(capture + ": NOT FOUND ends 35.5 pt before the right edge"))
+    public let previousCenter = Metric(74.0, .anatomy(capture + ": up arrow centre"))
+    public let nextCenter = Metric(48.0, .anatomy(capture + ": down arrow centre"))
+    public let separatorTrailing = Metric(30.0, .anatomy(capture + ": vertical separator"))
+    public let separatorHeight = Metric(18.0, .anatomy(capture + ": vertical separator"))
+    public let closeCenter = Metric(16.0, .anatomy(capture + ": close cross centre"))
+    public let button = Metric(24.0, .guess("Hit target around the 11 pt arrow and close glyphs"))
+    /// SF Symbol point sizes that draw Arc's glyphs: arrows 11 pt wide, the magnifier 12 x 12, the cross 9 pt.
+    public let glyph = Metric(13.0, .anatomy(capture + ": arrows are 11 pt wide"))
+    public let iconGlyph = Metric(13.0, .anatomy(capture + ": magnifier 12 x 12 pt"))
+    public let closeGlyph = Metric(12.0, .anatomy(capture + ": close cross"))
+    public let textInset = Metric(3.0, .guess("NSTextField's cell padding before the first glyph"))
+    public let statusWidth = Metric(44.0, .guess("Room for a count up to 999/999 before the arrows"))
+    public let notFoundWidth = Metric(70.0, .guess("NOT FOUND is 61 pt wide in 10 pt semibold"))
+    public let message = Metric(22.0, .guess("Brk-only status line (errors, replacement results) under the rows"))
+    public let messageFont = Metric(11.0, .guess("Brk-only status line"))
+    /// Brk's replacement row (Arc has no visible Find and Replace) reuses the find row's insets.
+    public let replaceWidth = Metric(56.0, .guess("Replace label in 12 pt medium"))
+    public let replaceAllWidth = Metric(30.0, .guess("All label in 12 pt medium"))
+    public let actionFont = Metric(12.0, .guess("Replacement row labels"))
     public let gap = Metric(4.0, .guess("Find control spacing"))
-    public let button = Metric(28.0, .guess("Find navigation and close button width"))
-    public let actionWidth = Metric(92.0, .guess("Minimum width for readable replacement action labels"))
+    /// Below this bar width (narrow split panes) the bar stacks its controls in rows.
+    public let compactWidth = Metric(200.0, .guess("Query, count, arrows and close need about 200 pt in one row"))
+    public let compactInset = Metric(4.0, .guess("Narrow panes keep most of their width for the stacked controls"))
+    public let compactPadding = Metric(6.0, .guess("Stacked find controls inset"))
+    public let actionWidth = Metric(80.0, .guess("Minimum width for readable stacked replacement labels"))
+}
+
+/// Arc's site control center (ARC_SiteControlCenter): an NSPopover under the URL pill's site icon. The popover
+/// window is 262 x 227 pt; its body is 237 x 202 pt.
+public struct SiteControlsMetrics: MetricGroup {
+    private static let capture = "verify/visual-pairs/run-20261103/REPORT.md, P36-a Arc capture measured at 2x"
+    public let width = Metric(237.0, .anatomy(capture + ": popover body"))
+    public let inset = Metric(10.5, .anatomy(capture + ": buttons to the body's left and right edges"))
+    public let top = Metric(10.0, .anatomy(capture + ": button row to the body's top edge"))
+    public let button = Metric(CGSize(width: 48, height: 32.5), .anatomy(capture + ": the four action buttons and the Extensions + button"))
+    public let buttonGap = Metric(8.0, .anatomy(capture))
+    public let buttonRadius = Metric(8.0, .anatomy(capture))
+    public let buttonGlyph = Metric(15.0, .anatomy(capture + ": share, Boost, camera and full-page glyphs"))
+    public let buttonsPerRow = Metric(4, .anatomy(capture))
+    public let buttonShadowBlur = Metric(3.0, .anatomy(capture + ": the shadow spreads about 2 pt round each button"))
+    public let buttonShadowOffset = Metric(1.0, .anatomy(capture + ": the shadow is heavier under the button"))
+    /// Arc's Boost glyph is a brush with a sparkle at its top-left; Brk draws SF paintbrush.pointed plus sparkle.
+    public let badgeScale = Metric(0.55, .guess("SF sparkle sized to Arc's boost.sparkle accent"))
+    public let badgeOffset = Metric(CGPoint(x: 2, y: 1), .guess("Moves the brush off the sparkle's corner"))
+    /// Baselines from the body's top: section titles, then the Developer Mode title and its state.
+    public let extensionsBaseline = Metric(66.5, .anatomy(capture + ": Extensions title"))
+    public let extensionsRow = Metric(80.0, .anatomy(capture + ": Extensions + button top"))
+    public let sectionGap = Metric(28.0, .anatomy(capture + ": + button bottom to the Settings baseline"))
+    public let sectionFont = Metric(14.0, .anatomy(capture + ": section title cap height 10 pt, semibold"))
+    public let rowGap = Metric(15.5, .anatomy(capture + ": Settings baseline to the Developer Mode circle"))
+    public let rowIcon = Metric(32.0, .anatomy(capture + ": Developer Mode circle"))
+    public let rowGlyph = Metric(14.0, .anatomy(capture + ": hammer glyph"))
+    public let rowText = Metric(51.0, .anatomy(capture + ": Developer Mode title starts"))
+    public let rowTitleBaseline = Metric(11.5, .anatomy(capture + ": Developer Mode baseline below the circle top"))
+    public let rowSubtitleBaseline = Metric(28.0, .anatomy(capture + ": Off baseline below the circle top"))
+    public let rowFont = Metric(13.0, .anatomy(capture + ": Developer Mode cap height 9 pt"))
+    public let bottom = Metric(14.0, .anatomy(capture + ": circle bottom to the body's bottom edge (no web page: no security row)"))
+    /// The security row under a hairline for an http(s) page: a grey rounded button with a lock and Secure or Insecure,
+    /// and a round … button at the right.
+    public let securityDividerGap = Metric(14.0, .anatomy(capture + ": Developer Mode circle to the hairline"))
+    public let securityGap = Metric(10.0, .anatomy(capture + ": hairline to the security row"))
+    public let securityHeight = Metric(32.0, .anatomy(capture + ": Insecure button and … circle"))
+    public let securityBottom = Metric(10.0, .anatomy(capture + ": security row to the body's bottom edge"))
+    public let securityPadding = Metric(9.5, .anatomy(capture + ": lock inset in the Insecure button"))
+    public let securityTrailing = Metric(9.0, .anatomy(capture + ": Insecure text to the button's right edge"))
+    public let securityGlyph = Metric(13.0, .anatomy(capture + ": the lock is 10 x 13.5 pt"))
+    public let securityGlyphGap = Metric(8.5, .anatomy(capture + ": lock to the Insecure text"))
+    public let securityFont = Metric(14.0, .anatomy(capture + ": Insecure cap height 10 pt"))
+    /// Brk's second page holds the full site form (Arc puts these in menus, settings and permission prompts).
+    public let detailsSize = Metric(CGSize(width: 360, height: 520), .guess("Room for the site form without crowding the page"))
+    public let detailsHeader = Metric(36.0, .guess("Back button row of the site settings page"))
+    public let anchorTrailing = Metric(19.0, .anatomy(capture + ": site icon centre to the pill's right edge"))
+    public let anchorRise = Metric(4.5, .anatomy(capture + ": body top 90 pt from the window top, 8 pt under the pill"))
+    /// Where the popover points when the sidebar, and with it the site button, is hidden.
+    public let fallbackAnchor = Metric(CGPoint(x: 24, y: 12), .guess("Content area's top-left corner, clear of the traffic lights"))
 }
 
 /// Local CLI answer document; these are Brk choices, not claimed Arc pixel measurements.

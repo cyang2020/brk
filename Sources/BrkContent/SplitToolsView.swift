@@ -42,6 +42,7 @@ final class PaneHeaderView: NSView {
             self.dispatch(pane.loading ? .page(.stop(.item(pane.tab))) : .page(.reload(.item(pane.tab), ignoringCache: false)))
         }
         siteControls.action = { [weak self] in self?.dispatch(.site(.controls)) }
+        siteControls.identify(.paneSiteInfo)
         splitMenu.action = { [weak self] in self?.showSplitMenu() }
         close.action = { [weak self] in self?.send { .split(.closePaneAt($0)) } }
     }
