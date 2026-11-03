@@ -39,7 +39,7 @@ public final class AppStore {
     private var settingsWindow: SettingsWindowController?
     /// The Icon pane's drawing last set as `NSApp.applicationIconImage` (the Dock icon); nil before the first render.
     private(set) var shownIcon: AppIconChoice?
-    /// The "Warn before quitting" dialog is open (or about to be).
+    /// The "Warn before quitting" dialog is open.
     private var askingQuit = false
     static let dockIconSide: CGFloat = 512
     private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
@@ -199,6 +199,8 @@ public final class AppStore {
         guard !isTerminating else { return }
         isTerminating = true
         settingsWindow?.endSheets()
+        // An open Warn before quitting sheet (a quit that did not ask, SIGTERM or the control socket, overtook it).
+        for controller in windows.values { if let sheet = controller.window.attachedSheet, sheet.className.contains("Alert") { controller.window.endSheet(sheet) } }
         aiServices.cancelAll()
         cancelExports()
         for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
@@ -208,17 +210,18 @@ public final class AppStore {
 
     func stopAI() async { await aiServices.stop() }
 
-    /// "Warn before quitting" (`QuitWarning`): true to go on quitting. Asks only while the setting is on; "Quit, and
-    /// don’t ask again" turns it off through the reducer, so the answer is saved before the ordered quit flushes.
-    func confirmQuit() -> Bool {
-        QuitWarning.shouldQuit(snapshot.settings.general, dispatch: { [weak self] command in
+    /// "Warn before quitting" (`QuitWarning`): `answer` gets whether to go on quitting. Asks only while the setting is
+    /// on, as a sheet on `window`; "Quit, and don’t ask again" turns it off through the reducer, so the answer is saved
+    /// before the ordered quit flushes.
+    func confirmQuit(on window: NSWindow?, answer: @escaping @MainActor (Bool) -> Void) {
+        QuitWarning.confirm(snapshot.settings.general, on: window, dispatch: { [weak self] command in
             guard let self, let window = self.windowController(nil)?.id else { return }
             self.dispatch(.user(window, command))
-        }, ask: Self.askQuit)
+        }, ask: Self.askQuit, answer: answer)
     }
 
-    /// The quit dialog; tests answer it without a modal session.
-    static var askQuit: @MainActor (NSAlert) -> QuitWarning.Answer = QuitWarning.run
+    /// The quit dialog; tests answer it without presenting it.
+    static var askQuit: @MainActor (NSAlert, NSWindow?, @escaping @MainActor (QuitWarning.Answer) -> Void) -> Void = QuitWarning.present
 
     private func quitNow() {
         // AppKit can defer termination while a save sheet remains attached.
@@ -466,15 +469,15 @@ public final class AppStore {
             case .app(let effect):
                 switch effect {
                 case .quit:
-                    // "Warn before quitting": the question comes first, before anything is torn down, on the next
-                    // run-loop turn (so the key press or control request that asked returns). A second quit while
-                    // it is open only ends the question when it was already confirmed (the control socket's quit).
-                    if askingQuit { if Quit.confirmed { NSApp.abortModal() }; break }
+                    // "Warn before quitting": the question comes first, before anything is torn down, as a sheet on
+                    // this window (no nested run loop: the key press that asked returns, and the ordered quit that
+                    // follows does not run inside a modal session). While it is open another quit is ignored,
+                    // except an already confirmed one (the control socket's), which quits.
+                    if askingQuit { if Quit.confirmed { quitNow() }; break }
                     if Quit.confirmed || !snapshot.settings.general.warnBeforeQuitting { quitNow(); break }
                     askingQuit = true
-                    Quit.enqueue { [weak self] in
+                    confirmQuit(on: NSApp.keyWindow ?? windowController(nil)?.window) { [weak self] go in
                         guard let self else { return }
-                        let go = self.confirmQuit()
                         self.askingQuit = false
                         if go || Quit.confirmed { self.quitNow() }
                     }

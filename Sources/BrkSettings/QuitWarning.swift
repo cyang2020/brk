@@ -29,6 +29,29 @@ public enum QuitWarning {
         return answer.quit
     }
 
+    /// The same question without a nested run loop: on `window` as a sheet (the app keeps running while it is open,
+    /// and the ordered quit that may follow does not start inside a modal session), else as a modal alert. `answer`
+    /// gets whether to go on quitting; it is called at once when the setting is off.
+    public static func confirm(_ general: GeneralSettings, on window: NSWindow?, dispatch: @escaping Dispatch,
+                               ask: @MainActor (NSAlert, NSWindow?, @escaping @MainActor (Answer) -> Void) -> Void = QuitWarning.present,
+                               answer: @escaping @MainActor (Bool) -> Void) {
+        guard general.warnBeforeQuitting else { answer(true); return }
+        ask(alert(), window) { reply in
+            if reply.quit, reply.dontAskAgain { dispatch(.settings(.general(.warnBeforeQuitting(false)))) }
+            answer(reply.quit)
+        }
+    }
+
+    /// Shows `alert` as a sheet on `window` when it can take one, else modally.
+    public static func present(_ alert: NSAlert, on window: NSWindow?, _ done: @escaping @MainActor (Answer) -> Void) {
+        guard let window, window.isVisible, window.attachedSheet == nil else { done(run(alert)); return }
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                done(Answer(quit: response == .alertFirstButtonReturn, dontAskAgain: alert.suppressionButton?.state == .on))
+            }
+        }
+    }
+
     /// Arc's dialog: its title and message are short strings that did not survive in the binary; the suppression
     /// button's text did.
     static func alert() -> NSAlert {

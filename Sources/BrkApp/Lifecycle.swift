@@ -183,9 +183,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         // quitting" here; a logout, restart or shut down does not.
         if !Quit.confirmed, !Self.isSystemQuit(), let store, store.snapshot.settings.general.warnBeforeQuitting {
             askingQuit = true
-            Quit.enqueue { [weak self] in
+            store.confirmQuit(on: NSApp.keyWindow ?? NSApp.mainWindow) { [weak self] go in
                 guard let self else { return }
-                let go = store.confirmQuit()
                 self.askingQuit = false
                 if go { Quit.confirmed = true; self.beginOrderedQuit() } else { NSApp.reply(toApplicationShouldTerminate: false) }
             }
