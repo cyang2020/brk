@@ -63,7 +63,7 @@ final class TabToolsSiteTests: XCTestCase {
         XCTAssertTrue(d.view.tabTools.toast?.text.contains("No available meeting") ?? false)
         d.advance(.seconds(300))
         XCTAssertNil(d.view.favorites.tiles.first?.badge)
-        XCTAssertTrue(d.state.doc.tabPreferences.hoverPreviews)
+        XCTAssertFalse(d.state.doc.tabPreferences.hoverPreviews, "previews stay off until turned on in settings")
     }
     func testCalendarFileSupportsFoldedUTCAndTZIDAndRejectsRecurrence() throws {
         let input = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261031T100000Z\r\nDTEND:20261031T110000Z\r\nSUMMARY:Weekly\r\n  meeting\r\nURL:https://example.com/meeting\r\nEND:VEVENT\r\nEND:VCALENDAR"

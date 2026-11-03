@@ -72,7 +72,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .navigate(url("https://example.com/x")))])
         XCTAssertEqual(d.todayIDs, [a])
         XCTAssertEqual(d.row(a)?.url, url("https://example.com/x"))
-        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "example.com/x", loading: false, canGoBack: false, canGoForward: false))
+        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "example.com/x", loading: false, canGoBack: false, canGoForward: false, host: "example.com"))
         XCTAssertNil(d.view.overlay)
     }
 
@@ -425,7 +425,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.row(a)?.title, "A")
         XCTAssertEqual(d.row(a)?.favicon, url("http://127.0.0.1:9/f.ico"))
         XCTAssertEqual(d.row(a)?.loading, true)
-        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "127.0.0.1:9/a", loading: true, canGoBack: true, canGoForward: false))
+        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "127.0.0.1:9/a", loading: true, canGoBack: true, canGoForward: false, host: "127.0.0.1"))
         XCTAssertTrue(d.view.enabledActions.contains(.goBack))
         XCTAssertFalse(d.view.enabledActions.contains(.goForward))
         assertUnchanged(d.state, d.page(a, .titleChanged("A")))
@@ -615,7 +615,7 @@ final class ReduceSpecTests: XCTestCase {
         d.page(a, .loadingChanged(isLoading: true, canGoBack: true, canGoForward: false))
         XCTAssertTrue(d.view.urlPill.loading)
         d.page(a, .closed)
-        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "127.0.0.1:9/a", loading: false, canGoBack: false, canGoForward: false))
+        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "127.0.0.1:9/a", loading: false, canGoBack: false, canGoForward: false, host: "127.0.0.1"))
         XCTAssertEqual(d.row(a)?.loaded, true)
         assertUnchanged(d.state, d.page(a, .closed))
     }
@@ -1040,7 +1040,7 @@ final class ReduceSpecTests: XCTestCase {
         let work = d.newSpace("Work")
         let w1 = d.open("127.0.0.1:9/page2.html")
         XCTAssertNotEqual(d.view.theme, firstTheme)
-        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[7], RGBA(hex: "#2D4468")])
+        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[0], RGBA(hex: "#2D4468")])
         d.user(.space(.focus(first)))
         XCTAssertEqual(d.view.space.id, first)
         XCTAssertEqual(d.todayIDs, [a])
@@ -1739,7 +1739,7 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 225, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 227, "a Command case was added: add its sample and a behavior test")
         XCTAssertEqual(CommandInventory.events.count, 50, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))

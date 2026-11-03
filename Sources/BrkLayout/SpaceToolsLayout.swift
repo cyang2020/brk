@@ -1,13 +1,29 @@
 import BrkBase
 import CoreGraphics
 
+/// The toolbar across the top of the content card (Arc with Shift+Cmd+D): back, forward and reload at the left, the
+/// address (link glyph and host, centred on the card) between them and the three buttons at the right, a hairline
+/// under the 32 pt control row.
 public enum AddressToolbarLayout {
     public static var height: Double { Metrics.spaceTools.toolbarHeight.value }
+    /// The control row above the hairline.
+    static var rowHeight: Double { Metrics.spaceTools.controlSize.value }
+    /// Everything between the third left button and the first right one; a click there edits the address.
     public static func address(in rect: CGRect) -> CGRect {
-        CGRect(x: rect.minX + Metrics.spaceTools.toolbarAddressLeading.value, y: rect.minY + 4, width: max(0, rect.width - 148), height: 32)
+        let start = button(2, in: rect).maxX, end = trailingButton(2, in: rect).minX
+        return CGRect(x: start, y: rect.minY, width: max(0, end - start), height: rowHeight)
     }
+    /// Back (0), forward (1) and reload (2) from the left edge.
     public static func button(_ index: Int, in rect: CGRect) -> CGRect {
-        CGRect(x: rect.minX + Double(index) * 34, y: rect.minY + 4, width: 32, height: 32)
+        let m = Metrics.spaceTools
+        return CGRect(x: rect.minX + m.toolbarControlInset.value + Double(index) * m.controlPitch.value, y: rect.minY,
+                      width: m.controlSize.value, height: rowHeight)
+    }
+    /// The right buttons, 0 nearest the address.
+    public static func trailingButton(_ index: Int, in rect: CGRect) -> CGRect {
+        let m = Metrics.spaceTools
+        let x = rect.maxX - m.toolbarControlInset.value - m.controlSize.value - Double(2 - index) * m.controlPitch.value
+        return CGRect(x: x, y: rect.minY, width: m.controlSize.value, height: rowHeight)
     }
 }
 

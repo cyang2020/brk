@@ -11,12 +11,12 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted
+    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted, more, close
 
     var symbol: String {
         switch self {
-        case .back: "chevron.left"
-        case .forward: "chevron.right"
+        case .back: "arrow.left"
+        case .forward: "arrow.right"
         case .reload: "arrow.clockwise"
         case .stop: "xmark"
         case .sidebarToggle: "sidebar.left"
@@ -26,13 +26,15 @@ enum Glyph {
         case .closeKeepPinned: "minus"
         case .clearDown: "arrow.down"
         case .copyLink: "link"
-        case .siteControls: "slider.horizontal.3"
+        case .siteControls: "slider.horizontal.2.square"
         case .search: "magnifyingglass"
         case .globe: "globe"
         case .chevronDown: "chevron.down"
         case .chevronRight: "chevron.right"
         case .speaker: "speaker.wave.2.fill"
         case .speakerMuted: "speaker.slash.fill"
+        case .more: "ellipsis"
+        case .close: "xmark"
         }
     }
 
@@ -53,7 +55,8 @@ extension NamedIcon { var symbol: String { systemSymbolName } }
 
 /// What an icon slot shows.
 enum IconContent: Equatable {
-    /// A page favicon; the globe while it loads, fails, or when the page has none.
+    /// A page favicon; Arc's empty favicon (a rounded square in the space's hue) while it loads, fails, or when the
+    /// page has none.
     case favicon(URL?)
     case custom(CustomIcon)
     case folder(open: Bool)
@@ -74,17 +77,17 @@ enum IconContent: Equatable {
     }
 }
 
-/// One icon slot: favicon, emoji, symbol, folder, dot, or a spinner while loading. Tinted glyphs use `tint`;
-/// favicons and emoji keep their own colors. The slot's size is its frame; glyph point sizes follow it.
+/// One icon slot: favicon, emoji, symbol, folder or dot. Tinted glyphs use `tint`; favicons and emoji keep their own
+/// colors; the folder and the empty favicon take the space's hue from `palette`. The slot's size is its frame; glyph
+/// point sizes follow it. Loading draws nothing extra (Arc keeps the icon, or the empty favicon, in the row).
 @MainActor
 final class IconView: NSView {
     private let image = NSImageView()
     private let emoji = NSTextField(labelWithString: "")
     private let dot = CAShapeLayer()
-    private let spinner = SpinnerLayer()
     private var content: IconContent = .none
     private var tint: NSColor = .labelColor
-    private var loading = false
+    private var palette: Palette?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -95,7 +98,6 @@ final class IconView: NSView {
         addSubview(image)
         addSubview(emoji)
         layer?.addSublayer(dot)
-        layer?.addSublayer(spinner)
     }
 
     @available(*, unavailable)
@@ -103,10 +105,10 @@ final class IconView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func render(_ content: IconContent, tint: NSColor, loading: Bool = false) {
+    func render(_ content: IconContent, tint: NSColor, palette: Palette? = nil) {
         self.content = content
         self.tint = tint
-        self.loading = loading
+        self.palette = palette
         needsLayout = true
     }
 
@@ -118,22 +120,17 @@ final class IconView: NSView {
         emoji.isHidden = true
         image.isHidden = true
         dot.isHidden = true
-        spinner.isHidden = !loading
-        spinner.frame = square
-        spinner.update(color: tint)
-        if loading { return }
         switch content {
         case .favicon(let url):
-            image.isHidden = false
             if let url, let loaded = FaviconStore.shared.image(for: url, ready: { [weak self] in
                 guard let self, self.content == .favicon(url) else { return }
                 self.needsLayout = true
             }) {
+                image.isHidden = false
                 image.image = loaded
                 image.contentTintColor = nil
             } else {
-                image.image = Glyph.globe.image(size: side * 0.85, weight: .regular)
-                image.contentTintColor = tint
+                showEmptyFavicon(in: square)
             }
         case .custom(.emoji(let text)):
             showEmoji(text, side: side)
@@ -143,8 +140,16 @@ final class IconView: NSView {
             if symbolImage(name, size: side) != nil { showSymbol(name, side: side) } else { showEmoji(String(name.prefix(1)).uppercased(), side: side) }
         case .folder(let open):
             image.isHidden = false
-            image.image = FolderGlyph.image(open: open, side: side)
-            image.contentTintColor = tint
+            if let palette {
+                let size = open ? CGSize(width: Draw.folderGlyphWidth.value, height: side)
+                    : CGSize(width: Draw.folderClosedSide.value, height: Draw.folderClosedSide.value)
+                image.image = FolderGlyph.filled(open: open, ink: HueInk(palette), size: size)
+                image.contentTintColor = nil
+                image.frame = CGRect(x: bounds.midX - size.width / 2 + Draw.folderGlyphShift.value, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
+            } else {
+                image.image = FolderGlyph.image(open: open, side: side)
+                image.contentTintColor = tint
+            }
         case .glyph(let glyph):
             image.isHidden = false
             image.image = glyph.image(size: side * 0.8)
@@ -156,6 +161,23 @@ final class IconView: NSView {
         case .none:
             break
         }
+    }
+
+    /// Arc's empty favicon: a 14 pt rounded square in the space's hue at low opacity, centred in the slot. Without a
+    /// palette (the folder preview card) it is the globe.
+    private func showEmptyFavicon(in square: CGRect) {
+        guard let palette else {
+            image.isHidden = false
+            image.image = Glyph.globe.image(size: square.width * 0.85, weight: .regular)
+            image.contentTintColor = tint
+            return
+        }
+        let side = Draw.emptyFavicon.value * square.width / Metrics.tablist.favicon.value
+        let rect = CGRect(x: square.midX - side / 2, y: square.midY - side / 2, width: side, height: side)
+        let radius = Draw.emptyFaviconRadius.value * side / Draw.emptyFavicon.value
+        dot.isHidden = false
+        dot.path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        dot.fillColor = HueInk(palette).emptyFavicon.cgColor
     }
 
     private func showSymbol(_ name: String, side: Double) {
@@ -175,49 +197,61 @@ final class IconView: NSView {
     }
 }
 
-/// A 270-degree arc that turns while a page loads (drawn in the favicon slot, Arc's loading state).
-final class SpinnerLayer: CAShapeLayer {
-    override var frame: CGRect {
-        didSet {
-            let inset = bounds.insetBy(dx: bounds.width * 0.12, dy: bounds.height * 0.12)
-            path = CGPath(ellipseIn: inset, transform: nil)
+/// The colors Arc derives from the space's hue for the sidebar's own glyphs (measured on the #F2EAE4 theme, light:
+/// folder outline #725137, back panel #C2A994, front flap #E6DEDA, empty favicon #CEC2B9 over #F0EBE6). Saturation
+/// follows the theme's, so a grey theme gives grey glyphs.
+struct HueInk {
+    let outline: NSColor, back: NSColor, front: NSColor, frontShade: NSColor, emptyFavicon: NSColor
+
+    init(_ palette: Palette) {
+        let (h, s, _) = Self.hsl(palette.accent)
+        let sat = min(s, 0.5)
+        if palette.scheme == .light {
+            outline = Self.color(h, sat, 0.33)
+            back = Self.color(h, sat * 0.8, 0.67)
+            front = Self.color(h, sat * 0.5, 0.92)
+            frontShade = Self.color(h, sat * 0.5, 0.84)
+            emptyFavicon = Self.color(h, sat, 0.33, alpha: 0.25)
+        } else {
+            outline = Self.color(h, sat, 0.8)
+            back = Self.color(h, sat * 0.8, 0.45)
+            front = Self.color(h, sat * 0.5, 0.3)
+            frontShade = Self.color(h, sat * 0.5, 0.24)
+            emptyFavicon = Self.color(h, sat, 0.8, alpha: 0.25)
         }
     }
 
-    override init() {
-        super.init()
-        fillColor = nil
-        lineCap = .round
-        strokeStart = 0
-        strokeEnd = 0.75
+    static func hsl(_ c: RGBA) -> (Double, Double, Double) {
+        let hi = max(c.red, c.green, c.blue), lo = min(c.red, c.green, c.blue), l = (hi + lo) / 2
+        guard hi > lo else { return (0, 0, l) }
+        let d = hi - lo
+        let s = l > 0.5 ? d / (2 - hi - lo) : d / (hi + lo)
+        var h: Double
+        if hi == c.red { h = (c.green - c.blue) / d + (c.green < c.blue ? 6 : 0) }
+        else if hi == c.green { h = (c.blue - c.red) / d + 2 }
+        else { h = (c.red - c.green) / d + 4 }
+        h /= 6
+        return (h, s, l)
     }
 
-    override init(layer: Any) { super.init(layer: layer) }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override var isHidden: Bool {
-        didSet {
-            guard isHidden != oldValue else { return }
-            if isHidden { removeAnimation(forKey: "spin"); return }
-            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-            spin.fromValue = 0
-            spin.toValue = -2 * Double.pi
-            spin.duration = 0.9
-            spin.repeatCount = .infinity
-            add(spin, forKey: "spin")
+    static func color(_ h: Double, _ s: Double, _ l: Double, alpha: Double = 1) -> NSColor {
+        func channel(_ t: Double) -> Double {
+            let q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q
+            var t = t
+            if t < 0 { t += 1 }
+            if t > 1 { t -= 1 }
+            if t < 1.0 / 6 { return p + (q - p) * 6 * t }
+            if t < 0.5 { return q }
+            if t < 2.0 / 3 { return p + (q - p) * (2.0 / 3 - t) * 6 }
+            return p
         }
-    }
-
-    func update(color: NSColor) {
-        strokeColor = color.cgColor
-        lineWidth = max(1.5, bounds.width / 9)
+        return NSColor(srgbRed: channel(h + 1.0 / 3), green: channel(h), blue: channel(h - 1.0 / 3), alpha: alpha)
     }
 }
 
-/// Arc's folder glyph, open (expanded) and closed, as a template image.
+/// Arc's folder glyph, open (expanded) and closed.
 enum FolderGlyph {
+    /// The template outline, for callers without a palette.
     @MainActor
     static func image(open: Bool, side: Double) -> NSImage {
         let image = NSImage(size: CGSize(width: side, height: side), flipped: true) { rect in
@@ -254,6 +288,100 @@ enum FolderGlyph {
         }
         image.isTemplate = true
         return image
+    }
+
+    /// Arc's sidebar folder (P01-a): a tan back panel with its tab and a light front flap, both filled and outlined
+    /// in the space's hue. Open, the flap tips forward; closed, it stands upright over the back.
+    @MainActor
+    static func filled(open: Bool, ink: HueInk, size: CGSize) -> NSImage {
+        if !open { return closed(ink: ink, size: size) }
+        return NSImage(size: size, flipped: true) { rect in
+            let w = rect.width, h = rect.height, line = Draw.folderGlyphLine.value
+            let x0 = line / 2, y0 = h * 0.06, x1 = w - line / 2, y1 = h - line / 2
+            let back = NSBezierPath()
+            back.move(to: CGPoint(x: x0 + w * (open ? 0.18 : 0.04), y: y1))
+            back.line(to: CGPoint(x: x0, y: y0 + h * 0.1))
+            back.curve(to: CGPoint(x: x0 + w * 0.06, y: y0), controlPoint1: CGPoint(x: x0, y: y0 + h * 0.03), controlPoint2: CGPoint(x: x0 + w * 0.02, y: y0))
+            back.line(to: CGPoint(x: w * 0.34, y: y0))
+            back.line(to: CGPoint(x: w * 0.44, y: y0 + h * 0.1))
+            back.line(to: CGPoint(x: (open ? w * 0.7 : x1 - w * 0.06), y: y0 + h * 0.1))
+            back.line(to: CGPoint(x: (open ? w * 0.74 : x1), y: y0 + h * 0.2))
+            back.line(to: CGPoint(x: (open ? w * 0.76 : x1), y: y1))
+            back.close()
+            back.lineWidth = line
+            back.lineJoinStyle = .round
+            ink.back.setFill()
+            back.fill()
+            ink.outline.setStroke()
+            back.stroke()
+            let flap = NSBezierPath()
+            if open {
+                flap.move(to: CGPoint(x: w * 0.27, y: y0 + h * 0.22))
+                flap.line(to: CGPoint(x: x1, y: y0 + h * 0.26))
+                flap.line(to: CGPoint(x: x1 - w * 0.12, y: y1))
+                flap.line(to: CGPoint(x: x0 + w * 0.18, y: y1))
+            } else {
+                flap.move(to: CGPoint(x: x0, y: y0 + h * 0.3))
+                flap.line(to: CGPoint(x: x1, y: y0 + h * 0.3))
+                flap.line(to: CGPoint(x: x1, y: y1))
+                flap.line(to: CGPoint(x: x0, y: y1))
+            }
+            flap.close()
+            flap.lineWidth = line
+            flap.lineJoinStyle = .round
+            NSGradient(starting: ink.front, ending: ink.frontShade)?.draw(in: flap, angle: 90)
+            ink.outline.setStroke()
+            flap.stroke()
+            return true
+        }
+    }
+
+    /// Closed (P13-a): a tab at the top left in the back colour behind a rounded body in the front colour, both
+    /// outlined.
+    @MainActor
+    static func closed(ink: HueInk, size: CGSize) -> NSImage {
+        NSImage(size: size, flipped: true) { rect in
+            let line = Draw.folderGlyphLine.value
+            let box = rect.insetBy(dx: line / 2, dy: line / 2)
+            let radius = Draw.folderClosedRadius.value
+            let tabHeight = box.height * 0.3
+            let tab = NSBezierPath(roundedRect: CGRect(x: box.minX, y: box.minY, width: box.width * 0.48, height: tabHeight * 1.6),
+                                   xRadius: radius * 0.7, yRadius: radius * 0.7)
+            tab.lineWidth = line
+            ink.back.setFill()
+            tab.fill()
+            ink.outline.setStroke()
+            tab.stroke()
+            let body = NSBezierPath(roundedRect: CGRect(x: box.minX, y: box.minY + tabHeight * 0.55, width: box.width, height: box.height - tabHeight * 0.55),
+                                    xRadius: radius, yRadius: radius)
+            body.lineWidth = line
+            NSGradient(starting: ink.front, ending: ink.frontShade)?.draw(in: body, angle: 90)
+            ink.outline.setStroke()
+            body.stroke()
+            return true
+        }
+    }
+}
+
+/// The empty favorites box's badge: a filled circle in the space's outline hue with a light star.
+enum StarBadge {
+    @MainActor
+    static func image(side: Double, ink: HueInk) -> NSImage {
+        NSImage(size: CGSize(width: side, height: side), flipped: true) { rect in
+            ink.outline.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            let star = NSBezierPath(), c = CGPoint(x: rect.midX, y: rect.midY + side * 0.03)
+            let outer = side * 0.3, inner = outer * 0.45
+            for i in 0..<10 {
+                let r = i % 2 == 0 ? outer : inner, a = -Double.pi / 2 + Double(i) * Double.pi / 5
+                let p = CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
+                if i == 0 { star.move(to: p) } else { star.line(to: p) }
+            }
+            star.close()
+            ink.front.setFill()
+            star.fill()
+            return true
+        }
     }
 }
 
