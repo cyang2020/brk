@@ -53,10 +53,14 @@ enum BoostScenarios {
         try app.click(.boostControl("menu")); try typeField(app, "name", name)
         try app.waitUntil("Boost renamed") { try editor(app).draft.name == name }
     }
+    /// The Code page widens the panel to the left; a synthetic click goes through the window server's copy of the
+    /// frame, which trails AppKit's for a moment after the move.
+    private static func panelMoved() { Thread.sleep(forTimeInterval: 0.4) }
     private static func code(_ app: AppUnderTest, _ page: BoostEditorPage) throws {
         if try editor(app).page == .style {
             try app.click(.boostControl("code"))
             try app.waitUntil("Boost Code page") { try editor(app).page == .css }
+            panelMoved()
         }
         if page == .javascript { try app.click(.boostControl("tab-javascript")) }
         try app.waitUntil("Boost Code segment") { try editor(app).page == page }
@@ -64,6 +68,7 @@ enum BoostScenarios {
     private static func back(_ app: AppUnderTest) throws {
         try app.click(.boostControl("back"))
         try app.waitUntil("Boost editor page again") { try editor(app).page == .style }
+        panelMoved()
     }
     @Sendable static func css(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("boost.html"))
