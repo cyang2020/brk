@@ -126,7 +126,7 @@ struct LibrarySpacesMetrics: MetricGroup {
     let plusGap = Metric(48.0, .anatomy("P32-d: the + button is centred 48 after the last card"))
     let shadowRadius = Metric(24.0, .anatomy("P30-a: no outline; the panel darkens from #EDEDED at a card's edge back to #FCFCFC about 25 pt out"))
     let shadowDrop = Metric(1.0, .anatomy("P30-a: the shadow is a little darker under a card (#EBEBEA) than over it (#EDEDEC)"))
-    let shadowOpacity = Metric(0.13, .anatomy("P30-a: #FCFCFC to #ECECEC right at the edge, about half the shadow's darkness"))
+    let shadowOpacity = Metric(0.15, .anatomy("P30-a: #FCFCFC to #EDEDED right at a card's edge"))
     let themeWash = Metric(0.15, .guess("P30-a: the 对照 card (a pale beige theme) is the panel's #FCFCFC and Space 1's runs #E4E4FB to #FDEFEE: its theme at about 15% over the panel"))
     let faviconPlaceholderAlpha = Metric(0.17, .anatomy("P32-d: a favicon-less row's square is #D1D1D1 on the #FCFCFC card"))
 }
