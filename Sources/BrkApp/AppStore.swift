@@ -74,7 +74,7 @@ public final class AppStore {
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
     /// Check for Updates… and the Help menu (`AppEffect.help`).
-    private(set) lazy var help = HelpActions(engine: engine, send: { [weak self] window, command in
+    private(set) lazy var help = HelpActions(engine: engine, now: { [clock] in clock.now() }, send: { [weak self] window, command in
         self?.dispatch(.user(window, command))
     }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window })
     let siteDialogs = SiteDialogs()

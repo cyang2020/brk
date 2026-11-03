@@ -17,13 +17,17 @@ enum Scripting {
     /// The tests' store (they run without the app delegate).
     static var storeOverride: AppStore?
 
-    /// Browser windows front to back (AppKit's order), Little and incognito windows included.
+    /// Browser windows front to back, Little and incognito windows included: by each window's place in the window
+    /// server's order (`NSApp.orderedWindows` leaves Little windows out); windows not on screen last.
     static func orderedWindows(_ store: AppStore) -> [WindowID] {
-        let ids = Array(store.snapshot.windows.keys)
-        let byWindow = Dictionary(uniqueKeysWithValues: ids.compactMap { id in store.windowController(id).map { (ObjectIdentifier($0.window), id) } })
-        var ordered = NSApp.orderedWindows.compactMap { byWindow[ObjectIdentifier($0)] }
-        ordered += ids.filter { !ordered.contains($0) }.sorted()
-        return ordered
+        let front = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
+            .compactMap { $0[kCGWindowNumber as String] as? Int }
+        let place = Dictionary(front.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        return store.snapshot.windows.keys.sorted().sorted { a, b in
+            let pa = store.windowController(a).flatMap { place[$0.window.windowNumber] } ?? Int.max
+            let pb = store.windowController(b).flatMap { place[$0.window.windowNumber] } ?? Int.max
+            return pa < pb
+        }
     }
 
     /// An address the user typed or a script set: what the command bar would make of it (a host gets https).

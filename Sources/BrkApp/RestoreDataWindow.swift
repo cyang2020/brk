@@ -18,9 +18,11 @@ final class RestoreDataWindow: NSObject {
     private(set) var selected: URL?
     private(set) var check: StateBackups.Check?
     var confirmed: (@MainActor (URL) -> Void)?
+    private let now: () -> Instant
 
-    init(backups: StateBackups) {
+    init(backups: StateBackups, now: @escaping () -> Instant) {
         self.backups = backups
+        self.now = now
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 210), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.title = "Restore Data"
@@ -81,7 +83,7 @@ final class RestoreDataWindow: NSObject {
 
     func select(_ url: URL?) {
         selected = url
-        check = url.map(StateBackups.check)
+        check = url.map { StateBackups.check($0, now: now()) }
         switch check {
         case .restorable(let spaces, let tabs)?:
             status.stringValue = "Backup can be restored: \(spaces) \(spaces == 1 ? "space" : "spaces") and \(tabs) \(tabs == 1 ? "tab" : "tabs")."

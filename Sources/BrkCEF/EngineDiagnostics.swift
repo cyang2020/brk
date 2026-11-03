@@ -25,7 +25,7 @@ extension CEFEngine {
 
     /// AppleScript's text for a JavaScript value: a string as it is, a number or boolean as JSON writes it, an
     /// object or array as JSON, nothing for undefined and null.
-    static func scriptText(_ value: Any?) -> String? {
+    nonisolated static func scriptText(_ value: Any?) -> String? {
         switch value {
         case nil, is NSNull: return nil
         case let text as String: return text
@@ -63,9 +63,20 @@ extension CEFEngine {
         return written
     }
 
+    /// The task manager, fetched once: releasing it would drop Chromium's refresh observer, and every reading would
+    /// show zero memory and CPU.
+    private var manager: UnsafeMutablePointer<cef_task_manager_t>? {
+        if taskManager == nil, phase == .running { taskManager = cef_task_manager_get() }
+        return phase == .running ? taskManager : nil
+    }
+
+    func releaseTaskManager() {
+        if let taskManager { release(taskManager) }
+        taskManager = nil
+    }
+
     public func tasks() -> [EngineTask] {
-        guard phase == .running, let manager = cef_task_manager_get() else { return [] }
-        defer { release(manager) }
+        guard let manager else { return [] }
         let count = manager.pointee.get_tasks_count?(manager) ?? 0
         guard count > 0 else { return [] }
         var ids = [Int64](repeating: 0, count: count)
@@ -84,8 +95,7 @@ extension CEFEngine {
     }
 
     public func endTask(_ id: Int64) -> Bool {
-        guard phase == .running, let manager = cef_task_manager_get() else { return false }
-        defer { release(manager) }
+        guard let manager else { return false }
         return manager.pointee.kill_task?(manager, id) != 0
     }
 

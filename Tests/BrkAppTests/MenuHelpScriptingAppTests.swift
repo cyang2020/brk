@@ -121,22 +121,22 @@ final class MenuHelpScriptingAppTests: XCTestCase {
         h.store.start()
         h.store.flush()
         let backups = StateBackups(directory: h.directory)
-        let first = try XCTUnwrap(backups.snapshot(now: Date(timeIntervalSince1970: 1_000)))
-        XCTAssertNil(backups.snapshot(now: Date(timeIntervalSince1970: 2_000)), "the same file is not copied twice")
-        guard case .restorable(let spaces, let tabs) = StateBackups.check(first) else { return XCTFail("\(StateBackups.check(first))") }
+        let first = try XCTUnwrap(backups.snapshot(now: Instant(milliseconds: 1_000_000)))
+        XCTAssertNil(backups.snapshot(now: Instant(milliseconds: 2_000_000)), "the same file is not copied twice")
+        guard case .restorable(let spaces, let tabs) = StateBackups.check(first, now: Instant(milliseconds: 0)) else { return XCTFail("\(StateBackups.check(first, now: Instant(milliseconds: 0)))") }
         XCTAssertEqual(spaces, 1)
         XCTAssertEqual(tabs, 1)
         let garbage = h.directory.appendingPathComponent("not-state.json")
         try Data("{\"version\": 99}".utf8).write(to: garbage)
-        guard case .notRestorable = StateBackups.check(garbage) else { return XCTFail("a foreign file was accepted") }
+        guard case .notRestorable = StateBackups.check(garbage, now: Instant(milliseconds: 0)) else { return XCTFail("a foreign file was accepted") }
         let kept = h.directory.appendingPathComponent("kept-backup.json")
         try FileManager.default.copyItem(at: first, to: kept)
         for n in 0..<12 {
             try Data("{\"n\":\(n)}".utf8).write(to: backups.stateURL)
-            backups.snapshot(now: Date(timeIntervalSince1970: Double(3_000 + n * 10)))
+            backups.snapshot(now: Instant(milliseconds: Int64(3_000 + n * 10) * 1000))
         }
         XCTAssertEqual(backups.list().count, 10)
-        try backups.install(kept, now: Date(timeIntervalSince1970: 9_000))
+        try backups.install(kept, now: Instant(milliseconds: 9_000_000))
         XCTAssertEqual(try Data(contentsOf: backups.stateURL), try Data(contentsOf: kept))
         XCTAssertTrue(backups.list().contains { $0.url.lastPathComponent.hasPrefix("state-before-restore") })
     }
@@ -147,8 +147,8 @@ final class MenuHelpScriptingAppTests: XCTestCase {
         h.store.start()
         h.store.flush()
         let backups = StateBackups(directory: h.directory)
-        let good = try XCTUnwrap(backups.snapshot())
-        let window = RestoreDataWindow(backups: backups)
+        let good = try XCTUnwrap(backups.snapshot(now: Instant(milliseconds: 1_000_000)))
+        let window = RestoreDataWindow(backups: backups, now: { Instant(milliseconds: 0) })
         var confirmed: URL?
         window.confirmed = { confirmed = $0 }
         window.reload()
@@ -170,7 +170,8 @@ final class MenuHelpScriptingAppTests: XCTestCase {
         let engine = FakeEngine()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-trace-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
-        let recorder = TraceRecorder(engine: engine, directory: directory)
+        var tick: Int64 = 0
+        let recorder = TraceRecorder(engine: engine, directory: directory, now: { tick += 1_000; return Instant(milliseconds: tick) })
         var shown: [URL] = []
         recorder.reveal = { shown.append($0) }
         var failures: [String] = []

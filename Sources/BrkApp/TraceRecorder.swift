@@ -9,20 +9,22 @@ import Foundation
 /// chrome://tracing or Perfetto) and shows it in the Finder; Cancel Trace stops and keeps nothing.
 @MainActor
 final class TraceRecorder {
-    enum Phase: Equatable { case idle, starting, recording(since: Date), stopping }
+    enum Phase: Equatable { case idle, starting, recording(since: Instant), stopping }
 
     private(set) var phase: Phase = .idle
     private let engine: any WebEngine
     let directory: URL
     /// Shows the saved file (the Finder by default; tests record it).
     var reveal: @MainActor (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
-    var now: () -> Date = Date.init
+    /// The app's clock (file names).
+    private let now: () -> Instant
     /// The last file written, for the control socket and tests.
     private(set) var lastFile: URL?
 
-    init(engine: any WebEngine, directory: URL) {
+    init(engine: any WebEngine, directory: URL, now: @escaping () -> Instant) {
         self.engine = engine
         self.directory = directory
+        self.now = now
     }
 
     var isRecording: Bool { if case .recording = phase { true } else { false } }
@@ -64,10 +66,10 @@ final class TraceRecorder {
         }
     }
 
-    nonisolated static func stamp(_ date: Date) -> String {
+    nonisolated static func stamp(_ instant: Instant) -> String {
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")
         format.dateFormat = "yyyyMMdd-HHmmss"
-        return format.string(from: date)
+        return format.string(from: Date(timeIntervalSince1970: Double(instant.milliseconds) / 1000))
     }
 }

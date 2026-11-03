@@ -45,6 +45,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var dockTile: DockTile?
     /// Help > Restore Data's confirmed backup: put in place after the ordered quit, then the app starts again.
     private var pendingRestore: URL?
+    private var clock: (any Clock)?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
     public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
@@ -93,13 +94,14 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         case .restored(let repairs):
             if !repairs.isEmpty { log.notice("restored with repairs: \(repairs.joined(separator: "; "))") }
             // Help > Restore Data's copies: the file as this launch found it, before the store writes anything.
-            StateBackups(directory: directory).snapshot()
+            StateBackups(directory: directory).snapshot(now: ctx.now)
         case .rejected(let reason):
             log.error("state.json rejected (\(String(describing: reason))); quarantined")
             try? stateFile.quarantine(now: ctx.now)
         }
 
         let store = AppStore(restored: restored, clock: clock, engine: engine, stateFile: stateFile)
+        self.clock = clock
         let router = KeyRouter(store: store)
         engine.delegate = router
         self.store = store
@@ -206,7 +208,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             case .clean:
                 if let backup = self.pendingRestore {
                     do {
-                        try StateBackups(directory: Product.dataDirectory()).install(backup)
+                        try StateBackups(directory: Product.dataDirectory()).install(backup, now: self.clock?.now() ?? Instant(milliseconds: 0))
                         Self.relaunch()
                     } catch { log.error("restore of \(backup.path, privacy: .public) failed: \(error)") }
                 }

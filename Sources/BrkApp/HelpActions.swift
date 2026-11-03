@@ -27,11 +27,15 @@ final class HelpActions {
     /// Where Copy {app} Info writes (tests give a private pasteboard).
     var pasteboard = NSPasteboard.general
 
-    init(engine: any WebEngine, send: @escaping @MainActor (WindowID, Command) -> Void, owner: @escaping @MainActor (WindowID) -> NSWindow?) {
+    private let now: () -> Instant
+
+    init(engine: any WebEngine, now: @escaping () -> Instant, send: @escaping @MainActor (WindowID, Command) -> Void,
+         owner: @escaping @MainActor (WindowID) -> NSWindow?) {
         self.engine = engine
+        self.now = now
         self.send = send
         self.owner = owner
-        trace = TraceRecorder(engine: engine, directory: Product.dataDirectory().appendingPathComponent("Traces", isDirectory: true))
+        trace = TraceRecorder(engine: engine, directory: Product.dataDirectory().appendingPathComponent("Traces", isDirectory: true), now: now)
     }
 
     func run(_ action: HelpAction, owner window: WindowID) {
@@ -67,7 +71,7 @@ final class HelpActions {
             taskManager = manager
             manager.show()
         case .restoreData:
-            let panel = restore ?? RestoreDataWindow(backups: StateBackups(directory: Product.dataDirectory()))
+            let panel = restore ?? RestoreDataWindow(backups: StateBackups(directory: Product.dataDirectory()), now: now)
             restore = panel
             panel.confirmed = { [weak self] url in self?.restoreConfirmed?(url) }
             panel.show()

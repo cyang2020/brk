@@ -37,7 +37,7 @@ struct StateBackups {
 
     /// The launch copy. Returns the new backup, or nil when there is no state file or it equals the newest copy.
     @discardableResult
-    func snapshot(now: Date = Date()) -> URL? {
+    func snapshot(now: Instant) -> URL? {
         guard let data = try? Data(contentsOf: stateURL) else { return nil }
         if let newest = list().first(where: { !$0.url.lastPathComponent.hasPrefix("state-before-restore") }),
            (try? Data(contentsOf: newest.url)) == data { return nil }
@@ -62,10 +62,10 @@ struct StateBackups {
     }
 
     /// Whether `url` is a state file this build can open, by the codec itself (a file it would quarantine is refused).
-    static func check(_ url: URL) -> Check {
+    static func check(_ url: URL, now: Instant) -> Check {
         guard let data = try? Data(contentsOf: url) else { return .notRestorable("The file cannot be read.") }
         let restored = StateCodec.restore(data, seed: RestoreSeed(startURL: nil, contentSize: CGSize(width: 1280, height: 800)),
-                                          ctx: Context(now: Instant(milliseconds: Int64(Date().timeIntervalSince1970 * 1000)), newID: { UUID().uuidString }))
+                                          ctx: Context(now: now, newID: { UUID().uuidString }))
         switch restored.outcome {
         case .rejected(let error): return .notRestorable("It is not a \(Product.name) data file this version can open (\(error)).")
         case .fresh: return .notRestorable("The file is empty.")
@@ -76,7 +76,7 @@ struct StateBackups {
     }
 
     /// Puts `backup` in place of the state file, keeping the current one as `state-before-restore-<time>.json`.
-    func install(_ backup: URL, now: Date = Date()) throws {
+    func install(_ backup: URL, now: Instant) throws {
         let data = try Data(contentsOf: backup)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: stateURL.path) {
