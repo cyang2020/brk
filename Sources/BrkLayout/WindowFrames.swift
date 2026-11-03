@@ -132,7 +132,7 @@ public enum ViewID: Hashable, Sendable, Codable {
     case toolbar, toolbarAddress, toolbarButton(String), spaceToolsControl(String), boostControl(String)
     /// The page loading bar above the content card (Arc P06-a).
     case loadingBar
-    case siteInfo
+    case siteInfo, paneSiteInfo
     case sidebar, floatingSidebar, titleRow, urlPill, favoritesTray
     case favorite(ItemID)
     case section(SectionKind)
@@ -174,6 +174,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .floatingSidebar: "floating-sidebar"
         case .titleRow: "title-row"
         case .siteInfo: "site-info"
+        case .paneSiteInfo: "pane-site-info"
         case .urlPill: "url-pill"
         case .favoritesTray: "favorites"
         case .favorite(let id): "favorite-\(id)"
@@ -272,7 +273,7 @@ extension WindowFrames {
         case .archive: return library?.page   // the archive page fills the Library's page column while it is the open page
         case .historyPage: return cards.first { if case .history = $0.content { true } else { false } }?.rect
         case .peek: return peek
-        case .siteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+        case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
              .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:
