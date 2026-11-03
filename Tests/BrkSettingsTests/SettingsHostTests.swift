@@ -258,7 +258,9 @@ final class SettingsHostTests: XCTestCase {
         let f = Fixture()
         f.render(snapshot(pane: .general))
         f.window.orderFront(nil)
-        defer { f.window.orderOut(nil) }
+        // Closed, not only hidden: SwiftUI's sheet presentation keeps the window alive, and a later test looks the
+        // settings window up in NSApp.windows.
+        defer { f.window.orderOut(nil); f.window.close() }
         XCTAssertEqual(f.click("previewsSettings"), [])
         for _ in 0..<10 where f.window.attachedSheet == nil { f.settle() }
         let sheet = try XCTUnwrap(f.window.attachedSheet, "the sheet is attached to the settings window")

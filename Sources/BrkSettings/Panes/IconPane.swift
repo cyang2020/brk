@@ -14,7 +14,7 @@ struct IconPane: View {
 
     var body: some View {
         CardPane {
-            SettingsCard {
+            SettingsCard(fill: Color(nsColor: .textBackgroundColor)) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(AppIconChoice.allCases.enumerated()), id: \.element) { index, choice in
                         if index > 0 {

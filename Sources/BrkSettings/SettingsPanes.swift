@@ -80,7 +80,6 @@ struct PreviewsSheet: View {
                 }
             }
             .padding(.top, C.sheetListTop.value)
-            Spacer(minLength: C.sheetListTop.value)
             HStack {
                 Spacer()
                 Button(action: done) {
@@ -92,16 +91,19 @@ struct PreviewsSheet: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: C.doneRadius.value))
                 .tint(ArtColor.maxInk)
                 .controlSize(.extraLarge)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier(ViewID.settingsField("previewsDone").identifier)
             }
+            .padding(.top, C.sheetDoneTop.value)
         }
         .padding(.horizontal, C.sheetPadding.value)
         .padding(.top, C.sheetTop.value)
         .padding(.bottom, C.sheetBottom.value)
-        .frame(width: C.sheetSize.value.width, height: C.sheetSize.value.height, alignment: .topLeading)
+        // Arc's seven boxes make its sheet 372 points tall; Brk's two make it shorter, the width stays Arc's.
+        .frame(width: C.sheetSize.value.width, alignment: .topLeading)
         .background(ArtColor.rgb(0xFBFBFF))
     }
 }
@@ -143,8 +145,7 @@ struct LinksPane: View {
                         CardRow(height: C.popUpRowHeight.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
                             SettingsPopUp(field: "littleArcAutoArchive",
                                           entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: LinkSettings.default.littleArcAutoArchive), $0) },
-                                          selected: links.littleArcAutoArchive) { send(.littleArcAutoArchive($0)) }
-                                .fixedSize()
+                                          selected: links.littleArcAutoArchive, width: .selected(minimum: 0)) { send(.littleArcAutoArchive($0)) }
                                 .padding(.trailing, C.popUpTrailing.value)
                         }
                     }

@@ -195,7 +195,7 @@ struct SettingsRootView: View {
 
     var body: some View {
         if let context {
-            SettingsContainer {
+            SettingsContainer(minHeight: context.size.height) {
                 switch pane {
                 case .general: GeneralPane(context: context)
                 case .profiles: ProfilesPane(context: context)

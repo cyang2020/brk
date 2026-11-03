@@ -221,8 +221,10 @@ struct ProminentButton: NSViewRepresentable {
         let color: NSColor = prominent ? .white : .labelColor
         button.attributedTitle = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: color])
         if let symbol {
+            // A filled symbol keeps its glyph in the button's colour (Arc's ⌘ in a white disc).
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: NSFont.systemFontSize, weight: .regular).applying(.init(paletteColors: [color])))
+                .withSymbolConfiguration(.init(pointSize: NSFont.systemFontSize, weight: .regular)
+                    .applying(.init(paletteColors: prominent ? [accent, color] : [color])))
             button.imagePosition = .imageLeading
         }
     }

@@ -22,11 +22,14 @@ private var S: SettingsMetrics { Metrics.settings }
 /// A pane's body: the window's width, top-aligned. Card panes pad themselves (`CardPane`); banner panes (Max,
 /// Links) draw edge to edge.
 struct SettingsContainer<Content: View>: View {
+    /// The pane's area: a shorter pane stays at the top of it instead of being centred.
+    var minHeight: CGFloat = 0
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(width: Metrics.settings.windowSize.value.width, alignment: .topLeading)
+            .frame(minHeight: minHeight, alignment: .top)
     }
 }
 
@@ -217,11 +220,20 @@ enum PopUpEntry<Value: Hashable> {
     }
 }
 
+/// How wide a settings pop-up is.
+enum PopUpWidth {
+    /// As wide as offered (the old label-column panes line their pickers up this way).
+    case proposed
+    /// Arc 1.170's card pickers: the chosen item's title plus the control's chrome, at least `minimum`.
+    case selected(minimum: CGFloat)
+}
+
 /// A pop-up button for one choice. `selected` is the snapshot's value; choosing another calls `choose` once.
 struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
     let field: String
     let entries: [PopUpEntry<Value>]
     let selected: Value?
+    var width: PopUpWidth = .proposed
     let choose: @MainActor (Value) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -256,9 +268,17 @@ struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
         context.coordinator.showSelected(in: button)
     }
 
-    /// As wide as offered (the panes give pop-ups one width so they line up), as tall as the control.
+    /// As tall as the control; as wide as `width` says.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSPopUpButton, context: NSViewRepresentableContext<Self>) -> CGSize? {
-        CGSize(width: proposal.width ?? button.intrinsicContentSize.width, height: button.intrinsicContentSize.height)
+        switch width {
+        case .proposed:
+            return CGSize(width: proposal.width ?? button.intrinsicContentSize.width, height: button.intrinsicContentSize.height)
+        case .selected(let minimum):
+            let item = button.selectedItem
+            let title = ((item?.title ?? "") as NSString).size(withAttributes: [.font: button.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)]).width
+            let image = item?.image.map { $0.size.width + CardMetrics.popUpImageGap.value } ?? 0
+            return CGSize(width: max(minimum, (title + image + CardMetrics.popUpChrome.value).rounded(.up)), height: button.intrinsicContentSize.height)
+        }
     }
 
     @MainActor final class Coordinator: NSObject {

@@ -33,12 +33,13 @@ enum SettingsStyle {
 
 /// A group of rows in one rounded card. Put `CardDivider()` between the rows.
 struct SettingsCard<Content: View>: View {
+    var fill: Color = SettingsStyle.cardFill
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: C.cornerRadius.value, style: .continuous).fill(SettingsStyle.cardFill))
+            .background(RoundedRectangle(cornerRadius: C.cornerRadius.value, style: .continuous).fill(fill))
             .overlay(RoundedRectangle(cornerRadius: C.cornerRadius.value, style: .continuous).strokeBorder(SettingsStyle.cardBorder, lineWidth: C.borderWidth.value))
     }
 }
@@ -55,13 +56,15 @@ struct CardDivider: View {
 /// One row of a card: a label (or anything) at the left, a control at the right, at least `height` tall.
 struct CardRow<Leading: View, Trailing: View>: View {
     var height: CGFloat = CardMetrics.rowHeight.value
+    /// The least space between the label and the control.
+    var gap: CGFloat = CardMetrics.controlGap.value
     @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: C.controlGap.value) {
+        HStack(alignment: .center, spacing: 0) {
             leading
-            Spacer(minLength: C.controlGap.value)
+            Spacer(minLength: gap)
             trailing
         }
         .padding(.horizontal, C.rowPadding.value)
@@ -201,7 +204,7 @@ struct SettingsSwitch: NSViewRepresentable {
         let control = NSSwitch()
         control.target = context.coordinator
         control.action = #selector(Coordinator.clicked(_:))
-        control.controlSize = .regular
+        control.controlSize = .mini
         return control
     }
 
@@ -257,6 +260,10 @@ struct SettingsCardMetricsTable: MetricGroup {
     let rowPadding = Metric(10.0, .anatomy("\(capture)/P38-a-arc.png: labels start at x 148 px, switches end at 1220 px"))
     let dividerInset = Metric(10.0, .anatomy("\(capture)/P38-a-arc.png: the second card's hairline spans x 148 to 1220 px"))
     let controlGap = Metric(8.0, .guess("space between a row's label and its control"))
+    let switchSize = Metric(CGSize(width: 36, height: 16), .anatomy("\(capture)/P38-d-arc.png: the switch track spans x 1148 to 1220 px, y 520 to 552 px (AppKit's mini switch)"))
+    let popUpChrome = Metric(44.0, .anatomy("\(capture)/P38-f-arc.png: '6 hours (default)' is about 104 pt of text in a 148.5 pt pop-up"))
+    let popUpImageGap = Metric(4.0, .guess("space after a pop-up item's icon"))
+    let profilePopUpMinimum = Metric(135.0, .anatomy("\(capture)/P38-d-arc.png: the Google and Downloads pop-ups are 135 to 136 pt wide"))
     let rowHeight = Metric(36.0, .anatomy("\(capture)/P38-a-arc.png: switch rows 216 to 288 to 360 px"))
     let buttonRowHeight = Metric(42.0, .anatomy("\(capture)/P38-a-arc.png: the Previews row spans y 378 to 462 px"))
     let iconRowHeight = Metric(40.0, .anatomy("\(capture)/P38-g-arc.png: Advanced rows 216 to 296 to 376 px"))
@@ -284,6 +291,8 @@ struct SettingsCardMetricsTable: MetricGroup {
     let sheetListTop = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: Learn more centred at y 456 px, the first box at 511 px"))
     let sheetRowGap = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: boxes 57 px apart"))
     let keyGlyphPadding = Metric(4.0, .guess("the ↩ box inside Done"))
+    let doneRadius = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: Done is a rounded rectangle, not a capsule"))
+    let sheetDoneTop = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the last box is centred at y 852 px, Done starts at 902 px"))
     let keyGlyphRadius = Metric(4.0, .guess("the ↩ box's corner"))
     let popoverWidth = Metric(320.0, .guess("a Learn more popover"))
     let introLineSpacing = Metric(0.0, .anatomy("\(capture)/P38-f-arc.png: paragraph lines 32 px apart, a 13 pt line"))

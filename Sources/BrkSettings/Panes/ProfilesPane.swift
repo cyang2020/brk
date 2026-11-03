@@ -220,13 +220,14 @@ struct ProfileSettingsForm: View {
     private var settings: ProfileSettings { row.settings }
 
     private func send(_ setting: ProfileSetting) { context.dispatch(.settings(.profile(id, setting))) }
+    private var popUpWidth: PopUpWidth { .selected(minimum: CardMetrics.profilePopUpMinimum.value) }
 
     var body: some View {
         SettingsCard {
-            CardRow(height: P.popUpRow.value) { CardLabel(ProfilesCopy.searchEngine) } trailing: {
+            CardRow(height: P.popUpRow.value, gap: 0) { CardLabel(ProfilesCopy.searchEngine).fixedSize() } trailing: {
                 SettingsPopUp(field: "searchEngine-\(id)", entries: (context.settings.engines.map { ($0.name, $0.id) } + (settings.siteSearchEngines ?? []).map { ($0.name, $0.id) }).map { .option($0.0, $0.1) },
-                              selected: settings.searchEngine) { send(.searchEngine($0)) }
-                    .fixedSize().frame(width: P.popUpColumn.value)
+                              selected: settings.searchEngine, width: popUpWidth) { send(.searchEngine($0)) }
+                    .frame(width: P.popUpColumn.value)
             }
             CardDivider()
             ButtonRow(title: ProfilesCopy.manageSearch, button: ProfilesCopy.searchSettings, field: "searchSettings-\(id)", height: P.popUpRow.value) { open(.siteSearch) }
@@ -234,29 +235,30 @@ struct ProfileSettingsForm: View {
             SwitchRow(title: SettingsCopy.searchSuggestions, field: "searchSuggestions-\(id)", isOn: settings.searchSuggestions) { send(.searchSuggestions($0)) }
         }
         SettingsCard {
-            CardRow(height: P.popUpRow.value) {
+            CardRow(height: P.popUpRow.value, gap: 0) {
                 HStack(spacing: CardMetrics.subtitleGap.value) {
                     CardLabel(ProfilesCopy.archiveTabsAfter)
                     Image(systemName: "info.circle").foregroundStyle(SettingsStyle.text).help(ProfilesCopy.archiveHelp)
                 }
+                .fixedSize()
             } trailing: {
                 SettingsPopUp(field: "autoArchive-\(id)", entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: .default), $0) },
-                              selected: settings.autoArchive) { send(.autoArchive($0)) }
-                    .fixedSize().frame(width: P.popUpColumn.value)
+                              selected: settings.autoArchive, width: popUpWidth) { send(.autoArchive($0)) }
+                    .frame(width: P.popUpColumn.value)
             }
             CardDivider()
-            CardRow(height: P.popUpRow.value) { CardLabel(ProfilesCopy.newDocuments) } trailing: {
+            CardRow(height: P.popUpRow.value, gap: 0) { CardLabel(ProfilesCopy.newDocuments).fixedSize() } trailing: {
                 // Arc's Default Document App; Brk has no document apps to pick yet, so the menu shows Arc's dash.
                 SettingsPopUp(field: "newDocuments-\(id)", entries: [PopUpEntry<Int>.option(ProfilesCopy.noDocumentApp, 0)], selected: 0) { _ in }
                     .disabled(true).frame(width: P.documentsWidth.value).frame(width: P.popUpColumn.value)
             }
             CardDivider()
-            CardRow(height: P.popUpRow.value) { CardLabel(ProfilesCopy.downloadLocation) } trailing: {
+            CardRow(height: P.popUpRow.value, gap: 0) { CardLabel(ProfilesCopy.downloadLocation).fixedSize() } trailing: {
                 SettingsPopUp(field: "downloadLocation-\(id)", entries: downloadEntries,
-                              selected: settings.promptForDownloadLocation ? DownloadChoice.prompt : .folder) { choice in
+                              selected: settings.promptForDownloadLocation ? DownloadChoice.prompt : .folder, width: popUpWidth) { choice in
                     send(.promptForDownloadLocation(choice == .prompt))
                 }
-                .fixedSize().frame(width: P.popUpColumn.value)
+                .frame(width: P.popUpColumn.value)
             }
         }
         CardHeader(text: ProfilesCopy.yourData).padding(.top, P.dataHeaderTop.value)
