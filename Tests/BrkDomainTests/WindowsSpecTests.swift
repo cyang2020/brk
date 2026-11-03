@@ -141,6 +141,50 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertNil(d.view.overlay)
     }
 
+    /// The Peek's ⤢ button (Arc 1.170, the 2026-11-03 capture P22c): the peeked tab moves to the end of Today with its
+    /// id, so its page (same window, same item) stays live and keeps its scroll position; it is focused and the card closes
+    func test_peekOpenAsTabAppendsTheSamePageToTodayAndFocusesIt() throws {
+        let d = Driver()
+        let before = d.todayIDs
+        d.user(.peek(.open(url("https://example.com/peeked"))))
+        guard case .peek(let peek)? = d.view.overlay else { return XCTFail("no peek") }
+        let page = PageID(window: d.window, item: peek.tab.id)
+        XCTAssertTrue(d.view.space.today.rows.contains { if case .tab(let t) = $0 { t.peeking } else { false } }, "the shown row carries the Peek marker")
+        d.user(.peek(.openAsTab))
+        XCTAssertNil(d.view.overlay)
+        XCTAssertEqual(d.todayIDs, before + [peek.tab.id], "the peeked tab is the last tab of Today, with its id")
+        XCTAssertEqual(d.view.content.panes.map(\.tab), [peek.tab.id])
+        XCTAssertNotNil(d.snapshot.pages.first { $0.id == page }, "the peeked page is still live (Arc keeps its scroll)")
+        XCTAssertFalse(d.view.space.today.rows.contains { if case .tab(let t) = $0 { t.peeking } else { false } })
+    }
+
+    /// The Peek's split button: the peeked page joins the shown Today tab in a split, on its right, keeping its page
+    func test_peekOpenInSplitGroupsTheShownTabWithThePeekedPage() throws {
+        let d = Driver()
+        let shown = try XCTUnwrap(d.view.content.panes.first?.tab)
+        d.user(.peek(.open(url("https://example.com/peeked"))))
+        guard case .peek(let peek)? = d.view.overlay else { return XCTFail("no peek") }
+        d.user(.peek(.openInSplit))
+        XCTAssertNil(d.view.overlay)
+        XCTAssertEqual(d.view.content.panes.map(\.tab), [shown, peek.tab.id])
+        XCTAssertEqual(d.view.content.panes.first { $0.focused }?.tab, peek.tab.id)
+        XCTAssertNotNil(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: peek.tab.id) })
+    }
+
+    /// A blank window (Ctrl+Cmd+N) lists its own tabs: its scratch section is what the sidebar shows
+    func test_blankWindowListsItsOwnTabs() throws {
+        let d = Driver()
+        d.user(.window(.newBlank))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .blank }?.id)
+        d.user(.commandBar(.submit("https://example.com/home")), in: window)
+        d.user(.commandBar(.open(.newTab)), in: window)
+        d.user(.commandBar(.submit("https://example.com/docs")), in: window)
+        let rows = try XCTUnwrap(d.view(of: window).scratch?.rows)
+        XCTAssertEqual(rows.compactMap { row -> URL? in if case .tab(let t) = row { t.url } else { nil } }, [url("https://example.com/docs"), url("https://example.com/home")],
+                       "newest first, as Arc lists them under This Window")
+        XCTAssertEqual(rows.compactMap { row -> RowStatus? in if case .tab(let t) = row { t.status } else { nil } }, [.current, .idle])
+    }
+
     /// Shift+click (Shift held when the page asks to open a link) opens a Peek when the Links setting allows it; Opt+Cmd opens a Little Arc
     func test_modifierClicksFollowTheLinksSettings() throws {
         let d = Driver()

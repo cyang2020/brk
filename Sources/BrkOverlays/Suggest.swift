@@ -57,7 +57,8 @@ public enum Suggest {
     ///    of its trigger words up to a word's end (an exact title or trigger first), 3 characters at least, and the
     ///    query is not an address;
     /// 2. open tabs whose title or URL matches (`.tab(.focus(id))`), never the focused one; word-start matches
-    ///    before mid-word. For an address, only exact URL matches precede the typed row; partial matches follow it;
+    ///    before mid-word. For an address, only exact URL matches precede the typed row (none while the bar fills an
+    ///    empty split pane, `fillsPane`: the typed row opens there); partial matches follow it;
     /// 3. "open what you typed" (`.commandBar(.submit(trimmed))`) when `resolve` accepts it: "Search <q>" when it
     ///    resolves to a search for the text, else "Open <url>"; a typed URL that is also in history shows once;
     /// 4. (site search is offered beside the input, `siteSearchOffer`, not as a row);
@@ -167,11 +168,13 @@ public enum Suggest {
                        command: .commandBar(.submit(entry.url.absoluteString)))
         }
         let typedRow = typed.map { [$0] } ?? []
+        // Filling an empty split pane, a typed address opens in that pane: it leads, the tab showing it follows.
+        let (lead, trail) = bar.fillsPane && isAddress ? ([], switches) : (switches, [])
         let rows: [Suggestion]
         if let completed {
             rows = [completed] + typedRow + switches + related + history + domains + bookmarks + suggestions + travel.prefix(actionCap).map(\.suggestion)
         } else {
-            rows = top + switches + typedRow + related + domains + bookmarks + suggestions + history + travel.prefix(actionCap).map(\.suggestion)
+            rows = top + lead + typedRow + trail + related + domains + bookmarks + suggestions + history + travel.prefix(actionCap).map(\.suggestion)
         }
         return Array(rows.prefix(limit))
     }

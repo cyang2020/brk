@@ -22,7 +22,43 @@ extension Work {
             openOverlay({ .peek(openID: $0, tab: tab) }, in: window)
         case .close:
             closePeek(in: window)
+        case .openAsTab:
+            promotePeek(in: window, split: false)
+        case .openInSplit:
+            promotePeek(in: window, split: true)
         }
+    }
+
+    /// The card's ⤢ and split buttons (Arc: the round buttons beside the Peek). The held scratch tab moves into the
+    /// window's own space with its id unchanged, so its page (same window, same item, same profile: the window's
+    /// space's) stays live: Arc keeps the Peek's scroll position. As a tab it goes to the end of Today; into a split
+    /// it sits after the shown tab and the two are grouped (`SidebarTree.groupTab`), the peeked page on the right.
+    /// A shown split, Favorites tab or nothing shown falls back to the Today tab.
+    mutating func promotePeek(in window: WindowID, split: Bool) {
+        guard let doc = state.doc.windows[window], doc.kind == .standard, let held = state.peekedTab(in: window),
+              var tab = state.displayedTab(held, in: window, for: .savedDocument),
+              let today = state.doc.spaces[doc.space]?.todayRoot else { return }
+        tab.url = state.address(of: held, in: window, for: .savedDocument)
+        let shown = state.shownItem(in: window)
+        var partner: ItemID?
+        if split, let shown, case .tab? = state.doc.tree[shown]?.body, state.doc.tree.splitContaining(shown) == nil,
+           let role = state.doc.tree.role(of: shown), role.kind != .favorites { partner = shown }
+        state.session.windows[window]!.overlay = nil
+        _ = removeItem(held)
+        do {
+            try state.doc.tree.insert(held, .tab(tab), at: partner.map { .after($0) } ?? .into(parent: today, index: Int.max), createdAt: ctx.now)
+        } catch {
+            unload(held)
+            return
+        }
+        if let partner {
+            var grouped: ItemID?
+            state.withTree(.global) { tree in
+                grouped = try? tree.groupTab(held, with: partner, splitID: ItemID(ctx.newID()), edge: .right, createdAt: ctx.now)
+            }
+            if let grouped { select(grouped, in: window, space: doc.space) }
+        }
+        focus(held, in: window)
     }
 
     /// Drops the peeked tab and its page; the overlay closes. No archive entry: a Peek is a preview, not a tab.

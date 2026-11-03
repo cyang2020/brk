@@ -146,6 +146,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         row.documentPictureInPicture = state.session.live[PageID(window: id, item: tab)]?.documentPictureInPicture ?? false
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
+        if tab == focusedPane, case .peek(_, let peeked)? = session.overlay, kind != .scratch {
+            row.peeking = true
+            row.peekFavicon = state.displayedTab(peeked, in: id)?.favicon
+        }
         if kind == .favorites, doc.kind == .standard {
             let pending = state.session.siteRequests.values.contains { $0.target == .favorite(tab) }
             if pending { row.sourceStatus = "Connecting…" }
@@ -229,7 +233,14 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         } else {
             content = .blank
         }
-        return Pane(tab: p, content: content, fraction: fraction, focused: p == focusedPane)
+        var pane = Pane(tab: p, content: content, fraction: fraction, focused: p == focusedPane)
+        if splitID != nil {
+            pane.host = state.address(of: p, in: id, for: .visible).map { $0.host ?? displayURL($0) }
+            if let live = state.session.live[PageID(window: id, item: p)] {
+                pane.canGoBack = live.canGoBack; pane.canGoForward = live.canGoForward; pane.loading = live.loading
+            }
+        }
+        return pane
     }
     let content = ContentSnapshot(expanded: splitID != nil && session.expandedSplit == splitID,
                                   drop: state.splitDrop(in: id), panes: contentPanes, split: splitID, orientation: orientation)
@@ -302,7 +313,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             suggestions: session.suggestions?.results ?? [],
             suggestedFor: session.suggestions?.query,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
-            createsTab: target == .newTab
+            createsTab: target == .newTab,
+            fillsPane: { if case .fillPane = target { true } else { false } }()
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
@@ -379,10 +391,14 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     case nil: nil
     }
 
-    // Incognito has its own dark chrome. Greyscale 7 is an existing preset, chosen pending an Arc comparison;
-    // it never edits the space's saved theme or the appearance of its standard windows.
+    // Incognito has its own dark chrome: Arc's near-black (the 2026-11-03 capture Q03 reads #0D0F14 under the dark
+    // wash; this color washes to it). It never edits the space's saved theme or the appearance of its standard windows.
+    // A blank window and a Little Arc belong to no space's sidebar: Arc draws them in its own lavender-to-pink
+    // gradient (the 2026-11-03 captures P20a and P21b read #DADBF5 to #ECE2E6 under the wash; these colors wash to them).
     let theme = doc.kind == .incognito
-        ? SpaceTheme(colors: [ThemePresets.greyscale[6]], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
+        ? SpaceTheme(colors: [RGBA(hex: "#14171E")], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
+        : doc.kind == .blank || doc.kind == .little
+        ? SpaceTheme(colors: [RGBA(hex: "#C7C9F0"), RGBA(hex: "#E2D3D9")], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .light)
         : space.theme
     return WindowSnapshot(capture: session.capture,
         id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme, systemScheme: ctx.systemScheme),

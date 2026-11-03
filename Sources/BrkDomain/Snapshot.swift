@@ -178,6 +178,10 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var audible: Bool = false
     public var muted: Bool = false
     public var canReset: Bool
+    /// The window's Peek was opened from this tab (it is the shown tab under the card): the row shows the peeked
+    /// page's icon at its trailing end (Arc's Peek marker). `peekFavicon` is that page's favicon.
+    public var peeking: Bool = false
+    public var peekFavicon: URL? = nil
 }
 
 public struct FolderRow: Sendable, Equatable, Codable {
@@ -227,6 +231,12 @@ public struct Pane: Sendable, Equatable, Codable {
     /// Relative width, normalized to sum 1 across panes.
     public var fraction: Double
     public var focused: Bool
+    /// What a split pane's own header shows (Arc: each pane of a split has back, forward, reload and its host):
+    /// the pane's host, nil without a page address.
+    public var host: String? = nil
+    public var canGoBack: Bool = false
+    public var canGoForward: Bool = false
+    public var loading: Bool = false
 }
 
 /// What a card hosts. Easels and Notes plug in as new cases hosting native editors instead of a page surface.
@@ -347,6 +357,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var suggestionsEnabled: Bool = true
     /// The bar opens a new tab (Cmd+T, the New Tab row): the sidebar's New Tab row shows as selected meanwhile (Q01-a).
     public var createsTab: Bool = false
+    /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
+    /// even when a tab already shows that address (Arc opens the page in the new pane).
+    public var fillsPane: Bool = false
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
