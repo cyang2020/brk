@@ -30,11 +30,12 @@ public final class SiteControlsHost: NSView {
     }
 
     public func render(_ value: SiteControlSnapshot, dispatch: @escaping Dispatch) {
-        let resized = self.value.map { $0.extensions.count != value.extensions.count } ?? false
+        let size = preferredSize, first = self.value == nil
         self.value = value; self.dispatch = dispatch
         overview.render(value, dispatch: dispatch)
         if showingDetails { renderDetails() }
-        if resized { onResize?(preferredSize) }
+        // More extensions, or the security row coming and going with the page, change the popover's height.
+        if !first, preferredSize != size { onResize?(preferredSize) }
     }
 
     public func show(details: Bool) {
@@ -121,6 +122,10 @@ private struct SiteControlsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
+                if let target = value.target {
+                    Text(target.origin.url.scheme == "https" ? "Connection is secure (HTTPS)." : "Connection is not secure: this site uses plain HTTP.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Text(value.profileName).foregroundStyle(.secondary)
                 if value.target != nil {
                     HStack {

@@ -5,8 +5,9 @@ import BrkUIKit
 
 /// The first page of the site controls popover, drawn after Arc's site control center (P36-a): a row of four
 /// rounded buttons (Share, Boost, Capture, Capture Full Page), an Extensions section with one button per extension
-/// and a + button, and a Settings section with the per-site Developer Mode row. The section titles open the second
-/// page, which keeps the full site form.
+/// and a + button, a Settings section with the per-site Developer Mode row and, for a web page, a security row
+/// (Secure or a red Insecure, and a … button). The section titles, the security button and … open the second page,
+/// which keeps the full site form.
 @MainActor
 final class SiteControlsOverview: NSView {
     var openDetails: (() -> Void)?
@@ -19,6 +20,9 @@ final class SiteControlsOverview: NSView {
     private let extensionsTitle = SectionTitle("Extensions", field: "siteExtensionsDetails")
     private let settingsTitle = SectionTitle("Settings", field: "siteSettingsDetails")
     private let developer = SiteRow(title: "Developer Mode", symbol: "hammer.fill", field: "siteDeveloperMode")
+    private let divider = NSView()
+    private let security = SecurityChip(field: "siteSecurity")
+    private let more = SiteTile(symbol: "ellipsis", tip: "More Site Settings", field: "siteMore", filled: true, round: true)
     private var value: SiteControlSnapshot?
     private var dispatch: Dispatch?
 
@@ -28,9 +32,10 @@ final class SiteControlsOverview: NSView {
                                  (fullPage, #selector(captureFullPage)), (add, #selector(addExtension))] {
             tile.target = self; tile.action = selector
         }
-        for title in [extensionsTitle, settingsTitle] { title.target = self; title.action = #selector(details) }
+        for control in [extensionsTitle, settingsTitle, security, more] as [NSControl] { control.target = self; control.action = #selector(details) }
         developer.target = self; developer.action = #selector(toggleDeveloperMode)
-        for view in [share, boost, capture, fullPage, extensionsTitle, add, settingsTitle, developer] as [NSView] { addSubview(view) }
+        divider.wantsLayer = true
+        for view in [share, boost, capture, fullPage, extensionsTitle, add, settingsTitle, developer, divider, security, more] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -59,6 +64,10 @@ final class SiteControlsOverview: NSView {
         }
         developer.subtitle = value.rule.developerMode == true ? "On" : "Off"
         developer.isOn = value.rule.developerMode == true
+        // Only web pages have the row (Arc's History page has none); certificate errors are not reported here yet.
+        let web = value.target != nil
+        security.secure = value.target?.origin.url.scheme == "https"
+        for view in [divider, security, more] as [NSView] { view.isHidden = !web }
         needsLayout = true
     }
 
@@ -71,11 +80,14 @@ final class SiteControlsOverview: NSView {
         for (tile, rect) in zip([share, boost, capture, fullPage], f.actions) { tile.frame = rect }
         for (tile, rect) in zip(extensionTiles + [add], f.extensions) { tile.frame = rect }
         extensionsTitle.frame = f.extensionsTitle; settingsTitle.frame = f.settingsTitle; developer.frame = f.developer
+        divider.frame = f.divider; security.frame = f.security; more.frame = f.more
+        divider.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
     }
 
     private struct Frames {
         var actions: [CGRect] = [], extensions: [CGRect] = []
         var extensionsTitle = CGRect.zero, settingsTitle = CGRect.zero, developer = CGRect.zero
+        var divider = CGRect.zero, security = CGRect.zero, more = CGRect.zero
         var height = 0.0
     }
 
@@ -98,6 +110,12 @@ final class SiteControlsOverview: NSView {
         let rowTop = settingsBaseline + m.rowGap.value
         f.developer = CGRect(x: inset, y: rowTop, width: width - 2 * inset, height: m.rowIcon.value)
         f.height = rowTop + m.rowIcon.value + m.bottom.value
+        guard !security.isHidden else { return f }
+        f.divider = CGRect(x: inset, y: f.developer.maxY + m.securityDividerGap.value, width: width - 2 * inset, height: 1)
+        let row = f.divider.maxY + m.securityGap.value, height = m.securityHeight.value
+        f.security = CGRect(x: inset, y: row, width: security.fittingWidth, height: height)
+        f.more = CGRect(x: width - inset - height, y: row, width: height, height: height)
+        f.height = row + height + m.securityBottom.value
         return f
     }
 
@@ -126,12 +144,12 @@ final class SiteControlsOverview: NSView {
 @MainActor
 final class SiteTile: NSButton {
     var extensionID: String?
-    private let symbol: String?, badge: String?, letter: String?, filled: Bool
+    private let symbol: String?, badge: String?, letter: String?, filled: Bool, round: Bool
     private var hovering = false
     private var tracking: NSTrackingArea?
 
-    init(symbol: String? = nil, badge: String? = nil, letter: String? = nil, tip: String, field: String, filled: Bool = false) {
-        self.symbol = symbol; self.badge = badge; self.letter = letter; self.filled = filled
+    init(symbol: String? = nil, badge: String? = nil, letter: String? = nil, tip: String, field: String, filled: Bool = false, round: Bool = false) {
+        self.symbol = symbol; self.badge = badge; self.letter = letter; self.filled = filled; self.round = round
         super.init(frame: .zero)
         title = ""; isBordered = false; toolTip = tip; setButtonType(.momentaryChange)
         setAccessibilityLabel(tip)
@@ -157,9 +175,12 @@ final class SiteTile: NSButton {
         let ink: NSColor = dark ? .white : .black
         let radius = Metrics.siteControls.buttonRadius.value
         let hairline = 1 / max(1, window?.backingScaleFactor ?? 2)
-        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: hairline / 2, dy: hairline / 2), xRadius: radius, yRadius: radius)
+        let shape = round ? NSBezierPath(ovalIn: bounds)
+            : NSBezierPath(roundedRect: bounds.insetBy(dx: hairline / 2, dy: hairline / 2), xRadius: radius, yRadius: radius)
         if filled {
-            ink.withAlphaComponent(isHighlighted ? 0.1 : hovering && isEnabled ? 0.07 : 0.05).setFill()
+            // Arc's … circle is a shade darker than the + button.
+            let base = round ? 0.08 : 0.05
+            ink.withAlphaComponent(isHighlighted ? base + 0.05 : hovering && isEnabled ? base + 0.02 : base).setFill()
             shape.fill()
         } else {
             NSGraphicsContext.saveGraphicsState()
@@ -282,5 +303,55 @@ final class SiteRow: NSButton {
         let small = NSFont.systemFont(ofSize: m.rowFont.value)
         NSAttributedString(string: subtitle, attributes: [.font: small, .foregroundColor: NSColor.secondaryLabelColor])
             .draw(at: CGPoint(x: m.rowText.value - m.inset.value, y: m.rowSubtitleBaseline.value - small.ascender))
+    }
+}
+
+/// The security button: a lock and Secure, or Arc's orange-red crossed-out lock and Insecure for plain HTTP, on the
+/// same grey fill as the Extensions + button.
+@MainActor
+final class SecurityChip: NSButton {
+    var secure = false { didSet { if secure != oldValue { needsDisplay = true; invalidateIntrinsicContentSize() } } }
+    private static let font = NSFont.systemFont(ofSize: Metrics.siteControls.securityFont.value, weight: .semibold)
+    /// Arc's Insecure orange-red, as captured (P36-a).
+    private static let insecure = NSColor(srgbRed: 0xEB / 255.0, green: 0x50 / 255.0, blue: 0, alpha: 1)
+    private var text: String { secure ? "Secure" : "Insecure" }
+
+    init(field: String) {
+        super.init(frame: .zero)
+        title = ""; isBordered = false; setButtonType(.momentaryChange)
+        identify(.settingsField(field))
+        toolTip = "Connection and site settings"
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+    override var isHighlighted: Bool { didSet { needsDisplay = true } }
+    override func accessibilityLabel() -> String? { text }
+
+    var fittingWidth: Double {
+        let m = Metrics.siteControls
+        let label = NSAttributedString(string: text, attributes: [.font: Self.font]).size().width
+        return ceil(m.securityPadding.value + glyphSize.width + m.securityGlyphGap.value + label + m.securityTrailing.value)
+    }
+    private var glyph: NSImage? {
+        let tint: NSColor = secure ? NSColor.labelColor.withAlphaComponent(0.78) : Self.insecure
+        let configuration = NSImage.SymbolConfiguration(pointSize: Metrics.siteControls.securityGlyph.value, weight: .semibold)
+            .applying(.init(paletteColors: [tint]))
+        return NSImage(systemSymbolName: secure ? "lock.fill" : "lock.slash.fill", accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
+    }
+    private var glyphSize: CGSize { glyph?.size ?? .zero }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let m = Metrics.siteControls, radius = m.buttonRadius.value
+        NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.1 : 0.05).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
+        var x = m.securityPadding.value
+        if let glyph {
+            glyph.draw(in: CGRect(x: x, y: (bounds.height - glyph.size.height) / 2, width: glyph.size.width, height: glyph.size.height).integral,
+                       from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            x += glyph.size.width + m.securityGlyphGap.value
+        }
+        let color: NSColor = secure ? NSColor.labelColor.withAlphaComponent(0.9) : Self.insecure
+        let label = NSAttributedString(string: text, attributes: [.font: Self.font, .foregroundColor: color])
+        label.draw(at: CGPoint(x: x, y: (bounds.height - label.size().height) / 2))
     }
 }

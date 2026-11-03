@@ -452,7 +452,18 @@ public struct SiteControlsMetrics: MetricGroup {
     public let rowTitleBaseline = Metric(11.5, .anatomy(capture + ": Developer Mode baseline below the circle top"))
     public let rowSubtitleBaseline = Metric(28.0, .anatomy(capture + ": Off baseline below the circle top"))
     public let rowFont = Metric(13.0, .anatomy(capture + ": Developer Mode cap height 9 pt"))
-    public let bottom = Metric(14.0, .anatomy(capture + ": circle bottom to the body's bottom edge"))
+    public let bottom = Metric(14.0, .anatomy(capture + ": circle bottom to the body's bottom edge (no web page: no security row)"))
+    /// The security row under a hairline for an http(s) page: a grey rounded button with a lock and Secure or Insecure,
+    /// and a round … button at the right.
+    public let securityDividerGap = Metric(14.0, .anatomy(capture + ": Developer Mode circle to the hairline"))
+    public let securityGap = Metric(10.0, .anatomy(capture + ": hairline to the security row"))
+    public let securityHeight = Metric(32.0, .anatomy(capture + ": Insecure button and … circle"))
+    public let securityBottom = Metric(10.0, .anatomy(capture + ": security row to the body's bottom edge"))
+    public let securityPadding = Metric(9.5, .anatomy(capture + ": lock inset in the Insecure button"))
+    public let securityTrailing = Metric(9.0, .anatomy(capture + ": Insecure text to the button's right edge"))
+    public let securityGlyph = Metric(13.0, .anatomy(capture + ": the lock is 10 x 13.5 pt"))
+    public let securityGlyphGap = Metric(8.5, .anatomy(capture + ": lock to the Insecure text"))
+    public let securityFont = Metric(14.0, .anatomy(capture + ": Insecure cap height 10 pt"))
     /// Brk's second page holds the full site form (Arc puts these in menus, settings and permission prompts).
     public let detailsSize = Metric(CGSize(width: 360, height: 520), .guess("Room for the site form without crowding the page"))
     public let detailsHeader = Metric(36.0, .guess("Back button row of the site settings page"))
