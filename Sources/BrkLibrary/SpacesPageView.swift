@@ -312,7 +312,7 @@ private final class SpaceCardView: NSView {
 /// Under a card: the card's rounded shape in the panel color with Arc's soft all-round shadow (P30-a), drawn into
 /// the view itself, which reaches `reach` past the card on every side. Takes no clicks.
 @MainActor final class SpaceCardShadow: NSView {
-    static var reach: Double { 2 * LibraryDraw.spaces.shadowRadius.value }
+    static var reach: Double { LibraryDraw.spaces.shadowRadius.value + 2 * LibraryDraw.spaces.shadowDrop.value }
     var fill = NSColor.white { didSet { needsDisplay = true } }
 
     override var isFlipped: Bool { true }
@@ -324,7 +324,7 @@ private final class SpaceCardView: NSView {
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(s.shadowOpacity.value)
         shadow.shadowBlurRadius = s.shadowRadius.value
-        shadow.shadowOffset = .zero
+        shadow.shadowOffset = NSSize(width: 0, height: -s.shadowDrop.value)   // base coordinates: negative is down
         NSGraphicsContext.saveGraphicsState()
         shadow.set()
         fill.setFill()
