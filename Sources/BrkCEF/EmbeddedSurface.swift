@@ -176,8 +176,14 @@ final class EmbeddedSurface: PageSurfaceView {
     /// Show the window server reports that window as occluded, Chromium hides its input view, and AppKit then skips
     /// it for key equivalents and clicks: Cmd shortcuts went to the menu and clicks to this surface. When our
     /// window is visible again, the page is shown again.
+    /// Chromium hides the view a moment after the notification sometimes, so the check runs again for 1.5 s.
     @objc private func windowBecameVisible(_ note: Notification) {
-        guard !retired, isEmbedded, !nativeFullscreenOwnsFrame, let window, let host, window.isVisible, window.occlusionState.contains(.visible),
+        for delay in [0, 0.15, 0.4, 0.8, 1.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.showInputViewIfHidden() }
+        }
+    }
+    private func showInputViewIfHidden() {
+        guard !retired, isEmbedded, !nativeFullscreenOwnsFrame, !NSApp.isHidden, let window, let host, window.isVisible, window.occlusionState.contains(.visible),
               !isHiddenOrHasHiddenAncestor, Self.find("RenderWidgetHostViewCocoa", in: self)?.isHiddenOrHasHiddenAncestor == true else { return }
         log.notice("page \(self.page.description, privacy: .public): input view hidden after the window came back; showing the host again")
         window.removeChildWindow(host)
