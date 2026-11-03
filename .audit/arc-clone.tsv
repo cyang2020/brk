@@ -172,3 +172,5 @@ ts	phase	decision	why	evidence	result
 2026-11-03T19:18:21Z	gate	合并后 main：单元测试 964/0 失败/1 跳过（station2 干净工作树）；站台 P19、P43、P36、P38 与上一轮持平	验收规矩	/tmp/station-parent/r3-5/sheet.tsv；/tmp/r3-5-tests.log	通过；A125 partial→implemented，A131/A133 missing→partial，A041/A130 的 remaining 更新
 2026-11-03T19:34:34Z	merge	R3-3 Easel 分支合进 main（662007f2）；六处冲突两边保留；占位测试修正 f989c39b	任务自己的门：945 单元测试、5 个原生场景、站台 Q09/P32-c	分支 t3/r3-3-easel（57a2dec3）	合并提交 662007f2
 2026-11-03T19:34:34Z	gate	合并后 main：单元测试 982/0 失败/1 跳过（第一次跑测试进程崩过一次，未复现）；站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%，P30/P19 持平	验收规矩	/tmp/station-parent/r3-3/sheet.tsv；/tmp/r3-3-tests-3.log	通过；A101 missing→implemented；A100、A081 的 remaining 更新
+2026-11-03T19:54:01Z	merge	R3-2 设置分支合进 main（05c81d7b + 906162c1 解冲突修正）；八处冲突两边保留，空卡片保留侧栏组按 Arc 验过的白卡片	任务自己的门：938 单元测试、10 个原生场景、站台 Q06	分支 t3/r3-2-settings（90930813 代码，362d0c9c 原生证据）	合并提交 05c81d7b
+2026-11-03T19:54:01Z	gate	合并后 main：单元测试 993/0 失败/1 跳过；站台 Q06-a 3.1%、Q06 底部 5.1%、P38/Q02/P23/P24 持平	验收规矩	/tmp/station-parent/r3-2/sheet.tsv；/tmp/r3-2-tests-2.log	通过；A113/A114/A115/A117/A118 → implemented，A111/A116 的 remaining 更新

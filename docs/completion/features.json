@@ -9129,7 +9129,8 @@
       ],
       "remaining": [
         "Complete actual external events with edited/reordered rules, invalid destinations and multiple physically activated windows.",
-        "Arc 对照（run-20261103 Q06）仍有差异或无参照：Q06-a: 要修（设置组：改成盖在 Links 窗口上的表单，按 Arc 的标题、New Route、×、路由行两段式和底部 Default 下拉）"
+        "Arc 对照（run-20261103 Q06）仍有差异或无参照：Q06-a: 要修（设置组：改成盖在 Links 窗口上的表单，按 Arc 的标题、New Route、×、路由行两段式和底部 Default 下拉）",
+        "R3-2（2026-11-04，合并 05c81d7b）：Air Traffic Control 改成盖在 Links 窗口上的表单（Q06-a 3.1%），路由多了 Contains / Matches 两种匹配，Default 下拉和 Links from other apps open in Little Arc 是同一个设置（原来选 Most Recent Space 不生效的 bug 已修；两者互改是对 Arc 行为的推断）；表单按钮的点击区域原来压在文字下面，已放到最上层。原生场景 SettingsRoutes 通过。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -9205,7 +9206,7 @@
       "arc_evidence": "row 3; anatomy-m 4.1 (nine panes)",
       "description": "Account, General, Max, Profiles, Shortcuts, Links, Advanced, App Icon",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Provide General, Max, Profiles, Shortcuts, Links, Advanced and App Icon panes in a native settings window; omit excluded Account features.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9245,7 +9246,8 @@
       ],
       "remaining": [
         "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features.",
-        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
+        "R3-2（2026-11-04，合并 05c81d7b）：Icon 页补上，各页开关接到了行为（见 A114–A117）。"
       ],
       "implementation": [
         "Sources/BrkApp/SettingsWindowController.swift",
@@ -9266,7 +9268,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Warn before quitting, auto update, previews, ad blocker, translation",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "General settings must actually warn before quit and control previews, ad blocking and translation; updater remains deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9297,7 +9299,8 @@
         }
       ],
       "remaining": [
-        "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers."
+        "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers.",
+        "R3-2（2026-11-04，合并 05c81d7b）：Warn before quitting 接到有序退出（Cmd+Q、菜单、Dock 退出先问，SIGTERM/控制口/注销不问；对话框挂在当前窗口上，不是独立对话框，Arc 的样子没拍到，待补拍）；Previews 原来就接好；拦截广告和跟踪器（默认开）、Block Cookie Banners（默认关）两个开关放在 Advanced 的 More Settings… 里（Arc 的 General 页截图里没有这两项）；翻译用现有的 Translate Pages 开关，补了开关关着时不读网页的测试。原生场景 SettingsQuit 通过。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -9319,7 +9322,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Search engine, document app, download location, archive after",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Profile settings control search, default document app, download location and archive threshold for that profile.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9350,7 +9353,8 @@
         }
       ],
       "remaining": [
-        "Add default document app behavior and native per-profile checks for each setting."
+        "Add default document app behavior and native per-profile checks for each setting.",
+        "R3-2（2026-11-04，合并 05c81d7b）：New documents 下拉能选七个网页文档应用（Google Docs/Sheets/Slides、Word、Notion、Figma、FigJam），每个 Profile 各存一份；选了之后命令栏输入 new doc 出现 New Google Doc 这类一行，回车新开该应用的新建文档页。除 Google Doc 外几个应用的命令栏文案是任务起的。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -9403,7 +9407,8 @@
         }
       ],
       "remaining": [
-        "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings."
+        "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings.",
+        "R3-2（2026-11-04）：录制、冲突提示、Remove Conflicting Shortcut 原来就有（单元测试）。未做：用真实按键操作录制框的原生测试；Go Back / Go Forward / Zoom Out 的第二个快捷键仍固定、编辑器不显示；Edit 菜单系统自带项不能改快捷键。"
       ],
       "implementation": [
         "Sources/BrkSettings/Panes/ShortcutsPane.swift",
@@ -9425,7 +9430,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Restore windows, sounds, haptics, toolbar URL, window dragging, auto PiP, theme CSS, Boosts, shared quotes, update channel",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Each Advanced switch must change the named runtime behavior; updates and update-channel selection may remain deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9463,7 +9468,8 @@
         }
       ],
       "remaining": [
-        "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers."
+        "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers.",
+        "R3-2（2026-11-04，合并 05c81d7b）：页面顶部拖动窗口（开着且工具栏隐藏时网页顶上 10 点高的透明窄条，高度是估的；原生场景 SettingsPageDrag）、Shared Quotes（选中文字再复制网址得到指向这段文字的链接；SettingsQuotes）、重排触感（侧栏拖动标签排序每换一个位置振一下）新做；恢复窗口、音效、工具栏完整网址、自动画中画、主题 CSS、Boosts 原来就有行为和开关测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -9486,7 +9492,7 @@
       "arc_evidence": "anatomy-m 4.2; `ARCClients_BaseAssets` (10 icons)",
       "description": "Pick one of the app icons",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "implemented",
       "acceptance": "Pick an available Brk app icon, apply it to the application and retain the choice without account or referral gates.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9512,7 +9518,8 @@
       ],
       "remaining": [
         "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker.",
-        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
+        "R3-2（2026-11-04，合并 05c81d7b）：App Icon 页能选 Brk 自己的几个图标，选了 Dock 和 About 马上换，重启记住（原生场景 SettingsIcon）。未做：Brk 没运行时访达和 Dock 里仍是原图标（要往签名包里写文件或做 Dock 插件）。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
