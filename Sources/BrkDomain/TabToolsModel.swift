@@ -93,9 +93,16 @@ struct TabSelection: Equatable, Sendable {
 public struct ToastSnapshot: Equatable, Sendable, Codable {
     public var text: String
     public var expiresAt: Instant
+    /// A notice with a way out (Arc's "ChatGPT in the Command Bar not enabled" with "Arc Max Preferences ↗"): shown
+    /// as Arc's notice banner instead of the plain toast.
+    public var link: ToastLink? = nil
     /// Arc's undo toasts: "Cleared Tabs! Use", the key cap "⌘Z", then "to undo".
     public var keycap: String? = nil
     public var trailing: String? = nil
+}
+public struct ToastLink: Equatable, Sendable, Codable {
+    public var title: String
+    public var command: Command
 }
 
 /// What ⌘Z undoes while an undo toast shows (session only).
@@ -113,6 +120,8 @@ public struct RecentTabRow: Equatable, Sendable, Codable {
     public var id: ItemID
     public var title: String
     public var url: URL?
+    /// The tab's favicon, drawn before its title under the switcher's thumbnail.
+    public var favicon: URL? = nil
 }
 public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     public var pendingSiteRequest: String? = nil

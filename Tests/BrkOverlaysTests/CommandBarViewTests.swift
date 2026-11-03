@@ -35,18 +35,108 @@ final class CommandBarViewTests: XCTestCase {
 
     func testReturnDispatchesTheHighlightedResultAndArrowsWrapAround() {
         let view = makeBar()
-        type("hub", into: view)   // t2, t1, "Search hub", hubspot.com, history status.example.com/hub
+        type("hub", into: view)   // completes to hubspot.com: hubspot.com, "hub", t2, t1, history status.example.com/hub
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveUp(_:)), in: view)       // from the first row up to the last
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveDown(_:)), in: view)     // from the last row down to the first
         press(#selector(NSResponder.moveDown(_:)), in: view)
+        press(#selector(NSResponder.moveDown(_:)), in: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         XCTAssertEqual(chosen, [
-            .tab(.focus(ItemID("t2"))),
+            .commandBar(.submit("hubspot.com")),
             .commandBar(.submit("https://status.example.com/hub")),
-            .tab(.focus(ItemID("t1"))),
+            .tab(.focus(ItemID("t2"))),
         ])
+    }
+
+    /// Arc's inline completion (P02-c, Q01-b): typing on shows the rest of a site's domain after what was typed and
+    /// the site leads; the next letter replaces the rest; a deletion never completes; the query sent is what was
+    /// typed; → keeps the whole domain
+    func testTypingOnCompletesASiteAndDeletingDoesNot() {
+        let view = makeBar(commandBar([], [], siteSearch: [bing]))
+        type("you", into: view)
+        XCTAssertEqual(view.typed, "you")
+        XCTAssertEqual(view.completion, "youtube.com")
+        XCTAssertEqual(view.input.stringValue, "youtube.com")
+        XCTAssertEqual(rows(view.results).first, "domain:youtube.com")
+        XCTAssertEqual(view.results.first?.title, "YouTube")
+        type("yout", into: view)
+        XCTAssertEqual(view.input.stringValue, "youtube.com")
+        type("yout", into: view)   // the completion deleted: the field shows what was typed, and it stays so
+        XCTAssertNil(view.completion)
+        XCTAssertEqual(view.input.stringValue, "yout")
+        type("you", into: view)
+        XCTAssertNil(view.completion, "shorter is a deletion")
+        XCTAssertEqual(sent.filter { if case .commandBar(.queryChanged) = $0 { true } else { false } },
+                       ["you", "yout", "yout", "you"].map { Command.commandBar(.queryChanged($0)) })
+        type("bin", into: view)
+        XCTAssertEqual(view.completion, "bing.com")
+        XCTAssertEqual(view.offer, bing, "the completed site's engine is offered beside the input")
+        press(#selector(NSResponder.moveRight(_:)), in: view)
+        XCTAssertNil(view.completion)
+        XCTAssertEqual(view.typed, "bing.com")
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen.last, .commandBar(.submit("bing.com")))
+    }
+
+    /// P20-a, Q01-b: titles are whole and the address after them is whole when the row has room; in a narrow row
+    /// the title stays whole and the address gives way from its middle
+    func testTitlesStayWholeAndOnlyTheAddressGivesWay() throws {
+        let view = CommandBarView(dispatch: { _ in })
+        view.show(commandBar([], []), in: box, scheme: .light, spaceless: true)
+        let rows = view.descendants.compactMap { $0 as? ResultRowView }.filter { !$0.isHidden }
+        XCTAssertEqual(rows.count, 5)
+        for row in rows {
+            row.layoutSubtreeIfNeeded()
+            let labels = row.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden && !$0.attributedStringValue.string.isEmpty }
+            for label in labels.prefix(2) {
+                let text = label.attributedStringValue
+                XCTAssertGreaterThanOrEqual(label.frame.width, ceil(text.size().width), "\(text.string) is cut in a 746 pt row")
+            }
+        }
+        let browser = try XCTUnwrap(rows.first { $0.accessibilityLabel() == "The Browser Company" })
+        browser.frame.size.width = 240
+        browser.layoutSubtreeIfNeeded()
+        let fields = browser.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden && !$0.attributedStringValue.string.isEmpty }
+        XCTAssertGreaterThanOrEqual(fields[0].frame.width, ceil(fields[0].attributedStringValue.size().width), "the title stays whole")
+        XCTAssertLessThan(fields[1].frame.width, ceil(fields[1].attributedStringValue.size().width), "the address gives way")
+    }
+
+    /// P20-a, P21-a, Q03-a: a window without a space highlights in Arc's blue-violet (#8F95FF light, #424ADD dark);
+    /// a space's centered bar in grey (Q01-a)
+    func testWindowsWithoutASpaceHighlightInBlueViolet() throws {
+        func highlight(_ scheme: Scheme, spaceless: Bool) throws -> NSColor {
+            let view = CommandBarView(dispatch: { _ in })
+            view.show(commandBar([], []), in: box, scheme: scheme, spaceless: spaceless)
+            let row = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == "command-bar-result-0" })
+            return try XCTUnwrap(row.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.sRGB))
+        }
+        let light = try highlight(.light, spaceless: true), dark = try highlight(.dark, spaceless: true), space = try highlight(.light, spaceless: false)
+        XCTAssertEqual([light.redComponent, light.greenComponent, light.blueComponent].map { ($0 * 255).rounded() }, [0x8F, 0x95, 0xFF])
+        XCTAssertEqual([dark.redComponent, dark.greenComponent, dark.blueComponent].map { ($0 * 255).rounded() }, [0x42, 0x4A, 0xDD])
+        XCTAssertEqual(space.alphaComponent, 0.31, accuracy: 0.01, "grey: black at 31%")
+    }
+
+    /// P02-b: the bar over the URL pill is 350 wide (wider only for its input row), the centered one fills its box
+    func testTheCardOverThePillIs350WideAndTheCenteredOneFillsTheBox() {
+        let view = CommandBarView(dispatch: { _ in })
+        view.resolve = fakeResolve
+        let url = "http://127.0.0.1:8764/visual.html"
+        var bar = commandBar([candidate("v", "Visual fixture", url, focused: true)], [], initialQuery: url)
+        bar.placement = .overURLPill
+        let attached = CGRect(x: 8, y: 44.5, width: 720, height: 338)
+        view.show(bar, in: attached, scheme: .light, primary: RGBA(hex: "#F2EAE4"))
+        XCTAssertEqual(view.style, .attached)
+        let card = view.subviews[0].frame
+        XCTAssertEqual(card.width, 350)
+        XCTAssertEqual(card.height, 50 + 5 * 50 + 9, "input 50, five rows of 50, 9 under them (P02-b: 309)")
+        XCTAssertEqual(rows(view.results).first, "current:\(url)")
+        bar.placement = .centered
+        bar.initialQuery = ""
+        bar.openID = 2
+        view.show(bar, in: box, scheme: .light)
+        XCTAssertEqual(view.subviews[0].frame.width, box.width)
     }
 
     func testTypingMovesTheHighlightBackToTheFirstRow() {
@@ -82,23 +172,23 @@ final class CommandBarViewTests: XCTestCase {
 
     /// suggestions that arrive while the user looks at the rows slot in under the typed row and keep the highlight
     func testArrivingSuggestionsSlotInUnderTheTypedRow() {
-        let view = makeBar(commandBar([], []))
+        let view = makeBar(commandBar([], []))   // no site's domain starts with "swi": no completion
         type("swi", into: view)
-        XCTAssertEqual(rows(view.results).first, "open:Search swi")
+        XCTAssertEqual(rows(view.results).first, "open:swi")
         view.show(commandBar([], [], suggestions: ["swift", "swim"], suggestedFor: "swi"), in: box, scheme: .light)
-        XCTAssertEqual(Array(rows(view.results).prefix(3)), ["open:Search swi", "suggestion:google:swift", "suggestion:google:swim"])
+        XCTAssertEqual(Array(rows(view.results).prefix(3)), ["open:swi", "suggestion:google:swift", "suggestion:google:swim"])
         press(#selector(NSResponder.moveDown(_:)), in: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "swift"))])
     }
 
-    /// Tab on a site-search row (or Space after an engine's whole name) enters site search: the engine's pill, an
-    /// empty input, Return searches there; Backspace in the empty input or Esc gives the typed name back, and only
-    /// a second Esc closes the bar
+    /// Tab with a site-search offer beside the input (or Space after an engine's whole name) enters site search: the
+    /// engine's pill, an empty input, Return searches there; Backspace in the empty input or Esc gives the typed name
+    /// back, and only a second Esc closes the bar
     func testSiteSearchModeWithTabSpaceBackspaceAndEscape() {
         let view = makeBar(commandBar([], [], siteSearch: [bing, kagi]))
         type("bi", into: view)
-        XCTAssertTrue(rows(view.results).contains("site:Bing:Space or Tab"))
+        XCTAssertEqual(view.offer, bing)
         XCTAssertTrue(press(#selector(NSResponder.insertTab(_:)), in: view))
         XCTAssertEqual(view.siteSearch, bing)
         XCTAssertEqual(view.input.stringValue, "")
@@ -121,7 +211,7 @@ final class CommandBarViewTests: XCTestCase {
         press(#selector(NSResponder.cancelOperation(_:)), in: view)
         XCTAssertEqual(chosen.last, .commandBar(.dismiss))
 
-        // Tab with no site-search row stays in the bar and does nothing; "bing" followed by a space and more words
+        // Tab with no site-search offer stays in the bar and does nothing; "bing" followed by a space and more words
         // is an ordinary search.
         type("weather", into: view)
         XCTAssertTrue(press(#selector(NSResponder.insertTab(_:)), in: view))
@@ -131,7 +221,11 @@ final class CommandBarViewTests: XCTestCase {
     }
 
     func testEscapeDismissesAndReturnWithNothingToChooseDispatchesNothing() {
-        let view = makeBar(commandBar([], []))
+        // An empty bar always lists Arc's Contact the Team (Q01-a); Ask Max with nothing typed lists nothing.
+        var ask = commandBar([], [])
+        ask.aiMode = .question
+        let view = makeBar(ask)
+        XCTAssertTrue(view.results.isEmpty)
         XCTAssertTrue(press(#selector(NSResponder.insertNewline(_:)), in: view))
         XCTAssertTrue(press(#selector(NSResponder.cancelOperation(_:)), in: view))
         XCTAssertEqual(sent, [.commandBar(.dismiss)])
@@ -163,10 +257,12 @@ final class CommandBarViewTests: XCTestCase {
         let view = makeBar()
         type("hub", into: view)
         press(#selector(NSResponder.moveDown(_:)), in: view)
-        // A page event re-projects the same opening with one tab fewer: the query stays, the rows follow.
+        // A page event re-projects the same opening with one tab fewer: the query and its completion stay, the rows
+        // follow.
         view.show(commandBar(fixtureBar.tabs.filter { $0.tab != ItemID("t2") }, fixtureBar.history), in: box, scheme: .light)
-        XCTAssertEqual(view.input.stringValue, "hub")
-        XCTAssertEqual(rows(view.results), ["switch:t1", "open:Search hub", "domain:hubspot.com", "history:https://status.example.com/hub"])
+        XCTAssertEqual(view.typed, "hub")
+        XCTAssertEqual(view.input.stringValue, "hubspot.com")
+        XCTAssertEqual(rows(view.results), ["domain:hubspot.com", "open:hub", "switch:t1", "history:https://status.example.com/hub"])
         // Cmd+L opens a new bar: its query is the tab's URL and the first row is highlighted again.
         view.show(commandBar(fixtureBar.tabs, fixtureBar.history, openID: 2, initialQuery: "https://github.com/arc"), in: box, scheme: .light)
         XCTAssertEqual(view.input.stringValue, "https://github.com/arc")
@@ -182,12 +278,12 @@ final class CommandBarViewTests: XCTestCase {
         let shown = view.descendants.filter { !$0.isHiddenOrHasHiddenAncestor }.map { $0.accessibilityIdentifier() }
         XCTAssertEqual(shown.filter { $0.hasPrefix("command-bar-result-") },
                        ["command-bar-result-0", "command-bar-result-1", "command-bar-result-2", "command-bar-result-3", "command-bar-result-4"])
-        // Card: the 50 pt input row, then 5 rows of 50 and the list's 10 pt padding (layout-constants.md).
+        // Centered card (Q01-a): the 64 pt input row, 5 under its hairline, 5 rows of 50, 9 under them: 328.
         // Points are in the bar's superview, as AppKit passes them to `hitTest`.
-        let rowCentre = CGPoint(x: box.midX, y: box.minY + 50 + 5 + 25)
+        let rowCentre = CGPoint(x: box.midX, y: box.minY + 64 + 5 + 25)
         XCTAssertEqual(view.hitTest(rowCentre)?.enclosing(ResultRowView.self)?.accessibilityIdentifier(), "command-bar-result-0")
-        XCTAssertNotNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 309)))
-        XCTAssertNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 311)), "below the card the box lets clicks through")
+        XCTAssertNotNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 327)))
+        XCTAssertNil(view.hitTest(CGPoint(x: box.midX, y: box.minY + 329)), "below the card the box lets clicks through")
     }
 }
 
@@ -238,7 +334,7 @@ final class CommandBarPointerTests: XCTestCase {
 
         click(CGPoint(x: box.midX, y: box.minY + 25), in: window)          // the input row: stays open
         XCTAssertEqual(sent, [])
-        click(CGPoint(x: box.midX, y: box.minY + 50 + 5 + 25), in: window) // the first row: t1
+        click(CGPoint(x: box.midX, y: box.minY + 64 + 5 + 25), in: window) // the first row: t1
         XCTAssertEqual(sent, [.tab(.focus(ItemID("t1")))])
         sent = []
         click(CGPoint(x: 100, y: 700), in: window)                          // outside the card

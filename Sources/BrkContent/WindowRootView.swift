@@ -37,6 +37,14 @@ public final class WindowRootView: NSView {
     /// both before the space exists, P24 flow).
     private var draft: (theme: SpaceTheme, icon: SpaceIcon)?
     private var last: (snapshot: WindowSnapshot, frames: WindowFrames)?
+    private let thumbnails = PageThumbnails()
+    private var switcherShown = false
+    /// Takes the window's image as the window server shows it (BrkApp's `WindowCapture`), for the Ctrl+Tab
+    /// switcher's page images. Nil (tests): the switcher shows white cards.
+    public var captureWindow: (() -> CGImage?)? {
+        get { thumbnails.capture }
+        set { thumbnails.capture = newValue }
+    }
     private let loadingBar = LoadingBarView(frame: .zero)
 
     public init(dispatch: @escaping Dispatch) {
@@ -101,6 +109,9 @@ public final class WindowRootView: NSView {
     /// surface for its pane; a surface that moved to another card is simply re-added there), Library, command bar.
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, surface: (PageID) -> NSView?) {
         last = (snapshot, frames)
+        // The screen still shows the last frame: the page the switcher starts from is taken before it covers it.
+        thumbnails.beforeRender(opening: snapshot.tabTools.recent != nil && !switcherShown, in: self)
+        switcherShown = snapshot.tabTools.recent != nil
         if frames.sidebarFloats != sidebarFloats {
             sidebarFloats = frames.sidebarFloats
             sidebar.removeFromSuperview()
@@ -133,16 +144,18 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
-        commandBar.render(barSnapshot, frames: frames, palette: palette)
+        commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
         spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette,
                                  spaceNames: Dictionary(snapshot.dock.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }))
         tabTools.frame = bounds
-        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome, contentArea: frames.contentArea)
+        tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output,
+                        exported: snapshot.exportOutcome, contentArea: frames.contentArea, thumbnails: thumbnails.images)
         boostEditor.render(snapshot.boostEditor, in: frames.contentArea, scheme: palette.scheme)
         zapOverlay.render(snapshot.boostEditor, in: frames.contentArea)
         captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
+        thumbnails.afterRender(snapshot, frames: frames, in: self)
     }
 
     /// The background and the sidebar. While Create a Space is open they show the draft: its theme, and in the dock

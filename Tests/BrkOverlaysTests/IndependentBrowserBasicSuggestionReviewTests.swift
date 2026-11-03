@@ -24,8 +24,12 @@ final class IndependentBrowserBasicSuggestionReviewTests: XCTestCase {
         let rows = Suggest.rank(query: explicit, bar: bar, appName: "Brk")
         XCTAssertEqual(rows.first?.kind, .openTyped)
         XCTAssertEqual(rows.first?.command, .commandBar(.submit(explicit)))
-        XCTAssertTrue(rows.first?.title.hasPrefix("Open ") == true)
-        XCTAssertTrue(Suggest.rank(query: "ordinary search", bar: bar, appName: "Brk").contains { $0.title == "Search ordinary search" })
+        // Arc titles the typed row with the address itself, and a search with the words themselves (P02-c, Q01-b).
+        XCTAssertEqual(rows.first?.title, "owned-fixture.example/search/preferences")
+        XCTAssertEqual(rows.first?.symbol, "globe")
+        let search = Suggest.rank(query: "ordinary search", bar: bar, appName: "Brk").first { $0.kind == .openTyped }
+        XCTAssertEqual(search?.title, "ordinary search")
+        XCTAssertEqual(search?.symbol, "magnifyingglass")
     }
 
 }

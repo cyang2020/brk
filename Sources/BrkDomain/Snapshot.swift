@@ -373,6 +373,8 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var suggestions: [String]
     public var suggestedFor: String?
     public var suggestionsEnabled: Bool = true
+    /// The bar opens a new tab (Cmd+T, the New Tab row): the sidebar's New Tab row shows as selected meanwhile (Q01-a).
+    public var createsTab: Bool = false
     /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
     /// even when a tab already shows that address (Arc opens the page in the new pane).
     public var fillsPane: Bool = false
