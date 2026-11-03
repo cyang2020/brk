@@ -43,6 +43,9 @@ public protocol WebEngine: AnyObject {
     /// `document.title`) and, later, Boosts' user scripts. A no-op for a page that is not live.
     func evaluate(_ script: String, in page: PageID)
 
+    /// The browser engine's version as the About window shows it ("154.0.8037.98" for Chromium); nil without one.
+    var engineVersion: String? { get }
+
     /// Diagnostics for the control socket. Never used for app behavior.
     func facts(for page: PageID) -> PageFacts?
     func isPageHostWindow(_ window: NSWindow) -> Bool
@@ -199,4 +202,8 @@ extension WebEngine {
 extension WebEngine {
     public func readAIPage(_ document: DocumentToken) async throws -> AIPageContent { throw AIPageFailure.unavailable }
     public func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool { throw AIPageFailure.unavailable }
+}
+
+extension WebEngine {
+    public var engineVersion: String? { nil }
 }

@@ -318,11 +318,12 @@ public struct LibraryMetrics: MetricGroup {
 /// a right-aligned label column, the controls beside it, a divider between sections, and a window that fits each
 /// pane's height. Arc's own numbers were not recovered, so every value here is ours.
 public struct SettingsMetrics: MetricGroup {
-    /// The content size the window opens at, before the first pane is measured and the window fits it.
-    public let windowSize = Metric(CGSize(width: 660, height: 460), .guess("settings window content size before the pane fits it; contentWidth plus both horizontal paddings wide"))
-    /// Every pane is this wide (Settings.Container's `contentWidth`).
-    public let contentWidth = Metric(600.0, .guess("pane content width; Arc's Settings.Container(contentWidth:) value was not recovered; fits a label column and the longest Links checkbox"))
-    public let horizontalPadding = Metric(30.0, .guess("Settings.Container's horizontal padding in the sindresorhus/Settings package source"))
+    /// The window's frame, title bar and pane toolbar included; every pane is shown at this size (Arc 1.170's
+    /// settings window does not resize per pane).
+    public let windowSize = Metric(CGSize(width: 684, height: 650), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38: every Arc settings capture is 1368 x 1300 px"))
+    /// The width of a pane's cards.
+    public let contentWidth = Metric(556.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: cards span x 128 to 1240 px"))
+    public let horizontalPadding = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: 128 px from the window's left edge to a card"))
     public let verticalPadding = Metric(20.0, .guess("Settings.Container's vertical padding in the sindresorhus/Settings package source"))
     /// The right-aligned label column (Settings.Container's `minimumLabelWidth`).
     public let labelWidth = Metric(170.0, .guess("label column width; fits 'Archive Little Arcs after:' and 'Air Traffic Control:' at the system font"))

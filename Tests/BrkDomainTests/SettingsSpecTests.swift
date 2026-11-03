@@ -200,4 +200,64 @@ final class SettingsSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.settings(.profile(.default, .autoArchive(.twelveHours)))))
         assertUnchanged(d.state, d.user(.settings(.closeWindow)))
     }
+
+    /// the Icon pane's choice is saved (the original is the default and is saved as none)
+    func test_theAppIconChoicePersists() {
+        let d = Driver()
+        XCTAssertNil(d.snapshot.settings.general.appIcon)
+        d.user(.settings(.general(.appIcon(.neon))))
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.settings.general.appIcon, .neon)
+        d.user(.settings(.general(.appIcon(.original))))
+        XCTAssertNil(d.snapshot.settings.general.appIcon)
+    }
+
+    /// "Turn On Max" picks the automatic tool and switches on every feature never switched; off stops the tool;
+    /// "Automatically enable future … features" decides a feature the user never switched
+    func test_turnOnMaxAndFutureFeatures() {
+        let d = Driver()
+        d.user(.settings(.max(.provider(.off))))
+        d.user(.settings(.max(.feature(.translation, false))))
+        d.user(.settings(.max(.enable(true))))
+        var max = d.snapshot.settings.max.settings
+        XCTAssertEqual(max.provider, .auto)
+        XCTAssertTrue(max.enabled(.commandBar))
+        XCTAssertFalse(max.enabled(.translation), "a switch the user turned off stays off")
+        d.user(.settings(.max(.enable(false))))
+        XCTAssertEqual(d.snapshot.settings.max.settings.provider, .off)
+
+        let e = Driver()
+        XCTAssertFalse(e.snapshot.settings.max.settings.enabled(.browse))
+        e.user(.settings(.max(.autoEnableFutureFeatures(true))))
+        max = e.snapshot.settings.max.settings
+        XCTAssertTrue(max.enabled(.browse), "a feature never switched follows the future-features switch")
+        e.user(.settings(.max(.feature(.browse, false))))
+        XCTAssertFalse(e.snapshot.settings.max.settings.enabled(.browse))
+        XCTAssertEqual(Driver(file: e.savedFile).snapshot.settings.max.settings.autoEnableFutureFeatures, true)
+    }
+
+    /// Links' global New Little Window switch is saved; Little Arcs archive after 6 hours by default (Arc 1.170)
+    func test_theGlobalLittleShortcutSwitchAndTheLittleDefault() {
+        let d = Driver()
+        XCTAssertEqual(d.snapshot.settings.links.littleArcAutoArchive, .sixHours)
+        XCTAssertNotEqual(d.snapshot.settings.links.globalLittleArcShortcut, false)
+        d.user(.settings(.links(.globalLittleArcShortcut(false))))
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.settings.links.globalLittleArcShortcut, false)
+        d.user(.settings(.links(.globalLittleArcShortcut(true))))
+        XCTAssertNil(d.snapshot.settings.links.globalLittleArcShortcut)
+    }
+
+    /// Profiles' "Your Data and Settings" rows open Chromium's page in a tab of a space using that profile and close
+    /// the settings window; a profile no space uses has nowhere to open it
+    func test_openBrowserPageOpensAChromiumPageInTheProfilesSpace() {
+        let d = Driver()
+        d.user(.settings(.openPane(.profiles)))
+        let before = d.todayIDs.count
+        d.user(.settings(.openBrowserPage(.passwords, profile: .default)))
+        XCTAssertEqual(d.todayIDs.count, before + 1)
+        XCTAssertNil(d.snapshot.settings.pane, "the page is shown instead of the settings window")
+        XCTAssertEqual(d.state.address(of: d.todayIDs[0], in: d.window, for: .visible), BrowserPage.passwords.url)
+        let lonely = d.user(.settings(.openBrowserPage(.privacy, profile: ProfileID("nobody"))))
+        XCTAssertTrue(lonely.effects.contains(.app(.beep)))
+        XCTAssertEqual(d.todayIDs.count, before + 1)
+    }
 }

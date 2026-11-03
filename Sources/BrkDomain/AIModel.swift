@@ -34,7 +34,8 @@ public struct AITranslationExclusions: Hashable, Sendable, Codable {
     public init() {}
 }
 extension MaxSettings {
-    public func enabled(_ feature: AIFeature) -> Bool { features?[feature] ?? false }
+    /// The user's switch, else "Automatically enable future … features" for a feature never switched.
+    public func enabled(_ feature: AIFeature) -> Bool { features?[feature] ?? autoEnableFutureFeatures ?? false }
 }
 
 public struct AISource: Hashable, Sendable, Codable {

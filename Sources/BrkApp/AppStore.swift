@@ -3,6 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkEngine
 import BrkLayout
+import BrkSettings
 import os
 
 /// The one owner of application state. `dispatch` is the only path into `reduce`, and `reduce` is the only writer;
@@ -36,6 +37,12 @@ public final class AppStore {
     private var windows: [WindowID: WindowController] = [:]
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
+    private var shownIcon: AppIconChoice?
+    private static let dockIconSide: CGFloat = 512
+    private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
+        guard let self, let window = self.windowController(nil)?.id else { return }
+        self.dispatch(.user(window, command))
+    }
     /// Fallback for in-process input while the display is locked or the app has no key window.
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
@@ -287,8 +294,14 @@ public final class AppStore {
         didPublish?(snapshot)
     }
 
-    /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens).
+    /// The settings window follows `snapshot.settings.pane` (created the first time a pane opens); the Dock shows
+    /// the Icon pane's choice.
     private func renderSettings() {
+        let icon = snapshot.settings.general.appIcon ?? .original
+        if icon != shownIcon {
+            shownIcon = icon
+            NSApp.applicationIconImage = AppIconArt.image(icon, side: Self.dockIconSide)
+        }
         if settingsWindow == nil, snapshot.settings.pane == nil { return }
         if settingsWindow == nil {
             settingsWindow = SettingsWindowController(send: { [weak self] command in
@@ -424,7 +437,7 @@ public final class AppStore {
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()
-                case .showAbout: NSApp.orderFrontStandardAboutPanel(nil)
+                case .showAbout: aboutWindow.show(icon: snapshot.settings.general.appIcon ?? .original)
                 case .showSettings:
                     settingsWindow?.present()
                     inputWindow = settingsWindow?.window
