@@ -188,7 +188,7 @@ final class AppUnderTest {
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
-        if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
+        if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)

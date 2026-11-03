@@ -215,12 +215,12 @@ enum TabToolsScenarios {
         try app.dispatch(.tabTools(.site(.refreshFolder(folder.id))))
         try app.waitUntil("empty state after refresh") {
             guard case .folder(let refreshed)? = try app.view().space.pinned.rows.first else { return false }
-            return refreshed.children.isEmpty && refreshed.title.contains("No open pull requests")
+            return refreshed.children.isEmpty && refreshed.live?.state == .empty
         }
         try expect(app.site.requestCount("/repos/fixture/repo/pulls") == 2, "refresh made no HTTP request")
         try app.flush(); try app.restart()
         guard case .folder(let saved)? = try app.view().space.pinned.rows.first else { throw Check(description: "live config missing after restart") }
-        try expect(saved.title.contains("fixture/repo"), "repository configuration not saved")
+        try expect(saved.title.contains("fixture/repo") && saved.live?.source == "fixture/repo", "repository configuration not saved")
         _ = try app.screenshot("TabTools5-empty")
     }
     @Sendable static func archiveControls(_ app: AppUnderTest) throws {

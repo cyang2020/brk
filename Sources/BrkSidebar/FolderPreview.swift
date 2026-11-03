@@ -264,6 +264,7 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         rows = shown.enumerated().map { i, entry in
             let row = PreviewRowView(entry: entry)
             row.identifier = NSUserInterfaceItemIdentifier("sidebar-hover-card-row-\(i)")
+            row.setAccessibilityIdentifier("sidebar-hover-card-row-\(i)")
             row.onClick = { [weak self] in if !entry.open.isEmpty { self?.onOpen?(entry.open) } }
             row.onJoin = { [weak self] in if let join = entry.join { self?.onOpen?(join) } }
             row.onHover = { [weak self] in self?.highlight(i) }
@@ -366,6 +367,7 @@ final class PreviewRowView: HoverView {
         join.layer?.cornerRadius = PreviewDraw.joinHeight.value / 2
         join.isHidden = entry.join == nil
         join.identifier = NSUserInterfaceItemIdentifier("sidebar-hover-card-join")
+        join.setAccessibilityIdentifier("sidebar-hover-card-join")
         icon.render(entry.icon, tint: NSColor(white: 0, alpha: 0.55))   // no palette: a missing favicon is the globe, as in Arc's card
         for view in [icon, title, time, join] as [NSView] { addSubview(view) }
     }

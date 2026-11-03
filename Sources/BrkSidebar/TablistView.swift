@@ -532,7 +532,9 @@ final class RowView: HoverView {
         let live: LiveFolderSnapshot? = if case .folder(let folder) = row { folder.live } else { nil }
         let id = row.id.rawValue
         spinner.identifier = NSUserInterfaceItemIdentifier("live-folder-spinner-" + id)
+        spinner.setAccessibilityIdentifier("live-folder-spinner-" + id)
         liveMark.identifier = NSUserInterfaceItemIdentifier("live-folder-failed-" + id)
+        liveMark.setAccessibilityIdentifier("live-folder-failed-" + id)
         if live?.state == .loading { spinner.isHidden = false; spinner.startAnimation(nil) } else { spinner.stopAnimation(nil); spinner.isHidden = true }
         if case .failed(let message)? = live?.state {
             liveMark.isHidden = false
@@ -1120,6 +1122,7 @@ final class LivePlaceholderView: HoverView {
         self.depth = depth
         self.palette = palette
         identifier = NSUserInterfaceItemIdentifier("live-folder-note-" + folder.rawValue)
+        setAccessibilityIdentifier("live-folder-note-" + folder.rawValue)
         label.stringValue = SidebarCopy.liveFolderNote(live.state)
         label.textColor = palette.ink.secondary
         setAccessibilityLabel(label.stringValue)

@@ -180,10 +180,18 @@ extension AppState {
     }
 
     /// The context menu's per-site switches for a Favorite (all that apply) or a Pinned tab (the card only).
-    func siteDisplayEntries(url: URL?, favorite: Bool) -> [MenuEntry] {
+    func siteDisplayEntries(url: URL?, favorite: Bool, item: ItemID? = nil) -> [MenuEntry] {
         guard let app = TopApp.of(url), let host = TopApp.key(url) else { return [] }
         let prefs = doc.tabPreferences
         var entries: [MenuEntry] = []
+        // Brk's sources (Arc reads the signed-in site): a GitHub Favorite connects its notifications, a calendar
+        // reads a selected .ics export.
+        if favorite, app == .github, let item {
+            entries.append(.action(title: "Connect GitHub Notifications…", command: .tabTools(.site(.connectGitHub(favorite: item))), enabled: true))
+        }
+        if app.isCalendar {
+            entries.append(.action(title: "Select Calendar Export…", command: .tabTools(.site(.connectCalendar)), enabled: true))
+        }
         if favorite, app.badgeTint != nil {
             let on = !prefs.badgeHiddenHosts.contains(host)
             entries.append(.choice(title: SiteDisplayOption.unreadBadge.title, command: .tabTools(.siteDisplay(host: host, .unreadBadge, on: !on)), on: on))
