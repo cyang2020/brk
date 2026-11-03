@@ -5,25 +5,69 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
+/// The site controls popover's content: Arc's site control center first (`SiteControlsOverview`), and the full site
+/// form (address, copy and export, extensions, website appearance, blocking, permissions, suspension, clearing) as a
+/// second page opened from the Extensions or Settings title. `onResize` asks the popover for the page's size.
 @MainActor
 public final class SiteControlsHost: NSView {
+    public var onResize: ((CGSize) -> Void)?
+    private let overview = SiteControlsOverview()
     private var hosting: NSHostingView<SiteControlsView>?
+    private var value: SiteControlSnapshot?
+    private var dispatch: Dispatch?
+    public private(set) var showingDetails = false
+
+    public override init(frame: NSRect) {
+        super.init(frame: frame)
+        overview.openDetails = { [weak self] in self?.show(details: true) }
+        addSubview(overview)
+    }
+    @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
+    public override var isFlipped: Bool { true }
+
+    public var preferredSize: CGSize {
+        showingDetails ? Metrics.siteControls.detailsSize.value : CGSize(width: Metrics.siteControls.width.value, height: overview.preferredHeight)
+    }
+
     public func render(_ value: SiteControlSnapshot, dispatch: @escaping Dispatch) {
-        let view = SiteControlsView(value: value, dispatch: dispatch)
-        if let hosting { hosting.rootView = view }
-        else {
-            let hosting = NSHostingView(rootView: view)
-            self.hosting = hosting
-            addSubview(hosting)
-            hosting.frame = bounds
-            hosting.autoresizingMask = [.width, .height]
-        }
+        let resized = self.value.map { $0.extensions.count != value.extensions.count } ?? false
+        self.value = value; self.dispatch = dispatch
+        overview.render(value, dispatch: dispatch)
+        if showingDetails { renderDetails() }
+        if resized { onResize?(preferredSize) }
+    }
+
+    public func show(details: Bool) {
+        guard details != showingDetails else { return }
+        showingDetails = details
+        if details { renderDetails() } else { hosting?.removeFromSuperview(); hosting = nil }
+        overview.isHidden = details
+        onResize?(preferredSize)
+        needsLayout = true
+    }
+
+    private func renderDetails() {
+        guard let value, let dispatch else { return }
+        let view = SiteControlsView(value: value, dispatch: dispatch, back: { [weak self] in self?.show(details: false) })
+        if let hosting { hosting.rootView = view; return }
+        let hosting = NSHostingView(rootView: view)
+        self.hosting = hosting
+        addSubview(hosting)
+        hosting.frame = bounds
+        hosting.autoresizingMask = [.width, .height]
+    }
+
+    public override func layout() {
+        super.layout()
+        overview.frame = bounds
+        hosting?.frame = bounds
     }
 }
 
 private struct SiteControlsView: View {
     let value: SiteControlSnapshot
     let dispatch: Dispatch
+    let back: @MainActor () -> Void
     @State private var selectedData: Set<SiteDataKind> = [.cookies]
     @State private var dataScope: SiteDataScope = .site
     @State private var refreshAfterClear = true
@@ -62,6 +106,18 @@ private struct SiteControlsView: View {
         }
     }
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: s.columnSpacing.value) {
+                SettingsButton(title: "Back", field: "siteControlsBack", symbol: "chevron.left", action: back)
+                Text("Site Settings").font(.headline)
+            }
+            .padding(.horizontal, Metrics.siteControls.inset.value)
+            .frame(height: Metrics.siteControls.detailsHeader.value)
+            Divider()
+            form
+        }
+    }
+    private var form: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
@@ -132,7 +188,6 @@ private struct SiteControlsView: View {
                     Divider()
 
                 }
-                Text("Boosts and page capture are not available yet.").font(.caption).foregroundStyle(.secondary)
             }.padding(s.sectionSpacing.value)
         }
         .onChange(of: dataScope) { _, scope in if scope == .profile { selectedData.remove(.storage) } }

@@ -306,10 +306,11 @@ public final class AppStore {
 
     private func renderWindows() {
         siteDialogs.validate(snapshot)
-        sitePanels.render(snapshot.sites) { windows[$0]?.window }
         for (id, controller) in windows {
             if let window = snapshot.windows[id] { controller.render(window) }
         }
+        // After the windows, so a new popover anchors to the site button where this snapshot lays it out.
+        sitePanels.render(snapshot.sites, owner: { windows[$0]?.window }, scheme: { snapshot.windows[$0]?.theme.scheme })
         renderSettings()
     }
 

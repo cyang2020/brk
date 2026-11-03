@@ -77,7 +77,7 @@ public enum WindowLayout {
                             contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, library: library, peek: peek)
         if let find = snapshot.find,
            let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.rect {
-            result.find = FindLayout.compute(in: card, replacing: find.replacement)
+            result.find = FindLayout.compute(in: card, replacing: find.replacement, notFound: find.notFound, message: !find.message.isEmpty)
         }
         result.toolbar = toolbar
         return result

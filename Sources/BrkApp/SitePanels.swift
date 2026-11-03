@@ -4,38 +4,129 @@ import BrkDomain
 import BrkSettings
 import BrkLayout
 
+/// Site controls (Arc's site control center): one NSPopover per window, anchored under the URL pill's site button
+/// and attached to that window, so it never floats over other apps. A click elsewhere in the window, Escape or
+/// Cmd+W closes it; clicking the site button again toggles it. Sheets and other windows leave it open (a clear
+/// confirmation sheet reports its result back into the popover).
 @MainActor
-final class SitePanels: NSObject, NSWindowDelegate {
-    private var panels: [WindowID: NSPanel] = [:]
-    private var values: [WindowID: SiteControlSnapshot] = [:]
+final class SitePanels: NSObject, NSPopoverDelegate {
+    private final class Entry {
+        let popover: NSPopover
+        let host: SiteControlsHost
+        weak var parent: NSWindow?
+        var value: SiteControlSnapshot?
+        var monitor: Any?
+        init(popover: NSPopover, host: SiteControlsHost, parent: NSWindow) { self.popover = popover; self.host = host; self.parent = parent }
+    }
+    private var entries: [WindowID: Entry] = [:]
     var send: ((WindowID, Command) -> Void)?
-    func render(_ snapshots: [WindowID: SiteControlSnapshot], owner: (WindowID) -> NSWindow?) {
-        for id in panels.keys where snapshots[id] == nil { panels.removeValue(forKey: id)?.close(); values[id] = nil }
+
+    /// `scheme` is the window theme's: the popover draws light or dark with the sidebar, not with the system.
+    func render(_ snapshots: [WindowID: SiteControlSnapshot], owner: (WindowID) -> NSWindow?, scheme: (WindowID) -> Scheme?) {
+        for (id, entry) in entries {
+            guard snapshots[id] != nil, let parent = owner(id), entry.parent === parent else { dismiss(id); continue }
+        }
         for (id, value) in snapshots {
-            guard let parent = owner(id) else { continue }
-            let panel: NSPanel
-            if let existing = panels[id] { panel = existing }
-            else {
-                panel = SiteControlPanel(contentRect: CGRect(x: 0, y: 0, width: 440, height: 680), styleMask: [.titled, .closable, .utilityWindow], backing: .buffered, defer: false)
-                panel.title = "Website controls"
-                panel.hidesOnDeactivate = false
-                panel.isReleasedWhenClosed = false
-                panel.delegate = self
-                panel.contentView = SiteControlsHost(frame: panel.contentLayoutRect)
-                panel.setFrameOrigin(CGPoint(x: parent.frame.minX + 30, y: parent.frame.maxY - panel.frame.height - 40))
-                panels[id] = panel
-                panel.makeKeyAndOrderFront(nil)
-            }
-            guard values[id] != value else { continue }
-            values[id] = value
-            (panel.contentView as? SiteControlsHost)?.render(value) { [weak self] in self?.send?(id, $0) }
+            guard let parent = owner(id), parent.isVisible else { continue }
+            let appearance = NSAppearance(named: scheme(id) == .dark ? .darkAqua : .aqua)
+            guard let entry = entries[id] ?? open(id, value, in: parent, appearance: appearance) else { continue }
+            if entry.popover.appearance?.name != appearance?.name { entry.popover.appearance = appearance }
+            guard entry.value != value else { continue }
+            entry.value = value
+            entry.host.render(value) { [weak self] in self?.send?(id, $0) }
         }
     }
-    func window(for id: WindowID) -> NSWindow? { panels[id] }
-    func windowWillClose(_ notification: Notification) {
-        guard let panel = notification.object as? NSPanel, let id = panels.first(where: { $0.value === panel })?.key else { return }
-        panels[id] = nil; values[id] = nil
+
+    func window(for id: WindowID) -> NSWindow? { entries[id]?.popover.contentViewController?.view.window }
+
+    private func open(_ id: WindowID, _ value: SiteControlSnapshot, in parent: NSWindow, appearance: NSAppearance?) -> Entry? {
+        guard let content = parent.contentView else { return nil }
+        let host = SiteControlsHost(frame: .zero)
+        let controller = NSViewController()
+        controller.view = host
+        let popover = NSPopover()
+        popover.behavior = .applicationDefined
+        popover.animates = false
+        popover.appearance = appearance
+        popover.contentViewController = controller
+        popover.delegate = self
+        let entry = Entry(popover: popover, host: host, parent: parent)
+        entries[id] = entry
+        host.render(value) { [weak self] in self?.send?(id, $0) }
+        entry.value = value
+        popover.contentSize = host.preferredSize
+        host.onResize = { [weak popover] size in popover?.contentSize = size }
+        let (rect, edge) = anchor(in: parent, content: content)
+        popover.show(relativeTo: rect, of: content, preferredEdge: edge)
+        // Arc's popover is a flat PopoverBackground, not the system's translucent material (which also takes on
+        // whatever window is behind it).
+        if let frame = host.superview {
+            let background = PopoverBackground(frame: frame.bounds)
+            background.autoresizingMask = [.width, .height]
+            frame.addSubview(background, positioned: .below, relativeTo: host)
+        }
+        entry.monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) { [weak self] event in
+            self?.handle(event, for: id) ?? event
+        }
+        return entry
+    }
+    /// Where Arc's arrow points (P36-a): at the site icon 19 pt in from the URL pill's right edge, the body 8 pt under the
+    /// pill. Then the site button wherever it is; the content area's top-left corner when the sidebar is hidden.
+    private func anchor(in window: NSWindow, content: NSView) -> (CGRect, NSRectEdge) {
+        let below: NSRectEdge = content.isFlipped ? .maxY : .minY
+        let m = Metrics.siteControls
+        func visible(_ id: ViewID) -> CGRect? {
+            guard let view = ViewTree.find(id.identifier, in: window), view.window === window, !view.isHiddenOrHasHiddenAncestor else { return nil }
+            let rect = view.convert(view.bounds, to: content)
+            return !rect.isEmpty && content.bounds.contains(CGPoint(x: rect.midX, y: rect.midY)) ? rect : nil
+        }
+        if let pill = visible(.urlPill) {
+            let x = pill.maxX - m.anchorTrailing.value, rise = m.anchorRise.value
+            let rect = content.isFlipped ? CGRect(x: x, y: pill.minY, width: 0, height: pill.height - rise)
+                : CGRect(x: x, y: pill.minY + rise, width: 0, height: pill.height - rise)
+            return (rect.insetBy(dx: -0.5, dy: 0), below)
+        }
+        if let button = visible(.siteInfo) { return (button, below) }
+        let corner = Metrics.siteControls.fallbackAnchor.value
+        let top = content.isFlipped ? content.bounds.minY + corner.y : content.bounds.maxY - corner.y
+        return (CGRect(x: content.bounds.minX + corner.x, y: top, width: 0, height: 0).insetBy(dx: -0.5, dy: -0.5), below)
+    }
+
+    private func handle(_ event: NSEvent, for id: WindowID) -> NSEvent? {
+        guard let entry = entries[id], let parent = entry.parent else { return event }
+        let popoverWindow = entry.popover.contentViewController?.view.window
+        if event.type == .keyDown {
+            guard event.window === popoverWindow || event.window === parent else { return event }
+            let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            let escape = event.keyCode == 53 && modifiers.isEmpty
+            let closeKey = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "w" && event.window === popoverWindow
+            guard escape || closeKey else { return event }
+            close(id); return nil
+        }
+        guard event.window === parent else { return event }
+        // A click on the site button closes the popover instead of reopening it.
+        let hit = parent.contentView?.superview?.hitTest(event.locationInWindow) ?? parent.contentView?.hitTest(event.locationInWindow)
+        var view = hit
+        while let current = view, current.accessibilityIdentifier() != ViewID.siteInfo.identifier { view = current.superview }
+        close(id)
+        return view == nil ? event : nil
+    }
+
+    private func close(_ id: WindowID) {
+        guard entries[id] != nil else { return }
+        dismiss(id)
         send?(id, .site(.closeControls))
+    }
+
+    private func dismiss(_ id: WindowID) {
+        guard let entry = entries.removeValue(forKey: id) else { return }
+        if let monitor = entry.monitor { NSEvent.removeMonitor(monitor) }
+        entry.popover.close()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard let popover = notification.object as? NSPopover, let id = entries.first(where: { $0.value.popover === popover })?.key else { return }
+        close(id)
     }
 }
 
@@ -98,13 +189,14 @@ final class SiteDialogs {
     }
 }
 
+/// The site controls popover's opaque fill (#FAFAFA as measured in P36-a; dark: a neutral popover grey).
 @MainActor
-private final class SiteControlPanel: NSPanel {
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
-        if event.keyCode == 53 || (modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "w") {
-            performClose(nil); return true
-        }
-        return super.performKeyEquivalent(with: event)
+private final class PopoverBackground: NSView {
+    override var wantsUpdateLayer: Bool { true }
+    override init(frame: NSRect) { super.init(frame: frame); wantsLayer = true }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = (dark ? NSColor(white: 0.17, alpha: 1) : NSColor(white: 0.98, alpha: 1)).cgColor
     }
 }

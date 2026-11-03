@@ -75,12 +75,19 @@ extension ChromePage {
         if websiteStyleOwner?.document != document { websiteStyleOwner = (document, UUID().uuidString) }
         let owner = Self.jsString(websiteStyleOwner!.id)
         let mediaMarker = Self.jsString("data-brk-media-" + websiteStyleOwner!.id)
+        // Dark (P19-b): a page that leaves its canvas to the browser shows Chromium's dark Canvas (#121212) as in Arc,
+        // not the Chrome-runtime frame grey (#202020) drawn under it. Pages with their own root or body background
+        // keep it (a root background would stop the body's from filling the canvas).
+        let canvas = policy.appearance == .dark ? "true" : "false"
         let script = """
         (()=>{
           if(location.origin!==\(Self.jsString(origin.value)))return false;
           const owner=\(owner);let s=document.querySelector('style[data-brk-policy-owner="'+owner+'"]');
           if(!s){s=document.createElement('style');s.setAttribute('data-brk-policy-owner',owner);(document.head||document.documentElement).append(s);}
-          s.textContent=\(literal);if(!s.textContent||s.textContent===':root{}')s.remove();
+          s.textContent=\(literal);
+          if(\(canvas)){const bare=e=>{const c=getComputedStyle(e);return c.backgroundColor==='rgba(0, 0, 0, 0)'&&c.backgroundImage==='none'};
+            if(bare(document.documentElement)&&(!document.body||bare(document.body)))s.textContent+=':where(html){background-color:Canvas}';}
+          if(!s.textContent||s.textContent===':root{}')s.remove();
           const marker=\(mediaMarker), installed=marker+'-observed';
           const reconcile=()=>{for(const media of document.querySelectorAll('audio,video')){
             if(!media.paused&&!media.ended)media.setAttribute(marker,'');else media.removeAttribute(marker);
@@ -112,6 +119,11 @@ extension ChromePage {
                 let effective = policy.appearance == .automatic ? automatic : policy.appearance.rawValue
                 let features: [[String: String]] = [["name": "prefers-color-scheme", "value": effective]]
                 _ = try await self.browser.protocolSession.call("Emulation.setEmulatedMedia", ["features": features])
+                guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
+                // Arc's Dark (P19-b) also darkens pages without a dark style: Chromium's automatic dark mode. Light and
+                // Automatic leave pages as their own styles draw them.
+                let dark = policy.appearance == .dark
+                _ = try await self.browser.protocolSession.call("Emulation.setAutoDarkModeOverride", dark ? ["enabled": true] : [:])
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 let frameTree = try await self.browser.protocolSession.call("Page.getFrameTree")
                 guard let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any], let frameID = frame["id"] as? String,
