@@ -15,7 +15,7 @@
       "arc_evidence": "anatomy-m 1.15 `SidebarHeaderView`; `layout-constants.md`",
       "description": "Traffic lights, sidebar toggle, back, forward and reload buttons above the URL pill",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Render traffic lights, sidebar toggle, back, forward and reload or stop above the address pill; controls act on the intended window.",
       "owner": "native-grounding",
       "required_checks": [
@@ -44,6 +44,13 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P01",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P01: P01-a 0.8% 已修（一致）; P01-b 2.7% 已修（一致）; P01-d 0.5% 一致; P01-c 0.8% 已修（一致）. References in verify/visual-pairs/run-20261103/P01/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -59,7 +66,15 @@
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
         "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P01 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A002",
@@ -68,7 +83,7 @@
       "arc_evidence": "anatomy-m 1.15 `CommandBarPlaceholderView`; anatomy-v 3 \"Search or Enter URL…\"",
       "description": "Shows the focused tab's address; a click opens the command bar on top of it",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show the focused pane address and open an editable address bar over the pill when clicked.",
       "owner": "native-grounding",
       "required_checks": [
@@ -97,6 +112,13 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P02",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P02: P02-d 0.8% 已修（一致）; P02-b 2.0% 已修（一致）; P02-c 2.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P02/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -112,7 +134,15 @@
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
         "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P02 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A003",
@@ -192,6 +222,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P03",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P03: P03-b 0.9% 已修（一致）; P03-c 1.0% 已修（一致）; P03-d 站台未拍 一致. References in verify/visual-pairs/run-20261103/P03/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -350,6 +387,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P04",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P04: P04-a 0.4% 一致; P04-b 1.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P04/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -531,9 +575,18 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P05",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P05: P05-c 1.0% 已修（一致）; P05-d 0.8% 已修（一致）; P05-e 站台未拍 有意不同. References in verify/visual-pairs/run-20261103/P05/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
-      "remaining": [],
+      "remaining": [
+        "Arc 对照（run-20261103 P05）仍有差异或有意不同：P05-e: 有意不同"
+      ],
       "implementation": [
         "Sources/BrkSidebar/TablistView.swift",
         "Sources/BrkLayout/SidebarLayout.swift",
@@ -869,7 +922,7 @@
       "arc_evidence": "`ARC_AppTray`; anatomy-v 3 \"Drag to add Favorites\"",
       "description": "Tiles shared by every space of a profile; drag in, reorder, empty state",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Share Favorites between spaces of one profile; support empty state, dropping in and grid reorder.",
       "owner": "native-grounding",
       "required_checks": [
@@ -898,6 +951,13 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P07",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P07: P07-b 1.3% 已修（一致）; P07-c 0.8% 一致; P07-d 0.8% 已修（一致）. References in verify/visual-pairs/run-20261103/P07/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -914,7 +974,15 @@
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
         "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P07 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A014",
@@ -1219,10 +1287,18 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools4, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P09",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P09: P09-a 4.1% 已修（一致）; P09-b 4.0% 已修（一致）; P09-behaviour 站台未拍 待定. References in verify/visual-pairs/run-20261103/P09/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Fresh native-capture pixels show the recent panel and current-item marker, and Escape cancellation passes before the separate audible-state failure. Complete held-Control visual/order matrix."
+        "Fresh native-capture pixels show the recent panel and current-item marker, and Escape cancellation passes before the separate audible-state failure. Complete held-Control visual/order matrix.",
+        "Arc 对照（run-20261103 P09）仍有差异或有意不同：P09-behaviour: 待定"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -1601,7 +1677,7 @@
       "arc_evidence": "anatomy-m 1.8 `multiSelectedItems`; anatomy-v 3 \"Archive Other Tabs\", \"Archive Tabs Below\", \"New Folder from Selection…\"",
       "description": "Select several rows and act on them at once",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Select multiple rows and perform contextual bulk archive, move and new-folder actions, including Other and Below scopes.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1637,6 +1713,13 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P11",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P11: P11-a 0.8% 一致; P11-b 0.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P11/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -1669,6 +1752,14 @@
         "verify/completion/batch-tabs/INTEGRATION.md",
         "Sources/BrkDomain/Rules/TabTools.swift",
         "verify/completion/batch-tabs/native-ship/REPORT.md"
+      ],
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P11 matches; see verification"
+        }
       ]
     },
     {
@@ -1918,7 +2009,7 @@
       "arc_evidence": "`ARC_ContextMenus` (`SidebarMenu`, `SpaceMenu`, `SplitScreenMenu`, `DownloadMenu`)",
       "description": "Right-click menus on tabs, folders, splits and spaces",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Provide working context menus for tabs, Favorites, folders, splits and spaces, including their completed workflow actions.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1961,6 +2052,13 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools6, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P12",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P12: P12-f 3.9% 已修（一致）; P12-a 1.0% 已修（一致）; P12-b 1.0% 已修（一致）; P12-c 0.9% 已修（一致）; P12-d 0.9% 已修（一致）; P12-g 1.1% 已修（一致）; P12-e 4.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P12/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -1994,6 +2092,14 @@
         "verify/completion/batch-tabs/INTEGRATION.md",
         "Sources/BrkDomain/Rules/TabTools.swift",
         "verify/completion/batch-tabs/native-ship/REPORT.md"
+      ],
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P12 matches; see verification"
+        }
       ]
     },
     {
@@ -2149,11 +2255,19 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SidebarToolsGlow, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P06",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P06: P06-a 0.8% 已修（一致）; P06-b 站台未拍 已修（第 1 组：失败后标签行加载态结束；站台未拍）. References in verify/visual-pairs/run-20261103/P06/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
         "None within the assigned scope.",
-        "Opus review: no indicator while the sidebar is hidden (F8); placement has no anatomy source."
+        "Opus review: no indicator while the sidebar is hidden (F8); placement has no anatomy source.",
+        "Arc 对照（run-20261103 P06）仍有差异或有意不同：P06-b: 已修（第 1 组：失败后标签行加载态结束；站台未拍）"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -2250,11 +2364,19 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SidebarToolsPreview, SidebarToolsReviewHostile, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P13",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P13: P13-c 站台未拍 已修（第 7 组：Previews 表单；站台未拍）; P13-a 5.5% 已修；卡片白底，Arc 半透明; P13-b 5.5% 已修；未加载的置顶标签不显示 ×. References in verify/visual-pairs/run-20261103/P13/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
         "None within the assigned scope.",
-        "Opus review: links in cross-site iframes get no preview (F2); anchor text becomes the card title when the destination has none (F3); long hosts cut the URL off the card (F4); idle CPU with previews on and many frames (withdrawn Fable review)."
+        "Opus review: links in cross-site iframes get no preview (F2); anchor text becomes the card title when the destination has none (F3); long hosts cut the URL off the card (F4); idle CPU with previews on and many frames (withdrawn Fable review).",
+        "Arc 对照（run-20261103 P13）仍有差异或有意不同：P13-c: 已修（第 7 组：Previews 表单；站台未拍） | P13-a: 已修；卡片白底，Arc 半透明 | P13-b: 已修；未加载的置顶标签不显示 ×"
       ],
       "implementation": [
         "Sources/BrkCEF/PageLinkPreviews.swift",
@@ -2500,10 +2622,18 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools4b, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P15",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P15: P15-c 站台未拍 已修（第 1 组：删除 Space 后弹提示条；站台未拍）; P15-a 8.0% 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）. References in verify/visual-pairs/run-20261103/P15/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Window-owned replacement toasts, dismissal, four-second timer and clock expiry are implemented. Native timing is asserted in TabTools4b; the final native timing check passes; add a two-window feedback ownership case."
+        "Window-owned replacement toasts, dismissal, four-second timer and clock expiry are implemented. Native timing is asserted in TabTools4b; the final native timing check passes; add a two-window feedback ownership case.",
+        "Arc 对照（run-20261103 P15）仍有差异或有意不同：P15-c: 已修（第 1 组：删除 Space 后弹提示条；站台未拍） | P15-a: 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）"
       ],
       "implementation": [
         "Sources/BrkBase/Metrics.swift",
@@ -2885,9 +3015,18 @@
           "command": "Parent inspection of real signed-application captures; python3 verify/completion/find-parent/check.py",
           "artifact": "verify/completion/find-parent/VISUAL.md",
           "scope": "Ordinary, narrow replacement and repeated-find bar readability/control placement. Supported editing limits are recorded; no authenticated Arc pixel-parity claim."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P18",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P18: P18-a 1.1% 已修（一致）; P18-b 1.1% 已修（一致）; P18-c 站台未拍 有意不同（Arc 无界面；Brk 面板已改成查找条同款）; P18-d 1.4% 已修（一致）. References in verify/visual-pairs/run-20261103/P18/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
-      "remaining": [],
+      "remaining": [
+        "Arc 对照（run-20261103 P18）仍有差异或有意不同：P18-c: 有意不同（Arc 无界面；Brk 面板已改成查找条同款）"
+      ],
       "implementation": [
         "Sources/BrkBase/Find.swift",
         "Sources/BrkDomain/Rules/Find.swift",
@@ -3171,6 +3310,13 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on SitePolicy-appearance, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P19",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P19: P19-a 1.4% 已修（一致）; P19-b 3.8% 已修（一致）; P19-c 1.0% 一致. References in verify/visual-pairs/run-20261103/P19/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -4019,7 +4165,7 @@
       "arc_evidence": "row 18",
       "description": "A window with no sidebar items",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Blank Window opens a native browser window whose sidebar has no inherited items and whose lifetime/persistence/profile behavior is explicit.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -4070,6 +4216,13 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P20",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P20: P20-a 4.3% 已修（一致）; P20-b 0.6% 已修（一致）; P20-c 0.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P20/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -4096,7 +4249,15 @@
           "proposal": "verify/completion/batch-browser-basic/proposal.json",
           "proposal_sha256": "9f31367bfe9d42e27b7da9bf594e396fcdad3e8776ece53c3667381d5a3437ae"
         }
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P20 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A053",
@@ -4326,10 +4487,18 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P24",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P24: P24-a 1.8% 已修（一致）; P24-b 站台未拍 已修（第 5 组：图标浮层；站台未拍）; P24-c 站台未拍 已修（第 5 组：Choose a Theme 弹主题面板；站台未拍）; P24-d 站台未拍 一致; P24-e 站台未拍 已修（第 5 组；站台未拍）; P24-flow 站台未拍 已修（第 5 组：侧栏内流程；录屏待下一轮）. References in verify/visual-pairs/run-20261103/P24/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Authenticated Arc creation animation comparison remains in A148."
+        "Authenticated Arc creation animation comparison remains in A148.",
+        "Arc 对照（run-20261103 P24）仍有差异或有意不同：P24-b: 已修（第 5 组：图标浮层；站台未拍） | P24-c: 已修（第 5 组：Choose a Theme 弹主题面板；站台未拍） | P24-e: 已修（第 5 组；站台未拍） | P24-flow: 已修（第 5 组：侧栏内流程；录屏待下一轮）"
       ],
       "implementation": [
         "Sources/BrkOverlays/SpaceDialogHost.swift",
@@ -4432,6 +4601,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P25",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P25: P25-a 1.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P25/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -4525,6 +4701,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P25",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P25: P25-a 1.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P25/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -4624,6 +4807,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P26",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P26: P26-a 1.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P26/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [],
@@ -4721,6 +4911,13 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P27",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P27: P27-a 1.4% 已修（一致）. References in verify/visual-pairs/run-20261103/P27/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -4883,10 +5080,18 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 4. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P29",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P29: P29-b 1.6% 一致; P29-c 7.7% 已修；同 P02-b; P29-d 2.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P29/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Compare gradient positions, texture appearance and low-power fallback with an authenticated reference; procedural images are approximations."
+        "Compare gradient positions, texture appearance and low-power fallback with an authenticated reference; procedural images are approximations.",
+        "Arc 对照（run-20261103 P29）仍有差异或有意不同：P29-c: 已修；同 P02-b"
       ],
       "implementation": [
         "Sources/BrkTheme/ThemeRenderer.swift",
@@ -4965,10 +5170,18 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on SpaceTools-2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P28",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P28: P28-a 6.2% 已修（剩余为数据或他组）; P28-b 站台未拍 已修（第 5 组；站台未拍）; P28-c 站台未拍 已修（预设页序 Brand→Pastel→Drab→Greyscale）; P28-d 站台未拍 有意不同; P28-e 站台未拍 已修（波浪滑杆；见 p28-full）. References in verify/visual-pairs/run-20261103/P28/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Native creation, color count, presets, undo, independent values, save and cancel pass. A complete pointer-driven pad/color-well/slider matrix remains a manual native gate; pure paint and Metal pixel tests cover the generated outputs."
+        "Native creation, color count, presets, undo, independent values, save and cancel pass. A complete pointer-driven pad/color-well/slider matrix remains a manual native gate; pure paint and Metal pixel tests cover the generated outputs.",
+        "Arc 对照（run-20261103 P28）仍有差异或有意不同：P28-a: 已修（剩余为数据或他组） | P28-b: 已修（第 5 组；站台未拍） | P28-c: 已修（预设页序 Brand→Pastel→Drab→Greyscale） | P28-d: 有意不同 | P28-e: 已修（波浪滑杆；见 p28-full）"
       ],
       "implementation": [
         "Sources/BrkOverlays/SpaceDialogHost.swift",
@@ -5056,10 +5269,18 @@
           "command": "Read verify/completion/browser-basic-parent/native-sites-combined/shots/<capture>.png",
           "artifact": "verify/completion/ledger-reconciliation-20261031/VISUAL.md",
           "scope": "Parent inspected the combined-run captures named in VISUAL.md for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P29",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P29: P29-b 1.6% 一致; P29-c 7.7% 已修；同 P02-b; P29-d 2.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P29/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Pure projection covers automatic system selection; native forced appearance and independent values survive restart. No global OS appearance setting was changed."
+        "Pure projection covers automatic system selection; native forced appearance and independent values survive restart. No global OS appearance setting was changed.",
+        "Arc 对照（run-20261103 P29）仍有差异或有意不同：P29-c: 已修；同 P02-b"
       ],
       "implementation": [
         "Sources/BrkDomain/Theme/SpaceTheme.swift",
@@ -5787,9 +6008,18 @@
           "command": "Parent inspection of real corrected-bundle captures; python3 verify/completion/splits-parent/check.py",
           "artifact": "verify/completion/splits-parent/VISUAL.md",
           "scope": "Integrated readable controls, no Find overlap, retained four-pane presentation and real stationary drag feedback. No Arc pixel-parity claim."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P23",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P23: P23-d 站台未拍 未比较; P23-a 5.3% 已修；栏头 32 点（Arc 图量得）; P23-b 5.7% 已修; P23-c 站台未拍 未比较. References in verify/visual-pairs/run-20261103/P23/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
-      "remaining": [],
+      "remaining": [
+        "Arc 对照（run-20261103 P23）仍有差异或有意不同：P23-d: 未比较 | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 未比较"
+      ],
       "implementation": [
         "Sources/BrkContent/SplitToolsView.swift",
         "Sources/BrkDomain/Project.swift",
@@ -6060,9 +6290,18 @@
           "command": "Parent inspection of real corrected-bundle captures; python3 verify/completion/splits-parent/check.py",
           "artifact": "verify/completion/splits-parent/VISUAL.md",
           "scope": "Integrated readable controls, no Find overlap, retained four-pane presentation and real stationary drag feedback. No Arc pixel-parity claim."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P23",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P23: P23-d 站台未拍 未比较; P23-a 5.3% 已修；栏头 32 点（Arc 图量得）; P23-b 5.7% 已修; P23-c 站台未拍 未比较. References in verify/visual-pairs/run-20261103/P23/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
-      "remaining": [],
+      "remaining": [
+        "Arc 对照（run-20261103 P23）仍有差异或有意不同：P23-d: 未比较 | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 未比较"
+      ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
         "Sources/BrkContent/SplitToolsView.swift",
@@ -6391,10 +6630,18 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-12. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P32",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P32: P32-a 9.2% 已修；剩余为数据（无归档/Boost）与系统图标; P32-b 6.9% 已修（剩余为数据或他组）; P32-c 6.9% 已修（剩余为数据或他组）; P32-d 11.7% 已修；剩余为数据; P32-e 6.9% 已修（剩余为数据或他组）; P32-f 7.3% 已修（剩余为数据或他组）; P32-i 9.1% 已修；剩余为数据. References in verify/visual-pairs/run-20261103/P32/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency."
+        "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency.",
+        "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -6552,10 +6799,18 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on W2-5, BB3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P21",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P21: P21-a 4.3% 已修（一致）; P21-b 2.4% 已修（一致）; P21-c 站台未拍 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）; P21-d 站台未拍 一致. References in verify/visual-pairs/run-20261103/P21/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Authenticated floating reference, multiple-panel physical activation/input and scratch-link/close/restart matrix remain."
+        "Authenticated floating reference, multiple-panel physical activation/input and scratch-link/close/restart matrix remain.",
+        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）"
       ],
       "implementation": [
         "Sources/BrkApp/LittleWindowController.swift",
@@ -6647,11 +6902,19 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on W2-5, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P21",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P21: P21-a 4.3% 已修（一致）; P21-b 2.4% 已修（一致）; P21-c 站台未拍 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）; P21-d 站台未拍 一致. References in verify/visual-pairs/run-20261103/P21/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
         "Native form/history reset, context-change and ongoing-download continuity need full runtime proof.",
-        "No seamless browser/form-state transfer is claimed."
+        "No seamless browser/form-state transfer is claimed.",
+        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -6839,10 +7102,18 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on W2-6, BB2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P22",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P22: P22-a 0.9% 已修（一致）; P22-b 站台未拍 一致; P22-c 站台未拍 已修（第 4 组：转标签放底部并保留滚动；站台未拍）. References in verify/visual-pairs/run-20261103/P22/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Finish pinned/favorite same/cross-site, iframe, selection, folder Open In and private/Little native matrix."
+        "Finish pinned/favorite same/cross-site, iframe, selection, folder Open In and private/Little native matrix.",
+        "Arc 对照（run-20261103 P22）仍有差异或有意不同：P22-c: 已修（第 4 组：转标签放底部并保留滚动；站台未拍）"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
@@ -7892,11 +8163,19 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on Boost-CSS, Boost-JavaScript, Boost-Zap, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P37",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P37: P37-a 5.6% 已修；引导卡徽章不是 Arc 原插图; P37-b 5.3% 已修（一致）; P37-c 7.6% 已修（剩余为数据或他组）; P37-d 16.9% 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比. References in verify/visual-pairs/run-20261103/P37/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
         "No owned implementation gate remains. Parent wires the exported site-control command and runs unified integration regression. Physical file-picker acceptance and Arc pixel comparison are not claimed.",
-        "Reviews (verify/completion/batch2-parent/boosts/REVIEW.md): CSP-restricted pages get no Boost and no error; page scripts can read and remove the injected style; cross-origin iframe Zap; IDN and IPv6 hosts; scope text reverts after a refusal; editor covers the command bar; reload ends preview. Edit and Export buttons have no native click receipt; file install only by command."
+        "Reviews (verify/completion/batch2-parent/boosts/REVIEW.md): CSP-restricted pages get no Boost and no error; page scripts can read and remove the injected style; cross-origin iframe Zap; IDN and IPv6 hosts; scope text reverts after a refusal; editor covers the command bar; reload ends preview. Edit and Export buttons have no native click receipt; file install only by command.",
+        "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比"
       ],
       "implementation": [
         "Sources/BrkDomain/Boosts.swift",
@@ -7964,7 +8243,7 @@
       "arc_evidence": "rows 35 to 37; `ARC_Capture`; Shortcuts \"Hold Command and Shift to start a Capture.\"",
       "description": "Area, full page and portrait screenshots",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Area, full-page and portrait screenshots capture correct webpage pixels/scale, allow intended selection/export, and handle long/sticky/GPU content and private data with explicit ownership.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -8004,6 +8283,13 @@
           "artifact": "verify/completion/batch2-parent/integration-final-2/build.log",
           "scope": "Full signed build on the integration branch at 3b07ec4 (ledger commit 1c6bc97 differs only in audit and evidence files): 851 tests, 1 known skip, 0 failures; signature verified. Native: 187 scenarios, 183 PASS, 3 FAIL (W2-10 external search, DataExtensionProfiles intermittent focus after restart, Ext-media WebAudio readback), 1 SKIPPED (extension action popup).",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P33",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P33: P33-a 4.5% 已修（一致）; P33-b 2.1% 已修（一致）; P33-c 1.6% 已修（一致）; P33-d 4.5% 已修（一致）. References in verify/visual-pairs/run-20261103/P33/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -8033,7 +8319,15 @@
           "proposal_sha256": "3878ca897b64d6b54ead995f0a414cc0069716ad2ca2266477f46d9529b8fb18",
           "native_run": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md"
         }
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P33 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A103",
@@ -8402,10 +8696,18 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on Ext-controls, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P36",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P36: P36-a 5.4% 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点. References in verify/visual-pairs/run-20261103/P36/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Physical remote save-chooser confirmation remains with file-panels. NSSavePanel.ok was unimplemented on this OS and that experimental call was removed. Boost/capture actions await their slices."
+        "Physical remote save-chooser confirmation remains with file-panels. NSSavePanel.ok was unimplemented on this OS and that experimental call was removed. Boost/capture actions await their slices.",
+        "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -8911,10 +9213,18 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-1,W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features."
+        "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features.",
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
       ],
       "implementation": [
         "Sources/BrkApp/SettingsWindowController.swift",
@@ -9170,10 +9480,18 @@
           "command": "python3 verify/completion/native-grounding/validate.py",
           "artifact": "verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker."
+        "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker.",
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -9647,6 +9965,13 @@
           "command": "python3 verify/completion/native-grounding/validate.py",
           "artifact": "verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P39",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P39: P39-a 5.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P39/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -9841,7 +10166,7 @@
       "arc_evidence": "row 133; Max \"ChatGPT in the Command Bar\"",
       "description": "Ask a question from the bar, Opt+Cmd+G",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Submit a command-bar question to the selected local AI CLI and display a cancellable answer or actionable failure.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -9891,6 +10216,13 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AICommand, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P43",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P43: P43-a 4.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P43/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
@@ -9915,7 +10247,15 @@
           "proposal_sha256": "b0dc37e459e203d91b97045d33c5d002b9734e470b14501c65f23a2670264517",
           "native_run": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md"
         }
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-03",
+          "from": "implemented",
+          "to": "verified",
+          "why": "real Arc paired capture P43 matches; see verification"
+        }
+      ]
     },
     {
       "id": "A135",
@@ -10580,10 +10920,18 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIMax, all PASS."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
+          "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
