@@ -79,7 +79,8 @@ final class IdentityIntegrationTests: XCTestCase {
         d.page(tab, .committed(url("https://example.com/away")), in: other)
         let home = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(tab), at: .zero)))))
         let away = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(tab), at: .zero)), in: other)))
-        XCTAssertNil(command(home, ActionID.resetTab.spec.title))
+        XCTAssertEqual(isEnabled(home, ActionID.resetTab.spec.title), false)
+        XCTAssertEqual(isEnabled(away, ActionID.resetTab.spec.title), true)
         XCTAssertEqual(command(away, ActionID.resetTab.spec.title), .tab(.reset(.item(tab))))
     }
 

@@ -42,6 +42,7 @@ final class TablistView: NSScrollView {
         newTab = NewTabRowView(dispatch: dispatch)
         super.init(frame: .zero)
         document.onKey = { [weak self] command in self?.dispatch(.tabTools(command)) }
+        document.onRightClick = { [weak self] event in self?.spaceMenu(event) }
         drawsBackground = false
         hasVerticalScroller = true
         autohidesScrollers = true
@@ -75,6 +76,14 @@ final class TablistView: NSScrollView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Arc opens the space's menu for a right-click on the list's empty area too (P12-g).
+    override func rightMouseDown(with event: NSEvent) { spaceMenu(event) }
+
+    private func spaceMenu(_ event: NSEvent) {
+        guard let space = last?.space, space.today.kind != .scratch else { return }
+        dispatch(.sidebar(.popupMenu(.spaceControls(space.id), at: rootPoint(fromWindow: event.locationInWindow))))
+    }
 
     /// A rename field of some row is being edited.
     var isRenaming: Bool { rowViews.values.contains { $0.isEditingName } }
@@ -303,6 +312,9 @@ final class ListDocumentView: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     var onKey: ((TabToolsCommand) -> Void)?
+    /// A right-click that no row took (the sections' gaps and the space below the last row).
+    var onRightClick: ((NSEvent) -> Void)?
+    override func rightMouseDown(with event: NSEvent) { onRightClick?(event) }
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
         case 125: onKey?(.sidebarStep(.next))
@@ -564,6 +576,7 @@ final class RowView: HoverView {
 
     override func rightMouseDown(with event: NSEvent) {
         guard let row else { return }
+        preview.cancel()
         let targets = closeTargets?(row.id) ?? [row.id]
         dispatch(.sidebar(.popupMenu(targets.count > 1 ? .selection(targets) : .item(row.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }

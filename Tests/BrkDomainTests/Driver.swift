@@ -207,11 +207,28 @@ func popup(_ t: Transition) -> MenuModel? {
     return nil
 }
 
-func titles(_ menu: MenuModel) -> [String] {
-    menu.entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } }
+/// The top level as the menu shows it: rows, submenu titles ("Share ▸"), captions ("— Tab Options") and "|" for a
+/// separator.
+func layout(_ menu: MenuModel) -> [String] {
+    menu.entries.map {
+        switch $0 {
+        case .action(let title, _, _), .choice(let title, _, _): title
+        case .submenu(let title, _): title + " ▸"
+        case .header(let title): "— " + title
+        case .separator: "|"
+        }
+    }
 }
 
-func command(_ menu: MenuModel, _ title: String) -> Command? {
-    for case .action(let t, let command, _) in menu.entries where t == title { return command }
+/// Every choosable row's title, submenus included.
+func titles(_ menu: MenuModel) -> [String] { menu.actions.map(\.title) }
+
+/// The first row with this title, submenus included.
+func command(_ menu: MenuModel, _ title: String) -> Command? { menu.actions.first { $0.title == title }?.command }
+
+func isEnabled(_ menu: MenuModel, _ title: String) -> Bool? { menu.actions.first { $0.title == title }?.enabled }
+
+func submenu(_ menu: MenuModel, _ title: String) -> MenuModel? {
+    for case .submenu(let t, let entries) in menu.entries where t == title { return MenuModel(entries: entries) }
     return nil
 }

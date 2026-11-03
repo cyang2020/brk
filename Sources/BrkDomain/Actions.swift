@@ -220,9 +220,9 @@ extension ActionID {
         case .share:
             // Arc titles the result "Share URL"; Brk's Share… exports to a file, so the menu title stays and "Export" is ours.
             entry(33, "Share…", .file, 4, [], .app(.export(.focusedTab)), bar: listing("square.and.arrow.up", "Share", "Export"))
-        case .videoPictureInPicture: entry(220, "Video Picture in Picture", .view, 9, [], .page(.pictureInPicture(.video)), bar: listing("pip", "Picture in Picture", "Video PiP"))
-        case .documentPictureInPicture: entry(221, "Page Picture in Picture", .view, 9, [], .page(.pictureInPicture(.document)), bar: listing("pip", "Page Picture in Picture", "Meet PiP"))
-        case .closePictureInPicture: entry(222, "Close Picture in Picture", .view, 9, [], .page(.pictureInPicture(.close)), bar: listing("pip.exit", "Close Picture in Picture"))
+        case .videoPictureInPicture: entry(220, "Video Picture in Picture", .view, 9, [], .page(.pictureInPicture(.video)), bar: listing("pip", "Picture in Picture", "Video PiP"), hidden: true)
+        case .documentPictureInPicture: entry(221, "Page Picture in Picture", .view, 9, [], .page(.pictureInPicture(.document)), bar: listing("pip", "Page Picture in Picture", "Meet PiP"), hidden: true)
+        case .closePictureInPicture: entry(222, "Close Picture in Picture", .view, 9, [], .page(.pictureInPicture(.close)), bar: listing("pip.exit", "Close Picture in Picture"), hidden: true)
         case .capturePage:
             entry(35, "Capture…", .file, 4, [key([shift, cmd], .two, .page)], .capture(.begin(.area)), bar: listing("camera", "Capture", "Screenshot", "Snapshot", "Cut Out"))
         case .captureFullPage:
@@ -330,17 +330,18 @@ extension ActionID {
                   bar: listing("arrow.up.left.and.arrow.down.right", "Enter Full Screen", "Exit Full Screen", "Full Screen", "Toggle Full Screen"))
         case .exit: entry(122, "Exit", .view, 7, [key([], .escape, .pageThenApp)], .app(.exit), bar: listing("escape", "Exit", "Exit Modal", "Exit Full Screen"))
 
-        // Brk split controls have distinct rows after the extracted Arc inventory.
-        case .splitHorizontal: entry(190, "Split Side by Side", .view, 8, [], .split(.orientCurrent(.horizontal)), bar: listing("rectangle.split.2x1", "Horizontal Split"))
-        case .splitVertical: entry(191, "Split Top and Bottom", .view, 8, [], .split(.orientCurrent(.vertical)), bar: listing("rectangle.split.1x2", "Vertical Split"))
-        case .restoreSplit: entry(192, "Restore Split Panes", .view, 8, [], .split(.restore), bar: listing("rectangle.split.2x1"))
-        case .separateAllSplit: entry(193, "Separate All Split Panes", .view, 8, [], .split(.separateAll), bar: listing("square.split.2x2", "Separate All"))
-        case .nextSplitPane: entry(194, "Next Split Pane", .view, 8, [key([ctrl, opt], .rightArrow, .app)], .split(.stepPane(.next)), bar: listing("arrow.right"), repeats: true)
-        case .previousSplitPane: entry(195, "Previous Split Pane", .view, 8, [key([ctrl, opt], .leftArrow, .app)], .split(.stepPane(.previous)), bar: listing("arrow.left"), repeats: true)
-        case .splitPane1: entry(196, "Focus Split Pane 1", .view, 8, [key([ctrl, opt], .one, .app)], .split(.focusPane(1)), bar: listing("1.square"))
-        case .splitPane2: entry(197, "Focus Split Pane 2", .view, 8, [key([ctrl, opt], .two, .app)], .split(.focusPane(2)), bar: listing("2.square"))
-        case .splitPane3: entry(198, "Focus Split Pane 3", .view, 8, [key([ctrl, opt], .three, .app)], .split(.focusPane(3)), bar: listing("3.square"))
-        case .splitPane4: entry(199, "Focus Split Pane 4", .view, 8, [key([ctrl, opt], .four, .app)], .split(.focusPane(4)), bar: listing("4.square"))
+        // Brk split controls have distinct rows after the extracted Arc inventory. Arc's View menu has none of them
+        // (P19-a), so they are hidden; their keys and command bar rows remain.
+        case .splitHorizontal: entry(190, "Split Side by Side", .view, 8, [], .split(.orientCurrent(.horizontal)), bar: listing("rectangle.split.2x1", "Horizontal Split"), hidden: true)
+        case .splitVertical: entry(191, "Split Top and Bottom", .view, 8, [], .split(.orientCurrent(.vertical)), bar: listing("rectangle.split.1x2", "Vertical Split"), hidden: true)
+        case .restoreSplit: entry(192, "Restore Split Panes", .view, 8, [], .split(.restore), bar: listing("rectangle.split.2x1"), hidden: true)
+        case .separateAllSplit: entry(193, "Separate All Split Panes", .view, 8, [], .split(.separateAll), bar: listing("square.split.2x2", "Separate All"), hidden: true)
+        case .nextSplitPane: entry(194, "Next Split Pane", .view, 8, [key([ctrl, opt], .rightArrow, .app)], .split(.stepPane(.next)), bar: listing("arrow.right"), repeats: true, hidden: true)
+        case .previousSplitPane: entry(195, "Previous Split Pane", .view, 8, [key([ctrl, opt], .leftArrow, .app)], .split(.stepPane(.previous)), bar: listing("arrow.left"), repeats: true, hidden: true)
+        case .splitPane1: entry(196, "Focus Split Pane 1", .view, 8, [key([ctrl, opt], .one, .app)], .split(.focusPane(1)), bar: listing("1.square"), hidden: true)
+        case .splitPane2: entry(197, "Focus Split Pane 2", .view, 8, [key([ctrl, opt], .two, .app)], .split(.focusPane(2)), bar: listing("2.square"), hidden: true)
+        case .splitPane3: entry(198, "Focus Split Pane 3", .view, 8, [key([ctrl, opt], .three, .app)], .split(.focusPane(3)), bar: listing("3.square"), hidden: true)
+        case .splitPane4: entry(199, "Focus Split Pane 4", .view, 8, [key([ctrl, opt], .four, .app)], .split(.focusPane(4)), bar: listing("4.square"), hidden: true)
 
         // MARK: Spaces (groups: New Space… to Change Profile | Next, Previous | Manage Spaces…)
         case .newSpace: entry(124, "New Space…", .spaces, 0, [], .sidebar(.openDialog(.newSpace)), bar: listing("plus.rectangle.portrait", "Create New Space"))

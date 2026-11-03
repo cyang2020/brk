@@ -243,19 +243,22 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(entry.archivedAt, T0.advanced(by: .seconds(4 * 3_600)))
     }
 
-    /// the Pinned-tab menu offers Close and Keep Pinned and a separate Archive Tab that archives it
-    func test_thePinnedTabMenuOffersCloseAndKeepPinnedAndASeparateArchiveTabThatArchives() throws {
+    /// the Pinned-tab menu is Arc's (P12-b): Close and Keep Pinned sits in Edit Pinned Page, and Remove Pin unpins
+    func test_thePinnedTabMenuIsArcsWithCloseAndKeepPinnedUnderEditPinnedPageAndRemovePin() throws {
         let d = Driver()
         let a = d.todayIDs[0]
         d.user(.tab(.togglePin(.item(a))))
         let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(a), at: .zero)))))
-        XCTAssertEqual(titles(menu), ["Export…", "Pin/Unpin Tab", "Change Icon…", "Duplicate", "Archive Item", "Archive Other Items", "Archive Items Below", "New Group from Selection", "New Folder from Selection", "Duplicate in Space 1", "Rename Current Item", "Mute Tab", "Close and Keep Pinned", "Archive Tab"])
+        XCTAssertEqual(layout(menu), ["Copy Link", "Share ▸", "|", "Change Icon…", "Rename…", "Mute", "Customize Page…", "Edit Pinned Page ▸", "|",
+                                      "Open in Split View", "Duplicate", "Move to ▸", "|", "Remove Pin"])
+        XCTAssertEqual(isEnabled(menu, "Mute"), false, "nothing is playing")
         XCTAssertEqual(command(menu, "Close and Keep Pinned"), .tab(.close(.item(a))))
-        let archive = try XCTUnwrap(command(menu, "Archive Tab"))
-        XCTAssertEqual(archive, .tab(.archive(.item(a))))
-        d.user(archive)
+        XCTAssertEqual(command(menu, "Export…"), .app(.export(.items([a]))))
+        let remove = try XCTUnwrap(command(menu, "Remove Pin"))
+        XCTAssertEqual(remove, .tab(.togglePin(.item(a))))
+        d.user(remove)
         XCTAssertFalse(d.pinnedIDs.contains(a))
-        XCTAssertEqual(d.archive().map(\.url), [start])
+        XCTAssertTrue(d.todayIDs.contains(a))
     }
 
     /// .tab(.archive) keeps a Today tab menu to a single Archive Tab entry (.tab(.close))
@@ -1382,22 +1385,24 @@ final class ReduceSpecTests: XCTestCase {
         guard case .popupMenu(let window, let menu, let at)? = t.effects.first else { return XCTFail("no popup") }
         XCTAssertEqual(window, d.window)
         XCTAssertEqual(at, CGPoint(x: 40, y: 120))
-        XCTAssertEqual(titles(menu), ["Export…", "Pin/Unpin Tab", "Change Icon…", "Duplicate", "Archive Item", "Archive Other Items", "Archive Items Below", "New Group from Selection", "New Folder from Selection", "Duplicate in Space 1", "Duplicate in Work", "Rename Current Item", "Mute Tab", "Move to Today in Work", "Archive Tab"])
-        d.user(try XCTUnwrap(command(menu, "Move to Today in Work")))
+        XCTAssertEqual(layout(menu), ["Copy Link", "Share ▸", "|", "Change Icon…", "Rename…", "Mute", "Customize Page…", "|",
+                                      "Open in Split View", "Duplicate", "Move to ▸", "|", "Archive Tab", "Archive Tabs Below"])
+        XCTAssertEqual(isEnabled(menu, "Archive Tabs Below"), false, "nothing below the only tab")
+        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Move to"))), ["Space 1", "Work"])
+        XCTAssertEqual(isEnabled(menu, "Space 1"), false, "the tab's own space")
+        d.user(try XCTUnwrap(command(menu, "Work")))
         d.user(.space(.focus(work)))
         XCTAssertEqual(d.todayIDs, [a])
+        let space1 = try XCTUnwrap(d.state.doc.spaceOrder.first)
         let space = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.space(work), at: .zero)))))
-        XCTAssertEqual(space.entries, [
-            .action(title: "Rename Space", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
-            .action(title: "Change Space Icon…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
-            .action(title: "Edit Theme Color…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
-            .separator,
-            .action(title: "Reset All Pinned Tabs", command: .tabTools(.resetPinned), enabled: true),
-            .action(title: "Collapse All Folders", command: .tabTools(.folders(expanded: false)), enabled: true),
-            .action(title: "Expand All Folders", command: .tabTools(.folders(expanded: true)), enabled: true),
-            .action(title: "Export Space…", command: .app(.export(.space(.space(work)))), enabled: true),
-            .action(title: "Delete Space", command: .space(.delete(work)), enabled: true),
-        ])
+        XCTAssertEqual(layout(space), ["Change Space Icon…", "Rename Space…", "Edit Theme Color…", "Set Profile ▸", "|", "New Folder", "Live Folders ▸", "|",
+                                       "Share Space…", "Export “Work” into Folder ▸", "|", "Manage Spaces…", "|", "Delete Space"])
+        XCTAssertEqual(command(space, "Rename Space…"), .sidebar(.openDialog(.editSpace(.space(work)))))
+        XCTAssertEqual(command(space, "Share Space…"), .app(.export(.space(.space(work)))))
+        XCTAssertEqual(command(space, "Delete Space"), .space(.delete(work)))
+        XCTAssertEqual(try XCTUnwrap(submenu(space, "Set Profile")).entries.first, .choice(title: "Default", command: .profile(.assign(.space(work), to: .default)), on: true))
+        XCTAssertEqual(titles(try XCTUnwrap(submenu(space, "Export “Work” into Folder"))), ["Space 1", "Bookmarks Folder on Disk…"])
+        XCTAssertEqual(command(space, "Space 1"), .tabTools(.spaceIntoFolder(work, into: space1)))
         let plus = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.plusButton, at: .zero)))))
         XCTAssertEqual(plus.entries.compactMap { (entry: MenuEntry) -> Command? in
             if case .action(_, let c, _) = entry { return c }
@@ -1407,7 +1412,10 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.item(.newFolder))
         let folder = d.pinnedIDs[0]
         let folderMenu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(folder), at: .zero)))))
-        XCTAssertEqual(titles(folderMenu), ["Rename Current Item", "Collapse Folder", "Change Icon…", "Archive Folder", "Duplicate Folder", "Export Folder…", "Delete Folder"])
+        XCTAssertEqual(layout(folderMenu), ["Share Folder…", "|", "New Nested Folder…", "Turn “New Folder” into Space", "Copy All Links", "|",
+                                            "Change Icon…", "Rename…", "|", "Duplicate", "Move to ▸", "|", "Delete"])
+        XCTAssertEqual(command(folderMenu, "Delete"), .item(.deleteFolder(folder)))
+        XCTAssertEqual(isEnabled(folderMenu, "Copy All Links"), false, "an empty folder has no links")
         XCTAssertEqual(d.user(.sidebar(.popupMenu(.item(ItemID("ghost")), at: .zero))).effects, [])
         XCTAssertEqual(d.user(.sidebar(.popupMenu(.space(SpaceID("ghost")), at: .zero))).effects, [])
     }
@@ -1731,7 +1739,7 @@ final class ReduceSpecTests: XCTestCase {
 
     /// cover every UiCommand type, and every command type has a behavior test above
     func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 221, "a Command case was added: add its sample and a behavior test")
+        XCTAssertEqual(CommandInventory.commands.count, 228, "a Command case was added: add its sample and a behavior test")
         XCTAssertEqual(CommandInventory.events.count, 50, "a SystemEvent case was added: add its sample and a behavior test")
         let sources = try CommandInventory.testSources()
         let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))

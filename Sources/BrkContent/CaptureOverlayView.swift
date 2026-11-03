@@ -17,6 +17,10 @@ import BrkUIKit
     /// Started by ⇧⌘-drag on the page: the "Next time, hold ⇧⌘" lesson is already learned.
     private var viaShortcut = false
     private var shortcutPending = false
+    /// Above the dim and below the hint card: greys the page out (Arc's mask is colourless, P33-a).
+    private let shade = CaptureShadeView()
+    /// The hint card, the ⇧⌘ lesson and the selection's blue line, drawn above the grey-out so they keep their colours.
+    private let chrome = CaptureChromeView()
     private let menuCard = CaptureMenuCard()
     private var tracking: NSTrackingArea?
 
@@ -26,7 +30,8 @@ import BrkUIKit
         wantsLayer = true
         identify(.tabTool("capture-overlay"))
         menuCard.chosen = { [weak self] action in self?.dispatch(.capture(.act(action))) }
-        addSubview(menuCard)
+        chrome.drawChrome = { [weak self] in self?.drawChrome() }
+        addSubview(shade); addSubview(chrome); addSubview(menuCard)
         isHidden = true
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -68,8 +73,13 @@ import BrkUIKit
 
     // MARK: Drawing
 
+    override func layout() {
+        super.layout()
+        shade.frame = bounds; chrome.frame = bounds
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        guard let snapshot else { return }
+        guard snapshot != nil else { return }
         let cut = selection.isEmpty ? nil : selection
         // The sidebar and window frame fade; the page dims to grey (P33-a: white → #C6C6C6, black text → #959594).
         let outside = NSBezierPath(rect: bounds); outside.append(NSBezierPath(rect: page)); outside.windingRule = .evenOdd
@@ -77,6 +87,13 @@ import BrkUIKit
         let dim = NSBezierPath(rect: page)
         if let cut { dim.append(NSBezierPath(rect: cut)); dim.windingRule = .evenOdd }
         NSColor.black.withAlphaComponent(Metrics.capture.pageDim.value).setFill(); dim.fill()
+        shade.render(page: page, cut: cut)
+        chrome.needsDisplay = true
+    }
+
+    private func drawChrome() {
+        guard let snapshot else { return }
+        let cut = selection.isEmpty ? nil : selection
         if let cut, cut.width > 12, cut.height > 10 {
             let line = CGRect(x: cut.minX + 4.5, y: cut.maxY - 8, width: cut.width - 9, height: 4)
             NSColor(srgbRed: 0x99 / 255.0, green: 0xBD / 255.0, blue: 0xE7 / 255.0, alpha: 1).setFill()
@@ -215,6 +232,36 @@ import BrkUIKit
         }
         return NSCursor(image: image, hotSpot: hot)
     }()
+}
+
+/// Neutral grey composited with a saturation blend: whatever is under it keeps its brightness and loses its colour.
+@MainActor final class CaptureShadeView: NSView {
+    private var page = CGRect.zero, cut: CGRect?
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layerUsesCoreImageFilters = true
+        compositingFilter = CIFilter(name: "CISaturationBlendMode")
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    func render(page: CGRect, cut: CGRect?) {
+        guard page != self.page || cut != self.cut else { return }
+        self.page = page; self.cut = cut; needsDisplay = true
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(rect: page)
+        if let cut { path.append(NSBezierPath(rect: cut)); path.windingRule = .evenOdd }
+        NSColor(white: 0.5, alpha: 1).setFill(); path.fill()
+    }
+}
+
+@MainActor final class CaptureChromeView: NSView {
+    var drawChrome: (() -> Void)?
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) { drawChrome?() }
 }
 
 /// The menu card beside a finished selection (P33-c): a Send To… field, then Save to Library, Copy, Save…, Send via

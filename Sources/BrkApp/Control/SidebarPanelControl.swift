@@ -24,8 +24,9 @@ enum SidebarPanelControl {
             (owner.attachedSheet as? NSSavePanel)?.directoryURL = testDirectory
             return .ok
         }
-        let preview = owner.childWindows?.first { window in
-            return window.isVisible && ViewTree.find("web-link-preview", in: window) != nil
+        // A link preview or the icon popover (`TabIconPicker`) hangs off the window instead of attaching as a sheet.
+        let preview = ((owner.childWindows ?? []) + NSApp.windows.filter { $0.isVisible && $0 !== owner }).first { window in
+            window.isVisible && (ViewTree.find("web-link-preview", in: window) != nil || (window.parent === owner || window.parent == nil) && ViewTree.find("tab-icon-picker", in: window) != nil)
         }
         guard let sheet = owner.attachedSheet ?? preview, let root = sheet.contentView else { throw Invalid(message: "No attached native sheet or link preview") }
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
@@ -59,7 +60,7 @@ enum SidebarPanelControl {
             })
         case .button(let title):
             if sheet is NSSavePanel, title == "Cancel" { try press("escape", in: sheet); return .ok }
-            guard let button = views.compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) else {
+            guard let button = views.compactMap({ $0 as? NSButton }).first(where: { ($0.title == title || $0.title.isEmpty && $0.accessibilityLabel() == title) && $0.isEnabled }) else {
                 throw Invalid(message: "Native button not found: " + title)
             }
             button.performClick(nil)
