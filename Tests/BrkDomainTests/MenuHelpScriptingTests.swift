@@ -17,10 +17,10 @@ final class MenuHelpScriptingTests: XCTestCase {
     // MARK: Menu bar coverage
 
     /// every row Arc's menu shows does something: no visible row is a later wave except the ones the parent holds
-    /// (Notes, which Arc 1.170 does not show either and BrkApp hides, and New Easel, the Easel group's)
+    /// (Notes, which Arc 1.170 does not show either and BrkApp hides; New Easel became real with the Easel group)
     func testNoVisibleMenuRowIsAPlaceholder() {
         let later = ActionID.allCases.filter { $0.spec.later != nil }
-        XCTAssertEqual(Set(later), [.newNote, .newNoteInSplitView, .exportArcNotes, .newEasel])
+        XCTAssertEqual(Set(later), [.newNote, .newNoteInSplitView, .exportArcNotes])
         for action in [ActionID.checkForUpdates, .releaseNotes, .contactTheTeam, .visitHelpCenter, .restoreData, .recordTrace, .cancelTrace,
                        .openTaskManager, .copyArcInfo] {
             guard case .app(.help) = action.spec.command else { return XCTFail("\(action) is not a Help action: \(action.spec.command)") }
