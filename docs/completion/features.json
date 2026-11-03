@@ -2792,7 +2792,7 @@
       "arc_evidence": "anatomy-m 1.14, 2.2",
       "description": "App wins, page wins, or page first then app on a second press",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "App priority, page priority and page-first/second-press behavior work for every implemented chord and user override, with preventDefault, repeat, native editors, distinct windows and exactly-once dispatch.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -2866,7 +2866,8 @@
         }
       ],
       "remaining": [
-        "Broader affected Chrome accelerator and physical repeat coverage remains; BO1/N1/N2 do not prove every implemented chord."
+        "Broader affected Chrome accelerator and physical repeat coverage remains; BO1/N1/N2 do not prove every implemented chord.",
+        "R3-7（2026-11-04，合并 00800f02）：清单里能路由的 94 个组合在吞键页和不处理页上各按一遍（PB1，173 次，逐次核对执行的动作、只执行一次、页面收到几次）；按住不放的自动重复（PB1R）和真实键盘事件都过；Cmd+H 隐藏再回来后 Chromium 把页面输入视图一直藏着、Cmd 快捷键跳过页面的真实 bug 已修（PB1H）。未证明：Chrome 自己的加速键拦截代码没有被真实触发过（这台机器上 15 个候选组合都没到 Chrome）。"
       ],
       "implementation": [
         "Sources/BrkDomain/KeyRouting.swift",
@@ -3090,7 +3091,7 @@
       "arc_evidence": "rows 113 to 120",
       "description": "View source, DevTools, inspect, console, network, developer mode",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "View Source, DevTools toggle, element inspection, console, network, JavaScript from Apple Events setting and developer mode execute their named behavior on the correct page and close safely.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3131,7 +3132,8 @@
       "remaining": [
         "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup.",
         "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。",
-        "R3-5（2026-11-04，合并 e9f5e87d）：View > Developer 子菜单按真实 Arc 的七项做齐，最后一项 Turn on/off Developer Mode for this site（⌃D）接到按站点的开关，Allow JavaScript from Apple Events 是会保存的打勾开关（默认关）。剩余归 R3-7：检查元素的节点选择、辅助输入。"
+        "R3-5（2026-11-04，合并 e9f5e87d）：View > Developer 子菜单按真实 Arc 的七项做齐，最后一项 Turn on/off Developer Mode for this site（⌃D）接到按站点的开关，Allow JavaScript from Apple Events 是会保存的打勾开关（默认关）。剩余归 R3-7：检查元素的节点选择、辅助输入。",
+        "R3-7（2026-11-04，合并 00800f02）：Inspect Elements 进入 DevTools 的点选元素模式，点 #target-b 只选中那个节点且不触发页面自己的点击（PB7）；DevTools 控制台输入能到页面。未做：DevTools 的停靠和分离。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3357,7 +3359,7 @@
       "arc_evidence": "rows 33, 38, 39, 111",
       "description": "Standard page actions",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Save Page As creates a usable offline page in supported formats; Print and PDF export report completion/cancellation; Share writes a local file; Cast selects and controls a real receiver, with correct page/window/profile ownership.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3403,7 +3405,8 @@
         }
       ],
       "remaining": [
-        "Default-profile Cast is explicitly unavailable before get_media_router after repeated pinned-CEF quit traps; custom-profile enumeration and clean quit passed BO5C. No receiver exists on this Mac; real successful route creation/control/termination is unverified. Raw ownership fixtures do not complete this gate. HTTP/HTTPS tab mirroring is rejected by the pinned API. Save-panel gesture belongs to file-panels; printer submission and physical Share chooser execution remain gaps."
+        "Default-profile Cast is explicitly unavailable before get_media_router after repeated pinned-CEF quit traps; custom-profile enumeration and clean quit passed BO5C. No receiver exists on this Mac; real successful route creation/control/termination is unverified. Raw ownership fixtures do not complete this gate. HTTP/HTTPS tab mirroring is rejected by the pinned API. Save-panel gesture belongs to file-panels; printer submission and physical Share chooser execution remain gaps.",
+        "R3-7（2026-11-04，合并 00800f02）：默认 Profile 下 Cast 可用：接收器发现改用 Brk 自己建的专用 Profile 目录 Profile-brk-cast-receivers（父任务接受这个隐藏目录），不再碰退出时会崩的全局服务；BO5 看到真实的接收器通知并干净退出。未验证：这台 Mac 附近没有 Cast 接收器，真正建立和结束一条投屏没试过（硬件条件）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3438,7 +3441,7 @@
       "arc_evidence": "rows 121, 122",
       "description": "Ctrl+Cmd+F; Esc leaves the current context",
       "historical_status": "done",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Ctrl+Cmd+F enters/leaves native fullscreen; Escape closes the current overlay first and exits page/video or window fullscreen when appropriate, without activating a hidden CEF host.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3477,7 +3480,8 @@
         }
       ],
       "remaining": [
-        "Physical key/traffic-light gestures and broader interrupted/hidden-source fullscreen transitions remain unverified."
+        "Physical key/traffic-light gestures and broader interrupted/hidden-source fullscreen transitions remain unverified.",
+        "R3-7（2026-11-04，合并 00800f02）：真实 Ctrl+Cmd+F、真实绿色按钮、真实 Esc 进出全屏；动画中再按一次不再丢失，动画结束后补做；文档全屏的标签被切走或关掉时窗口退出全屏（PB3）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3511,7 +3515,7 @@
       "arc_evidence": "rows 41 to 51, 59 to 84",
       "description": "Standard editing, spelling, substitutions, transformations, speech, font",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "All standard editing, spelling/grammar, substitutions, transformations, speech and font actions are enabled only when their responder supports them and work in native editors and applicable webpage editing contexts.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3550,7 +3554,8 @@
         }
       ],
       "remaining": [
-        "Broader web spelling/grammar, substitutions, speech and font execution remains incomplete or unverified; AppKit owns native font-manager validation. Cross-origin transformation selection validation and broader native extended-action execution remain incomplete."
+        "Broader web spelling/grammar, substitutions, speech and font execution remains incomplete or unverified; AppKit owns native font-manager validation. Cross-origin transformation selection validation and broader native extended-action execution remain incomplete.",
+        "R3-7（2026-11-04，合并 00800f02）：网页编辑区里 Check Document Now 和拼写面板（Change、Ignore）、语法检查、边打字检查（红色波浪线出现和消失）、Substitutions 面板的替换按钮、Start/Stop Speaking、Bold/Italic/Underline 都能用（PB4）。未做：边打字自动替换和自动纠错（会和网页自己的编辑逻辑打架）；Smart Copy/Paste 和 Data Detectors 保持灰（网页没有对应物）；这些项在真实 Arc 里是灰是亮没核对。"
       ],
       "implementation": [
         "Sources/BrkApp/MainMenu.swift",
@@ -3879,7 +3884,7 @@
       "arc_evidence": "anatomy-m 1.10 `browserPopup`; RS spec",
       "description": "Cmd+click opens a background tab; popups open",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Cmd+click opens a background tab; foreground-modifier opens and popups retain correct disposition, opener/context and requested window behavior, including private and hidden source pages.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3967,7 +3972,8 @@
         }
       ],
       "remaining": [
-        "Anonymous nonempty URL popup opens retain domain tabs and therefore lose native opener/geometry. Native-child download/dialog forwarding and native named/empty creation from an already hidden private source remain incomplete or unverified; BO2 proves retention after hiding."
+        "Anonymous nonempty URL popup opens retain domain tabs and therefore lose native opener/geometry. Native-child download/dialog forwarding and native named/empty creation from an already hidden private source remain incomplete or unverified; BO2 proves retention after hiding.",
+        "R3-7（2026-11-04，合并 00800f02）：前台页面发起的带尺寸参数的弹窗是真正的弹出窗口，保留 window.opener 和请求的尺寸位置（520×380 在 240,180；原来是 800×600 放角落）；弹窗里的 alert/confirm 挂在弹窗自己窗口上；弹窗里的下载进打开者的下载目录和 Library（PB5）。未做：已隐藏的私密页面发起的具名或空白弹窗。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -8433,7 +8439,7 @@
       "arc_evidence": "`ARC_PictureInPicture`; Advanced \"Enable Picture in Picture when you leave a video tab\"",
       "description": "Video and Meet PiP, auto PiP on leaving the tab",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Video and Meet PiP work with explicit/automatic entry when leaving a video tab, respect user activation/settings/site rules, and close or reattach correctly on navigation/tab/window/profile changes.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -8469,7 +8475,8 @@
         }
       ],
       "remaining": [
-        "Authenticated Meet behavior, automatic first entry after transient activation expires, and combined PiP/profile-retarget/active-download lifecycle receipts remain unverified."
+        "Authenticated Meet behavior, automatic first entry after transient activation expires, and combined PiP/profile-retarget/active-download lifecycle receipts remain unverified.",
+        "R3-7（2026-11-04，合并 00800f02）：页面报告没有最近用户操作后切走标签仍自动进入画中画（PB6，浏览器以自己的手势执行，调用瞬间页面里能看到手势，和手动画中画一样）；切回来退出；设置关掉不进入。"
       ],
       "implementation": [
         "Sources/BrkCEF/DocumentPiP.swift",
@@ -8578,7 +8585,7 @@
       "arc_evidence": "`ARC_SoundEffects`; Advanced \"Play Arc sound effects\"",
       "description": "Capture and event sounds",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Capture and other intended events play the defined Brk sounds when enabled and are silent when disabled, without blocking UI.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -8621,7 +8628,8 @@
         }
       ],
       "remaining": [
-        "Physical speaker or loopback output has not been recorded; API acceptance and disabled behavior are proven."
+        "Physical speaker or loopback output has not been recorded; API acceptance and disabled behavior are proven.",
+        "R3-7（2026-11-04，合并 00800f02）：用只录 Brk 音频输出的录音工具实测：归档音效开着 RMS 0.0467，关着 0（PB6S，WAV 在证据目录）。"
       ],
       "implementation": [
         "Sources/BrkApp/SoundEffects.swift",

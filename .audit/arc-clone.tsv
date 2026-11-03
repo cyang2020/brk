@@ -176,3 +176,5 @@ ts	phase	decision	why	evidence	result
 2026-11-03T19:54:01Z	gate	合并后 main：单元测试 993/0 失败/1 跳过；站台 Q06-a 3.1%、Q06 底部 5.1%、P38/Q02/P23/P24 持平	验收规矩	/tmp/station-parent/r3-2/sheet.tsv；/tmp/r3-2-tests-2.log	通过；A113/A114/A115/A117/A118 → implemented，A111/A116 的 remaining 更新
 2026-11-03T20:34:44Z	merge	R3-8 站点控制/权限/拦截器/扩展分支合进 main（c792cfc9）；四处冲突两边保留	任务自己的门：945 单元测试、18 个原生场景、站台 P36	分支 t3/r3-8-site-controls-extensions（d8859d35）；verify/visual-pairs/run-20261103/r3-8/	合并提交 c792cfc9
 2026-11-03T20:34:44Z	gate	合并后 main：单元测试 1011/0 失败/1 跳过；站台 P36、P38、Q06、P09 持平	验收规矩	/tmp/station-parent/r3-8/sheet.tsv；/tmp/r3-8-tests.log	通过；A107/A108/A109/A110/A098 → implemented；A097 仍 blocked，依据 EXTENSION-POPUP.md
+2026-11-03T20:43:52Z	merge	R3-7 页面与浏览分支合进 main（00800f02）；两处冲突两边保留；合并后修正 856dd053（删掉的属性）和 3837feae（同名工具改名）	任务自己的门：932 单元测试、29 个原生场景；接受 Profile-brk-cast-receivers 隐藏目录	分支 t3/r3-7-page-browsing（c91555da）；verify/completion/browser-basic-parent/round3-page-browsing/README.md	合并提交 00800f02
+2026-11-03T20:43:52Z	gate	合并后 main：单元测试 1016/0 失败/1 跳过；站台 P01、P18、P19、P36 持平	验收规矩	/tmp/station-parent/r3-7/sheet.tsv；/tmp/r3-7-tests-3.log	通过；A037/A041/A044/A045/A046/A049/A104/A106 → implemented
