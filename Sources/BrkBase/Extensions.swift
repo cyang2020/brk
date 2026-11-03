@@ -9,8 +9,10 @@ public struct BrowserExtension: Hashable, Sendable, Codable, Identifiable {
     public let canChangeIncognito: Bool?
     public let commands: [BrowserExtensionCommand]?
     public let supportsNativeAction: Bool
-    public init(id: String, name: String, version: String, enabled: Bool, supportsNativeAction: Bool = false, incognitoAllowed: Bool? = nil, canChangeIncognito: Bool? = nil, commands: [BrowserExtensionCommand]? = nil) {
-        self.incognitoAllowed = incognitoAllowed; self.canChangeIncognito = canChangeIncognito; self.commands = commands
+    /// The toolbar icon Chromium reports (PNG), drawn on the site controls' extension button.
+    public let icon: Data?
+    public init(id: String, name: String, version: String, enabled: Bool, supportsNativeAction: Bool = false, incognitoAllowed: Bool? = nil, canChangeIncognito: Bool? = nil, commands: [BrowserExtensionCommand]? = nil, icon: Data? = nil) {
+        self.incognitoAllowed = incognitoAllowed; self.canChangeIncognito = canChangeIncognito; self.commands = commands; self.icon = icon
         self.supportsNativeAction = supportsNativeAction
         self.id = id; self.name = name; self.version = version; self.enabled = enabled
     }

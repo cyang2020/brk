@@ -540,6 +540,8 @@ public enum SystemEvent: Sendable, Equatable {
     case exportFinished(WindowID, ExportOutcome)
     case contextDisposed(ContextDisposalResult)
     case websiteRulesLoaded(BrowsingContext, WebsiteRulesUpdate)
+    /// A filter list download finished (`Effect.fetchFilterList`).
+    case filterListFetched(BrowsingContext, String, FilterListFetch)
     case boost(BoostEvent)
     case extensionOperationFailed(BrowsingContext, String)
     case extensionsRead(ExtensionCatalog)

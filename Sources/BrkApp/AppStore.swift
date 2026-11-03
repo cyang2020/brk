@@ -63,6 +63,7 @@ public final class AppStore {
     private var syncTaskID: UUID?
     private var sidebarShuttingDown = false
     private let exports = ExportSheets()
+    private lazy var filterListDownloads = FilterListDownloads(send: { [weak self] event in self?.dispatch(.system(event)) })
     private lazy var sidebarPanels = SidebarDataPanels(send: { [weak self] event in
         self?.dispatch(.system(.sidebarData(event)))
     }, command: { [weak self] window, command in
@@ -550,10 +551,12 @@ public final class AppStore {
                     let update = await Task.detached(priority: .utility) { SiteRulesFiles.read(file) }.value
                     self?.dispatch(.system(.websiteRulesLoaded(context, update)))
                 }
+            case .fetchFilterList(let context, let record): filterListDownloads.fetch(context, record)
             case .chooseWebsiteRules(let id, let context):
                 guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
                 let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
-                panel.message = "Choose Brk rules JSON or a supported EasyList subset text file. This replaces this profile's current network and cosmetic rules."
+                SidebarPanelControl.configureTestDirectory(panel)
+                panel.message = "Choose an EasyList-syntax filter list, or Brk rules JSON. A list becomes this profile's imported list; rules JSON replaces the built-in rules."
                 panel.beginSheetModal(for: owner) { [weak self] response in
                     guard let self, response == .OK, let file = panel.url else { return }
                     self.dispatch(.user(id, .site(.selectedBlockingRules(file, context))))

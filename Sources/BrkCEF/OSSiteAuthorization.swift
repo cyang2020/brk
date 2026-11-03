@@ -67,6 +67,7 @@ final class OSSiteAuthorization: NSObject, @preconcurrency CLLocationManagerDele
                 if status == .notDetermined {
                     guard (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
                 } else if status != .authorized && status != .provisional { return false }
+            case .clipboard, .midi, .windowManagement, .storageAccess, .sensors, .automaticDownloads, .pointerLock: continue
             case .desktopCapture, .other: return false
             }
         }

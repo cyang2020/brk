@@ -1,0 +1,11 @@
+[Adblock Plus 2.0]
+! Title: EasyList (Brk fixture)
+! Version: 202611040001
+! Expires: 4 days (update frequency)
+! A small list in EasyList syntax that the SiteFilters scenarios download instead of easylist.to.
+/brk-filter/easylist-ad.js$script
+@@/brk-filter/easylist-ad.js?allowed$script
+##.brk-easylist-ad
+127.0.0.1#@#.brk-easylist-kept
+##.brk-easylist-kept
+example.com#$#hide-if-contains ad

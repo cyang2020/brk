@@ -9,9 +9,11 @@ enum ExtScenarios {
         Scenario("Ext-catalog", "incognito toggle readback, both private script outcomes and profile pins", cefOnly: "CEF extensions", catalog),
         Scenario("Ext-shortcuts", "shortcut editor, conflicts, restart and Brk remap priority", cefOnly: "CEF extension commands", shortcuts),
         Scenario("Ext-loading", "remembered denial and origin readback while the committed document is loading", cefOnly: "CEF permissions", loading),
-        Scenario("Ext-blocking", "main-frame, cross-origin frame, redirect and selected EasyList subset", cefOnly: "CEF IO request filtering", blocking),
+        Scenario("Ext-blocking", "main-frame, cross-origin frame, redirect and a selected EasyList file", cefOnly: "CEF IO request filtering", blocking),
         Scenario("Ext-media", "audible WebAudio, suspended WebAudio and hidden media scheduling", cefOnly: "Chromium lifecycle", media),
         Scenario("Ext-controls", "origin/profile readback, copy and local link export", cefOnly: "native site controls", controls),
+        Scenario("Ext-shortcut-physical", "window-server key events edit the shortcut field and fire the extension command",
+                 cefOnly: "CEF extension commands", physicalShortcut),
     ]
     static func js(_ text: String) -> String {
         String(decoding: try! JSONSerialization.data(withJSONObject: [text]), as: UTF8.self).dropFirst().dropLast().description
@@ -130,6 +132,38 @@ enum ExtScenarios {
         app.note("Owned AppKit focus/press actions plus real key input edited the actual fields and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap. Synthetic physical utility-panel clicks remain a separate verification limitation.")
     }
 
+    /// The shortcut editor's text and the shortcut itself arrive as keyboard events from the window server
+    /// (`PhysicalKeys`), not through the control socket's in-process press.
+    @Sendable static func physicalShortcut(_ app: AppUnderTest) throws {
+        let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
+        guard let pid = app.hello?.pid, let owner = app.window else { throw Check(description: "app identity missing") }
+        let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command
+        try app.dispatch(.site(.nativeExtensions))
+        try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
+        try control(app, field, .focus)
+        PhysicalKeys.press(KeyChord([.command], .a), pid: pid)
+        PhysicalKeys.type("cmd+shift+u", pid: pid)
+        app.sleep(0.3)
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
+        try app.waitUntil("Chromium reads back the typed shortcut") {
+            if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
+            return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
+        }
+        _ = try app.screenshotSiteControls("physical-shortcut")
+        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
+        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
+        try app.waitForPageInput(PageID(window: owner, item: item), at: app.site.url("site-policy.html"))
+        try app.waitUntil("extension listener ready") {
+            try SitePolicyScenarios.evaluate(app, item, "document.title='shortcut-ready:'+document.documentElement.getAttribute('data-brk-extension')")
+            return try tab(item, in: app.view())?.title == "shortcut-ready:installed"
+        }
+        _ = try app.send(.activate(window: owner))
+        app.sleep(0.3)
+        PhysicalKeys.press(KeyChord([.command, .shift], .u), pid: pid)
+        try waitForTitle(app, item, "extension-command:fixture-command")
+        app.note("The editor field got focus through AppKit; ⌘A, the text cmd+shift+u and the shortcut ⇧⌘U itself were keyboard events posted by the window server to Brk's process (CGEvent.postToPid), so they took AppKit's full event path into the field editor and into Chromium, which ran the extension command.")
+    }
+
     @Sendable static func loading(_ app: AppUnderTest) throws {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
         try app.dispatch(.site(.controls))
@@ -181,18 +215,21 @@ enum ExtScenarios {
         let source = app.dataDirectory.appendingPathComponent("selected-easylist.txt")
         try Data(("! selected subset\n|" + app.site.url("page2.html").absoluteString + "\n##.brk-advertisement\n").utf8).write(to: source)
         try app.dispatch(.site(.selectedBlockingRules(source, context)))
-        try app.waitUntil("selected EasyList subset readback") { try SitePolicyScenarios.controls(app).rulesError == nil && SitePolicyScenarios.controls(app).rulesVersion == 1 }
+        try app.waitUntil("selected EasyList list readback") {
+            let value = try SitePolicyScenarios.controls(app)
+            return value.rulesError == nil && value.filterLists.contains { $0.id == FilterListRecord.importedID && $0.key != nil }
+        }
         app.sleep(0.5)
         let before = app.site.requestCount("/page2.html")
         try SitePolicyScenarios.evaluate(app, item, "fetch('/page2.html').then(()=>document.title='import:allowed').catch(()=>document.title='import:blocked')")
         try waitForTitle(app, item, "import:blocked")
         try expect(app.site.requestCount("/page2.html") == before, "imported URL-prefix rule did not block")
-        try Data("||ads.example^$third-party\n".utf8).write(to: source)
+        try Data("! nothing Brk can use\nexample.com#$#hide-if-contains ad\n".utf8).write(to: source)
         try app.dispatch(.site(.selectedBlockingRules(source, context)))
-        try app.waitUntil("unsupported rule refresh error") { try SitePolicyScenarios.controls(app).rulesError?.contains("line 1") == true }
+        try app.waitUntil("a refresh without usable rules reports an error") { try SitePolicyScenarios.controls(app).rulesError?.contains("no filter rules") == true }
         try SitePolicyScenarios.evaluate(app, item, "fetch('/page2.html').then(()=>document.title='retained:allowed').catch(()=>document.title='retained:blocked')")
         try waitForTitle(app, item, "retained:blocked")
-        app.note("Blocked main frame, cross-origin iframe and redirected destination produced zero target-server hits. Selected subset import blocked a new URL; an invalid refresh retained that working rule.")
+        app.note("Blocked main frame, cross-origin iframe and redirected destination produced zero target-server hits. A selected EasyList file blocked a new URL; a refresh with no usable rules retained that working list.")
     }
 
     @Sendable static func media(_ app: AppUnderTest) throws {

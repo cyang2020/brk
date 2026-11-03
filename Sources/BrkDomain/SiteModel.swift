@@ -17,6 +17,12 @@ public enum SiteCommand: Hashable, Sendable, Codable {
     case loadBlockingRules
     case selectedBlockingRules(URL, BrowsingContext)
     case resetBlockingRules
+    /// Turn one of the profile's filter lists on or off (by `FilterListRecord.id`).
+    case filterList(String, Bool)
+    /// Whether Brk downloads filter list updates for the profile.
+    case filterUpdates(Bool)
+    /// Download every enabled subscription now.
+    case updateFilterLists
     case nativeExtensions
     case pinExtension(String, Bool)
     case extensionIncognito(String, Bool)
@@ -50,6 +56,9 @@ public struct SiteControlSnapshot: Sendable, Equatable, Codable {
     public var secure: Bool = false
     /// The engine's report for this document, nil until it has made one (the details page says why it is insecure).
     public var security: PageSecurity? = nil
+    /// The profile's EasyList-syntax lists and whether updates download.
+    public var filterLists: [FilterListRecord] = []
+    public var filterUpdates = true
 }
 
 struct SiteSession: Sendable, Equatable {

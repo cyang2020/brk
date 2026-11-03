@@ -64,8 +64,12 @@ final class ControlExecutor {
         case .siteControlInput(let owner, let field, let action):
             guard let panel = store.sitePanels.window(for: owner), panel.isVisible,
                   let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel) as? NSControl,
-                  !control.isHiddenOrHasHiddenAncestor, !control.visibleRect.intersection(control.bounds).isEmpty,
-                  control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+                  !control.isHiddenOrHasHiddenAncestor, control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+            // A control below the fold of the second page is scrolled to, as a user would before using it.
+            if control.visibleRect.intersection(control.bounds).isEmpty, control.enclosingScrollView != nil {
+                control.scrollToVisible(control.bounds); panel.displayIfNeeded()
+            }
+            guard !control.visibleRect.intersection(control.bounds).isEmpty else { throw Failure(message: "The owned site control is off screen: " + field) }
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             store.inputWindow = panel
@@ -103,6 +107,27 @@ final class ControlExecutor {
             try png.write(to: URL(fileURLWithPath: path))
             return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
         case .siteControls: return .siteControls(store.snapshot.sites)
+        case .siteControlTexts(let id):
+            guard let window = store.sitePanels.window(for: id), window.isVisible, let root = window.contentView else {
+                throw Failure(message: "Site controls are closed")
+            }
+            return .menuItems(Self.accessibilityTexts(root))
+        case .sitePrompt(let id, let path, let press):
+            guard let window = store.siteDialogs.permissionWindow(for: id), window.isVisible, let root = window.contentView else {
+                throw Failure(message: "No permission prompt is open")
+            }
+            if let press {
+                guard let button = ViewTree.find(ViewID.settingsField(press).identifier, in: window) as? NSButton, button.isEnabled,
+                      !button.isHiddenOrHasHiddenAncestor else { throw Failure(message: "The prompt has no answer " + press) }
+                button.performClick(nil)
+                return .ok
+            }
+            if let path {
+                let image = try capture(window)
+                guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { throw Failure(message: "PNG encoding failed") }
+                try png.write(to: URL(fileURLWithPath: path))
+            }
+            return .menuItems(Self.accessibilityTexts(root))
         case .hello:
             return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))
@@ -547,6 +572,27 @@ final class ControlExecutor {
             throw Failure(message: "CGWindowListCreateImage returned no image for window \(window.windowNumber)")
         }
         return image
+    }
+
+    /// The visible accessibility tree and view tree under `root` (AppKit controls and SwiftUI's elements alike): label,
+    /// title and string value of each, in order, without repeats of the same string on one element.
+    static func accessibilityTexts(_ root: NSView) -> [String] {
+        var out: [String] = [], seen = Set<ObjectIdentifier>()
+        func visit(_ element: Any, depth: Int) {
+            guard depth < 40, let object = element as? NSObject, seen.insert(ObjectIdentifier(object)).inserted else { return }
+            if let view = object as? NSView, view.isHiddenOrHasHiddenAncestor { return }
+            guard let node = object as? NSAccessibilityProtocol else { return }
+            var own: [String] = []
+            for text in [node.accessibilityLabel(), node.accessibilityTitle(), node.accessibilityValue() as? String] {
+                if let text, !text.isEmpty, !own.contains(text) { own.append(text) }
+            }
+            out += own
+            for child in node.accessibilityChildren() ?? [] { visit(child, depth: depth + 1) }
+            // AppKit leaves custom-drawn, untitled buttons out of a view's accessibility children; walk the views too.
+            if let view = object as? NSView { for subview in view.subviews { visit(subview, depth: depth + 1) } }
+        }
+        visit(root, depth: 0)
+        return out
     }
 
     /// Polls every 50 ms: no row in any window is loading, then two more idle turns of the main queue.

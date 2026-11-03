@@ -50,17 +50,21 @@ final class SiteControlsOverview: NSView {
         let extensions = value.extensions.sorted {
             (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name)
         }
-        if extensionTiles.map(\.toolTip) != extensions.map(\.name) {
+        if extensionTiles.map(\.toolTip) != extensions.map(\.name) || zip(extensionTiles, extensions).contains(where: { $0.icon == nil && $1.icon != nil }) {
             extensionTiles.forEach { $0.removeFromSuperview() }
             extensionTiles = extensions.map { item in
                 let tile = SiteTile(letter: String(item.name.prefix(1)).uppercased(), tip: item.name, field: "siteExtension-" + item.id, filled: true)
+                tile.icon = item.icon.flatMap(NSImage.init(data:))
                 tile.target = self; tile.action = #selector(invokeExtension(_:)); tile.extensionID = item.id
                 addSubview(tile)
                 return tile
             }
         }
+        // Chromium opens action popups only from its own toolbar, which Brk does not show (supportsNativeAction is
+        // false), so every extension button is in Arc's grey state: the icon in grey, no press.
         for (tile, item) in zip(extensionTiles, extensions) {
             tile.isEnabled = item.enabled && item.supportsNativeAction && site && !privateSession
+            tile.setAccessibilityLabel(item.name + (tile.isEnabled ? "" : ", unavailable"))
         }
         developer.subtitle = value.rule.developerMode == true ? "On" : "Off"
         developer.isOn = value.rule.developerMode == true
@@ -145,6 +149,8 @@ final class SiteControlsOverview: NSView {
 @MainActor
 final class SiteTile: NSButton {
     var extensionID: String?
+    /// An extension's own icon, drawn instead of the letter; grey while the button is disabled.
+    var icon: NSImage? { didSet { needsDisplay = true } }
     private let symbol: String?, badge: String?, letter: String?, filled: Bool, round: Bool
     private var hovering = false
     private var tracking: NSTrackingArea?
@@ -202,6 +208,12 @@ final class SiteTile: NSButton {
             }
         }
         let tint = isEnabled ? ink.withAlphaComponent(0.78) : ink.withAlphaComponent(0.3)
+        if let icon {
+            let side = Metrics.siteControls.extensionIcon.value
+            let rect = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side).integral
+            (isEnabled ? icon : Self.grey(icon)).draw(in: rect, from: .zero, operation: .sourceOver, fraction: isEnabled ? 1 : 0.45, respectFlipped: true, hints: nil)
+            return
+        }
         if let letter {
             let font = NSFont.systemFont(ofSize: Metrics.siteControls.buttonGlyph.value, weight: .semibold)
             let text = NSAttributedString(string: letter, attributes: [.font: font, .foregroundColor: tint])
@@ -214,6 +226,17 @@ final class SiteTile: NSButton {
         draw(symbol, size: glyph, tint: tint, center: CGPoint(x: bounds.midX + shift.x, y: bounds.midY + shift.y), turned: badge != nil)
         let scale = m.badgeScale.value
         if let badge { draw(badge, size: glyph * scale, tint: tint, center: CGPoint(x: bounds.midX - glyph * scale, y: bounds.midY - glyph * scale)) }
+    }
+
+    /// The image's luminance only: grey drawn in the color blend mode over it, then cut back to its own shape.
+    static func grey(_ image: NSImage) -> NSImage {
+        NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            NSColor.gray.setFill()
+            rect.fill(using: .color)
+            image.draw(in: rect, from: .zero, operation: .destinationIn, fraction: 1)
+            return true
+        }
     }
 
     private func draw(_ name: String, size: Double, tint: NSColor, center: CGPoint, turned: Bool = false) {

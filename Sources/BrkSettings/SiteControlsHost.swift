@@ -65,6 +65,36 @@ public final class SiteControlsHost: NSView {
     }
 }
 
+extension SiteControlsHost {
+    /// Why the overview's security row says Secure or Insecure.
+    static func connectionNote(_ target: SiteTarget, secure: Bool, security: PageSecurity?) -> String {
+        if target.origin.url.scheme != "https" { return "Connection is not secure: this site uses plain HTTP." }
+        if secure { return "Connection is secure (HTTPS)." }
+        if security?.certificateError == true { return "Connection is not secure: the site's certificate is not valid." }
+        if security?.insecureContent != true, security?.insecureForm == true {
+            return "Connection is not secure: a form on this page sends information over plain HTTP."
+        }
+        return "Connection is not secure: this page loaded content over plain HTTP."
+    }
+
+    /// A filter list's line under its checkbox: how many rules it gave, how many it skipped, and the download state.
+    /// No network is reported as a fact, not an error.
+    static func filterListStatus(_ list: FilterListRecord) -> String {
+        var parts: [String] = []
+        if let summary = list.summary {
+            parts.append("\(summary.usable.formatted()) rules")
+            if summary.skipped > 0 { parts.append("\(summary.skipped.formatted()) skipped") }
+        }
+        if list.key == nil {
+            parts.append(list.offline == true ? "Not downloaded yet; no network connection" : "Not downloaded yet")
+        } else if list.offline == true {
+            parts.append("Using the saved copy; no network connection at the last check")
+        }
+        if let problem = list.problem { parts.append("Last update failed: " + problem) }
+        return parts.joined(separator: " · ")
+    }
+}
+
 private struct SiteControlsView: View {
     let value: SiteControlSnapshot
     let dispatch: Dispatch
@@ -101,7 +131,7 @@ private struct SiteControlsView: View {
                     }
                     }
                 }
-                Text("Use the manager to change permissions or enable and disable extensions. Opening action popups is currently unavailable.").font(.caption).foregroundStyle(.secondary)
+                Text("Use the manager to change permissions or enable and disable extensions. Brk can't open extension popups: Chromium opens them only from its own toolbar, which Brk does not show. Extension shortcuts still work.").font(.caption).foregroundStyle(.secondary)
                 Button("Manage extensions…") { dispatch(.site(.extensions)) }.disabled(privateSession)
                 Button("Extension shortcuts…") { dispatch(.site(.extensionShortcuts)) }.disabled(privateSession)
         }
@@ -118,20 +148,12 @@ private struct SiteControlsView: View {
             form
         }
     }
-    /// Why the overview's security row says Secure or Insecure.
-    static func connectionNote(_ target: SiteTarget, secure: Bool, security: PageSecurity?) -> String {
-        if target.origin.url.scheme != "https" { return "Connection is not secure: this site uses plain HTTP." }
-        if secure { return "Connection is secure (HTTPS)." }
-        if security?.certificateError == true { return "Connection is not secure: the site's certificate is not valid." }
-        return "Connection is not secure: this page loaded content over plain HTTP."
-    }
-
     private var form: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: s.sectionSpacing.value) {
                 Text(value.target?.origin.value ?? "Open a website to change site controls").font(.headline).textSelection(.enabled)
                 if let target = value.target {
-                    Text(Self.connectionNote(target, secure: value.secure, security: value.security)).font(.caption).foregroundStyle(.secondary)
+                    SettingsCaption(text: SiteControlsHost.connectionNote(target, secure: value.secure, security: value.security), field: "siteConnectionNote")
                 }
                 Text(value.profileName).foregroundStyle(.secondary)
                 if value.target != nil {
@@ -153,13 +175,24 @@ private struct SiteControlsView: View {
                     Toggle("Hide matching cookie banners", isOn: Binding(get: { value.rule.hideCookieBanners }, set: { on in change { $0.hideCookieBanners = on } }))
                     Text("Rules v\(value.rulesVersion). Hiding a banner does not give consent.").font(.caption).foregroundStyle(.secondary)
                     HStack {
-                        Button("Import blocking rules…") { dispatch(.site(.loadBlockingRules)) }
-                        Button("Restore built-in rules") { dispatch(.site(.resetBlockingRules)) }
+                        SettingsButton(title: "Import blocking rules…", field: "siteImportRules") { dispatch(.site(.loadBlockingRules)) }
+                        SettingsButton(title: "Restore built-in rules", field: "siteResetRules") { dispatch(.site(.resetBlockingRules)) }
                     }
                     if let error = value.rulesError { Text(error).font(.caption) }
+                    Text("Filter lists").font(.subheadline.weight(.semibold))
+                    ForEach(value.filterLists) { list in
+                        VStack(alignment: .leading, spacing: 2) {
+                            SettingsCheckbox(title: list.title, field: "filterList-" + list.id, isOn: list.enabled) { dispatch(.site(.filterList(list.id, $0))) }
+                            SettingsCaption(text: SiteControlsHost.filterListStatus(list), field: "filterListStatus-" + list.id)
+                        }
+                    }
+                    HStack {
+                        SettingsCheckbox(title: "Download list updates", field: "filterUpdates", isOn: value.filterUpdates) { dispatch(.site(.filterUpdates($0))) }
+                        SettingsButton(title: "Update now", field: "filterUpdateNow") { dispatch(.site(.updateFilterLists)) }.disabled(!value.filterUpdates)
+                    }
                     Divider()
-                    ForEach([SiteCapability.camera, .microphone, .location, .notifications], id: \.self) { capability in
-                        Picker(capability.rawValue.capitalized, selection: Binding(get: { value.rule.permissions[capability] ?? .ask }, set: { answer in change { $0.permissions[capability] = answer } })) {
+                    ForEach(SiteCapability.prompted, id: \.self) { capability in
+                        Picker(SitePermissionPromptView.title(capability), selection: Binding(get: { value.rule.permissions[capability] ?? .ask }, set: { answer in change { $0.permissions[capability] = answer } })) {
                             ForEach(SitePermission.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                         }
                     }
@@ -168,7 +201,7 @@ private struct SiteControlsView: View {
                             Text("macOS " + capability.rawValue + ": " + (authorization[capability] ?? "unknown")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Text("macOS may also require authorization. Screen capture needs a separate source picker.").font(.caption).foregroundStyle(.secondary)
+                    Text("Camera, microphone, location and notifications also need macOS authorization, which macOS asks for itself. Screen capture needs a source picker.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Toggle("Suspend this site while its tab is hidden", isOn: Binding(get: { value.rule.suspendWhenHidden }, set: { on in change { $0.suspendWhenHidden = on } }))
                     Toggle("Keep this site alive", isOn: Binding(get: { value.rule.keepAlive }, set: { on in change { $0.keepAlive = on } }))

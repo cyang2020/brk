@@ -45,6 +45,8 @@ public enum Effect: Hashable, Sendable {
     /// Drop a request context's data: incognito when its last window closed, a profile when it was deleted.
     case disposeContext(ContextDisposal)
     case loadWebsiteRules(URL, BrowsingContext)
+    /// Download a subscription's text into `FilterListStore`; the answer is `SystemEvent.filterListFetched`.
+    case fetchFilterList(BrowsingContext, FilterListRecord)
     case chooseWebsiteRules(WindowID, BrowsingContext)
     case editExtension(String, ExtensionEdit, BrowsingContext)
     case queryExtensions(BrowsingContext)

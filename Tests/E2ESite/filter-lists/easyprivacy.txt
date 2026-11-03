@@ -1,0 +1,5 @@
+[Adblock Plus 2.0]
+! Title: EasyPrivacy (Brk fixture)
+! Version: 202611040001
+! Expires: 4 days (update frequency)
+||tracker.brk.test^$third-party

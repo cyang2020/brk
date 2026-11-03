@@ -13,6 +13,7 @@ extension ChromePage {
         guard let document = documentPiPSource, readyDocument == document, engine.isLive(self) else { auxiliary.close(force:true); return }
         documentPiPActive = true
         engine.pageDidEmit(self,.documentPictureInPictureChanged(document,true,error:nil))
+        refreshWebsitePolicy()
     }
     func observePictureInPictureAuxiliaries() {
         guard pictureInPictureAuxiliaries.isEmpty else { return }
@@ -20,6 +21,7 @@ extension ChromePage {
         if browser.nativeAuxiliaryCount == 0 || wasActive { documentPiPSource = nil }
         documentPiPActive = false
         if wasActive, let source, readyDocument == source, engine.isLive(self) { engine.pageDidEmit(self,.documentPictureInPictureChanged(source,false,error:nil)) }
+        if wasActive { refreshWebsitePolicy() }
     }
     func closeDocumentPiP() {
         browser.closeNativeAuxiliaries(matching: { kind in

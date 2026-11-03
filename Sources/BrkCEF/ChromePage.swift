@@ -79,6 +79,16 @@ final class ChromePage: CefBrowserDelegate {
     var boostPickerGeneration: UInt64 = 0
     var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
     var permissionRequests: [String: PagePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
+    /// Requests allowed in the current document, so Chromium's stored grant can follow Brk's remembered choice once
+    /// the document ends (Allow this time is not remembered; Chromium stores every accepted request).
+    var permissionGrants: [(document: DocumentToken, requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
+    /// The page is capturing from a camera or microphone (CEF's media access report).
+    var capturingMedia = false
+    /// Media in a cross-origin frame was playing when the page was last visible (the audio extension reads every
+    /// frame). Chromium pauses muted media of a hidden page, so the intent is kept until the page is visible again.
+    var subframeMediaIntent = false
+    /// Remembered choices changed in Brk and not yet written to Chromium's store (`flushPermissionSync`).
+    var permissionSync: [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
     var policyRevision: UInt64 = 0
     var websiteError: String?
     /// The automatic dark mode last sent to this page's DevTools session, and for which document (nil: never sent).
@@ -176,6 +186,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func applyAudio(_ reading: ChromeAudibility.Reading, ticket: AudioObservation.Ticket, observer: Int) {
         let changed = audio.audible != reading.audible
+        let pictureInPicture = mediaPlayers.contains(where: \.pictureInPicture)
         guard engine.isLive(self), reading.target == ticket.target, audio.accept(reading.audible, tab: reading.tab, for: ticket) else { return }
         if let document = readyDocument {
             let error = reading.mediaError ?? mediaOperationError
@@ -186,7 +197,18 @@ final class ChromePage: CefBrowserDelegate {
         }
         audioObserverID = observer
         audioError = nil
-        if changed { emit([.audioChanged(reading.audible)]); refreshWebsitePolicy() }
+        // While the page is visible its cross-origin frames' playing state is current; hidden, the last one stands.
+        if websitePolicy.visible { subframeMediaIntent = mediaPlayers.contains { $0.id.frame != 0 && !$0.paused && !$0.ended } }
+        if changed { emit([.audioChanged(reading.audible)]) }
+        // Entering or leaving video picture in picture changes what keeps a hidden page running.
+        if changed || pictureInPicture != mediaPlayers.contains(where: \.pictureInPicture) { refreshWebsitePolicy() }
+    }
+
+    func browser(_ b: CefBrowser, didChangeMediaAccess camera: Bool, microphone: Bool) {
+        let capturing = camera || microphone
+        guard capturing != capturingMedia else { return }
+        capturingMedia = capturing
+        refreshWebsitePolicy()
     }
 
     func mediaControlFinished(_ error: String?) {
@@ -252,6 +274,7 @@ final class ChromePage: CefBrowserDelegate {
     /// Idempotent: views back first (never close a browser whose views are in our window), then force-close.
     /// OnBeforeClose arrives later as `browserDidClose` -> `engine.pageDidClose(self)`.
     func close() {
+        settlePermissionGrants(keeping: nil)
         captureRevision &+= 1
         closeDocumentPiP()
         fullscreenTransition.cancelPending()
@@ -360,6 +383,8 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         closeDocumentPiP()
+        settlePermissionGrants(keeping: nil)
+        subframeMediaIntent = false
         emit(mainDocument.started(url))
         refreshBoosts()
         if b.isLoading { engine.pageLoadProgress(self, progress: currentLoadProgress) }
@@ -396,9 +421,13 @@ final class ChromePage: CefBrowserDelegate {
     private func reportSecurity() {
         guard let document = mainDocument.readyDocument, let status = browser.visibleSSLStatus() else { return }
         let security = PageSecurity(document: document, secureConnection: status.isSecureConnection,
-                                    certificateError: status.hasCertificateError, insecureContent: status.hasInsecureContent)
+                                    certificateError: status.hasCertificateError, insecureContent: status.hasInsecureContent,
+                                    insecureForm: status.hasInsecureFormAction)
         guard security != reportedSecurity else { return }
         reportedSecurity = security
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-security] page=\(id) secure=\(security.secure) tls=\(status.isSecureConnection) cert=0x\(String(status.certStatus, radix: 16)) content=0x\(String(status.contentStatus, radix: 16))")
+        }
         engine.pageDidEmit(self, .securityChanged(security))
     }
 

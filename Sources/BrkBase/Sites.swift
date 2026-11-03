@@ -27,7 +27,16 @@ public struct SiteOrigin: Hashable, Sendable, Codable, CustomStringConvertible {
 }
 
 public enum WebsiteAppearance: String, Hashable, Sendable, Codable, CaseIterable { case automatic, light, dark }
-public enum SiteCapability: String, Hashable, Sendable, Codable, CaseIterable { case camera, microphone, location, notifications, desktopCapture, other }
+public enum SiteCapability: String, Hashable, Sendable, Codable, CaseIterable {
+    case camera, microphone, location, notifications, desktopCapture, other
+    /// Requests macOS has no authorization for: only Brk's own prompt and the remembered choice decide them.
+    case clipboard, midi, windowManagement, storageAccess, sensors, automaticDownloads, pointerLock
+    /// The capabilities Brk asks about and remembers (screen capture needs a source picker; `other` is refused).
+    public static let prompted: [SiteCapability] = [.camera, .microphone, .location, .notifications, .clipboard, .midi, .windowManagement,
+                                                    .storageAccess, .sensors, .automaticDownloads, .pointerLock]
+    /// macOS must also authorize these (camera, microphone, location, notifications); the system prompt is the OS's.
+    public var needsOSAuthorization: Bool { [.camera, .microphone, .location, .notifications].contains(self) }
+}
 public enum SitePermission: String, Hashable, Sendable, Codable, CaseIterable { case ask, allow, deny }
 
 public struct SiteRule: Hashable, Sendable, Codable {
@@ -52,6 +61,13 @@ public struct SitePreferences: Hashable, Sendable, Codable {
     /// What a site without its own rule gets: the app-wide ad blocker and cookie-banner choices (Settings, Advanced
     /// > More Settings…). The reducer fills it in for every policy it hands out and never saves it.
     public var defaultRule: SiteRule? = nil
+    /// EasyList-syntax lists; nil means the two default subscriptions, not downloaded yet.
+    public var filterLists: [FilterListRecord]? = nil
+    /// Whether Brk downloads list updates; nil means on.
+    public var filterUpdates: Bool? = nil
+    public var effectiveFilterLists: [FilterListRecord] { filterLists ?? FilterListRecord.subscriptions }
+    /// The stored lists the engine applies, in order.
+    public var activeFilterKeys: [String] { effectiveFilterLists.filter(\.enabled).compactMap(\.key) }
     public func permissions(for origin: SiteOrigin, embeddedIn top: SiteOrigin) -> [SiteCapability: SitePermission] {
         origin == top ? rule(for: origin).permissions : embeddedPermissions?[top.value + "\n" + origin.value] ?? [:]
     }
@@ -149,12 +165,14 @@ public struct PageSecurity: Hashable, Sendable, Codable {
     /// The certificate has an error Chromium counts against the page (expired, wrong name, unknown authority…) and the
     /// page was loaded anyway.
     public let certificateError: Bool
-    /// The page displayed or ran content that came over plain HTTP.
+    /// The page displayed or ran content that came over plain HTTP (or with a certificate error).
     public let insecureContent: Bool
-    public var secure: Bool { secureConnection && !certificateError && !insecureContent }
-    public init(document: DocumentToken, secureConnection: Bool, certificateError: Bool, insecureContent: Bool) {
+    /// A form on the page submits to a plain HTTP address.
+    public let insecureForm: Bool
+    public var secure: Bool { secureConnection && !certificateError && !insecureContent && !insecureForm }
+    public init(document: DocumentToken, secureConnection: Bool, certificateError: Bool, insecureContent: Bool, insecureForm: Bool = false) {
         self.document = document; self.secureConnection = secureConnection
-        self.certificateError = certificateError; self.insecureContent = insecureContent
+        self.certificateError = certificateError; self.insecureContent = insecureContent; self.insecureForm = insecureForm
     }
 }
 

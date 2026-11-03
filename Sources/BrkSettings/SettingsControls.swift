@@ -446,3 +446,29 @@ struct SettingsLabel: NSViewRepresentable {
         return CGSize(width: width, height: height)
     }
 }
+
+/// A secondary caption as an AppKit label, so the control socket and VoiceOver read it like the window's other
+/// controls (SwiftUI's own Text is not in the in-process accessibility tree until an assistive client asks).
+struct SettingsCaption: NSViewRepresentable {
+    let text: String
+    var field: String? = nil
+
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> NSTextField {
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize - 1)
+        label.textColor = .secondaryLabelColor
+        label.isSelectable = false
+        if let field { label.identify(.settingsField(field)) }
+        return label
+    }
+
+    func updateNSView(_ label: NSTextField, context: NSViewRepresentableContext<Self>) {
+        if label.stringValue != text { label.stringValue = text }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView label: NSTextField, context: NSViewRepresentableContext<Self>) -> CGSize? {
+        let width = proposal.width ?? label.intrinsicContentSize.width
+        let height = label.cell?.cellSize(forBounds: CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)).height ?? 0
+        return CGSize(width: width, height: ceil(height))
+    }
+}

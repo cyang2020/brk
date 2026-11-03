@@ -29,11 +29,12 @@ enum SitePolicyBehaviorScenarios {
         let card = try app.native().computed.cards[0].rect
         try app.click(at: CGPoint(x: card.minX + 80, y: card.minY + 240))
         if osStatus == "authorized" {
-            try app.waitUntil("Brk permission sheet after OS authorization") { try app.native().sheetClass != nil }
+            try app.waitUntil("Brk permission prompt after OS authorization") { (try? app.send(.sitePrompt(window: app.window!, path: nil))).map { if case .menuItems = $0 { true } else { false } } ?? false }
             try app.click(.settingsField("sitePermissionDeny"))
         }
         try waitForTitle(app, item, "permission:denied")
-        try expect(try app.native().sheetClass == nil, "a permission sheet outlived the denied request")
+        try expect(try app.native().sheetClass == nil, "a sheet outlived the denied request")
+        if case .menuItems? = try? app.send(.sitePrompt(window: app.window!, path: nil)) { throw Check(description: "a permission prompt outlived the denied request") }
         try app.dispatch(.site(.controls))
         guard let target = try SitePolicyScenarios.controls(app).target else { throw Check(description: "permission target missing") }
         var rule = SiteRule(); rule.permissions[.notifications] = .deny

@@ -11,20 +11,29 @@ public struct CefRequestRules: Sendable {
 }
 
 public final class CefRequestFilter: @unchecked Sendable {
+    /// The app's own decision for a request, given CEF's `cef_resource_type_t` (raw value). Called on the IO thread.
+    public typealias Matcher = @Sendable (_ url: URL, _ resourceType: Int32) -> Bool
     private let lock = NSLock()
     private var enabled = false
     private var hosts: [String] = []
     private var paths: [String] = []
     private var urlPrefixes: [String] = []
+    private var matcher: Matcher?
     public init() {}
-    public func configure(enabled: Bool, hosts: [String], paths: [String], urlPrefixes: [String] = []) {
+    public func configure(enabled: Bool, hosts: [String], paths: [String], urlPrefixes: [String] = [], matcher: Matcher? = nil) {
         lock.lock(); defer { lock.unlock() }
-        self.enabled = enabled; self.hosts = hosts; self.paths = paths; self.urlPrefixes = urlPrefixes
+        self.enabled = enabled; self.hosts = hosts; self.paths = paths; self.urlPrefixes = urlPrefixes; self.matcher = matcher
     }
-    public func blocks(_ url: URL) -> Bool {
+    public func blocks(_ url: URL, resourceType: Int32 = Int32(RT_SUB_RESOURCE.rawValue)) -> Bool {
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return false }
-        lock.lock(); defer { lock.unlock() }
-        guard enabled else { return false }
+        lock.lock()
+        guard enabled else { lock.unlock(); return false }
+        let matcher = self.matcher
+        let listed = listedLocked(url)
+        lock.unlock()
+        return listed || matcher?(url, resourceType) == true
+    }
+    private func listedLocked(_ url: URL) -> Bool {
         let host = (url.host?.lowercased() ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
         return hosts.contains { host == $0 || host.hasSuffix("." + $0) } || paths.contains { url.path.hasPrefix($0) } || urlPrefixes.contains { prefix in
             guard let rule = URL(string: prefix), url.scheme == rule.scheme, url.host == rule.host, url.port == rule.port else { return false }
@@ -42,15 +51,17 @@ public final class CefRequestFilter: @unchecked Sendable {
             }
             guard let owner = cefOwner(CefRequestFilter.self, pointer.map(UnsafeMutableRawPointer.init)), let request,
                   let value = CefStringUtil.takingUserFree(request.pointee.get_url?(request)), let url = URL(string: value) else { return RV_CONTINUE }
-            return owner.blocks(url) ? RV_CANCEL : RV_CONTINUE
+            let type = Int32(request.pointee.get_resource_type?(request).rawValue ?? RT_SUB_RESOURCE.rawValue)
+            return owner.blocks(url, resourceType: type) ? RV_CANCEL : RV_CONTINUE
         }
         handler.pointee.on_resource_redirect = { pointer, browser, frame, request, response, newURL in
             defer {
                 cefRelease(browser.map(UnsafeMutableRawPointer.init)); cefRelease(frame.map(UnsafeMutableRawPointer.init))
                 cefRelease(request.map(UnsafeMutableRawPointer.init)); cefRelease(response.map(UnsafeMutableRawPointer.init))
             }
+            let type = Int32(request.map { $0.pointee.get_resource_type?($0).rawValue ?? RT_SUB_RESOURCE.rawValue } ?? RT_SUB_RESOURCE.rawValue)
             guard let owner = cefOwner(CefRequestFilter.self, pointer.map(UnsafeMutableRawPointer.init)), let newURL,
-                  let url = URL(string: CefStringUtil.string(from: newURL)), owner.blocks(url) else { return }
+                  let url = URL(string: CefStringUtil.string(from: newURL)), owner.blocks(url, resourceType: type) else { return }
             CefStringUtil.set("about:blank#brk-blocked", into: &newURL.pointee)
         }
         return handler

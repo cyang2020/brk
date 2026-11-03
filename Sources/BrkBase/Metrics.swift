@@ -460,6 +460,7 @@ public struct SiteControlsMetrics: MetricGroup {
     public let buttonRadius = Metric(8.0, .anatomy(capture))
     public let buttonGlyph = Metric(15.0, .anatomy(capture + ": share, Boost, camera and full-page glyphs"))
     public let buttonsPerRow = Metric(4, .anatomy(capture))
+    public let extensionIcon = Metric(16.0, .guess("an extension button shows the extension's toolbar icon at Chromium's 16 pt action size; P36-a has no extension installed to measure"))
     public let buttonShadowBlur = Metric(3.0, .anatomy(capture + ": the shadow spreads about 2 pt round each button"))
     public let buttonShadowOffset = Metric(1.0, .anatomy(capture + ": the shadow is heavier under the button"))
     /// Arc's Boost glyph is a brush with a sparkle at its top-left; Brk draws SF paintbrush.pointed plus sparkle.

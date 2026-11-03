@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Site permissions fixture</title>
+<style>button{position:fixed;left:20px;width:220px;height:40px}</style>
+<button id="screens" style="top:40px">Window management</button>
+<script>
+// Requests macOS has no authorization for: Brk's own prompt and its remembered choice decide them.
+const report = (name, request) => {
+  document.title = name + ':pending';
+  request().then(() => { document.title = name + ':granted'; }, error => { document.title = name + ':denied:' + error.name; });
+};
+document.getElementById('screens').onclick = () => report('screens', () => window.getScreenDetails());
+</script>

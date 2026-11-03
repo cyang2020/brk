@@ -40,6 +40,7 @@ public final class CEFEngine: WebEngine {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
     let transfers = Transfers()
+    let filterLists = FilterListCache()
     private let outputs = DocumentOutputs()
     private var outputAdapters: [OutputID: AnyObject] = [:]
     private var outputPreparations: [OutputID: Task<Void, Never>] = [:]
@@ -104,6 +105,11 @@ public final class CEFEngine: WebEngine {
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
             config.safeStorage = .mockKeychain
             config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"
+            // The https fixture's certificate (verify/visual-pairs/https-fixture): Chromium accepts this one public key
+            // as if a trusted root had issued it. Test launches only; no keychain or system trust setting changes.
+            if let spki = ProcessInfo.processInfo.environment["BRK_TEST_TRUSTED_SPKI"], !spki.isEmpty {
+                config.extraCommandLineSwitches["ignore-certificate-errors-spki-list"] = spki
+            }
         }
         config.defaultRuntimeStyle = .chrome
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
@@ -122,6 +128,10 @@ public final class CEFEngine: WebEngine {
     }
 
     private init() {
+        filterLists.loaded = { [weak self] in
+            guard let self, self.phase == .running else { return }
+            for page in self.live.values { page.configureRequestFilter(page.browser.url); page.refreshWebsitePolicy() }
+        }
         resources.leasesDidChange = { [weak self] browser in
             guard let self, self.phase == .running, let page = self.resources.entries[browser]?.resource else { return }
             page.refreshWebsitePolicy()
@@ -280,7 +290,8 @@ public final class CEFEngine: WebEngine {
                 audioObservers[context] = observer
             }
             for page in pages { await page.resolveAudioTarget() }
-            let requests = pages.compactMap { page in page.audio.ticket.map { (page, $0) } }
+            // A frozen page cannot change until it is thawed, and reading it would stall the whole context's reading.
+            let requests = pages.filter { !$0.frozen }.compactMap { page in page.audio.ticket.map { (page, $0) } }
             do {
                 let readings = try await observer.read(targets: requests.map { $0.1.target })
                 guard phase == .running, contexts.permitsWork(context), audioObservers[context] === observer else { continue }

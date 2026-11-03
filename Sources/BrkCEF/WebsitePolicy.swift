@@ -22,8 +22,12 @@ extension ChromePage {
         return token == target.document && incarnation == target.document.browser && context == target.context && browser.url.flatMap(SiteOrigin.init) == target.origin
     }
 
+    /// What keeps a hidden page running even when its site is set to suspend: audible sound, picture in picture
+    /// (video, document, or the typed hook), camera or microphone capture, a download in its profile, an open
+    /// permission request, and operations holding the browser (document output, extension work).
     func websiteOperationProtected() -> Bool {
         audio.audible || pictureInPictureDocument == mainDocument.readyDocument && pictureInPictureDocument != nil
+            || documentPiPActive || mediaPlayers.contains(where: \.pictureInPicture) || capturingMedia
             || engine.transfers.contains(context: context) || !permissionRequests.isEmpty
             || engine.resources.entries[incarnation]?.leases.isEmpty == false
     }
@@ -44,7 +48,12 @@ extension ChromePage {
 
     func applyWebsitePolicy(_ policy: WebsitePolicy) {
         let changed = websitePolicy != policy
+        let before = websitePolicy.preferences
         websitePolicy = policy
+        if let origin = browser.url.flatMap(SiteOrigin.init) {
+            permissionSync += Self.changedPermissions(before, policy.preferences, top: origin)
+            flushPermissionSync()
+        }
         configureRequestFilter(browser.url)
         if changed || (frozen && websiteOperationProtected()) { refreshWebsitePolicy() }
     }
@@ -52,7 +61,11 @@ extension ChromePage {
     func configureRequestFilter(_ url: URL?) {
         let rule = url.flatMap(SiteOrigin.init).map { websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
         let rules = websitePolicy.preferences.blockingRules ?? .builtIn
-        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes, urlPrefixes: rules.blockedURLPrefixes ?? [])
+        // The profile's EasyList-syntax lists, judged against this document: third-party, $domain and page-wide
+        // exceptions read the page the request belongs to (a new top-level page judges itself).
+        let lists = rule.blocking ? engine.filterLists.lists(websitePolicy.preferences.activeFilterKeys) : []
+        browser.requestFilter?.configure(enabled: rule.blocking, hosts: rules.blockedHosts, paths: rules.blockedPathPrefixes,
+                                         urlPrefixes: rules.blockedURLPrefixes ?? [], matcher: lists.isEmpty ? nil : FilterResourceTypes.matcher(lists, document: url))
     }
 
     func refreshWebsitePolicy() {
@@ -65,9 +78,14 @@ extension ChromePage {
         let trace = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil
         if trace { print("[site-lifecycle] refresh page=\(id) revision=\(revision) visible=\(policy.visible) cachedFrozen=\(frozen)") }
         let rule = policy.preferences.rule(for: origin)
+        let framesPlaying = mediaPlayers.contains { $0.id.frame != 0 && !$0.paused && !$0.ended }
+        if policy.visible { subframeMediaIntent = framesPlaying } else if framesPlaying { subframeMediaIntent = true }
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
-        let cosmetic = rule.blocking ? rules.cosmeticSelectors.map { $0 + "{display:none!important;}" }.joined() : ""
+        let lists = rule.blocking ? engine.filterLists.lists(policy.preferences.activeFilterKeys) : []
+        let listed = FilterLists.hiddenSelectors(lists, documentURL: browser.url, pageFlags: FilterLists.pageFlags(lists, documentURL: browser.url))
+        // One rule per selector, so a selector this Chromium does not support drops alone.
+        let cosmetic = rule.blocking ? (rules.cosmeticSelectors + listed).map { $0 + "{display:none!important;}" }.joined(separator: "\n") : ""
         let banners = rule.hideCookieBanners ? "[data-cookie-banner],[aria-label=\"cookie consent\"]{display:none!important;}" : ""
         // A dedicated style element changes no inline user styles. Opt-out removes exactly this owner's CSS.
         let content = ":root{" + css + "}" + cosmetic + banners
@@ -146,6 +164,8 @@ extension ChromePage {
                     let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||x.hasAttribute(\(mediaMarker))))"
                     let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true, "contextId": contextID])
                     media = (result["result"] as? [String: Any])?["value"] as? Bool ?? true
+                    // The main document cannot see into cross-origin frames; the audio extension's reading can.
+                    media = media || self.subframeMediaIntent
                     if trace { print("[site-media] page=\(self.id) revision=\(revision) protected=\(media)") }
                 }
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
@@ -186,7 +206,10 @@ extension ChromePage {
         }
         if request.kinds.contains(.geolocation) { kinds.insert(.location) }
         if request.kinds.contains(.notifications) { kinds.insert(.notifications) }
-        let supported: CefPermissionKind = [.camera, .microphone, .geolocation, .notifications]
+        let unprompted: [(CefPermissionKind, SiteCapability)] = [(.clipboard, .clipboard), (.midi, .midi), (.windowManagement, .windowManagement),
+            (.storageAccess, .storageAccess), (.sensors, .sensors), (.downloads, .automaticDownloads), (.pointerLock, .pointerLock)]
+        for (kind, capability) in unprompted where request.kinds.contains(kind) { kinds.insert(capability) }
+        let supported: CefPermissionKind = [.camera, .microphone, .geolocation, .notifications, .clipboard, .midi, .windowManagement, .storageAccess, .sensors, .downloads, .pointerLock]
         if !request.kinds.subtracting(supported).isEmpty || kinds.isEmpty { kinds.insert(.other) }
         // Screen capture needs a source picker; never describe it as device camera access.
         if kinds.contains(.desktopCapture) || kinds.contains(.other) { callback.resolve(.deny); return }
@@ -196,6 +219,9 @@ extension ChromePage {
             target: SiteTarget(document: document, context: context, origin: origin), requestingOrigin: requesting,
             capabilities: kinds, frame: request.frameIdentifier, mask: request.requestedMask)
         permissionRequests[prompt.id] = PagePermissionRequest(prompt: prompt, nativeID: request.promptID, callback: callback)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-permission] request id=\(prompt.id) native=\(request.promptID.map(String.init) ?? "-") capabilities=\(kinds.map(\.rawValue).sorted())")
+        }
         Task { @MainActor [weak self] in
             let granted = await OSSiteAuthorization.shared.grants(kinds) { [weak self] in
                 guard let self else { return false }
@@ -216,16 +242,102 @@ extension ChromePage {
         guard let owner = permissionRequests.removeValue(forKey: id) else { return }
         let valid = engine.isLive(self) && matchesPermission(owner.prompt.target)
         engine.dismissPermission(id)
+        let prompt = owner.prompt
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-permission] answer id=\(id) decision=\(decision.rawValue) valid=\(valid) capabilities=\(prompt.capabilities.map(\.rawValue).sorted())")
+        }
+        // Chromium stores this answer itself; a choice remembered with it needs no second write.
+        permissionSync = permissionSync.compactMap { change in
+            guard change.requesting == prompt.requestingOrigin, change.top == prompt.target.origin else { return change }
+            let rest = change.capabilities.subtracting(prompt.capabilities)
+            return rest.isEmpty ? nil : (change.requesting, change.top, rest)
+        }
+        if valid && decision == .allow {
+            permissionGrants.append((prompt.target.document, prompt.requestingOrigin, prompt.target.origin, prompt.capabilities))
+        }
         owner.callback.resolve(valid && decision == .allow ? .allow : decision == .ask ? .dismiss : .deny)
+        // A choice remembered with this answer reached the policy before the answer; write it once Chromium has the answer.
+        Task { @MainActor [weak self] in self?.flushPermissionSync() }
+    }
+
+    /// Chromium stores every request Brk accepts or blocks. When the document that was allowed ends, its grants go back
+    /// to what Brk remembers: an Allow this time returns to asking.
+    func settlePermissionGrants(keeping document: DocumentToken?) {
+        let ended = permissionGrants.filter { $0.document != document }
+        permissionGrants.removeAll { $0.document != document }
+        for grant in ended { pushPermissions(grant.capabilities, requesting: grant.requesting, top: grant.top) }
+    }
+
+    /// The remembered choices that differ between two preference values for a top-level site and what it embeds.
+    static func changedPermissions(_ old: SitePreferences, _ new: SitePreferences, top: SiteOrigin) -> [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] {
+        func differing(_ a: [SiteCapability: SitePermission], _ b: [SiteCapability: SitePermission]) -> Set<SiteCapability> {
+            Set(SiteCapability.prompted.filter { (a[$0] ?? .ask) != (b[$0] ?? .ask) })
+        }
+        var out: [(SiteOrigin, SiteOrigin, Set<SiteCapability>)] = []
+        let own = differing(old.rule(for: top).permissions, new.rule(for: top).permissions)
+        if !own.isEmpty { out.append((top, top, own)) }
+        let prefix = top.value + "\n"
+        for key in Set((old.embeddedPermissions ?? [:]).keys).union((new.embeddedPermissions ?? [:]).keys) where key.hasPrefix(prefix) {
+            guard let url = URL(string: String(key.dropFirst(prefix.count))), let requesting = SiteOrigin(url) else { continue }
+            let embedded = differing(old.embeddedPermissions?[key] ?? [:], new.embeddedPermissions?[key] ?? [:])
+            if !embedded.isEmpty { out.append((requesting, top, embedded)) }
+        }
+        return out.map { (requesting: $0.0, top: $0.1, capabilities: $0.2) }
+    }
+
+    /// Writes changed remembered choices into Chromium's store, so a choice changed in the site settings takes effect
+    /// (allow, block, or back to asking). Waits while a request is open: Chromium settles it from the same store.
+    func flushPermissionSync() {
+        guard permissionRequests.isEmpty, !permissionSync.isEmpty else { return }
+        let work = permissionSync
+        permissionSync = []
+        let live = permissionGrants.filter { $0.document == mainDocument.readyDocument }
+        for change in work {
+            let granted = Set(live.filter { $0.requesting == change.requesting && $0.top == change.top }.flatMap(\.capabilities))
+            pushPermissions(change.capabilities.subtracting(granted), requesting: change.requesting, top: change.top)
+        }
+    }
+
+    private func pushPermissions(_ capabilities: Set<SiteCapability>, requesting: SiteOrigin, top: SiteOrigin) {
+        let remembered = websitePolicy.preferences.permissions(for: requesting, embeddedIn: top)
+        for capability in capabilities {
+            guard let kind = Self.permissionKind(capability) else { continue }
+            // A remembered allow of a device macOS must authorize stays with Brk (asking), so the OS check runs first.
+            let allowed: Bool? = switch remembered[capability] { case .allow?: capability.needsOSAuthorization ? nil : true; case .deny?: false; default: nil }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                print("[site-permission] chromium store \(capability.rawValue) \(requesting.value) in \(top.value) = \(allowed.map { $0 ? "allow" : "block" } ?? "ask")")
+            }
+            browser.setPermission(kind, requesting: requesting.url, topLevel: top.url, allowed: allowed)
+        }
+    }
+
+    static func permissionKind(_ capability: SiteCapability) -> CefPermissionKind? {
+        switch capability {
+        case .camera: .camera
+        case .microphone: .microphone
+        case .location: .geolocation
+        case .notifications: .notifications
+        case .clipboard: .clipboard
+        case .windowManagement: .windowManagement
+        case .storageAccess: .storageAccess
+        case .sensors: .sensors
+        case .automaticDownloads: .downloads
+        case .pointerLock: .pointerLock
+        // Chromium 154 traps on writing the MIDI settings (probed: CEF_CONTENT_SETTING_TYPE_MIDI / _MIDI_SYSEX), so a
+        // MIDI choice is applied when Chromium asks Brk, and Chromium's own stored MIDI decision is left alone.
+        case .midi, .desktopCapture, .other: nil
+        }
     }
 
     func cancelPermissions(frame: String? = nil) {
         let ids = permissionRequests.filter { frame == nil || $0.value.prompt.frame == nil || $0.value.prompt.frame == frame }.map(\.key)
+        if !ids.isEmpty, ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] cancel frame=\(frame ?? "all") ids=\(ids)") }
         for id in ids { answerPermission(id, .ask) }
     }
     func browser(_ b: CefBrowser, willNavigateFrame identifier: String) { cancelPermissions(frame: identifier) }
     func browser(_ b: CefBrowser, dismissedPermission promptID: UInt64) {
         let ids = permissionRequests.filter { $0.value.nativeID == promptID }.map(\.key)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] chromium dismissed native=\(promptID) open=\(ids)") }
         for id in ids {
             guard let owner = permissionRequests.removeValue(forKey: id) else { continue }
             engine.dismissPermission(id)

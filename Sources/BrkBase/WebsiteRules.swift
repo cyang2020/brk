@@ -22,4 +22,10 @@ public struct WebsiteBlockingRules: Hashable, Sendable, Codable {
     }()
 }
 
-public enum WebsiteRulesUpdate: Hashable, Sendable { case loaded(WebsiteBlockingRules), failed(String) }
+public enum WebsiteRulesUpdate: Hashable, Sendable {
+    /// A Brk rules JSON file: replaces the built-in host, path and selector rules.
+    case loaded(WebsiteBlockingRules)
+    /// An EasyList-syntax file, stored under `key`: becomes the profile's imported list.
+    case filterList(key: String, title: String, summary: FilterListSummary)
+    case failed(String)
+}
