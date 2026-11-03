@@ -220,14 +220,17 @@ final class FavoriteTileView: HoverView {
         self.row = row
         self.palette = palette
         let unread = row.badge.flatMap { $0 > 0 ? ($0 > 99 ? "99+ unread" : "\($0) unread") : nil }
-        toolTip = [row.title, row.subtitle, unread, row.sourceStatus].compactMap { $0 }.joined(separator: "\n")
+        // Arc shows no tip over a Favorite; Brk keeps one only for a source that needs the user (failed, expired,
+        // not connected), since that state has no mark on the tile.
+        let attention = row.sourceStatus.flatMap { $0.hasPrefix("Updated") || $0.hasPrefix("Selected export") || $0.hasSuffix("…") ? nil : $0 }
+        toolTip = attention
+        setAccessibilityHelp([unread, row.sourceStatus].compactMap { $0 }.joined(separator: ", "))
         // One overlay at a time (Arc's `AppTrayItemOverlay`: a subtitle or a badge); source states stay in the tip.
         badge.isHidden = row.badgeTint == nil
         badge.layer?.backgroundColor = row.badgeTint.map { FavoriteOverlayStyle.tint($0, scheme: palette.scheme).cgColor }
         badge.setAccessibilityLabel(unread)
         subtitle.isHidden = row.subtitle == nil
         subtitle.render(row.subtitle ?? "", selected: row.status == .current, scheme: palette.scheme)
-        subtitle.toolTip = toolTip
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, palette: palette)
         icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
         if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
@@ -355,14 +358,15 @@ final class SubtitleCapsule: NSView {
 
     override var fittingSize: NSSize {
         let m = Metrics.sidebarTools, text = label.intrinsicContentSize
-        return NSSize(width: ceil(text.width) + 2 * m.subtitlePadding.value, height: m.subtitleHeight.value)
+        return NSSize(width: ceil(text.width) + 2 * m.subtitlePadding.value - 4, height: m.subtitleHeight.value)
     }
 
     override func layout() {
         super.layout()
         layer?.cornerRadius = bounds.height / 2
-        let h = label.intrinsicContentSize.height, pad = Metrics.sidebarTools.subtitlePadding.value
-        label.frame = CGRect(x: pad, y: (bounds.height - h) / 2, width: max(0, bounds.width - 2 * pad), height: h)
+        // The label spans the capsule (centred): its cell has its own inset, so a width of the bare text truncates.
+        let h = label.intrinsicContentSize.height
+        label.frame = CGRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h)
     }
 }
 

@@ -6,9 +6,9 @@ public struct SidebarToolsMetrics: MetricGroup {
     /// Arc's favorites overlay (`AppTrayItemOverlay`: `badge(NSColor)` or `subtitle(...)`): a dot or a capsule.
     public let unreadDot = Metric(8.0, .guess("unread dot on the favicon's top-right corner; Arc's AppTrayItemBadgeView size was not traced (P08 pending)"))
     public let subtitleHeight = Metric(14.0, .guess("calendar subtitle capsule height inside the 47 pt tile (P08 pending)"))
-    public let subtitlePadding = Metric(5.0, .guess("calendar subtitle capsule side padding"))
+    public let subtitlePadding = Metric(4.0, .guess("calendar subtitle capsule side padding beyond the label cell's own 2 pt"))
     public let subtitleFont = Metric(9.0, .guess("calendar subtitle text size; fits 'in 45m' in the narrowest tile"))
-    public let subtitleInset = Metric(3.0, .guess("the capsule never touches the tile's sides"))
+    public let subtitleInset = Metric(2.0, .guess("the capsule never touches the tile's sides"))
     public let subtitleBottom = Metric(4.0, .guess("capsule gap above the tile's bottom edge"))
     public let subtitleIconTop = Metric(8.0, .guess("favicon moves up so the capsule fits under it"))
     public let glowRadius = Metric(2.0, .guess("soft progress line inside the existing URL pill"))

@@ -157,7 +157,7 @@ struct PreviewEntry {
 }
 
 /// The card's content: a search row (folders, recent pages) or a header (the calendar), a hairline, the rows.
-/// Arc's card is a light, slightly translucent surface (P13-a: #F9F9FA over the white page, PreviewBackgroundColor
+/// Arc's card is an opaque light surface (P13-a: #F9F9FA, the page text under it hidden; PreviewBackgroundColor
 /// in the dark scheme).
 @MainActor
 final class FolderPreviewView: NSView, NSTextFieldDelegate {
@@ -430,8 +430,8 @@ struct FolderPreviewMetrics: MetricGroup {
 /// The card's colors.
 enum PreviewColors {
     /// P13-a: Arc's card reads #F9F9FA over the white page; the dark scheme uses PreviewBackgroundColor #212222.
-    static var light: NSColor { NSColor(srgbRed: 0xF9 / 255, green: 0xF9 / 255, blue: 0xFA / 255, alpha: 0.97) }
-    static var dark: NSColor { NSColor(srgbRed: 0x21 / 255, green: 0x22 / 255, blue: 0x22 / 255, alpha: 0.97) }
+    static var light: NSColor { NSColor(srgbRed: 0xF9 / 255, green: 0xF9 / 255, blue: 0xFA / 255, alpha: 1) }
+    static var dark: NSColor { NSColor(srgbRed: 0x21 / 255, green: 0x22 / 255, blue: 0x22 / 255, alpha: 1) }
     /// BrandBlue #3139FB, Arc's primary button face.
     static var join: NSColor { NSColor(srgbRed: 0x31 / 255, green: 0x39 / 255, blue: 0xFB / 255, alpha: 1) }
 }
