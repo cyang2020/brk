@@ -332,7 +332,7 @@ extension PageBrowsingScenarios {
         try app.dispatch(.settings(.advanced(.autoPictureInPicture(false))))
         try app.dispatch(.tab(.focus(other.item)))
         for _ in 0..<10 { try expect(try tab(item, in: app.view())?.mediaPlayers.contains { $0.pictureInPicture } == false, "PiP entered with the setting off"); app.sleep(0.1) }
-        app.note("Automatic entry ran \(6) s after the last page input; the page's own user activation stayed inactive.")
+        app.note("Automatic entry ran after the page itself reported navigator.userActivation.isActive false (6.5 s after the last script the harness ran in it).")
     }
 
     // MARK: PB6S sound output
