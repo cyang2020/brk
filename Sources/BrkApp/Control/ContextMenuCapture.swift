@@ -45,10 +45,16 @@ import BrkEngine
         tracking.finish(current)
     }
 
+    /// `choice` names a row, or a row of a submenu as "Submenu › Row".
     @objc private func cancelMenu() {
-        if let choice, let menu, let index = menu.items.firstIndex(where: { $0.title == choice && $0.isEnabled }) {
-            self.choice = nil
-            menu.performActionForItem(at: index)
+        if let choice, let menu {
+            let path = choice.components(separatedBy: " › ")
+            var target: NSMenu? = menu
+            for title in path.dropLast() { target = target?.items.first { $0.title == title && $0.isEnabled }?.submenu }
+            if let target, let index = target.items.firstIndex(where: { $0.title == path.last && $0.isEnabled }) {
+                self.choice = nil
+                target.performActionForItem(at: index)
+            }
         }
         menu?.cancelTracking()
     }

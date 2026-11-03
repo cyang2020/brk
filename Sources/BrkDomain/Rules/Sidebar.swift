@@ -67,12 +67,7 @@ extension Work {
         case .newFolder:
             guard state.doc.windows[window]?.kind == .standard else { return }
             // "New Folder" at the top of the current space's Pinned, which expands; the folder is in rename mode.
-            guard let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }) else { return }
-            let folder = ItemID(ctx.newID())
-            do {
-                try state.doc.tree.insert(folder, .folder(Folder(title: "New Folder", collapsed: false)), at: .into(parent: space.pinnedRoot, index: 0), createdAt: ctx.now)
-            } catch { return }
-            if space.pinnedCollapsed { state.doc.spaces[space.id]!.pinnedCollapsed = false }
+            guard let space = state.doc.windows[window]?.space, let folder = insertNewFolder(in: space) else { return }
             state.session.windows[window]!.renaming = folder
             peekIfHidden(window)
         case .toggleFolder(let id):
@@ -92,6 +87,17 @@ extension Work {
                 tree.updateSplit(id) { if $0.icon != icon { $0.icon = icon } }
             }
         }
+    }
+
+    /// "New Folder" at the top of `space`'s Pinned, which expands. Nil when the space is gone.
+    mutating func insertNewFolder(in space: SpaceID) -> ItemID? {
+        guard let space = state.doc.spaces[space] else { return nil }
+        let folder = ItemID(ctx.newID())
+        do {
+            try state.doc.tree.insert(folder, .folder(Folder(title: "New Folder", collapsed: false)), at: .into(parent: space.pinnedRoot, index: 0), createdAt: ctx.now)
+        } catch { return nil }
+        if space.pinnedCollapsed { state.doc.spaces[space.id]!.pinnedCollapsed = false }
+        return folder
     }
 
     mutating func spaces(_ command: SpaceCommand, in window: WindowID) {
@@ -146,6 +152,14 @@ extension Work {
         case .focus(let id):
             // The space's last active item shows again (activeBySpace keeps it per space).
             showSpace(id, in: window)
+        case .inSpace(let id, let action):
+            guard state.doc.windows[window]?.kind == .standard, state.doc.spaces[id] != nil else { return }
+            switch action {
+            case .newFolder: _ = insertNewFolder(in: id)
+            case .connectGitHub, .connectCalendar:
+                showSpace(id, in: window)
+                siteTools(action == .connectGitHub ? .connectGitHub(favorite: nil) : .connectCalendar, in: window)
+            }
         case .step(let step):
             guard let current = state.doc.windows[window]?.space, let i = state.doc.spaceOrder.firstIndex(of: current) else { return }
             let j = step == .next ? i + 1 : i - 1
@@ -228,6 +242,8 @@ extension Work {
     /// - space (its name, the dock and the sidebar's empty area): Change Space Icon…, Rename Space…, Edit Theme
     ///   Color…, Set Profile ▸ | New Folder, Live Folders ▸ | Share Space…, Export “X” into Folder ▸ | Manage Spaces… |
     ///   Delete Space;
+    /// - a Library Spaces card (P30-c): the same four groups without Manage Spaces…; New Folder and Live Folders act
+    ///   on the card's space (`.space(.inSpace)`), Delete Space asks first;
     /// - plus button: New Tab, New Folder, New Space, the live folder sources.
     /// Share is a file export (user decision), so each Share row writes the same document the old Export rows did.
     func menuModel(for request: PopupMenuRequest, in window: WindowID) -> MenuModel {
@@ -303,8 +319,9 @@ extension Work {
                 return entry
             }
             return model
-        case .space(let id):
+        case .space(let id), .spaceCard(let id):
             guard let space = state.doc.spaces[id] else { return MenuModel(entries: []) }
+            let card = request == .spaceCard(id)
             let title = state.displayTitle(of: id)
             let current = standard && state.doc.windows[window]?.space == id
             let profiles = state.doc.profiles.values.filter { state.doc.deletingProfiles[$0.id] == nil }
@@ -314,6 +331,23 @@ extension Work {
             } + [.separator, entry("New Profile…", .profile(.openDialog(.create)))]
             let others = state.doc.spaceOrder.filter { $0 != id && state.doc.spaces[$0] != nil }.map {
                 entry(state.displayTitle(of: $0), .tabTools(.spaceIntoFolder(id, into: $0)))
+            }
+            if card {
+                return MenuModel(entries: [
+                    entry("Change Space Icon…", .sidebar(.openDialog(.icon(.space(id))))),
+                    entry("Rename Space…", .sidebar(.openDialog(.rename(.space(id))))),
+                    entry("Edit Theme Color…", .sidebar(.openDialog(.theme(.space(id))))),
+                    .submenu(title: "Set Profile", entries: standard ? profileRows : []), .separator,
+                    entry("New Folder", .space(.inSpace(id, .newFolder)), enabled: standard),
+                    .submenu(title: "Live Folders", entries: standard ? [
+                        entry("New GitHub Live Folder…", .space(.inSpace(id, .connectGitHub))),
+                        entry("Connect Calendar File…", .space(.inSpace(id, .connectCalendar))),
+                    ] : []), .separator,
+                    entry("Share Space…", .app(.export(.space(.space(id))))),
+                    .submenu(title: "Export “\(title)” into Folder", entries: standard ? others + (others.isEmpty ? [] : [.separator])
+                        + [entry("Bookmarks Folder on Disk…", .space(.exportIntoFolder(id)))] : []), .separator,
+                    entry("Delete Space", .space(.requestDelete(id)), enabled: state.doc.spaceOrder.count > 1),
+                ])
             }
             var entries: [MenuEntry] = [
                 entry("Change Space Icon…", .sidebar(.openDialog(.icon(.space(id))))),

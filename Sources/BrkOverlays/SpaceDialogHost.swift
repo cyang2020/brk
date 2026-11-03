@@ -10,7 +10,8 @@ import SwiftUI
 ///   icon popover from the name field's icon button and the theme panel as a popover from Choose a Theme
 ///   (`SpaceCreateFlow.swift`). The draft's theme and icon are reported through `onDraft` while it is open.
 /// - Rename Space and the delete confirmation: the small centred dialogs (`SpaceAlertView.swift`).
-/// - Change Space Icon…: the Emoji / Icon popover under the space header (`SpaceIconPicker.swift`).
+/// - Change Space Icon…: the Emoji / Icon popover under the space header, or under the space's Library card when the
+///   Library covers the sidebar (`SpaceIconPicker.swift`).
 /// - Edit Theme…, Edit Theme Color… and the Library Space card's Edit Space…: the theme panel beside the sidebar
 ///   (`ThemeEditor.swift`); each edit is saved as it is made.
 ///
@@ -26,6 +27,9 @@ public final class SpaceDialogHost: NSView {
     }
     /// The Create a Space draft (theme and icon) whenever it changes, nil once the flow closes.
     public var onDraft: ((SpaceTheme, SpaceIcon)?) -> Void = { _ in }
+    /// Where Change Space Icon… points while the Library covers the sidebar (its Spaces card's header, in this view's
+    /// coordinates); nil when that space has no card on screen.
+    public var cardHeader: (SpaceID) -> CGRect? = { _ in nil }
 
     private var dialog: SpaceDialogSnapshot?
     private var deletion: SpaceDeletionRequest?
@@ -194,7 +198,7 @@ public final class SpaceDialogHost: NSView {
     // MARK: Icon and theme
 
     private func showIconPicker(space: SpaceID, icon: SpaceIcon, frames: WindowFrames) {
-        guard iconPopover == nil, let header = frames.sidebar?.spaceHeader else { return }
+        guard iconPopover == nil, let header = frames.sidebar?.spaceHeader ?? cardHeader(space) else { return }
         let popover = IconPickerPopover(icon: icon, pick: { [dispatch] icon in
             dispatch(.space(.update(space, title: nil, icon: icon, theme: nil)))
         }, closed: { [weak self, dispatch] in

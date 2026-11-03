@@ -185,6 +185,8 @@ final class LibraryRowView: NSView {
     struct Accessory {
         let symbol: String
         let tooltip: String
+        /// The button's identifier for the control socket (nil: none).
+        var id: ViewID? = nil
         let action: () -> Void
     }
 
@@ -204,22 +206,26 @@ final class LibraryRowView: NSView {
     private let colors: LibraryColors
     private let onClick: (() -> Void)?
     private var hovered = false
+    /// On the control fill, hovered or not: the row whose item shows elsewhere (Media's previewed capture).
+    let selected: Bool
 
-    init(id: ViewID, icon image: NSImage?, favicon: URL? = nil, title: String, detail: String, progress state: Progress, accessories: [Accessory],
-         menu: [(String, () -> Void)], colors: LibraryColors, onClick: (() -> Void)?) {
+    init(id: ViewID, icon image: NSImage?, favicon: URL? = nil, thumbnail: NSImage? = nil, title: String, detail: String, progress state: Progress,
+         accessories: [Accessory], menu: [(String, () -> Void)], selected: Bool = false, colors: LibraryColors, onClick: (() -> Void)?) {
         let m = LibraryDraw.list
         self.title = NSTextField(labelWithString: title)
         self.detail = NSTextField(labelWithString: detail)
         menuItems = menu
         self.colors = colors
         self.onClick = onClick
+        self.selected = selected
         super.init(frame: .zero)
         identify(id)
         setAccessibilityLabel(title)
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = m.rowRadius.value
-        icon.show(favicon: favicon, symbol: image, colors: colors)
+        if let thumbnail { icon.show(thumbnail: thumbnail, colors: colors) } else { icon.show(favicon: favicon, symbol: image, colors: colors) }
+        if selected { layer?.backgroundColor = colors.control.cgColor }
         self.title.font = .systemFont(ofSize: m.titleFont.value)
         self.title.textColor = colors.foregroundPrimary
         self.title.lineBreakMode = .byTruncatingMiddle
@@ -248,6 +254,7 @@ final class LibraryRowView: NSView {
             button.target = self
             button.action = #selector(accessoryClicked(_:))
             button.alphaValue = 0
+            if let id = accessory.id { button.identify(id) }
             actions.append(accessory.action)
             buttons.append(button)
             addSubview(button)
@@ -268,6 +275,14 @@ final class LibraryRowView: NSView {
     }
 
     func pressAccessory(_ tooltip: String) { buttons.first { $0.toolTip == tooltip }?.performClick(nil) }
+
+    var showsThumbnail: Bool { icon.showsThumbnail }
+
+    /// The context menu under the trailing button with this tooltip (Media's … button).
+    func showMenu(under tooltip: String) {
+        guard let button = buttons.first(where: { $0.toolTip == tooltip }), let menu = contextMenu() else { return }
+        menu.popUp(positioning: nil, at: CGPoint(x: 0, y: button.bounds.maxY + 2), in: button)
+    }
 
     @objc private func accessoryClicked(_ sender: NSButton) {
         guard actions.indices.contains(sender.tag) else { return }
@@ -337,7 +352,7 @@ final class LibraryRowView: NSView {
 
     private func setHovered(_ value: Bool) {
         hovered = value
-        layer?.backgroundColor = value ? colors.rowHighlight.cgColor : nil
+        layer?.backgroundColor = selected ? colors.control.cgColor : value ? colors.rowHighlight.cgColor : nil
         for button in buttons { button.alphaValue = value ? 1 : 0 }
         needsLayout = true
     }

@@ -230,6 +230,8 @@ final class DayHeaderView: NSView {
 @MainActor
 final class LibraryTileView: NSView {
     let image = NSImageView()
+    /// A capture's thumbnail, cropped to the tile.
+    private let picture = CALayer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -238,6 +240,10 @@ final class LibraryTileView: NSView {
         layer?.cornerRadius = LibraryDraw.list.iconRadius.value
         image.imageScaling = .scaleProportionallyUpOrDown
         addSubview(image)
+        picture.contentsGravity = .resizeAspectFill
+        picture.masksToBounds = true
+        picture.cornerCurve = .continuous
+        layer?.addSublayer(picture)
     }
 
     @available(*, unavailable)
@@ -247,6 +253,8 @@ final class LibraryTileView: NSView {
 
     /// `symbol` is a glyph image drawn tinted (a file kind); `favicon` a page's icon, loaded once.
     func show(favicon: URL?, symbol: NSImage? = nil, colors: LibraryColors) {
+        picture.contents = nil
+        image.isHidden = false
         layer?.backgroundColor = colors.placeholder.cgColor
         image.contentTintColor = colors.foregroundSecondary
         image.image = symbol
@@ -256,11 +264,26 @@ final class LibraryTileView: NSView {
         needsLayout = true
     }
 
+    /// A picture filling the tile, cropped to it (a capture's thumbnail in the Media list).
+    func show(thumbnail: NSImage, colors: LibraryColors) {
+        image.isHidden = true
+        layer?.backgroundColor = colors.page.cgColor
+        picture.contents = thumbnail
+        needsLayout = true
+    }
+
     override func layout() {
         super.layout()
         let side = (bounds.width * 0.67).rounded()
         image.frame = CGRect(x: ((bounds.width - side) / 2).rounded(), y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        picture.cornerRadius = layer?.cornerRadius ?? 0
+        CATransaction.commit()
     }
+
+    var showsThumbnail: Bool { picture.contents != nil }
 }
 
 /// A page's glyph, title and subtitle, centred: an empty list, a search without results (P32-b: the empty Downloads).

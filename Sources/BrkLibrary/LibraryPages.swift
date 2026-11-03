@@ -86,16 +86,16 @@ final class DownloadsPageView: LibraryListPage {
         }
         if download.path != nil {
             let reveal: () -> Void = { [weak self] in self?.dispatch(.library(.revealDownload(id))) }
-            accessories.append(.init(symbol: "magnifyingglass", tooltip: LibraryCopy.showInFinder, action: reveal))
+            accessories.append(.init(symbol: "magnifyingglass", tooltip: LibraryCopy.showInFinder, id: .tabTool("download-reveal-\(id)"), action: reveal))
             menu.append((LibraryCopy.showInFinder, reveal))
         }
         if download.state == .inProgress || download.state == .choosingDestination {
             let cancel: () -> Void = { [weak self] in self?.dispatch(.library(.cancelDownload(id))) }
-            accessories.append(.init(symbol: "xmark.circle", tooltip: LibraryCopy.cancelDownload, action: cancel))
+            accessories.append(.init(symbol: "xmark.circle", tooltip: LibraryCopy.cancelDownload, id: .tabTool("download-cancel-\(id)"), action: cancel))
             menu.append((LibraryCopy.cancelDownload, cancel))
         } else if !download.state.isActive {
             let remove: () -> Void = { [weak self] in self?.dispatch(.library(.removeDownload(id))) }
-            accessories.append(.init(symbol: "xmark", tooltip: LibraryCopy.removeFromList, action: remove))
+            accessories.append(.init(symbol: "xmark", tooltip: LibraryCopy.removeFromList, id: .tabTool("download-remove-\(id)"), action: remove))
             menu.append((LibraryCopy.removeFromList, remove))
         }
         let icon = onDisk && file != nil ? NSWorkspace.shared.icon(forFile: file!.path)
