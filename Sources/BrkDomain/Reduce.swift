@@ -102,6 +102,13 @@ struct Work {
             tabTools(.cancelRecent, in: window)
             return
         }
+        // A space dialog opened from the Library (its Spaces card's Edit Space…: the theme panel) sits above it, so
+        // Esc closes the dialog and the Library stays.
+        if command == .app(.exit), case .library? = state.session.windows[window]?.overlay, state.session.windows[window]?.dialog != nil {
+            begin(window: window)
+            state.session.windows[window]!.dialog = nil
+            return
+        }
         if command == .app(.exit), state.session.windows[window]?.capture != nil { captures(.cancel, in: window); return }
         if command == .app(.exit), state.session.windows[window]?.find != nil { closeFind(in: window); return }
         if case .settings(.openPane) = command { closeFind(in: window) }

@@ -177,7 +177,10 @@ enum SpaceToolsScenarios {
         try app.waitUntil("the panel edits the card's space") { try app.view().theme.scheme == .light }
         guard case .library? = try app.view().overlay else { throw Check(description: "the theme panel closed the Library") }
         try app.press("escape")
-        try app.waitUntil("Esc closed the theme panel") { try app.view().dialog == nil }
+        try app.waitUntil("Esc closed the card's theme panel and kept the Library") {
+            let v = try app.view()
+            if case .library? = v.overlay { return v.dialog == nil } else { return false }
+        }
         try app.click(.spaceToolsControl("manager-edit-\(created)"))
         try app.waitUntil("the pencil opened the theme panel") { if case .theme(created, _)? = try app.view().dialog { return true } else { return false } }
         try app.press("escape")

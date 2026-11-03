@@ -119,6 +119,11 @@ final class ArcBehaviourAlignmentTests: XCTestCase {
         d.user(.sidebar(.openDialog(.theme(.space(space)))))   // the card's pencil and its … menu's Edit Space…
         guard case .theme(space, _)? = d.view.dialog else { return XCTFail("Edit Space… did not open the theme panel") }
         guard case .library? = d.view.overlay else { return XCTFail("the Library closed") }
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.dialog, "Esc closes the theme panel above the Library first")
+        guard case .library? = d.view.overlay else { return XCTFail("Esc closed the Library under the theme panel") }
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.overlay, "the next Esc closes the Library")
     }
 
     // MARK: Secure / Insecure
