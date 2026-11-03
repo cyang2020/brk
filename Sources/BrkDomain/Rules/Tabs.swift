@@ -135,6 +135,10 @@ extension Work {
             case .quote: "> \(t.displayTitle)\n\(url.absoluteString)"
             }
             effects.append(.copyToPasteboard(text))
+        case .navigate(let ref, let url):
+            // AppleScript's `set URL`: an address the command bar could open, in place, like the bar's edit-current.
+            guard isOpenableURL(url), let tab = state.resolveTab(ref, in: window) else { return }
+            request(url, for: PageID(window: window, item: tab))
         }
     }
 

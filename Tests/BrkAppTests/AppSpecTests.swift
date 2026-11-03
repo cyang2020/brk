@@ -340,8 +340,7 @@ final class MenuTests: XCTestCase {
         let target = MenuTarget()
         target.isEnabled = { _ in true }
         let main = MainMenu.build(target: target)
-        let developer = try XCTUnwrap(main.items[3].submenu!.items.first { $0.title == "Developer" }?.submenu)
-        let unsupported = try XCTUnwrap(developer.items.first { $0.title == "Toggle Developer Mode" })
+        let unsupported = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Note" })
         let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
         XCTAssertFalse(target.validateMenuItem(unsupported))
         XCTAssertTrue(target.validateMenuItem(newWindow))

@@ -113,6 +113,9 @@ public enum AppEffect: Hashable, Sendable {
     case registerAsDefaultBrowser
     /// The data directory in the Finder.
     case revealDataDirectory
+    /// A Help menu row BrkApp runs (`HelpAction`; never `.open`, which the reducer handles): `owner` is the window it
+    /// came from, where a resolved page opens and an alert attaches.
+    case help(HelpAction, owner: WindowID)
 }
 
 public struct MenuModel: Hashable, Sendable {

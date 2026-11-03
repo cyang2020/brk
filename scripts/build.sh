@@ -20,6 +20,8 @@
 #    are declared for the main app and all helpers before the bundle is signed again.
 #    The app icon (A131): scripts/app-icon/main.swift draws Sources/BrkSettings/AppIconArt.swift's "The Original" into an
 #    iconset, iconutil makes Resources/<Product>.icns and CFBundleIconFile names it, before the bundle is signed again.
+#    scripts/declare-scripting.sh adds the AppleScript dictionary, the build's commit and repository, and the release
+#    notes page (A133, A125).
 # 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -56,6 +58,7 @@ rm -rf "$(dirname "$ICONSET")"
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$APP/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string $PRODUCT" "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"
+scripts/declare-scripting.sh "$APP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "[build] $APP signed ad hoc and verified"

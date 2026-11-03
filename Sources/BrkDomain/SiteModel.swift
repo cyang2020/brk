@@ -5,6 +5,9 @@ public enum SiteCommand: Hashable, Sendable, Codable {
     case controls
     case closeControls
     case rule(SiteTarget, SiteRule)
+    /// View > Developer > "Turn on/off Developer Mode for this site" (Ctrl+D): the focused page's site's Developer
+    /// Mode, the same switch as the site controls' row.
+    case toggleDeveloperMode
     case permission(SiteTarget, SiteOrigin, Set<SiteCapability>, SitePermission)
     case appearance(WebsiteAppearance)
     case clear(kinds: Set<SiteDataKind>, scope: SiteDataScope, reload: Bool)

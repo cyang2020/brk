@@ -16,7 +16,7 @@ final class ProtocolTests: XCTestCase {
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
-        case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer
+        case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer, appleScript
     }
 
     static func tag(of op: ControlOp) -> Tag {
@@ -72,6 +72,7 @@ final class ProtocolTests: XCTestCase {
         case .settings: .settings
         case .openSettings: .openSettings
         case .externalURL: .externalURL
+        case .appleScript: .appleScript
         }
     }
 
@@ -136,6 +137,7 @@ final class ProtocolTests: XCTestCase {
         case .settings: return [.settings]
         case .openSettings: return [.openSettings(pane: .links)]
         case .externalURL: return [.externalURL(url: URL(string: "https://example.com/from-another-app")!)]
+        case .appleScript: return [.appleScript(script: "tell me to return 1")]
         }
     }
 

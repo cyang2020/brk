@@ -20,6 +20,20 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
     public var settings: SettingsSnapshot
     public var sites: [WindowID: SiteControlSnapshot] = [:]
     public var observations: [PageID: PageObservation] = [:]
+    /// What the Dock icon shows: the downloads under way, app-wide.
+    public var dockTile = DockTileSnapshot()
+}
+
+/// The Dock icon's badge and progress bar (Chrome's and Arc's Dock tile): `active` downloads in progress, and the
+/// share of their bytes received when every one of them knows its size. `finished` names the most recent finished
+/// downloads with their files, so BrkApp can bounce the Downloads stack once for each new one.
+public struct DockTileSnapshot: Sendable, Equatable, Codable {
+    public var active = 0
+    public var progress: Double? = nil
+    public var finished: [DownloadID: String] = [:]
+    public init(active: Int = 0, progress: Double? = nil, finished: [DownloadID: String] = [:]) {
+        self.active = active; self.progress = progress; self.finished = finished
+    }
 }
 
 public struct PageObservation: Sendable, Equatable, Codable {
@@ -108,6 +122,8 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     /// address, "http://127.0.0.1:8764/visual.html", while the site's Developer Mode is on; "about:blank" while a new
     /// tab has not committed its first document). Nil shows "Search or Enter URL…".
     public var host: String? = nil
+    /// The focused page's site has Developer Mode on (View > Developer's row then reads "Turn off …").
+    public var developerMode = false
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {

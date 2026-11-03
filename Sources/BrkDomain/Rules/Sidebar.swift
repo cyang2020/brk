@@ -467,6 +467,17 @@ extension Work {
         case .showAbout: effects.append(.app(.showAbout))
         case .setAsDefaultBrowser: effects.append(.app(.registerAsDefaultBrowser))
         case .revealDataDirectory: effects.append(.app(.revealDataDirectory))
+        case .help(.open(let url)):
+            // A page a Help row resolved (release notes, help center, a new issue): a new focused tab, in the
+            // window's current space or, for a Little or incognito window, its own container.
+            guard isOpenableURL(url), let doc = state.doc.windows[window] else { return }
+            if doc.kind == .standard { openTab(url, inSpace: doc.space, window: window, focus: true) }
+            else { openScratchTab(url, in: window, focus: true) }
+        case .help(.copyInfo):
+            // Arc: "Copied Arc Info!" (a toast with list.clipboard.fill); BrkApp writes the text.
+            effects.append(.app(.help(.copyInfo, owner: window)))
+            toast("Copied \(Product.name) Info!", in: window)
+        case .help(let action): effects.append(.app(.help(action, owner: window)))
         case .export(let subject):
             // Share-by-link replaced by a file (user decision): the document is built here from state, so the
             // writer (BrkApp/ShareExport.swift) never reads the tree.

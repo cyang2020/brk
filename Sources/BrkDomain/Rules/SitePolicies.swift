@@ -108,6 +108,14 @@ extension Work {
         case .rule(let target, let rule):
             guard target.page.window == window, state.validSiteTarget(target) else { return }
             updateSitePreferences(target.context) { $0.rules[target.origin.value] = rule }
+        case .toggleDeveloperMode:
+            // The page the window shows (its committed document); a page without an http(s) site has no switch.
+            guard let target = state.siteTarget(in: window) else { return }
+            updateSitePreferences(target.context) { preferences in
+                var rule = preferences.rule(for: target.origin)
+                rule.developerMode = rule.developerMode == true ? false : true
+                preferences.rules[target.origin.value] = rule
+            }
         case .permission(let target, let origin, let capabilities, let decision):
             // Device requests may precede load completion, but the requesting main document must already have
             // committed its origin. Pending navigation and superseded document tokens still reject persistence.

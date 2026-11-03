@@ -18,6 +18,9 @@ extension Work {
             case .dismissDefaultBrowserPrompt: state.doc.settings.general.defaultBrowserPromptDismissed = true
             case .webAppearance(let appearance): state.doc.settings.general.webAppearance = appearance
             case .appIcon(let icon): state.doc.settings.general.appIcon = icon == .original ? nil : icon
+            case .javaScriptFromAppleEvents(let on): state.doc.settings.general.javaScriptFromAppleEvents = on ? true : nil
+            case .toggleJavaScriptFromAppleEvents:
+                state.doc.settings.general.javaScriptFromAppleEvents = state.doc.settings.general.javaScriptFromAppleEvents == true ? nil : true
             }
         case .profile(let profile, let setting):
             guard state.doc.profiles[profile] != nil else { return }

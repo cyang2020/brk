@@ -60,6 +60,9 @@ public final class CEFEngine: WebEngine {
     var wanted: [PageSpec] = []
     private let reconciliation = PageReconciliation()
     var phase: ShutdownPhase = .running
+    /// Help > Open Task Manager's CEF task manager, kept from its first use until shutdown: Chromium measures CPU and
+    /// memory only while an observer stays registered (EngineDiagnostics.swift).
+    var taskManager: UnsafeMutablePointer<cef_task_manager_t>?
     private var appearanceObservation: NSKeyValueObservation?
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     /// Each native window keeps its own page intent, including while a profile or input view is being created.
@@ -566,6 +569,7 @@ public final class CEFEngine: WebEngine {
         loaders.removeAll()
         HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
+        releaseTaskManager()
         CefRuntime.shared.shutdown()
         phase = .done
         log.notice("shutdown: clean")

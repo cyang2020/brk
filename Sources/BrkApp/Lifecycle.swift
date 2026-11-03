@@ -42,6 +42,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private let menuTarget = MenuTarget()
     private var quitting = false
     private var overlayEscapeMonitor: Any?
+    private var dockTile: DockTile?
+    /// Help > Restore Data's confirmed backup: put in place after the ordered quit, then the app starts again.
+    private var pendingRestore: URL?
+    private var clock: (any Clock)?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
     public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
@@ -87,13 +91,17 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         let restored = StateCodec.restore(data, seed: seed, ctx: ctx)
         switch restored.outcome {
         case .fresh: log.notice("fresh profile in \(directory.path)")
-        case .restored(let repairs): if !repairs.isEmpty { log.notice("restored with repairs: \(repairs.joined(separator: "; "))") }
+        case .restored(let repairs):
+            if !repairs.isEmpty { log.notice("restored with repairs: \(repairs.joined(separator: "; "))") }
+            // Help > Restore Data's copies: the file as this launch found it, before the store writes anything.
+            StateBackups(directory: directory).snapshot(now: ctx.now)
         case .rejected(let reason):
             log.error("state.json rejected (\(String(describing: reason))); quarantined")
             try? stateFile.quarantine(now: ctx.now)
         }
 
         let store = AppStore(restored: restored, clock: clock, engine: engine, stateFile: stateFile)
+        self.clock = clock
         let router = KeyRouter(store: store)
         engine.delegate = router
         self.store = store
@@ -119,6 +127,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             case .appearanceAutomatic: return window.websiteAppearance == .automatic
             case .appearanceLight: return window.websiteAppearance == .light
             case .appearanceDark: return window.websiteAppearance == .dark
+            case .allowJavaScriptFromAppleEvents: return self.store?.snapshot.settings.general.javaScriptFromAppleEvents == true
             default: return nil
             }
         }
@@ -130,7 +139,16 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 
         let entryPoints = LittleEntryPoints(target: menuTarget)
         littleEntryPoints = entryPoints
-        store.didPublish = { [weak entryPoints] in entryPoints?.update($0) }
+        let dockTile = DockTile()
+        self.dockTile = dockTile
+        store.didPublish = { [weak entryPoints, weak dockTile] in
+            entryPoints?.update($0)
+            dockTile?.update($0.dockTile)
+        }
+        store.help.restoreConfirmed = { [weak self] backup in
+            self?.pendingRestore = backup
+            Quit.request()
+        }
         store.start()
         // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -188,6 +206,12 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             switch await Self.orderedQuit(store: store, engine: engine, dataDirectory: Product.dataDirectory(), log: log) {
             case .clean:
+                if let backup = self.pendingRestore {
+                    do {
+                        try StateBackups(directory: Product.dataDirectory()).install(backup, now: self.clock?.now() ?? Instant(milliseconds: 0))
+                        Self.relaunch()
+                    } catch { log.error("restore of \(backup.path, privacy: .public) failed: \(error)") }
+                }
                 NSApp.reply(toApplicationShouldTerminate: true)
             case .timedOut:
                 exit(Self.shutdownTimedOutStatus)
@@ -198,6 +222,33 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 
     /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// The Dock icon's menu (Arc opens windows from it: window source `dockMenu`): New Window and New Incognito
+    /// Window, through the same actions as the File menu. macOS adds the window list above them.
+    public func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu(title: "Dock")
+        for action in [ActionID.newWindow, .newIncognitoWindow] {
+            let item = NSMenuItem(title: action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
+            item.target = menuTarget
+            item.representedObject = action.rawValue
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    /// Starts this executable again once this process has exited, with the same environment (so a test's data
+    /// directory and control socket carry over). Restore Data's last step.
+    static func relaunch() {
+        guard let executable = Bundle.main.executablePath else { return }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; exec \"$2\"", "sh",
+                             "\(ProcessInfo.processInfo.processIdentifier)", executable]
+        var environment = ProcessInfo.processInfo.environment
+        environment["MallocNanoZone"] = "0"
+        process.environment = environment
+        try? process.run()
+    }
 
     /// Steps 2 and 3 of the quit, free of AppKit so a test can run them with a fake engine: `store.flush()` (state is
     /// on disk before anything risky), `await engine.shutdown()`, then the records in the data directory:

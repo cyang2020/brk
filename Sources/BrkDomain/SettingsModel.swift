@@ -34,6 +34,9 @@ public struct GeneralSettings: Hashable, Sendable, Codable {
     public var webAppearance: WebAppearance
     /// The Icon pane's choice for the Dock and the About window; nil is `.original`.
     public var appIcon: AppIconChoice? = nil
+    /// View > Developer > "Allow JavaScript from Apple Events": AppleScript's `execute` runs only while this is on.
+    /// Nil (older files) is off, as in Arc and Chrome.
+    public var javaScriptFromAppleEvents: Bool? = nil
 
     public static let `default` = GeneralSettings(warnBeforeQuitting: false, defaultBrowserPromptDismissed: false, webAppearance: .automatic)
 }
