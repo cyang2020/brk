@@ -282,6 +282,11 @@ final class CardView: NSView {
         frame = rect
         holdsPage = false
         autoresizesSubviews = true
+        if hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
+        drag?.frame = dragBounds
+        sad.frame = pageBounds
+    }
+
     /// The window-drag band over the top of the page (`PageDragStrip`) for pane `pane`; nil removes it.
     func dragStrip(_ pane: Int?) {
         guard let pane else { drag?.removeFromSuperview(); drag = nil; return }
@@ -294,11 +299,6 @@ final class CardView: NSView {
 
     private var dragBounds: CGRect {
         CGRect(x: 0, y: pageBounds.minY, width: bounds.width, height: min(pageBounds.height, Metrics.content.pageDragHeight.value))
-    }
-
-        if hosted?.superview === self, hosted?.frame != pageBounds { hosted?.frame = pageBounds }
-        drag?.frame = dragBounds
-        sad.frame = pageBounds
     }
 
     override func layout() {
