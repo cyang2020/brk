@@ -551,6 +551,8 @@ extension Command {
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
         // A Spaces card's … menu and what its rows do (P30-c): the Library stays, so the card shows the result.
         case .sidebar(.popupMenu(.spaceCard, _)), .space(.inSpace), .profile(.assign), .app(.export), .tabTools(.spaceIntoFolder): true
+        // The save panel of Share Space… answering (a destination, or Cancel) changes nothing the window shows.
+        case .sidebarData(.exportSelected), .sidebarData(.cancelFilePanel): true
         default: false
         }
     }

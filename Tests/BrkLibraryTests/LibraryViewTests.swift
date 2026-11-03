@@ -281,6 +281,11 @@ final class LibraryViewTests: XCTestCase {
         guard case .sidebar(.popupMenu(.spaceCard(space), _))? = sent.last else { return XCTFail("right-click sent \(sent)") }
         XCTAssertNil(view.descendants.first { $0.accessibilityIdentifier().hasPrefix("space-tools-manager-search") }, "no search field")
         XCTAssertNotNil(view.cardHeader(space), "the icon popover's anchor")
+        let shadow = try XCTUnwrap(view.descendants.first { $0 is SpaceCardShadow })
+        XCTAssertEqual(shadow.frame, card.frame.insetBy(dx: -SpaceCardShadow.reach, dy: -SpaceCardShadow.reach), "the shadow reaches past the card")
+        XCTAssertTrue(shadow.superview === card.superview)
+        XCTAssertLessThan(try XCTUnwrap(shadow.superview?.subviews.firstIndex(of: shadow)), try XCTUnwrap(card.superview?.subviews.firstIndex(of: card)), "under the card")
+        XCTAssertNil(shadow.hitTest(CGPoint(x: shadow.frame.midX, y: shadow.frame.midY)))
     }
 
     /// the move handle at a card's lower left reorders: the card follows the pointer while the others close up, and

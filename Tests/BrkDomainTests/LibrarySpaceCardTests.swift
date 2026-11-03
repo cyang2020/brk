@@ -100,6 +100,19 @@ final class LibrarySpaceCardTests: XCTestCase {
         assertUnchanged(d.state, d.user(.space(.inSpace(SpaceID("ghost"), .newFolder))))
     }
 
+    /// Share Space… writes the export file through the save panel; its answer (a destination or Cancel) leaves the
+    /// Library open
+    func testShareSpaceKeepsTheLibraryThroughTheSavePanel() throws {
+        let (d, first, _) = fixture()
+        let t = d.user(.app(.export(.space(.space(first)))))
+        XCTAssertTrue(t.effects.contains { if case .export = $0 { true } else { false } })
+        d.user(.sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/library-card-share.json"))))
+        XCTAssertNotNil(library(d))
+        d.user(.app(.export(.space(.space(first)))))
+        d.user(.sidebarData(.cancelFilePanel))
+        XCTAssertNotNil(library(d))
+    }
+
     /// Delete Space asks with Arc's dialog (P27) over the Library; confirming deletes the space and its card goes
     func testDeleteSpaceAsksFirst() throws {
         let (d, first, _) = fixture()
