@@ -17,7 +17,7 @@ enum EaselScenarios {
     ]
 
     /// A two-colour 160 x 100 PNG (left blue #3478F6, right red #F25E6B).
-    static let picture = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAKAAAABkCAIAAACO1KzYAAAA9klEQVR42u3RMQ0AMAgAMERNDwZmYLp3cGODhCZ10DivVvl5VwnBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsOB5GvsDIGjjKq89AAAAAElFTkSuQmCC")!
+    static let picture = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAKAAAABkCAIAAACO1KzYAAAA9klEQVR42u3RMQ0AMAgAMERNDwZmYLp3cGODhCZ10DivVvl5VwnBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsOB5GvsDIGjjKq89AAAAAElFTkSuQmCC")!
 
     // MARK: Helpers
 
@@ -161,15 +161,25 @@ enum EaselScenarios {
         // Select the rectangle with a click, move it by dragging, then delete it with the Delete key.
         try tool(app, "select")
         try app.click(at: try point(app, CGPoint(x: -230, y: 245)))
-        try app.waitUntil("a click selects the rectangle") { isShown(try app.native(), .easelControl("selection")) }
+        // The selection frame is the rectangle's box 6 pt out: 152 x 102 (the text box was selected before).
+        try app.waitUntil("a click selects the rectangle") {
+            let n = try app.native()
+            guard isShown(n, .easelControl("selection")), let frame = n.actual[ViewID.easelControl("selection").identifier]?.frame else { return false }
+            return abs(frame.width - 152) < 1 && abs(frame.height - 102) < 1
+        }
         let before = try visible(app.native(), .easelControl("selection")).frame
         try stroke(app, [CGPoint(x: -230, y: 245), CGPoint(x: -210, y: 260), CGPoint(x: -190, y: 275)])
         try app.waitUntil("the rectangle moved by the drag") {
             guard let moved = try board(app).elements.first(where: { $0.id == rectangle.id }) else { return false }
             return near(moved.frame, rectangle.frame.offsetBy(dx: 40, dy: 30), tolerance: 1)
         }
-        let after = try visible(app.native(), .easelControl("selection")).frame
-        try expect(abs(after.minX - before.minX - 40) < 1 && abs(after.minY - before.minY - 30) < 1, "the selection did not follow: \(before) -> \(after)")
+        var after = before
+        do {
+            try app.waitUntil("the selection follows the rectangle") {
+                after = try visible(app.native(), .easelControl("selection")).frame
+                return abs(after.minX - before.minX - 40) < 1 && abs(after.minY - before.minY - 30) < 1
+            }
+        } catch { throw Check(description: "the selection did not follow: \(before) -> \(after)") }
         _ = try app.screenshot("easel-moved")
         try app.click(.easelControl("duplicate"))
         try waitForElements(app, 7, "duplicate copies the selection")
