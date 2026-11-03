@@ -1040,7 +1040,7 @@ final class ReduceSpecTests: XCTestCase {
         let work = d.newSpace("Work")
         let w1 = d.open("127.0.0.1:9/page2.html")
         XCTAssertNotEqual(d.view.theme, firstTheme)
-        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[7], RGBA(hex: "#2D4468")])
+        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[0], RGBA(hex: "#2D4468")])
         d.user(.space(.focus(first)))
         XCTAssertEqual(d.view.space.id, first)
         XCTAssertEqual(d.todayIDs, [a])

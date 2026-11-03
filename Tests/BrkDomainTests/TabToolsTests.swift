@@ -256,7 +256,7 @@ extension TabToolsTests {
         let restored = Driver(file: try JSONSerialization.data(withJSONObject: saved))
         XCTAssertFalse(restored.state.folderIsExpanded(folder, in: restored.window))
         XCTAssertTrue(restored.view.tabTools.includeFavoritesInNumbers)
-        XCTAssertTrue(restored.view.tabTools.hoverPreviews)
+        XCTAssertFalse(restored.view.tabTools.hoverPreviews, "previews are off by default, as in Arc")
         restored.user(.item(.beginRename(.item(folder))))
         XCTAssertEqual(restored.view.renaming, folder)
     }

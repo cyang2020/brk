@@ -519,7 +519,7 @@ public struct ProfileDeletionRow: Sendable, Equatable, Codable {
 
 public struct TabPreferenceSnapshot: Equatable, Sendable, Codable {
     public var includeFavoritesInNumbers = true
-    public var hoverPreviews = true
+    public var hoverPreviews = false
     public init() {}
     public init(includeFavoritesInNumbers: Bool, hoverPreviews: Bool) {
         self.includeFavoritesInNumbers = includeFavoritesInNumbers

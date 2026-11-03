@@ -59,7 +59,8 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
 
 struct TabPreferences: Equatable, Sendable, Codable {
     var includeFavoritesInNumbers = true
-    var hoverPreviews = true
+    /// Off until turned on in settings, as Arc's Previews are.
+    var hoverPreviews = false
     var archiveEducationDismissed = false
     var favoritesHintDismissed = false
 
@@ -71,7 +72,7 @@ struct TabPreferences: Equatable, Sendable, Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         includeFavoritesInNumbers = try c.decodeIfPresent(Bool.self, forKey: .includeFavoritesInNumbers) ?? true
-        hoverPreviews = try c.decodeIfPresent(Bool.self, forKey: .hoverPreviews) ?? true
+        hoverPreviews = try c.decodeIfPresent(Bool.self, forKey: .hoverPreviews) ?? false
         archiveEducationDismissed = try c.decodeIfPresent(Bool.self, forKey: .archiveEducationDismissed) ?? false
         favoritesHintDismissed = try c.decodeIfPresent(Bool.self, forKey: .favoritesHintDismissed) ?? false
     }
@@ -121,7 +122,7 @@ public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     public var recent: RecentTabsSnapshot?
     public var toast: ToastSnapshot?
     public var archiveEducation: String?
-    public var hoverPreviews = true
+    public var hoverPreviews = false
     public var includeFavoritesInNumbers = true
 }
 
