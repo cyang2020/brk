@@ -4,6 +4,7 @@ import BrkControl
 import BrkDomain
 import BrkEngine
 import BrkLayout
+import BrkSettings
 
 /// Executes control ops against the running app, on the main actor, through the same paths a user takes:
 /// `dispatch` and `load` -> `AppStore.dispatch`; `press`/`hold`/`type`/`click`/`hover` -> in-process NSEvents into
@@ -499,6 +500,7 @@ final class ControlExecutor {
         facts.keyWindowNumber = NSApp.keyWindow?.windowNumber
         facts.appHidden = NSApp.isHidden
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
+        facts.dockIcon = AppIconChoice.allCases.first { NSApp.applicationIconImage === AppIconArt.image($0, side: AppStore.dockIconSide) }?.rawValue
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts

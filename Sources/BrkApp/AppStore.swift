@@ -40,7 +40,7 @@ public final class AppStore {
     private var shownIcon: AppIconChoice?
     /// The "Warn before quitting" dialog is open (or about to be).
     private var askingQuit = false
-    private static let dockIconSide: CGFloat = 512
+    static let dockIconSide: CGFloat = 512
     private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
         guard let self, let window = self.windowController(nil)?.id else { return }
         self.dispatch(.user(window, command))

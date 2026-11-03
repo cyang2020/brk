@@ -185,6 +185,9 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var keyWindowNumber: Int? = nil
     public var appHidden: Bool = false
     public var sheetClass: String? = nil
+    /// The Icon pane's choice the Dock shows now (`NSApp.applicationIconImage` is that drawing), nil when it is none
+    /// of them (the bundle's own icon).
+    public var dockIcon: String? = nil
     public var window: WindowID
     /// NSWindow frame (screen, bottom-left origin) and content size.
     public var windowFrame: CGRect
