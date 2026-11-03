@@ -43,6 +43,7 @@ public enum DownloadTag {}
 public enum LinkRouteTag {}
 public enum SearchEngineTag {}
 public enum AIRequestTag {}
+public enum EaselTag {}
 
 /// A sidebar item: tab, folder, split, or section root (Arc: `Identifier<SidebarItem>`).
 public typealias ItemID = ID<ItemTag>
@@ -63,6 +64,8 @@ public typealias LinkRouteID = ID<LinkRouteTag>
 public typealias SearchEngineID = ID<SearchEngineTag>
 /// One request to the local AI provider (`Effect.ai` -> `SystemEvent.aiResult`).
 public typealias AIRequestID = ID<AIRequestTag>
+/// One Easel, a whiteboard shown in a card instead of a page (Arc: `SidebarEasel.easelID`).
+public typealias EaselID = ID<EaselTag>
 
 extension ID where Tag == ProfileTag {
     /// Arc stores its initial profile as "default".

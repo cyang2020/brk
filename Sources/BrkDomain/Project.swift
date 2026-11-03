@@ -75,8 +75,8 @@ func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec
         let policy: DownloadPolicy = settings.promptForDownloadLocation ? .ask(startingAt: directory) : .directory(directory)
         let requested = live?.requestContext == context ? live?.requestedURL : nil
         let initialURL = requested ?? state.address(of: page.item, in: page.window, for: .savedDocument)
-        // The History page is drawn natively in its card: no browser.
-        if HistoryPage.shows(live?.requestedURL ?? initialURL) { return nil }
+        // The History page and Easels are drawn natively in their cards: no browser.
+        if HistoryPage.shows(live?.requestedURL ?? initialURL) || EaselPage.shows(live?.requestedURL ?? initialURL) { return nil }
         var spec = PageSpec(id: page, initialURL: initialURL, context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
         spec.hoverPreviews = state.doc.tabPreferences.hoverPreviews
         spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
@@ -258,8 +258,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         let content: PaneContent
         let address = state.address(of: p, in: id, for: .visible)
         if address != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
-            content = HistoryPage.shows(address) ? .history(PageID(window: id, item: p))
-                : (state.session.live[PageID(window: id, item: p)]?.crashed ?? false) ? .crashed(PageID(window: id, item: p)) : .page(PageID(window: id, item: p))
+            let page = PageID(window: id, item: p)
+            if HistoryPage.shows(address) { content = .history(page) }
+            else if let easel = EaselPage.id(of: address), state.doc.easels[easel] != nil { content = .easel(page, easel) }
+            else { content = (state.session.live[page]?.crashed ?? false) ? .crashed(page) : .page(page) }
         } else {
             content = .blank
         }
@@ -291,6 +293,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {
             pill.loadProgress = live.loadProgress
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
+        }
+        // An Easel's pill is its Share button (Q09 a: a lock and "Share").
+        if let easel = EaselPage.id(of: t.url), state.doc.easels[easel] != nil {
+            pill.share = easel
+            pill.host = EaselCopy.share
+            pill.toolbarText = doc.toolbarVisible ? EaselCopy.share : nil
+            pill.canGoBack = false; pill.canGoForward = false
         }
     }
     if doc.kind == .incognito {
@@ -379,7 +388,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                 }
             } : [],
             spaceExportMessage: session.spaceExportMessage, spaceExportInProgress: session.spaceExport != nil,
-            canManageSpaces: doc.kind == .standard
+            canManageSpaces: doc.kind == .standard,
+            easels: page == .easelsAndNotes ? state.easelCards(in: id) : []
         ))
     case .peek(let openID, let tab)?:
         // The peeked tab lives in the window's own scratch tree, whatever the window's container is.
@@ -404,7 +414,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if session.find?.focusInput == true { focus = .findInput }
     else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
-    else if session.pendingSpaceDeletion != nil { focus = .spaceDialog }
+    else if session.pendingSpaceDeletion != nil || session.pendingEaselDeletion != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.boostEditor != nil { focus = .none }
@@ -412,6 +422,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if case .library? = session.overlay { focus = .none }
     else if let peekPage { focus = .page(peekPage) }
     else if let focusedPane, case .page(let page)? = contentPanes.first(where: { $0.tab == focusedPane })?.content { focus = .page(page) }
+    else if let focusedPane, case .easel(let page, _)? = contentPanes.first(where: { $0.tab == focusedPane })?.content { focus = .easel(page) }
     else { focus = .none }
 
     let dialog: SpaceDialogSnapshot? = switch session.dialog {
@@ -450,6 +461,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
                                  hapticsEnabled: state.doc.settings.advanced.hapticsOnReorder),
         urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
         renaming: session.renaming, dialog: dialog, pendingSpaceDeletion: session.pendingSpaceDeletion,
+        pendingEaselDeletion: session.pendingEaselDeletion,
+        easels: contentPanes.compactMap { if case .easel(let page, let easel) = $0.content { state.easelSnapshot(page, easel) } else { nil } },
         spaceProfiles: profileRows(state), profileDialog: profileDialog, find: session.find.map {
             FindSnapshot(page: $0.page, query: $0.query, replacement: $0.replacement, count: $0.count, ordinal: $0.ordinal,
                          searching: $0.searching, canReplace: $0.ticket != nil && $0.editable != nil && $0.operation == nil && !$0.query.text.isEmpty,
@@ -490,7 +503,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     if state.doc.windows[window]?.kind != .standard { enabled.remove(.peekEmail) }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
     if state.doc.windows[window]?.kind != .standard {
-        enabled.subtract([.importFromBrowser, .gettingStarted, .newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
+        enabled.subtract([.newEasel, .importFromBrowser, .gettingStarted, .newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
@@ -506,6 +519,8 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         if (state.session.live[PageID(window: window, item: id)]?.zoomPercent ?? 100) == 100 { enabled.remove(.resetZoom) }
         if tab.url == nil { enabled.remove(.copyCurrentURL) }
         if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
+        // A board has no page to reload, zoom, print or inspect.
+        if EaselPage.shows(tab.url) { enabled.subtract(pageActions) }
     } else {
         enabled.subtract(pageActions + [.archiveTab, .copyCurrentURL, .pinTab, .rename, .resetTab])
     }

@@ -22,6 +22,7 @@ public final class WindowRootView: NSView {
     public let content: ContentAreaView
     public let library: LibraryView
     public let history: HistoryPageView
+    public let easel: EaselBoardView
     public let peek: PeekCardView
     public let findBar: FindBarView
     public let commandBar: CommandBarView
@@ -59,13 +60,14 @@ public final class WindowRootView: NSView {
         content = ContentAreaView(dispatch: dispatch)
         library = LibraryView(dispatch: dispatch)
         history = HistoryPageView(dispatch: dispatch)
+        easel = EaselBoardView(dispatch: dispatch)
         peek = PeekCardView(dispatch: dispatch)
         findBar = FindBarView(dispatch: dispatch)
         commandBar = CommandBarView(dispatch: dispatch)
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, history, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
@@ -96,6 +98,7 @@ public final class WindowRootView: NSView {
         case .commandBarInput: commandBar.focusInput()
         case .renameField(let item): sidebar.focusRenameField(item)
         case .spaceDialog: spaceDialog.focusForm()
+        case .easel: easel.focusBoard()
         case .profileDialog: ProfileDialogHost.focus(over: spaceDialog)
         case .sidebar: sidebar.focusList()
         case .page, .none: false
@@ -125,7 +128,7 @@ public final class WindowRootView: NSView {
         }
         renderChrome(snapshot, frames: frames)
         let palette = Palette(snapshot.theme)
-        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil
+        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil && snapshot.pendingEaselDeletion == nil
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         // Arc's Create a Space flow shows no page: the content area is a blank card over the draft's theme.
         content.isHidden = snapshot.dialog == .newSpace
@@ -133,6 +136,11 @@ public final class WindowRootView: NSView {
         let historyPage: PageID? = if case .history(let page)? = historyCard?.content { page } else { nil }
         history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
         history.layer?.cornerRadius = historyCard?.cornerRadius ?? 0
+        // One board at a time: the focused card's Easel, else the first card showing one.
+        let easelCards = frames.cards.filter { if case .easel = $0.content { true } else { false } }
+        let easelCard = easelCards.first { card in snapshot.content.panes.indices.contains(card.pane) && snapshot.content.panes[card.pane].focused } ?? easelCards.first
+        let shownEasel = easelCard.flatMap { card in snapshot.easels.first { if case .easel(let page, _) = card.content { $0.page == page } else { false } } }
+        easel.render(shownEasel, in: easelCard?.rect, cornerRadius: easelCard?.cornerRadius ?? 0)
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
         loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,
@@ -151,7 +159,7 @@ public final class WindowRootView: NSView {
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
-        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, frames: frames, palette: palette)
+        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, easelDeletion: snapshot.pendingEaselDeletion, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette,
                                  spaceNames: Dictionary(snapshot.dock.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }))
         tabTools.frame = bounds
@@ -418,4 +426,10 @@ public enum PeekCopy {
     public static let openInTab = "Open as Tab"
     public static let openInSplit = "Open in Split View"
     public static let close = "Close"
+}
+
+/// Share's PNG of an Easel's board, for BrkApp (which reaches the Library's drawing only through this module).
+@MainActor
+public enum EaselExport {
+    public static func png(_ card: EaselCard) -> Data? { EaselDrawing.png(card) }
 }

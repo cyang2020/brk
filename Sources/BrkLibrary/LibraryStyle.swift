@@ -273,7 +273,7 @@ public enum LibraryCopy {
     static let downloadsEmpty = "Come back after you’ve found some cool stuff to save."
     static func noResults(_ query: String) -> String { "No results found for “\(query)”" }
     /// GUESS.
-    static let easelsEmpty = "Easels and Notes will show here in a later version of Brk."
+    static let easelsEmpty = "Make one with File > New Easel (⌃⇧E)."
     /// Observed: "File deleted or moved" (Downloads).
     static let fileMissing = "File deleted or moved"
     static let clearDownloads = "Clear Downloads"

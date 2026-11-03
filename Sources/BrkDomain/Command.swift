@@ -46,6 +46,8 @@ public enum Command: Hashable, Sendable, Codable {
     /// The Library (downloads, history, archive, media, easels and notes, boosts, spaces). F5.
     case library(LibraryCommand)
     case boost(BoostCommand)
+    /// Easels: the whiteboard rows and their boards (Easels.swift).
+    case easel(EaselCommand)
     /// Windows: new standard, incognito and Little Arc windows, closing, "Open in <space>". F3.
     case window(WindowCommand)
     /// Peek: a link previewed in a card over the content. F3.
@@ -62,7 +64,7 @@ public enum Command: Hashable, Sendable, Codable {
 /// Features behind the greyed-out menu rows. One case per feature, not per row, so a wave that ships a feature
 /// replaces every `.later(x)` in the table with real commands and deletes the case.
 public enum LaterFeature: String, Hashable, Sendable, Codable, CaseIterable {
-    case importer, blankWindow, boosts, notes, easels, captures, savePage, print, toolbar
+    case importer, blankWindow, boosts, notes, captures, savePage, print, toolbar
     case sidebarKeyboardFocus, siteData, cast, spaceManager, aiCommandBar, joinMeeting
     case peekEmail, duplicate, folderTools, linearTabCycling, resetSpace, extensions, onboarding
 }
@@ -521,6 +523,7 @@ public enum ProfileDialogRequest: Hashable, Sendable, Codable {
 
 public enum SystemEvent: Sendable, Equatable {
     case capture(CaptureEvent)
+    case easel(EaselEvent)
     case find(FindUpdate)
     case sidebarData(SidebarDataEvent)
     case page(BrowserToken, PageEvent)
@@ -586,7 +589,8 @@ extension Command {
         switch self {
         case .capture(.begin), .library(.openHistory): false
         case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
-             .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
+             .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create),
+             .easel(.requestDelete), .easel(.confirmDelete), .easel(.rename): true
         // A Spaces card's … menu and what its rows do (P30-c): the Library stays, so the card shows the result.
         case .sidebar(.popupMenu(.spaceCard, _)), .space(.inSpace), .profile(.assign), .app(.export), .tabTools(.spaceIntoFolder): true
         // The save panel of Share Space… answering (a destination, or Cancel) changes nothing the window shows.

@@ -161,6 +161,9 @@ public enum ViewID: Hashable, Sendable, Codable {
     case profileBadge, profileDialog
     /// The settings window: its pane toolbar buttons and one id per field, by the setting's name (F1).
     case settingsWindow, settingsPane(SettingsPane), settingsField(String)
+    /// An Easel's board in its card, one of its controls by name (the tools, the title box, the font-size buttons,
+    /// the person button), one element by id, and a card of the Library's Easels page.
+    case easelBoard, easelControl(String), easelElement(String), easelCard(EaselID)
 
     public var identifier: String {
         switch self {
@@ -233,6 +236,10 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .settingsWindow: "settings"
         case .settingsPane(let pane): "settings-pane-\(pane.rawValue)"
         case .settingsField(let name): "settings-field-\(name)"
+        case .easelBoard: "easel-board"
+        case .easelControl(let name): "easel-\(name)"
+        case .easelElement(let id): "easel-element-\(id)"
+        case .easelCard(let id): "easel-card-\(id)"
         }
     }
 }
@@ -272,11 +279,12 @@ extension WindowFrames {
         case .libraryPage(let page): return library?.pageCells[page]
         case .archive: return library?.page   // the archive page fills the Library's page column while it is the open page
         case .historyPage: return cards.first { if case .history = $0.content { true } else { false } }?.rect
+        case .easelBoard: return cards.first { if case .easel = $0.content { true } else { false } }?.rect
         case .peek: return peek
         case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
-             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool:
+             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool, .easelControl, .easelElement, .easelCard:
             return nil   // view-owned: reported by `actual` only
         }
     }

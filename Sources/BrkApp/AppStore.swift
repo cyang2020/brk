@@ -70,6 +70,7 @@ public final class AppStore {
     let sounds = SoundEffects()
     let captureSheets = CaptureSheets()
     let captureFiles: CaptureFiles
+    let easelFiles: EaselFiles
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
@@ -91,6 +92,7 @@ public final class AppStore {
         self.stateFile = stateFile
         self.boostFiles = BoostFiles(root: stateFile.url.deletingLastPathComponent())
         captureFiles = CaptureFiles(root: stateFile.url.deletingLastPathComponent())
+        easelFiles = EaselFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
         for row in snapshot.settings.profiles {
             let id = row.profile.id
@@ -406,6 +408,7 @@ public final class AppStore {
         for effect in effects {
             switch effect {
             case .capture(let effect): runCapture(effect)
+            case .easel(let effect): runEasel(effect)
             case .find(let request): engine.find(request)
             case .boost(let request): runBoost(request)
             case .siteRequest(let request):

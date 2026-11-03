@@ -201,7 +201,7 @@ extension ActionID {
         case .newNoteInSplitView:
             entry(29, "New Note (in Split)", .file, 2, [key([ctrl, opt], .n, .pageThenApp)], .later(.notes),
                   bar: listing("note.text", "Create Note in Split View", "Note Split", "Scratchpad Split"), hidden: true)
-        case .newEasel: entry(30, "New Easel", .file, 2, [key([ctrl, shift], .e, .page)], .later(.easels), bar: listing("scribble.variable", "Mood Board"))
+        case .newEasel: entry(30, "New Easel", .file, 2, [key([ctrl, shift], .e, .page)], .easel(.create), bar: listing("scribble.variable", "Mood Board"))
         case .closeWindow: entry(31, "Close Window", .file, 3, [key([shift, cmd], .w, .app)], .window(.close), bar: listing("xmark.circle", "Exit Window"))
         case .archiveTab:
             entry(32, "Archive Tab", .file, 3, [key(cmd, .w, .app)], .tab(.close(.focused)), bar: listing("archivebox", "Exit Tab", "Unload", "Deselect", "Close"))

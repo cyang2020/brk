@@ -9,6 +9,7 @@ import Foundation
 /// exist, what has keyboard focus, frames) is derived from the snapshot and reconciled, never sent as an effect.
 public enum Effect: Hashable, Sendable {
     case capture(CaptureEffect)
+    case easel(EaselEffect)
     case sound(MediaSoundEvent)
     case find(FindRequest)
     case boost(BoostEffect)
