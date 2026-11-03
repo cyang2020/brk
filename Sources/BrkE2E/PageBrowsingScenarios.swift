@@ -10,7 +10,7 @@ import Foundation
 enum PageBrowsingScenarios {
     static let all = core + more
     static let core = [
-        Scenario("PB1", "every routed chord through CEF: app first, page first, press twice, exactly once; Chrome-only accelerators consumed", cefOnly: "CEF keys", keyCoverage),
+        Scenario("PB1", "every routed chord through CEF: app first, page first, press twice, exactly once; unbound Chrome accelerators open no Chrome UI", cefOnly: "CEF keys", keyCoverage),
         Scenario("PB1H", "after Hide Brk and coming back, Cmd chords reach the page's key handler again", cefOnly: "CEF keys", keysAfterHide),
         Scenario("PB1R", "held keys repeat only repeating actions; window-server key presses take the same routes", cefOnly: "CEF keys", keyRepeat),
     ]
