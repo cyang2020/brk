@@ -649,7 +649,8 @@
       ],
       "remaining": [
         "Add a native New Tab row click check and verify overflow and empty states against the reference.",
-        "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）"
+        "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：Today 清空后不画置顶区与 Today 之间的分隔线和 Clear；无当前标签时内容区是不透明 #FCFCFC 白卡片带阴影（新建 Space 后的空白页同样）。站台 Q02-b 1.1%，一致。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -4925,7 +4926,8 @@
       ],
       "remaining": [
         "Physical reorder haptic output is unverified; its setting is consumed by the owned gestures.",
-        "Arc 对照（run-20261103 P27）仍有差异或无参照：P27-a: 已修（一致） | P27-b: 要修（Space 组：dock 拖动时被拖的圆点用浅色小胶囊跟随指针，不在格位上画灰方块）"
+        "Arc 对照（run-20261103 P27）仍有差异或无参照：P27-a: 已修（一致） | P27-b: 要修（Space 组：dock 拖动时被拖的圆点用浅色小胶囊跟随指针，不在格位上画灰方块）",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：底栏拖 Space 圆点时圆点装进浅色胶囊跟着指针走，原格位空出；站台 P27-b 4.1%，剩余为测试数据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Sidebar.swift",
@@ -6025,7 +6027,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修"
+        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：拖标签进内容区有了 Arc 的落点预览（当前页让位不重排、主题色描边落点框、169×250 点的拖动卡片、被拖行的 ×），松开建成分屏，置顶文件夹里的标签可以和 Today 标签分屏；栏头右侧四个按钮（翻译、站点控制、分屏菜单、×）和分屏菜单七项四组按 Arc，两栏之间有拖动条，焦点栏描边按主题色取同亮度。站台 P23-d 12.1%（剩余为参照图主题和测试数据）、P23-c 5.3%。待补拍：上下分屏时的菜单措辞和拖动条样式、米色主题下的 P23-c。"
       ],
       "implementation": [
         "Sources/BrkContent/SplitToolsView.swift",
@@ -6307,7 +6310,8 @@
         }
       ],
       "remaining": [
-        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修"
+        "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：同 A073；新增命令：前后挪动当前栏（Move Left/Right）、在左侧加一栏（Add Left Split）。"
       ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",

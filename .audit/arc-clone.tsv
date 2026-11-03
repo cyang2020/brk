@@ -166,3 +166,5 @@ ts	phase	decision	why	evidence	result
 2026-11-03T17:27:17Z	visual-pairs-r3	父任务补拍 Arc 参照（results.tsv 第 144–158 行，main c0ea2f3d）：Max 设置页、5 秒预览卡、Instant Links、Tidy 按钮、置顶自动改短标题、翻译全流程、命令栏问句；Ask on Page 和 Browse for Me 在 Arc 1.170 桌面版没有界面	第三轮修复任务没有分配 AI 组，参照先拍下来留给下一轮；拍 AI 场景要开 Max，拍完已关回去	verify/visual-pairs/run-20261103/P38、P44–P50；ROUND3-BRIEF.md 父任务补充	8 个修复任务运行中（分支上还没有提交）
 2026-11-03T18:21:47Z	merge	R3-4 Library 分支合进 main（0adfa4b1）	任务自己的门：934 单元测试、11 个原生场景；代码看过，菜单和命令的改动集中在 Library 和 Space 命令	分支 t3/r3-4-library（58c829be 代码，4dcb1919 原生证据）	合并提交 0adfa4b1
 2026-11-03T18:21:47Z	gate	合并后 main：单元测试 934/0 失败/1 跳过（station2 干净工作树）；站台 P30、P32 与任务报告一致	验收规矩	/tmp/station-parent/r3-4/sheet.tsv	通过；A061 的验收文字去掉了 Arc 没有的搜索框；A061/A103/A099/A048/A081 的 remaining 更新
+2026-11-03T18:46:19Z	merge	R3-1 侧栏与窗口分支合进 main（087ee736）；三处冲突（场景清单、命令样本、命令计数）两边都保留	任务自己的门：936 单元测试、13 个原生场景（SplitTools4 原场景发错窗口已修）	分支 t3/r3-1-sidebar-window（88714360 代码，984a8c36 原生证据）	合并提交 087ee736
+2026-11-03T18:46:19Z	gate	合并后 main：单元测试 943/0 失败/1 跳过（第一次跑 1 个失败，重跑未复现）；站台 Q02、P23、P27、P24、P30 与任务报告一致	验收规矩	/tmp/station-parent/r3-1/sheet.tsv；/tmp/r3-1-tests.log	通过；A073/A076/A060/A008 的 remaining 更新
