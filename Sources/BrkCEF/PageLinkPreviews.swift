@@ -306,7 +306,7 @@ private final class LinkPreviewCard: NSView {
         summarize.title = "Summarize"
         summarize.isBordered = false
         summarize.wantsLayer = true
-        summarize.layer?.cornerRadius = 11
+        summarize.layer?.cornerRadius = Metrics.sidebarTools.previewButtonRadius.value
         summarize.font = .systemFont(ofSize: 12, weight: .medium)
         summarize.target = self; summarize.action = #selector(summarizeCard)
         for view in [icon, host, heading, address, note, close, summarize] as [NSView] { addSubview(view) }

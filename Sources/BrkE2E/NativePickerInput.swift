@@ -1,5 +1,6 @@
 import ApplicationServices
 import BrkBase
+import Carbon
 import BrkControl
 import Foundation
 
@@ -285,5 +286,64 @@ extension AppUnderTest {
             try NativePickerInput.drive(self, file: nil); return .ok
         default: return nil
         }
+    }
+}
+
+/// System-wide input for R3-6's Little Arc entry points: a key press the window server delivers to whichever app is
+/// in front (so a Carbon hot key fires), the status item's menu through Accessibility, and a hot key this runner
+/// holds to give the app a real conflict.
+enum NativeSystemInput {
+    /// Posts `chord` the way the keyboard does (window server), so a Carbon hot key fires whatever app is in front.
+    static func postSystemWide(_ chord: KeyChord) throws {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(keyboardEventSource: source, virtualKey: chord.key.code, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: chord.key.code, keyDown: false) else { throw Check(description: "no CGEvent") }
+        var flags = CGEventFlags()
+        if chord.modifiers.contains(.command) { flags.insert(.maskCommand) }
+        if chord.modifiers.contains(.option) { flags.insert(.maskAlternate) }
+        if chord.modifiers.contains(.control) { flags.insert(.maskControl) }
+        if chord.modifiers.contains(.shift) { flags.insert(.maskShift) }
+        down.flags = flags; up.flags = flags
+        down.post(tap: .cghidEventTap); usleep(40_000); up.post(tap: .cghidEventTap)
+    }
+    static func activateFinder() {
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
+        try? p.run(); p.waitUntilExit()
+    }
+    /// The status item's menu, opened and chosen through Accessibility (`AXExtrasMenuBar`).
+    static func chooseStatusMenu(pid: Int32, title: String) throws {
+        let app = AXUIElementCreateApplication(pid)
+        var bar: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, "AXExtrasMenuBar" as CFString, &bar) == .success, let extras = bar else { throw Check(description: "no status item through Accessibility") }
+        var children: CFTypeRef?
+        AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &children)
+        guard let item = (children as? [AXUIElement])?.first else { throw Check(description: "status item missing") }
+        AXUIElementPerformAction(item, kAXPressAction as CFString)
+        usleep(400_000)
+        func find(_ node: AXUIElement, _ depth: Int) -> AXUIElement? {
+            var t: CFTypeRef?
+            if AXUIElementCopyAttributeValue(node, kAXTitleAttribute as CFString, &t) == .success, (t as? String) == title { return node }
+            guard depth < 4 else { return nil }
+            var kids: CFTypeRef?
+            AXUIElementCopyAttributeValue(node, kAXChildrenAttribute as CFString, &kids)
+            for kid in (kids as? [AXUIElement]) ?? [] { if let hit = find(kid, depth + 1) { return hit } }
+            return nil
+        }
+        guard let entry = find(item, 0) else { throw Check(description: "status menu has no \(title)") }
+        guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else { throw Check(description: "status menu press failed") }
+    }
+
+    /// Registers `chord` exclusively for this runner; the returned closure releases it.
+    static func hold(_ chord: KeyChord) throws -> () -> Void {
+        var flags: UInt32 = 0
+        if chord.modifiers.contains(.command) { flags |= UInt32(cmdKey) }
+        if chord.modifiers.contains(.option) { flags |= UInt32(optionKey) }
+        if chord.modifiers.contains(.shift) { flags |= UInt32(shiftKey) }
+        if chord.modifiers.contains(.control) { flags |= UInt32(controlKey) }
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(UInt32(chord.key.code), flags, EventHotKeyID(signature: 0x52333648, id: 7),
+                                         GetEventDispatcherTarget(), OptionBits(kEventHotKeyExclusive), &ref)
+        guard status == noErr, let ref else { throw Check(description: "the runner could not hold \(chord) (\(status))") }
+        return { UnregisterEventHotKey(ref) }
     }
 }

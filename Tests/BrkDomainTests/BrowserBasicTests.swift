@@ -272,21 +272,29 @@ final class BrowserBasicTests: XCTestCase {
         XCTAssertEqual(d.snapshot.pages.first { $0.id == peek.page }?.context, .profile(.default))
     }
 
+    /// Idle is real input (R3-6, A086): activity and key changes stamp the panel; being key alone does not keep it.
     func testLittleActivityAndWindowActivationDriveArchiveAndRouting() throws {
         let d = Driver()
         d.user(.window(.newLittle(url("https://little.example/"))))
         let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little }?.id)
         d.system(.window(little, .becameKey))
-        d.advance(.seconds(60 * 60 * 13))
-        d.system(.clockTick)
-        XCTAssertNotNil(d.snapshot.windows[little])
-        d.system(.window(little, .resignedKey))
-        d.advance(.seconds(60 * 60 * 13))
+        d.advance(.seconds(60 * 60 * 5))
         d.system(.window(little, .activity))
+        d.advance(.seconds(60 * 60 * 5))
         d.system(.clockTick)
-        XCTAssertNotNil(d.snapshot.windows[little])
-        d.advance(.seconds(60 * 60 * 13))
+        XCTAssertNotNil(d.snapshot.windows[little], "input five hours ago keeps it (Links default: six hours)")
+        d.system(.window(little, .resignedKey))
+        d.advance(.seconds(60 * 60 * 5))
+        d.system(.clockTick)
+        XCTAssertNotNil(d.snapshot.windows[little], "leaving key is a stamp too")
+        d.advance(.seconds(60 * 60 + 1))
         d.system(.clockTick)
         XCTAssertNil(d.snapshot.windows[little])
+        d.user(.window(.newLittle(url("https://little.example/key"))))
+        let key = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little }?.id)
+        d.system(.window(key, .becameKey))
+        d.advance(.seconds(60 * 60 * 6 + 1))
+        d.system(.clockTick)
+        XCTAssertNil(d.snapshot.windows[key], "key for six hours without input is idle")
     }
 }

@@ -1,10 +1,7 @@
-import ApplicationServices
 import BrkBase
 import BrkControl
 import BrkDomain
 import BrkLayout
-import Carbon
-import CoreGraphics
 import Foundation
 
 /// Round 3, R3-6: tab hover cards and Favorite overlays, tab groups, Little Arc's entry points and idleness, Live
@@ -232,46 +229,6 @@ enum TabsLittleBarScenarios {
 
     // MARK: Little Arc entry points (A085)
 
-    /// Posts `chord` the way the keyboard does (window server), so a Carbon hot key fires whatever app is in front.
-    private static func postSystemWide(_ chord: KeyChord) throws {
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let down = CGEvent(keyboardEventSource: source, virtualKey: chord.key.code, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: chord.key.code, keyDown: false) else { throw Check(description: "no CGEvent") }
-        var flags = CGEventFlags()
-        if chord.modifiers.contains(.command) { flags.insert(.maskCommand) }
-        if chord.modifiers.contains(.option) { flags.insert(.maskAlternate) }
-        if chord.modifiers.contains(.control) { flags.insert(.maskControl) }
-        if chord.modifiers.contains(.shift) { flags.insert(.maskShift) }
-        down.flags = flags; up.flags = flags
-        down.post(tap: .cghidEventTap); usleep(40_000); up.post(tap: .cghidEventTap)
-    }
-    private static func activateFinder() {
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
-        try? p.run(); p.waitUntilExit()
-    }
-    /// The status item's menu, opened and chosen through Accessibility (`AXExtrasMenuBar`).
-    private static func chooseStatusMenu(pid: Int32, title: String) throws {
-        let app = AXUIElementCreateApplication(pid)
-        var bar: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(app, "AXExtrasMenuBar" as CFString, &bar) == .success, let extras = bar else { throw Check(description: "no status item through Accessibility") }
-        var children: CFTypeRef?
-        AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &children)
-        guard let item = (children as? [AXUIElement])?.first else { throw Check(description: "status item missing") }
-        AXUIElementPerformAction(item, kAXPressAction as CFString)
-        usleep(400_000)
-        func find(_ node: AXUIElement, _ depth: Int) -> AXUIElement? {
-            var t: CFTypeRef?
-            if AXUIElementCopyAttributeValue(node, kAXTitleAttribute as CFString, &t) == .success, (t as? String) == title { return node }
-            guard depth < 4 else { return nil }
-            var kids: CFTypeRef?
-            AXUIElementCopyAttributeValue(node, kAXChildrenAttribute as CFString, &kids)
-            for kid in (kids as? [AXUIElement]) ?? [] { if let hit = find(kid, depth + 1) { return hit } }
-            return nil
-        }
-        guard let entry = find(item, 0) else { throw Check(description: "status menu has no \(title)") }
-        guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else { throw Check(description: "status menu press failed") }
-    }
-
     @Sendable static func littleEntry(_ app: AppUnderTest) throws {
         // Whatever ⌥⌘N came to (another Brk may hold it), the app said so instead of taking it silently.
         try app.waitUntil("the launch registration was reported") { try settings(app).littleArcShortcut != nil }
@@ -280,21 +237,18 @@ enum TabsLittleBarScenarios {
         let mine = KeyChord([.control, .option, .shift, .command], .l)
         try app.dispatch(.settings(.shortcuts(.setChord(.showLittleArc, mine))))
         try app.waitUntil("registered system-wide") { try settings(app).littleArcShortcut == .registered(mine) }
-        activateFinder()
+        NativeSystemInput.activateFinder()
         app.sleep(0.8)
         let before = try littleWindows(app).count
-        try postSystemWide(mine)
+        try NativeSystemInput.postSystemWide(mine)
         try app.waitUntil("the system-wide shortcut opened a Little Arc from another app", timeout: 6) { try littleWindows(app).count == before + 1 }
         _ = try app.screenshot("R36-little-from-hotkey", window: try littleWindows(app).last)
         for little in try littleWindows(app) { _ = try? dispatch(app, window: little, .window(.close)) }
         try app.waitUntil("Little Arcs closed") { try littleWindows(app).isEmpty }
         // A combination this runner holds exclusively: Brk reports it unavailable and does not fire.
         let held = KeyChord([.control, .option, .shift, .command], .k)
-        var ref: EventHotKeyRef?
-        let status = RegisterEventHotKey(UInt32(held.key.code), UInt32(cmdKey | optionKey | shiftKey | controlKey), EventHotKeyID(signature: 0x52333648, id: 7),
-                                         GetEventDispatcherTarget(), OptionBits(kEventHotKeyExclusive), &ref)
-        try expect(status == noErr, "the runner could not hold its test combination (\(status))")
-        defer { if let ref { UnregisterEventHotKey(ref) } }
+        let release = try NativeSystemInput.hold(held)
+        defer { release() }
         try app.dispatch(.settings(.shortcuts(.setChord(.showLittleArc, held))))
         try app.waitUntil("conflict reported") { if case .unavailable(held, _)? = try settings(app).littleArcShortcut { return true }; return false }
         app.note("conflict: \(String(describing: try settings(app).littleArcShortcut!))")
@@ -303,14 +257,14 @@ enum TabsLittleBarScenarios {
         try app.waitUntil("registered again") { try settings(app).littleArcShortcut == .registered(mine) }
         try app.dispatch(.settings(.links(.globalLittleArcShortcut(false))))
         try app.waitUntil("off reported") { try settings(app).littleArcShortcut == .off }
-        activateFinder(); app.sleep(0.8)
-        try postSystemWide(mine)
+        NativeSystemInput.activateFinder(); app.sleep(0.8)
+        try NativeSystemInput.postSystemWide(mine)
         app.sleep(1.5)
         try expect(try littleWindows(app).isEmpty, "the shortcut fired with the switch off")
         try app.dispatch(.settings(.links(.globalLittleArcShortcut(true))))
         try app.waitUntil("on again") { try settings(app).littleArcShortcut == .registered(mine) }
         // The status item's menu: New Little Brk Window.
-        try chooseStatusMenu(pid: app.hello!.pid, title: "New Little Brk Window")
+        try NativeSystemInput.chooseStatusMenu(pid: app.hello!.pid, title: "New Little Brk Window")
         try app.waitUntil("the status menu opened a Little Arc", timeout: 6) { try littleWindows(app).count == 1 }
     }
 
