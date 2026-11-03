@@ -3130,7 +3130,8 @@
       ],
       "remaining": [
         "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup.",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。",
+        "R3-5（2026-11-04，合并 e9f5e87d）：View > Developer 子菜单按真实 Arc 的七项做齐，最后一项 Turn on/off Developer Mode for this site（⌃D）接到按站点的开关，Allow JavaScript from Apple Events 是会保存的打勾开关（默认关）。剩余归 R3-7：检查元素的节点选择、辅助输入。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -9866,13 +9867,14 @@
       "arc_evidence": "rows 176 to 189",
       "description": "Shortcuts guide, release notes, help, restore data, export notes, task manager, troubleshooting",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Help entries open useful local documentation and working restore, diagnostics and troubleshooting tools instead of disabled placeholders.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
       "verification": [],
       "remaining": [
-        "The menu and shortcut settings entry exist. Restore, tracing, task manager and most help actions remain disabled."
+        "The menu and shortcut settings entry exist. Restore, tracing, task manager and most help actions remain disabled.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：Help 菜单各项有了真实行为：Release Notes（构建时从 git 历史生成的页面）、Visit Help Center、Contact the Team（指向仓库的新建 issue 页，仓库私有，未登录 GitHub 时 404，目标待用户定）、Restore Data（启动时自动备份，可选备份恢复并重启）、Record/Stop/Cancel Trace（Chromium trace 存到数据目录 Traces/）、Open Task Manager（每秒刷新，可结束进程）、Copy Brk Info、Check for Updates…（说明没有更新渠道）。Note 相关三项隐藏（Arc 1.170 也没有）。只有单元测试的：End Process 按钮。"
       ]
     },
     {
@@ -10044,7 +10046,8 @@
         }
       ],
       "remaining": [
-        "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior."
+        "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：菜单栏可用行数 107→118、147→158，Help 和 Developer 子菜单补齐；Note 三项隐藏，New Easel 归 R3-3。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -10066,7 +10069,7 @@
       "arc_evidence": "anatomy-m 4.1 (Dock tile plugin plists)",
       "description": "Custom Dock icon behavior",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "partial",
       "acceptance": "Implement the intended custom Dock tile behavior for Brk and verify it across active and inactive application states.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10085,7 +10088,8 @@
         }
       ],
       "remaining": [
-        "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features."
+        "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：下载时 Dock 图标底部有进度条（截图验证），下载完成时 Dock 下载文件夹弹一下（只有单元测试），Dock 右键菜单有 New Window / New Incognito Window。未做：下载数角标代码里设了但这台机器不显示（要给 Brk 开通知权限，属系统权限，待用户定）；Arc 那个不运行时也显示自选图标的 Dock 插件（验证要把 Brk 固定到 Dock）。"
       ],
       "implementation": [
         "Sources/BrkApp/Lifecycle.swift",
@@ -10144,7 +10148,7 @@
       "arc_evidence": "anatomy-m 1.1 (4 classes, 10 commands)",
       "description": "Scripting windows, tabs and spaces",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "partial",
       "acceptance": "Script windows, tabs and spaces through a documented AppleScript dictionary with correct object identity and context.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10162,7 +10166,8 @@
         }
       ],
       "remaining": [
-        "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions."
+        "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions.",
+        "R3-5（2026-11-04，合并 e9f5e87d）：脚本字典照 Arc（窗口、标签、Space；make/count/close/select/go back/go forward/reload/stop/execute/focus），所有修改走普通命令，execute 只在 Developer 子菜单的开关打开时运行。验证是在 Brk 自己的进程里用 NSAppleScript 跑同一份字典（外部 osascript 会弹系统授权框，没动系统设置）；记录在 verify/completion/r3-5-menus/applescript/。要补外部 osascript 证据需用户在系统设置里允许一次。"
       ],
       "implementation": [
         "Sources/BrkApp/ExternalLinks.swift",
