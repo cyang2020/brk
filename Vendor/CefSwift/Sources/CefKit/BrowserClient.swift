@@ -349,6 +349,15 @@ final class BrowserClient {
                 cefBrowser.delegate?.browser(cefBrowser, didChangeFullscreen: isFullscreen)
             }
         }
+        display.pointee.on_media_access_change = { handlerSelf, browser, video, audio in
+            cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }
+            let camera = video != 0, microphone = audio != 0
+            MainActor.assumeIsolated {
+                guard let cefBrowser = client.browser else { return }
+                cefBrowser.delegate?.browser(cefBrowser, didChangeMediaAccess: camera, microphone: microphone)
+            }
+        }
         display.pointee.on_loading_progress_change = { handlerSelf, browser, progress in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
             guard let client = BrowserClient.owner(handlerSelf.map(UnsafeMutableRawPointer.init)) else { return }

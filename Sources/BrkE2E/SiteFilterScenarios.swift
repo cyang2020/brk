@@ -118,10 +118,14 @@ enum SiteFilterScenarios {
         try expect(try SitePolicyScenarios.controls(app).rulesError == nil, "offline was reported as a rules error")
         let first = try lists(app).compactMap(\.checked)
         try ExtScenarios.control(app, "siteSettingsDetails", .press)
-        try app.waitUntil("the second page says there is no network") {
-            guard case .menuItems(let texts) = try app.send(.siteControlTexts(window: app.window!)) else { return false }
-            return texts.filter { $0 == "Not downloaded yet; no network connection" }.count == 2
-        }
+        var seen: [String] = []
+        do {
+            try app.waitUntil("the second page says there is no network") {
+                guard case .menuItems(let texts) = try app.send(.siteControlTexts(window: app.window!)) else { return false }
+                seen = texts
+                return texts.filter { $0 == "Not downloaded yet; no network connection" }.count == 2
+            }
+        } catch { throw Check(description: "\(error); the panel showed \(seen)") }
         _ = try app.screenshotSiteControls("offline")
         _ = try app.send(.advanceClock(seconds: 3601))
         try app.waitUntil("an hour later Brk tries again", timeout: 20) {

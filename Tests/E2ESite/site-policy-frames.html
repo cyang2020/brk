@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Frame media fixture</title>
+<p>The muted video plays in a cross-origin frame (media.brk.test).</p>
+<script>
+const frame = document.createElement('iframe');
+frame.src = 'http://media.brk.test:' + location.port + '/media-frame.html';
+frame.width = 200; frame.height = 120; frame.allow = 'autoplay';
+document.addEventListener('DOMContentLoaded', () => document.body.append(frame));
+</script>

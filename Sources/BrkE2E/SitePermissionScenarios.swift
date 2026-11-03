@@ -24,6 +24,11 @@ enum SitePermissionScenarios {
             if case .menuItems(let texts)? = try? app.send(.sitePrompt(window: owner, path: nil)) { return texts }
             return nil
         }
+        /// Clicks one of the prompt's answers once the popover has settled on screen.
+        func answer(_ field: String) throws {
+            app.sleep(0.4)
+            try app.click(.settingsField(field))
+        }
         func reload() throws {
             try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
             try app.waitForPageInput(PageID(window: owner, item: item), at: app.site.url("site-permissions.html"))
@@ -40,14 +45,14 @@ enum SitePermissionScenarios {
         try expect(texts()?.contains(site) == true && texts()?.contains("Allow while visiting the site") == true
                    && texts()?.contains("Allow this time") == true && texts()?.contains("Never allow") == true, "prompt texts \(texts() ?? [])")
         _ = try app.send(.sitePrompt(window: owner, path: app.shotsDirectory.appendingPathComponent("SitePermission-prompt-ask.png").path))
-        try app.click(.settingsField("sitePermissionAllowOnce"))
+        try answer("sitePermissionAllowOnce")
         try waitForTitle(app, item, "screens:granted")
         try expect(try remembered(.windowManagement) == nil, "Allow this time was remembered")
 
         try reload()
         try press("screens")
         try app.waitUntil("the next document asks again") { texts()?.contains("Manage windows on all your displays") == true }
-        try app.click(.settingsField("sitePermissionDeny"))
+        try answer("sitePermissionDeny")
         try waitForTitle(app, item, "screens:denied:NotAllowedError")
         try expect(try remembered(.windowManagement) == .deny, "Never allow was not remembered")
         try press("screens")
@@ -70,7 +75,7 @@ enum SitePermissionScenarios {
 
         try press("screens")
         try app.waitUntil("Brk asks once more") { texts()?.contains("Manage windows on all your displays") == true }
-        try app.click(.settingsField("sitePermissionAllow"))
+        try answer("sitePermissionAllow")
         try waitForTitle(app, item, "screens:granted")
         try expect(try remembered(.windowManagement) == .allow, "Allow while visiting the site was not remembered")
         try reload()

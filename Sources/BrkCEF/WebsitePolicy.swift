@@ -22,8 +22,12 @@ extension ChromePage {
         return token == target.document && incarnation == target.document.browser && context == target.context && browser.url.flatMap(SiteOrigin.init) == target.origin
     }
 
+    /// What keeps a hidden page running even when its site is set to suspend: audible sound, picture in picture
+    /// (video, document, or the typed hook), camera or microphone capture, a download in its profile, an open
+    /// permission request, and operations holding the browser (document output, extension work).
     func websiteOperationProtected() -> Bool {
         audio.audible || pictureInPictureDocument == mainDocument.readyDocument && pictureInPictureDocument != nil
+            || documentPiPActive || mediaPlayers.contains(where: \.pictureInPicture) || capturingMedia
             || engine.transfers.contains(context: context) || !permissionRequests.isEmpty
             || engine.resources.entries[incarnation]?.leases.isEmpty == false
     }
@@ -74,6 +78,8 @@ extension ChromePage {
         let trace = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil
         if trace { print("[site-lifecycle] refresh page=\(id) revision=\(revision) visible=\(policy.visible) cachedFrozen=\(frozen)") }
         let rule = policy.preferences.rule(for: origin)
+        let framesPlaying = mediaPlayers.contains { $0.id.frame != 0 && !$0.paused && !$0.ended }
+        if policy.visible { subframeMediaIntent = framesPlaying } else if framesPlaying { subframeMediaIntent = true }
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
         let lists = rule.blocking ? engine.filterLists.lists(policy.preferences.activeFilterKeys) : []
@@ -158,6 +164,8 @@ extension ChromePage {
                     let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||x.hasAttribute(\(mediaMarker))))"
                     let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true, "contextId": contextID])
                     media = (result["result"] as? [String: Any])?["value"] as? Bool ?? true
+                    // The main document cannot see into cross-origin frames; the audio extension's reading can.
+                    media = media || self.subframeMediaIntent
                     if trace { print("[site-media] page=\(self.id) revision=\(revision) protected=\(media)") }
                 }
                 guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
@@ -211,6 +219,9 @@ extension ChromePage {
             target: SiteTarget(document: document, context: context, origin: origin), requestingOrigin: requesting,
             capabilities: kinds, frame: request.frameIdentifier, mask: request.requestedMask)
         permissionRequests[prompt.id] = PagePermissionRequest(prompt: prompt, nativeID: request.promptID, callback: callback)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-permission] request id=\(prompt.id) native=\(request.promptID.map(String.init) ?? "-") capabilities=\(kinds.map(\.rawValue).sorted())")
+        }
         Task { @MainActor [weak self] in
             let granted = await OSSiteAuthorization.shared.grants(kinds) { [weak self] in
                 guard let self else { return false }
@@ -232,6 +243,15 @@ extension ChromePage {
         let valid = engine.isLive(self) && matchesPermission(owner.prompt.target)
         engine.dismissPermission(id)
         let prompt = owner.prompt
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            print("[site-permission] answer id=\(id) decision=\(decision.rawValue) valid=\(valid) capabilities=\(prompt.capabilities.map(\.rawValue).sorted())")
+        }
+        // Chromium stores this answer itself; a choice remembered with it needs no second write.
+        permissionSync = permissionSync.compactMap { change in
+            guard change.requesting == prompt.requestingOrigin, change.top == prompt.target.origin else { return change }
+            let rest = change.capabilities.subtracting(prompt.capabilities)
+            return rest.isEmpty ? nil : (change.requesting, change.top, rest)
+        }
         if valid && decision == .allow {
             permissionGrants.append((prompt.target.document, prompt.requestingOrigin, prompt.target.origin, prompt.capabilities))
         }
@@ -284,6 +304,9 @@ extension ChromePage {
             guard let kind = Self.permissionKind(capability) else { continue }
             // A remembered allow of a device macOS must authorize stays with Brk (asking), so the OS check runs first.
             let allowed: Bool? = switch remembered[capability] { case .allow?: capability.needsOSAuthorization ? nil : true; case .deny?: false; default: nil }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+                print("[site-permission] chromium store \(capability.rawValue) \(requesting.value) in \(top.value) = \(allowed.map { $0 ? "allow" : "block" } ?? "ask")")
+            }
             browser.setPermission(kind, requesting: requesting.url, topLevel: top.url, allowed: allowed)
         }
     }
@@ -308,11 +331,13 @@ extension ChromePage {
 
     func cancelPermissions(frame: String? = nil) {
         let ids = permissionRequests.filter { frame == nil || $0.value.prompt.frame == nil || $0.value.prompt.frame == frame }.map(\.key)
+        if !ids.isEmpty, ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] cancel frame=\(frame ?? "all") ids=\(ids)\n" + Thread.callStackSymbols.prefix(8).joined(separator: "\n")) }
         for id in ids { answerPermission(id, .ask) }
     }
     func browser(_ b: CefBrowser, willNavigateFrame identifier: String) { cancelPermissions(frame: identifier) }
     func browser(_ b: CefBrowser, dismissedPermission promptID: UInt64) {
         let ids = permissionRequests.filter { $0.value.nativeID == promptID }.map(\.key)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-permission] chromium dismissed native=\(promptID) open=\(ids)") }
         for id in ids {
             guard let owner = permissionRequests.removeValue(forKey: id) else { continue }
             engine.dismissPermission(id)

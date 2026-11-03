@@ -151,6 +151,7 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
             let document = snapshot.observations[prompt.target.page]?.document
             let current = document == .ready(prompt.target.document) || (prompt.allowLoading && document == .loading(prompt.target.document))
             guard !current || !snapshot.pages.contains(where: { $0.id == prompt.target.page && $0.context == prompt.target.context }) else { continue }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-prompt] validate dismisses \(id) document=\(String(describing: document)) current=\(current)") }
             dismiss(id)
         }
     }
@@ -200,6 +201,7 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
             let own = popover?.contentViewController?.view.window
             let escape = event.type == .keyDown && event.keyCode == 53 && (event.window === own || event.window === window)
             guard escape || event.type != .keyDown && event.window === window else { return event }
+            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { print("[site-prompt] \(escape ? "escape" : "outside click") dismisses \(id)") }
             self?.dismiss(id)
             return escape ? nil : event
         }
@@ -214,6 +216,7 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         guard let popover = notification.object as? NSPopover, let id = popovers.first(where: { $0.value === popover })?.key else { return }
         _ = release(id)
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, prompts[id] != nil { print("[site-prompt] popover closed unanswered \(id)") }
         prompts.removeValue(forKey: id)?.cancel()
     }
     /// The open permission prompt's window for a browser window, for the control socket.

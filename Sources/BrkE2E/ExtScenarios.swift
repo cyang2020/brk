@@ -12,6 +12,8 @@ enum ExtScenarios {
         Scenario("Ext-blocking", "main-frame, cross-origin frame, redirect and a selected EasyList file", cefOnly: "CEF IO request filtering", blocking),
         Scenario("Ext-media", "audible WebAudio, suspended WebAudio and hidden media scheduling", cefOnly: "Chromium lifecycle", media),
         Scenario("Ext-controls", "origin/profile readback, copy and local link export", cefOnly: "native site controls", controls),
+        Scenario("Ext-shortcut-physical", "window-server key events edit the shortcut field and fire the extension command",
+                 cefOnly: "CEF extension commands", physicalShortcut),
     ]
     static func js(_ text: String) -> String {
         String(decoding: try! JSONSerialization.data(withJSONObject: [text]), as: UTF8.self).dropFirst().dropLast().description
@@ -128,6 +130,38 @@ enum ExtScenarios {
         try waitForTitle(app, item, "extension-count:1")
         try app.dispatch(.settings(.shortcuts(.reset(.newTab))))
         app.note("Owned AppKit focus/press actions plus real key input edited the actual fields and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap. Synthetic physical utility-panel clicks remain a separate verification limitation.")
+    }
+
+    /// The shortcut editor's text and the shortcut itself arrive as keyboard events from the window server
+    /// (`PhysicalKeys`), not through the control socket's in-process press.
+    @Sendable static func physicalShortcut(_ app: AppUnderTest) throws {
+        let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
+        guard let pid = app.hello?.pid, let owner = app.window else { throw Check(description: "app identity missing") }
+        let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command
+        try app.dispatch(.site(.nativeExtensions))
+        try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
+        try control(app, field, .focus)
+        PhysicalKeys.press(KeyChord([.command], .a), pid: pid)
+        PhysicalKeys.type("cmd+shift+u", pid: pid)
+        app.sleep(0.3)
+        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
+        try app.waitUntil("Chromium reads back the typed shortcut") {
+            if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
+            return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
+        }
+        _ = try app.screenshotSiteControls("physical-shortcut")
+        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
+        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
+        try app.waitForPageInput(PageID(window: owner, item: item), at: app.site.url("site-policy.html"))
+        try app.waitUntil("extension listener ready") {
+            try SitePolicyScenarios.evaluate(app, item, "document.title='shortcut-ready:'+document.documentElement.getAttribute('data-brk-extension')")
+            return try tab(item, in: app.view())?.title == "shortcut-ready:installed"
+        }
+        _ = try app.send(.activate(window: owner))
+        app.sleep(0.3)
+        PhysicalKeys.press(KeyChord([.command, .shift], .u), pid: pid)
+        try waitForTitle(app, item, "extension-command:fixture-command")
+        app.note("The editor field got focus through AppKit; ⌘A, the text cmd+shift+u and the shortcut ⇧⌘U itself were keyboard events posted by the window server to Brk's process (CGEvent.postToPid), so they took AppKit's full event path into the field editor and into Chromium, which ran the extension command.")
     }
 
     @Sendable static func loading(_ app: AppUnderTest) throws {

@@ -47,6 +47,8 @@ public protocol CefBrowserDelegate: AnyObject {
     func browser(_ b: CefBrowser, didChangeFavicon urls: [URL])
     /// The page entered or exited HTML fullscreen.
     func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool)
+    /// The page started or stopped capturing from a camera or microphone (CEF's OnMediaAccessChange).
+    func browser(_ b: CefBrowser, didChangeMediaAccess camera: Bool, microphone: Bool)
     /// The page wants to open a popup window. Defaults to ``CefPopupDecision/allow``.
     ///
     /// - Note: Prefer ``browser(_:decideWindowOpenFor:)``, which carries the
@@ -209,6 +211,7 @@ extension CefBrowserDelegate {
     public func browser(_ b: CefBrowser, didFailLoad code: Int, errorText: String, failedURL: String) {}
     public func browser(_ b: CefBrowser, didChangeFavicon urls: [URL]) {}
     public func browser(_ b: CefBrowser, didChangeFullscreen isFullscreen: Bool) {}
+    public func browser(_ b: CefBrowser, didChangeMediaAccess camera: Bool, microphone: Bool) {}
     public func browser(_ b: CefBrowser, requestsPopupFor url: URL?) -> CefPopupDecision { .allow }
     public func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction {
         // Bridge the legacy popup decision so apps that only adopted
