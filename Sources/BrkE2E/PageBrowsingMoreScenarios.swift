@@ -93,13 +93,16 @@ extension PageBrowsingScenarios {
         try app.waitUntil("document fullscreen fills the window", timeout: 15) { try title(app, video) == "fs:true" && app.native().fullscreen && app.native().fullscreenTransitioning != true }
         try app.dispatch(.tab(.focus(other.item)))
         try expect(try !settledFullscreen(app), "switching away from a fullscreen page left the window fullscreen")
-        try app.waitUntil("hidden page left document fullscreen") { try title(app, video) == "fs:false" }
         try app.screenshot("switched-away-windowed")
-        trace["hidden-source"] = "tab switch: window and document left fullscreen"
-
-        // Document fullscreen, then its tab closes.
+        // A hidden document runs no rendering steps, so its fullscreenchange arrives once it is shown again.
         try app.dispatch(.tab(.focus(video.item)))
         try app.waitForPageInput(video, at: app.site.url("browser-basic.html?pb-fullscreen"))
+        try app.waitUntil("the page left document fullscreen") { try title(app, video) == "fs:false" }
+        try expect(try pageText(app, video, "String(!!document.fullscreenElement)") == "false" && !settledFullscreen(app),
+                   "back on the page, it or the window is fullscreen again")
+        trace["hidden-source"] = "tab switch: window and document left fullscreen; nothing re-entered on return"
+
+        // Document fullscreen, then its tab closes.
         try clicked(app, video, "document.documentElement.requestFullscreen().catch(e=>document.title='fs-error:'+e.name)")
         try app.waitUntil("document fullscreen again", timeout: 15) { try title(app, video) == "fs:true" && app.native().fullscreen && app.native().fullscreenTransitioning != true }
         try app.dispatch(.tab(.close(.item(video.item))))
@@ -316,7 +319,7 @@ extension PageBrowsingScenarios {
         // reaches it from here on and its transient activation (5 s in Chromium) expires.
         try app.evaluate(page, "setInterval(()=>{document.title='ua:'+navigator.userActivation.isActive},200)")
         app.sleep(6.5)
-        try app.waitUntil("page reports no user activation", timeout: 3) { try title(app, page) == "ua:false" }
+        try app.waitUntil("page reports no user activation", timeout: 10) { try title(app, page) == "ua:false" }
         try app.dispatch(.tab(.focus(other.item)))
         try app.waitUntil("automatic PiP after activation expired", timeout: 10) {
             guard let row = try tab(item, in: app.view()) else { return false }

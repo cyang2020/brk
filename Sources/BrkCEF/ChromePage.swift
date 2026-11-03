@@ -485,12 +485,34 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
+    /// The Chrome runtime opens a popup window at its default size in the screen's corner, ignoring the window
+    /// features. The page asked for a content size and a screen position (top-left, points): the window is sized
+    /// so its web content gets exactly that size, the toolbar and title bar on top of it.
+    private func placePopup(_ popup: CefBrowser, _ features: CefPopupFeatures, attempt: Int) {
+        guard features.width != nil || features.height != nil || features.x != nil || features.y != nil else { return }
+        guard let window = popup.nativeView?.window, let content = window.contentView,
+              let web = EmbeddedSurface.find("WebContentsViewCocoa", in: content), web.frame.width > 0 else {
+            if attempt < 40 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak popup] in
+                if let self, let popup { self.placePopup(popup, features, attempt: attempt + 1) } } }
+            return
+        }
+        let chrome = CGSize(width: window.frame.width - web.frame.width, height: window.frame.height - web.frame.height)
+        let size = CGSize(width: CGFloat(features.width ?? Int(web.frame.width)) + chrome.width,
+                          height: CGFloat(features.height ?? Int(web.frame.height)) + chrome.height)
+        let top = NSScreen.screens.first?.frame.maxY ?? window.frame.maxY
+        let left = features.x.map(CGFloat.init) ?? window.frame.minX
+        let originY = features.y.map { top - CGFloat($0) - size.height } ?? (window.frame.maxY - size.height)
+        window.setFrame(NSRect(x: left, y: originY, width: size.width, height: size.height), display: true)
+        auxiliaryEvents.append("placed:\(window.windowNumber):\(Int(window.frame.minX)),\(Int(top - window.frame.maxY)),\(Int(web.frame.width))x\(Int(web.frame.height))")
+    }
+
     func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {
         engine.auxiliaryCountChanged(self, count: count)
         observePictureInPictureAuxiliaries()
     }
     func browser(_ b: CefBrowser, didCreateAuxiliary auxiliary: CefBrowser, kind: CefAuxiliaryKind) {
         guard engine.isLive(self) else { auxiliary.close(force: true); return }
+        if case .popup(let request) = kind, request.disposition == .newPopup { placePopup(auxiliary, request.features, attempt: 0) }
         if case .devTools = kind { toolsBrowser = auxiliary; selectDeveloperPanel() }
         observePictureInPictureAuxiliary(auxiliary, kind: kind)
     }
@@ -577,7 +599,7 @@ final class ChromePage: CefBrowserDelegate {
             else if press.chord.modifiers == [.command, .shift] { browser.redo(); handled = true }
         }
         if isBeforePage { presses.beforePage(press, id: pressID, handled: handled, at: now) }
-        if press.phase == .down, !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
+        if press.phase == .down, result.shortcut || !press.chord.modifiers.isDisjoint(with: [.command, .control]) || press.chord.key == .escape {
             recordKey(PageKeyReceipt(stage: isBeforePage ? "pre" : "post", chord: press.chord.description,
                                      press: pressID.raw, handled: handled, shortcut: result.shortcut, action: result.action, isRepeat: press.isRepeat))
             log.notice("cef.\(isBeforePage ? "pre" : "post", privacy: .public) page \(self.id.description, privacy: .public) \(press.chord.description, privacy: .public) native=\(event.nativeKeyCode, privacy: .public) editable=\(event.isEditableFieldFocused, privacy: .public) \(pressID.description, privacy: .public) consumed=\(handled, privacy: .public)")
