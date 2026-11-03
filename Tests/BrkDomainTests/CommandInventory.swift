@@ -59,6 +59,7 @@ enum CommandInventory {
         .settings(.autoArchive(.sevenDays)), .settings(.general(.warnBeforeQuitting(true))), .settings(.profile(.default, .searchSuggestions(false))),
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
+        .settings(.openBrowserPage(.passwords, profile: .default)),
         .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
@@ -350,6 +351,7 @@ enum CommandInventory {
             case .advanced: "advanced"
             case .openPane: "openPane"
             case .closeWindow: "closeWindow"
+            case .openBrowserPage: "openBrowserPage"
             }
         case .library(let c):
             switch c {

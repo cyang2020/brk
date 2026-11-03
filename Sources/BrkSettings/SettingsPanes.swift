@@ -5,250 +5,189 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
-// The six panes. Each shows what anatomy-m 4.2 lists for the pane and the model has; options whose features are
-// later waves (ad blocker, previews, translation, auto-update, the global Little Arc hotkey, Default Document App,
-// Clear Browsing Data, the capture and ninth-tab switches) are not shown until they exist.
+// The General, Links and Advanced panes, laid out as Arc 1.170 shows them (P38-a, P38-f, P38-g): rows in rounded
+// cards with switches. What Brk has and Arc's pane does not show stays reachable one level down: the "…Settings…"
+// buttons open a sub-page in the same pane.
 //
 // Field names (`settings-field-<name>`) are the ones the control socket clicks; per-profile fields end in the
 // profile id.
 
 private var S: SettingsMetrics { Metrics.settings }
+private var C: SettingsCardMetricsTable { CardMetrics }
 
 // MARK: - General
 
 struct GeneralPane: View {
     let context: PaneContext
+    @State private var showingPreviews = false
     private var s: SettingsSnapshot { context.settings }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !context.isDefaultBrowser && !s.general.defaultBrowserPromptDismissed {
-                DefaultBrowserNotice(dispatch: context.dispatch)
-                SettingsDivider()
-            }
-            SettingsSection {
-                SettingsNote(text: SettingsCopy.profileSettingsHint)
-                SettingsButton(title: SettingsCopy.profileSettingsButton, field: "profileSettings") {
-                    context.dispatch(.settings(.openPane(.profiles)))
-                }
-            }
-            SettingsDivider()
-            SettingsSection {
-                SettingsCheckbox(title: SettingsCopy.warnBeforeQuitting, field: "warnBeforeQuitting", isOn: s.general.warnBeforeQuitting) {
+        CardPane {
+            // Arc's first card also has "Automatically update my Arc"; Brk's updater is a later wave.
+            SettingsCard {
+                SwitchRow(title: SettingsCopy.warnBeforeQuitting, field: "warnBeforeQuitting", isOn: s.general.warnBeforeQuitting) {
                     context.dispatch(.settings(.general(.warnBeforeQuitting($0))))
                 }
             }
-            SettingsDivider()
-            SettingsSection {
-                SettingsButton(title: "Sidebar Data: Import, Sync and Export", field: "sidebarData") {
-                    context.dispatch(.sidebarData(.syncSettings))
+            SettingsCard {
+                ButtonRow(title: SettingsCopy.previews, button: SettingsCopy.previewsSettingsButton, field: "previewsSettings") {
+                    showingPreviews = true
                 }
-                SettingsNote(text: s.sidebarData?.status ?? "Not connected.")
-                SettingsButton(title: "Import an exported browser file…", field: "importBrowserFile") {
-                    context.dispatch(.sidebarData(.importFile))
-                }
-                SettingsButton(title: "Open Brk 101", field: "brk101") {
-                    context.dispatch(.sidebarData(.tour))
+                CardDivider()
+                CardRow(height: C.twoLineRowHeight.value) {
+                    CardLabel(SettingsCopy.profileSettingsHint).frame(maxWidth: C.wrappedLabelWidth.value, alignment: .leading)
+                } trailing: {
+                    SettingsButton(title: SettingsCopy.profileSettingsButton, field: "profileSettings") {
+                        context.dispatch(.settings(.openPane(.profiles)))
+                    }
                 }
             }
-            SettingsDivider()
-            SettingsSection(.text(SettingsCopy.appearanceLabel)) {
-                Text(SettingsCopy.webAppearance)
-                SettingsPopUp(field: "webAppearance", entries: WebAppearance.allCases.map { .option(SettingsCopy.appearance($0), $0) },
-                              selected: s.general.webAppearance) { context.dispatch(.settings(.general(.webAppearance($0)))) }
-                    .frame(width: S.popUpWidth.value)
-            }
+        }
+        .sheet(isPresented: $showingPreviews) {
+            PreviewsSheet(context: context) { showingPreviews = false }
         }
     }
 }
 
-/// " is not your default web browser." with the two ways out (Arc: MakeDefaultView). Shown until the app is the
-/// default browser or the notice is dismissed.
-struct DefaultBrowserNotice: View {
-    let dispatch: Dispatch
-
-    var body: some View {
-        HStack(spacing: S.columnSpacing.value) {
-            SettingsLabel(text: SettingsCopy.notDefaultBrowser, field: "defaultBrowserNotice")
-            Spacer(minLength: 0)
-            SettingsButton(title: SettingsCopy.dismissNotice, field: "dismissDefaultBrowserPrompt") {
-                dispatch(.settings(.general(.dismissDefaultBrowserPrompt)))
-            }
-            SettingsButton(title: SettingsCopy.setAsDefaultBrowser, field: "setAsDefaultBrowser") { dispatch(.app(.setAsDefaultBrowser)) }
-        }
-        .padding(S.noticePadding.value)
-        .background(RoundedRectangle(cornerRadius: S.noticeCornerRadius.value, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: S.noticeCornerRadius.value, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
-    }
-}
-
-// MARK: - Max
-
-struct MaxPane: View {
+/// "Previews Settings…" (P13-settings-arc.png): Arc's sheet "Show Arc Previews:" with what previews on hover and a
+/// blue Done. Arc lists seven sources (its folders and six sites' own previews); Brk previews folders, Pinned and
+/// Favorited tabs and links in one switch, and Max's 5-Second Previews in another, so those are the boxes here.
+struct PreviewsSheet: View {
     let context: PaneContext
-    private var max: MaxSnapshot { context.settings.max }
+    let done: @MainActor () -> Void
+    @State private var explaining = false
+    private var tabs: TabPreferenceSnapshot { context.settings.tabPreferences }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsSection {
-                SettingsNote(text: SettingsCopy.maxIntro)
-            }
-            SettingsDivider()
-            SettingsSection(.text(SettingsCopy.aiProvider)) {
-                SettingsPopUp(field: "aiProvider", entries: AIProviderChoice.allCases.map { .option(SettingsCopy.provider($0), $0) },
-                              selected: max.settings.provider) { context.dispatch(.settings(.max(.provider($0)))) }
-                    .frame(width: S.popUpWidth.value)
-                SettingsLabel(text: SettingsCopy.detected(max.detected, active: max.active), field: "aiStatus", secondary: true)
-                SettingsNote(text: SettingsCopy.maxPrivacy)
-            }
-            SettingsDivider()
-            SettingsSection(.text(SettingsCopy.maxFeatures)) {
-                SettingsCheckbox(title: SettingsCopy.renamePinnedTabs, field: "renamePinnedTabs", isOn: max.settings.renamePinnedTabs) {
-                    context.dispatch(.settings(.max(.renamePinnedTabs($0))))
+            Text(SettingsCopy.showPreviews).font(.system(size: C.fontSize.value, weight: .bold))
+            Text(SettingsCopy.previewsExplanation).font(SettingsStyle.font).foregroundStyle(ArtColor.rgb(0x4F5669))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, C.sheetTitleGap.value)
+            LinkedText(parts: [.link(SettingsCopy.learnMore, id: "previews")], color: SettingsStyle.link) { _ in explaining = true }
+                .popover(isPresented: $explaining) {
+                    Text(SettingsCopy.previewsDetail).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
+                        .frame(width: C.popoverWidth.value).padding()
                 }
-                SettingsNote(text: SettingsCopy.renamePinnedTabsDescription, underCheckbox: true)
-                SettingsCheckbox(title: SettingsCopy.tidyTabs, field: "tidyTabs", isOn: max.settings.tidyTabs) {
-                    context.dispatch(.settings(.max(.tidyTabs($0))))
+            VStack(alignment: .leading, spacing: C.sheetRowGap.value) {
+                SettingsCheckbox(title: SettingsCopy.folderAndTabPreviews, field: "tabHoverPreviews", isOn: tabs.hoverPreviews, size: .large) {
+                    context.dispatch(.tabTools(.preferences(includeFavorites: tabs.includeFavoritesInNumbers, previews: $0)))
                 }
-                SettingsNote(text: SettingsCopy.tidyTabsDescription, underCheckbox: true)
-                ForEach(AIFeature.allCases, id: \.self) { feature in
-                    SettingsCheckbox(title: feature.title, field: feature.rawValue, isOn: max.settings.enabled(feature)) {
-                        context.dispatch(.settings(.max(.feature(feature, $0))))
+                SettingsCheckbox(title: SettingsCopy.maxLinkPreviews, field: "previews-\(AIFeature.linkPreviews.rawValue)",
+                                 isOn: context.settings.max.settings.enabled(.linkPreviews), size: .large) {
+                    context.dispatch(.settings(.max(.feature(.linkPreviews, $0))))
+                }
+            }
+            .controlSize(.large)
+            .padding(.top, C.sheetListTop.value)
+            HStack {
+                Spacer()
+                Button(action: done) {
+                    HStack(spacing: C.controlGap.value) {
+                        Text(SettingsCopy.done)
+                        Image(systemName: "return").font(.system(size: C.fontSize.value, weight: .semibold))
+                            .padding(.horizontal, C.keyGlyphPadding.value)
+                            .background(RoundedRectangle(cornerRadius: C.keyGlyphRadius.value, style: .continuous).strokeBorder(Color.white.opacity(0.6)))
                     }
                 }
-                SettingsNote(text: "Use the Tabs menu or Command Bar to ask, organize, find links, browse selected URLs or translate. Hover a link deliberately for a short preview. The tool receives requested page text from regular windows; private windows are excluded.")
-                SettingsButton(title: "Reset Never-Translate Choices", field: "resetTranslationExclusions") { context.dispatch(.settings(.max(.resetTranslationExclusions))) }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: C.doneRadius.value))
+                .tint(ArtColor.maxInk)
+                .controlSize(.extraLarge)
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier(ViewID.settingsField("previewsDone").identifier)
             }
+            .padding(.top, C.sheetDoneTop.value)
         }
+        .padding(.horizontal, C.sheetPadding.value)
+        .padding(.top, C.sheetTop.value)
+        .padding(.bottom, C.sheetBottom.value)
+        // Arc's seven boxes make its sheet 372 points tall; Brk's two make it shorter, the width stays Arc's.
+        .frame(width: C.sheetSize.value.width, alignment: .topLeading)
+        .background(ArtColor.rgb(0xFBFBFF))
     }
 }
-
-/// One profile's own settings (Arc: `ProfilePreferences.State`).
-struct ProfileSettingsForm: View {
-    let context: PaneContext
-    let row: ProfileSettingsRow
-    private var id: ProfileID { row.profile.id }
-    private var settings: ProfileSettings { row.settings }
-    @State private var clearingConfirmation = false
-    @State private var clearKinds: Set<SiteDataKind> = [.cookies, .cache, .history]
-
-    private func send(_ setting: ProfileSetting) { context.dispatch(.settings(.profile(id, setting))) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: S.sectionSpacing.value) {
-            SettingsSection(.text("Privacy — " + row.profile.name)) {
-                SettingsNote(text: "These controls affect only this profile, across all its Spaces. Profile settings, tabs, extensions and downloaded files are kept.")
-                ForEach([SiteDataKind.cookies, .cache, .history], id: \.self) { kind in
-                    Toggle(kind == .cache ? "HTTP cache" : kind == .history ? "Brk browsing history" : "Cookies (including HttpOnly and domain cookies)", isOn: Binding(get: { clearKinds.contains(kind) }, set: { on in
-                        if on { clearKinds.insert(kind) } else { clearKinds.remove(kind) }
-                    }))
-                }
-                SettingsNote(text: "Profile-wide localStorage, IndexedDB, Cache Storage and service-worker removal is unavailable. To remove those, open each website and use Website Controls → Site storage. HTTP cache removal always covers this entire profile.")
-                SettingsButton(title: "Clear selected browsing data…", field: "clearProfileData-\(id)") { clearingConfirmation = true }
-                    .disabled(clearKinds.isEmpty || row.clearingData == true)
-                if row.clearingData == true { ProgressView("Clearing this profile’s data…") }
-                if let result = row.clearDataResult {
-                    Text((result.error.map { "Could not finish: " + $0 + "\n" } ?? "") + "Cleared: " + (result.completed.isEmpty ? "none" : result.completed.map(\.rawValue).sorted().joined(separator: ", ")))
-                        .font(.caption).textSelection(.enabled)
-                }
-            }
-            SettingsSection(.text(SettingsCopy.autoArchive)) {
-                SettingsPopUp(field: "autoArchive-\(id)", entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0), $0) },
-                              selected: settings.autoArchive) { send(.autoArchive($0)) }
-                    .frame(width: S.popUpWidth.value)
-            }
-            SettingsSection(.text(SettingsCopy.searchEngine)) {
-                SettingsPopUp(field: "searchEngine-\(id)", entries: (context.settings.engines.map { ($0.name, $0.id) } + (settings.siteSearchEngines ?? []).map { ($0.name, $0.id) }).map { .option($0.0, $0.1) },
-                              selected: settings.searchEngine) { send(.searchEngine($0)) }
-                    .frame(width: S.popUpWidth.value)
-                SettingsCheckbox(title: SettingsCopy.searchSuggestions, field: "searchSuggestions-\(id)", isOn: settings.searchSuggestions) {
-                    send(.searchSuggestions($0))
-                }
-            }
-            SiteSearchEditor(profile: id, engines: settings.siteSearchEngines ?? [], dispatch: context.dispatch)
-            SettingsSection(.text(SettingsCopy.downloadLocation)) {
-                SettingsPopUp(field: "downloadLocation-\(id)", entries: downloadEntries,
-                              selected: settings.promptForDownloadLocation ? DownloadChoice.prompt : .folder) { choice in
-                    send(.promptForDownloadLocation(choice == .prompt))
-                }
-                .frame(width: S.popUpWidth.value)
-            }
-
-        }
-        .alert("Clear browsing data for \(row.profile.name)?", isPresented: $clearingConfirmation) {
-            Button("Clear selected data", role: .destructive) { context.dispatch(.site(.clearProfile(id, clearKinds))) }.keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Remove \(clearKinds.map(\.rawValue).sorted().joined(separator: ", ")) from this profile only. Active downloads and document output must finish first. This does not delete the profile or its origin storage.")
-        }
-    }
-
-    /// Arc's three kinds of item: the folder, ask each time, and "Other…" (tags `arc.folder`,
-    /// `arc.promptForDownload`, `arc.other`).
-    private var downloadEntries: [PopUpEntry<DownloadChoice>] {
-        let folder = settings.downloadsDirectory
-        let title = folder.map { URL(fileURLWithPath: $0).lastPathComponent } ?? SettingsCopy.downloadsFolder
-        let icon = folder.map { NSWorkspace.shared.icon(forFile: $0) } ?? NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
-        icon?.size = CGSize(width: S.menuIconSize.value, height: S.menuIconSize.value)
-        var entries: [PopUpEntry<DownloadChoice>] = [
-            .option(title, .folder, image: icon),
-            .option(SettingsCopy.promptForDownloadLocation, .prompt),
-            .separator,
-            .action(SettingsCopy.otherFolder) { [context, settings, id] in
-                guard let path = context.chooseFolder(settings.downloadsDirectory) else { return }
-                context.dispatch(.settings(.profile(id, .downloadsDirectory(path))))
-                if settings.promptForDownloadLocation { context.dispatch(.settings(.profile(id, .promptForDownloadLocation(false)))) }
-            },
-        ]
-        if folder != nil {
-            entries.append(.action(SettingsCopy.useDownloadsFolder) { [context, settings, id] in
-                context.dispatch(.settings(.profile(id, .downloadsDirectory(nil))))
-                if settings.promptForDownloadLocation { context.dispatch(.settings(.profile(id, .promptForDownloadLocation(false)))) }
-            })
-        }
-        return entries
-    }
-}
-
-enum DownloadChoice: Hashable { case folder, prompt }
 
 // MARK: - Links
 
 struct LinksPane: View {
     let context: PaneContext
+    @State private var showingRoutes = false
     private var links: LinkSettings { context.settings.links }
 
     private func send(_ setting: LinkSetting) { context.dispatch(.settings(.links(setting))) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            LinksRoutesEditor(routes: context.settings.routes, spaces: context.settings.spaces,
-                              links: links, dispatch: context.dispatch)
-            SettingsDivider()
-            SettingsSection(.text(SettingsCopy.peekLabel)) {
-                SettingsNote(text: SettingsCopy.peekDescription)
-                SettingsCheckbox(title: SettingsCopy.peekFromPinnedAndFavorites, field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) {
-                    send(.peekFromPinnedAndFavorites($0))
+        if showingRoutes {
+            CardPane {
+                Subpage(title: LinksRoutesCopy.title, back: { showingRoutes = false }) {
+                    SettingsCard {
+                        LinksRoutesEditor(routes: context.settings.routes, spaces: context.settings.spaces, links: links, dispatch: context.dispatch)
+                            .padding(C.rowPadding.value)
+                    }
                 }
-                SettingsNote(text: SettingsCopy.peekNote, underCheckbox: true)
-                SettingsCheckbox(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
             }
-            SettingsDivider()
-            SettingsSection(.text(SettingsCopy.littleArcLabel)) {
-                SettingsNote(text: SettingsCopy.littleArcDescription)
-                SettingsCheckbox(title: SettingsCopy.externalLinksInLittleArc, field: "externalLinksInLittleArc", isOn: links.externalLinksInLittleArc) {
-                    send(.externalLinksInLittleArc($0))
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                LittleBrkBanner()
+                VStack(alignment: .leading, spacing: 0) {
+                    Intro(text: SettingsCopy.littleArcDescription).padding(.top, C.introTop.value)
+                    SettingsCard {
+                        SwitchRow(title: SettingsCopy.globalLittleArcShortcut(context.settings.shortcuts), field: "globalLittleArcShortcut",
+                                  isOn: links.globalLittleArcShortcut != false) { send(.globalLittleArcShortcut($0)) }
+                        CardDivider()
+                        SwitchRow(title: SettingsCopy.optionCommandClickLittleArc, field: "optionCommandClickLittleArc",
+                                  isOn: links.optionCommandClickLittleArc) { send(.optionCommandClickLittleArc($0)) }
+                        CardDivider()
+                        SwitchRow(title: SettingsCopy.externalLinksInLittleArc, field: "externalLinksInLittleArc",
+                                  isOn: links.externalLinksInLittleArc) { send(.externalLinksInLittleArc($0)) }
+                        CardDivider()
+                        CardRow(height: C.popUpRowHeight.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
+                            SettingsPopUp(field: "littleArcAutoArchive",
+                                          entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: LinkSettings.default.littleArcAutoArchive), $0) },
+                                          selected: links.littleArcAutoArchive, width: .selected(minimum: 0)) { send(.littleArcAutoArchive($0)) }
+                                .padding(.trailing, C.popUpTrailing.value)
+                        }
+                    }
+                    .padding(.top, C.introToCard.value)
+                    Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
+                    Intro(text: SettingsCopy.peekDescription)
+                    SettingsCard {
+                        SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
+                        CardDivider()
+                        CardRow(height: C.twoLineRowHeight.value) {
+                            VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                                CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
+                                Text(SettingsCopy.peekNote).font(SettingsStyle.font.italic()).foregroundStyle(SettingsStyle.note)
+                            }
+                        } trailing: {
+                            SettingsSwitch(field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) { send(.peekFromPinnedAndFavorites($0)) }
+                        }
+                    }
+                    .padding(.top, C.introToCard.value)
+                    SettingsCard {
+                        ButtonRow(title: SettingsCopy.routesSummary(context.settings.routes.count), button: SettingsCopy.airTrafficControlButton,
+                                  field: "airTrafficControl") { showingRoutes = true }
+                    }
+                    .padding(.top, C.cardSpacing.value)
                 }
-                SettingsCheckbox(title: SettingsCopy.optionCommandClickLittleArc, field: "optionCommandClickLittleArc",
-                                 isOn: links.optionCommandClickLittleArc) { send(.optionCommandClickLittleArc($0)) }
-                HStack(alignment: .firstTextBaseline, spacing: S.columnSpacing.value) {
-                    Text(SettingsCopy.littleArcAutoArchive)
-                    SettingsPopUp(field: "littleArcAutoArchive", entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0), $0) },
-                                  selected: links.littleArcAutoArchive) { send(.littleArcAutoArchive($0)) }
-                        .frame(width: S.popUpWidth.value)
-                }
+                .frame(width: S.contentWidth.value, alignment: .leading)
+                .padding(.horizontal, S.horizontalPadding.value)
+                .padding(.bottom, C.paneTop.value)
             }
         }
+    }
+}
+
+/// A paragraph above a card, inset like the card's labels.
+struct Intro: View {
+    let text: String
+
+    var body: some View {
+        Text(text).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text).fixedSize(horizontal: false, vertical: true)
+            .lineSpacing(C.introLineSpacing.value)
+            .padding(.horizontal, C.rowPadding.value)
     }
 }
 
@@ -256,37 +195,101 @@ struct LinksPane: View {
 
 struct AdvancedPane: View {
     let context: PaneContext
+    @State private var showingMore = false
     private var a: AdvancedSettings { context.settings.advanced }
 
-    private func box(_ title: String, _ field: String, _ value: Bool, _ setting: @escaping (Bool) -> AdvancedSetting) -> SettingsCheckbox {
-        SettingsCheckbox(title: title, field: field, isOn: value) { context.dispatch(.settings(.advanced(setting($0)))) }
+    private func row(_ symbol: String, _ color: NSColor, _ title: String, _ field: String, _ value: Bool, note: String? = nil,
+                     _ setting: @escaping (Bool) -> AdvancedSetting) -> some View {
+        CardRow(height: note == nil ? C.iconRowHeight.value : C.iconTwoLineRowHeight.value) {
+            HStack(spacing: C.rowIconGap.value) {
+                RowIcon(symbol: symbol, color: Color(nsColor: color))
+                VStack(alignment: .leading, spacing: 0) {
+                    CardLabel(title)
+                    if let note { Text(note).font(.system(size: C.noteFontSize.value)).foregroundStyle(SettingsStyle.note) }
+                }
+            }
+        } trailing: {
+            SettingsSwitch(field: field, isOn: value) { context.dispatch(.settings(.advanced(setting($0)))) }
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsSection(.symbol(SettingsCopy.advancedWebSymbol)) {
-                box(SettingsCopy.boostsEnabled, "boostsEnabled", a.boostsEnabled) { .boostsEnabled($0) }
-                box(SettingsCopy.themeToCSS, "themeToCSS", a.themeToCSS) { .themeToCSS($0) }
-                box(SettingsCopy.autoPictureInPicture, "autoPictureInPicture", a.autoPictureInPicture) { .autoPictureInPicture($0) }
-            }
-            SettingsDivider()
-            SettingsSection(.symbol(SettingsCopy.advancedWindowSymbol)) {
-                box(SettingsCopy.windowDraggingFromPages, "windowDraggingFromPages", a.windowDraggingFromPages) { .windowDraggingFromPages($0) }
-                SettingsCheckbox(title: "Show tab, folder and webpage link previews", field: "tabHoverPreviews", isOn: context.settings.tabPreferences.hoverPreviews) {
-                    context.dispatch(.tabTools(.preferences(includeFavorites: context.settings.tabPreferences.includeFavoritesInNumbers, previews: $0)))
+        CardPane(spacing: C.advancedCardSpacing.value) {
+            if showingMore {
+                Subpage(title: SettingsCopy.moreSettingsTitle, back: { showingMore = false }) {
+                    MoreSettings(context: context)
                 }
-                SettingsCheckbox(title: "Include Favorites in numbered tab shortcuts", field: "numberedFavorites", isOn: context.settings.tabPreferences.includeFavoritesInNumbers) {
-                    context.dispatch(.tabTools(.preferences(includeFavorites: $0, previews: context.settings.tabPreferences.hoverPreviews)))
+            } else {
+                SettingsCard {
+                    row("speaker.wave.2.fill", .systemBlue, SettingsCopy.soundEffects, "soundEffects", a.soundEffects) { .soundEffects($0) }
+                    CardDivider()
+                    row("hand.tap.fill", .systemBlue, SettingsCopy.hapticsOnReorder, "hapticsOnReorder", a.hapticsOnReorder) { .hapticsOnReorder($0) }
                 }
-                box(SettingsCopy.sharedQuotes, "sharedQuotes", a.sharedQuotes) { .sharedQuotes($0) }
-                box(SettingsCopy.showFullURLInToolbar, "showFullURLInToolbar", a.showFullURLInToolbar) { .showFullURLInToolbar($0) }
-                box(SettingsCopy.restoreWindowsOnLaunch, "restoreWindowsOnLaunch", a.restoreWindowsOnLaunch) { .restoreWindowsOnLaunch($0) }
+                SettingsCard {
+                    row("macwindow", .systemGreen, SettingsCopy.restoreWindowsOnLaunch, "restoreWindowsOnLaunch", a.restoreWindowsOnLaunch) { .restoreWindowsOnLaunch($0) }
+                    CardDivider()
+                    row("rectangle.topthird.inset.filled", .systemGreen, SettingsCopy.windowDraggingFromPages, "windowDraggingFromPages",
+                        a.windowDraggingFromPages) { .windowDraggingFromPages($0) }
+                    CardDivider()
+                    row("ellipsis.rectangle", .systemRed, SettingsCopy.showFullURLInToolbar, "showFullURLInToolbar", a.showFullURLInToolbar) { .showFullURLInToolbar($0) }
+                    CardDivider()
+                    row("quote.opening", .systemRed, SettingsCopy.sharedQuotes, "sharedQuotes", a.sharedQuotes, note: SettingsCopy.sharedQuotesNote) { .sharedQuotes($0) }
+                }
+                SettingsCard {
+                    row("play.rectangle", .systemPurple, SettingsCopy.autoPictureInPicture, "autoPictureInPicture", a.autoPictureInPicture) { .autoPictureInPicture($0) }
+                    CardDivider()
+                    row("paintpalette.fill", .systemPurple, SettingsCopy.themeToCSS, "themeToCSS", a.themeToCSS) { .themeToCSS($0) }
+                    CardDivider()
+                    row("paintbrush.pointed.fill", .systemPurple, SettingsCopy.boostsEnabled, "boostsEnabled", a.boostsEnabled) { .boostsEnabled($0) }
+                }
+                HStack(spacing: C.buttonGap.value) {
+                    SettingsButton(title: SettingsCopy.moreSettings, field: "moreSettings") { showingMore = true }
+                    SettingsButton(title: SettingsCopy.resetTranslatedSitePrompts, field: "resetTranslationExclusions") {
+                        context.dispatch(.settings(.max(.resetTranslationExclusions)))
+                    }
+                    Spacer(minLength: 0)
+                    SettingsButton(title: SettingsCopy.exportData, field: "exportData") { context.dispatch(.sidebarData(.syncSettings)) }
+                }
             }
-            SettingsDivider()
-            SettingsSection(.symbol(SettingsCopy.advancedFeedbackSymbol)) {
-                box(SettingsCopy.hapticsOnReorder, "hapticsOnReorder", a.hapticsOnReorder) { .hapticsOnReorder($0) }
-                box(SettingsCopy.soundEffects, "soundEffects", a.soundEffects) { .soundEffects($0) }
+        }
+    }
+}
+
+/// Advanced's "More Settings…": what Brk has beyond Arc's Advanced cards (the default browser, numbered favorites,
+/// sidebar data, importing a browser file, the tour). Previews are General's "Previews Settings…".
+struct MoreSettings: View {
+    let context: PaneContext
+    private var tabs: TabPreferenceSnapshot { context.settings.tabPreferences }
+
+    var body: some View {
+        SettingsCard {
+            CardRow(height: C.buttonRowHeight.value) {
+                SettingsLabel(text: context.isDefaultBrowser ? SettingsCopy.isDefaultBrowser : SettingsCopy.notDefaultBrowser, field: "defaultBrowserNotice")
+            } trailing: {
+                SettingsButton(title: SettingsCopy.setAsDefaultBrowser, field: "setAsDefaultBrowser") { context.dispatch(.app(.setAsDefaultBrowser)) }
+                    .disabled(context.isDefaultBrowser)
             }
+        }
+        SettingsCard {
+            SwitchRow(title: SettingsCopy.numberedFavorites, field: "numberedFavorites", isOn: tabs.includeFavoritesInNumbers) {
+                context.dispatch(.tabTools(.preferences(includeFavorites: $0, previews: tabs.hoverPreviews)))
+            }
+        }
+        SettingsCard {
+            CardRow(height: C.buttonRowHeight.value) {
+                VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                    CardLabel(SettingsCopy.sidebarData)
+                    Text(context.settings.sidebarData?.status ?? "Not connected.").font(SettingsStyle.font).foregroundStyle(SettingsStyle.note)
+                }
+            } trailing: {
+                SettingsButton(title: SettingsCopy.exportData, field: "sidebarData") { context.dispatch(.sidebarData(.syncSettings)) }
+            }
+            CardDivider()
+            ButtonRow(title: SettingsCopy.importBrowserFileTitle, button: SettingsCopy.importBrowserFile, field: "importBrowserFile") {
+                context.dispatch(.sidebarData(.importFile))
+            }
+            CardDivider()
+            ButtonRow(title: SettingsCopy.tourTitle, button: SettingsCopy.tour, field: "brk101") { context.dispatch(.sidebarData(.tour)) }
         }
     }
 }

@@ -18,6 +18,8 @@
 # 5. scripts/declare-url-types.sh adds CFBundleURLTypes for http and https to the bundle's Info.plist (the plugin
 #    writes the plist without them; the default-browser registration needs them). Device permission usage strings
 #    are declared for the main app and all helpers before the bundle is signed again.
+#    The app icon (A131): scripts/app-icon/main.swift draws Sources/BrkSettings/AppIconArt.swift's "The Original" into an
+#    iconset, iconutil makes Resources/<Product>.icns and CFBundleIconFile names it, before the bundle is signed again.
 # 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -46,6 +48,13 @@ cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 mkdir -p "$APP/Contents/Resources/BrkSounds"
 cp Sources/BrkApp/SoundAssets/*.wav "$APP/Contents/Resources/BrkSounds/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
+ICONSET="$(mktemp -d)/$PRODUCT.iconset"
+swiftc -O -o .build/brk-app-icon scripts/app-icon/main.swift Sources/BrkSettings/AppIconArt.swift
+.build/brk-app-icon "$ICONSET" original
+iconutil -c icns -o "$APP/Contents/Resources/$PRODUCT.icns" "$ICONSET"
+rm -rf "$(dirname "$ICONSET")"
+/usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$APP/Contents/Info.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string $PRODUCT" "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"

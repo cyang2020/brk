@@ -196,6 +196,9 @@ enum DataScenarios {
         try assign(app, other, item: a); try seed(app, a, "C"); try http(app, a, "C-warm", requests: 1)
         try app.dispatch(.settings(.openPane(.profiles)))
         try app.settle()
+        // "Your Data and Settings" → Clear Browsing Data opens the sub-page with the boxes and the button.
+        try app.click(.settingsField("profileData-clearBrowsingData-" + ProfileID.default.rawValue))
+        try app.settle()
         try app.click(.settingsField("clearProfileData-" + ProfileID.default.rawValue))
         try app.settle()
         try app.press("return")
