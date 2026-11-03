@@ -108,7 +108,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragCardIconCenter = Metric(105.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the icon is centred 105 below the card top, on its vertical axis"))
     let dragCardTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: \"Interface comparison\" is 137 pt wide in bold, SF 13 bold"))
     let dragCardTitleTop = Metric(137.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the title's capitals span 140.5...150 below the card top"))
-    let dragCardInset = Metric(12.0, .guess("the title's side margin inside the card; Arc's one-line title does not show it"))
+    let dragCardInset = Metric(8.0, .guess("the title's side margin inside the card: Arc keeps the 137 pt \"Interface comparison\" on one line in the 169 pt card"))
     let dragCardShadow = Metric(10.0, .guess("blur of the drag card's shadow: it fades over about 16 pt at the sides, 20 below (P23-d-arc.png)"))
     let dragCardShadowOpacity = Metric(0.16, .guess("the drag card's shadow darkens #FCFCFC to #E4E5E5 at its side (P23-d-arc.png)"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
