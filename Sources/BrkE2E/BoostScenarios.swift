@@ -34,14 +34,22 @@ enum BoostScenarios {
     private static func typeField(_ app: AppUnderTest, _ id: String, _ value: String) throws {
         try app.click(.boostControl(id)); try app.press("cmd+a"); try app.type(value)
     }
+    /// The Boost panel is its own window: its first click must not race the window server placing a window that
+    /// appeared a few milliseconds earlier (the click then lands outside it).
+    private static func panelOnScreen(_ app: AppUnderTest) throws {
+        try app.waitUntil("Boost panel window on screen") { try app.native().appWindows.contains { $0.className.hasSuffix("BoostPanelWindow") && $0.isVisible } }
+        Thread.sleep(forTimeInterval: 0.3)
+    }
     /// Arc's first Boost opens on its intro card; Make a Boost shows the editor.
     private static func start(_ app: AppUnderTest) throws {
         try app.waitUntil("Boost intro card") { try app.view().boostEditor?.page == .intro }
+        try panelOnScreen(app)
         try app.click(.boostControl("start"))
         try app.waitUntil("Boost editor page") { try app.view().boostEditor?.page == .style }
     }
     /// The name, scope and switches live under My Boost ▾.
     private static func rename(_ app: AppUnderTest, _ name: String) throws {
+        try panelOnScreen(app)
         try app.click(.boostControl("menu")); try typeField(app, "name", name)
         try app.waitUntil("Boost renamed") { try editor(app).draft.name == name }
     }
@@ -100,6 +108,7 @@ enum BoostScenarios {
         try expect(try library(app).boosts.isEmpty, "remove did not update Library")
         try app.click(.boostControl("preset-reader"))
         try expect(try editor(app).draft.name == "Comfortable reading", "local preset did not open editable draft")
+        try panelOnScreen(app)
         try app.click(.boostControl("close"))
         try app.waitUntil("preset saved on close") { try app.view().boostEditor == nil }
         try expect(try library(app).boosts.count == 1, "preset did not install")
@@ -159,6 +168,7 @@ enum BoostScenarios {
         try app.dispatch(.tab(.focus(item)))
         try app.waitForPageInput(PageID(window: publicWindow, item: item), at: document)
         try app.dispatch(.boost(.edit(id)))
+        try panelOnScreen(app)
         try app.click(.boostControl("menu")); try app.click(.boostControl("private"))
         try app.waitUntil("native private checkbox revokes JavaScript approval") { try editor(app).draft.allowPrivate && !editor(app).draft.javascriptApproved }
         try code(app, .javascript)
