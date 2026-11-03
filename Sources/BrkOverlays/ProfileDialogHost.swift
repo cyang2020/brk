@@ -6,34 +6,28 @@ import BrkUIKit
 import SwiftUI
 
 /// Owner: F2. Arc's three profile dialogs (`ProfilesUI`: `CreateProfileDialog`, `ChangeProfileDialog`,
-/// `DeleteProfileDialog`) as one card centred in the content area, SwiftUI in an `NSHostingView` like the space
-/// dialog. Copy and rules come from `ProfileCopy` (BrkDomain), so the dialog says no exactly when the reducer does.
-/// The form's fields are local state seeded from the snapshot and kept while the same dialog stays open; the
-/// confirm button dispatches one `.profile(...)` command, Cancel and Esc dispatch `.profile(.openDialog(nil))`.
+/// `DeleteProfileDialog`) in Arc's centred dialog (`ArcDialog.swift`), matched to the 2026-11-03 captures P42 a (New
+/// Profile) and Q04 a (Change Profile). Copy and rules come from `ProfileCopy` (BrkDomain), so the dialog says no
+/// exactly when the reducer does; the strings Arc 1.170 shows differently are in `ProfileDialogCopy`. The confirm
+/// button dispatches one `.profile(...)` command, Cancel and Esc dispatch `.profile(.openDialog(nil))`.
 ///
-/// - Create: a name and an icon. A taken name is refused by the reducer and the dialog stays open; the form then
-///   shows "A Profile with that name already exists." (the snapshot does not list names for this dialog). Arc's
-///   second step ("Which Spaces should use this Profile?") is left out: the change dialog assigns spaces.
-/// - Change: the space's profile, one row per profile, and "New Profile…".
+/// - Create: two steps, as Arc's. The name (Next), then the icon (Create Profile). A taken name is refused by the
+///   reducer and the dialog stays open on the name with "A Profile with that name already exists.".
+/// - Change: "Change X’s Profile" and the space's profile as a pill that opens a menu of every profile and New
+///   Profile….
 /// - Delete: refused for the default profile and a profile with spaces (Arc's two rules, with the spaces named);
 ///   otherwise Arc's warning and "To continue, please type the name of this Profile:".
 @MainActor
 public final class ProfileDialogHost: NSView {
     let dispatch: Dispatch
-    private var form: NSHostingController<ProfileDialogForm>?
-    private var hosting: NSView? { form?.view }
+    private var view: ProfileDialogView?
     private var dialog: ProfileDialogSnapshot?
-    private var area: CGRect?
     private var scheme: Scheme?
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
         isHidden = true
-        identify(.profileDialog)
-        wantsLayer = true
-        layer?.cornerCurve = .continuous
-        layer?.cornerRadius = OverlayMetrics.dialog.cornerRadius.value
     }
 
     @available(*, unavailable)
@@ -42,76 +36,58 @@ public final class ProfileDialogHost: NSView {
     public override var isFlipped: Bool { true }
 
     /// W2's root holds the space dialog; until it holds this host too, these two calls keep it as the space
-    /// dialog's sibling, just above it, with the same dispatch (added on the first dialog).
-    public static func render(_ dialog: ProfileDialogSnapshot?, over sibling: SpaceDialogHost, frames: WindowFrames, palette: Palette) {
+    /// dialog's sibling, just above it, with the same dispatch (added on the first dialog). `spaceNames` names the
+    /// space in Change Profile's title (the dock's titles).
+    public static func render(_ dialog: ProfileDialogSnapshot?, over sibling: SpaceDialogHost, frames: WindowFrames, palette: Palette,
+                              spaceNames: [SpaceID: String] = [:]) {
         guard let root = sibling.superview else { return }
         var host = root.subviews.lazy.compactMap { $0 as? ProfileDialogHost }.first
         if host == nil, dialog != nil {
             host = ProfileDialogHost(dispatch: sibling.dispatch)
             root.addSubview(host!, positioned: .above, relativeTo: sibling)
         }
-        host?.render(dialog, frames: frames, palette: palette)
+        host?.frame = root.bounds
+        host?.render(dialog, scheme: palette.scheme, spaceNames: spaceNames)
     }
 
     public static func focus(over sibling: SpaceDialogHost) -> Bool {
         sibling.superview?.subviews.lazy.compactMap { $0 as? ProfileDialogHost }.first?.focusForm() ?? false
     }
 
-    /// Keyboard focus into the form: its text field (create, delete), else the form itself (Esc and Return work).
+    /// Keyboard focus into the dialog: its text field (create, delete), else the dialog itself (Return works).
     public func focusForm() -> Bool {
-        guard !isHidden, let hosting, let window else { return false }
-        hosting.layoutSubtreeIfNeeded()
-        return window.makeFirstResponder(Self.firstEditableField(in: hosting) ?? hosting)
-    }
-
-    private static func firstEditableField(in view: NSView) -> NSTextField? {
-        for child in view.subviews {
-            if let field = child as? NSTextField, field.isEditable { return field }
-            if let field = firstEditableField(in: child) { return field }
-        }
-        return nil
+        guard !isHidden, let view else { return false }
+        return view.dialog.focus()
     }
 
     public func render(_ dialog: ProfileDialogSnapshot?, frames: WindowFrames, palette: Palette) {
-        guard let dialog else { return hide() }
-        show(dialog, in: frames.contentArea, scheme: palette.scheme)
+        render(dialog, scheme: palette.scheme, spaceNames: [:])
     }
 
-    /// Another dialog (or another space's change dialog) starts a fresh form; the same one keeps what was typed.
-    func show(_ dialog: ProfileDialogSnapshot, in area: CGRect, scheme: Scheme) {
-        guard isHidden || dialog != self.dialog || area != self.area || scheme != self.scheme else { return }
-        if dialog != self.dialog || form == nil {
-            hosting?.removeFromSuperview()
-            let controller = NSHostingController(rootView: ProfileDialogForm(draft: ProfileDraft(dialog), dispatch: dispatch))
-            controller.safeAreaRegions = []
-            addSubview(controller.view)
-            form = controller
+    /// Another dialog (or another space's change dialog) starts afresh; the same one keeps what was typed.
+    func render(_ dialog: ProfileDialogSnapshot?, scheme: Scheme, spaceNames: [SpaceID: String]) {
+        guard let dialog else {
+            isHidden = true
+            view?.removeFromSuperview()
+            view = nil
+            self.dialog = nil
+            return
+        }
+        if dialog != self.dialog || scheme != self.scheme || view == nil {
+            view?.removeFromSuperview()
+            var spaceName = ""
+            if case .change(let space, _, _) = dialog { spaceName = spaceNames[space] ?? "" }
+            let fresh = ProfileDialogView(ProfileDraft(dialog), spaceName: spaceName, scheme: scheme, dispatch: dispatch)
+            addSubview(fresh)
+            view = fresh
         }
         self.dialog = dialog
-        self.area = area
-        if scheme != self.scheme {
-            self.scheme = scheme
-            let colors = OverlayColors.of(scheme)
-            appearance = .of(scheme)
-            layer?.backgroundColor = colors.popover.cgColor
-            shadow = .popover(colors)
-        }
+        self.scheme = scheme
         isHidden = false
-        let margin = Metrics.commandBar.minVerticalMargin.value
-        let width = min(OverlayMetrics.dialog.width.value, area.width - 2 * margin)
-        let fitted = form?.sizeThatFits(in: CGSize(width: width, height: area.height)).height ?? 0
-        let height = min(fitted, area.height - 2 * margin)
-        frame = CGRect(x: area.midX - width / 2, y: area.midY - height / 2, width: width, height: height).integral
-        hosting?.frame = bounds
+        view?.frame = bounds
     }
 
-    private func hide() {
-        guard !isHidden else { return }
-        isHidden = true
-        hosting?.removeFromSuperview()
-        form = nil
-        dialog = nil
-    }
+    public override func hitTest(_ point: NSPoint) -> NSView? { isHidden ? nil : super.hitTest(point) }
 }
 
 /// What a profile dialog edits and says, and the command its confirm button sends. Plain data, so the decisions
@@ -190,127 +166,6 @@ struct ProfileDraft: Equatable {
 
     static let cancelCommand: Command = .profile(.openDialog(nil))
     static let newProfileCommand: Command = .profile(.openDialog(.create))
-}
-
-struct ProfileDialogForm: View {
-    @State private var draft: ProfileDraft
-    let dispatch: Dispatch
-    @Environment(\.colorScheme) private var colorScheme
-
-    init(draft: ProfileDraft, dispatch: @escaping Dispatch) {
-        _draft = State(initialValue: draft)
-        self.dispatch = dispatch
-    }
-
-    private var colors: OverlayColors { .of(colorScheme == .dark ? .dark : .light) }
-    private var m: DialogOverlayMetrics { OverlayMetrics.dialog }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: m.padding.value * 0.6) {
-            Text(draft.title).font(.headline)
-            Text(draft.explanation).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let detail = draft.detail { Text(detail).font(.callout).fixedSize(horizontal: false, vertical: true) }
-            fields
-            if let error = draft.error { Text(error).font(.callout).foregroundStyle(.red) }
-            HStack {
-                if case .change = draft.dialog {
-                    Button(ProfileCopy.createFromChange) { dispatch(ProfileDraft.newProfileCommand) }
-                }
-                Spacer()
-                Button(ProfileCopy.cancel, action: cancel).keyboardShortcut(.cancelAction)
-                Button(draft.confirmTitle, action: confirm)
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .tint(isDelete ? .red : Color(nsColor: colors.primaryButton))
-                    .disabled(draft.confirmCommand == nil)
-            }
-        }
-        .padding(m.padding.value)
-        .onExitCommand(perform: cancel)
-    }
-
-    private var isDelete: Bool { if case .delete = draft.dialog { true } else { false } }
-
-    @ViewBuilder
-    private var fields: some View {
-        switch draft.dialog {
-        case .create:
-            Text(ProfileCopy.namePrompt).font(.subheadline)
-            TextField(ProfileCopy.namePrompt, text: $draft.name, prompt: Text(ProfileCopy.namePlaceholder))
-                .textFieldStyle(.roundedBorder).labelsHidden().onSubmit(confirm)
-            iconPicker
-        case .change(_, _, let profiles):
-            VStack(spacing: 2) {
-                ForEach(profiles, id: \.id) { row in profileRow(row) }
-            }
-        case .delete(let row):
-            if ProfileCopy.deleteRefusal(row) == nil {
-                Text(ProfileCopy.deleteTypePrompt).font(.subheadline)
-                TextField(ProfileCopy.deleteTypePrompt, text: $draft.typedName, prompt: Text(row.name))
-                    .textFieldStyle(.roundedBorder).labelsHidden().onSubmit(confirm)
-                Text(ProfileCopy.cannotBeUndone).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// Arc's profile picker row: the profile's icon and name, the chosen one on ProfilePicker blue.
-    private func profileRow(_ row: ProfileRow) -> some View {
-        let chosen = draft.chosen == row.id
-        let pick = ProfilePickerColors.of(colorScheme == .dark ? .dark : .light)
-        return Button { draft.chosen = row.id } label: {
-            HStack {
-                ProfileGlyph(icon: row.icon)
-                Text(row.name)
-                Spacer()
-                Text(ProfileCopy.spaceCount(row.spaceTitles)).font(.caption).foregroundStyle(.secondary)
-                if chosen { Image(systemName: "checkmark.circle.fill") }
-            }
-            .padding(.horizontal, m.padding.value / 2)
-            .frame(height: m.iconButtonSize.value + 4)
-            .foregroundStyle(chosen ? pick.text : Color.primary)
-            .background(RoundedRectangle(cornerRadius: m.iconButtonSize.value / 4, style: .continuous).fill(chosen ? pick.fill : Color.clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(row.name)
-        .accessibilityAddTraits(chosen ? .isSelected : [])
-    }
-
-    private var iconPicker: some View {
-        let side = m.iconButtonSize.value
-        let icons: [CustomIcon?] = [nil] + NamedIcon.allCases.map { CustomIcon.named($0) }
-        let perRow = 8
-        let rows = stride(from: 0, to: icons.count, by: perRow).map { Array(icons[$0..<min($0 + perRow, icons.count)]) }
-        return VStack(alignment: .leading, spacing: m.padding.value / 4) {
-            ForEach(rows.indices, id: \.self) { r in
-                HStack(spacing: m.padding.value / 4) {
-                    ForEach(rows[r].indices, id: \.self) { i in
-                        let icon = rows[r][i], selected = draft.icon == icon
-                        Button { draft.icon = icon } label: {
-                            ProfileGlyph(icon: icon)
-                                .frame(width: side, height: side)
-                                .background(RoundedRectangle(cornerRadius: side / 4, style: .continuous)
-                                    .fill(selected ? Color(nsColor: colors.focusRing).opacity(0.18) : Color(nsColor: colors.accessoryBackground)))
-                                .overlay(RoundedRectangle(cornerRadius: side / 4, style: .continuous)
-                                    .stroke(selected ? Color(nsColor: colors.focusRing) : .clear, lineWidth: m.ringWidth.value))
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(icon.map(ProfileGlyph.name) ?? "Default")
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                    }
-                }
-            }
-        }
-    }
-
-    private func confirm() {
-        guard let command = draft.confirmCommand else { return }
-        dispatch(command)
-        draft.confirmed()
-    }
-
-    private func cancel() { dispatch(ProfileDraft.cancelCommand) }
 }
 
 /// ARC_ProfilesUI's two colors (visual-and-copy.md "ARC_ProfilesUI"): ProfilePicker #3139FB @ 0.1 light, @ 0.898

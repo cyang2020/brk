@@ -112,13 +112,14 @@ extension Work {
             showSpace(space, in: window)
             if state.session.windows[window]?.dialog != nil { state.session.windows[window]!.dialog = nil }
         case .update(let id, let title, let icon, let theme):
-            // Patches what is given (a blank title keeps the old one) and closes this window's dialog.
+            // Patches what is given (a blank title keeps the old one) and closes this window's dialog, except the
+            // theme panel of this space: Arc applies each edit there while the panel stays open.
             guard var space = state.doc.spaces[id] else { return }
             if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { space.title = title }
             if let icon { space.icon = icon }
             if let theme { space.theme = clamped(theme) }
             if space != state.doc.spaces[id] { state.doc.spaces[id] = space }
-            if state.session.windows[window]?.dialog != nil { state.session.windows[window]!.dialog = nil }
+            if let dialog = state.session.windows[window]?.dialog, dialog != .theme(id) { state.session.windows[window]!.dialog = nil }
         case .delete(let id):
             // Refused for the last space. Its tabs are archived (reason containerDeleted, in sidebar order), its roots
             // removed, and windows on it move to the next space in dock order, else the previous one.
@@ -189,12 +190,22 @@ extension Work {
             switch request {
             case nil: dialog = nil
             case .newSpace?: dialog = .newSpace
-            case .editSpace(.current)?: dialog = .editSpace(state.doc.windows[window]!.space)
-            case .editSpace(.space(let id))?:
+            case .editSpace(let ref)?, .rename(let ref)?, .icon(let ref)?, .theme(let ref)?:
+                let id: SpaceID = switch ref {
+                case .current: state.doc.windows[window]!.space
+                case .space(let id): id
+                }
                 guard state.doc.spaces[id] != nil else { return }
-                dialog = .editSpace(id)
+                dialog = switch request {
+                case .rename?: .rename(id)
+                case .icon?: .icon(id)
+                case .theme?: .theme(id)
+                default: .editSpace(id)
+                }
             }
             if state.session.windows[window]?.dialog != dialog { state.session.windows[window]!.dialog = dialog }
+            // Create a Space takes the sidebar's place, so the Library (New Space on the Space manager) closes.
+            if dialog == .newSpace, case .library? = state.session.windows[window]?.overlay { state.session.windows[window]!.overlay = nil }
             if dialog != nil { peekIfHidden(window) }
         case .popupMenu(let request, let at):
             // A native menu built from state; each entry carries the real command it dispatches. A menu with no
@@ -295,7 +306,6 @@ extension Work {
             return model
         case .space(let id):
             guard let space = state.doc.spaces[id] else { return MenuModel(entries: []) }
-            let edit = Command.sidebar(.openDialog(.editSpace(.space(id))))
             let title = state.displayTitle(of: id)
             let current = standard && state.doc.windows[window]?.space == id
             let profiles = state.doc.profiles.values.filter { state.doc.deletingProfiles[$0.id] == nil }
@@ -307,7 +317,9 @@ extension Work {
                 entry(state.displayTitle(of: $0), .tabTools(.spaceIntoFolder(id, into: $0)))
             }
             var entries: [MenuEntry] = [
-                entry("Change Space Icon…", edit), entry("Rename Space…", edit), entry("Edit Theme Color…", edit),
+                entry("Change Space Icon…", .sidebar(.openDialog(.icon(.space(id))))),
+                entry("Rename Space…", .sidebar(.openDialog(.rename(.space(id))))),
+                entry("Edit Theme Color…", .sidebar(.openDialog(.theme(.space(id))))),
                 .submenu(title: "Set Profile", entries: standard ? profileRows : []), .separator,
                 entry("New Folder", .item(.newFolder), enabled: current),
                 .submenu(title: "Live Folders", entries: current ? [
@@ -439,8 +451,9 @@ extension Work {
             }
             else if session.overlay != nil { session.overlay = nil }
             else if session.renaming != nil { session.renaming = nil }
-            else if session.dialog != nil { session.dialog = nil }
+            else if session.pendingSpaceDeletion != nil { session.pendingSpaceDeletion = nil }
             else if session.profileDialog != nil { session.profileDialog = nil }
+            else if session.dialog != nil { session.dialog = nil }
             else if let tab = state.resolveTab(.focused, in: window), state.session.live[PageID(window: window, item: tab)]?.fullscreen == true {
                 effects.append(.page(PageID(window: window, item: tab), .exitFullscreen))
             } else { effects.append(.window(window, .leaveFullScreen)) }

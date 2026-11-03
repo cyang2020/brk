@@ -48,6 +48,9 @@ public final class ContentAreaView: NSView {
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
     /// i hosts the surface for pane i (`.page`), a white card (`.blank`, `.history`) or the sad-tab placeholder (`.crashed`).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
+    /// White over the theme for an empty card in light: #FCFCFC over Arc's #F7F7F8 window (P24 e).
+    static func blankAlpha(_ palette: Palette) -> Double { 0.75 }
+
     func render(_ content: ContentSnapshot, frames: WindowFrames, theme: ResolvedTheme, palette: Palette, surface: (PageID) -> NSView?) {
         frame = CGRect(origin: .zero, size: frames.contentSize)
         drop = content.drop
@@ -65,11 +68,13 @@ public final class ContentAreaView: NSView {
             shadows.removeLast().removeFromSuperview()
         }
         for ((card, shadow), frame) in zip(zip(cards, shadows), frames.cards) {
+            let blank: Bool = if case .blank = frame.content { true } else { false }
             // Under the toolbar a card is the lower part of one white card: square top corners, one shadow for both.
             let toolbar = frames.toolbar.flatMap { $0.maxY == frame.rect.minY ? $0 : nil }
             shadow.frame = toolbar.map { frame.rect.union(CGRect(x: frame.rect.minX, y: $0.minY, width: frame.rect.width, height: $0.height)) } ?? frame.rect
             shadow.layer?.cornerRadius = frame.cornerRadius
-            shadow.isHidden = !Metrics.content.showsShadow.value || frame.cornerRadius == 0   // an edge-to-edge page (Little Arc) casts none
+            // An edge-to-edge page (Little Arc) casts none, nor does an empty card (the theme shows through it).
+            shadow.isHidden = !Metrics.content.showsShadow.value || frame.cornerRadius == 0 || blank
             card.frame = frame.rect
             card.layer?.cornerRadius = frame.cornerRadius
             card.layer?.maskedCorners = toolbar == nil ? CardView.allCorners : [.layerMinXMinYCorner, .layerMaxXMinYCorner]
@@ -89,6 +94,9 @@ public final class ContentAreaView: NSView {
             case .blank, .history:
                 // The History page is drawn over its card by the root (`HistoryPageView`).
                 card.host(nil, placeholder: nil)
+                // Arc's empty content area is the theme under a white wash (P24 e), not a white page; dark keeps the
+                // empty color above.
+                if palette.scheme == .light { card.layer?.backgroundColor = NSColor.white.withAlphaComponent(Self.blankAlpha(palette)).cgColor }
             case .crashed(let page):
                 card.host(nil, placeholder: "This tab has crashed")
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }

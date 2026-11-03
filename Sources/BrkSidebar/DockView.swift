@@ -15,7 +15,7 @@ final class DockView: NSView {
     private let library = GlyphButton()
     private let plus = GlyphButton()
     var hapticsEnabled = true
-    private var last: ([DockItem], SidebarFrames, Palette)?
+    private var last: ([DockItem], SidebarFrames, Palette, Bool)?
     private var draggingSpace: SpaceID?
     private var dragTarget: SpaceID?
     private var cancelMonitor: Any?
@@ -39,9 +39,12 @@ final class DockView: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
-    func render(_ items: [DockItem], frames: SidebarFrames, palette: Palette) {
-        if let last, last.0 == items, last.1 == frames, last.2 == palette { return }
-        last = (items, frames, palette)
+    /// `creating`: the Create a Space flow is open; Arc's dock then shows only the spaces (P24 a).
+    func render(_ items: [DockItem], frames: SidebarFrames, palette: Palette, creating: Bool = false) {
+        if let last, last.0 == items, last.1 == frames, last.2 == palette, last.3 == creating { return }
+        last = (items, frames, palette, creating)
+        library.isHidden = creating
+        plus.isHidden = creating
         let local = { (r: CGRect) in r.offsetBy(dx: -frames.dock.minX, dy: -frames.dock.minY) }
         library.frame = local(frames.libraryButton)
         plus.frame = local(frames.plusButton)
@@ -50,6 +53,7 @@ final class DockView: NSView {
             button.render(button === library ? .library : .plus, size: Draw.dockButtonGlyph.value, palette: palette, tint: tint,
                           radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
         }
+        library.image = LibraryGlyph.image(tint: (palette.scheme == .light ? NSColor.black : .white).withAlphaComponent(Draw.dockActiveInk.value))
         let shown = Set(items.map(\.id))
         for (id, cell) in cells where !shown.contains(id) { cell.removeFromSuperview(); cells[id] = nil }
         for item in items {
@@ -142,9 +146,14 @@ final class DockCellView: HoverView {
         let compact = bounds.width < Metrics.dock.compactBelow.value
         showsDot = compact || item.icon == .none
         toolTip = item.title
-        let content: IconContent = compact ? .dot(item.color) : IconContent(space: item.icon, color: item.color)
-        icon.render(content, tint: palette.ink.secondary)
-        icon.alphaValue = item.active ? 1 : Draw.inactiveSpaceAlpha.value
+        // Arc (P25 a): the current space's icon or dot is dark, the others light grey, whatever the theme color.
+        let ink = palette.scheme == .light ? NSColor.black : NSColor.white
+        let tint = ink.withAlphaComponent(item.active ? Draw.dockActiveInk.value : Draw.dockInactiveInk.value)
+        let dot = tint.usingColorSpace(.sRGB).map { RGBA($0.redComponent, $0.greenComponent, $0.blueComponent, $0.alphaComponent) } ?? item.color
+        let content: IconContent = compact ? .dot(dot) : IconContent(space: item.icon, color: dot)
+        icon.render(content, tint: tint)
+        // Emoji keep their own colors, so only they are dimmed.
+        if case .custom(.emoji) = item.icon, !compact { icon.alphaValue = item.active ? 1 : Draw.inactiveSpaceAlpha.value } else { icon.alphaValue = 1 }
         setAccessibilityLabel(item.title)
         stateChanged()
         needsLayout = true

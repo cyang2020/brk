@@ -47,22 +47,3 @@ struct SpaceToolsButton: NSViewRepresentable {
         @objc func click() { action() }
     }
 }
-
-struct SpaceToolsSchemePicker: NSViewRepresentable {
-    @Binding var scheme: Scheme
-    func makeCoordinator() -> Coordinator { Coordinator($scheme) }
-    func makeNSView(context: NSViewRepresentableContext<Self>) -> NSSegmentedControl {
-        let control = NSSegmentedControl(labels: ["Light values", "Dark values"], trackingMode: .selectOne, target: context.coordinator, action: #selector(Coordinator.change(_:)))
-        control.identify(.spaceToolsControl("theme-edit-scheme"))
-        return control
-    }
-    func updateNSView(_ view: NSSegmentedControl, context: NSViewRepresentableContext<Self>) {
-        context.coordinator.scheme = $scheme
-        view.selectedSegment = scheme == .dark ? 1 : 0
-    }
-    @MainActor final class Coordinator: NSObject {
-        var scheme: Binding<Scheme>
-        init(_ scheme: Binding<Scheme>) { self.scheme = scheme }
-        @objc func change(_ sender: NSSegmentedControl) { scheme.wrappedValue = sender.selectedSegment == 1 ? .dark : .light }
-    }
-}

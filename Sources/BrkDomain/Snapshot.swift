@@ -267,6 +267,10 @@ public enum PaneContent: Sendable, Equatable, Codable {
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {
     case newSpace
     case editSpace(id: SpaceID, title: String, icon: SpaceIcon, theme: SpaceTheme)
+    /// `title` is the name as the dock shows it ("Space N" for a blank one).
+    case rename(id: SpaceID, title: String)
+    case icon(id: SpaceID, icon: SpaceIcon)
+    case theme(id: SpaceID, theme: SpaceTheme)
 }
 
 /// Arc: `ProfilesUI`. `profiles` lists every profile for the change dialog; `inUse` says which cannot be deleted.

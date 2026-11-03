@@ -185,7 +185,9 @@ final class EventInjector {
         }
         func handle(_ event: NSEvent) {
             if key { NSApp.sendEvent(event) }
-            else if target is NSControl { window.sendEvent(event) }
+            // A popover or panel (the space icon popover, the theme panel) hosts SwiftUI buttons, which act only on
+            // events that go through their window; they take the first click, so the window delivers it.
+            else if target is NSControl || (window is NSPanel && !(window is any HostWindow)) { window.sendEvent(event) }
             else if event.type == .leftMouseDown {
                 // What a key window's sendEvent does first: report the click's modifiers (a Shift+click opens a Peek).
                 _ = (window as? any HostWindow)?.hostEvent(event)

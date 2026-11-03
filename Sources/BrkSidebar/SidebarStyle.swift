@@ -88,7 +88,9 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // Dock.
     let dockGlyph = Metric(15.0, .guess("space emoji or symbol size in a 34 x 32 dock cell (cra L115: tiny emoji)"))
-    let dockDot = Metric(6.0, .guess("dot for a space without an icon"))
+    let dockDot = Metric(8.0, .guess("dot for a space without an icon, measured on P25-a-arc.png (16 px at 2x)"))
+    let dockActiveInk = Metric(0.47, .guess("black (white in dark) over the sidebar for the current space's icon or dot, sampled on P25 a (#817E7C on #EFEAE6)"))
+    let dockInactiveInk = Metric(0.22, .guess("the same for the other spaces, sampled on P25 a (#BAB6B2)"))
     let dockButtonGlyph = Metric(15.0, .guess("Library and + glyph size in their 32 pt buttons"))
     let inactiveSpaceAlpha = Metric(0.45, .anatomy("cra L115: inactive space icons in the dock are dimmed; amount guessed"))
 

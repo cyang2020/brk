@@ -9,7 +9,7 @@ import Foundation
 enum SpaceToolsScenarios {
     static let all = [
         Scenario("SpaceTools-1", "toolbar navigation, full URL, header layout, pointer resize and floating CEF sidebar", cefOnly: "native CEF navigation and focus", shell),
-        Scenario("SpaceTools-2", "staged creation with profile, theme editing/undo, saved independent appearances and manager", cefOnly: "native editor and profile browsing", editor),
+        Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", cefOnly: "native editor and profile browsing", editor),
         Scenario("SpaceTools-3", "dock drag, sidebar swipe cancellation/page ownership and confirmed deletion", cefOnly: "native pointer/trackpad sequences", gestures),
         Scenario("SpaceTools-4", "Space manager local folder panel cancellation and public bookmark files", cefOnly: "native folder selection", export),
     ]
@@ -93,63 +93,75 @@ enum SpaceToolsScenarios {
         try app.recordWindows("shell-final")
     }
 
+    /// A control in a popover or the theme panel (its own window) once it is on screen and settled.
+    private static func clickWhenShown(_ app: AppUnderTest, _ name: String) throws {
+        let start = uptime()
+        try app.waitUntil("\(name) settled") { uptime() - start >= 0.6 }
+        try app.waitUntil("\(name) on screen") { (try? app.click(.spaceToolsControl(name))) != nil }
+    }
+
     @Sendable static func editor(_ app: AppUnderTest) throws {
         try app.dispatch(.profile(.create(name: "Space Fixture", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings),
-              let profile = settings.profiles.first(where: { $0.profile.name == "Space Fixture" })?.profile.id else { throw Check(description: "fixture profile missing") }
+              settings.profiles.contains(where: { $0.profile.name == "Space Fixture" }) else { throw Check(description: "fixture profile missing") }
         let before = try app.view().dock.count
+        // Arc's Create a Space flow in the sidebar: name, Choose a Theme (the theme panel as a popover; a preset
+        // shows on the window at once), the Profile menu, Create Space.
         try app.dispatch(.sidebar(.openDialog(.newSpace)))
+        try app.waitUntil("the Create a Space flow") { let n = try app.native(); return isShown(n, .spaceDialog) && !isShown(n, .urlPill) }
         try app.type("Native Work")
-        try app.click(.spaceToolsControl("save"))
+        try app.click(.spaceToolsControl("theme"))
+        try clickWhenShown(app, "theme-presets-next")
+        try clickWhenShown(app, "theme-preset-6")
+        try clickWhenShown(app, "theme-add")
         try finishAnimation(app)
         try app.screenshot("theme-stage")
-        try app.click(.spaceToolsControl("theme-add"))
-        try app.click(.spaceToolsControl("theme-presets-next"))
-        try app.click(.spaceToolsControl("theme-preset-8"))
-        try app.click(.spaceToolsControl("theme-undo"))
-        let appearanceEditor = try control(app, "theme-edit-scheme")
-        try app.click(at: CGPoint(x: appearanceEditor.minX + appearanceEditor.width * 0.75, y: appearanceEditor.midY))
-        try app.click(.spaceToolsControl("theme-preset-6"))
-        try app.click(at: CGPoint(x: appearanceEditor.minX + appearanceEditor.width * 0.25, y: appearanceEditor.midY))
-        try app.click(.spaceToolsControl("save"))
-        try app.click(.spaceToolsControl("profile-\(profile)"))
-        try finishAnimation(app)
-        try app.screenshot("profile-stage")
+        let pill = try control(app, "profile")
+        guard case .menuItems(let menu) = try app.send(.captureContextMenu(window: app.window, point: point(pill), choose: "Space Fixture")) else {
+            throw Check(description: "profile menu capture missing")
+        }
+        try expect(menu.contains("Space Fixture") && menu.contains("New Profile…"), "profile menu rows: \(menu)")
         try app.click(.spaceToolsControl("save"))
         try app.waitUntil("created space saved its profile") { try app.view().dock.count == before + 1 && app.view().urlPill.profile?.name == "Space Fixture" }
         let created = try app.view().space.id
         try expect(try app.view().space.title == "Native Work", "name not saved")
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        try finishAnimation(app)
+        try expect(try app.view().dialog == nil && isShown(try app.native(), .urlPill), "the flow did not give the sidebar back")
+        guard case .theme(_, let theme)? = { () -> SpaceDialogSnapshot? in try? app.dispatch(.sidebar(.openDialog(.theme(.current)))); return try? app.view().dialog }() else {
+            throw Check(description: "theme panel missing")
+        }
+        try expect(theme.variants?.light.colors.first?.color == ThemePresets.pastel[6], "the picked preset was not the created theme")
+        try expect(theme.variants?.light.colors.count == 2 && theme.variants?.dark.colors.count == 2, "add-color change not saved on both appearances")
+        // Edit Theme…: every edit is saved while the panel stays open; Esc closes it.
+        try clickWhenShown(app, "theme-appearance-dark")
+        try app.waitUntil("dark appearance applied with the panel open") {
+            let v = try app.view()
+            if case .theme? = v.dialog { return v.theme.scheme == .dark } else { return false }
+        }
+        // The panel opens on the page of the space's color (Pastel); the next page is Drab.
+        try clickWhenShown(app, "theme-presets-next")
+        try clickWhenShown(app, "theme-preset-8")
+        try app.waitUntil("the Drab preset applied") {
+            guard case .theme(_, let t)? = try app.view().dialog else { return false }
+            return t.variants?.dark.colors.first?.color == ThemePresets.drab[8]
+        }
         try app.screenshot("theme-editor")
-        guard case .editSpace(_, _, _, let theme)? = try app.view().dialog else { throw Check(description: "edit theme missing") }
-        try expect(theme.variants?.light.colors.count == 2, "add-color change not saved")
-        try expect(theme.variants?.light.colors[1].color != ThemePresets.drab[8], "undo did not restore the prior color")
-        try expect(theme.variants?.dark.colors[0].color == ThemePresets.drab[6], "native dark editing did not retain its independent color")
-        try app.click(.spaceToolsControl("name"))
-        try app.press("cmd+a"); try app.type("Discarded edit")
-        try app.click(.spaceToolsControl("cancel"))
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        guard case .editSpace(_, let unchangedName, _, let unchangedTheme)? = try app.view().dialog else { throw Check(description: "cancelled edit missing") }
-        try expect(unchangedName == "Native Work" && unchangedTheme == theme, "Cancel persisted an edited draft")
-        try app.click(.spaceToolsControl("name"))
-        try app.press("cmd+a"); try app.type("Native Work Edited")
-        try app.click(.spaceToolsControl("emoji"))
-        try app.press("cmd+a"); try app.type("🌙")
-        try app.click(.spaceToolsControl("save"))
-        try expect(try app.view().space.title == "Native Work Edited" && app.view().space.icon == .custom(.emoji("🌙")), "native name/icon edit did not save")
-        var paired = theme
-        paired.variants!.light.colors[0].color = RGBA(0.8, 0.3, 0.2)
-        paired.variants!.dark.colors[0].color = RGBA(0.15, 0.2, 0.5)
-        paired.variants!.dark.darkBias = 0.4
-        paired.variants!.selection = .dark
-        try app.dispatch(.space(.update(created, title: nil, icon: nil, theme: paired)))
+        try app.press("escape")
+        try app.waitUntil("Esc closed the theme panel") { try app.view().dialog == nil }
+        // Rename Space: the centred dialog with the name selected.
+        try app.dispatch(.sidebar(.openDialog(.rename(.current))))
+        try app.waitUntil("rename field focused") { try app.native().firstResponder.contains("space-rename-field") }
+        try app.type("Native Work Edited"); try app.press("return")
+        try app.waitUntil("renamed") { try app.view().space.title == "Native Work Edited" && app.view().dialog == nil }
+        // Change Space Icon…: the Emoji / Icon popover.
+        try app.dispatch(.sidebar(.openDialog(.icon(.current))))
+        try clickWhenShown(app, "icon-picker-search")
+        try app.type("blue book")
+        try clickWhenShown(app, "icon-result-0")
+        try app.waitUntil("icon picked") { try app.view().space.icon == .custom(.emoji("📘")) && app.view().dialog == nil }
         try app.flush(); try app.restart()
         try expect(try app.view().theme.scheme == .dark, "dark appearance not restored")
-        try app.dispatch(.sidebar(.openDialog(.editSpace(.current))))
-        guard case .editSpace(_, let title, let icon, let restored)? = try app.view().dialog else { throw Check(description: "restored editor missing") }
-        try expect(restored == paired && title == "Native Work Edited" && icon == .custom(.emoji("🌙")), "independent values/icon/name did not restore")
-        try app.click(.spaceToolsControl("cancel"))
+        try expect(try app.view().space.id == created && app.view().space.title == "Native Work Edited" && app.view().space.icon == .custom(.emoji("📘")),
+                   "name and icon did not restore")
         try app.dispatch(.library(.open(.spaces)))
         try expect(isShown(try app.native(), .spaceToolsControl("manager")), "Spaces destination missing")
         try finishAnimation(app)
@@ -159,8 +171,8 @@ enum SpaceToolsScenarios {
         guard case .library(let manager)? = try app.view().overlay else { throw Check(description: "Space manager closed") }
         try expect(manager.spaces.contains { $0.id == created && $0.title == "Native Work Edited" }, "the card lost the edited name")
         try app.click(.spaceToolsControl("manager-new"))
+        try app.waitUntil("the Create a Space flow from the manager") { try app.view().dialog == .newSpace }
         try app.type("Cancelled Space")
-        try app.click(.spaceToolsControl("save"))
         try app.click(.spaceToolsControl("cancel"))
         try expect(try app.view().dock.count == before + 1, "cancelled creation changed saved Spaces")
         try app.recordWindows("editor-final")
@@ -201,12 +213,14 @@ enum SpaceToolsScenarios {
         try app.dispatch(.library(.open(.spaces)))
         try managerMenu(app, second, choose: "Delete Space…")
         try expect(try app.view().pendingSpaceDeletion?.id == second, "Delete did not ask for confirmation")
-        try perform(app, .sheetButton(title: "Cancel"))
+        try app.click(.spaceToolsControl("alert-cancel"))
         try app.waitUntil("cancel preserved the space") { try app.view().pendingSpaceDeletion == nil }
         try expect(try app.view().dock.contains { $0.id == second }, "Cancel deleted the space")
         try managerMenu(app, second, choose: "Delete Space…")
-        try perform(app, .sheetButton(title: "Delete Space"))
+        try app.waitUntil("the delete dialog focused") { try app.native().firstResponder.contains("SpaceAlert") || app.native().firstResponder.contains("ArcDialog") }
+        try app.press("return")
         try app.waitUntil("confirmed deletion removed the space") { try !app.view().dock.contains { $0.id == second } }
+        try expect(try app.view().tabTools.toast?.text.hasPrefix("Space deleted!") == true, "no undo toast after the deletion")
         try app.flush(); try app.restart()
         try expect(try app.view().dock.map(\.id) == [third, first], "dock order did not persist")
         try app.screenshot("reordered-spaces")

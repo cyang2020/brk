@@ -74,8 +74,10 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
 }
 
 /// Arc's four 9-color picker sets (visual-and-copy.md, "Space theme preset palette"). Brand5 uses the rendered value
-/// #FF8558. Arc's page order is unknown; this order is ours.
+/// #FF8558. `pages` is Arc 1.170's page order in the theme panel (captured 2026-11-03, P28 c): Brand, Pastel, Drab,
+/// Greyscale.
 public enum ThemePresets {
+    public static let pages: [(name: String, colors: [RGBA])] = [("Brand", brand), ("Pastel", pastel), ("Drab", drab), ("Greyscale", greyscale)]
     public static let brand = ["#F2EAE4", "#F29BBB", "#A6729D", "#F25E6B", "#FF8558", "#F2D66D", "#73E59C", "#7EB8D6", "#666786"].map { RGBA(hex: $0) }
     public static let drab = ["#4B3B58", "#623856", "#854444", "#A77048", "#D1B46A", "#CDCCA8", "#84A885", "#34604B", "#2D4468"].map { RGBA(hex: $0) }
     public static let greyscale = ["#FFFFFF", "#E5E5E5", "#CCCCCC", "#B2B2B2", "#808080", "#666666", "#333333", "#1A1A1A", "#000000"].map { RGBA(hex: $0) }

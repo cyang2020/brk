@@ -361,6 +361,16 @@ enum CommandBarTarget: Sendable, Equatable {
 enum SpaceDialog: Sendable, Equatable {
     case newSpace
     case editSpace(SpaceID)
+    case rename(SpaceID)
+    case icon(SpaceID)
+    case theme(SpaceID)
+
+    var space: SpaceID? {
+        switch self {
+        case .newSpace: nil
+        case .editSpace(let id), .rename(let id), .icon(let id), .theme(let id): id
+        }
+    }
 }
 
 /// Ctrl+Tab in progress: a frozen recent order and a cursor. Focus moves without stamping `lastActiveAt` until the

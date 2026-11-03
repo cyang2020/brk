@@ -40,6 +40,7 @@ extension Work {
     mutating func confirmSpaceDeletion(_ id: SpaceID, token: String, confirmed: Bool, in window: WindowID) {
         guard let request = state.session.windows[window]?.pendingSpaceDeletion, request.id == id, request.token == token else { return }
         state.session.windows[window]?.pendingSpaceDeletion = nil
+        // The deletion itself says "Space deleted! Use ⌘Z to undo" (Arc, P15 c).
         if confirmed { spaces(.delete(id), in: window) }
     }
 

@@ -385,9 +385,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if session.find?.focusInput == true { focus = .findInput }
     else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
-    else if session.pendingSpaceDeletion != nil { focus = .none }
-    else if session.dialog != nil { focus = .spaceDialog }
+    else if session.pendingSpaceDeletion != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
+    else if session.dialog != nil { focus = .spaceDialog }
     else if session.boostEditor != nil { focus = .none }
     else if session.sidebarFocused { focus = .sidebar }
     else if case .library? = session.overlay { focus = .none }
@@ -398,6 +398,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let dialog: SpaceDialogSnapshot? = switch session.dialog {
     case .newSpace?: .newSpace
     case .editSpace(let sid)?: state.doc.spaces[sid].map { .editSpace(id: sid, title: $0.title, icon: $0.icon, theme: $0.theme) }
+    case .rename(let sid)?: state.doc.spaces[sid] == nil ? nil : .rename(id: sid, title: state.displayTitle(of: sid))
+    case .icon(let sid)?: state.doc.spaces[sid].map { .icon(id: sid, icon: $0.icon) }
+    case .theme(let sid)?: state.doc.spaces[sid].map { .theme(id: sid, theme: $0.theme) }
     case nil: nil
     }
     let profileDialog: ProfileDialogSnapshot? = switch session.profileDialog {

@@ -70,6 +70,8 @@ public final class SidebarView: NSView {
         var palette: Palette
         /// The New Tab row looks like the current tab (a blank window with nothing open, or Cmd+T's bar is open).
         var newTabCurrent: Bool
+        /// Create a Space is open: its flow takes the column's place.
+        var creatingSpace: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -159,7 +161,7 @@ public final class SidebarView: NSView {
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: dockItems, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
-                          newTabCurrent: newTabCurrent)
+                          newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace)
         guard slice != last else { return }
         let previous = last
         last = slice
@@ -184,7 +186,8 @@ public final class SidebarView: NSView {
         header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette, navigation: snapshot.content.split == nil)
         urlPill.frame = local(f.urlPill)
         urlPill.isHidden = f.urlPill.height == 0
-        urlPill.render(snapshot.urlPill, palette: palette, searchField: thisWindow)
+        // Any window with no page reads as a search field, a new space's as well (Arc, P24 e).
+        urlPill.render(snapshot.urlPill, palette: palette, searchField: true)
         favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
@@ -196,7 +199,10 @@ public final class SidebarView: NSView {
                        newTabCurrent: newTabCurrent, now: snapshot.now)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
-        dock.render(dockItems, frames: f, palette: palette)
+        dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace)
+        // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
+        if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
+        else { tablist.isHidden = false }
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }

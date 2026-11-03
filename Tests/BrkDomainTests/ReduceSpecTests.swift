@@ -1009,6 +1009,70 @@ final class ReduceSpecTests: XCTestCase {
     }
 
     // MARK: reduce: spaces and archive
+    /// Arc's space dialogs (2026-11-03 captures P26, P10 c, P28): Rename opens the rename dialog with the dock's
+    /// name, Change Space Icon… the icon popover, Edit Theme… the theme panel, which stays open while its edits are
+    /// saved; a rename or an icon closes its dialog. The delete confirmation takes focus, Esc cancels it, and a
+    /// confirmed deletion shows the undo toast.
+    func test_spaceDialogsRenameIconThemeAndTheDeleteConfirmation() throws {
+        let d = Driver()
+        let first = d.view.space.id
+        let work = d.newSpace("Work", color: ThemePresets.drab[3])
+        d.user(.sidebar(.openDialog(.rename(.current))))
+        XCTAssertEqual(d.view.dialog, .rename(id: work, title: "Work"))
+        XCTAssertEqual(d.view.focus, .spaceDialog)
+        d.user(.space(.update(work, title: "Work 2", icon: nil, theme: nil)))
+        XCTAssertNil(d.view.dialog)
+        XCTAssertEqual(d.view.space.title, "Work 2")
+        d.user(.sidebar(.openDialog(.icon(.space(work)))))
+        XCTAssertEqual(d.view.dialog, .icon(id: work, icon: .none))
+        d.user(.space(.update(work, title: nil, icon: .custom(.emoji("📘")), theme: nil)))
+        XCTAssertNil(d.view.dialog)
+        d.user(.sidebar(.openDialog(.theme(.current))))
+        var pastel = SpaceTheme(colors: [ThemePresets.pastel[1]], texture: .grain, intensity: 0.6, appearance: .auto)
+        d.user(.space(.update(work, title: nil, icon: nil, theme: pastel)))
+        guard case .theme(work, let saved)? = d.view.dialog else { return XCTFail("the theme panel closed on an edit") }
+        XCTAssertEqual(saved.colors, pastel.colors)
+        pastel.intensity = 0.1
+        d.user(.space(.update(work, title: nil, icon: nil, theme: pastel)))
+        guard case .theme(work, let lighter)? = d.view.dialog else { return XCTFail("the theme panel closed on the second edit") }
+        XCTAssertEqual(lighter.intensity, 0.1)
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.dialog, "Esc closes the theme panel")
+        d.user(.space(.requestDelete(work)))
+        let request = try XCTUnwrap(d.view.pendingSpaceDeletion)
+        XCTAssertEqual(d.view.focus, .spaceDialog, "the delete dialog takes focus so Return confirms")
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.pendingSpaceDeletion, "Esc cancels the confirmation")
+        XCTAssertEqual(d.view.dock.count, 2)
+        d.user(.space(.requestDelete(work)))
+        let again = try XCTUnwrap(d.view.pendingSpaceDeletion)
+        XCTAssertNotEqual(again.token, request.token)
+        d.user(.space(.confirmDelete(work, token: again.token, confirmed: true)))
+        XCTAssertEqual(d.view.dock.map(\.id), [first])
+        XCTAssertEqual(d.view.tabTools.toast?.text.hasPrefix("Space deleted!"), true, "Arc's undo toast")
+    }
+
+    /// New Space on the Space manager closes the Library: Create a Space takes the sidebar's place.
+    func test_newSpaceFromTheSpaceManagerClosesTheLibrary() {
+        let d = Driver()
+        d.user(.library(.open(.spaces)))
+        guard case .library? = d.view.overlay else { return XCTFail("no Library") }
+        d.user(.sidebar(.openDialog(.newSpace)))
+        XCTAssertEqual(d.view.dialog, .newSpace)
+        XCTAssertNil(d.view.overlay)
+    }
+
+    /// A profile dialog opened over Create a Space takes focus and Esc closes it first.
+    func test_aProfileDialogOverCreateASpaceTakesFocusAndEscFirst() {
+        let d = Driver()
+        d.user(.sidebar(.openDialog(.newSpace)))
+        d.user(.profile(.openDialog(.create)))
+        XCTAssertEqual(d.view.focus, .profileDialog)
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.profileDialog)
+        XCTAssertEqual(d.view.dialog, .newSpace)
+    }
+
     /// .space(.create) creates an empty space, switches to it and closes the dialog; a blank title gets the fallback name
     func test_spaceCreateCreatesAnEmptySpaceSwitchesToItAndClosesTheDialogABlankTitle() throws {
         let d = Driver()
@@ -1397,7 +1461,9 @@ final class ReduceSpecTests: XCTestCase {
         let space = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.space(work), at: .zero)))))
         XCTAssertEqual(layout(space), ["Change Space Icon…", "Rename Space…", "Edit Theme Color…", "Set Profile ▸", "|", "New Folder", "Live Folders ▸", "|",
                                        "Share Space…", "Export “Work” into Folder ▸", "|", "Manage Spaces…", "|", "Delete Space"])
-        XCTAssertEqual(command(space, "Rename Space…"), .sidebar(.openDialog(.editSpace(.space(work)))))
+        XCTAssertEqual(command(space, "Rename Space…"), .sidebar(.openDialog(.rename(.space(work)))))
+        XCTAssertEqual(command(space, "Change Space Icon…"), .sidebar(.openDialog(.icon(.space(work)))))
+        XCTAssertEqual(command(space, "Edit Theme Color…"), .sidebar(.openDialog(.theme(.space(work)))))
         XCTAssertEqual(command(space, "Share Space…"), .app(.export(.space(.space(work)))))
         XCTAssertEqual(command(space, "Delete Space"), .space(.delete(work)))
         XCTAssertEqual(try XCTUnwrap(submenu(space, "Set Profile")).entries.first, .choice(title: "Default", command: .profile(.assign(.space(work), to: .default)), on: true))
