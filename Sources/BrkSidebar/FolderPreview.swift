@@ -176,7 +176,7 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
     var onExit: (() -> Void)?
     var onEnter: (() -> Void)?
     private(set) var pointerInside = false
-    var isSearching: Bool { searchable && (!search.stringValue.isEmpty || window?.firstResponder === search.currentEditor()) }
+    var isSearching: Bool { searchable && (!search.stringValue.isEmpty || search.currentEditor() != nil) }
     /// A card without rows is not shown, except the calendar's, which says there is nothing coming.
     var hasContent: Bool { !entries.isEmpty || !emptyLabel.stringValue.isEmpty }
 
@@ -248,7 +248,9 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        // The card's own bounds: it does not clip (its shadow draws outside), and an unclipped view's visible rect
+        // reaches past its bounds, so `.inVisibleRect` would count the page beside it as inside the card.
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
         addTrackingArea(area)
         tracking = area
     }

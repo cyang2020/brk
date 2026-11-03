@@ -408,7 +408,8 @@ extension Work {
                         entry("Replace Pinned URL with Current", .tabTools(.replacePinned(id)), enabled: drifted),
                         entry("Close and Keep Pinned", .tab(.close(.item(id))), enabled: state.session.loaded.contains(PageID(window: window, item: id))),
                     ]))
-                    let display = state.siteDisplayEntries(url: tab.url, favorite: role.kind == .favorites, item: id)
+                    // The address the row shows (a Favorite that never loaded has only its requested one).
+                    let display = state.siteDisplayEntries(url: state.displayedTab(id, in: window)?.url ?? tab.url, favorite: role.kind == .favorites, item: id)
                     if !display.isEmpty { entries += [.separator] + display }
                 }
                 entries += [.separator,
