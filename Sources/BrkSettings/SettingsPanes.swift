@@ -79,6 +79,7 @@ struct PreviewsSheet: View {
                     context.dispatch(.settings(.max(.feature(.linkPreviews, $0))))
                 }
             }
+            .controlSize(.large)
             .padding(.top, C.sheetListTop.value)
             HStack {
                 Spacer()

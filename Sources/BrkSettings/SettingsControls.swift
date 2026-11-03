@@ -181,6 +181,7 @@ struct SettingsCheckbox: NSViewRepresentable {
         context.coordinator.isOn = isOn
         context.coordinator.toggle = toggle
         button.isEnabled = context.environment.isEnabled
+        button.controlSize = size
         button.identify(.settingsField(field))
         if button.title != title { button.title = title }
         button.state = isOn ? .on : .off

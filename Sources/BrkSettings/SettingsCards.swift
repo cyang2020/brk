@@ -190,10 +190,19 @@ struct Subpage<Content: View>: View {
 
 // MARK: - Switch
 
-/// A switch for one Bool setting (SwiftUI's `.switch` toggle is this control underneath). `field` names it
-/// (`settings-field-<field>`). Like the checkbox, it shows only the snapshot: a click asks for the change and the
-/// next render shows the answer.
-struct SettingsSwitch: NSViewRepresentable {
+/// A switch for one Bool setting (SwiftUI's `.switch` toggle is this control underneath), at Arc's size: AppKit's
+/// mini switch. `field` names it (`settings-field-<field>`). Like the checkbox, it shows only the snapshot: a click
+/// asks for the change and the next render shows the answer.
+struct SettingsSwitch: View {
+    let field: String
+    let isOn: Bool
+    let toggle: @MainActor (Bool) -> Void
+
+    // SwiftUI hands its control size to the AppKit control inside a representable, so it is set here.
+    var body: some View { SwitchControl(field: field, isOn: isOn, toggle: toggle).controlSize(.mini) }
+}
+
+struct SwitchControl: NSViewRepresentable {
     let field: String
     let isOn: Bool
     let toggle: @MainActor (Bool) -> Void
@@ -212,6 +221,7 @@ struct SettingsSwitch: NSViewRepresentable {
         context.coordinator.isOn = isOn
         context.coordinator.toggle = toggle
         control.isEnabled = context.environment.isEnabled
+        control.controlSize = .mini
         control.identify(.settingsField(field))
         let state: NSControl.StateValue = isOn ? .on : .off
         if control.state != state { control.state = state }
