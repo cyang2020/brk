@@ -37,8 +37,14 @@ struct SidebarDrawMetrics: MetricGroup {
     let folderClosedRadius = Metric(3.0, .guess("corner radius of the closed folder's body in P13-a"))
     let folderGlyphShift = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the folder is centred at x 27, 1 right of the favicon slot's centre"))
     let folderGlyphLine = Metric(1.4, .guess("the folder outline is about 1.4 pt wide in the P01-a capture (3 px at 2x)"))
-    let splitSlashHeight = Metric(14.0, .guess("height of the TabCellSlash stroke between split panes"))
-    let splitSlashSlant = Metric(4.0, .guess("horizontal run of the TabCellSlash stroke"))
+    // Split rows: each pane a TabCellBackgroundChild box inside the row (measured on the 2026-11-03 Arc capture P23a/b).
+    let splitSegmentInset = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane boxes 4 pt inside the row's selection"))
+    let splitSegmentGap = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: 4 pt between pane boxes"))
+    let splitSegmentRadius = Metric(8.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane box corners about 8 pt"))
+    let splitSegmentIconLeading = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's icon 7 pt inside its box"))
+    let splitSegmentTitleLeading = Metric(36.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's title 36 pt inside its box"))
+    let peekMarkerIcon = Metric(14.0, .guess("measured on the 2026-11-03 Arc capture P22a: a 14 pt icon in the 24 pt Peek marker"))
+    let splitSegmentTitleMinWidth = Metric(80.0, .guess("the 2026-11-03 Arc capture P23b: four pane boxes of about 50 pt show icons only, two of 100 pt show titles"))
 
     // Title row (cra L1215, Arc 1.170 AX tree).
     let navButton = Metric(32.0, .anatomy("cra L1215: Go back, Go forward and Reload are 32 x 32"))
@@ -59,6 +65,7 @@ struct SidebarDrawMetrics: MetricGroup {
     // URL pill.
     /// The label's frame; its cell draws the text 2 further in, at x 21 in the sidebar.
     let pillTextLeading = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: pill at x 8, host text at x 21"))
+    let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
     let pillAccessoryGap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: copy link and site controls centred 29 apart (cra L1222-1223)"))
     let pillAccessoryGlyph = Metric(15.0, .guess("copy-link and site-control glyph size inside the 28 pt accessory"))

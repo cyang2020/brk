@@ -138,8 +138,11 @@ public final class SidebarView: NSView {
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
         canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
+        // A blank or incognito window: no favorites, no space dots, "This Window" or "Incognito Tabs" over its own tabs.
+        let thisWindow = SidebarLayout.listsOwnTabs(snapshot.kind)
+        let dockItems = thisWindow ? [] : snapshot.dock
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
-                          dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
+                          dock: dockItems, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
         guard slice != last else { return }
         let previous = last
@@ -161,21 +164,23 @@ public final class SidebarView: NSView {
         backdrop.frame = bounds
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         header.frame = local(f.titleRow)
-        header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette)
+        // In a split each pane has its own back, forward and reload (Arc moves them off the title row).
+        header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette, navigation: snapshot.content.split == nil)
         urlPill.frame = local(f.urlPill)
         urlPill.isHidden = f.urlPill.height == 0
-        urlPill.render(snapshot.urlPill, palette: palette)
+        urlPill.render(snapshot.urlPill, palette: palette, searchField: thisWindow)
+        favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
         favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         spaceHeader.frame = local(f.spaceHeader)
-        spaceHeader.render(space, palette: palette)
+        spaceHeader.render(space, palette: palette, interactive: !thisWindow)
         tablist.frame = local(f.tablistViewport)
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
-                       now: snapshot.now)
+                       newTabCurrent: thisWindow && snapshot.content.panes.isEmpty, now: snapshot.now)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
-        dock.render(snapshot.dock, frames: f, palette: palette)
+        dock.render(dockItems, frames: f, palette: palette)
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
@@ -284,7 +289,7 @@ final class TitleRowView: NSView {
     private let more = GlyphButton()
     private let dispatch: Dispatch
     private var loading = false
-    private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette)?
+    private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette, Bool)?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -308,9 +313,11 @@ final class TitleRowView: NSView {
     /// The title row moves the window (spike unknown 6); its buttons do not.
     override var mouseDownCanMoveWindow: Bool { true }
 
-    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, toolbar: Bool, palette: Palette) {
-        if let last, last.0 == pill, last.1 == f, last.2 == toolbar, last.3 == palette { return }
-        last = (pill, f, toolbar, palette)
+    /// `navigation` false hides back, forward and reload (a split shows them in each pane's header); with the
+    /// toolbar shown they are in the toolbar.
+    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, toolbar: Bool, palette: Palette, navigation: Bool = true) {
+        if let last, last.0 == pill, last.1 == f, last.2 == toolbar, last.3 == palette, last.4 == navigation { return }
+        last = (pill, f, toolbar, palette, navigation)
         loading = pill.loading
         let w = Metrics.window, size = Draw.navButton.value, gap = Draw.navGap.value
         let y = (f.titleRow.height - size) / 2
@@ -318,14 +325,15 @@ final class TitleRowView: NSView {
         toggle.frame = CGRect(x: lightsEnd + Draw.toggleGap.value, y: y, width: size, height: size)
         let right = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
         let fits = right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
-        more.isHidden = toolbar || fits
-        toggle.isHidden = !toolbar && !fits
-        if fits || toolbar {
+        let offRow = toolbar || !navigation
+        more.isHidden = offRow || fits
+        toggle.isHidden = !offRow && !fits
+        if fits || offRow {
             var x = right
             for button in [reload, forward, back] {
                 x -= size
                 button.frame = CGRect(x: x, y: y, width: size, height: size)
-                button.isHidden = toolbar
+                button.isHidden = offRow
                 x -= gap
             }
         } else {
@@ -407,18 +415,27 @@ final class URLPillView: HoverView {
         identify(.urlPill)
     }
 
-    func render(_ pill: URLPillSnapshot, palette: Palette) {
-        if pill == self.pill, palette == self.palette { needsLayout = true; return }
+    /// A blank or incognito window's pill reads as a search field while it has no page (Arc: a magnifier before
+    /// "Search or Enter URL…").
+    private var searchField = false
+
+    func render(_ pill: URLPillSnapshot, palette: Palette, searchField: Bool = false) {
+        let search = searchField && pill.text == nil
+        if pill == self.pill, palette == self.palette, search == self.searchField { needsLayout = true; return }
         self.pill = pill
         self.palette = palette
+        self.searchField = search
         let text = pill.host ?? pill.text
         label.stringValue = (text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
         toolTip = "Zoom: \(pill.zoomPercent)%"
         label.textColor = text == nil ? palette.ink.placeholder : palette.ink.secondary
         let radius = Metrics.urlPill.accessoryRadius.value
         copyLink.render(.copyLink, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
-        siteInfo.render(.siteControls, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
-        badge.render(pill.profile, palette: palette)
+        siteInfo.render(search ? .search : .siteControls, size: search ? Draw.navGlyph.value : Draw.pillAccessoryGlyph.value, palette: palette,
+                        radius: radius, hoverFill: palette.tokens.itemHover)
+        siteInfo.isEnabled = !search
+        // Arc's incognito pill keeps its own background but shows no badge (the 2026-11-03 capture Q03).
+        badge.render(pill.profile?.incognito == true ? nil : pill.profile, palette: palette)
         stateChanged()
         needsLayout = true
     }
@@ -426,9 +443,13 @@ final class URLPillView: HoverView {
     override func layout() {
         super.layout()
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
-        siteInfo.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
-        copyLink.frame = siteInfo.frame.offsetBy(dx: -(size + Draw.pillAccessoryGap.value), dy: 0)
-        let leading = Draw.pillTextLeading.value
+        // A search-field pill keeps its magnifier before the placeholder; otherwise the site controls sit at the right
+        // end with copy link before them.
+        siteInfo.frame = searchField ? CGRect(x: inset, y: (bounds.height - size) / 2, width: size, height: size)
+            : CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
+        copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
+            .offsetBy(dx: searchField ? 0 : -(size + Draw.pillAccessoryGap.value), dy: 0)
+        let leading = searchField ? inset + size + Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value
         var trailing = accessoriesShown ? copyLink.frame.minX : bounds.width - leading
         if !badge.isHidden {
             if !accessoriesShown { trailing = bounds.width - inset }
@@ -449,7 +470,7 @@ final class URLPillView: HoverView {
         layer?.backgroundColor = pill?.profile?.incognito == true && !isPressed && !isHovered
             ? ProfileBadgeView.incognitoPillBackground.cgColor : palette.color(fill).cgColor
         copyLink.alphaValue = accessoriesShown ? 1 : 0
-        siteInfo.alphaValue = accessoriesShown ? 1 : 0
+        siteInfo.alphaValue = searchField || accessoriesShown ? 1 : 0
         needsLayout = true
     }
 

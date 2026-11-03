@@ -14,13 +14,21 @@ enum SplitParentScenarios {
         _ = try app.send(.pointer(window: app.window, phase: phase, point: point))
     }
 
+    /// Find sits in the page under its pane's header (Arc's split panes each have one; there is no split toolbar).
     private static func toolbarAvoidsFind(_ app: AppUnderTest) throws {
         let native = try app.native()
         let bar = try visible(native, .findBar).frame
-        for action in [ActionID.splitHorizontal, .splitVertical, .maximizeSplitPane, .separateTabFromSplitView, .separateAllSplit] {
-            let button = try visible(native, .splitTool(action)).frame
-            try expect(!bar.intersects(button), "Split control \(action) is covered by Find")
+        for card in native.computed.cards {
+            guard let header = card.header else { continue }
+            try expect(!bar.intersects(header), "Find covers pane \(card.pane)'s header")
         }
+    }
+
+    /// What the removed split toolbar's buttons did, through the commands the View menu and the pane header's split
+    /// menu send (`.maximizeSplitPane` restores while the split is expanded).
+    static func splitTool(_ app: AppUnderTest, _ action: ActionID) throws {
+        let expanded = try app.view().content.expanded
+        try app.dispatch(action == .maximizeSplitPane && expanded ? .split(.restore) : action.spec.command)
     }
 
     private static func findAndTools(_ app: AppUnderTest) throws {
@@ -51,16 +59,16 @@ enum SplitParentScenarios {
         try app.press("cmd+f"); try FindScenarios.typeQuery(app, "needle"); try FindScenarios.matches(app, 3)
         try expect(try app.view().find?.page == fourth, "Find is not owned by pane four")
         try toolbarAvoidsFind(app)
-        try app.click(.splitTool(.maximizeSplitPane))
+        try splitTool(app, .maximizeSplitPane)
         try expect(try app.view().content.expanded && app.native().computed.cards.first?.pane == 3, "Expansion lost the original pane index")
         try expect(try app.view().find?.page == fourth, "Expansion retargeted Find")
         try toolbarAvoidsFind(app)
         try app.screenshot("expanded-find-and-tools")
-        try app.click(.splitTool(.maximizeSplitPane))
-        try app.click(.splitTool(.splitVertical))
+        try splitTool(app, .maximizeSplitPane)
+        try splitTool(app, .splitVertical)
         try expect(try app.view().content.orientation == .vertical && app.view().find?.page == fourth, "Orientation changed Find's owner")
         try toolbarAvoidsFind(app)
-        try app.click(.splitTool(.separateTabFromSplitView))
+        try splitTool(app, .separateTabFromSplitView)
         try expect(try app.view().content.split == nil && app.view().find?.page == fourth, "Separate lost the original Find owner")
         try FindScenarios.matches(app, 3)
         try expect(try app.pageLog().filter { $0.kind == .created && panes.contains($0.page.item) } == before, "Split tools recreated a browser")

@@ -62,7 +62,7 @@ enum CommandInventory {
         .library(.open(.archive)), .library(.close), .library(.cancelDownload(download)), .library(.revealDownload(download)),
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
-        .peek(.email), .peek(.open(example)), .peek(.close),
+        .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
         .profile(.assign(.current, to: profile)), .profile(.openDialog(.create)),
         .site(.loadBlockingRules), .site(.selectedBlockingRules(URL(fileURLWithPath: "/tmp/fixture"), .profile(profile))), .site(.resetBlockingRules),
@@ -374,7 +374,7 @@ enum CommandInventory {
             case .openIn: "openIn"
             case .openInFolder: "openInFolder"
             }
-        case .peek(let c): switch c { case .email: "email"; case .open: "open"; case .close: "close" }
+        case .peek(let c): switch c { case .email: "email"; case .open: "open"; case .close: "close"; case .openAsTab: "openAsTab"; case .openInSplit: "openInSplit" }
         case .profile(let c):
             switch c {
             case .create: "create"
