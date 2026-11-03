@@ -41,6 +41,8 @@ public struct FindSnapshot: Equatable, Sendable, Codable {
     public var message: String
     public var scope: String
     public var focusRequest: FindRequestID?
+    /// A finished search with no match: the bar says NOT FOUND and hides its arrows.
+    public var notFound: Bool { count == 0 && !searching && !query.text.isEmpty }
 }
 
 extension AppState {
