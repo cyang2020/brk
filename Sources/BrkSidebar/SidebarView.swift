@@ -59,6 +59,7 @@ public final class SidebarView: NSView {
         var resizeHandle: CGRect?
         var revealStrip: CGRect?
         var palette: Palette
+        var creating: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -114,7 +115,8 @@ public final class SidebarView: NSView {
         let space = SidebarLayout.space(in: snapshot)
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: snapshot.dock, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
-                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette)
+                          floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
+                          creating: snapshot.dialog == .newSpace)
         guard slice != last else { return }
         let previous = last
         last = slice
@@ -148,7 +150,10 @@ public final class SidebarView: NSView {
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
-        dock.render(snapshot.dock, frames: f, palette: palette)
+        dock.render(snapshot.dock, frames: f, palette: palette, creating: slice.creating)
+        // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
+        for view in [urlPill, favorites, tablist] as [NSView] { view.isHidden = slice.creating }
+        if slice.creating { spaceHeader.isHidden = true }
         drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
@@ -353,7 +358,11 @@ final class URLPillView: HoverView {
         label.textColor = pill.text == nil ? palette.ink.placeholder : palette.ink.secondary
         copyLink.render(.copyLink, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
                         hoverFill: palette.tokens.itemHover)
-        siteInfo.render(.siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
+        // With no page the pill reads as a search field (Arc, P24 e): a magnifier, not the site controls, and a click
+        // on it is a click on the pill.
+        siteInfo.render(pill.text == nil ? .search : .siteControls, size: Draw.navGlyph.value, palette: palette, radius: Metrics.urlPill.accessoryRadius.value,
+                        hoverFill: pill.text == nil ? nil : palette.tokens.itemHover)
+        siteInfo.action = pill.text == nil ? { [dispatch] _ in dispatch(.commandBar(.open(.editCurrent))) } : { [dispatch] _ in dispatch(.site(.controls)) }
         shimmer.colors = [NSColor.systemPurple.withAlphaComponent(0.35).cgColor, NSColor.systemBlue.withAlphaComponent(0.7).cgColor, NSColor.systemOrange.withAlphaComponent(0.8).cgColor]
         shimmer.shadowColor = palette.ink.loading.cgColor
         shimmer.shadowOpacity = 0.85

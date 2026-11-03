@@ -4,46 +4,119 @@ import XCTest
 @testable import BrkOverlays
 import BrkBase
 @testable import BrkDomain
+@testable import BrkLayout
+import BrkUIKit
 
-// Ported from electron-v1:src/renderer/sidebar/SpaceDialog.test.tsx, against the Swift commands: Save sends the
-// name, the picked icon and the theme with the picked preset as its primary color; Cancel closes without changes.
+// The space dialogs against the 2026-11-03 Arc captures: Create a Space sends the typed name, the picked icon and
+// the theme; the theme panel's edits land on both appearances and its pad is Arc's hue wheel; Rename and the delete
+// confirmation send their commands; the dialogs are Arc's 450 pt cards centred in the window.
 
 private let editTheme = SpaceTheme(colors: [ThemePresets.brand[3]], wheel: .complementary, texture: .denim, noise: 0.2,
                                    intensity: 0.4, appearance: .light)
 
-final class SpaceDraftTests: XCTestCase {
-    func testSaveOnANewSpaceSendsTheTrimmedNameThePickedIconAndThePickedPreset() {
-        var draft = SpaceDraft(.newSpace)
-        draft.title = "  Work "
-        draft.icon = .custom(.named(.briefcase))
-        draft.pickColor(ThemePresets.drab[8])
-        var expected = SpaceTheme.default
-        expected.colors = [ThemePresets.drab[8]]
-        XCTAssertEqual(draft.saveCommand, .space(.create(title: "Work", icon: .custom(.named(.briefcase)), theme: expected)))
-        XCTAssertTrue(draft.isPicked(ThemePresets.drab[8]))
-        XCTAssertFalse(draft.isPicked(SpaceTheme.default.colors[0]))
+@MainActor
+final class SpaceCreateDraftTests: XCTestCase {
+    func testCreateSpaceNeedsANameAndSendsTheTrimmedNameIconThemeAndProfile() {
+        var draft = SpaceCreateDraft()
+        XCTAssertFalse(draft.canCreate)
+        XCTAssertNil(draft.createCommand, "Arc's Create Space is disabled until a name is typed")
+        draft.name = "  流程 "
+        draft.icon = .custom(.emoji("📘"))
+        draft.profile = ProfileID("work")
+        XCTAssertEqual(draft.createCommand, .space(.create(title: "流程", icon: .custom(.emoji("📘")), theme: SpaceCreateDraft.defaultTheme, profile: ProfileID("work"))))
+        XCTAssertEqual(SpaceCreateDraft.cancelCommand, .sidebar(.openDialog(nil)))
     }
 
-    func testEditingStartsFromTheSpaceAndSaveUpdatesIt() {
-        var draft = SpaceDraft(.editSpace(id: SpaceID("s2"), title: "Work", icon: .custom(.named(.briefcase)), theme: editTheme))
-        XCTAssertEqual(draft.title, "Work")
-        XCTAssertTrue(draft.isPicked(ThemePresets.brand[3]))
+    func testThePickedPresetIsTheCreatedSpacesTheme() {
+        let model = SpaceCreateModel(dispatch: { _ in })
+        XCTAssertFalse(model.theme.chosen, "the pad says \"Tap to pick a color for this space\" until a color is picked")
+        model.theme.update { $0.setColor(ThemePresets.greyscale[0], at: 0) }
+        XCTAssertTrue(model.draft.themeChosen)
+        XCTAssertEqual(ThemeDraft(theme: model.draft.theme).colors.first, ThemePresets.greyscale[0])
+        model.draft.name = "流程"
+        guard case .space(.create(_, _, let theme, _))? = model.draft.createCommand else { return XCTFail("no create command") }
+        XCTAssertEqual(resolveTheme(theme).gradient.first, ThemePresets.greyscale[0])
+    }
+
+    func testTheCreateButtonIsArcsBlueUntilAThemeIsPickedThenADeepShadeOfIt() {
+        var draft = SpaceCreateDraft()
+        let blue = draft.accent(systemScheme: .light)
+        XCTAssertEqual(blue.hex, "#1E2CFF")
+        draft.themeChosen = true
+        draft.theme = SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto)
+        let brown = HSL(draft.accent(systemScheme: .light))
+        XCTAssertEqual(brown.hue, HSL(ThemePresets.brand[0]).hue, accuracy: 1, "cream gives a brown of its own hue (#725137 in Arc)")
+        XCTAssertLessThan(brown.lightness, 0.4)
+    }
+}
+
+final class ThemeDraftTests: XCTestCase {
+    func testEditsLandOnBothAppearancesAndTheLegacyFieldsFollow() {
+        var draft = ThemeDraft(theme: editTheme)
+        draft.setColor(ThemePresets.pastel[2], at: 0)
+        draft.setIntensity(0.9)
+        draft.setNoise(0.1)
+        XCTAssertEqual(draft.theme.variants?.light.colors.first?.color, ThemePresets.pastel[2])
+        XCTAssertEqual(draft.theme.variants?.dark.colors.first?.color, ThemePresets.pastel[2])
+        XCTAssertEqual(draft.theme.colors.first, ThemePresets.pastel[2])
+        XCTAssertEqual(draft.theme.intensity, 0.9)
+        XCTAssertEqual(draft.theme.noise, 0.1)
+        XCTAssertEqual(draft.theme.texture, .denim, "the panel has no texture control (P28 d); the stored texture stays")
+    }
+
+    func testPlusAddsTheComplementAndMinusNeverRemovesTheLastColor() {
+        var draft = ThemeDraft(theme: SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto))
+        draft.addColor()
+        XCTAssertEqual(draft.colors.count, 2)
+        XCTAssertEqual(HSL(draft.colors[1]).hue, (HSL(draft.colors[0]).hue + 180).truncatingRemainder(dividingBy: 360), accuracy: 1)
+        draft.addColor(); draft.addColor()
+        XCTAssertEqual(draft.colors.count, 3)
+        draft.removeColor(at: 0); draft.removeColor(at: 0); draft.removeColor(at: 0)
+        XCTAssertEqual(draft.colors.count, 1)
+    }
+
+    func testTheAppearanceButtonsSetTheSelection() {
+        var draft = ThemeDraft(theme: SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto), systemScheme: .light)
+        XCTAssertEqual(draft.appearance, .auto)
+        draft.setAppearance(.dark)
+        XCTAssertEqual(draft.theme.variants?.selection, .dark)
+        XCTAssertEqual(draft.resolved.scheme, .dark)
+    }
+
+    func testThePadIsArcsHueWheel() {
+        // P28 a: the cream preset sits 29° below the right-hand axis at 0.82 of the inscribed radius.
+        let cream = ThemePad.point(of: ThemePresets.brand[0])
+        let angle = atan2(cream.y - 0.5, cream.x - 0.5) * 180 / .pi
+        XCTAssertEqual(angle, HSL(ThemePresets.brand[0]).hue, accuracy: 0.5)
+        XCTAssertEqual(hypot(cream.x - 0.5, cream.y - 0.5) / 0.5, 0.82, accuracy: 0.02)
+        // Round trip: a dot dragged to where a color sits picks that color.
+        for color in [ThemePresets.brand[3], ThemePresets.drab[7], ThemePresets.pastel[4]] {
+            let back = ThemePad.color(at: ThemePad.point(of: color), saturation: HSL(color).saturation)
+            XCTAssertEqual(back.hex, color.hex)
+        }
+    }
+
+    func testThePresetPagesAreInArcsOrder() {
+        XCTAssertEqual(ThemePresets.pages.map(\.name), ["Brand", "Pastel", "Drab", "Greyscale"])
+        XCTAssertEqual(ThemePresets.pages.map(\.colors.count), [9, 9, 9, 9])
+    }
+}
+
+final class SpaceDraftTests: XCTestCase {
+    func testEditSpaceSavesTheNameAndIconOnly() {
+        var draft = SpaceDraft(.editSpace(id: SpaceID("s2"), title: "Work", icon: .custom(.named(.briefcase)), theme: editTheme))!
+        draft.title = " Work 2 "
         draft.icon = SpaceIcon.none
-        XCTAssertEqual(draft.saveCommand, .space(.update(SpaceID("s2"), title: "Work", icon: SpaceIcon.none, theme: editTheme)))
-        // A preset keeps the editor's other settings: only the primary color changes.
-        draft.pickColor(ThemePresets.pastel[0])
-        var picked = editTheme
-        picked.colors = [ThemePresets.pastel[0]]
-        XCTAssertEqual(draft.theme, picked)
+        XCTAssertEqual(draft.saveCommand, .space(.update(SpaceID("s2"), title: "Work 2", icon: SpaceIcon.none, theme: nil)))
+        XCTAssertNil(SpaceDraft(.newSpace))
     }
 
     func testTheLastEmojiTypedBecomesTheIconAndClearingItGoesBackToNone() {
-        var draft = SpaceDraft(.newSpace)
+        var draft = SpaceDraft(.editSpace(id: SpaceID("s2"), title: "Work", icon: .none, theme: editTheme))!
         draft.setEmoji("🚀")
         XCTAssertEqual(draft.icon, .custom(.emoji("🚀")))
         draft.setEmoji("🚀👨‍👩‍👧")
         XCTAssertEqual(draft.icon, .custom(.emoji("👨‍👩‍👧")), "one emoji, even when it is several code points")
-        XCTAssertEqual(draft.emoji, "👨‍👩‍👧")
         draft.setEmoji("")
         XCTAssertEqual(draft.icon, SpaceIcon.none)
         draft.icon = .custom(.named(.star))
@@ -51,61 +124,32 @@ final class SpaceDraftTests: XCTestCase {
         XCTAssertEqual(draft.icon, .custom(.named(.star)), "an empty emoji field leaves a named icon alone")
     }
 
-    func testCancelClosesTheDialogWithoutChangingAnything() {
-        XCTAssertEqual(SpaceDraft.cancelCommand, .sidebar(.openDialog(nil)))
-    }
-
-    func testTheFourPresetSetsOfNineInEditorOrder() {
-        XCTAssertEqual(presetSets.map(\.name), ["Brand", "Drab", "Greyscale", "Pastel"])
-        XCTAssertEqual(presetSets.map(\.colors.count), [9, 9, 9, 9])
-        XCTAssertEqual(presetSets[1].colors.map(\.hex).last, "#2D4468")
+    func testTheEmojiSearchUsesUnicodeNames() {
+        XCTAssertTrue(EmojiCatalog.matching("blue book").contains("📘"))
+        XCTAssertEqual(EmojiCatalog.categories.first?.emoji.prefix(8).joined(), "😀😃😄😁😆😅🤣😂", "P10 c's first row")
+        XCTAssertEqual(EmojiCatalog.categories.count, 8)
     }
 }
 
-/// The form as a user drives it: real mouse and key events through `NSApp.sendEvent` into a window that holds it.
+final class SpaceAlertKindTests: XCTestCase {
+    func testRenameSendsTheTrimmedNameAndRefusesABlankOne() {
+        let rename = SpaceAlertKind.rename(id: SpaceID("s"), title: "对照")
+        XCTAssertEqual(rename.confirmCommand(name: " 新名 "), .space(.update(SpaceID("s"), title: "新名", icon: nil, theme: nil)))
+        XCTAssertNil(rename.confirmCommand(name: "  "))
+        XCTAssertEqual(rename.cancelCommand, .sidebar(.openDialog(nil)))
+    }
+
+    func testDeleteConfirmsOrCancelsWithItsToken() {
+        let request = SpaceDeletionRequest(id: SpaceID("s"), title: "对照", token: "t1")
+        XCTAssertEqual(SpaceAlertKind.delete(request).confirmCommand(name: ""), .space(.confirmDelete(SpaceID("s"), token: "t1", confirmed: true)))
+        XCTAssertEqual(SpaceAlertKind.delete(request).cancelCommand, .space(.confirmDelete(SpaceID("s"), token: "t1", confirmed: false)))
+    }
+}
+
+/// The dialogs as a user drives them: real key events through `NSApp.sendEvent` into a window that holds them.
 @MainActor
 final class SpaceDialogHostTests: XCTestCase {
     private var sent: [Command] = []
-
-    /// The centre of the pixels of `color` in a capture of `window` (by window id, as the control socket's
-    /// screenshot does), in window coordinates from the top-left.
-    private func centre(of color: RGBA, in window: NSWindow) -> CGPoint? {
-        guard let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming]),
-              let space = CGColorSpace(name: CGColorSpace.sRGB),
-              let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
-                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        guard let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
-        let target = [color.red, color.green, color.blue].map { Int(($0 * 255).rounded()) }
-        var sumX = 0, sumY = 0, count = 0
-        for y in 0..<image.height {
-            for x in 0..<image.width {
-                let p = (y * image.width + x) * 4
-                if abs(Int(data[p]) - target[0]) <= 3, abs(Int(data[p + 1]) - target[1]) <= 3, abs(Int(data[p + 2]) - target[2]) <= 3 {
-                    sumX += x
-                    sumY += y
-                    count += 1
-                }
-            }
-        }
-        guard count > 0 else { return nil }
-        // The bitmap context's first row is the image's top row.
-        let scale = CGFloat(image.width) / window.frame.width
-        return CGPoint(x: CGFloat(sumX) / CGFloat(count) / scale, y: CGFloat(sumY) / CGFloat(count) / scale)
-    }
-
-    /// A click at a window point measured from the top-left.
-    private func click(_ point: CGPoint, in window: NSWindow) {
-        let location = CGPoint(x: point.x, y: window.frame.height - point.y)
-        func event(_ type: NSEvent.EventType) -> NSEvent {
-            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-        }
-        NSApp.postEvent(event(.leftMouseUp), atStart: false)
-        NSApp.sendEvent(event(.leftMouseDown))
-        if let up = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true) { NSApp.sendEvent(up) }
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
-    }
 
     private func press(_ key: UInt16, _ characters: String, in window: NSWindow) {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
@@ -117,7 +161,13 @@ final class SpaceDialogHostTests: XCTestCase {
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
     }
 
-    func testClickingASwatchThenReturnCreatesTheSpaceWithThatPresetAndEscapeCancels() throws {
+    private func type(_ text: String, in window: NSWindow) {
+        (window.firstResponder as? NSTextView)?.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+    }
+
+    /// A 1280 x 776 window with a 228 pt sidebar (dock 50 at the bottom) and the content area beside it.
+    private func harness() -> (NSWindow, SpaceDialogHost, WindowFrames) {
         _ = NSApplication.shared
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1280, height: 776), styleMask: [.titled, .fullSizeContentView],
                               backing: .buffered, defer: false)
@@ -125,40 +175,117 @@ final class SpaceDialogHostTests: XCTestCase {
         window.contentView = root
         let host = SpaceDialogHost(dispatch: { [unowned self] in self.sent.append($0) })
         root.addSubview(host)
-        let area = CGRect(x: 238, y: 10, width: 1032, height: 756)
-        host.show(.newSpace, in: area, scheme: .light)
+        let sidebar = SidebarFrames(frame: CGRect(x: 0, y: 0, width: 228, height: 776), titleRow: CGRect(x: 0, y: 4, width: 228, height: 40),
+                                    trafficLightsOrigin: CGPoint(x: 13, y: 17), urlPill: CGRect(x: 8, y: 48, width: 212, height: 36),
+                                    favoritesTray: .zero, favoriteTiles: [:], spaceHeader: CGRect(x: 0, y: 140, width: 228, height: 36),
+                                    tablistViewport: CGRect(x: 0, y: 176, width: 228, height: 550), rows: [],
+                                    dock: CGRect(x: 0, y: 726, width: 228, height: 50), dockSpaces: [:], libraryButton: .zero, plusButton: .zero)
+        let frames = WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: sidebar, sidebarFloats: false, resizeHandle: nil,
+                                  revealStrip: nil, contentArea: CGRect(x: 238, y: 10, width: 1032, height: 756), cards: [], dividers: [],
+                                  commandBar: nil, library: nil, peek: nil)
         window.makeKeyAndOrderFront(nil)
+        return (window, host, frames)
+    }
+
+    func testRenameIsArcsCentredCardWithTheNameSelectedAndReturnRenames() throws {
+        let (window, host, frames) = harness()
         defer { window.orderOut(nil) }
+        host.render(.rename(id: SpaceID("s"), title: "对照"), deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
         host.layoutSubtreeIfNeeded()
-
-        // Centred in the content area, Arc-popover wide, as tall as the form (no titlebar inset).
-        XCTAssertEqual(host.frame.width, 420)
-        XCTAssertEqual(host.frame.midX, area.midX, accuracy: 1)
-        XCTAssertEqual(host.frame.midY, area.midY, accuracy: 1)
-        XCTAssertEqual(host.accessibilityIdentifier(), "space-dialog")
+        let alert = try XCTUnwrap(host.alert)
+        alert.layoutSubtreeIfNeeded()
+        alert.dialog.layoutSubtreeIfNeeded()
+        XCTAssertEqual(alert.card.frame.size, CGSize(width: 450, height: 222), "P26 a")
+        XCTAssertEqual(alert.card.frame.midX, 640, accuracy: 1)
+        XCTAssertEqual(alert.card.frame.midY, 388, accuracy: 1)
         XCTAssertTrue(host.focusForm(), "the name field takes keyboard focus")
-
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
-        let drab9 = try XCTUnwrap(centre(of: ThemePresets.drab[8], in: window), "the Drab 9 swatch is drawn")
-        click(drab9, in: window)
+        let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2), "the name is selected")
+        type("新名", in: window)
         press(36, "\r", in: window)
-        var drab = SpaceTheme.default
-        drab.colors = [ThemePresets.drab[8]]
-        XCTAssertEqual(sent, [.space(.create(title: "", icon: SpaceIcon.none, theme: drab))])
-
-        press(53, "\u{1b}", in: window)
+        XCTAssertEqual(sent.last, .space(.update(SpaceID("s"), title: "新名", icon: nil, theme: nil)))
+        alert.cancel.action()
         XCTAssertEqual(sent.last, .sidebar(.openDialog(nil)))
     }
 
-    func testTheSameDialogKeepsTheFormAndAnotherOneStartsFresh() throws {
-        let host = SpaceDialogHost(dispatch: { _ in })
-        let area = CGRect(x: 238, y: 10, width: 1032, height: 756)
-        host.show(.newSpace, in: area, scheme: .light)
-        let first = try XCTUnwrap(host.hosting)
-        host.show(.newSpace, in: area, scheme: .dark)
-        XCTAssertTrue(host.hosting === first, "a re-render of the same dialog keeps what was typed")
-        host.show(.editSpace(id: SpaceID("s2"), title: "Work", icon: .none, theme: editTheme), in: area, scheme: .dark)
-        XCTAssertFalse(host.hosting === first)
-        XCTAssertFalse(host.isHidden)
+    func testDeleteIsArcsCentredCardAndReturnConfirmsWithTheToken() throws {
+        let (window, host, frames) = harness()
+        defer { window.orderOut(nil) }
+        let request = SpaceDeletionRequest(id: SpaceID("s"), title: "对照", token: "t1")
+        host.render(nil, deletion: request, frames: frames, palette: Palette(resolveTheme(.default)))
+        let alert = try XCTUnwrap(host.alert)
+        host.layoutSubtreeIfNeeded(); alert.layoutSubtreeIfNeeded(); alert.dialog.layoutSubtreeIfNeeded()
+        XCTAssertEqual(alert.card.frame.size, CGSize(width: 450, height: 273), "P27 a")
+        XCTAssertTrue(host.focusForm())
+        press(36, "\r", in: window)
+        XCTAssertEqual(sent.last, .space(.confirmDelete(SpaceID("s"), token: "t1", confirmed: true)))
+        host.render(nil, deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
+        XCTAssertNil(host.alert)
+        XCTAssertTrue(host.isHidden)
+    }
+
+    func testCreateASpaceTakesTheSidebarsPlaceAndReportsItsDraft() throws {
+        let (window, host, frames) = harness()
+        defer { window.orderOut(nil) }
+        var drafts: [(SpaceTheme, SpaceIcon)?] = []
+        host.onDraft = { drafts.append($0) }
+        host.render(.newSpace, deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
+        host.layoutSubtreeIfNeeded()
+        let flow = try XCTUnwrap(host.subviews.first { $0.accessibilityIdentifier() == "space-dialog" })
+        XCTAssertEqual(flow.frame, CGRect(x: 0, y: 44, width: 228, height: 682), "between the title row and the dock")
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertTrue(host.focusForm(), "the name field takes keyboard focus")
+        type("流程", in: window)
+        press(36, "\r", in: window)
+        XCTAssertEqual(sent.last, .space(.create(title: "流程", icon: .none, theme: SpaceCreateDraft.defaultTheme, profile: .default)))
+        host.render(nil, deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
+        XCTAssertNil(drafts.last!, "closing the flow clears the draft")
+    }
+
+    func testEditSpaceIsTheNameAndIconFormCentredInTheContentArea() throws {
+        let (window, host, frames) = harness()
+        defer { window.orderOut(nil) }
+        host.render(.editSpace(id: SpaceID("s2"), title: "Work", icon: .none, theme: editTheme), deletion: nil, frames: frames, palette: Palette(resolveTheme(.default)))
+        let card = try XCTUnwrap(host.editCardFrame)
+        XCTAssertEqual(card.width, 420)
+        XCTAssertEqual(card.midX, frames.contentArea.midX, accuracy: 1)
+        XCTAssertTrue(host.focusForm())
+    }
+
+    func testNewProfileIsTwoStepsInArcsCentredCard() throws {
+        let (window, host, frames) = harness()
+        defer { window.orderOut(nil) }
+        ProfileDialogHost.render(.create, over: host, frames: frames, palette: Palette(resolveTheme(.default)))
+        let profile = try XCTUnwrap(window.contentView?.subviews.compactMap { $0 as? ProfileDialogHost }.first)
+        profile.layoutSubtreeIfNeeded()
+        let view = try XCTUnwrap(profile.subviews.first as? ProfileDialogView)
+        view.layoutSubtreeIfNeeded(); view.dialog.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.dialog.card.frame.width, 450)
+        XCTAssertEqual(view.dialog.card.frame.height, 424, accuracy: 6, "P42 a")
+        XCTAssertFalse(view.dialog.confirm.isEnabled, "Next waits for a name")
+        XCTAssertTrue(ProfileDialogHost.focus(over: host))
+        type("Work", in: window)
+        press(36, "\r", in: window)
+        XCTAssertTrue(sent.isEmpty, "Next shows the icon step; nothing is created yet")
+        press(36, "\r", in: window)
+        XCTAssertEqual(sent.last, .profile(.create(name: "Work", icon: nil)))
+    }
+
+    func testChangeProfileIsArcsCentredCardNamingTheSpace() throws {
+        let (window, host, frames) = harness()
+        defer { window.orderOut(nil) }
+        let rows = [ProfileRow(id: .default, name: "Default", icon: nil, spaceTitles: ["对照"], isDefault: true),
+                    ProfileRow(id: ProfileID("w"), name: "Work", icon: nil, spaceTitles: [], isDefault: false)]
+        ProfileDialogHost.render(.change(space: SpaceID("s"), current: .default, profiles: rows), over: host, frames: frames,
+                                 palette: Palette(resolveTheme(.default)), spaceNames: [SpaceID("s"): "对照"])
+        let profile = try XCTUnwrap(window.contentView?.subviews.compactMap { $0 as? ProfileDialogHost }.first)
+        profile.layoutSubtreeIfNeeded()
+        let view = try XCTUnwrap(profile.subviews.first as? ProfileDialogView)
+        view.layoutSubtreeIfNeeded(); view.dialog.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.dialog.card.frame.width, 450)
+        XCTAssertEqual(view.dialog.card.frame.height, 332, accuracy: 6, "Q04 a")
+        XCTAssertTrue(ProfileDialogHost.focus(over: host))
+        press(36, "\r", in: window)
+        XCTAssertEqual(sent.last, .profile(.openDialog(nil)), "confirming the current profile just closes")
     }
 }

@@ -345,9 +345,9 @@ extension ActionID {
         // MARK: Spaces (groups: New Space… to Change Profile | Next, Previous | Manage Spaces…)
         case .newSpace: entry(124, "New Space…", .spaces, 0, [], .sidebar(.openDialog(.newSpace)), bar: listing("plus.rectangle.portrait", "Create New Space"))
         case .editSpaceTheme:
-            entry(125, "Edit Theme…", .spaces, 0, [], .sidebar(.openDialog(.editSpace(.current))),
+            entry(125, "Edit Theme…", .spaces, 0, [], .sidebar(.openDialog(.theme(.current))),
                   bar: listing("paintbrush.pointed.fill", "Theme", "Edit Theme", "Edit Space Theme"))
-        case .renameSpace: entry(126, "Rename Space", .spaces, 0, [], .sidebar(.openDialog(.editSpace(.current))), bar: listing("character.cursor.ibeam"))
+        case .renameSpace: entry(126, "Rename Space", .spaces, 0, [], .sidebar(.openDialog(.rename(.current))), bar: listing("character.cursor.ibeam"))
         case .changeProfile: entry(127, "Change Profile", .spaces, 0, [], .profile(.openDialog(.change(.current))), bar: listing("person.fill"))
         case .focusNextSpace:
             entry(128, "Next Space", .spaces, 1, [key([opt, cmd], .rightArrow, .page)], .space(.step(.next)), bar: listing("arrow.right.to.line", "Focus Next Space"),

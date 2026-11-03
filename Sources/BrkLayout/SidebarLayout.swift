@@ -96,7 +96,8 @@ public enum FavoritesGrid {
 }
 
 /// The tab list: spacer (2), Pinned rows (none while the section is collapsed; a collapsed folder's children are not
-/// laid out), the Pinned/Today divider (16), Today's New Tab row, then Today's rows. Rows are 40 tall on a 41 pitch
+/// laid out), the Pinned/Today divider (16; none while Pinned is empty, as Arc's new space, P24 e), Today's New Tab
+/// row, then Today's rows. Rows are 40 tall on a 41 pitch
 /// (1 pt between rows); a split is one row; `depth` is the folder nesting for the indent.
 public enum TablistLayout {
     public static func rows(_ space: SpaceSnapshot, width: Double) -> [RowFrame] {
@@ -115,7 +116,7 @@ public enum TablistLayout {
         }
         add(.topSpacer, height: t.topSpacerHeight.value)
         if !space.pinned.collapsed || space.pinned.peeked { addRows(space.pinned.rows, depth: 0) }
-        add(.divider, height: t.dividerRowHeight.value)
+        if !space.pinned.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value) }
         add(.newTab, height: t.rowHeight.value)
         addRows(space.today.rows, depth: 0)
         return out

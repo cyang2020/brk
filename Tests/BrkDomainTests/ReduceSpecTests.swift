@@ -1006,6 +1006,60 @@ final class ReduceSpecTests: XCTestCase {
     }
 
     // MARK: reduce: spaces and archive
+    /// Arc's space dialogs (2026-11-03 captures P26, P10 c, P28): Rename opens the rename dialog with the dock's
+    /// name, Change Space Icon… the icon popover, Edit Theme… the theme panel, which stays open while its edits are
+    /// saved; a rename or an icon closes its dialog. The delete confirmation takes focus, Esc cancels it, and a
+    /// confirmed deletion says "Space deleted!".
+    func test_spaceDialogsRenameIconThemeAndTheDeleteConfirmation() throws {
+        let d = Driver()
+        let first = d.view.space.id
+        let work = d.newSpace("Work", color: ThemePresets.drab[3])
+        d.user(.sidebar(.openDialog(.rename(.current))))
+        XCTAssertEqual(d.view.dialog, .rename(id: work, title: "Work"))
+        XCTAssertEqual(d.view.focus, .spaceDialog)
+        d.user(.space(.update(work, title: "Work 2", icon: nil, theme: nil)))
+        XCTAssertNil(d.view.dialog)
+        XCTAssertEqual(d.view.space.title, "Work 2")
+        d.user(.sidebar(.openDialog(.icon(.space(work)))))
+        XCTAssertEqual(d.view.dialog, .icon(id: work, icon: .none))
+        d.user(.space(.update(work, title: nil, icon: .custom(.emoji("📘")), theme: nil)))
+        XCTAssertNil(d.view.dialog)
+        d.user(.sidebar(.openDialog(.theme(.current))))
+        var pastel = SpaceTheme(colors: [ThemePresets.pastel[1]], texture: .grain, intensity: 0.6, appearance: .auto)
+        d.user(.space(.update(work, title: nil, icon: nil, theme: pastel)))
+        guard case .theme(work, let saved)? = d.view.dialog else { return XCTFail("the theme panel closed on an edit") }
+        XCTAssertEqual(saved.colors, pastel.colors)
+        pastel.intensity = 0.1
+        d.user(.space(.update(work, title: nil, icon: nil, theme: pastel)))
+        guard case .theme(work, let lighter)? = d.view.dialog else { return XCTFail("the theme panel closed on the second edit") }
+        XCTAssertEqual(lighter.intensity, 0.1)
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.dialog, "Esc closes the theme panel")
+        d.user(.space(.requestDelete(work)))
+        let request = try XCTUnwrap(d.view.pendingSpaceDeletion)
+        XCTAssertEqual(d.view.focus, .spaceDialog, "the delete dialog takes focus so Return confirms")
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.pendingSpaceDeletion, "Esc cancels the confirmation")
+        XCTAssertEqual(d.view.dock.count, 2)
+        d.user(.space(.requestDelete(work)))
+        let again = try XCTUnwrap(d.view.pendingSpaceDeletion)
+        XCTAssertNotEqual(again.token, request.token)
+        d.user(.space(.confirmDelete(work, token: again.token, confirmed: true)))
+        XCTAssertEqual(d.view.dock.map(\.id), [first])
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Space deleted!")
+    }
+
+    /// A profile dialog opened over Create a Space takes focus and Esc closes it first.
+    func test_aProfileDialogOverCreateASpaceTakesFocusAndEscFirst() {
+        let d = Driver()
+        d.user(.sidebar(.openDialog(.newSpace)))
+        d.user(.profile(.openDialog(.create)))
+        XCTAssertEqual(d.view.focus, .profileDialog)
+        d.user(.app(.exit))
+        XCTAssertNil(d.view.profileDialog)
+        XCTAssertEqual(d.view.dialog, .newSpace)
+    }
+
     /// .space(.create) creates an empty space, switches to it and closes the dialog; a blank title gets the fallback name
     func test_spaceCreateCreatesAnEmptySpaceSwitchesToItAndClosesTheDialogABlankTitle() throws {
         let d = Driver()
@@ -1388,9 +1442,9 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.todayIDs, [a])
         let space = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.space(work), at: .zero)))))
         XCTAssertEqual(space.entries, [
-            .action(title: "Rename Space", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
-            .action(title: "Change Space Icon…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
-            .action(title: "Edit Theme Color…", command: .sidebar(.openDialog(.editSpace(.space(work)))), enabled: true),
+            .action(title: "Rename Space", command: .sidebar(.openDialog(.rename(.space(work)))), enabled: true),
+            .action(title: "Change Space Icon…", command: .sidebar(.openDialog(.icon(.space(work)))), enabled: true),
+            .action(title: "Edit Theme Color…", command: .sidebar(.openDialog(.theme(.space(work)))), enabled: true),
             .separator,
             .action(title: "Reset All Pinned Tabs", command: .tabTools(.resetPinned), enabled: true),
             .action(title: "Collapse All Folders", command: .tabTools(.folders(expanded: false)), enabled: true),

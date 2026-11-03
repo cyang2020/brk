@@ -49,6 +49,9 @@ public final class ContentAreaView: NSView {
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
     /// i hosts the surface for pane i (`.page`), a white card (`.blank`) or the sad-tab placeholder (`.crashed`).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
+    /// White over the theme for an empty card: #FCFCFC over Arc's #F7F7F8 window (P24 e) in light, a faint lift in dark.
+    static func blankAlpha(_ palette: Palette) -> Double { palette.scheme == .light ? 0.75 : 0.06 }
+
     func render(_ content: ContentSnapshot, frames: WindowFrames, palette: Palette, surface: (PageID) -> NSView?) {
         frame = CGRect(origin: .zero, size: frames.contentSize)
         drop = content.drop
@@ -66,6 +69,7 @@ public final class ContentAreaView: NSView {
             shadows.removeLast().removeFromSuperview()
         }
         for ((card, shadow), frame) in zip(zip(cards, shadows), frames.cards) {
+            if case .blank = frame.content { shadow.isHidden = true } else { shadow.isHidden = !Metrics.content.showsShadow.value }
             shadow.frame = frame.rect
             shadow.layer?.cornerRadius = frame.cornerRadius
             card.frame = frame.rect
@@ -76,6 +80,8 @@ public final class ContentAreaView: NSView {
                 card.host(surface(page), placeholder: nil)
             case .blank:
                 card.host(nil, placeholder: nil)
+                // Arc's empty content area is the theme under a white wash (P24 e), not a white page.
+                card.layer?.backgroundColor = NSColor.white.withAlphaComponent(Self.blankAlpha(palette)).cgColor
             case .crashed(let page):
                 card.host(nil, placeholder: "This tab has crashed")
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }

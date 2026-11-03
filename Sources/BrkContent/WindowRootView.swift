@@ -15,7 +15,6 @@ import BrkUIKit
 /// Native views above Chromium's moved views draw and take focus normally (spike unknown 2, embed mode).
 @MainActor
 public final class WindowRootView: NSView {
-    private let deleteConfirmation = SpaceDeleteConfirmation()
     private let dispatch: Dispatch
     public let background = ThemeBackgroundView(frame: .zero)
     public let toolbar: AddressToolbarView
@@ -33,6 +32,10 @@ public final class WindowRootView: NSView {
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var sidebarFloats = false
+    /// The Create a Space draft while the flow is open: its theme on the window and its icon in the dock (Arc shows
+    /// both before the space exists, P24 flow).
+    private var draft: (theme: SpaceTheme, icon: SpaceIcon)?
+    private var last: (snapshot: WindowSnapshot, frames: WindowFrames)?
 
     public init(dispatch: @escaping Dispatch) {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
@@ -56,6 +59,11 @@ public final class WindowRootView: NSView {
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
+        spaceDialog.onDraft = { [weak self] draft in
+            guard let self else { return }
+            self.draft = draft
+            if let last = self.last { self.renderChrome(last.snapshot, frames: last.frames) }
+        }
     }
 
     @available(*, unavailable)
@@ -88,18 +96,19 @@ public final class WindowRootView: NSView {
     /// floating: same view, re-parented above `content` while floating), content cards (each card hosts the
     /// surface for its pane; a surface that moved to another card is simply re-added there), Library, command bar.
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, surface: (PageID) -> NSView?) {
-        background.frame = bounds
-        background.show(snapshot.theme, animated: lastTheme != nil && lastTheme != snapshot.theme)
-        let palette = Palette(snapshot.theme)
+        last = (snapshot, frames)
         if frames.sidebarFloats != sidebarFloats {
             sidebarFloats = frames.sidebarFloats
             sidebar.removeFromSuperview()
             if sidebarFloats { addSubview(sidebar, positioned: .above, relativeTo: peek) }
             else { addSubview(sidebar, positioned: .above, relativeTo: background) }
         }
-        sidebar.render(snapshot, frames: frames, palette: palette)   // hidden, it keeps its reveal strip and slide-in
+        renderChrome(snapshot, frames: frames)
+        let palette = Palette(snapshot.theme)
         content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil
         content.render(snapshot.content, frames: frames, palette: palette, surface: surface)
+        // Arc's Create a Space flow shows no page: the content area is a blank card over the draft's theme.
+        content.isHidden = snapshot.dialog == .newSpace
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         var librarySnapshot: LibrarySnapshot?, barSnapshot: CommandBarSnapshot?, peekSnapshot: PeekSnapshot?
         switch snapshot.overlay {
@@ -115,16 +124,38 @@ public final class WindowRootView: NSView {
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
         commandBar.render(barSnapshot, frames: frames, palette: palette)
         spaceDialog.profiles = snapshot.spaceProfiles
-        spaceDialog.render(snapshot.dialog, frames: frames, palette: palette)
-        ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette)
+        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, frames: frames, palette: palette)
+        ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette,
+                                 spaceNames: Dictionary(snapshot.dock.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }))
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output, exported: snapshot.exportOutcome)
         boostEditor.render(snapshot.boostEditor, in: frames.contentArea, scheme: palette.scheme)
         zapOverlay.render(snapshot.boostEditor, in: frames.contentArea)
-        deleteConfirmation.render(snapshot.pendingSpaceDeletion, in: window, dispatch: dispatch)
         captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
-        lastTheme = snapshot.theme
     }
+
+    /// The background and the sidebar. While Create a Space is open they show the draft: its theme, and in the dock
+    /// a cell for the space to be, current, after the others.
+    private func renderChrome(_ snapshot: WindowSnapshot, frames: WindowFrames) {
+        var shown = snapshot, shownFrames = frames
+        if snapshot.dialog == .newSpace, let draft, var cell = snapshot.dock.first {
+            let system: Scheme = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+            shown.theme = resolveTheme(draft.theme, systemScheme: system)
+            cell.id = Self.draftSpace
+            cell.title = ""
+            cell.icon = draft.icon
+            cell.active = true
+            cell.color = draft.theme.colors.first ?? cell.color
+            shown.dock = snapshot.dock.map { var item = $0; item.active = false; return item } + [cell]
+            shownFrames = WindowLayout.compute(shown, contentSize: frames.contentSize)
+        }
+        background.frame = bounds
+        background.show(shown.theme, animated: lastTheme != nil && lastTheme != shown.theme)
+        lastTheme = shown.theme
+        sidebar.render(shown, frames: shownFrames, palette: Palette(shown.theme))   // hidden, it keeps its reveal strip and slide-in
+    }
+
+    private static let draftSpace = SpaceID("brk-create-a-space-draft")
 }
 
 /// Owner: F3. The Peek card (Arc: `modalV2`; visual-and-copy.md "Peek"): the peeked page's surface in a rounded,

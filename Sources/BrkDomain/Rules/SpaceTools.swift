@@ -37,7 +37,10 @@ extension Work {
     mutating func confirmSpaceDeletion(_ id: SpaceID, token: String, confirmed: Bool, in window: WindowID) {
         guard let request = state.session.windows[window]?.pendingSpaceDeletion, request.id == id, request.token == token else { return }
         state.session.windows[window]?.pendingSpaceDeletion = nil
-        if confirmed { spaces(.delete(id), in: window) }
+        guard confirmed else { return }
+        spaces(.delete(id), in: window)
+        // Arc: "Space deleted! Use ⌘Z to undo". Brk has no undo for a deleted space, so only the first half is said.
+        if state.doc.spaces[id] == nil { toast("Space deleted!", in: window) }
     }
 
     mutating func exportSpace(_ id: SpaceID, in window: WindowID) {

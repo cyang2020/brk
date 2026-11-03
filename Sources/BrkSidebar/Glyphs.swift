@@ -11,7 +11,7 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case siteControls, globe, chevronDown, chevronRight, speaker, speakerMuted
+    case siteControls, globe, chevronDown, chevronRight, speaker, speakerMuted, search
 
     var symbol: String {
         switch self {
@@ -27,6 +27,7 @@ enum Glyph {
         case .clearDown: "arrow.down"
         case .copyLink: "link"
         case .siteControls: "slider.horizontal.3"
+        case .search: "magnifyingglass"
         case .globe: "globe"
         case .chevronDown: "chevron.down"
         case .chevronRight: "chevron.right"
@@ -280,5 +281,47 @@ final class FaviconStore {
         if let data, let image = NSImage(data: data) { images[url] = image } else { failed.insert(url) }
         let callbacks = waiting.removeValue(forKey: url) ?? []
         if images[url] != nil { callbacks.forEach { $0() } }
+    }
+}
+
+/// Arc's dock Library button (P25-a-arc.png): a filled box with a slot, and a star, a dot and a small triangle
+/// popping out of it. Drawn from the capture's 2x pixels, 20 x 20 pt with the art 14 x 16 in the middle.
+enum LibraryGlyph {
+    @MainActor
+    static func image(tint: NSColor) -> NSImage {
+        let image = NSImage(size: NSSize(width: 20, height: 20), flipped: true) { _ in
+            tint.setFill()
+            // Box: 12 x 9 with rounder bottom corners.
+            let box = NSBezierPath()
+            box.move(to: CGPoint(x: 4.5, y: 11))
+            box.line(to: CGPoint(x: 15.5, y: 11))
+            box.line(to: CGPoint(x: 15.5, y: 17))
+            box.appendArc(withCenter: CGPoint(x: 12.5, y: 17), radius: 3, startAngle: 0, endAngle: 90)
+            box.line(to: CGPoint(x: 7.5, y: 20))
+            box.appendArc(withCenter: CGPoint(x: 7.5, y: 17), radius: 3, startAngle: 90, endAngle: 180)
+            box.close()
+            box.append(NSBezierPath(roundedRect: CGRect(x: 8, y: 12, width: 4, height: 2), xRadius: 0.5, yRadius: 0.5).reversed)
+            box.fill()
+            // Star.
+            let star = NSBezierPath()
+            star.move(to: CGPoint(x: 2.5, y: 9.5))
+            star.line(to: CGPoint(x: 5.2, y: 7.6))
+            star.line(to: CGPoint(x: 7, y: 4.2))
+            star.line(to: CGPoint(x: 8.5, y: 7.3))
+            star.line(to: CGPoint(x: 11.6, y: 8))
+            star.line(to: CGPoint(x: 10.6, y: 9.6))
+            star.close()
+            star.fill()
+            NSBezierPath(ovalIn: CGRect(x: 11.2, y: 3, width: 2, height: 2)).fill()
+            let triangle = NSBezierPath()
+            triangle.move(to: CGPoint(x: 14, y: 5.4))
+            triangle.line(to: CGPoint(x: 16.6, y: 8.6))
+            triangle.line(to: CGPoint(x: 13.4, y: 9.4))
+            triangle.close()
+            triangle.fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
     }
 }

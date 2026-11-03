@@ -128,13 +128,12 @@ enum ReviewFableScenarios {
         // 5. Two public profiles: the second profile's preview must not carry the first profile's cookie.
         try app.dispatch(.profile(.create(name: "Review Profile", icon: nil)))
         guard case .settings(let settings) = try app.send(.settings),
-              let profile = settings.profiles.first(where: { $0.profile.name == "Review Profile" })?.profile.id else { throw Check(description: "review profile missing") }
+              settings.profiles.contains(where: { $0.profile.name == "Review Profile" }) else { throw Check(description: "review profile missing") }
         let dockBefore = try app.view().dock.count
         try app.dispatch(.sidebar(.openDialog(.newSpace)))
         try app.type("Review Space")
-        try app.click(.spaceToolsControl("save")); app.sleep(0.5)
-        try app.click(.spaceToolsControl("save")); app.sleep(0.5)
-        try app.click(.spaceToolsControl("profile-\(profile)")); app.sleep(0.5)
+        let pill = try visible(app.native(), .spaceToolsControl("profile")).frame
+        _ = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: pill.midX, y: pill.midY), choose: "Review Profile")); app.sleep(0.5)
         try app.click(.spaceToolsControl("save"))
         try app.waitUntil("second profile space") { try app.view().dock.count == dockBefore + 1 && app.view().urlPill.profile?.name == "Review Profile" }
         let (second, secondFrame) = try sourcePage(app, href: target, left: 40, top: 40)

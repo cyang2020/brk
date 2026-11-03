@@ -239,8 +239,15 @@ public enum SidebarCommand: Hashable, Sendable, Codable {
 }
 
 public enum SpaceDialogRequest: Hashable, Sendable, Codable {
+    /// Arc's Create a Space flow, in place of the sidebar.
     case newSpace
     case editSpace(SpaceRef)
+    /// Rename Space: the small centred dialog with the name selected.
+    case rename(SpaceRef)
+    /// Change Space Icon…: the Emoji / Icon popover under the space header.
+    case icon(SpaceRef)
+    /// Edit Theme… and Edit Theme Color…: the theme panel. Its changes apply to the space as they are made.
+    case theme(SpaceRef)
 }
 
 public enum PopupMenuRequest: Hashable, Sendable, Codable {

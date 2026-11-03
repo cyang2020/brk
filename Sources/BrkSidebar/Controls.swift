@@ -109,6 +109,12 @@ final class GlyphButton: HoverView {
         layer?.cornerCurve = .continuous
     }
 
+    /// A drawn, already tinted picture in place of the glyph's symbol (the dock's Library box).
+    var image: NSImage? {
+        get { icon.image }
+        set { icon.image = newValue }
+    }
+
     func render(_ glyph: Glyph, size: Double, palette: Palette, tint: NSColor? = nil, radius: Double, hoverFill: RGBA?) {
         if self.glyph != glyph || glyphSize != size { icon.image = glyph.image(size: size) }
         self.glyph = glyph
