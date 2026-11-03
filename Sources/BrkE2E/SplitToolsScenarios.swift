@@ -89,6 +89,10 @@ enum SplitToolsScenarios {
                    "restart lost horizontal divider fractions")
         try SplitParentScenarios.splitTool(app, .splitVertical)
         try expect(try app.view().content.orientation == .vertical, "orientation button did not stack panes")
+        try app.waitUntil("the stacked dividers on screen") {
+            let frame = try visible(app.native(), .divider(1)).frame
+            return frame.width > frame.height
+        }
         divider = try visible(app.native(), .divider(1)).frame
         try drag(app, from: CGPoint(x: divider.midX, y: divider.midY), to: CGPoint(x: divider.midX, y: divider.midY + 36))
         var vertical = try app.view().content.panes.map(\.fraction)
