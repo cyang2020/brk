@@ -37,7 +37,7 @@ enum CommandInventory {
         .commandBar(.queryChanged("exa")), .commandBar(.dismiss),
         .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.requestClear), .archive(.clear),
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
-        .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday),
+        .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday), .tab(.newDocument),
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
@@ -256,6 +256,7 @@ enum CommandInventory {
             case .togglePin: "togglePin"
             case .reset: "reset"
             case .clearToday: "clearToday"
+            case .newDocument: "newDocument"
             }
         case .tabTools(let c):
             switch c {

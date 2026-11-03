@@ -248,9 +248,12 @@ struct ProfileSettingsForm: View {
             }
             CardDivider()
             CardRow(height: P.popUpRow.value, gap: 0) { CardLabel(ProfilesCopy.newDocuments).fixedSize() } trailing: {
-                // Arc's Default Document App; Brk has no document apps to pick yet, so the menu shows Arc's dash.
-                SettingsPopUp(field: "newDocuments-\(id)", entries: [PopUpEntry<Int>.option(ProfilesCopy.noDocumentApp, 0)], selected: 0) { _ in }
-                    .disabled(true).frame(width: P.documentsWidth.value).frame(width: P.popUpColumn.value)
+                // Arc's Default Document App: "——" or a web app; the command bar's New document row opens it.
+                SettingsPopUp(field: "newDocuments-\(id)",
+                              entries: [PopUpEntry<DocumentApp?>.option(ProfilesCopy.noDocumentApp, nil), .separator]
+                                + DocumentApp.allCases.map { .option($0.title, $0) },
+                              selected: settings.documentApp) { send(.documentApp($0)) }
+                    .frame(width: P.documentsWidth.value).frame(width: P.popUpColumn.value)
             }
             CardDivider()
             CardRow(height: P.popUpRow.value, gap: 0) { CardLabel(ProfilesCopy.downloadLocation).fixedSize() } trailing: {

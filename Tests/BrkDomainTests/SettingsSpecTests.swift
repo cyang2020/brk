@@ -301,3 +301,67 @@ final class SharedQuoteTests: XCTestCase {
         XCTAssertEqual(d.user(.page(.copyURL(.quote))).effects, [.copyToPasteboard("> \(title)\n\(url.absoluteString)")])
     }
 }
+
+/// The settings whose consumers R3-2 wired: each switch changes what the app does, not only what is saved.
+final class SettingsBehaviourTests: XCTestCase {
+    /// the app-wide ad blocker and cookie banners are the default rule of every site without its own; a site's own
+    /// choice wins; nothing of the default is saved into a site's record
+    func test_adBlockingDefaultsReachEveryPolicy() throws {
+        let d = Driver()
+        let page = PageID(window: d.window, item: d.todayIDs[0])
+        let origin = try XCTUnwrap(SiteOrigin(URL(string: "https://example.com/")!))
+        func rule() -> SiteRule { d.state.websitePolicy(for: page).preferences.rule(for: origin) }
+        XCTAssertTrue(rule().blocking, "on by default")
+        XCTAssertFalse(rule().hideCookieBanners)
+        d.user(.settings(.general(.blockAds(false))))
+        d.user(.settings(.general(.hideCookieBanners(true))))
+        XCTAssertFalse(rule().blocking, "off: pages without their own rule load unblocked")
+        XCTAssertTrue(rule().hideCookieBanners)
+        XCTAssertFalse(Driver(file: d.savedFile).state.websitePolicy(for: page).preferences.rule(for: origin).blocking, "saved")
+        var own = SiteRule(); own.blocking = true
+        let target = SiteTarget(document: DocumentToken(browser: try XCTUnwrap(d.state.session.live[page]?.browser), sequence: 1),
+                                context: .profile(.default), origin: origin)
+        var preferences = SitePreferences(); preferences.rules[origin.value] = own
+        XCTAssertTrue(preferences.rule(for: origin).blocking, "a site's own rule wins over the default")
+        _ = target
+        d.user(.settings(.general(.blockAds(true))))
+        XCTAssertNil(d.state.doc.settings.general.blockAds, "on is the saved default")
+        XCTAssertNil(d.state.doc.sitePreferences[.default]?.defaultRule)
+    }
+
+    /// Profiles > New documents: "——" offers nothing; a chosen app is the command bar's New document row, which opens
+    /// the app's new-document address in a new tab of the current space
+    func test_newDocumentsOpensTheProfilesDocumentApp() throws {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        guard case .commandBar(let bar)? = d.view.overlay else { return XCTFail("no command bar") }
+        XCTAssertNil(bar.newDocument)
+        d.user(.commandBar(.dismiss))
+        let before = d.todayIDs
+        assertUnchanged(d.state, d.user(.tab(.newDocument)))
+        d.user(.settings(.profile(.default, .documentApp(.googleDocs))))
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.settings.profiles.first?.settings.documentApp, .googleDocs)
+        d.user(.commandBar(.open(.newTab)))
+        guard case .commandBar(let shown)? = d.view.overlay else { return XCTFail("no command bar") }
+        XCTAssertEqual(shown.newDocument, .googleDocs)
+        d.user(.tab(.newDocument))
+        XCTAssertEqual(d.todayIDs.count, before.count + 1)
+        XCTAssertEqual(d.current?.url, URL(string: "https://doc.new"), "a new focused tab at Google Docs' new document")
+        d.user(.settings(.profile(.default, .documentApp(nil))))
+        XCTAssertNil(d.snapshot.settings.profiles.first?.settings.documentApp)
+    }
+
+    /// Max > Translate Pages: off, Translate Page… asks nothing of the page; on, it reads the page to translate it
+    func test_translationFollowsItsSwitch() throws {
+        let d = Driver()
+        let page = try XCTUnwrap(d.state.findPage(in: d.window))
+        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
+        let document = DocumentToken(browser: browser, sequence: 1)
+        d.page(page.item, .documentChanged(.loading(document))); d.page(page.item, .documentChanged(.ready(document)))
+        d.user(.settings(.max(.provider(.auto))))
+        d.user(.settings(.max(.feature(.translation, false))))
+        XCTAssertFalse(d.user(.assist(.translate("English"))).effects.contains { if case .aiRead = $0 { true } else { false } }, "off: no read")
+        d.user(.settings(.max(.feature(.translation, true))))
+        XCTAssertTrue(d.user(.assist(.translate("English"))).effects.contains { if case .aiRead = $0 { true } else { false } }, "on: the page is read")
+    }
+}

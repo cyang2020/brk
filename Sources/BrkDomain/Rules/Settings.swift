@@ -18,6 +18,8 @@ extension Work {
             case .dismissDefaultBrowserPrompt: state.doc.settings.general.defaultBrowserPromptDismissed = true
             case .webAppearance(let appearance): state.doc.settings.general.webAppearance = appearance
             case .appIcon(let icon): state.doc.settings.general.appIcon = icon == .original ? nil : icon
+            case .blockAds(let on): state.doc.settings.general.blockAds = on ? nil : false
+            case .hideCookieBanners(let on): state.doc.settings.general.hideCookieBanners = on ? true : nil
             }
         case .profile(let profile, let setting):
             guard state.doc.profiles[profile] != nil else { return }
@@ -41,6 +43,7 @@ extension Work {
                     if trimmed.isEmpty { s.downloadsDirectory = nil }
                     else if trimmed.hasPrefix("/") { s.downloadsDirectory = URL(fileURLWithPath: trimmed, isDirectory: true).standardized.path }
                 case .promptForDownloadLocation(let on): s.promptForDownloadLocation = on
+                case .documentApp(let app): s.documentApp = app
                 }
             }
         case .links(let setting):

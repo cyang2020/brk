@@ -34,6 +34,11 @@ public struct GeneralSettings: Hashable, Sendable, Codable {
     public var webAppearance: WebAppearance
     /// The Icon pane's choice for the Dock and the About window; nil is `.original`.
     public var appIcon: AppIconChoice? = nil
+    /// Arc's ad blocker ("Use Arc's built-in protection against ads, pop-ups, and trackers"): Brk's blocking rules
+    /// on every site without its own choice in Website Controls. Nil is on.
+    public var blockAds: Bool? = nil
+    /// Arc's "Block Cookie Banners": hide matching cookie banners on every site without its own choice. Nil is off.
+    public var hideCookieBanners: Bool? = nil
 
     public static let `default` = GeneralSettings(warnBeforeQuitting: false, defaultBrowserPromptDismissed: false, webAppearance: .automatic)
 }
@@ -58,9 +63,58 @@ public struct ProfileSettings: Hashable, Sendable, Codable {
     public var downloadsDirectory: String?
     /// Ask where to save every download (`promptForDownloadFilePath`).
     public var promptForDownloadLocation: Bool
+    /// "New documents" (Arc: Default Document App, `defaultDocumentsApp`): what the command bar's New document row
+    /// opens in this profile's spaces. Nil is Arc's "——" (none).
+    public var documentApp: DocumentApp? = nil
 
     public static let `default` = ProfileSettings(searchEngine: SearchEngine.google.id, searchSuggestions: true, autoArchive: .default,
                                                   downloadsDirectory: nil, promptForDownloadLocation: false)
+}
+
+/// A web app the Profiles pane's "New documents" can name (Arc: `NoteDocument`'s web document types with their
+/// `newDocURL`; the addresses are Arc's own table, `BaseModels`: doc.new, sheet.new, slide.new, word.new,
+/// app.notion.com/new, figma.new, figjam.new). Arc's own note (`arcNote`) is not one: Brk has no Notes.
+public enum DocumentApp: String, Hashable, Sendable, Codable, CaseIterable {
+    case googleDocs, googleSheets, googleSlides, microsoftWord, notion, figma, figjam
+
+    /// Where a new document of this app starts.
+    public var newDocumentURL: URL {
+        switch self {
+        case .googleDocs: URL(string: "https://doc.new")!
+        case .googleSheets: URL(string: "https://sheet.new")!
+        case .googleSlides: URL(string: "https://slide.new")!
+        case .microsoftWord: URL(string: "https://word.new")!
+        case .notion: URL(string: "https://app.notion.com/new")!
+        case .figma: URL(string: "https://figma.new")!
+        case .figjam: URL(string: "https://figjam.new")!
+        }
+    }
+
+    /// The pop-up's name for the app.
+    public var title: String {
+        switch self {
+        case .googleDocs: "Google Docs"
+        case .googleSheets: "Google Sheets"
+        case .googleSlides: "Google Slides"
+        case .microsoftWord: "Microsoft Word"
+        case .notion: "Notion"
+        case .figma: "Figma"
+        case .figjam: "FigJam"
+        }
+    }
+
+    /// The command bar row (Arc's comment on its string: "Action to create a new document; e.g. 'New Google Doc'").
+    public var newDocumentTitle: String {
+        switch self {
+        case .googleDocs: "New Google Doc"
+        case .googleSheets: "New Google Sheet"
+        case .googleSlides: "New Google Slides"
+        case .microsoftWord: "New Word Document"
+        case .notion: "New Notion Page"
+        case .figma: "New Figma File"
+        case .figjam: "New FigJam Board"
+        }
+    }
 }
 
 /// Arc's Links pane (anatomy-m 4.2, visual-and-copy.md "Little Arc", "Peek", "Air Traffic Control").

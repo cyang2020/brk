@@ -276,6 +276,17 @@ struct MoreSettings: View {
                     .disabled(context.isDefaultBrowser)
             }
         }
+        // Arc's General pane carries these when its ad blocker is available (anatomy-m 4.2); Arc 1.170's General
+        // (P38-a) shows neither, so Brk keeps them here. A site's own choice in Website Controls wins.
+        SettingsCard {
+            SwitchRow(title: SettingsCopy.blockAds, field: "blockAds", isOn: context.settings.general.blockAds != false) {
+                context.dispatch(.settings(.general(.blockAds($0))))
+            }
+            CardDivider()
+            SwitchRow(title: SettingsCopy.hideCookieBanners, field: "hideCookieBanners", isOn: context.settings.general.hideCookieBanners == true) {
+                context.dispatch(.settings(.general(.hideCookieBanners($0))))
+            }
+        }
         SettingsCard {
             SwitchRow(title: SettingsCopy.numberedFavorites, field: "numberedFavorites", isOn: tabs.includeFavoritesInNumbers) {
                 context.dispatch(.tabTools(.preferences(includeFavorites: $0, previews: tabs.hoverPreviews)))

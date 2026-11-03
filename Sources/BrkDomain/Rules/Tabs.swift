@@ -84,6 +84,11 @@ extension Work {
             let idle = (state.doc.tree[space.todayRoot]?.children ?? []).filter { !state.doc.tree.tabs(under: $0).contains(where: onScreen.contains) }
             let entries = archiving { $0.archiveTabs(idle, reason: .clearToday, in: window) }
             if !entries.isEmpty { undoToast("Cleared Tabs! Use", undo: .restore(entries), in: window) }
+        case .newDocument:
+            // Profiles > New documents: a new focused tab in the current space at that profile's document app.
+            guard let shown = state.doc.windows[window], shown.kind != .little,
+                  let app = state.profileSettings(in: window).documentApp else { return }
+            openTab(app.newDocumentURL, inSpace: shown.space, window: window, focus: true)
         }
     }
 

@@ -381,6 +381,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// The bar fills an empty split pane (Add Split View): a typed address opens there, so it is the first row
     /// even when a tab already shows that address (Arc opens the page in the new pane).
     public var fillsPane: Bool = false
+    /// The profile's "New documents" app (Profiles pane): type travel offers its "New Google Doc" row
+    /// (`.tab(.newDocument)`). Nil (Arc's "——"): no such row.
+    public var newDocument: DocumentApp? = nil
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {

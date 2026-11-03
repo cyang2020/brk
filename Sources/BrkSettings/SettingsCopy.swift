@@ -186,6 +186,10 @@ public enum SettingsCopy {
     }
     /// Air Traffic Control moved one level down (observed button "Air Traffic Control…").
     public static let airTrafficControlButton = "Air Traffic Control…"
+    /// Arc's ad blocker row ("Use Arc's built-in protection against ads, pop-ups, and trackers…", observed, cut
+    /// short) and "Block Cookie Banners" (observed).
+    public static var blockAds: String { "Use \(Product.name)'s built-in protection against ads and trackers" }
+    public static let hideCookieBanners = "Block Cookie Banners"
     /// Observed (Q06-links-bottom: "Choose where links open inside Arc." with an ⓘ).
     public static var routesSummary: String { "Choose where links open inside \(Product.name)." }
 

@@ -479,6 +479,22 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(g.view("setAsDefaultBrowser", NSButton.self)?.isEnabled, false)
     }
 
+    /// Advanced > More Settings… has the app-wide ad blocker and cookie banners; Profiles' New documents picks an app
+    func testAdBlockingAndNewDocumentsControls() {
+        let f = Fixture()
+        f.render(snapshot(pane: .advanced))
+        _ = f.click("moreSettings")
+        XCTAssertEqual(f.isOn("blockAds"), true, "on by default")
+        XCTAssertEqual(f.click("blockAds"), [.settings(.general(.blockAds(false)))])
+        XCTAssertEqual(f.isOn("hideCookieBanners"), false)
+        XCTAssertEqual(f.click("hideCookieBanners"), [.settings(.general(.hideCookieBanners(true)))])
+        f.render(snapshot(pane: .profiles))
+        let documents: NSPopUpButton? = f.view("newDocuments-default")
+        XCTAssertEqual(documents?.isEnabled, true, "a real choice, not a greyed placeholder")
+        XCTAssertEqual(documents?.titleOfSelectedItem, "——")
+        XCTAssertEqual(f.pick("newDocuments-default", "Google Docs"), [.settings(.profile(.default, .documentApp(.googleDocs)))])
+    }
+
     /// Max shows what launch found on PATH and what the choice resolves to
     func testTheMaxPaneShowsTheDetectedTools() {
         let f = Fixture()

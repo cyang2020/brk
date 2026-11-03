@@ -335,7 +335,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             suggestedFor: session.suggestions?.query,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
             createsTab: target == .newTab,
-            fillsPane: { if case .fillPane = target { true } else { false } }()
+            fillsPane: { if case .fillPane = target { true } else { false } }(),
+            newDocument: doc.kind == .little ? nil : state.profileSettings(in: id).documentApp
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
