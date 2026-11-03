@@ -10190,11 +10190,11 @@
           "scope": "AICommand passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
@@ -10288,11 +10288,11 @@
           "scope": "AIPage passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
@@ -10370,11 +10370,11 @@
           "scope": "AIHover passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "unit",
@@ -10462,11 +10462,11 @@
           "scope": "AIOrganize passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
@@ -10546,11 +10546,11 @@
           "scope": "AIDownload passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "real-provider",
@@ -10637,11 +10637,11 @@
           "scope": "AIInstant passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
@@ -10720,11 +10720,11 @@
           "scope": "AIBrowse passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "unit",
@@ -10811,11 +10811,11 @@
           "scope": "AITranslate passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
@@ -10894,11 +10894,11 @@
           "scope": "AIMax passes. All 16 selected cases pass in 84.1 s with sourceUnchanged and binariesUnchanged true; AIQuit additionally verifies active and previously-cancelled PIDs."
         },
         {
-          "kind": "build",
+          "kind": "static",
           "result": "pass",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock -- scripts/build.sh",
           "artifact": "verify/completion/batch2-ai-features/delivery-host-policy-build.log",
-          "scope": "772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
+          "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
           "kind": "visual",
