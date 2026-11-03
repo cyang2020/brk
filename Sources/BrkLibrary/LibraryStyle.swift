@@ -116,6 +116,7 @@ struct LibrarySpacesMetrics: MetricGroup {
     let rowPitch = Metric(41.0, .anatomy("P32-d: rows are 41 pt apart"))
     let rowFont = Metric(15.0, .anatomy("P32-d: \"Interface comparison\" is 15 pt"))
     let favicon = Metric(14.0, .anatomy("P32-d: the favicon squares are 14 pt"))
+    let faviconRadius = Metric(3.0, .guess("the small favicon squares' corners"))
     let rowTextLeading = Metric(25.0, .anatomy("P32-d: a row's text starts 25 after its icon's start (x 19 and 44 in the card)"))
     let indent = Metric(16.0, .anatomy("P32-d: a folder's children start 16 further in"))
     let dividerHeight = Metric(17.0, .anatomy("P32-d: Interface comparison at y 276.5, the line at 304.5, Inbox at 334.5: 41 + 17"))

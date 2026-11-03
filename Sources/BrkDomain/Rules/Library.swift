@@ -13,9 +13,11 @@ public enum HistoryPage {
     public static let title = "History"
     /// The tab's favicon: a blue clock with a counter-clockwise arrow, like Arc's history tab (an SVG data URL, so the
     /// sidebar's favicon loader draws it like any other).
-    public static let favicon = URL(string: "data:image/svg+xml;base64," + Data(#"""
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32"><g fill="none" stroke="#3478F6"         stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6.2A5.6 5.6 0 1 1 2.4 9.4"/>        <path d="M1.8 3.4v3h3"/><path d="M8 5v3.2l2.2 1.4"/></g></svg>
-        """#.utf8).base64EncodedString())!
+    public static let favicon = URL(string: "data:image/svg+xml;base64," + Data((
+        #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32">"#
+            + ##"<g fill="none" stroke="#3478F6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">"##
+            + #"<path d="M2.6 6.2A5.6 5.6 0 1 1 2.4 9.4"/><path d="M1.8 3.4v3h3"/><path d="M8 5v3.2l2.2 1.4"/></g></svg>"#
+    ).utf8).base64EncodedString())!
 
     /// Whether `url` is the History page (any path or query under brk://history).
     public static func shows(_ url: URL?) -> Bool { url?.scheme == "brk" && url?.host == "history" }

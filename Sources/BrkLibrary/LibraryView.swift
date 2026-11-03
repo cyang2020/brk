@@ -139,7 +139,7 @@ public final class LibraryView: NSView {
         if library.page == .downloads { downloads.show(library.downloads, openID: library.openID, in: page, scheme: scheme, now: now) } else { downloads.hide() }
         if library.page == .spaces { spaces.show(library, in: page, scheme: scheme) } else { spaces.hide() }
         if library.page == .boosts { boosts.show(library, in: page, scheme: scheme) } else { boosts.hide() }
-        if library.page == .media { media.show(library, in: page, scheme: scheme) } else { media.hide() }
+        if library.page == .media { media.show(library, in: page, scheme: scheme, now: now) } else { media.hide() }
         let previewed = library.page == .media ? library.captures.first { $0.id == library.capturePreview } : nil
         if let previewed {
             preview.show(previewed, file: library.captureFiles[previewed.id], in: previewCard, cornerRadius: frames.cards.first?.cornerRadius ?? 0, scheme: scheme)

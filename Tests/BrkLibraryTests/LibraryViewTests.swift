@@ -134,7 +134,7 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertTrue(texts(view.media).contains("Today"))
         let token = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("t")), generation: 1), sequence: 1)
         let request = CaptureRequest(id: "c1", document: token, context: .profile(.default), mode: .area, title: "Visual fixture",
-                                     url: URL(string: "http://127.0.0.1:9/a")!, createdAt: Instant(milliseconds: Int64(Date().timeIntervalSince1970 * 1000)))
+                                     url: URL(string: "http://127.0.0.1:9/a")!, createdAt: now)
         let record = CaptureRecord(request: request, profile: .default, image: CaptureImage(png: Data(), width: 400, height: 300, scale: 2))
         var snapshot = library(.media, openID: 2)
         snapshot.captures = [record]

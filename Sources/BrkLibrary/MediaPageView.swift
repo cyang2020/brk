@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage
 import BrkBase
 import BrkDomain
 import BrkLayout
@@ -27,6 +26,8 @@ import BrkUIKit
     private var scheme: Scheme?
     private var colors = LibraryColors.of(.light)
     private var rendered: (records: [CaptureRecord], selected: String?, query: String, files: [String: URL])?
+    /// The window's clock, for the day headers.
+    private var now = Instant(milliseconds: 0)
     /// The introduction card was put away (× or Show Media) in this session.
     static var introDismissed = false
 
@@ -65,7 +66,8 @@ import BrkUIKit
         list.subviews.forEach { $0.removeFromSuperview() }
     }
 
-    func show(_ library: LibrarySnapshot, in rect: CGRect, scheme: Scheme) {
+    func show(_ library: LibrarySnapshot, in rect: CGRect, scheme: Scheme, now: Instant) {
+        self.now = now
         frame = rect
         isHidden = false
         if scheme != self.scheme {
@@ -108,7 +110,7 @@ import BrkUIKit
             let shown = query.isEmpty ? records : records.filter {
                 [$0.title, $0.url.host ?? ""].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
             }
-            for day in LibraryDays.group(shown, at: \.createdAt, now: Instant(milliseconds: Int64(Date().timeIntervalSince1970 * 1000)), calendar: .current) {
+            for day in LibraryDays.group(shown, at: \.createdAt, now: now, calendar: .current) {
                 list.addSubview(DayHeaderView(day.title, colors: colors))
                 for record in day.items {
                     let card = MediaCardView(record: record, file: files[record.id], selected: record.id == selected, colors: colors, dispatch: dispatch)

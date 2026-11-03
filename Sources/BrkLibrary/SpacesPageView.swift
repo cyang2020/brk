@@ -305,7 +305,7 @@ private final class SpaceCardView: NSView {
         title.font = .systemFont(ofSize: s.rowFont.value, weight: { if case .folder = row { .semibold } else { .regular } }())
         title.textColor = colors.foregroundPrimary
         title.lineBreakMode = .byTruncatingTail
-        icon.layer?.cornerRadius = 3
+        icon.layer?.cornerRadius = LibraryDraw.spaces.faviconRadius.value
         switch row {
         case .tab(let tab): icon.show(favicon: tab.favicon, colors: colors)
         case .split(let split): icon.show(favicon: split.panes.first?.favicon, colors: colors)

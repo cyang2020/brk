@@ -28,7 +28,7 @@ enum Wave2Scenarios {
         Scenario("W2-10a", "a typed URL opens its exact destination; an exact open-tab URL still switches across spaces",
                  cefOnly: "cookie fixture titles from real pages", CommandBarScenarios.exactURL),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
-        Scenario("W2-12", "Cmd+Y opens the Library's History page listing the visits", history),
+        Scenario("W2-12", "Cmd+Y opens the History page as a Today tab listing the visits", history),
         Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
         Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
         Scenario("W2-11P", "incognito downloads keep their files and leave no saved download or history records", cefOnly: "private downloads", LibraryScenarios.privacy),
