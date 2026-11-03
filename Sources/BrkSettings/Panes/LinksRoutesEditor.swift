@@ -68,6 +68,7 @@ struct AirTrafficControlSheet: View {
         // Esc closes the sheet as × does.
         .background(Button("", action: finish).keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0))
         .background(IdentifiedRegion(id: .settingsField("airTrafficControlSheet")))
+        .background(NoInitialFocus())
     }
 
     private var rule: some View {
@@ -127,6 +128,26 @@ struct AirTrafficControlSheet: View {
     }
 }
 
+/// Arc's sheet opens with nothing focused (Q06-a); left alone, AppKit would put the first text field in the key view
+/// loop into editing. This empty view takes the first responder until the user clicks a field.
+private struct NoInitialFocus: NSViewRepresentable {
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> Sink { Sink() }
+    func updateNSView(_ view: Sink, context: NSViewRepresentableContext<Self>) {}
+
+    final class Sink: NSView {
+        override var acceptsFirstResponder: Bool { true }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.initialFirstResponder = self
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window else { return }
+                window.makeFirstResponder(self)
+            }
+        }
+    }
+}
+
 /// Arc's Air Traffic Control copy (visual-and-copy.md "Air Traffic Control", `bin:0x1039f8420`, `0x1039f8240`,
 /// `0x1039f82d0`; Q06-a), with the app's name in place of Arc's.
 public enum LinksRoutesCopy {
@@ -167,8 +188,8 @@ struct AirTrafficControlMetricsTable: MetricGroup {
     let newRouteRadius = Metric(6.0, .anatomy("\(capture): New Route's corner curve spans about 12 px"))
     let newRouteToClose = Metric(30.0, .anatomy("\(capture): New Route ends at x 1031 px, the × box starts near 1091 px"))
     let closeSize = Metric(20.0, .anatomy("\(capture): the × spans x 1099 to 1124 px, centred at 1111 px"))
-    let closeGlyph = Metric(17.0, .anatomy("\(capture): the × strokes span about 26 px"))
-    let closeTrailing = Metric(29.5, .anatomy("\(capture): the × box ends near x 1131 px of a sheet ending at 1191 px"))
+    let closeGlyph = Metric(16.0, .anatomy("\(capture): the × strokes span about 26 px"))
+    let closeTrailing = Metric(30.5, .anatomy("\(capture): the × box ends near x 1131 px of a sheet ending at 1191 px"))
     let routesTop = Metric(24.0, .anatomy("\(capture): the hairline at y 343 px, the URL pop-up starts at 394 px"))
     let routeGap = Metric(16.0, .guess("space between two routes; the capture has one"))
     let lineGap = Metric(4.0, .anatomy("\(capture): the URL row's pop-up ends at y 441 px, the Open in pop-up starts at 450 px"))
@@ -186,6 +207,6 @@ struct AirTrafficControlMetricsTable: MetricGroup {
     let destinationWidth = Metric(165.0, .anatomy("\(capture): the Open in and Default pop-ups span x 591 to 920 px and 505 to 834 px"))
     let footerHeight = Metric(73.0, .anatomy("\(capture): the hairline at y 995 px, Default centred at 1069 px"))
     let footerBottom = Metric(17.0, .anatomy("\(capture): Default centred at y 1069 px, the sheet ends at 1175 px"))
-    let defaultLeading = Metric(35.5, .anatomy("\(capture): Default starts at x 296 px"))
+    let defaultLeading = Metric(59.5, .anatomy("\(capture): Default starts at x 296 px"))
     let defaultLabelWidth = Metric(104.5, .anatomy("\(capture): Default starts at x 296 px, its pop-up at 505 px"))
 }

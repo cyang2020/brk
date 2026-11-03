@@ -1,13 +1,14 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkLayout
 import BrkUIKit
 
-/// "Warn before quitting" (General). Arc asks in `applicationShouldTerminate(_:)` with a dialog whose suppression
-/// button is "Quit, and don’t ask again" (observed), so every way of quitting is covered (Cmd+Q, the Dock menu,
-/// the app menu). The reducer keeps quitting an ordered effect; this is the question the terminate handler asks
-/// before it starts. Wiring: `Lifecycle.applicationShouldTerminate` calls `shouldQuit` first (not for SIGTERM or the
-/// control socket's quit), see the F1 report.
+/// "Warn before quitting" (General). Arc asks with a dialog whose suppression button is "Quit, and don’t ask again"
+/// (observed), so every way of quitting is covered. Wiring (BrkApp): Cmd+Q and Brk > Quit reach `AppEffect.quit`,
+/// which asks before anything is torn down (`AppStore.confirmQuit`); a quit that reaches
+/// `Lifecycle.applicationShouldTerminate` without it (the Dock menu, a quit Apple event) asks there. SIGTERM, the
+/// control socket's quit and a logout, restart or shut down never ask.
 @MainActor
 public enum QuitWarning {
     /// The user's answer: quit or not, and whether to stop asking.
@@ -38,6 +39,10 @@ public enum QuitWarning {
         alert.addButton(withTitle: SettingsCopy.cancelButton)
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = SettingsCopy.quitDontAskAgain
+        // The control socket clicks these by identifier (the e2e scenario answers the real dialog).
+        alert.buttons.first?.identify(.settingsField("quitWarning-quit"))
+        alert.buttons.last?.identify(.settingsField("quitWarning-cancel"))
+        alert.suppressionButton?.identify(.settingsField("quitWarning-dontAsk"))
         return alert
     }
 

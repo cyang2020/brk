@@ -35,6 +35,8 @@ final class ControlExecutor {
     /// The ordered quit, started after `quit`'s reply is written (ControlServer).
     func startQuit() {
         guard let controller = store.windowController(nil) else { return }
+        // The runner's ordered quit never waits on "Warn before quitting".
+        Quit.confirmed = true
         store.dispatch(.user(controller.id, .app(.quit)))
     }
 

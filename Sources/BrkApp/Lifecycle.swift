@@ -41,6 +41,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var pendingExternalURLs: [Input] = []
     private let menuTarget = MenuTarget()
     private var quitting = false
+    private var askingQuit = false
     private var overlayEscapeMonitor: Any?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
@@ -177,7 +178,30 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Quit.fixtureTrace("delegate entered")
-        guard !quitting else { return .terminateLater }
+        guard !quitting, !askingQuit else { return .terminateLater }
+        // A quit that did not come through `AppEffect.quit` (the Dock menu, a quit Apple event) asks "Warn before
+        // quitting" here; a logout, restart or shut down does not.
+        if !Quit.confirmed, !Self.isSystemQuit(), let store, store.snapshot.settings.general.warnBeforeQuitting {
+            askingQuit = true
+            Quit.enqueue { [weak self] in
+                guard let self else { return }
+                let go = store.confirmQuit()
+                self.askingQuit = false
+                if go { Quit.confirmed = true; self.beginOrderedQuit() } else { NSApp.reply(toApplicationShouldTerminate: false) }
+            }
+            return .terminateLater
+        }
+        beginOrderedQuit()
+        return .terminateLater
+    }
+
+    /// The quit Apple event of a logout, restart or shut down carries a reason (`kAEQuitReason`, 'why?').
+    static func isSystemQuit() -> Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
+        return event.attributeDescriptor(forKeyword: 0x7768_793F) != nil
+    }
+
+    private func beginOrderedQuit() {
         quitting = true
         if let overlayEscapeMonitor { NSEvent.removeMonitor(overlayEscapeMonitor); self.overlayEscapeMonitor = nil }
         store?.prepareForTermination()
@@ -193,7 +217,6 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
                 exit(Self.shutdownTimedOutStatus)
             }
         }
-        return .terminateLater
     }
 
     /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
@@ -237,7 +260,14 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 /// deadlock, first stub run. A run-loop block runs outside the dispatch drain, so the nested loop can service the queue.
 @MainActor
 public enum Quit {
-    public static func request() { perform() }
+    /// The quit under way needs no "Warn before quitting" question: it was answered, or it comes from SIGTERM or the
+    /// control socket.
+    public static var confirmed = false
+
+    public static func request() {
+        confirmed = true
+        perform()
+    }
 
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
     /// without terminating the test process.

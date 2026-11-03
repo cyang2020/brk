@@ -93,7 +93,7 @@ let package = Package(
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
         .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
-        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp"], swiftSettings: strict),
+        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings"], swiftSettings: strict),
         // Scans every `import` under Sources/ against the dependency rules in module-map.md.
         .testTarget(name: "ArchitectureTests", dependencies: ["BrkBase"], swiftSettings: strict),
     ]

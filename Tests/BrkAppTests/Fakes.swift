@@ -122,8 +122,12 @@ final class QuitCounter {
 
     init() {
         previous = Quit.perform
+        Quit.confirmed = false
         Quit.perform = { [unowned self] in self.count += 1 }
     }
 
-    func restore() { Quit.perform = previous }
+    func restore() {
+        Quit.perform = previous
+        Quit.confirmed = false
+    }
 }

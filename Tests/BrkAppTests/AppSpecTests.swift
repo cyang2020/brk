@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import BrkSettings
 import os
 import XCTest
 @testable import BrkApp
@@ -149,6 +150,36 @@ final class AppStoreTests: XCTestCase {
         h.store.dispatch(.user(h.window, .app(.quit)))
         XCTAssertEqual(quits.count, 1)
         XCTAssertEqual(h.store.snapshot.rev, rev)
+    }
+
+    /// "Warn before quitting" on: Cmd+Q asks on the next run-loop turn and tears nothing down until the answer;
+    /// Cancel keeps the app, Quit goes on, "Quit, and don’t ask again" turns the setting off. Off: no question
+    func test_warnBeforeQuittingAsksBeforeTheOrderedQuit() {
+        let h = Harness(), quits = QuitCounter()
+        let previousAsk = AppStore.askQuit
+        var answers: [QuitWarning.Answer] = [], asked = 0
+        AppStore.askQuit = { _ in asked += 1; return answers.removeFirst() }
+        defer { h.cleanUp(); quits.restore(); AppStore.askQuit = previousAsk }
+        func spin() { for _ in 0..<5 { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) } }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .settings(.general(.warnBeforeQuitting(true)))))
+        answers = [.init(quit: false, dontAskAgain: false)]
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 0, "the question waits for the next run-loop turn, so the key press returns")
+        spin()
+        XCTAssertEqual(asked, 1)
+        XCTAssertEqual(quits.count, 0, "Cancel keeps the app running")
+        XCTAssertFalse(Quit.confirmed)
+        answers = [.init(quit: true, dontAskAgain: true)]
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        spin()
+        XCTAssertEqual(asked, 2)
+        XCTAssertEqual(quits.count, 1, "Quit goes on to the ordered quit")
+        XCTAssertFalse(h.store.snapshot.settings.general.warnBeforeQuitting, "Quit, and don’t ask again turns the setting off")
+        Quit.confirmed = false
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertEqual(asked, 2, "with the setting off nothing is asked")
+        XCTAssertEqual(quits.count, 2, "and the quit starts at once")
     }
 
     /// an input dispatched from inside a dispatch (a page event fired by the engine during reconcile) is queued and

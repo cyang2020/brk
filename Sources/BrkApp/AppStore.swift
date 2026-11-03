@@ -38,6 +38,8 @@ public final class AppStore {
     /// The one settings window, created on first use (F1).
     private var settingsWindow: SettingsWindowController?
     private var shownIcon: AppIconChoice?
+    /// The "Warn before quitting" dialog is open (or about to be).
+    private var askingQuit = false
     private static let dockIconSide: CGFloat = 512
     private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
         guard let self, let window = self.windowController(nil)?.id else { return }
@@ -203,6 +205,26 @@ public final class AppStore {
     }
 
     func stopAI() async { await aiServices.stop() }
+
+    /// "Warn before quitting" (`QuitWarning`): true to go on quitting. Asks only while the setting is on; "Quit, and
+    /// don’t ask again" turns it off through the reducer, so the answer is saved before the ordered quit flushes.
+    func confirmQuit() -> Bool {
+        QuitWarning.shouldQuit(snapshot.settings.general, dispatch: { [weak self] command in
+            guard let self, let window = self.windowController(nil)?.id else { return }
+            self.dispatch(.user(window, command))
+        }, ask: Self.askQuit)
+    }
+
+    /// The quit dialog; tests answer it without a modal session.
+    static var askQuit: @MainActor (NSAlert) -> QuitWarning.Answer = QuitWarning.run
+
+    private func quitNow() {
+        // AppKit can defer termination while a save sheet remains attached.
+        sidebarPanels.cancelForQuit()
+        exports.cancelAll()
+        spacePanels.cancelAll()
+        Quit.request()
+    }
 
     func cancelExports() { exports.cancelAll() }
 
@@ -431,11 +453,18 @@ public final class AppStore {
             case .app(let effect):
                 switch effect {
                 case .quit:
-                    // AppKit can defer termination while a save sheet remains attached.
-                    sidebarPanels.cancelForQuit()
-                    exports.cancelAll()
-                    spacePanels.cancelAll()
-                    Quit.request()
+                    // "Warn before quitting": the question comes first, before anything is torn down, on the next
+                    // run-loop turn (so the key press or control request that asked returns). A second quit while
+                    // it is open only ends the question when it was already confirmed (the control socket's quit).
+                    if askingQuit { if Quit.confirmed { NSApp.abortModal() }; break }
+                    if Quit.confirmed || !snapshot.settings.general.warnBeforeQuitting { quitNow(); break }
+                    askingQuit = true
+                    Quit.enqueue { [weak self] in
+                        guard let self else { return }
+                        let go = self.confirmQuit()
+                        self.askingQuit = false
+                        if go || Quit.confirmed { self.quitNow() }
+                    }
                 case .hide: NSApp.hide(nil)
                 case .hideOthers: NSApp.hideOtherApplications(nil)
                 case .beep: NSSound.beep()

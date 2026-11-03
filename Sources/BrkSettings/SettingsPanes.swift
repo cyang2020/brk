@@ -147,7 +147,7 @@ struct LinksPane: View {
                 SettingsCard {
                     SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
                     CardDivider()
-                    CardRow(height: C.twoLineRowHeight.value) {
+                    CardRow(height: C.peekNoteRowHeight.value) {
                         VStack(alignment: .leading, spacing: C.subtitleGap.value) {
                             CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
                             Text(SettingsCopy.peekNote).font(SettingsStyle.font.italic()).foregroundStyle(SettingsStyle.note)
@@ -159,7 +159,7 @@ struct LinksPane: View {
                 .padding(.top, C.introToCard.value)
                 Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
                 SettingsCard {
-                    CardRow(height: C.buttonRowHeight.value) {
+                    CardRow(height: C.routesRowHeight.value) {
                         HStack(spacing: C.infoGap.value) {
                             CardLabel(SettingsCopy.routesSummary)
                             Image(systemName: "info.circle").font(.system(size: C.infoSize.value)).foregroundStyle(SettingsStyle.text)
