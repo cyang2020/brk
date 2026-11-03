@@ -47,8 +47,11 @@ enum SplitToolsScenarios {
 
     private static func fill(_ app: AppUnderTest, pane index: Int, text: String) throws {
         let view = try app.view(), pane = view.content.panes[index].tab
-        let rect = try visible(app.native(), .card(index)).frame
-        try app.click(at: CGPoint(x: rect.minX + 42, y: rect.minY + 99))
+        let native = try app.native()
+        _ = try visible(native, .card(index))
+        // The page starts under the pane's own header (Arc's split panes each have one).
+        guard let page = native.computed.cards.first(where: { $0.pane == index })?.page else { throw Check(description: "no card \(index)") }
+        try app.click(at: CGPoint(x: page.minX + 42, y: page.minY + 99))
         try app.waitUntil("pointer focus in pane \(index)") { try app.native().focusedPage == PageID(window: view.id, item: pane) }
         try app.type(text)
         try title(app, PageID(window: view.id, item: pane), "Split text:" + text)
