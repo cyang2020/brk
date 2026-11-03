@@ -274,7 +274,10 @@ final class ContentDragCard: NSView {
         title.font = .systemFont(ofSize: Draw.dragCardTitleFont.value, weight: .bold)
         title.textColor = palette.ink.text
         title.alignment = .center
-        title.lineBreakMode = .byTruncatingTail
+        title.usesSingleLineMode = false
+        title.cell?.wraps = true
+        title.cell?.truncatesLastVisibleLine = true
+        title.lineBreakMode = .byWordWrapping
         title.maximumNumberOfLines = 2
         title.isSelectable = false
         addSubview(icon)

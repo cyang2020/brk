@@ -285,7 +285,8 @@ final class CardView: NSView {
     }
 }
 
-/// An invisible hit view in the gap between two cards; dragging it dispatches `.split(.resize)`.
+/// The gap between two cards with Arc's drag handle centred in it (P23-a: a 2 x 24 bar between side-by-side panes;
+/// P23-c: 64 x 2 between stacked ones); dragging it dispatches `.split(.resize)`.
 @MainActor
 final class DividerView: NSView {
     let index: Int
@@ -295,18 +296,35 @@ final class DividerView: NSView {
     var panes: [ItemID] = []
     var fractions: [Double] = []
     var area: CGRect = .zero
-    var orientation: SplitOrientation = .horizontal
+    var orientation: SplitOrientation = .horizontal { didSet { if orientation != oldValue { needsLayout = true } } }
+    private let handle = CALayer()
 
     init(index: Int, dispatch: @escaping Dispatch) {
         self.index = index
         self.dispatch = dispatch
         super.init(frame: .zero)
+        wantsLayer = true
+        layer?.addSublayer(handle)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        let d = SplitDropDraw
+        let side = orientation == .horizontal
+        let size = side ? CGSize(width: d.handleThickness.value, height: d.handleLength.value)
+            : CGSize(width: d.stackedHandleLength.value, height: d.handleThickness.value)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        handle.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+        handle.cornerRadius = d.handleThickness.value / 2
+        handle.backgroundColor = NSColor(white: 0, alpha: side ? d.handleAlpha.value : d.stackedHandleAlpha.value).cgColor
+        CATransaction.commit()
+    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: orientation == .horizontal ? .resizeLeftRight : .resizeUpDown)
@@ -374,6 +392,11 @@ let LoadingBarDraw = LoadingBarMetrics()
 let SplitDropDraw = SplitDropMetrics()
 
 struct SplitDropMetrics: MetricGroup {
+    let handleThickness = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the divider handle is 4 px wide at 2x, centred in the 10 pt gap"))
+    let handleLength = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png and P23-splitmenu-arc.png: between side-by-side panes it spans y 376...400, centred"))
+    let handleAlpha = Metric(0.18, .anatomy("verify/visual-pairs/run-20261103/P23: #B2AFAC over #DCD5D2 and #BBBBBB over #E1E1E1, black at about 18%"))
+    let stackedHandleLength = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: between stacked panes it spans x 717...781, centred"))
+    let stackedHandleAlpha = Metric(0.39, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: #8B8B8B over #E3E3E3"))
     let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }
 
