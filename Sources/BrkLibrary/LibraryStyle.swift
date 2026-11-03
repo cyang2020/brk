@@ -89,7 +89,7 @@ struct LibraryMediaMetrics: MetricGroup {
     let introBodyFont = Metric(13.0, .anatomy("P32-a: a 37-character description line is 219 pt wide, lines 17 apart"))
     let introButtonHeight = Metric(40.0, .anatomy("P32-a: Show Media spans y 450...490"))
     let introButtonRadius = Metric(8.0, .guess("Show Media's corner radius"))
-    let introFootnoteFont = Metric(11.0, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart"))
+    let introFootnoteFont = Metric(10.5, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart"))
     let thumbnail = Metric(35.0, .guess("a capture's thumbnail inside its 47 pt card"))
 }
 

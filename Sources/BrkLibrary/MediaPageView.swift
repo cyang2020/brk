@@ -424,13 +424,15 @@ import BrkUIKit
         let th = title.fittingSize.height
         title.frame = CGRect(x: pad, y: (m.introTitleCenter.value - th / 2).rounded(), width: inner, height: th)
         body.preferredMaxLayoutWidth = inner
-        let bh = body.fittingSize.height
+        let bh = body.sizeThatFits(NSSize(width: inner, height: .greatestFiniteMagnitude)).height
         body.frame = CGRect(x: pad, y: title.frame.maxY + 4, width: inner, height: bh)
         button.frame = CGRect(x: pad, y: body.frame.maxY + 10, width: inner, height: m.introButtonHeight.value)
         let s = 11.0
         shield.frame = CGRect(x: pad + 1, y: button.frame.maxY + 15, width: s, height: s)
-        footnote.preferredMaxLayoutWidth = inner - s - 6
-        footnote.frame = CGRect(x: pad + s + 6, y: button.frame.maxY + 12, width: inner - s - 6, height: footnote.fittingSize.height)
+        let noteWidth = max(0, inner - s - 6)
+        footnote.preferredMaxLayoutWidth = noteWidth
+        let noteHeight = footnote.sizeThatFits(NSSize(width: noteWidth, height: .greatestFiniteMagnitude)).height
+        footnote.frame = CGRect(x: pad + s + 6, y: button.frame.maxY + 12, width: noteWidth, height: noteHeight)
     }
 }
 
