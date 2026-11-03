@@ -1061,7 +1061,8 @@
       ],
       "remaining": [
         "None within the assigned scope.",
-        "Opus review: events without an https link are dropped (F5); cancelling a reconnect removes a good badge (F9); 404 and 401 share one state (F10)."
+        "Opus review: events without an https link are dropped (F5); cancelling a reconnect removes a good badge (F9); 404 and 401 share one state (F10).",
+        "R3-6（2026-11-04，合并 2c2f3306）：按 Arc 的类型字段，一个收藏只显示一种标记：日历显示距下一场会议的时间（Now / in 12m / in 3h），GitHub 有未读显示黑色圆点，颜色取自 Arc 资源；去掉了原来的数字角标、状态小点、Access/Expired 字样和常规悬停提示；右键菜单加了 Show Unread Badge、Show Time to Next Meeting、Show Hover Preview 三个按站点的开关和 Connect GitHub Notifications…、Select Calendar Export… 入口（原生场景 R36-FavoriteOverlay）。圆点大小、胶囊尺寸、时间文字格式是猜的，待 P08 的 Arc 图（要在用户的 Arc 里登录 GitHub 和日历）。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -2302,7 +2303,7 @@
       "arc_evidence": "`HoverCards` module (anatomy-m 3.4); General \"Show Arc Previews\"",
       "description": "Preview cards for Gmail, Calendar, folders and recent pages on hover",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Hover supported Favorites, folders and recent pages or links to show dismissible preview cards controlled by settings.",
       "owner": "batch2-sidebar-tabs",
       "required_checks": [
@@ -2378,7 +2379,8 @@
       "remaining": [
         "None within the assigned scope.",
         "Opus review: links in cross-site iframes get no preview (F2); anchor text becomes the card title when the destination has none (F3); long hosts cut the URL off the card (F4); idle CPU with previews on and many frames (withdrawn Fable review).",
-        "Arc 对照（run-20261103 P13）仍有差异或有意不同：P13-c: 已修（第 7 组：Previews 表单；站台未拍） | P13-a: 已修；卡片白底，Arc 半透明 | P13-b: 已修；未加载的置顶标签不显示 ×"
+        "Arc 对照（run-20261103 P13）仍有差异或有意不同：P13-c: 已修（第 7 组：Previews 表单；站台未拍） | P13-a: 已修；卡片白底，Arc 半透明 | P13-b: 已修；未加载的置顶标签不显示 ×",
+        "R3-6（2026-11-04，合并 2c2f3306）：文件夹预览卡底色改成从 Arc 图量的 #F9F9FA 且不透明；Previews 开着时日历收藏/置顶标签悬停列出一天内的会议（https 会议带 Join），Linear/Notion/Figma 列最近访问的页面，普通网站不弹卡（P13-b 一致），每个站点可单独关；修了卡片在指针离开后关不掉的真问题（卡片没裁剪边界）；网页链接预览卡按 Arc 的预览配色重画。原生场景 R36-HoverCards。未做：Gmail/Outlook 的邮件预览（没有邮件数据来源）。待 Arc 参照：日历悬停卡（P13-d）、链接预览卡（P13-e），Brk 侧图在 verify/completion/browser-basic-parent/r36-merged/station/。"
       ],
       "implementation": [
         "Sources/BrkCEF/PageLinkPreviews.swift",
@@ -2711,7 +2713,8 @@
         }
       ],
       "remaining": [
-        "Pinned group placement, title, display, persistence and structural restore passed in native. Complete group close/menu coverage."
+        "Pinned group placement, title, display, persistence and structural restore passed in native. Complete group close/menu coverage.",
+        "R3-6（2026-11-04，合并 2c2f3306）：组标题行无文件夹图标、小号灰字，组内标签不缩进；悬停 × 把整组作为一条记录归档，⌘Z 可撤销；右键四项 Rename Group… / Remove Group Header / Copy All Links / Close Tab Group；拖组到组上合并，拖标签进组出组，组空了自动消失（原生场景 R36-TabGroups）。归档原因记成手动（Arc 的 clearTabGroup 要改资料库页面）；组标题样式是猜的，Arc 的 Tidy 在这台机器上触发不了，没有参照。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -5559,7 +5562,7 @@
       "arc_evidence": "anatomy-m 1.11; 114 menu items with `arcTypeTravelID`; 35 `TypeTravelCandidate` cases",
       "description": "Every menu command, space, folder move and extension is searchable",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Search all applicable completed menu actions, spaces, folder destinations and extensions from the command bar.",
       "owner": "native-grounding",
       "required_checks": [
@@ -5590,7 +5593,8 @@
         }
       ],
       "remaining": [
-        "Implement the remaining actions, folder destinations and extensions; W2-8 tests Preferences, not every advertised workflow."
+        "Implement the remaining actions, folder destinations and extensions; W2-8 tests Preferences, not every advertised workflow.",
+        "R3-6（2026-11-04，合并 2c2f3306）：命令栏补上 Add to / Remove from Favorites、Move to New Folder、Open 某文件夹、Replace Pinned Tab with the Current Site（也加进置顶标签右键的 Edit Pinned Page 子菜单）、四个方向的 Add … Split、Mute / Unmute All Tabs、撤销最近一次可撤销操作；每个带动作按钮的扩展各一行；Open Password Manager（原生场景 R36-TypeTravel）。未做：重做（Brk 没有）；扩展行只有单元测试。"
       ],
       "implementation": [
         "Sources/BrkOverlays/Suggest.swift",
@@ -6967,7 +6971,7 @@
       "arc_evidence": "Links pane; anatomy-m 1.10 `LittleBrowserEntryPoint`",
       "description": "Links from other apps, global hotkey, Opt+Cmd+click, menu bar item",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "External links, global hotkey, Option+Cmd link click and menu-bar entry can open Little Brk, with correct destination profile and private-link protections.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -6999,7 +7003,8 @@
       ],
       "remaining": [
         "Implement global shortcut registration and menu-bar entry.",
-        "Verify real external-app delivery and physical modifier clicks; retain private links in private context."
+        "Verify real external-app delivery and physical modifier clicks; retain private links in private context.",
+        "R3-6（2026-11-04，合并 2c2f3306）：全局快捷键改成独占注册，别的程序占着时注册失败并报给程序状态，设置 Links 页多一行说明；状态栏菜单入口可用。原生场景 R36-LittleEntry（用自己的数据目录和 ⌃⌥⇧⌘L：Finder 在前台时按下能开 Little Arc；被占用报 -9878；关掉开关无反应；辅助功能点状态栏菜单能开）。注意：每个 Brk 启动时仍先按默认 ⌥⌘N 注册一次（原有行为），要不要给测试实例加一个关掉全局快捷键的环境变量待定。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -7021,7 +7026,7 @@
       "arc_evidence": "Links \"Archive Little Arcs after:\"",
       "description": "Closes idle Little Arc windows",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Little Brk auto-archive respects configured thresholds and never closes a panel that is actively used; expired panels archive/close once and can be restored appropriately.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -7040,7 +7045,8 @@
       ],
       "remaining": [
         "Define idle using actual relevant interaction/activity; protect actively used panels and media/download work.",
-        "Add native active-vs-idle and restart/never threshold checks."
+        "Add native active-vs-idle and restart/never threshold checks.",
+        "R3-6（2026-11-04，合并 2c2f3306）：闲置 = 距最后一次真实输入（按键、点击、滚动、面板进出前台）超过阈值；只停在前台不算在用；正在下载、出声、播视频、开着画中画不归档。原生场景 R36-LittleArchive 五种情况通过，阈值设置重启后保留。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Archive.swift",
@@ -7426,7 +7432,7 @@
       "arc_evidence": "anatomy-m 1.6 `AutomaticLiveFolderData` (GitHub); `LiveFoldersFeature`",
       "description": "A folder filled from GitHub pull requests",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "implemented",
       "acceptance": "Maintain a GitHub pull-request Live Folder with refresh, opening items and useful loading, empty and error states.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -7464,7 +7470,8 @@
         }
       ],
       "remaining": [
-        "Explicit repository selection, real fixture HTTP fetch/refresh, PR document opening, empty state and saved config passed in native. Error/loading/freshness and authenticated private-repository refresh requires a reauthorization flow because refresh is currently anonymous; tokens are never saved."
+        "Explicit repository selection, real fixture HTTP fetch/refresh, PR document opening, empty state and saved config passed in native. Error/loading/freshness and authenticated private-repository refresh requires a reauthorization flow because refresh is currently anonymous; tokens are never saved.",
+        "R3-6（2026-11-04，合并 2c2f3306）：Live Folder 的状态改成单独字段：加载中行尾转圈，出错行尾警告图标（提示里是原因，原有行保留），空时展开多一行 No open pull requests，过期（超过 5 分钟）或本次启动后没刷新过的打开时自动刷新，行尾悬停按钮改成刷新（原生场景 R36-LiveStates）。样式是猜的，没有 Arc 图。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
