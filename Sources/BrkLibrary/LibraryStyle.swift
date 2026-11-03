@@ -90,7 +90,6 @@ struct LibraryMediaMetrics: MetricGroup {
     let introButtonHeight = Metric(40.0, .anatomy("P32-a: Show Media spans y 450...490"))
     let introButtonRadius = Metric(8.0, .guess("Show Media's corner radius"))
     let introFootnoteFont = Metric(10.5, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart"))
-    let thumbnail = Metric(35.0, .guess("a capture's thumbnail inside its 47 pt card"))
 }
 
 /// The Boosts page: one row per Boost under the search field.
@@ -124,6 +123,10 @@ struct LibrarySpacesMetrics: MetricGroup {
     let footerButton = Metric(24.0, .guess("the footer buttons' size"))
     let plusSize = Metric(31.0, .anatomy("P32-d: the + button is 31 pt across"))
     let plusGap = Metric(48.0, .anatomy("P32-d: the + button is centred 48 after the last card"))
+    let shadowRadius = Metric(12.0, .anatomy("P30-a: no outline; the panel darkens from #ECECEC at a card's edge back to #FCFCFC about 22 pt out"))
+    let shadowOpacity = Metric(0.13, .anatomy("P30-a: #FCFCFC to #ECECEC right at the edge, about half the shadow's darkness"))
+    let themeWash = Metric(0.15, .guess("P30-a: the 对照 card (a pale beige theme) is the panel's #FCFCFC and Space 1's runs #E4E4FB to #FDEFEE: its theme at about 15% over the panel"))
+    let faviconPlaceholderAlpha = Metric(0.17, .anatomy("P32-d: a favicon-less row's square is #D1D1D1 on the #FCFCFC card"))
 }
 
 /// The History page in the content area (Q05-a, positions from the card's top left).
@@ -309,12 +312,9 @@ public enum LibraryCopy {
     static let installFromFile = "Install from File…"
     static let localGallery = "Local Boost Gallery"
 
-    // The Spaces page. Observed: "Edit Theme…" (the pencil's tooltip in Arc is the space's edit), "Delete Space…".
+    // The Spaces page: the pencil's tooltip (it opens the theme panel) and the controls; the card's … menu is the
+    // reducer's (`.sidebar(.popupMenu(.spaceCard))`, Arc's rows in P30-c).
     static let editSpace = "Edit Space…"
-    static let moveEarlier = "Move Left"
-    static let moveLater = "Move Right"
-    static let exportIntoFolder = "Export into Folder…"
-    static let deleteSpace = "Delete Space…"
     static let newSpace = "New Space…"
     static let moveSpace = "Drag to reorder"
     static let more = "More"

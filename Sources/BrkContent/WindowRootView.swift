@@ -71,6 +71,8 @@ public final class WindowRootView: NSView {
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
+        // Both span the window from its top left, so the Library's coordinates are the dialog host's.
+        spaceDialog.cardHeader = { [weak library] space in library?.spaceCardHeader(space) }
         spaceDialog.onDraft = { [weak self] draft in
             guard let self else { return }
             self.draft = draft

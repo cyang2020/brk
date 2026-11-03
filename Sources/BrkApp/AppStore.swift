@@ -742,6 +742,7 @@ extension AppStore {
             if let selected { read(selected) }
             else if let owner = windows[window]?.window, owner.attachedSheet == nil {
                 let panel = NSOpenPanel(); panel.title = "Install Boost from File"; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+                SidebarPanelControl.configureTestDirectory(panel)
                 panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { read(url) } }
             }
         case .exportFile(let window, let boost, let selected):
@@ -756,6 +757,7 @@ extension AppStore {
             if let selected { write(selected) }
             else if let owner = windows[window]?.window, owner.attachedSheet == nil {
                 let panel = NSSavePanel(); panel.title = "Export Boost"; panel.nameFieldStringValue = "Boost.brkboost.json"
+                SidebarPanelControl.configureTestDirectory(panel)
                 panel.beginSheetModal(for: owner) { result in if result == .OK, let url = panel.url { write(url) } }
             }
         }

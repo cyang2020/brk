@@ -193,6 +193,8 @@ public enum SpaceCommand: Hashable, Sendable, Codable {
     case exportIntoFolder(SpaceID)
     case delete(SpaceID)
     case move(SpaceID, index: Int)
+    /// A Library Spaces card's New Folder or Live Folders row, for that card's space (P30-c).
+    case inSpace(SpaceID, SpaceCardAction)
     /// Dock icon click.
     case focus(SpaceID)
     /// Cmd+Opt+Right/Left, no wrap.
@@ -258,6 +260,20 @@ public enum PopupMenuRequest: Hashable, Sendable, Codable {
     /// Product controls include confirmation and view preferences; `.space` retains the existing model-query contract.
     case spaceControls(SpaceID)
     case plusButton
+    /// The … of a card on the Library's Spaces page (and the card's right-click; P30-c): the space's menu as Arc shows
+    /// it there, its New Folder and Live Folders acting on the card's space and Delete Space asking first.
+    case spaceCard(SpaceID)
+}
+
+/// What a Library Spaces card's New Folder and Live Folders rows do to the card's space (`SpaceCommand.inSpace`).
+public enum SpaceCardAction: Hashable, Sendable, Codable {
+    /// "New Folder" at the top of the space's Pinned. The card shows it; the rename field is the sidebar's, which the
+    /// Library covers, so it keeps Arc's default name.
+    case newFolder
+    /// Live Folders > "New GitHub Live Folder…" and "Connect Calendar File…": a source request belongs to the space
+    /// the window shows (its folder lands in that space's Pinned), so the window shows the card's space first.
+    case connectGitHub
+    case connectCalendar
 }
 
 /// App and window chrome. Also the commands behind app shortcuts (Cmd+Q, Cmd+H, Cmd+M): while a page has focus
@@ -533,6 +549,8 @@ extension Command {
         case .capture(.begin), .library(.openHistory): false
         case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create): true
+        // A Spaces card's … menu and what its rows do (P30-c): the Library stays, so the card shows the result.
+        case .sidebar(.popupMenu(.spaceCard, _)), .space(.inSpace), .profile(.assign), .app(.export), .tabTools(.spaceIntoFolder): true
         default: false
         }
     }
