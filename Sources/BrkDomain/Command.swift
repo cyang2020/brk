@@ -429,6 +429,11 @@ public enum PeekCommand: Hashable, Sendable, Codable {
     case open(URL)
     /// Esc, the card's close button, Cmd+W while peeking.
     case close
+    /// The card's ⤢ button: the peeked page becomes the last tab of the window's Today, focused, keeping its live
+    /// page (scroll position and form state).
+    case openAsTab
+    /// The card's split button: the peeked page joins the shown tab in a split, to its right, keeping its live page.
+    case openInSplit
 }
 
 public enum ProfileCommand: Hashable, Sendable, Codable {

@@ -32,8 +32,8 @@ import BrkUIKit
     override var acceptsFirstResponder: Bool { true }
     func render(_ value: CaptureSnapshot?, frames: WindowFrames, peek: PeekSnapshot?) {
         guard let value else { isHidden = true; snapshot = nil; return }
-        let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.rect
-            ?? (peek?.page == value.request.document.browser.page ? frames.peek.map { CGRect(x:$0.minX,y:$0.minY,width:$0.width,height:max(0,$0.height-Metrics.peek.hintHeight.value)) } : nil)
+        let rect = frames.cards.first(where: { if case .page(let page) = $0.content { page == value.request.document.browser.page } else { false } })?.page
+            ?? (peek?.page == value.request.document.browser.page ? frames.peek : nil)
         guard let rect else { isHidden = true; snapshot = nil; return }
         let fresh = snapshot?.request.id != value.request.id
         snapshot = value; frame = rect; isHidden = false
