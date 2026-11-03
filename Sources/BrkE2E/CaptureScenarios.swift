@@ -35,6 +35,14 @@ enum CaptureScenarios {
         try bytes.write(to:app.shotsDirectory.appendingPathComponent("product-"+mode.rawValue+".png"))
         return record
     }
+    /// Chooses `item` from a Media card's menu (Open, Export…, Remove, Insert in Easel), through the native menu.
+    private static func cardMenu(_ app: AppUnderTest, _ id: String, choose item: String) throws {
+        let card = try visible(app.native(), .tabTool("capture-card-" + id)).frame
+        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: card.midX, y: card.midY), choose: item)) else {
+            throw Check(description: "the capture card's menu did not open")
+        }
+        try expect(titles.contains(item), "the capture card's menu has \(titles), not \(item)")
+    }
     @Sendable static func product(_ app: AppUnderTest) throws {
         try app.dispatch(.settings(.advanced(.autoPictureInPicture(false))))
         let url=app.site.url("capture-media.html"), item=try app.load(app.site.url("capture-media.html"))
@@ -59,14 +67,14 @@ enum CaptureScenarios {
         try app.click(.tabTool("capture-confirm"))
         let portrait=try captureRecord(app,mode:.portrait,previous:2)
         try expect(abs(Double(portrait.width)/Double(portrait.height)-9.0/16)<0.01,"portrait framing is not 9:16")
-        try app.dispatch(.capture(.preview(area.id)))
-        try expect(try library(app)?.capturePreview == area.id,"preview selection lost")
-        try app.click(.tabTool("capture-open"))
+        try app.click(.tabTool("capture-card-" + area.id))
+        try app.waitUntil("the picked capture previews over the content area") { try library(app)?.capturePreview == area.id && isShown(app.native(), .tabTool("capture-preview")) }
+        try cardMenu(app, area.id, choose: "Open")
         try app.waitUntil("actual PNG opens in its native image viewer") { if case .menuItems = try? app.send(.sidebarPanel(window:app.window,action:.inspect)) { true } else { false } }
         Thread.sleep(forTimeInterval:0.25)
         _ = try app.send(.sidebarPanel(window:app.window,action:.capture(path:app.shotsDirectory.appendingPathComponent("product-open-viewer.png").path)))
         _ = try app.send(.sidebarPanel(window:app.window,action:.button("Close")))
-        try app.click(.tabTool("capture-export"))
+        try cardMenu(app, area.id, choose: "Export…")
         try app.waitUntil("real PNG save sheet opens") { if case .menuItems = try? app.send(.sidebarPanel(window:app.window, action:.inspect)) { true } else { false } }
         Thread.sleep(forTimeInterval:0.25)
         _ = try app.send(.sidebarPanel(window:app.window, action:.capture(path:app.shotsDirectory.appendingPathComponent("product-export-sheet.png").path)))

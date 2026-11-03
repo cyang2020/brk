@@ -243,10 +243,11 @@ public struct SearchEngine: Hashable, Sendable, Codable {
     }
 }
 
-/// The Library's pages (Arc: `HomePageID` downloads, archive, easelsAndNotes, screenshotsAndCaptures, boosts,
-/// spaces; plus History, which Arc's Cmd+Y shows as its own page).
+/// The Library's pages, in the order of Arc's navigation column (Arc: `HomePageID` screenshotsAndCaptures,
+/// downloads, easelsAndNotes, spaces, boosts, archive). History is not one of them: Cmd+Y opens it in the content
+/// area (`HistoryPage`), as Arc opens arc://history.
 public enum LibraryPage: String, Hashable, Sendable, Codable, CaseIterable {
-    case downloads, history, archive, media, easelsAndNotes, boosts, spaces
+    case media, downloads, easelsAndNotes, spaces, boosts, archive
 }
 
 /// One file download (Arc: `StorableDownloadMetadata`; Library "Downloads" page, `DownloadMenu`).
