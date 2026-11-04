@@ -130,10 +130,13 @@ final class FavoritesView: NSView {
         emptyBadge.image = StarBadge.image(side: badge, ink: ink)
         emptyBadge.frame = CGRect(x: box.midX - badge / 2, y: box.minY + Draw.emptyBadgeTop.value * scale, width: badge, height: badge)
         emptyTitle.font = .systemFont(ofSize: Draw.emptyTitleFont.value * scale, weight: .semibold)
-        emptySubtitle.font = .systemFont(ofSize: Draw.smallFont.value * scale)
+        emptySubtitle.font = .systemFont(ofSize: Draw.emptySubtitleFont.value * scale)
         let side = Draw.emptyTextInset.value * scale, width = max(0, box.width - 2 * side)
+        // The title sits under the ×, so it may use the box's width up to the ×'s inset.
+        let titleSide = Draw.emptyCloseInset.value * scale
         let titleTop = min(box.maxY, emptyBadge.frame.maxY + Draw.emptyTitleGap.value * scale)
-        emptyTitle.frame = CGRect(x: box.minX + side, y: titleTop, width: width, height: min(emptyTitle.intrinsicContentSize.height, box.maxY - titleTop))
+        emptyTitle.frame = CGRect(x: box.minX + titleSide, y: titleTop, width: max(0, box.width - 2 * titleSide),
+                                  height: min(emptyTitle.intrinsicContentSize.height, box.maxY - titleTop))
         emptySubtitle.preferredMaxLayoutWidth = width
         let subtitleTop = min(box.maxY, emptyTitle.frame.maxY + Draw.emptySubtitleGap.value * scale)
         let subtitle = emptySubtitle.intrinsicContentSize.height

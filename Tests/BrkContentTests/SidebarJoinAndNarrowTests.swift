@@ -125,6 +125,15 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
             XCTAssertLessThanOrEqual(full, subtitle.bounds.height + 0.5, "the explanation is cut at \(width)")
             let line = subtitle.font!.boundingRectForFont.height
             XCTAssertLessThanOrEqual(full, 2.5 * line, "the explanation takes more than two lines at \(width)")
+            // Arc's break (P07-b): "Favorites keep your most" over "used sites and apps close".
+            func cell(_ text: String) -> Double {
+                let probe = NSTextField(labelWithString: text)
+                probe.font = subtitle.font
+                return probe.cell!.cellSize.width
+            }
+            XCTAssertLessThanOrEqual(cell("Favorites keep your most"), subtitle.bounds.width, "the first line breaks before \"most\" at \(width)")
+            XCTAssertLessThanOrEqual(cell("used sites and apps close"), subtitle.bounds.width, "the second line does not fit at \(width)")
+            XCTAssertGreaterThan(cell("Favorites keep your most used"), subtitle.bounds.width, "the first line runs past \"most\" at \(width)")
             XCTAssertTrue(tray.bounds.contains(box), "the box \(box) runs out of its tray \(tray.bounds) into the space header at \(width)")
         }
         XCTAssertEqual(FavoritesGrid.emptyBox(width: 164).box.size.width, 149)

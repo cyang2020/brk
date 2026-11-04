@@ -373,8 +373,17 @@ final class SplitJoinPreview: NSView {
         shadow.shadowBlurRadius = Draw.selectedShadowRadius.value
         shadow.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
         capsule.shadow = shadow
-        slot.layer?.backgroundColor = ink.back.cgColor
-        chip.layer?.backgroundColor = ink.front.cgColor
+        // The theme's hue at Arc's measured strength (P23-e: slot #82A9A8, chip #E0E7E7 on the pale teal theme); dark
+        // windows take the hue ink's back and front.
+        if palette.scheme == .light {
+            let (h, sat, _) = HueInk.hsl(palette.accent)
+            let slotInk = Draw.splitJoinSlotInk.value, chipInk = Draw.splitJoinChipInk.value
+            slot.layer?.backgroundColor = HueInk.color(h, min(sat, 0.5) * slotInk[0], slotInk[1]).cgColor
+            chip.layer?.backgroundColor = HueInk.color(h, min(sat, 0.5) * chipInk[0], chipInk[1]).cgColor
+        } else {
+            slot.layer?.backgroundColor = ink.back.cgColor
+            chip.layer?.backgroundColor = ink.front.cgColor
+        }
         icon.render(IconContent(tab: dragged), tint: palette.ink.secondary, palette: palette)
         title.stringValue = dragged.awaitingFirstDocument ? SidebarCopy.untitled : dragged.title
         title.textColor = palette.ink.text
@@ -399,6 +408,6 @@ final class SplitJoinPreview: NSView {
         title.frame = CGRect(x: titleX, y: (bounds.height - height) / 2, width: max(0, chip.frame.maxX - Draw.titleTrailing.value - titleX), height: height)
         close.frame = g.button
         let targetX = g.selection.midX + Draw.splitJoinTargetLeading.value
-        target.frame = CGRect(x: targetX, y: (bounds.height - height) / 2, width: max(0, g.button.minX - targetX), height: height)
+        target.frame = CGRect(x: targetX, y: (bounds.height - height) / 2, width: max(0, g.button.midX - Draw.splitJoinTargetTrailing.value - targetX), height: height)
     }
 }
