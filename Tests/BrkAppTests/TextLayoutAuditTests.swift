@@ -147,6 +147,17 @@ import XCTest
         XCTAssertEqual(report.findings.map(\.problem), [.wrapOverflow])
     }
 
+    /// The new Profile dialog's prompt: one wrapping line, its frame short only of the line's leading.
+    func testAWrappingLineShortOfItsLeadingIsWhole() {
+        let report = audit { root in
+            let prompt = NSTextField(wrappingLabelWithString: "What do you want to call this Profile?")
+            prompt.font = .systemFont(ofSize: 15)
+            prompt.frame = CGRect(x: 20, y: 20, width: 374, height: 18)
+            root.addSubview(prompt)
+        }
+        XCTAssertEqual(report.findings, [])
+    }
+
     func testAnAncestorThatClipsCutsATruncatedLabel() {
         let report = audit { root in
             let box = NSView(frame: CGRect(x: 20, y: 20, width: 60, height: 30))

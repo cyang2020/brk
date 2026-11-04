@@ -105,7 +105,9 @@ enum TextLayoutAudit {
                     needed.height = min(needed.height, ceil(NSLayoutManager().defaultLineHeight(for: font)) * Double(field.maximumNumberOfLines))
                 }
                 report.note(text, frame: bounds, needed: needed)
-                if needed.height > bounds.height + TextLayoutAudit.slack {
+                // The last line's leading holds no glyphs.
+                let leading = field.font.map { max(0, ceil(NSLayoutManager().defaultLineHeight(for: $0)) - ($0.ascender - $0.descender)) } ?? 0
+                if needed.height - leading > bounds.height + TextLayoutAudit.slack {
                     add(truncates ? .ellipsis : .wrapOverflow, field, text, needed: needed)
                 }
                 checkClip(field, text, rect: bounds, needed: needed)
