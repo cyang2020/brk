@@ -261,3 +261,47 @@ final class SpaceDialogHostTests: XCTestCase {
         XCTAssertEqual(sent.last, .profile(.openDialog(nil)), "confirming the current profile just closes")
     }
 }
+
+/// A063 (R4-9): the theme panel's edits step back and forward with Cmd+Z and Shift+Cmd+Z; a drag is one step.
+@MainActor
+final class ThemeEditorUndoTests: XCTestCase {
+    func testEachEditIsOneStepAndADragIsOne() {
+        var reported: [ThemeDraft] = []
+        let start = ThemeDraft(theme: editTheme)
+        let model = ThemeEditorModel(draft: start) { reported.append($0) }
+        XCTAssertFalse(model.undo(), "nothing to undo before an edit")
+        model.update { $0.setColor(ThemePresets.drab[2], at: 0) }
+        let afterPreset = model.draft
+        for value in [0.5, 0.6, 0.7, 0.8] { model.update(group: "intensity") { $0.setIntensity(value) } }
+        model.endGroup()
+        let afterDrag = model.draft
+        model.update { $0.addColor() }
+        XCTAssertEqual(model.undoStack.count, 3, "preset, one drag, add color")
+        XCTAssertTrue(model.undo())
+        XCTAssertEqual(model.draft, afterDrag)
+        XCTAssertTrue(model.undo())
+        XCTAssertEqual(model.draft, afterPreset, "the whole drag came back in one step")
+        XCTAssertTrue(model.undo())
+        XCTAssertEqual(model.draft, start)
+        XCTAssertFalse(model.undo())
+        XCTAssertEqual(reported.last, start, "the undone draft is reported, so the space's theme follows")
+        XCTAssertTrue(model.redo())
+        XCTAssertEqual(model.draft, afterPreset)
+        XCTAssertTrue(model.redo())
+        XCTAssertEqual(model.draft, afterDrag)
+        model.update { $0.setNoise(0.9) }
+        XCTAssertFalse(model.redo(), "a new edit drops what was undone")
+    }
+
+    func testTwoDragsOfTheSameControlAreTwoSteps() {
+        let model = ThemeEditorModel(draft: ThemeDraft(theme: editTheme))
+        model.update(group: "noise") { $0.setNoise(0.3) }
+        model.update(group: "noise") { $0.setNoise(0.4) }
+        model.endGroup()
+        model.update(group: "noise") { $0.setNoise(0.6) }
+        model.endGroup()
+        XCTAssertEqual(model.undoStack.count, 2)
+        model.undo()
+        XCTAssertEqual(model.draft.style.noise, 0.4, accuracy: 1e-9)
+    }
+}

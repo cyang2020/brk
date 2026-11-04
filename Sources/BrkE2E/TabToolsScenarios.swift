@@ -54,7 +54,7 @@ enum TabToolsScenarios {
         try expect(copy != second, "duplicate reused identity")
         try ready(app, copy, url)
         try app.press("ctrl+cmd+right")
-        try expect(try currentTab(app.view())?.id == home, "linear cycle did not wrap in sidebar order")
+        try expect(try currentTab(app.view())?.id == home, "Ctrl+Cmd+Right did not step to the next unit in sidebar order (R49-StepKeys checks the wrap at both ends)")
         try app.press("cmd+1")
         try expect(try currentTab(app.view())?.id == second, "Cmd+1 did not select first item")
         try app.press("cmd+9")

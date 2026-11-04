@@ -212,6 +212,13 @@ public final class SpaceDialogHost: NSView {
         popover.show(relativeTo: CGRect(x: header.minX + 8, y: header.minY, width: 22, height: header.height), of: self, scheme: scheme)
     }
 
+    /// Cmd+Z (or Shift+Cmd+Z with `redo`) while Edit Theme is open undoes (redoes) one edit in the panel. False when
+    /// no panel is open or it has nothing to step through.
+    public func stepThemeEdit(redo: Bool) -> Bool {
+        guard let themePanel else { return false }
+        return redo ? themePanel.redo() : themePanel.undo()
+    }
+
     private func showThemePanel(space: SpaceID, theme: SpaceTheme, frames: WindowFrames) {
         guard let window else { return }
         let draft = ThemeDraft(theme: theme, systemScheme: systemScheme)
@@ -245,7 +252,7 @@ struct SpaceGlyph: View {
             let side = OverlayMetrics.dialog.dotSize.value
             Circle().fill(dot).frame(width: side, height: side).overlay(Circle().stroke(.white.opacity(0.6)))
         case .custom(.emoji(let emoji)): Text(emoji)
-        case .custom(.named(let name)): Image(systemName: NamedIconSymbol.of(name))
+        case .custom(.named(let name)): NamedIconImage(icon: name)
         case .custom(.symbol(let symbol)): Image(systemName: symbol)
         }
     }

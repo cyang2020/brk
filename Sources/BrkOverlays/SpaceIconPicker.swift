@@ -218,7 +218,7 @@ struct SpaceIconPickerView: View {
                 .buttonStyle(.plain).help(OverlayCopy.noIcon).accessibilityLabel(OverlayCopy.noIcon).spaceToolsID("icon-none")
                 ForEach(NamedIcon.allCases, id: \.self) { name in
                     Button { model.pick(.custom(.named(name))) } label: {
-                        Image(systemName: NamedIconSymbol.of(name)).font(.system(size: 16)).foregroundStyle(ink.opacity(0.7))
+                        NamedIconImage(icon: name, size: 16).foregroundStyle(ink.opacity(0.7))
                             .frame(width: m.cell.value.width + 4, height: m.cell.value.height)
                             .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .fill(model.icon == .custom(.named(name)) ? ink.opacity(0.08) : .clear))
@@ -271,5 +271,21 @@ final class IconPickerPopover: NSObject, NSPopoverDelegate {
         guard !reported else { return }
         reported = true
         closed()
+    }
+}
+
+/// A named icon in SwiftUI: its SF Symbol at `size`, or the drawn glyph for the four Arc icons SF Symbols lacks
+/// (`NamedIconArt`). Without a size it takes the surrounding font's (13 pt).
+struct NamedIconImage: View {
+    let icon: NamedIcon
+    var size: Double? = nil
+    var body: some View {
+        if let art = NamedIconArt.drawnImage(icon, pointSize: size ?? 13) {
+            Image(nsImage: art).renderingMode(.template)
+        } else if let size {
+            Image(systemName: NamedIconSymbol.of(icon)).font(.system(size: size))
+        } else {
+            Image(systemName: NamedIconSymbol.of(icon))
+        }
     }
 }

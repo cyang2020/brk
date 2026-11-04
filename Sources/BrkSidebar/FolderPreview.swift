@@ -46,8 +46,8 @@ final class FolderPreview {
         }
     }
 
-    /// A supported Favorite or Pinned tab (Arc Previews): the calendar's coming meetings with Join, or the pages
-    /// last visited on Linear, Notion or Figma.
+    /// A supported Favorite or Pinned tab (Arc Previews): the calendar's coming meetings with Join, the pages last
+    /// visited on Linear, Notion or Figma, or the mail opened last on Gmail or Outlook.
     func hover(tab: TabRow, card: HoverCardSnapshot, over view: NSView, now: Instant) {
         let made: FolderPreviewView
         switch card {
@@ -65,6 +65,13 @@ final class FolderPreview {
                              open: [.peek(.open(page.url))])
             }
             made = FolderPreviewView(search: TopAppCopy.searchSite(site), entries: entries)
+        case .mail(_, let unread, let messages):
+            let entries = messages.map { page in
+                PreviewEntry(key: page.url.absoluteString, title: page.title, icon: .favicon(tab.favicon),
+                             caption: FolderPreviewView.ago(page.visitedAt, now: now), searchText: page.title,
+                             open: [.peek(.open(page.url))])
+            }
+            made = FolderPreviewView(header: TopAppCopy.mailHeader(unread: unread), entries: entries, empty: TopAppCopy.mailEmpty(unread: unread))
         }
         schedule(item: tab.id, kind: .card, over: view) { [weak self] in self?.show(made, over: view) }
     }
@@ -220,6 +227,13 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         heading.textColor = NSColor(white: 0, alpha: 0.85)
         emptyLabel.font = .systemFont(ofSize: PreviewDraw.titleFont.value)
         emptyLabel.textColor = NSColor(white: 0, alpha: 0.5)
+        // The mail card's signed-out text takes two lines of the one row it has.
+        emptyLabel.maximumNumberOfLines = 2
+        emptyLabel.lineBreakMode = .byWordWrapping
+        emptyLabel.cell?.wraps = true
+        emptyLabel.cell?.isScrollable = false
+        emptyLabel.usesSingleLineMode = false
+        emptyLabel.preferredMaxLayoutWidth = PreviewDraw.width.value - 2 * (PreviewDraw.iconCentre.value - Metrics.tablist.favicon.value / 2)
         hairline.wantsLayer = true
         hairline.layer?.backgroundColor = NSColor(white: 0, alpha: 0.08).cgColor
         for view in (searchable ? [glass, search, hairline] : [heading, hairline, emptyLabel]) as [NSView] { addSubview(view) }

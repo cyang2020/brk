@@ -16,6 +16,9 @@ final class FixtureServer: @unchecked Sendable {
     func releaseHeldDocument() { heldDocument.signal() }
     func releaseAudioDocument() { heldAudioDocument.signal() }
     func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
+    /// Every `/suggest` request's query string, in order (which engine asked: `engine=<its suggest host>`).
+    func suggestQueries() -> [String] { countLock.withLock { suggests } }
+    private var suggests: [String] = []
     private var listener: Int32 = -1
 
     init(root: URL) { self.root = root.standardizedFileURL }
@@ -182,6 +185,11 @@ final class FixtureServer: @unchecked Sendable {
             let rows: [[String: String]] = round == 1 ? [["title": "Fixture Pull Request", "html_url": url("page2.html?pull=1").absoluteString]] : []
             guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path == "/repos/fixture/titles/pulls" {
+            // R49-Titles: a pull request whose page title carries GitHub's suffix; the row is never loaded.
+            let rows: [[String: String]] = [["title": "Shorten fixture titles · GitHub", "html_url": "https://github.com/fixture/titles/pull/7"]]
+            guard let body = try? JSONSerialization.data(withJSONObject: rows) else { return }
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/repos/fixture/r36/notifications" {
             let body = Data("[{\"unread\":true},{\"unread\":true},{\"unread\":true}]".utf8)
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
@@ -198,6 +206,7 @@ final class FixtureServer: @unchecked Sendable {
                 response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
             }
         } else if path.hasPrefix("/suggest") {
+            countLock.withLock { suggests.append(URLComponents(string: target)?.query ?? "") }
             let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
             guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

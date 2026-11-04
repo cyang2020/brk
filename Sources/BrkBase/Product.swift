@@ -34,8 +34,9 @@ public struct LaunchOptions: Sendable, Equatable {
     public var startURL: URL?
     /// `BRK_REMOTE_DEBUGGING_PORT`: CEF DevTools port, for debugging the e2e fixture pages.
     public var remoteDebuggingPort: Int?
-    /// `BRK_SUGGEST_URL`: replaces every search engine's suggest endpoint (the query is appended as `q`), so the e2e
-    /// fixture server can answer W2-10 without the network.
+    /// `BRK_SUGGEST_URL`: replaces every search engine's suggest endpoint (the query is appended as `q`, the engine's
+    /// own suggest host as `engine`), so the e2e fixture server can answer W2-10 without the network and tell which
+    /// engine asked.
     public var suggestOverride: URL?
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {

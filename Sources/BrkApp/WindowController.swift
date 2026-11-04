@@ -69,6 +69,11 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onKeyEquivalent = { [weak self] event in
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
+            // ⌘Z and ⇧⌘Z while Edit Theme is open step through the panel's edits, before the Edit menu's Undo.
+            if let self, event.charactersIgnoringModifiers?.lowercased() == "z" {
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                if flags == .command || flags == [.command, .shift], self.root.spaceDialog.stepThemeEdit(redo: flags.contains(.shift)) { return true }
+            }
             // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the Edit menu's Undo.
             if let self, self.lastSnapshot?.tabTools.toast?.keycap != nil, event.charactersIgnoringModifiers?.lowercased() == "z",
                event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {

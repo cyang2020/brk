@@ -188,7 +188,7 @@ final class AppUnderTest {
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
-        if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
+        if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") || scenarioID.hasPrefix("R49") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if scenarioID.hasPrefix("SiteFilters") {
             // Port 9 (discard) refuses connections: the offline scenario's downloads find no server.
             environment["BRK_TEST_FILTER_BASE"] = scenarioID == "SiteFilters-offline" ? "http://127.0.0.1:9/filter-lists" : site.url("filter-lists").absoluteString

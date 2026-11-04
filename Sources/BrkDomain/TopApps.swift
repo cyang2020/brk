@@ -8,8 +8,8 @@ import Foundation
 // The context menu turns each off per site ("Show Unread Badge", "Show Time to Next Meeting", "Show Hover Preview";
 // `topAppsBadgingDisabledHosts`, `topAppsSubtitleDisabledHosts`).
 
-/// The sites Arc treats specially, by host. Mail sites have no Brk data source (no account sign-in), so they
-/// get neither a badge nor a card.
+/// The sites Arc treats specially, by host. Mail sites have no Brk data source (no account sign-in): they get no
+/// badge, and their card is built from what Brk itself saw of the site (`mail` below).
 public enum TopApp: String, Hashable, Sendable, Codable, CaseIterable {
     case gmail, gcal, outlookMail, outlookCalendar, notionCalendar, github, whatsapp, twitter, linear, notion, figma
 
@@ -57,7 +57,8 @@ public enum TopApp: String, Hashable, Sendable, Codable, CaseIterable {
         switch self {
         case .gcal, .outlookCalendar, .notionCalendar: .calendar
         case .linear, .notion, .figma: .recentPages
-        case .gmail, .outlookMail, .github, .whatsapp, .twitter: nil
+        case .gmail, .outlookMail: .mail
+        case .github, .whatsapp, .twitter: nil
         }
     }
 
@@ -79,7 +80,7 @@ public enum TopApp: String, Hashable, Sendable, Codable, CaseIterable {
 }
 
 public enum BadgeTint: String, Hashable, Sendable, Codable { case black, red, gray }
-public enum HoverCardKind: String, Hashable, Sendable, Codable { case calendar, recentPages }
+public enum HoverCardKind: String, Hashable, Sendable, Codable { case calendar, recentPages, mail }
 
 /// The per-site switches in a Favorite's or Pinned tab's context menu.
 public enum SiteDisplayOption: String, Hashable, Sendable, Codable, CaseIterable {
@@ -100,10 +101,14 @@ public enum SiteDisplayOption: String, Hashable, Sendable, Codable, CaseIterable
 }
 
 /// What a supported tab shows on hover. Calendars list the coming meetings with Join; Linear, Notion and Figma list
-/// the pages visited on that site most recently.
+/// the pages visited on that site most recently. Gmail and Outlook list the messages last opened in Brk on that
+/// site, under the unread count the mailbox page's own title gives ("Inbox (3) - … - Gmail"), nil when no such page
+/// was seen. Arc reads the signed-in mailbox (`GmailDataFetcher`); Brk has no mail account, so a mailbox it never
+/// saw shows Arc's signed-out text and an inbox without unread mail Arc's empty text.
 public enum HoverCardSnapshot: Hashable, Sendable, Codable {
     case calendar(site: String, meetings: [HoverMeeting])
     case recentPages(site: String, pages: [HoverPage])
+    case mail(site: String, unread: Int?, messages: [HoverPage])
 }
 
 public struct HoverMeeting: Hashable, Sendable, Codable {
@@ -137,8 +142,44 @@ public enum TopAppCopy {
 
     /// Header of the calendar card.
     public static let upcoming = "Upcoming"
+    /// The mail card's header: Brk lists recently opened messages (Arc lists unread ones; its header was not
+    /// recovered), with the unread count when the mailbox title gives one. Brk's wording.
+    public static func mailHeader(unread: Int?) -> String {
+        guard let unread, unread > 0 else { return "Recent Emails" }
+        return "Recent Emails · \(unread) unread"
+    }
+    /// Arc's mail card texts (strings in Arc 1.170's binary): signed out (`MailPreviewLoginView`), and no unread mail
+    /// ("Empty state string for Gmail preview").
+    public static let mailSignedOut = "Sign in to your Email to see messages at a glance."
+    public static let mailNoUnread = "No unread emails, you can exhale!"
+    public static func mailEmpty(unread: Int?) -> String { unread == nil ? mailSignedOut : mailNoUnread }
+
+    /// The unread count in a mailbox page's title: Gmail's "Inbox (3) - a@b.c - Gmail" (0 for "Inbox - …") and
+    /// Outlook's "(3) Mail - Name - Outlook". Nil when the title is not a mailbox's.
+    public static func unreadCount(inMailboxTitle title: String) -> Int? {
+        let pattern = #"^(?:\((\d+)\)\s*)?(?:Inbox|Mail)(?:\s*\((\d+)\))?\s+-\s"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)) else { return nil }
+        for group in [1, 2] {
+            if let range = Range(match.range(at: group), in: title) { return Int(title[range]) }
+        }
+        return 0
+    }
+
+    /// A message page's subject: its title without Gmail's " - account - Gmail" or Outlook's " - Outlook" ending.
+    public static func mailSubject(_ title: String) -> String {
+        var parts = title.components(separatedBy: " - ")
+        guard parts.count > 1, let last = parts.last, last == "Gmail" || last.hasPrefix("Outlook") else { return title }
+        parts.removeLast()
+        if parts.count > 1, parts.last?.contains("@") == true || last != "Gmail" { parts.removeLast() }
+        return parts.joined(separator: " - ")
+    }
     public static let join = "Join"
     public static func searchSite(_ site: String) -> String { "Search \(site)…" }
+    /// Ctrl+Cmd+J in a private window or Little Arc (their pages have no profile calendar). Brk's wording.
+    public static let joinMeetingNeedsStandardWindow = "Join Meeting works in a regular window"
+    /// Ctrl+Cmd+J after the selected file could not be read as iCalendar. Brk's wording.
+    public static let calendarUnreadable = "The selected calendar file is not a readable .ics export. Select it again."
 }
 
 /// Most Linear, Notion and Figma pages a card lists; how far ahead the calendar card looks.
@@ -176,6 +217,17 @@ extension AppState {
                 .prefix(hoverPageLimit)
                 .map { HoverPage(title: $0.title.isEmpty ? $0.url.absoluteString : $0.title, url: $0.url, visitedAt: $0.visitedAt) }
             if !pages.isEmpty { row.hoverCard = .recentPages(site: app.name, pages: Array(pages)) }
+        case .mail:
+            // The mailbox title Brk last saw on this site: the tab's own page, else the newest mailbox visit.
+            let visits = doc.history.filter { $0.profile == profile && TopApp.key($0.url) == host }.sorted { $0.visitedAt > $1.visitedAt }
+            let unread = self.tab(tab).flatMap { TopAppCopy.unreadCount(inMailboxTitle: $0.title) }
+                ?? visits.lazy.compactMap { TopAppCopy.unreadCount(inMailboxTitle: $0.title) }.first
+            var seen: Set<String> = [url?.absoluteString ?? ""]
+            let messages = visits
+                .filter { !$0.title.isEmpty && TopAppCopy.unreadCount(inMailboxTitle: $0.title) == nil && seen.insert($0.url.absoluteString).inserted }
+                .prefix(hoverPageLimit)
+                .map { HoverPage(title: TopAppCopy.mailSubject($0.title), url: $0.url, visitedAt: $0.visitedAt) }
+            row.hoverCard = .mail(site: app.name, unread: unread, messages: Array(messages))
         }
     }
 

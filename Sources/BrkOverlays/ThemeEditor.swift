@@ -184,12 +184,20 @@ struct HSL: Equatable {
 
 /// The draft as SwiftUI observes it. The host replaces `draft` when the snapshot moves on (each reported edit comes
 /// back as the space's stored theme); the panel's own state (selected dot, preset page) survives that.
+///
+/// Every edit is one undo step (Arc's `SpaceStyleEditor.State.undoStack`): a tap, a preset, an appearance button,
+/// − or +, and one whole drag of a dot, the slider or the knob (`group` names the drag; `endGroup` ends it). Cmd+Z
+/// and Shift+Cmd+Z step through them (`undo`, `redo`) while the panel is open; reopening starts a new history.
 @MainActor
 final class ThemeEditorModel: ObservableObject {
     @Published var draft: ThemeDraft
     /// False in the Create a Space flow until a color is picked: the pad says "Tap to pick a color for this space".
     @Published var chosen: Bool
     var onChange: (ThemeDraft) -> Void
+    private(set) var undoStack: [ThemeDraft] = []
+    private(set) var redoStack: [ThemeDraft] = []
+    /// The drag whose changes are merging into the step on top of `undoStack`.
+    private var openGroup: String?
 
     init(draft: ThemeDraft, chosen: Bool = true, onChange: @escaping (ThemeDraft) -> Void = { _ in }) {
         self.draft = draft
@@ -199,14 +207,44 @@ final class ThemeEditorModel: ObservableObject {
 
     /// The first pick in a fresh draft starts from that one color: Arc's window turns the picked preset alone (P24
     /// flow), the default's second color does not stay.
-    func update(_ change: (inout ThemeDraft) -> Void) {
+    func update(group: String? = nil, _ change: (inout ThemeDraft) -> Void) {
         var next = draft
         if !chosen { next.edit { if $0.colors.count > 1 { $0.colors = [$0.colors[0]] } } }
         change(&next)
         chosen = true
         guard next != draft else { return }
+        if group == nil || group != openGroup {
+            undoStack.append(draft)
+            redoStack.removeAll()
+        }
+        openGroup = group
         draft = next
         onChange(next)
+    }
+
+    /// The drag `group` was released: its next change starts a new step.
+    func endGroup() { openGroup = nil }
+
+    /// Back one step; false when there is nothing to undo.
+    @discardableResult
+    func undo() -> Bool {
+        guard let previous = undoStack.popLast() else { return false }
+        openGroup = nil
+        redoStack.append(draft)
+        draft = previous
+        onChange(previous)
+        return true
+    }
+
+    /// Forward one undone step; false when there is nothing to redo.
+    @discardableResult
+    func redo() -> Bool {
+        guard let next = redoStack.popLast() else { return false }
+        openGroup = nil
+        undoStack.append(draft)
+        draft = next
+        onChange(next)
+        return true
     }
 }
 
@@ -234,12 +272,12 @@ struct ThemeEditorView: View {
             appearanceButtons.position(x: m.card.value.width / 2, y: m.padInset.value + m.appearanceY.value)
             steppers.position(x: m.card.value.width / 2, y: m.padInset.value + m.stepperY.value)
             presets.frame(width: m.card.value.width, height: m.presetDot.value + 8).position(x: m.card.value.width / 2, y: m.presetY.value)
-            WaveSlider(value: model.draft.style.intensity, ink: ink, enabled: model.chosen) { value in model.update { $0.setIntensity(value) } }
+            WaveSlider(value: model.draft.style.intensity, ink: ink, enabled: model.chosen, ended: { model.endGroup() }) { value in model.update(group: "intensity") { $0.setIntensity(value) } }
                 .frame(width: m.sliderX.value[1] - m.sliderX.value[0], height: m.handle.value.height)
                 .position(x: (m.sliderX.value[0] + m.sliderX.value[1]) / 2, y: m.controlsY.value)
                 .accessibilityLabel("Intensity")
                 .spaceToolsID("theme-intensity")
-            NoiseKnob(value: model.draft.style.noise, ink: ink, enabled: model.chosen) { value in model.update { $0.setNoise(value) } }
+            NoiseKnob(value: model.draft.style.noise, ink: ink, enabled: model.chosen, ended: { model.endGroup() }) { value in model.update(group: "noise") { $0.setNoise(value) } }
                 .frame(width: m.knobRadius.value[1] * 2 + 8, height: m.knobRadius.value[1] * 2 + 8)
                 .position(x: m.knobX.value, y: m.controlsY.value)
                 .accessibilityLabel("Noise")
@@ -274,8 +312,8 @@ struct ThemeEditorView: View {
                         .gesture(DragGesture(minimumDistance: 0).onChanged { event in
                             selected = index
                             let p = CGPoint(x: event.location.x / side, y: event.location.y / side)
-                            model.update { $0.setColor(ThemePad.color(at: p, saturation: HSL(color).saturation), at: index) }
-                        })
+                            model.update(group: "point-\(index)") { $0.setColor(ThemePad.color(at: p, saturation: HSL(color).saturation), at: index) }
+                        }.onEnded { _ in model.endGroup() })
                         .accessibilityLabel("Color \(index + 1)")
                         .spaceToolsID("theme-point-\(index)")
                 }
@@ -406,6 +444,7 @@ private struct WaveSlider: View {
     let value: Double
     let ink: Color
     let enabled: Bool
+    let ended: () -> Void
     let change: (Double) -> Void
 
     var body: some View {
@@ -429,7 +468,7 @@ private struct WaveSlider: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { event in
                 change(min(max((event.location.x - handle.width / 2) / max(width - handle.width, 1), 0), 1))
-            })
+            }.onEnded { _ in ended() })
         }
     }
 
@@ -453,6 +492,7 @@ private struct NoiseKnob: View {
     let value: Double
     let ink: Color
     let enabled: Bool
+    let ended: () -> Void
     let change: (Double) -> Void
 
     var body: some View {
@@ -479,7 +519,7 @@ private struct NoiseKnob: View {
                 var degrees = atan2(event.location.y - centre.y, event.location.x - centre.x) * 180 / Double.pi + 90
                 if degrees > 180 { degrees -= 360 }
                 change(min(max(degrees / 270 + 0.5, 0), 1))
-            })
+            }.onEnded { _ in ended() })
         }
     }
 }
@@ -522,6 +562,11 @@ final class ThemePanelWindow {
     }
 
     func update(_ draft: ThemeDraft) { if model.draft != draft { model.draft = draft } }
+
+    /// Cmd+Z and Shift+Cmd+Z while the panel is open: one edit back or forward. False when there is none, so the
+    /// key goes on to the Edit menu.
+    func undo() -> Bool { shown && model.undo() }
+    func redo() -> Bool { shown && model.redo() }
 
     /// Shows the panel over `window`, its left edge at the sidebar's right edge and its top where Arc's is (it hangs
     /// past the window's bottom, P28 a), moved up as far as needed to stay on the screen.

@@ -57,7 +57,8 @@ public final class SuggestionFetcher {
         let id = UUID(), eligibility = eligible[window]
         var url = engineURL
         if let override, var components = URLComponents(url: override, resolvingAgainstBaseURL: false) {
-            components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "q", value: query)]
+            // The engine's own host rides along, so a test sees which engine would have been asked.
+            components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "q", value: query), URLQueryItem(name: "engine", value: engineURL.host ?? "")]
             url = components.url ?? engineURL
         }
         let session = session, send = send
