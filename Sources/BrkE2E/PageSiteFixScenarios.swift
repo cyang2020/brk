@@ -218,7 +218,7 @@ enum PageSiteFixScenarios {
         dom = try report(excepted)
         try PageBrowsingScenarios.record(app, "excepted", dom.mapValues { "\($0)" })
         let allowedLoaded = dom["loaded"] as? [String: Bool] ?? [:], allowedShown = dom["shown"] as? [String: Bool] ?? [:]
-        try expect(["adsbygoogle", "gpt", "gtag", "collect"].allSatisfy { allowedLoaded[$0] == true }, "the site exception still blocks: \(allowedLoaded)")
+        try expect(["adsbygoogle", "gpt", "gtag", "collect"].allSatisfy { allowedLoaded[$0] == true }, "the excepted site's ad resources did not load: \(allowedLoaded)")
         try expect(allowedShown["adsense"] == true && allowedShown["gpt"] == true && allowedShown["banner"] == true, "the excepted site's slots are hidden: \(allowedShown)")
         try app.screenshot("news-excepted")
         app.passed("a site exception lets the same requests through and shows the slots")
@@ -311,6 +311,7 @@ enum PageSiteFixScenarios {
             throw Check(description: "\(field) has no screen rectangle")
         }
         let point = CGPoint(x: x + min(20, w / 2), y: y + h / 2)
+        try PageBrowsingScenarios.record(app, "click-" + String(field.prefix(24)), ["point": "\(point)", "control": values.joined(separator: " ")])
         guard case .hello(let hello) = try app.send(.hello), let front = PhysicalPointer.frontmost(at: point), front.pid == hello.pid else {
             throw Check(description: "another window is in front of Brk's panel at \(point); no click posted")
         }
@@ -347,6 +348,7 @@ enum PageSiteFixScenarios {
         try app.waitUntil("installed shortcut editor") { try ExtScenarios.catalogValue(app, fixture.id) != nil }
         try expect(try !focused(app, owner, field), "the shortcut field had focus before the click")
         try expect(try ExtScenarios.catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } != true, "the command already has ⇧⌘U")
+        _ = try app.screenshotSiteControls("before-click")
         _ = try panelClick(app, owner, field)
         do { try app.waitUntil("the mouse click put the caret in the shortcut field") { try focused(app, owner, field) } }
         catch { _ = try? app.screenshotSiteControls("field-not-focused"); throw Check(description: "after the click: " + (try locateState(app, owner, field))) }
