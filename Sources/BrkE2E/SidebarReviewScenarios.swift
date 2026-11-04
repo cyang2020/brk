@@ -67,6 +67,13 @@ enum SidebarReviewScenarios {
         try app.dispatch(.item(.move(item, to: .into(parent: try app.view().favorites.root, index: Int.max))))
         return item
     }
+    /// The texts Accessibility reads inside `rect` (window points, top-left) of the window: a row's labels.
+    static func texts(_ app: AppUnderTest, in rect: CGRect, window: WindowID? = nil) throws -> [String] {
+        let facts = try app.native(window ?? app.window)
+        let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
+        let screen = CGRect(x: facts.windowFrame.minX + rect.minX, y: top + rect.minY, width: rect.width, height: rect.height).insetBy(dx: -1, dy: -1)
+        return NativeSystemInput.staticTexts(pid: app.hello!.pid).filter { screen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }.map(\.text)
+    }
     static func toast(_ app: AppUnderTest, _ window: WindowID? = nil) throws -> String? { try app.view(window ?? app.window).tabTools.toast?.text }
     static func log(_ app: AppUnderTest, _ name: String, _ text: String) {
         let url = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(app.scenarioID)-\(name)")

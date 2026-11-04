@@ -353,6 +353,27 @@ enum NativeSystemInput {
         return []
     }
 
+    /// Every static text Accessibility exposes in the app's windows with its frame in global screen coordinates (top
+    /// left origin, as Accessibility reports them). Brk's sidebar rows and command bar rows are not AX elements of
+    /// their own, but their labels are, so a row's text is the labels inside the row's frame.
+    static func staticTexts(pid: Int32) -> [(text: String, frame: CGRect)] {
+        let root = AXUIElementCreateApplication(pid)
+        var out: [(String, CGRect)] = []
+        var queue = NativePickerInput.attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? [], seen = 0
+        while !queue.isEmpty, seen < 4000 {
+            let node = queue.removeFirst(); seen += 1
+            if NativePickerInput.string(node, kAXRoleAttribute) == kAXStaticTextRole,
+               let text = NativePickerInput.attribute(node, kAXValueAttribute) as? String, !text.isEmpty {
+                var point = CGPoint.zero, size = CGSize.zero
+                if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+                if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+                out.append((text, CGRect(origin: point, size: size)))
+            }
+            queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        }
+        return out
+    }
+
     /// Opens the pop-up button whose identifier is `identifier` in the app's windows with AXPress and presses its item
     /// titled `title`, as a user picking from it does.
     static func choosePopUp(pid: Int32, identifier: String, title: String) throws {

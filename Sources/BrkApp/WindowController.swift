@@ -127,6 +127,9 @@ public class WindowController: NSObject, NSWindowDelegate {
     private var queuedToggles = 0
     func toggleFullScreen() {
         guard !pageFullscreen.isTransitioning else { queuedToggles += 1; tracePageFullscreen("queued toggle \(queuedToggles)"); return }
+        // AppKit does not take a floating (Stay on Top) window to full screen: it goes down to the normal level first
+        // and floats again when it leaves full screen (`windowDidExitFullScreen`).
+        if !window.styleMask.contains(.fullScreen), window.level != .normal { window.level = .normal }
         window.toggleFullScreen(nil)
     }
     private func applyQueuedToggles() {

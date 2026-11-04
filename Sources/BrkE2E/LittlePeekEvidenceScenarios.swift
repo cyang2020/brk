@@ -96,6 +96,7 @@ enum LittlePeekEvidenceScenarios {
         _ = try app.screenshot("little-spaces", window: little)
         try app.press("escape")
         app.sleep(0.3)
+        app.window = standard
         try app.flush(); try app.restart()
         try expect(try littleWindows(app).isEmpty, "a Little Arc came back after the restart")
         try expect(!allTabs(try app.view()).contains { $0.url == url }, "the Little Arc page was restored into the window")
@@ -286,7 +287,8 @@ enum LittlePeekEvidenceScenarios {
     // MARK: A087
 
     @Sendable static func peekLinks(_ app: AppUnderTest) throws {
-        let target = brkTest(app, "other.brk.test", "page2.html")
+        // Another registrable domain (pinned.brk.test and other.brk.test are one site, brk.test).
+        let target = brkTest(app, "peek.localhost", "page2.html")
         // A pinned tab on one site, its link to another: the click opens a Peek, the pinned page stays.
         let (pinned, pinnedURL) = try linkPage(app, host: "pinned.brk.test", target: target)
         try app.dispatch(.item(.move(pinned, to: .into(parent: try app.view().space.pinned.root, index: 0))))
@@ -435,14 +437,15 @@ enum LittlePeekEvidenceScenarios {
                 }
             }
         }
-        let hierarchy = shape(try app.view().space.pinned.rows)
         let first = app.window!, space = try app.view().space.id
-        let other = try S.newWindow(app, "a second window", kind: .standard) { try app.press("cmd+n") }
-        // A second space with its own folder.
+        // A second space with its own folder, made before the second window so typing goes to this one.
         let elsewhere = try createSpace(app, title: "Folders elsewhere")
         let far = try E.newFolder(app, "Far")
         try app.dispatch(.space(.focus(space)))
         try app.waitUntil("first space") { try app.view().space.id == space }
+        let hierarchy = shape(try app.view().space.pinned.rows)
+        let other = try S.newWindow(app, "a second window", kind: .standard) { try app.press("cmd+n") }
+        _ = try app.send(.dispatch(window: other, command: .space(.focus(space))))
         _ = try app.send(.activate(window: first))
         try app.waitUntil("first window key") { try app.native(first).isKey }
         try app.perform(.menuAction("Collapse All Folders"))
@@ -455,9 +458,12 @@ enum LittlePeekEvidenceScenarios {
         try app.dispatch(.item(.toggleFolder(outer)))
         try expect(E.folder(outer, in: try app.view(other).space.pinned.rows)?.collapsed == false, "the other window's folder collapsed")
         try expect(shape(try app.view().space.pinned.rows) == hierarchy, "Collapse All changed the hierarchy")
-        _ = try app.send(.dispatch(window: other, command: .space(.focus(elsewhere))))
-        try app.waitUntil("the other window on the other space") { try app.view(other).space.id == elsewhere }
-        try expect(E.folder(far, in: try app.view(other).space.pinned.rows)?.collapsed == false, "the other space's folder collapsed")
+        // The other space, in this same window: its folder stayed open.
+        try app.dispatch(.space(.focus(elsewhere)))
+        try app.waitUntil("this window on the other space") { try app.view().space.id == elsewhere }
+        try expect(E.folder(far, in: try app.view().space.pinned.rows)?.collapsed == false, "the other space's folder collapsed")
+        try app.dispatch(.space(.focus(space)))
+        try app.waitUntil("back on the first space") { try app.view().space.id == space }
         try app.perform(.menuAction("Expand All Folders"))
         try app.waitUntil("expanded here") {
             let rows = try app.view().space.pinned.rows

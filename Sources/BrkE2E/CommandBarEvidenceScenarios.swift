@@ -19,11 +19,11 @@ enum CommandBarEvidenceScenarios {
     private typealias E = SidebarEvidenceScenarios
 
     static func rowTexts(_ app: AppUnderTest) throws -> [[String]] {
-        let pid = app.hello!.pid
         var rows: [[String]] = []
+        let n = try app.native()
         for i in 0..<12 {
-            guard isShown(try app.native(), .commandBarResult(i)) else { break }
-            rows.append(NativeSystemInput.texts(pid: pid, identifier: ViewID.commandBarResult(i).identifier))
+            guard let row = n.actual[ViewID.commandBarResult(i).identifier], !row.hidden else { break }
+            rows.append(try SidebarReviewScenarios.texts(app, in: row.frame))
         }
         return rows
     }

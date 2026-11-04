@@ -483,17 +483,17 @@ enum SidebarEvidenceScenarios {
         let row = try tab(pull!, in: app.view())!
         try expect(row.url == URL(string: "https://github.com/fixture/titles/pull/7")! && !row.loaded, "the pull request row: \(row)")
         try expect(row.title == "Shorten fixture titles", "the projected title is \(row.title)")
-        let pid = app.hello!.pid
-        try app.waitUntil("the row's text is the short title") { NativeSystemInput.texts(pid: pid, identifier: ViewID.row(pull!).identifier).contains("Shorten fixture titles") }
-        try expect(!NativeSystemInput.texts(pid: pid, identifier: ViewID.row(pull!).identifier).contains { $0.contains("· GitHub") }, "the row shows GitHub's suffix")
+        func rowText() throws -> [String] { try S.texts(app, in: try visible(app.native(), .row(pull!)).frame) }
+        try app.waitUntil("the row's text is the short title") { try rowText().contains("Shorten fixture titles") }
+        try expect(!(try rowText()).contains { $0.contains("· GitHub") }, "the row shows GitHub's suffix")
         _ = try app.screenshot("short-title")
         // A title the user types is kept as typed, suffix and all.
         let frame = try visible(app.native(), .row(pull!)).frame
         try S.contextMenu(app, at: S.centre(frame), choose: "Rename…")
         try app.waitUntil("rename field") { try app.view().renaming == pull }
         try app.press("cmd+a"); try app.type("Mine · GitHub"); try app.press("return")
-        try app.waitUntil("the user title shown as typed") { NativeSystemInput.texts(pid: pid, identifier: ViewID.row(pull!).identifier).contains("Mine · GitHub") }
-        S.log(app, "row-texts.txt", NativeSystemInput.texts(pid: pid, identifier: ViewID.row(pull!).identifier).joined(separator: "\n"))
+        try app.waitUntil("the user title shown as typed") { try rowText().contains("Mine · GitHub") }
+        S.log(app, "row-texts.txt", try rowText().joined(separator: "\n"))
     }
 
     // MARK: A034

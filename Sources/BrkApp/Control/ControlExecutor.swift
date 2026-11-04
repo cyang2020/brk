@@ -226,7 +226,14 @@ final class ControlExecutor {
             } else {
                 var responder: NSResponder? = try controller(nil).window.firstResponder
                 while let current = responder, !current.responds(to: action) { responder = current.nextResponder }
-                guard let responder else { throw Failure(message: "No native responder supports menu item: " + name) }
+                // Past the window's chain AppKit offers a nil-target item to NSApp and its delegate (Window > Bring All
+                // to Front, the app menu's Show All).
+                guard let responder else {
+                    guard NSApp.target(forAction: action, to: nil, from: item) != nil, NSApp.sendAction(action, to: nil, from: item) else {
+                        throw Failure(message: "No native responder supports menu item: " + name)
+                    }
+                    return .ok
+                }
                 if let validator = responder as? any NSMenuItemValidation, !validator.validateMenuItem(item) { throw Failure(message: "Native responder disabled menu item: " + name) }
                 guard NSApp.sendAction(action, to: responder, from: item) else { throw Failure(message: "Native menu action failed: " + name) }
             }
