@@ -306,7 +306,7 @@ enum PageSiteFixScenarios {
                 if case .menuItems = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) { true } else { false }
             }
         }
-        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 6,
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 7,
               let x = Double(values[0]), let y = Double(values[1]), let w = Double(values[2]), let h = Double(values[3]) else {
             throw Check(description: "\(field) has no screen rectangle")
         }
@@ -328,8 +328,36 @@ enum PageSiteFixScenarios {
         if case .failed = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) {
             try app.perform(.siteControlInput(window: owner, field: "siteSettingsDetails", action: .press))
         }
-        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 6 else { return false }
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 7 else { return false }
         return values[4] == "focused:true"
+    }
+    static func fieldValue(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> String? {
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 7 else { return nil }
+        return String(values[6].dropFirst("value:".count))
+    }
+    /// Text typed with real key codes through the window server (`cghidEventTap`), as a keyboard types it. Posted
+    /// only while this Brk's window is frontmost at `point`; the keys go to the active app's key window.
+    static func typeKeys(_ app: AppUnderTest, _ text: String, at point: CGPoint) throws {
+        guard case .hello(let hello) = try app.send(.hello), PhysicalPointer.frontmost(at: point)?.pid == hello.pid else { throw Check(description: "Brk is not frontmost; keys not posted") }
+        let keys: [Character: KeyChord] = ["c": KeyChord([], .c), "m": KeyChord([], .m), "d": KeyChord([], .d), "s": KeyChord([], .s), "h": KeyChord([], .h),
+                                           "i": KeyChord([], .i), "f": KeyChord([], .f), "t": KeyChord([], .t), "u": KeyChord([], .u), "+": KeyChord([.shift], .equals)]
+        let source = CGEventSource(stateID: .hidSystemState)
+        func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
+            event.flags = flags; event.post(tap: .cghidEventTap); usleep(25_000)
+        }
+        func chord(_ chord: KeyChord) {
+            var flags: CGEventFlags = []
+            if chord.modifiers.contains(.command) { flags.insert(.maskCommand) }
+            if chord.modifiers.contains(.shift) { flags.insert(.maskShift) }
+            if chord.modifiers.contains(.shift) { post(56, true, flags) }
+            if chord.modifiers.contains(.command) { post(55, true, flags) }
+            post(CGKeyCode(chord.key.code), true, flags); post(CGKeyCode(chord.key.code), false, flags)
+            if chord.modifiers.contains(.command) { post(55, false, []) }
+            if chord.modifiers.contains(.shift) { post(56, false, []) }
+        }
+        chord(KeyChord([.command], .a))
+        for character in text { guard let key = keys[character] else { throw Check(description: "no key for \(character)") }; chord(key) }
     }
     static func locateState(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> String {
         guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) else { return "unavailable" }
@@ -342,7 +370,7 @@ enum PageSiteFixScenarios {
     @Sendable static func shortcutByMouse(_ app: AppUnderTest) throws {
         guard WindowServerKeys.allowed else { throw Check(description: "posting window-server events is not allowed for this runner") }
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
-        guard let pid = app.hello?.pid, let owner = app.window else { throw Check(description: "app identity missing") }
+        guard let owner = app.window else { throw Check(description: "app identity missing") }
         let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try ExtScenarios.catalogValue(app, fixture.id) != nil }
@@ -354,9 +382,11 @@ enum PageSiteFixScenarios {
         catch { _ = try? app.screenshotSiteControls("field-not-focused"); throw Check(description: "after the click: " + (try locateState(app, owner, field))) }
         _ = try app.screenshotSiteControls("field-clicked")
         app.passed("a window-server click focused the shortcut field")
-        PhysicalKeys.press(KeyChord([.command], .a), pid: pid)
-        PhysicalKeys.type("cmd+shift+u", pid: pid)
-        app.sleep(0.3)
+        guard case .menuItems(let rect) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)),
+              let x = Double(rect[0]), let y = Double(rect[1]) else { throw Check(description: "field rectangle") }
+        try typeKeys(app, "cmd+shift+u", at: CGPoint(x: x + 20, y: y + 11))
+        try app.waitUntil("the typed shortcut is in the field") { try fieldValue(app, owner, field) == "cmd+shift+u" }
+        _ = try app.screenshotSiteControls("typed")
         _ = try panelClick(app, owner, "extension-shortcut-save-" + fixture.id + "-" + command)
         try app.waitUntil("Chromium reads back the shortcut entered by keyboard and saved by mouse") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
@@ -372,7 +402,7 @@ enum PageSiteFixScenarios {
         }
         try WindowServerKeys.press(app, KeyChord([.command, .shift], .u), window: owner)
         try waitForTitle(app, item, "extension-command:fixture-command")
-        app.note("Click, ⌘A, the typed text cmd+shift+u, the click on Save shortcut and ⇧⌘U were all window-server events; the field is Brk's text entry for a shortcut (Chrome's own page records the chord instead).")
+        app.note("Click, ⌘A, the typed text cmd+shift+u (real key codes through the HID event tap), the click on Save shortcut and ⇧⌘U were all window-server events; the field is Brk's text entry for a shortcut (Chrome's own page records the chord instead).")
     }
 
     // MARK: ATC-routes (A111)
