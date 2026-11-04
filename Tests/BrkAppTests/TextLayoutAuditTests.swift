@@ -245,9 +245,9 @@ import XCTest
 
     func testASwiftUITextNarrowerThanItsStringIsListed() {
         let frame = CGSize(width: 40, height: 16)
-        let needed = SwiftUIText.needed(for: "A settings label", frame: frame, isButton: false)
+        let needed = SwiftUIText.needed(for: "A settings label", frame: frame)
         XCTAssertGreaterThan(needed.width, frame.width + 1)
-        let fits = SwiftUIText.needed(for: "OK", frame: frame, isButton: false)
+        let fits = SwiftUIText.needed(for: "OK", frame: frame)
         XCTAssertLessThanOrEqual(fits.width, frame.width + 1)
     }
 

@@ -365,7 +365,10 @@ enum TextLayoutScenarios {
             try app.dispatch(.site(.controls))
             try app.waitUntil("the panel") { (try? app.send(.siteControlTexts(window: standard))).map { if case .menuItems = $0 { true } else { false } } ?? false }
         }
-        try sweep.surface("site-controls-details", close: { try app.dispatch(.site(.controls)) }) {
+        try sweep.surface("site-controls-details", close: {
+            try app.press("escape")
+            try app.waitUntil("the panel closed") { if case .failed = try app.send(.siteControlTexts(window: standard)) { return true }; return false }
+        }) {
             try app.perform(.siteControlInput(window: standard, field: "siteMore", action: .press))
             app.sleep(0.4)
         }

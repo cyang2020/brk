@@ -146,12 +146,12 @@ enum TextLayoutAudit {
             var needed = cell.cellSize(forBounds: cell.wraps ? CGRect(x: 0, y: 0, width: button.bounds.width, height: 100_000) : huge)
             var fits = needed.width <= button.bounds.width + TextLayoutAudit.slack
             if let popUp, let cell = popUp.cell as? NSPopUpButtonCell {
-                // A pop-up's cell size is its widest item's; what shows is the selected one, in the cell's title rectangle.
+                // A pop-up's cell size is its widest item's; what shows is the selected one, from the title's start (after
+                // its image) to the end of the cell's drawing area.
                 let title = (text as NSString).size(withAttributes: [.font: popUp.font ?? NSFont.menuFont(ofSize: 0)]).width
-                let image = popUp.selectedItem?.image.map { $0.size.width + 2 } ?? 0
-                let available = cell.titleRect(forBounds: popUp.bounds).width
-                needed.width = popUp.bounds.width - available + title + image
-                fits = title + image <= available + TextLayoutAudit.slack
+                let available = cell.drawingRect(forBounds: popUp.bounds).maxX - cell.titleRect(forBounds: popUp.bounds).minX
+                needed.width = popUp.bounds.width - available + title
+                fits = title <= available + TextLayoutAudit.slack
             }
             report.note(text, frame: button.bounds, needed: needed)
             if cell.wraps {
@@ -201,7 +201,7 @@ enum TextLayoutAudit {
         private mutating func measureHosted(_ host: NSView) {
             guard let window = host.window else { return }
             var seen = Set<ObjectIdentifier>()
-            var nodes: [(text: String, frame: CGRect, isButton: Bool)] = []
+            var nodes: [(text: String, frame: CGRect)] = []
             // SwiftUI's `AccessibilityNode` answers these selectors without declaring NSAccessibilityProtocol.
             func collect(_ element: Any, depth: Int) {
                 let node = element as AnyObject
@@ -210,11 +210,12 @@ enum TextLayoutAudit {
                 if let view = node as? NSView, view !== host, view is NSControl || NSStringFromClass(type(of: view)).contains("NSHostingView") { return }
                 let role = node.accessibilityRole?()
                 let children = node.accessibilityChildren?() ?? []
-                if role == .staticText || (role == .button && children.isEmpty) {
+                // Not buttons: an icon button's label is for accessibility, and the panes' text buttons are AppKit's.
+                if role == .staticText {
                     let text = accessibilityValue(of: node) ?? node.accessibilityLabel?() ?? node.accessibilityTitle?() ?? ""
                     let frame = node.accessibilityFrame?() ?? .zero
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, frame.width > 0, frame.height > 0 {
-                        nodes.append((text, window.convertFromScreen(frame), role == .button))
+                        nodes.append((text, window.convertFromScreen(frame)))
                     }
                 }
                 for child in children { collect(child, depth: depth + 1) }
@@ -222,7 +223,7 @@ enum TextLayoutAudit {
             collect(host, depth: 0)
             for node in nodes {
                 let rect = root.convert(node.frame, from: nil)
-                let needed = SwiftUIText.needed(for: node.text, frame: node.frame.size, isButton: node.isButton)
+                let needed = SwiftUIText.needed(for: node.text, frame: node.frame.size)
                 report.note(node.text, frame: node.frame, needed: needed)
                 if needed.width > node.frame.width + 1 || needed.height > node.frame.height + 1 {
                     report.truncated.append(finding(.ellipsis, describe(host) + " SwiftUI", node.text, rect, needed))
@@ -241,20 +242,23 @@ enum TextLayoutAudit {
         /// `rect` in `view`'s coordinates: reports the first ancestor (and the window) that cuts it.
         private mutating func checkClip(_ view: NSView, _ text: String, rect: CGRect, needed: CGSize, includingSelf: Bool = false) {
             guard rect.width > 0, rect.height > 0 else { return }
-            let inRoot = view.convert(rect, to: root)
+            var inRoot = view.convert(rect, to: root)
             var ancestor: NSView? = includingSelf ? view : view.superview
             while let current = ancestor {
                 defer { ancestor = current.superview }
                 let isClip = current is NSClipView
                 guard isClip || current === root || current.clipsToBounds || current.layer?.masksToBounds == true else { continue }
                 let box = current.convert(current.bounds, to: root)
+                // Wholly outside: scrolled away or a page of a sliding container, not a cut text.
+                if !box.intersects(inRoot) { return }
                 var horizontal = true, vertical = true
                 if let clip = current as? NSClipView {
                     vertical = false
                     if clip.enclosingScrollView?.hasHorizontalScroller == true { horizontal = false }
+                    // What scrolled out along that axis is not cut: the ancestors further out judge what is left.
+                    if !vertical { inRoot = CGRect(x: inRoot.minX, y: max(inRoot.minY, box.minY), width: inRoot.width, height: min(inRoot.maxY, box.maxY) - max(inRoot.minY, box.minY)) }
+                    if !horizontal { inRoot = CGRect(x: max(inRoot.minX, box.minX), y: inRoot.minY, width: min(inRoot.maxX, box.maxX) - max(inRoot.minX, box.minX), height: inRoot.height) }
                 }
-                // Wholly outside: scrolled away or a page of a sliding container, not a cut text.
-                if !box.intersects(inRoot) { return }
                 let cutX = horizontal && (inRoot.minX < box.minX - TextLayoutAudit.slack || inRoot.maxX > box.maxX + TextLayoutAudit.slack)
                 let cutY = vertical && (inRoot.minY < box.minY - TextLayoutAudit.slack || inRoot.maxY > box.maxY + TextLayoutAudit.slack)
                 if cutX || cutY {
@@ -305,9 +309,10 @@ enum TextLayoutAudit {
 /// says which system font sizes it can be set in; the text fits when it fits at one of them. Regular weight is the
 /// narrowest of what the panes use, so a bold label cannot be called short by accident.
 @MainActor enum SwiftUIText {
-    private static let sizes: [Double] = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 34]
+    /// Down to the Max pane's miniature pictures, whose Text is scaled and whose frame says so.
+    private static let sizes: [Double] = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 34]
 
-    static func needed(for text: String, frame: CGSize, isButton: Bool) -> CGSize {
+    static func needed(for text: String, frame: CGSize) -> CGSize {
         func natural(_ size: Double) -> CGSize {
             (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size)])
         }
@@ -315,8 +320,6 @@ enum TextLayoutAudit {
             (text as NSString).boundingRect(with: CGSize(width: width, height: 100_000), options: [.usesLineFragmentOrigin],
                                             attributes: [.font: NSFont.systemFont(ofSize: size)]).size
         }
-        // A button's frame is its bezel and padding, not its lines: only the smallest size says anything.
-        if isButton { return natural(sizes[0]) }
         var smallest: CGSize?
         for size in sizes {
             let line = ceil(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: size)))
