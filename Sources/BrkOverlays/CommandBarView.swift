@@ -133,7 +133,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         guard let bar, let frame = frames.commandBar else { return hide() }
         // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
         fillsWindow = frame.size == frames.contentSize
-        show(bar, in: frame, scheme: palette.scheme, primary: palette.accent, spaceless: window != .standard)
+        // Arc's card follows the system's dark appearance even over a light Space theme (P29-c); the sidebar does not.
+        let system: Scheme = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light
+        show(bar, in: frame, scheme: palette.scheme == .dark || system == .dark ? .dark : .light, primary: palette.accent, spaceless: window != .standard)
     }
 
     /// `render` once the slice and its frame are known. A new `openID` resets the query to `initialQuery` and the

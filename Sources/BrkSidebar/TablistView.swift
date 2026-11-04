@@ -1248,6 +1248,7 @@ final class ArchiveEducationView: HoverView {
     private let close = GlyphButton()
     private let dispatch: Dispatch
     private var shown: String?
+    private var ink: NSColor?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -1275,13 +1276,13 @@ final class ArchiveEducationView: HoverView {
         close.render(.close, size: Draw.smallFont.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
         guard let threshold else { shown = nil; return }
         let sentence = Copy.archiveEducation(threshold)
-        guard sentence != shown || text.textColor != palette.ink.text else { return }
+        guard sentence != shown || ink != palette.ink.text else { return }
         shown = sentence
+        ink = palette.ink.text
         let body = NSMutableAttributedString(string: sentence, attributes: [.font: NSFont.systemFont(ofSize: Draw.captionFont.value), .foregroundColor: palette.ink.text])
         let range = (sentence as NSString).range(of: Copy.archiveEducationLink, options: .backwards)
         body.addAttributes([.foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue], range: range)
         text.textStorage?.setAttributedString(body)
-        text.textColor = palette.ink.text
         needsLayout = true
     }
 

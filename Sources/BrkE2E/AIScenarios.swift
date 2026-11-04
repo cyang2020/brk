@@ -132,6 +132,8 @@ enum AIScenarios {
     /// plan: one Reading group), Arc's undo toast undoes it, and the groups survive a restart.
     private static func organize(_ app: AppUnderTest) throws {
         try enable(app); try app.dispatch(.settings(.max(.tidyTabs(true))))
+        // The divider between Pinned and Today (where Tidy and Clear live) shows once Pinned has a row.
+        try app.dispatch(.tab(.togglePin(.item(currentTab(app.view())!.id))))
         _ = try load(app)
         var n = 0
         while todayIDs(try app.view()).count < 7 { n += 1; _ = try load(app, "ai-source.html?tab=\(n)") }
@@ -242,13 +244,21 @@ enum AIScenarios {
     /// Max's Tidy Tab Titles (Arc P47-a): a Today tab dragged into Pinned gets the tool's shorter title.
     private static func tidyTitles(_ app: AppUnderTest) throws {
         try enable(app)
-        try app.dispatch(.settings(.max(.renamePinnedTabs(true))))
+        // Pinned gets a row to drop under before Tidy Tab Titles is on.
         let home = try currentTab(app.view())!.id
+        try app.dispatch(.tab(.togglePin(.item(home))))
+        try app.dispatch(.settings(.max(.renamePinnedTabs(true))))
         let tab = try load(app, "ai-source.html").item
         try waitForTitle(app, tab, "AI Source")
         let facts = try app.native()
         let from = try visible(facts, .row(tab)).frame, pinned = try visible(facts, .row(home)).frame
-        _ = try app.send(.pointerDrag(from: CGPoint(x: from.midX, y: from.midY), to: CGPoint(x: pinned.midX, y: pinned.maxY + 2), cancel: false))
+        let drop = CGPoint(x: pinned.midX, y: pinned.midY + pinned.height * 0.3)
+        try app.perform(.pointer(window: app.window, phase: .down, point: CGPoint(x: from.midX, y: from.midY)))
+        try app.perform(.pointer(window: app.window, phase: .dragged, point: CGPoint(x: from.midX + 8, y: from.midY - 4)))
+        try app.perform(.pointer(window: app.window, phase: .dragged, point: CGPoint(x: (from.midX + drop.x) / 2, y: (from.midY + drop.y) / 2)))
+        try app.perform(.pointer(window: app.window, phase: .dragged, point: drop))
+        app.sleep(0.3)
+        try app.perform(.pointer(window: app.window, phase: .up, point: drop))
         try app.waitUntil("dragged into Pinned") { tabRows(try app.view().space.pinned.rows).contains { $0.id == tab } }
         try waitForTitle(app, tab, "Fixture Tab", timeout: 15)
         _ = try app.screenshot("AITidyTitles-pinned")
@@ -311,23 +321,28 @@ enum AIScenarios {
         try capture.run(); capture.waitUntilExit()
         try app.click(.aiControl("translation-use-original"))
         try app.waitUntil("Use Original's toast") { try app.view().tabTools.toast?.text == "Translated back to French! Use" && app.view().tabTools.toast?.keycap == "⌘Z" }
-        try app.evaluate(page, "document.title=document.querySelector('#greeting').textContent==='Bonjour Monde'?'ai-original':'ai-still-translated'")
-        try waitForTitle(app, page.item, "ai-original")
+        try greeting(app, page, "Bonjour Monde", "ai-original")
         try expect(try app.view().urlPill.translation == .available, "the pill still says Translated")
         _ = try app.screenshot("AITranslate-original")
         try app.dispatch(.tabTools(.undoToast))   // the toast's ⌘Z
-        try app.evaluate(page, "document.title=document.querySelector('#greeting').textContent==='Hello World'?'ai-again':'ai-not-again'")
-        try waitForTitle(app, page.item, "ai-again")
+        try greeting(app, page, "Hello World", "ai-again")
         let count = calls(app).count
         try app.dispatch(.assist(.neverTranslateSite))
-        try app.evaluate(page, "document.title=document.querySelector('#greeting').textContent==='Bonjour Monde'?'ai-never':'ai-not-never'")
-        try waitForTitle(app, page.item, "ai-never")
+        try greeting(app, page, "Bonjour Monde", "ai-never")
         try expect(try app.view().urlPill.translation == nil, "a never-translated site still offers translation")
         try app.flush(); try app.restart()
         try app.waitForPageInput(page, at: app.site.url("ai.html"))
         try app.dispatch(.assist(.translate("English")))
         try app.waitUntil("refused for the site") { try app.view().tabTools.toast?.text.contains("never translates") == true }
         try expect(calls(app).count == count, "never-translate site invoked CLI")
+    }
+    /// The swap of translated and own text runs in the page after the command: the heading is read until it shows.
+    private static func greeting(_ app: AppUnderTest, _ page: PageID, _ text: String, _ tag: String) throws {
+        try app.waitUntil("the heading reads \(text)", timeout: 10) {
+            try app.evaluate(page, "document.title=document.querySelector('#greeting').textContent==='\(text)'?'\(tag)':'\(tag)-not'")
+            app.sleep(0.3)
+            return try BrkE2E.tab(page.item, in: app.view())?.title == tag
+        }
     }
     private static func maxPane(_ app: AppUnderTest) throws {
         try enable(app)
