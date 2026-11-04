@@ -15,10 +15,13 @@ import Carbon
     private var wanted: KeyChord??
     private let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let target: MenuTarget
+    private let environment: [String: String]
     private let report: (GlobalShortcutStatus) -> Void
 
-    init(target: MenuTarget, report: @escaping (GlobalShortcutStatus) -> Void) {
+    init(target: MenuTarget, environment: [String: String] = ProcessInfo.processInfo.environment,
+         report: @escaping (GlobalShortcutStatus) -> Void) {
         self.target = target
+        self.environment = environment
         self.report = report
         status.button?.image = NSImage(systemSymbolName: "macwindow.badge.plus", accessibilityDescription: "Little \(Product.name)")
         status.button?.toolTip = "New Little \(Product.name) Window"
@@ -41,11 +44,17 @@ import Carbon
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
     }
 
+    /// The combination to take system-wide, or nil: Links' "Open Little Arc when I press ⌥⌘N in any app" is off (the
+    /// shortcut works only inside the app, through its menu), the shortcut is unset or in conflict, or this is a test
+    /// launch with `BRK_TEST_NO_GLOBAL_SHORTCUT=1`, which leaves ⌥⌘N to the other apps and Brk instances running.
+    static func systemWideChord(_ settings: SettingsSnapshot, environment: [String: String]) -> KeyChord? {
+        guard environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] != "1", settings.links.globalLittleArcShortcut != false,
+              case .valid(let key)? = settings.shortcuts.first(where: { $0.action == .showLittleArc })?.state else { return nil }
+        return key
+    }
+
     func update(_ snapshot: AppSnapshot) {
-        // Links' "Open Little Arc when I press ⌥⌘N in any app" off: the shortcut works only inside the app (its menu).
-        let state = snapshot.settings.links.globalLittleArcShortcut == false ? nil
-            : snapshot.settings.shortcuts.first { $0.action == .showLittleArc }?.state
-        let chord: KeyChord? = if case .valid(let key)? = state { key } else { nil }
+        let chord = Self.systemWideChord(snapshot.settings, environment: environment)
         guard wanted != .some(chord) else { return }
         wanted = .some(chord)
         if let hotKey { UnregisterEventHotKey(hotKey); self.hotKey = nil }
