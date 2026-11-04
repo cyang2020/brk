@@ -14,22 +14,24 @@ enum ArtColor {
     static func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
         Color(.sRGB, red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, opacity: alpha)
     }
-    static let maxBlue = rgb(0x343EFF)
+    static let maxBlue = rgb(0x333DFF)
     static let maxInk = rgb(0x3139FB)
     static let flower = rgb(0xFF9999)
     static let cream = rgb(0xFFFCEA)
     static let littlePink = rgb(0xFFA0A4)
-    static let littleBody = rgb(0xF5C5C0)
+    static let littleBody = rgb(0xF5CCC9)
     static let mockChrome = rgb(0xE1E2F3)
     static let mockField = rgb(0xD5D5E8)
-    static let keyBlue = rgb(0x3F6BF0)
-    static let keyFace = rgb(0xD9E2FB)
+    static let keyBlue = rgb(0x007AFF)
+    static let keyFace = rgb(0xE1EBFF)
 }
 
-/// A rectangle whose bottom edge is a wave (Arc's banners: 20-point period, 5 points from crest to trough).
+/// A rectangle whose bottom edge is a wave (Arc's banners: 20-point period). The edge is highest `phase` points from
+/// the left edge and every period after it.
 struct WavyBottom: Shape {
     var period: CGFloat = ArtMetrics.wavePeriod.value
     var amplitude: CGFloat = ArtMetrics.waveAmplitude.value
+    var phase: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -41,7 +43,7 @@ struct WavyBottom: Shape {
         while x > rect.minX {
             let step = max(1, period / 16)
             x -= step
-            let y = mid + amplitude * sin((x - rect.minX) / period * 2 * .pi - .pi / 2)
+            let y = mid + amplitude * sin((x - rect.minX - phase) / period * 2 * .pi - .pi / 2)
             path.addLine(to: CGPoint(x: x, y: y))
         }
         path.closeSubpath()
@@ -62,7 +64,8 @@ enum Grain {
         }
         for _ in 0..<1400 {
             let light = next() > 0.5
-            (light ? NSColor.white : NSColor.black).withAlphaComponent(0.05 + next() * 0.07).setFill()
+            // Faint: Arc's grain varies a channel by 3 levels or so (P38-b's blue, standard deviation 2.8)
+            (light ? NSColor.white : NSColor.black).withAlphaComponent(0.02 + next() * 0.04).setFill()
             NSRect(x: next() * Double(side), y: next() * Double(side), width: 0.5 + next() * 0.8, height: 0.5 + next() * 0.8).fill()
         }
         image.unlockFocus()
@@ -76,24 +79,34 @@ struct GrainOverlay: View {
     }
 }
 
-/// Max's four-petal flower with the small cross at its centre.
+/// Max's flower (P38-b): four round petals, each split by a slit from the middle, around a small tilted square. The
+/// Enable Max icon's flower is also outlined in the slits' blue.
 struct MaxFlower: View {
     var size: CGFloat
     var color: Color = ArtColor.flower
     var hole: Color = ArtColor.maxInk
+    var outline: CGFloat = 0
 
     var body: some View {
         ZStack {
+            if outline > 0 { petals(hole, grow: outline * 2) }
+            petals(color, grow: 0)
             ForEach(0..<4, id: \.self) { index in
-                Circle().fill(color).frame(width: size * 0.46, height: size * 0.46)
-                    .offset(x: index == 0 ? size * 0.25 : index == 2 ? -size * 0.25 : 0, y: index == 1 ? size * 0.25 : index == 3 ? -size * 0.25 : 0)
+                Capsule().fill(hole).frame(width: size * 0.36, height: size * 0.085)
+                    .offset(x: size * 0.17).rotationEffect(.degrees(45 + Double(index) * 90))
             }
-            Rectangle().fill(color).frame(width: size * 0.34, height: size * 0.34)
-            Rectangle().fill(hole).frame(width: size * 0.07, height: size * 0.2)
-            Rectangle().fill(hole).frame(width: size * 0.2, height: size * 0.07)
+            RoundedRectangle(cornerRadius: size * 0.04).fill(hole).frame(width: size * 0.31, height: size * 0.31).rotationEffect(.degrees(10))
+            RoundedRectangle(cornerRadius: size * 0.02).fill(color).frame(width: size * 0.2, height: size * 0.2).rotationEffect(.degrees(10))
         }
         .frame(width: size, height: size)
-        .rotationEffect(.degrees(45))
+        .rotationEffect(.degrees(-12))
+    }
+
+    private func petals(_ fill: Color, grow: CGFloat) -> some View {
+        ForEach(0..<4, id: \.self) { index in
+            Circle().fill(fill).frame(width: size * 0.47 + grow, height: size * 0.47 + grow)
+                .offset(x: size * 0.265).rotationEffect(.degrees(45 + Double(index) * 90))
+        }
     }
 }
 
@@ -165,7 +178,7 @@ struct MaxBanner: View {
             MaxFlower(size: 19).position(x: 289, y: 64)
         }
         .frame(width: Metrics.settings.windowSize.value.width, height: A.maxBannerHeight.value)
-        .clipShape(WavyBottom())
+        .clipShape(WavyBottom(phase: A.maxWavePhase.value))
     }
 }
 
@@ -179,7 +192,7 @@ struct LittleBrkBanner: View {
                 .offset(x: A.mockOrigin.value.x, y: A.mockOrigin.value.y)
         }
         .frame(width: Metrics.settings.windowSize.value.width, height: A.littleBannerHeight.value)
-        .clipShape(WavyBottom())
+        .clipShape(WavyBottom(amplitude: A.littleWaveAmplitude.value))
     }
 }
 
@@ -332,10 +345,6 @@ struct MaxThumbnail: View {
             .frame(width: 92, height: 18, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 3).fill(Color.white))
             .offset(x: 12)
-        case .askOnPage, .browse, .translation:
-            ArtColor.rgb(feature == .askOnPage ? 0xF2C46D : feature == .browse ? 0x7FC4C0 : 0xE88FB2)
-            Image(systemName: feature == .askOnPage ? "doc.text.magnifyingglass" : feature == .browse ? "safari" : "character.bubble")
-                .font(.system(size: 22, weight: .medium)).foregroundStyle(.white)
         }
     }
 }
@@ -356,21 +365,71 @@ struct WaveLine: Shape {
 
 // MARK: - Shortcuts
 
-/// One of the two blue key caps beside the Shortcuts list (P38-e): ⌘ and a smiling face.
+/// One of the two blue key caps beside the Shortcuts list (P38-e): ⌘, and a smile of two strokes and a curve. The cap
+/// is system blue with a lighter rim at the top and a deeper front at the bottom; the face is pale blue with a white
+/// hairline.
 struct KeyCapArt: View {
-    let symbol: String
+    enum Glyph { case command, smile }
+    let glyph: Glyph
 
     var body: some View {
+        let face = RoundedRectangle(cornerRadius: A.keyFaceRadius.value, style: .continuous)
         RoundedRectangle(cornerRadius: A.keyRadius.value, style: .continuous)
-            .fill(ArtColor.keyBlue)
-            .overlay(
-                RoundedRectangle(cornerRadius: A.keyRadius.value - 2, style: .continuous)
-                    .fill(LinearGradient(colors: [ArtColor.keyFace, ArtColor.rgb(0xC3D0F7)], startPoint: .top, endPoint: .bottom))
-                    .padding(.horizontal, A.keyInset.value).padding(.top, A.keyInset.value).padding(.bottom, A.keyInset.value + 4)
-                    .overlay(Image(systemName: symbol).font(.system(size: A.keyGlyph.value, weight: .bold)).foregroundStyle(ArtColor.keyBlue).offset(y: -2))
-            )
-            .frame(width: A.keySize.value, height: A.keySize.value)
+            .fill(LinearGradient(colors: [ArtColor.rgb(0x4590FE), ArtColor.rgb(0x3881EE)], startPoint: .top, endPoint: .bottom))
+            .overlay(RoundedRectangle(cornerRadius: A.keyRadius.value, style: .continuous).strokeBorder(ArtColor.keyBlue, lineWidth: 1))
+            .overlay(alignment: .top) {
+                face.fill(LinearGradient(colors: [ArtColor.keyFace, ArtColor.rgb(0xD3E1FB)], startPoint: .top, endPoint: .bottom))
+                    .overlay(face.strokeBorder(ArtColor.rgb(0xF4F8FF), lineWidth: 0.75))
+                    .overlay(mark)
+                    .padding(.horizontal, A.keyInset.value).padding(.top, A.keyInset.value).padding(.bottom, A.keyFront.value)
+            }
+            .frame(width: A.keySize.value.width, height: A.keySize.value.height)
     }
+
+    @ViewBuilder private var mark: some View {
+        switch glyph {
+        case .command:
+            Image(systemName: "command").font(.system(size: A.keyGlyph.value, weight: .bold)).foregroundStyle(ArtColor.keyBlue)
+        case .smile:
+            ZStack {
+                HStack(spacing: 8.5) {
+                    ForEach(0..<2, id: \.self) { _ in Capsule().fill(ArtColor.keyBlue).frame(width: 3, height: 10) }
+                }
+                .offset(y: -6.5)
+                SmileCurve().stroke(ArtColor.keyBlue, style: StrokeStyle(lineWidth: 3, lineCap: .round)).frame(width: 25, height: 6).offset(y: 9)
+            }
+        }
+    }
+}
+
+/// The smile under the key cap's two strokes.
+struct SmileCurve: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY), control: CGPoint(x: rect.midX, y: rect.maxY + rect.height))
+        return path
+    }
+}
+
+/// Shortcuts' "…" beside Reset All Shortcuts (P38-e): three dots in a white circle with a grey hairline, as an image
+/// so the menu button can show it.
+enum MoreCircle {
+    @MainActor static let image: NSImage = {
+        let side = A.moreCircle.value
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            let ring = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+            NSColor.white.setFill(); ring.fill()
+            NSColor(white: 0xDB / 255.0, alpha: 1).setStroke(); ring.lineWidth = 1; ring.stroke()
+            NSColor(white: 0x2C / 255.0, alpha: 1).setFill()
+            for index in -1...1 {
+                let x = rect.midX + CGFloat(index) * 4.75
+                NSBezierPath(ovalIn: CGRect(x: x - 1.15, y: rect.midY - 1.15, width: 2.3, height: 2.3)).fill()
+            }
+            return true
+        }
+        return image
+    }()
 }
 
 // MARK: - Metrics
@@ -381,8 +440,10 @@ struct SettingsArtMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38"
     let wavePeriod = Metric(20.0, .anatomy("\(capture)/P38-b-arc.png: wave crests at x 10, 50, 90 px"))
     let waveAmplitude = Metric(2.5, .anatomy("\(capture)/P38-b-arc.png: the edge runs between y 417 and 427 px"))
-    let maxBannerHeight = Metric(123.0, .anatomy("\(capture)/P38-b-arc.png: blue from the toolbar hairline at 176 px to the wave's middle at 422 px"))
-    let littleBannerHeight = Metric(135.0, .anatomy("\(capture)/P38-f-arc.png: pink from 176 px to the wave near 445 px"))
+    let maxWavePhase = Metric(5.0, .anatomy("\(capture)/P38-b-arc.png: the edge is highest (417 px) at x 10, 50, 90 px and lowest (427 px) at 30, 70 px"))
+    let littleWaveAmplitude = Metric(2.0, .anatomy("\(capture)/P38-f-arc.png: the edge runs between y 438 px (x 0, 40 px) and 446 px (x 20 px)"))
+    let maxBannerHeight = Metric(125.5, .anatomy("\(capture)/P38-b-arc.png: blue from the toolbar hairline at 176 px to the wave's lowest at 427 px"))
+    let littleBannerHeight = Metric(135.0, .anatomy("\(capture)/P38-f-arc.png: pink from 176 px to the wave's lowest at 446 px"))
     let letterSize = Metric(50.0, .guess("the MAX lettering spans x 556 to 792 px in P38-b"))
     let letterStroke = Metric(8.0, .anatomy("\(capture)/P38-b-arc.png: the cream outline is 8 px of 2x, half of it outside the letter"))
     let letterSpacing = Metric(-4.0, .guess("the letters of the lettering overlap a little"))
@@ -401,8 +462,11 @@ struct SettingsArtMetricsTable: MetricGroup {
     let thumbSize = Metric(CGSize(width: 88, height: 56), .anatomy("\(capture)/P38-b-arc.png: thumbnails span x 154 to 330 px, y 832 to 944 px"))
     let thumbRadius = Metric(3.0, .guess("a thumbnail's corner"))
     let thumbFrame = Metric(1.5, .anatomy("\(capture)/P38-b-arc.png: a white rim of about 3 px around each thumbnail"))
-    let keySize = Metric(64.0, .anatomy("\(capture)/P38-e-arc.png: the key caps span x 840 to 968 px and 975 to 1105 px"))
+    let keySize = Metric(CGSize(width: 66, height: 65), .anatomy("\(capture)/P38-e-arc.png: the first key cap spans x 838 to 970 px, y 347 to 477 px"))
     let keyRadius = Metric(12.0, .guess("the key caps' corner"))
-    let keyInset = Metric(5.0, .guess("the key cap's face inset"))
-    let keyGlyph = Metric(26.0, .guess("the ⌘ and face on the key caps"))
+    let keyFaceRadius = Metric(9.0, .guess("the key cap face's corner"))
+    let keyInset = Metric(5.0, .anatomy("\(capture)/P38-e-arc.png: the face starts 10 px in from the cap's left, right and top edges"))
+    let keyFront = Metric(10.5, .anatomy("\(capture)/P38-e-arc.png: the face ends at y 456 px, the cap at 477 px"))
+    let keyGlyph = Metric(26.0, .guess("the ⌘ on the key cap"))
+    let moreCircle = Metric(24.0, .anatomy("\(capture)/P38-e-arc.png: the … circle spans x 1127 to 1175 px, y 1198 to 1246 px; dots 9.5 px apart"))
 }

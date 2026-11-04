@@ -147,7 +147,8 @@ struct LinksPane: View {
                     }
                 }
                 .padding(.top, C.introToCard.value)
-                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
+                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value)
+                    .padding(.top, C.sectionRule.value).padding(.bottom, C.sectionRuleBelow.value)
                 Intro(text: SettingsCopy.peekDescription)
                 SettingsCard {
                     SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
@@ -162,7 +163,8 @@ struct LinksPane: View {
                     }
                 }
                 .padding(.top, C.introToCard.value)
-                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value).padding(.vertical, C.sectionRule.value)
+                Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value)
+                    .padding(.top, C.sectionRule.value).padding(.bottom, C.sectionRuleBelow.value)
                 SettingsCard {
                     CardRow(height: C.routesRowHeight.value) {
                         HStack(spacing: C.infoGap.value) {
@@ -266,11 +268,15 @@ struct AdvancedPane: View {
     }
 }
 
-/// Advanced's "More Settings…": what Brk has beyond Arc's Advanced cards (the default browser, numbered favorites,
-/// sidebar data, importing a browser file, the tour). Previews are General's "Previews Settings…".
+/// Advanced's "More Settings…": what Brk has beyond Arc's Advanced cards (the default browser, the local AI tool and
+/// Brk's own three AI features, numbered favorites, sidebar data, importing a browser file, the tour). Previews are
+/// General's "Previews Settings…".
 struct MoreSettings: View {
     let context: PaneContext
     private var tabs: TabPreferenceSnapshot { context.settings.tabPreferences }
+    private var max: MaxSnapshot { context.settings.max }
+
+    private func send(_ setting: MaxSetting) { context.dispatch(.settings(.max(setting))) }
 
     var body: some View {
         SettingsCard {
@@ -279,6 +285,24 @@ struct MoreSettings: View {
             } trailing: {
                 SettingsButton(title: SettingsCopy.setAsDefaultBrowser, field: "setAsDefaultBrowser") { context.dispatch(.app(.setAsDefaultBrowser)) }
                     .disabled(context.isDefaultBrowser)
+            }
+        }
+        // Max runs a command-line tool on this Mac (Arc's Max pane has no such choice); Brk's three AI features that
+        // Arc 1.170's Max pane does not list are switched here too.
+        SettingsCard {
+            CardRow(height: C.twoLineRowHeight.value) {
+                VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                    CardLabel(MaxCopy.provider)
+                    SettingsLabel(text: SettingsCopy.detected(max.detected, active: max.active), field: "aiStatus", secondary: true)
+                }
+            } trailing: {
+                SettingsPopUp(field: "aiProvider", entries: AIProviderChoice.allCases.map { .option(SettingsCopy.provider($0), $0) },
+                              selected: max.settings.provider) { send(.provider($0)) }
+                    .fixedSize()
+            }
+            ForEach([AIFeature.askPage, .browse, .translation], id: \.self) { feature in
+                CardDivider()
+                SwitchRow(title: feature.title, field: feature.rawValue, isOn: max.settings.enabled(feature)) { send(.feature(feature, $0)) }
             }
         }
         // Arc's General pane carries these when its ad blocker is available (anatomy-m 4.2); Arc 1.170's General

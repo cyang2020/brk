@@ -773,13 +773,16 @@ public final class BoostZapOverlayView: NSView {
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
     public override var isFlipped: Bool { true }
+    static let hintShift = Metric(-30.0, .anatomy("verify/visual-pairs/run-20261103/P37/P37-c-arc.png: 'Click elements on the page to Zap them' spans x 1198 to 1679 px, the card 456 to 2540 px"))
     /// `card`: the page rect of the content card showing the Boost's page.
     public func render(_ editor: BoostEditor?, card: CGRect?) {
         guard let editor, editor.picking, editor.pickPurpose == .zap, let card else { isHidden = true; return }
         isHidden = false
         frame = card
         let height = Metrics.boostPanel.zapHintHeight.value
-        label.frame = CGRect(x: 0, y: bounds.height - height + (height - 18) / 2 + 1, width: bounds.width, height: 18)
+        // Arc centres the line 30 points left of the card's middle (P37-c: the text spans x 1198 to 1679 px in a card
+        // from 456 to 2540 px), its middle 3 px above the strip's.
+        label.frame = CGRect(x: Self.hintShift.value, y: bounds.height - height + (height - 18) / 2 - 0.5, width: bounds.width, height: 18)
         needsDisplay = true
     }
     public override func draw(_ dirtyRect: NSRect) {
