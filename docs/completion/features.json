@@ -3860,7 +3860,7 @@
       "arc_evidence": "rows 86 to 90",
       "description": "Websites, Easels and Notes use automatic, light or dark",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Automatic/light/dark appearance affects actual websites, Easels and Notes, follows the system in automatic mode, and persists with defined profile scope.",
       "owner": "batch-sites-extensions",
       "required_checks": [
@@ -3903,6 +3903,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P19",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P19: P19-a 1.4% 已修（一致）; P19-b 3.8% 已修（一致）; P19-c 1.0% 一致. References in verify/visual-pairs/run-20261103/P19/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-SystemAppearance",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-SystemAppearance 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P19",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P19-a 1.29%, P19-b 0.50%, P19-c 0.49%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -4291,6 +4312,27 @@
           "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
           "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
           "scope": "After visiting a, b, md and cache pages: window-server Cmd+Y opened History with four rows; key-code typing \"page\" in the focused search field left the two matching visits (a047-history-search-keycodes.png); a window-server click on \"A page js\" opened it as a new current tab; a window-server right-click on that newest visit showed \"More from this site / Remove from history\" (a047-history-row-menu.png) and clicking Remove took out exactly that visit while the older visit to the same page stayed (before 5 rows, after 4)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only 7",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：7 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 Q05",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：Q05-a 3.17%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -5952,6 +5994,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
           "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P28-a 6.41%；剩余差异见 results.tsv 的合并后两列。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only W2-1",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：W2-1 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P28",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P28-a 1.52%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -7476,7 +7539,7 @@
       "arc_evidence": "row 170; `ARC_HomeButton`; anatomy-m 1.9 `HomePageID`",
       "description": "One place for Downloads, Archive, Easels and Notes, Media, Boosts, Spaces",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library.",
       "owner": "native-grounding",
       "required_checks": [
@@ -7512,6 +7575,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P32",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P32: P32-a 9.2% 已修；剩余为数据（无归档/Boost）与系统图标; P32-b 6.9% 已修（剩余为数据或他组）; P32-c 6.9% 已修（剩余为数据或他组）; P32-d 11.7% 已修；剩余为数据; P32-e 6.9% 已修（剩余为数据或他组）; P32-f 7.3% 已修（剩余为数据或他组）; P32-i 9.1% 已修；剩余为数据. References in verify/visual-pairs/run-20261103/P32/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only 7,R2,W2-11,W2-12,LibraryCard-Menu",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：7, R2, W2-11, W2-12, LibraryCard-Menu 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P30,P32",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P30-a 0.99%, P30-c 0.83%, P32-a 2.11%, P32-b 1.34%, P32-c 1.04%, P32-d 1.31%, P32-e 1.35%, P32-f 1.82%, P32-i 2.08%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -9020,6 +9104,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on Extension-install, Extension-cancel-uninstall, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-ExtensionPanel",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-ExtensionPanel 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -9262,7 +9360,7 @@
       "arc_evidence": "rows 23 to 26, 174; `ARC_BoostsEditor`, `ARC_BoostsDialog`",
       "description": "Per-site CSS and JavaScript, Zap, editor, gallery, install and share dialogs",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Create, edit, install, disable, and remove a profile-scoped site boost with CSS, JavaScript and Zap; export and import its data.",
       "owner": "batch2-boosts",
       "required_checks": [
@@ -9312,6 +9410,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P37",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P37: P37-a 5.6% 已修；引导卡徽章不是 Arc 原插图; P37-b 5.3% 已修（一致）; P37-c 7.6% 已修（剩余为数据或他组）; P37-d 16.9% 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比. References in verify/visual-pairs/run-20261103/P37/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-Boosts,Boost-CSS",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-Boosts, Boost-CSS 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P37",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P37-a 6.96%, P37-a-editor 8.70%, P37-b 4.63%, P37-b-editor 4.77%, P37-c 5.85%, P37-c-editor 4.82%, P37-c2 5.98%, P37-d 20.19%, P37-d-editor 3.62%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -9695,6 +9814,27 @@
           "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
           "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
           "scope": "capture-media.html (playing muted video) left in the background behind b.html: window-server click on its sidebar media button paused it (paused true, B page stayed current, a105-after-click.png shows the play glyph); a second click resumed it (paused false, B page still current)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only W2-12",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：W2-12 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P33",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P33-a 1.02%, P33-b 1.23%, P33-c 1.26%, P33-d 0.76%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -9809,7 +9949,7 @@
       "arc_evidence": "`ARC_SiteControlCenter`",
       "description": "Popover with site settings, Boosts, capture, copy URL, share",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "A site control popover shows the active origin/profile, effective permissions/settings and actions for Boosts, capture, copy URL and local file export with current readback.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -9880,6 +10020,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P36",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P36: P36-a 5.4% 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点. References in verify/visual-pairs/run-20261103/P36/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only SettingsRoutes",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：SettingsRoutes 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P36",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P36-a 1.19%, P36-b 6.85%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -10346,6 +10507,27 @@
           "artifact": "verify/swift/focus-parent/evidence/build.log",
           "scope": "WindowsSpecTests checks emitted registration effect and idempotent http/https plist declarations, not OS registration.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-LaunchServices,SettingsRoutes",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-LaunchServices, SettingsRoutes 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 Q06",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：Q06-a 2.91%, Q06-links-bottom 2.66%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -10432,6 +10614,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-r3 all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv",
           "scope": "站台 main cfa87d56 与真实 Arc 1.170 并排（Brk 图在 /tmp/station-parent/final-r3/，参照在 verify/visual-pairs/run-20261103/<编号>/）：P38-a 2.53%、P38-d 4.09%、P38-e 5.20%、P38-g 4.03%、P38-h 5.26%（父任务第三轮逐项核过为一致）、P38-f 6.92%（剩余为数据或他组）、P38-b 10.45% 与 P38-c 15.09%（Max 页，见 A142）。窗口顶部七个分页的顺序和 Arc 去掉账号页后一致；剩余差异：Max、Icon 两个分页的小图标是 Brk 自己的（Arc 用 Max 花形和 Arc 标志）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only SettingsRoutes,W2-1",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：SettingsRoutes, W2-1 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-a 2.53%, P38-b 5.10%, P38-c 6.44%, P38-d 4.09%, P38-e 2.26%, P38-f 3.50%, P38-g 4.03%, P38-h 4.35%, P38-max-list 6.63%, P38-max-on 5.20%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -10591,7 +10794,7 @@
       "arc_evidence": "anatomy-m 1.14, 2.2; `StorableKeyBindings.json`",
       "description": "Change any shortcut, per-shortcut priority, conflicts shown",
       "historical_status": "planned",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Remap all intended shortcuts, assign priority, display conflicts and use the same bindings in menus and native or CEF routing.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10619,6 +10822,27 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N1,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-ShortcutKeys",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-ShortcutKeys 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-a 2.53%, P38-b 5.10%, P38-c 6.44%, P38-d 4.09%, P38-e 2.26%, P38-f 3.50%, P38-g 4.03%, P38-h 4.35%, P38-max-list 6.63%, P38-max-on 5.20%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -11257,7 +11481,7 @@
       "arc_evidence": "row 2; `ARC_AboutWindow`",
       "description": "About panel with credits",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Open an About Brk panel with correct application identity, version and credits.",
       "owner": "native-grounding",
       "required_checks": [
@@ -11279,6 +11503,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P39",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P39: P39-a 5.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P39/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-About",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-About 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P39",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P39-a 5.35%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -11304,7 +11549,7 @@
       "arc_evidence": "anatomy-m 2.3 (10 menus, 189 items)",
       "description": "Arc, File, Edit, View, Spaces, Tabs, Archive, Extensions, Window, Help",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Account for all 189 reference menu rows and make every in-scope action work or carry the explicit updater deferral.",
       "owner": "native-grounding",
       "required_checks": [
@@ -11332,6 +11577,27 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-8,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only R44-Menus",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：R44-Menus 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P19",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P19-a 1.29%, P19-b 0.50%, P19-c 0.49%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -12193,7 +12459,7 @@
       "arc_evidence": "anatomy-m 4.2 \"Max\"",
       "description": "Switches for each AI feature and the API key",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Expose functional settings for the delivered Max features and local CLI providers, without requiring an API key.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12250,6 +12516,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4234 --only AIMax",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/parent-gate-r4234/REPORT.md",
+          "scope": "父任务在自己的工作树（main 79c2212f）合并 R4-2/R4-3/R4-4 后独立重跑：AIMax 通过（Boost-CSS 在导入行等到布局后两遍通过，见 parent-gate-r4234c/d）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P38",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-a 2.53%, P38-b 5.10%, P38-c 6.44%, P38-d 4.09%, P38-e 2.26%, P38-f 3.50%, P38-g 4.03%, P38-h 4.35%, P38-max-list 6.63%, P38-max-on 5.20%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
