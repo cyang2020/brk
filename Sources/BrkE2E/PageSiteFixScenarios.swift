@@ -450,6 +450,10 @@ enum PageSiteFixScenarios {
         }
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try ExtScenarios.catalogValue(app, fixture.id) != nil }
+        // The tab behind the panel finishes loading first: a page that becomes ready takes the key focus, and the
+        // transient panel closes with it.
+        try app.waitUntil("the page behind the panel loaded") { try !app.view().urlPill.loading }
+        app.sleep(1)
         try expect(try binding() != chord, "the command already has ⇧⌘U")
         _ = try app.screenshotSiteControls("before-click")
         _ = try panelClick(app, owner, field)
