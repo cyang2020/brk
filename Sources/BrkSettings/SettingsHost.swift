@@ -145,8 +145,20 @@ public final class SettingsHost: NSView {
         guard let window, let content = window.contentView else { return }
         let chrome = window.frame.height - content.frame.height
         let pane = CGSize(width: Metrics.settings.windowSize.value.width, height: Metrics.settings.windowSize.value.height - chrome)
+        var root = controller.rootView
+        root.bottomSlack = 0
+        controller.rootView = root
         let fitted = controller.sizeThatFits(in: CGSize(width: pane.width, height: .greatestFiniteMagnitude))
-        controller.view.setFrameSize(CGSize(width: pane.width, height: max(pane.height, fitted.height.rounded(.up))))
+        // Whole pixels, not whole points: a pane scrolled to its end then lands within a pixel of where the content
+        // ends. SwiftUI centres a root that is shorter than its view, so the rounding goes under the content and the
+        // pane still starts at the top (P38-b, P38-max-on; P38-c, P38-max-list scrolled).
+        let scale = window.backingScaleFactor
+        let height = max(pane.height, (fitted.height * scale).rounded(.up) / scale)
+        if height > fitted.height {
+            root.bottomSlack = height - fitted.height
+            controller.rootView = root
+        }
+        controller.view.setFrameSize(CGSize(width: pane.width, height: height))
         guard pane != content.frame.size else { return }
         var frame = window.frame
         frame.size = Metrics.settings.windowSize.value
@@ -192,6 +204,8 @@ struct PaneContext {
 struct SettingsRootView: View {
     let context: PaneContext?
     let pane: SettingsPane
+    /// Space under the pane that rounds the document up to whole points (`SettingsHost.fitWindow`).
+    var bottomSlack: CGFloat = 0
 
     var body: some View {
         if let context {
@@ -208,6 +222,7 @@ struct SettingsRootView: View {
             }
             .background(IdentifiedRegion(id: .settingsPane(pane), label: SettingsCopy.paneDescription(pane)))
             .onExitCommand { context.dispatch(.settings(.closeWindow)) }
+            .padding(.bottom, bottomSlack)
         } else {
             Color.clear.frame(width: CardMetrics.paneSize.width, height: CardMetrics.paneSize.height)
         }
