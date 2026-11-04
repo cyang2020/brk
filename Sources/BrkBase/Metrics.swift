@@ -192,6 +192,7 @@ public struct ContentMetrics: MetricGroup {
     public let sidebarGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a and P03-b/c: Arc's card starts at the sidebar width"))
     /// Continuous corners.
     public let cornerRadius = Metric(6.0, .arc("Content card corner radius"))
+    public let statusBubbleMaxHeight = Metric(40.0, .guess("Chromium's status bubble widget is a short child of the page's host window; its other widgets are taller or are not at its bottom edge"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
     /// Measured round Arc's card (verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out

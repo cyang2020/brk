@@ -100,6 +100,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var ai: AIAnswerSnapshot? = nil
     /// Arc's 5-Second Preview card under a link Shift was held over (P45-a).
     public var aiPreview: AIPreviewSnapshot? = nil
+    /// The capsule naming the link under the pointer (P45-a).
+    public var linkStatus: LinkStatusSnapshot? = nil
     /// What View > Appearance applies to this window's site (the check mark of Automatic, Light or Dark).
     public var websiteAppearance: WebsiteAppearance = .automatic
 }
@@ -174,6 +176,17 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
     public var tidying: Bool = false
     /// Today only: Max's Tidy Tabs is on, however many tabs there are; Arc keeps the divider row taller (P45-a, P46-a).
     public var tidyEnabled: Bool = false
+}
+
+/// The link under the pointer as Arc's capsule shows it: the address without "http://".
+public struct LinkStatusSnapshot: Sendable, Equatable, Codable {
+    public let page: PageID
+    public let text: String
+    public init(page: PageID, text: String) { self.page = page; self.text = text }
+    public static func display(_ url: URL) -> String {
+        let text = url.absoluteString
+        return text.hasPrefix("http://") ? String(text.dropFirst("http://".count)) : text
+    }
 }
 
 public enum Row: Sendable, Equatable, Codable {

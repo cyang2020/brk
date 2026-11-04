@@ -155,7 +155,7 @@ struct LinksPane: View {
                     SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
                     CardDivider()
                     CardRow(height: C.peekNoteRowHeight.value) {
-                        VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                        VStack(alignment: .leading, spacing: C.peekNoteGap.value) {
                             CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
                             Text(SettingsCopy.peekNote).font(.system(size: C.peekNoteFontSize.value).italic()).foregroundStyle(SettingsStyle.italicNote)
                         }

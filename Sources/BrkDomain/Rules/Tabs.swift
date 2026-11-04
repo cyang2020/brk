@@ -184,7 +184,9 @@ extension Work {
         }
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
-        case .linkHovered(let url): aiHover(url, in: window)
+        case .linkHovered(let url):
+            state.session.windows[window]?.linkStatus = url.map { LinkStatusSnapshot(page: page, text: LinkStatusSnapshot.display($0)) }
+            aiHover(url, in: window)
         case .languageDetected(let document, let language):
             guard live.document == .ready(document) else { return }
             live.language = String(language.prefix(40))

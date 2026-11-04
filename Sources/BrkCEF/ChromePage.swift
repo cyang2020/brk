@@ -700,6 +700,7 @@ final class ChromePage: CefBrowserDelegate {
 extension ChromePage {
     func browser(_ b: CefBrowser, didChangeStatusMessage message: String) {
         guard !isAIReader else { return }
+        if let host = chrome.nsWindow { HostWindows.hideStatusBubble(of: host) }
         engine.pageDidEmit(self, .linkHovered(URL(string: message)))
     }
 }

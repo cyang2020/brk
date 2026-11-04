@@ -319,6 +319,7 @@ struct SettingsCardMetricsTable: MetricGroup {
     let peekNoteFontSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Note spans x 150 to 700 px, a 12 pt italic line (13 pt is 589 px wide)"))
     /// Arc's pop-up row keeps its label and pop-up half a point above the row's middle.
     let popUpRowBottom = Metric(1.0, .anatomy("\(capture)/P38-f-arc.png: the row spans y 826 to 914 px, the label is centred at 871 px"))
+    let peekNoteGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Peek title and its 12 pt Note start 42 px apart"))
     let introTop = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the banner's wave is lowest at y 446 px, the paragraph's first line is centred at 511 px"))
     let introToCard = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the paragraph's last line is centred at 543 px, the card starts at 606 px"))
     let sheetSize = Metric(CGSize(width: 422, height: 372), .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the sheet spans x 263 to 1105 px, y 278 to 1022 px"))

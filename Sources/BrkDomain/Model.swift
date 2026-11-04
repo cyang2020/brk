@@ -279,6 +279,8 @@ struct Session: Sendable, Equatable {
 }
 
 struct WindowSession: Sendable, Equatable {
+    /// The link under the pointer, for the capsule at the page's bottom left.
+    var linkStatus: LinkStatusSnapshot? = nil
     var boostEditor: BoostEditor? = nil
     var boostMessage: String? = nil
     var capture: CaptureSnapshot? = nil

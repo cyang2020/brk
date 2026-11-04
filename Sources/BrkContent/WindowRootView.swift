@@ -33,6 +33,7 @@ public final class WindowRootView: NSView {
     private let boostPanel: BoostPanel
     private let aiAnswer: AIAnswerDocumentView
     private let aiPreview: AIPreviewCardView
+    private let linkStatus = LinkStatusCapsule()
     private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
@@ -71,7 +72,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak veil = inactiveVeil] _ in
                 guard let veil else { return }
@@ -170,6 +171,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
+        linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
