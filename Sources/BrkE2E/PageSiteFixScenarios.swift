@@ -204,10 +204,10 @@ enum PageSiteFixScenarios {
 
         rule.blocking = false; rule.hideCookieBanners = false
         try app.dispatch(.site(.rule(target, rule)))
-        try app.dispatch(.page(.reload(.focused, ignoringCache: true)))
-        app.sleep(0.5)
+        let excepted = try app.load(app.site.url("news-site.html?excepted"))
+        try app.waitForPageInput(PageID(window: app.window!, item: excepted), at: app.site.url("news-site.html?excepted"))
         try app.waitUntil("the excepted site's ad requests reach the server", timeout: 10) { adPaths.allSatisfy { app.site.requestCount($0) > blocked[$0]! } }
-        dom = try report(news)
+        dom = try report(excepted)
         try PageBrowsingScenarios.record(app, "excepted", dom.mapValues { "\($0)" })
         let allowedLoaded = dom["loaded"] as? [String: Bool] ?? [:], allowedShown = dom["shown"] as? [String: Bool] ?? [:]
         try expect(["adsbygoogle", "gpt", "gtag", "collect"].allSatisfy { allowedLoaded[$0] == true }, "the site exception still blocks: \(allowedLoaded)")
@@ -215,14 +215,14 @@ enum PageSiteFixScenarios {
         try app.screenshot("news-excepted")
         app.passed("a site exception lets the same requests through and shows the slots")
 
-        rule.blocking = true
+        rule.blocking = true; rule.hideCookieBanners = true
         try app.dispatch(.site(.rule(target, rule)))
-        try app.dispatch(.page(.reload(.focused, ignoringCache: true)))
+        let afterException = counts()
+        let again = try app.load(app.site.url("news-site.html?again"))
+        try app.waitForPageInput(PageID(window: app.window!, item: again), at: app.site.url("news-site.html?again"))
+        _ = try report(again)
         app.sleep(0.5)
-        let excepted = counts()
-        _ = try report(news)
-        app.sleep(0.5)
-        try expect(adPaths.allSatisfy { app.site.requestCount($0) == excepted[$0] }, "blocking on again let a request through")
+        try expect(adPaths.allSatisfy { app.site.requestCount($0) == afterException[$0] }, "blocking on again let a request through: \(counts()) from \(afterException)")
         try app.dispatch(.site(.controls))
         let status = try app.send(.siteControlTexts(window: app.window!))
         try PageBrowsingScenarios.record(app, "site-texts", "\(status)")
@@ -291,6 +291,13 @@ enum PageSiteFixScenarios {
     /// A window-server mouse click on a control of the site controls panel, posted only when the frontmost window at
     /// the point is this Brk's (the panel is its own window, so `PhysicalPointer`'s key-window check does not apply).
     static func panelClick(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> Bool {
+        // The field may be on the panel's second page (site settings details), as `ExtScenarios.control` handles.
+        if case .failed = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) {
+            try app.perform(.siteControlInput(window: owner, field: "siteSettingsDetails", action: .press))
+            try app.waitUntil("site settings page shows \(field)") {
+                if case .menuItems = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) { true } else { false }
+            }
+        }
         guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 5,
               let x = Double(values[0]), let y = Double(values[1]), let w = Double(values[2]), let h = Double(values[3]) else {
             throw Check(description: "\(field) has no screen rectangle")
@@ -308,6 +315,9 @@ enum PageSiteFixScenarios {
         return values[4] == "focused:true"
     }
     static func focused(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> Bool {
+        if case .failed = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) {
+            try app.perform(.siteControlInput(window: owner, field: "siteSettingsDetails", action: .press))
+        }
         guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) else { return false }
         return values.last == "focused:true"
     }
@@ -395,8 +405,8 @@ enum PageSiteFixScenarios {
         }
         let work = try space("Work"), research = try space("Research")
         try app.dispatch(.space(.focus(personal)))
-        try app.dispatch(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("host"), pattern: "127.0.0.1", destination: .space(work))))))
-        try app.dispatch(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("red"), pattern: "red.html", destination: .space(research))))))
+        try app.dispatch(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("host"), pattern: "127.0.0.1", destination: .space(work), match: .contains)))))
+        try app.dispatch(.settings(.links(.addRoute(LinkRoute(id: LinkRouteID("red"), pattern: "red.html", destination: .space(research), match: .contains)))))
         func routes() throws -> [String] {
             guard case .settings(let settings) = try app.send(.settings) else { return [] }
             return settings.routes.map(\.route.id.rawValue)
@@ -572,9 +582,10 @@ enum PageSiteFixScenarios {
             app.sleep(1.0)
             var value = ""
             try app.waitUntil("typed text read back") {
-                try app.evaluate(page, "document.title='value:'+document.getElementById('t').value")
-                guard let t = try PageBrowsingScenarios.title(app, page), t.hasPrefix("value:") else { return false }
-                value = String(t.dropFirst(6)); return true
+                // Percent-encoded: a document title collapses and trims whitespace.
+                try app.evaluate(page, "document.title='value:'+encodeURIComponent(document.getElementById('t').value)")
+                guard let t = try PageBrowsingScenarios.title(app, page), t.hasPrefix("value:"), let decoded = String(t.dropFirst(6)).removingPercentEncoding else { return false }
+                value = decoded; return true
             }
             return value
         }
