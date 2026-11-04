@@ -97,9 +97,10 @@ struct CommandBarColors {
         let ink: NSColor = scheme == .light ? .black : .white
         guard scheme == .light else {
             // Q03-a (incognito): a neutral #191A1C card, the highlight #424ADD with a white tile under its glyph. P29-c (a
-            // standard window in the system's dark appearance): a translucent #171919 card (#2E3336 over the light
-            // sidebar, #161818 over the page), a #565656 edge, the highlight #676767, the selected address on #7B7B7B.
-            return CommandBarColors(card: spaceless ? srgb(0x191A1C) : srgb(0x171919).withAlphaComponent(0.87),
+            // standard window in the system's dark appearance): a dark card over a blur, reading #2E3336 over the light
+            // sidebar and #161818 over the page (this tint over the HUD material), a #565656 edge, the highlight
+            // #676767, the selected address on #7B7B7B.
+            return CommandBarColors(card: spaceless ? srgb(0x191A1C) : srgb(0x171919).withAlphaComponent(0.72),
                                     border: ink.withAlphaComponent(spaceless ? 0.12 : 0.27), text: base.textPrimary, secondary: base.textSecondary,
                                     placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.34),
                                     onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.43), hairline: base.hairline,
@@ -151,7 +152,6 @@ struct OverlayMetricsTable: MetricGroup {
 private let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b/c and Q01-a/b"
 
 struct CommandBarOverlayMetrics: MetricGroup {
-    let backdropBlur = Metric(22.0, .guess("verify/visual-pairs/run-20261103/P29/P29-c-arc.png: no text of the sidebar is readable through Arc's dark card"))
     let cornerRadius = Metric(Metrics.urlPill.cornerRadius.value, .derived(
         rule: "the URL pill's radius, so the bar opened over the pill covers it edge to edge",
         from: ["URL pill corner radius"]))

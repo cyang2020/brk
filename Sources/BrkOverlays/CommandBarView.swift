@@ -69,7 +69,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         didSet { if fillsWindow != oldValue { layoutCard() } }
     }
     private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
-    private let backdrop = NSView()
+    private let backdrop = NSVisualEffectView()
+    private let backdropTint = NSView()
     private var look: (Scheme, Style, RGBA, Bool)?
     private var leadingFavicon: URL?
     private var eventMonitor: Any?
@@ -110,12 +111,16 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         keyCap.addSubview(keyLabel)
         info.onClick = { [weak self] in self?.dispatch(.settings(.openPane(.shortcuts))) }
         // The dark card is translucent (P29-c); what shows through it is blurred, so the sidebar's text is not readable.
+        backdrop.material = .hudWindow
+        backdrop.blendingMode = .withinWindow
+        backdrop.state = .active
+        backdrop.appearance = NSAppearance(named: .darkAqua)
         backdrop.wantsLayer = true
-        backdrop.layerUsesCoreImageFilters = true
         backdrop.layer?.cornerCurve = .continuous
         backdrop.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
         backdrop.layer?.masksToBounds = true
-        backdrop.layer?.backgroundFilters = CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: OverlayMetrics.commandBar.backdropBlur.value]).map { [$0] } ?? []
+        backdropTint.wantsLayer = true
+        backdrop.addSubview(backdropTint)
         for view in [backdrop, leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
@@ -439,6 +444,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let width = attached ? min(bounds.width, max(m.attachedCardWidth.value, needed)) : bounds.width
         card.frame = CGRect(x: 0, y: 0, width: width, height: min(bounds.height, inputHeight + listHeight))
         backdrop.frame = card.bounds
+        backdropTint.frame = backdrop.bounds
         card.layer?.shadowPath = CGPath(roundedRect: card.bounds, cornerWidth: o.cornerRadius.value, cornerHeight: o.cornerRadius.value, transform: nil)
 
         let mid = inputHeight / 2
@@ -487,8 +493,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         appearance = .of(scheme)
         let o = OverlayMetrics.commandBar
         input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
-        card.layer?.backgroundColor = colors.card.cgColor
-        backdrop.isHidden = colors.card.alphaComponent >= 1
+        let translucent = colors.card.alphaComponent < 1
+        card.layer?.backgroundColor = translucent ? nil : colors.card.cgColor
+        backdropTint.layer?.backgroundColor = translucent ? colors.card.cgColor : nil
+        backdrop.isHidden = !translucent
         card.layer?.borderColor = colors.border.cgColor
         card.shadow = {
             let shadow = NSShadow()
