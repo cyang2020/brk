@@ -190,8 +190,11 @@ public struct ContentMetrics: MetricGroup {
     public let cornerRadius = Metric(6.0, .arc("Content card corner radius"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
-    public let shadowRadius = Metric(10.0, .guess("shadow radius and opacity were not recovered; the spike's value"))
-    public let shadowOpacity = Metric(0.2, .guess("visual-and-copy.md Shadow token #000000 @ 0.2 (light); the draw value was not recovered"))
+    /// Measured round Arc's card (verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
+    /// within 9 pt, 7% just above it within 5; between two split panes the two shadows meet (#D0CBC7 on #F0EAE6).
+    public let shadowRadius = Metric(2.9, .anatomy("verify/visual-pairs/run-20261103 P01-a: the edges fade like a 2.9 pt Gaussian"))
+    public let shadowOpacity = Metric(0.22, .anatomy("verify/visual-pairs/run-20261103 P01-a: 12% under the card plus 7% over it"))
+    public let shadowOffset = Metric(1.4, .anatomy("verify/visual-pairs/run-20261103 P01-a: the shadow sits 1.4 pt below the card"))
     public let highlightBorder = Metric(2.0, .arc("Content highlight border width", .medium))
     public let splitGap = Metric(10.0, .arc("Split view gap between panes", .low))
     /// Each split pane's header (back, forward, reload, host, close) and the hairline under it.

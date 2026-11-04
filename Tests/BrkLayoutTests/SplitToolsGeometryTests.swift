@@ -45,7 +45,8 @@ final class SplitToolsGeometryTests: XCTestCase {
         XCTAssertEqual(bottom.panes.count, 2)
         XCTAssertEqual(bottom.slot.maxY, area.maxY)
         XCTAssertEqual(bottom.slot.width, area.width)
-        XCTAssertEqual(bottom.slot.height, bottom.panes[0].height, accuracy: 1)
+        // Stacked panes give their gap from the pane above, so the bottom slot is a gap taller (Arc's P23-c).
+        XCTAssertEqual(bottom.slot.height, bottom.panes[0].height + Metrics.content.splitGap.value, accuracy: 1)
     }
 
     func testDividerAtItsRenderedCenterDoesNotChangeAnyFraction() {

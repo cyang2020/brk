@@ -76,9 +76,11 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertEqual(four.map(\.width), [251, 251, 251, 249])
         XCTAssertEqual(gaps.count, 3)
         XCTAssertEqual(four.last?.maxX, area.maxX)
-        // Stacked (vertical orientation) splits the height instead.
-        let (stacked, _) = ContentLayout.cards(in: area, fractions: [0.5, 0.5], orientation: .vertical)
-        XCTAssertEqual(stacked, [CGRect(x: 238, y: 10, width: 1032, height: 373), CGRect(x: 238, y: 393, width: 1032, height: 373)])
+        // Stacked (vertical orientation) splits the height instead, the gap out of the upper pane (Arc's P23-c:
+        // 10...378 and 388...766).
+        let (stacked, gap) = ContentLayout.cards(in: area, fractions: [0.5, 0.5], orientation: .vertical)
+        XCTAssertEqual(stacked, [CGRect(x: 238, y: 10, width: 1032, height: 368), CGRect(x: 238, y: 388, width: 1032, height: 378)])
+        XCTAssertEqual(gap, [CGRect(x: 238, y: 378, width: 1032, height: 10)])
         // No panes: nothing to place; the window shows one empty card filling the area.
         XCTAssertEqual(ContentLayout.cards(in: area, fractions: []).cards, [])
         let empty = LayoutDriver(startURL: nil)

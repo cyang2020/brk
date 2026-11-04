@@ -465,7 +465,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(scheme == .light ? o.cardShadowAlpha.value : 0.6)
             shadow.shadowBlurRadius = o.cardShadowRadius.value
-            shadow.shadowOffset = NSSize(width: 0, height: -o.cardShadowOffset.value)
+            // the card sits in a flipped view: a positive height drops the shadow below it
+            shadow.shadowOffset = NSSize(width: 0, height: o.cardShadowOffset.value)
             return shadow
         }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor

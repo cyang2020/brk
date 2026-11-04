@@ -131,6 +131,9 @@ public final class ContentAreaView: NSView {
             divider.fractions = content.panes.map(\.fraction)
             divider.area = frames.contentArea
             divider.orientation = content.orientation
+            // Arc's gap between panes is darker than the window round them (P23-a: #D8D4D0 mid-gap on #F0EAE6, P23-c
+            // likewise): black at 7%, the cards' shadows adding the rest at the edges.
+            divider.layer?.backgroundColor = palette.scheme == .light ? NSColor(white: 0, alpha: SplitDropDraw.gapShade.value).cgColor : nil
         }
         // Arc's slot (P23-d): the window shows through it, ringed in the split focus color at reduced strength.
         dropPreview.layer?.backgroundColor = nil
@@ -173,7 +176,9 @@ public final class ContentAreaView: NSView {
 }
 
 /// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the
-/// card with the same frame and radius (Metrics.content.shadowRadius, shadowOpacity; hidden when showsShadow is off).
+/// card with the same frame and radius (Metrics.content.shadowRadius, shadowOpacity, shadowOffset; hidden when
+/// showsShadow is off). The shadow goes through `NSView.shadow`: AppKit owns a layer-backed view's layer shadow and
+/// cleared the values set on the layer directly, so no shadow showed.
 @MainActor
 final class ShadowView: NSView {
     override init(frame: NSRect) {
@@ -181,10 +186,14 @@ final class ShadowView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.white.cgColor
         layer?.cornerCurve = .continuous
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = Float(Metrics.content.shadowOpacity.value)
-        layer?.shadowRadius = Metrics.content.shadowRadius.value
-        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        shadow = {
+            let s = NSShadow()
+            s.shadowColor = NSColor.black.withAlphaComponent(Metrics.content.shadowOpacity.value)
+            s.shadowBlurRadius = Metrics.content.shadowRadius.value
+            // in the flipped content area a positive height drops the shadow
+            s.shadowOffset = NSSize(width: 0, height: Metrics.content.shadowOffset.value)
+            return s
+        }()
         isHidden = !Metrics.content.showsShadow.value
     }
 
@@ -423,6 +432,7 @@ struct SplitDropMetrics: MetricGroup {
     let handleAlpha = Metric(0.18, .anatomy("verify/visual-pairs/run-20261103/P23: #B2AFAC over #DCD5D2 and #BBBBBB over #E1E1E1, black at about 18%"))
     let stackedHandleLength = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: between stacked panes it spans x 717...781, centred"))
     let stackedHandleAlpha = Metric(0.39, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: #8B8B8B over #E3E3E3"))
+    let gapShade = Metric(0.07, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the 10 pt gap reads #D0CBC7 at its edges and #DBD6D2 mid-way over the #F0EAE6 window"))
     let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }
 
