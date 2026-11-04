@@ -117,6 +117,12 @@ enum BoostScenarios {
         try app.click(.boostControl("close"))
         try app.waitUntil("preset saved on close") { try app.view().boostEditor == nil }
         try expect(try library(app).boosts.count == 1, "preset did not install")
+        // The Library lays its rows out again after the panel closes; the click waits for the import row to have a frame
+        // (the parent's gate runs twice clicked a zero-frame row and no panel opened).
+        try app.waitUntil("Install from File row laid out") {
+            guard let row = try app.native().actual[ViewID.boostControl("import").identifier], !row.hidden else { return false }
+            return row.frame.width > 0 && row.frame.height > 0
+        }
         try app.click(.boostControl("import"))
         try app.waitUntil("native import panel") { try app.native().sheetClass != nil }
         try app.screenshotSheet("import-panel")
