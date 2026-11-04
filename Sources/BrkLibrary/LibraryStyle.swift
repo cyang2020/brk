@@ -36,7 +36,7 @@ struct LibraryColumnMetrics: MetricGroup {
     let searchTop = Metric(10.0, .anatomy("P32-b: the search field spans y 10...46"))
     let searchHeight = Metric(36.0, .anatomy("cra L1556: Arc's Library search field is 36 pt tall"))
     let searchRadius = Metric(10.0, .guess("search field corner radius, from the capture's rounding"))
-    let searchFont = Metric(15.0, .anatomy("P32-a: \"Search Media…\" is 101 pt wide"))
+    let searchFont = Metric(14.5, .anatomy("P32-a: \"Search Media…\" is 101 pt wide (15 pt measured 105)"))
     let searchInset = Metric(8.0, .anatomy("P32-a/b: the search field (or the Filter button) runs from x 120 to 409 in the 112...417 column"))
     let searchGlyph = Metric(19.0, .anatomy("P32-b: the magnifier's ink is 15 x 14.5, centred 22 into the field (a 16 pt symbol drew 12.5)"))
     let searchGlyphLeading = Metric(12.5, .anatomy("P32-b: the magnifier starts 12.5 from the field's left"))
@@ -75,7 +75,7 @@ struct LibraryListMetrics: MetricGroup {
 struct LibraryMediaMetrics: MetricGroup {
     let headerCenter = Metric(63.0, .anatomy("P32-a: \"Today\" is centred at y 63"))
     let cardTop = Metric(83.0, .anatomy("P32-a: the first card starts at y 83"))
-    let cardHeight = Metric(47.0, .anatomy("P32-a: a card is 47 pt tall"))
+    let cardHeight = Metric(48.0, .anatomy("P32-a: a card spans y 83...131"))
     let cardPitch = Metric(60.0, .anatomy("P32-a: cards are 60 pt apart"))
     let cardLeading = Metric(12.0, .anatomy("P32-a: cards span x 124...404.5"))
     let cardRadius = Metric(12.0, .guess("a media card's corner radius, from the capture's rounding"))
