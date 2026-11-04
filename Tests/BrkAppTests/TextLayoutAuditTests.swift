@@ -63,6 +63,20 @@ import XCTest
         XCTAssertEqual(report.findings, [])
     }
 
+    /// A centred label's cell keeps 4 on each side; its ink is whole at the intrinsic width and cut below it.
+    func testACentredLabelAtItsIntrinsicWidthIsWhole() {
+        func report(width: (NSTextField) -> Double) -> TextLayoutReport {
+            audit { root in
+                let hint = label("Switch to Tab", font: .systemFont(ofSize: 13, weight: .medium))
+                hint.alignment = .center
+                hint.frame = CGRect(x: 20, y: 20, width: width(hint), height: hint.fittingSize.height)
+                root.addSubview(hint)
+            }
+        }
+        XCTAssertEqual(report { $0.intrinsicContentSize.width }.findings, [])
+        XCTAssertEqual(report { $0.attributedStringValue.size().width }.findings.map(\.problem), [.overflowsFrame])
+    }
+
     func testATruncatingLabelTooNarrowIsListedNotCut() {
         let report = audit { root in
             let long = label("A long title that cannot fit its row")

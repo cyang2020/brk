@@ -7,9 +7,9 @@ import BrkEngine
 ///
 /// What is measured:
 /// - `NSTextField`, `NSButton` (pop-ups included), `NSTextView`: the cell's or layout manager's own size for the text.
-///   A label's frame needs `cellSize`, not `intrinsicContentSize`: the cell draws the text 2 points in from each side,
-///   and on current macOS the intrinsic width leaves that out, so a frame of that width cuts the last letter or, with a
-///   truncating line break, ends a text that would fit with an ellipsis.
+///   A label's frame needs `cellSize`, not `intrinsicContentSize`: the cell draws the text 2 points in from each side
+///   (4 when centred), and on current macOS the intrinsic width leaves one of those sides out, so a frame of that width
+///   cuts the last letter or, with a truncating line break, ends a text that would fit with an ellipsis.
 /// - Text a view draws itself: `draw(_:)` runs once into a throwaway bitmap while `DrawnTextRecorder` notes each string.
 /// - SwiftUI `Text`: not a view. Its accessibility node gives the string and the laid-out frame; the font is worked out
 ///   from the frame's height, because a Text's frame is exactly its lines (`SwiftUIText`). SwiftUI builds those nodes
@@ -54,7 +54,6 @@ enum TextLayoutAudit {
     }
 
     nonisolated private static let slack = 0.5
-    nonisolated private static let clippingTrailingInset = 2.0
 
     // MARK: The walk
 
@@ -116,13 +115,14 @@ enum TextLayoutAudit {
             let scrolls = (field.isEditable || cell.isScrollable) && !placeholder
             let needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 100_000))
             report.note(text, frame: bounds, needed: needed)
-            // Measured on rendered labels: a clipping label's ink is whole from its advance plus the leading inset, one
-            // that truncates turns to an ellipsis below the whole cell width.
-            let room = needed.width - (truncates ? 0 : TextLayoutAudit.clippingTrailingInset)
+            // Measured on rendered labels: a clipping label's ink is whole from its advance plus the leading inset (half
+            // of the cell's padding: 2 points, 4 when centred), one that truncates turns to an ellipsis below the whole
+            // cell width.
+            let advance = placeholder ? (text as NSString).size(withAttributes: [.font: field.font ?? NSFont.systemFont(ofSize: 0)]).width : field.attributedStringValue.size().width
+            let room = truncates ? needed.width : needed.width - (needed.width - advance) / 2
             if !scrolls, room > bounds.width + 0.25 {
                 // A frame of the intrinsic width is a frame that forgot the cell's inset: an ellipsis there is a bug.
-                let natural = field.attributedStringValue.size().width
-                let fitsWithoutInset = truncates && !placeholder && bounds.width >= natural - TextLayoutAudit.slack
+                let fitsWithoutInset = truncates && !placeholder && bounds.width >= advance - TextLayoutAudit.slack
                 add(truncates && !fitsWithoutInset ? .ellipsis : .overflowsFrame, field, text, needed: needed)
             }
             // The line's height holds leading the glyphs do not reach; a frame is short when it cuts ascent or descent.

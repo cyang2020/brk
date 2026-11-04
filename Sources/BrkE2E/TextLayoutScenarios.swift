@@ -16,6 +16,10 @@ enum TextLayoutScenarios {
     private typealias S = SidebarReviewScenarios
     private typealias E = SidebarEvidenceScenarios
 
+    /// Cut in Arc too, so kept: the report still lists them, the scenario does not fail on them.
+    private static let sameInArc: [String: String] = [
+        "Type a feature name or shortcut (like “Command Bar” or ⌘T)": "P38-e-arc.png: Arc's own placeholder runs past its field and is cut at the field's edge",
+    ]
     private static let longTitle = "Long title for truncation and readable sidebar ellipsis"
     private static let longSpace = "Research and Development Notes"
 
@@ -37,7 +41,7 @@ enum TextLayoutScenarios {
             if let data = try? encoder.encode(report) { try? data.write(to: logs.appendingPathComponent("TextLayout-\(name).json")) }
             inspected += report.measured.count
             summary.append(["surface": name, "inspected": String(report.measured.count), "cut": String(report.findings.count), "ellipsized": String(report.truncated.count)])
-            for finding in report.findings {
+            for finding in report.findings where TextLayoutScenarios.sameInArc[finding.text] == nil {
                 let line = "\(finding.problem.rawValue) \"\(finding.text)\" \(finding.view) frame \(Int(finding.frame.width))x\(Int(finding.frame.height)) needs \(Int(ceil(finding.needed.width)))x\(Int(ceil(finding.needed.height)))"
                     + (finding.clipper.map { " clipped by \($0)" } ?? "")
                 if seen.insert(line).inserted { cut.append("\(name): \(line)") }
@@ -366,7 +370,7 @@ enum TextLayoutScenarios {
             try app.waitUntil("the panel") { (try? app.send(.siteControlTexts(window: standard))).map { if case .menuItems = $0 { true } else { false } } ?? false }
         }
         try sweep.surface("site-controls-details", close: {
-            try app.press("escape")
+            try app.dispatch(.site(.closeControls))
             try app.waitUntil("the panel closed") { if case .failed = try app.send(.siteControlTexts(window: standard)) { return true }; return false }
         }) {
             try app.perform(.siteControlInput(window: standard, field: "siteMore", action: .press))
