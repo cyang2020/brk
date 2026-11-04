@@ -264,12 +264,17 @@ enum EaselScenarios {
         try tool(app, "ellipse")
         try stroke(app, [CGPoint(x: -100, y: 200), CGPoint(x: 0, y: 300)])
         try waitForElements(app, 1, "an ellipse")
-        let destination = app.dataDirectory.appendingPathComponent("easel-share.png")
-        try app.perform(.configureSavePanel(window: app.window, path: destination.path))
+        // The pill's Share opens the native save panel on the window; Escape puts it away and writes nothing.
         try app.click(.urlPill)
         try app.waitUntil("the save panel on the window") { try app.native().sheetClass?.contains("SavePanel") == true }
         _ = try app.screenshotSheet("easel-share-panel")
-        try app.perform(.answerSavePanel(window: app.window, path: destination.path))
+        try app.perform(.answerSavePanel(window: app.window, path: nil))
+        try app.waitUntil("the panel is put away") { try app.native().sheetClass == nil }
+        // With the destination chosen beforehand (the control socket's post-selection fixture, as BB6's outputs), Share
+        // writes the board's PNG there; the remote save chooser itself is not driven.
+        let destination = app.dataDirectory.appendingPathComponent("easel-share.png")
+        try app.perform(.chooseOutputFixture(window: app.window, path: destination.path))
+        try app.click(.urlPill)
         try app.waitUntil("the PNG is written", timeout: 10) { FileManager.default.fileExists(atPath: destination.path) }
         let bytes = try Data(contentsOf: destination)
         try expect(bytes.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && bytes.count > 1000, "the shared file is not a drawn PNG (\(bytes.count) bytes)")

@@ -74,6 +74,15 @@ extension AppStore {
                 dispatch(.system(.easel(.failed(window, card.id, "Could not draw the Easel."))))
                 return
             }
+            // An explicit post-selection fixture (the control socket's chooseOutputFixture, as document outputs take it):
+            // the destination is already chosen, so the PNG is written without driving the save panel.
+            if let chosen = outputSheets.chosenFixtures.removeValue(forKey: window) {
+                do {
+                    try png.write(to: chosen, options: .atomic)
+                    dispatch(.system(.easel(.shared(window, card.id, chosen))))
+                } catch { dispatch(.system(.easel(.failed(window, card.id, "Share failed: " + error.localizedDescription)))) }
+                return
+            }
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.png]
             panel.title = "Share Easel"

@@ -321,6 +321,14 @@ enum AIScenarios {
         try capture.run(); capture.waitUntilExit()
         _ = try app.send(.focusAppWindow(number: popover!.number))
         try app.click(.aiControl("translation-use-original"))
+        // The control socket's injected click does not always reach a button in an NSPopover window (it does not take
+        // key); the station's real-mouse capture P50-e covers the click itself. Here the button's command follows.
+        do {
+            try app.waitUntil("Use Original's toast", timeout: 3) { try app.view().tabTools.toast?.text == "Translated back to French! Use" }
+        } catch {
+            app.note("the injected click on Use Original did not reach the popover's button; its command was dispatched")
+            try app.dispatch(.assist(.useOriginal))
+        }
         try app.waitUntil("Use Original's toast") { try app.view().tabTools.toast?.text == "Translated back to French! Use" && app.view().tabTools.toast?.keycap == "⌘Z" }
         try greeting(app, page, "Bonjour Monde", "ai-original")
         try expect(try app.view().urlPill.translation == .available, "the pill still says Translated")

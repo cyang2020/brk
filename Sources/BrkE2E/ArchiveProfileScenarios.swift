@@ -135,7 +135,12 @@ enum ArchiveProfileScenarios {
             throw Check(description: "no Work profile")
         }
         try app.dispatch(.settings(.openPane(.profiles)))
-        try app.waitUntil("the Profiles pane") { try app.native().appWindows.contains { $0.className == "NSWindow" && $0.isVisible } }
+        var settingsWindow: AppWindowFact?
+        try app.waitUntil("the Profiles pane") {
+            settingsWindow = try app.native().appWindows.first { $0.className == "NSWindow" && $0.isVisible }
+            return settingsWindow != nil
+        }
+        _ = try app.send(.focusAppWindow(number: settingsWindow!.number))
         app.sleep(1)
         for (profile, documentApp, threshold) in [(ProfileID.default, "Google Docs", "6 hours"), (work, "Notion", "Never")] {
             try app.click(.settingsField("profileRow-\(profile.rawValue)"))
