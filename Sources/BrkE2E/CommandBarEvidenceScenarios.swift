@@ -215,11 +215,11 @@ enum CommandBarEvidenceScenarios {
             record += "extension rows: \(rows)\n"
             S.log(app, "rows.txt", record)
             try run(app, row: index)
+            app.note("The extension row ran the action command; the action's popup is blocked on CEF 154 (A097), so only the row and its dispatch are shown.")
         } else {
             app.note("The installed fixture extension (\(fixture.name)) declares no action, so the bar lists no row for it; extension rows stay unit-tested.")
         }
         S.log(app, "rows.txt", record)
-        app.note("The extension row runs the action command; the action's popup is blocked on CEF 154 (A097), so only the row and its dispatch are shown.")
     }
 
     // MARK: A070
