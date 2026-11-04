@@ -265,7 +265,7 @@ enum PlanScenarios {
             try expect(library.strip.contains(library.page) && library.page.minX == library.nav.maxX, "library page column \(library.page), panel \(library.strip)")
             try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
             try expect(near(page.frame, library.page), "archive at \(page.frame), library page column \(library.page)")
-            try expect(n.computed.cards.first.map { $0.rect.minX > library.strip.maxX } == true, "the page's card is not beside the Library")
+            try expect(n.computed.cards.first.map { $0.rect.minX == library.strip.maxX } == true, "the page's card is not at the Library's edge")
             let group = try visible(n, .archiveGroup(.today)), row = try visible(n, .archiveEntry(entry.1.id))
             try expect(contains(group, row), "archive-entry \(row.frame) is outside archive-group-today \(group.frame)")
             return true

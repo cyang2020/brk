@@ -167,7 +167,10 @@ final class LibraryViewTests: XCTestCase {
         _ = render(view, snapshot)
         XCTAssertEqual(view.media.rows.first?.selected, true)
         XCTAssertFalse(view.preview.isHidden)
-        XCTAssertEqual(view.preview.frame, f.cards.first?.rect, "the preview covers the content card")
+        // The card keeps its closed width beside the Library and runs past the window: the preview covers its visible part.
+        let card = try XCTUnwrap(f.cards.first?.rect)
+        XCTAssertEqual(view.preview.frame, CGRect(x: card.minX, y: card.minY, width: f.contentSize.width - 10 - card.minX, height: card.height),
+                       "the preview covers the content card's visible part")
         XCTAssertEqual(view.preview.captionText, "Visual fixture · 400 × 300 · 127.0.0.1")
     }
 

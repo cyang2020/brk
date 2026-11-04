@@ -16,7 +16,9 @@ import Foundation
 /// - cards: one per pane (`ContentLayout.cards`), radius 6; an empty card fills the area when nothing is shown;
 /// - command bar: `CommandBarLayout.frame`; Peek: `PeekLayout.card` (its round buttons: `PeekLayout.controls`);
 /// - Library open: its panel replaces the sidebar, shown or hidden (no sidebar, handle or reveal strip), and the
-///   content area, still showing the page, starts 10 right of the panel (`LibraryLayout`).
+///   content area, still showing the page, moves right to start at the panel's edge while keeping the width it has
+///   with the Library closed, so the page slides under the window's right edge instead of reflowing
+///   (`LibraryLayout.contentArea`).
 public enum WindowLayout {
     public static func compute(_ snapshot: WindowSnapshot, contentSize: CGSize) -> WindowFrames {
         if snapshot.kind == .little { return LittleLayout.frames(snapshot, contentSize: contentSize) }
@@ -56,8 +58,10 @@ public enum WindowLayout {
         let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
         let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
         let toolbar = toolbarHeight > 0 ? CGRect(x: left, y: inset, width: max(0, contentSize.width - left - inset), height: toolbarHeight) : nil
-        let contentArea = CGRect(x: left, y: inset + toolbarHeight, width: max(0, contentSize.width - left - inset),
-                                 height: max(0, contentSize.height - 2 * inset - toolbarHeight))
+        let contentArea = libraryOpen
+            ? LibraryLayout.contentArea(panelWidth: anchoredWidth, snapshot: snapshot, contentSize: contentSize)
+            : CGRect(x: left, y: inset + toolbarHeight, width: max(0, contentSize.width - left - inset),
+                     height: max(0, contentSize.height - 2 * inset - toolbarHeight))
         let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
         let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
                                                     orientation: snapshot.content.orientation)
@@ -87,7 +91,9 @@ public enum WindowLayout {
                             contentArea: contentArea, cards: cards, dividers: dividers, commandBar: commandBar, library: library, peek: peek)
         if let find = snapshot.find,
            let card = peek ?? cards.first(where: { $0.content == .page(find.page) })?.page {
-            result.find = FindLayout.compute(in: card, replacing: find.replacement, notFound: find.notFound, message: !find.message.isEmpty)
+            // Beside the Library the card runs past the window's right edge: the bar stays in its visible part.
+            let visible = card.intersection(CGRect(x: 0, y: 0, width: contentSize.width - inset, height: contentSize.height))
+            result.find = FindLayout.compute(in: visible.isNull ? card : visible, replacing: find.replacement, notFound: find.notFound, message: !find.message.isEmpty)
         }
         result.toolbar = toolbar
         return result
@@ -112,6 +118,17 @@ public enum LibraryLayout {
         let wanted = l.navWidth.value + l.spacesLeading.value + cards * l.spacesCardWidth.value + (cards - 1) * l.spacesCardGap.value
             + l.spacesTrailing.value
         return max(base, min(wanted, windowWidth - s.libraryWindowMargin.value))
+    }
+
+    /// The content area beside the open Library (P30-a, P32): it starts at the panel's edge (no gap, as beside the
+    /// sidebar) and keeps the width it has with the Library closed (the window minus the sidebar or the inset on the
+    /// left and the inset on the right), so Arc's page slides right under the window's edge without reflowing. The
+    /// toolbar is not shown over the Library, so the area runs from the top inset to the bottom one.
+    public static func contentArea(panelWidth: Double, snapshot: WindowSnapshot, contentSize: CGSize) -> CGRect {
+        let inset = Metrics.content.inset.value
+        let closedLeft = snapshot.sidebar.visible ? snapshot.sidebar.width + Metrics.content.sidebarGap.value : inset
+        return CGRect(x: panelWidth + Metrics.content.sidebarGap.value, y: inset, width: max(0, contentSize.width - closedLeft - inset),
+                      height: max(0, contentSize.height - 2 * inset))
     }
 
     /// `panel` at the window's left edge (WindowLayout.compute): the navigation column, its cells and the page column.

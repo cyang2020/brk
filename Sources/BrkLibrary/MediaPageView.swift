@@ -104,11 +104,16 @@ import BrkUIKit
         placeholders = records.isEmpty && !Self.introDismissed
         intro.isHidden = !placeholders
         glow.isHidden = !placeholders
+        // Under the introduction card Arc's column is faded: the search field at half strength (P32-a: #F3F3F2, its
+        // placeholder #D7D6D6) and the day headers lighter (#A0A09F against the Archived Tabs page's #757575).
+        searchField.alphaValue = placeholders ? 0.5 : 1
         if placeholders {
             // Arc's media list before it is shown: grey cards under day headers.
-            list.addSubview(DayHeaderView(LibraryCopy.today, colors: colors))
+            let today = DayHeaderView(LibraryCopy.today, colors: colors), yesterday = DayHeaderView(LibraryCopy.yesterday, colors: colors)
+            for header in [today, yesterday] { header.alphaValue = 0.7 }
+            list.addSubview(today)
             for _ in 0..<5 { list.addSubview(MediaPlaceholderCard(colors: colors)) }
-            list.addSubview(DayHeaderView(LibraryCopy.yesterday, colors: colors))
+            list.addSubview(yesterday)
             for _ in 0..<6 { list.addSubview(MediaPlaceholderCard(colors: colors)) }
         } else {
             let shown = query.isEmpty ? records : records.filter {
@@ -291,13 +296,15 @@ import BrkUIKit
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = m.introRadius.value
         layer?.borderWidth = 1
-        glyph.image = LibraryIcon.symbol("photo.on.rectangle.angled", size: m.introGlyph.value * 0.82, weight: .medium)
+        // Drawn at its own size (a 42 pt frame scaled it down to 35 wide; Arc's is 42.5).
+        glyph.image = LibraryIcon.symbol("photo.on.rectangle.angled", size: m.introGlyph.value * 0.98, weight: .medium)
+        glyph.imageScaling = .scaleNone
         glyph.contentTintColor = NSColor(srgbRed: 0.53, green: 0.47, blue: 0.86, alpha: 1)
         title.font = .systemFont(ofSize: m.introTitleFont.value, weight: .bold)
         title.alignment = .center
         body.font = .systemFont(ofSize: m.introBodyFont.value)
         footnote.font = .systemFont(ofSize: m.introFootnoteFont.value)
-        shield.image = LibraryIcon.symbol("checkmark.shield", size: 11)
+        shield.image = LibraryIcon.symbol("lock.shield.fill", size: 12)
         close.image = LibraryIcon.symbol("xmark", size: 13, weight: .semibold, label: LibraryCopy.close)
         close.isBordered = false
         close.toolTip = LibraryCopy.close
@@ -314,13 +321,24 @@ import BrkUIKit
 
     func apply(_ scheme: Scheme) {
         let light = scheme == .light
-        layer?.backgroundColor = (light ? NSColor(srgbRed: 0.985, green: 0.975, blue: 0.99, alpha: 1) : NSColor(white: 0.18, alpha: 1)).cgColor
         layer?.borderColor = NSColor(white: light ? 0 : 1, alpha: 0.06).cgColor
-        title.textColor = light ? NSColor(srgbRed: 0.33, green: 0.20, blue: 0.33, alpha: 1) : .white
-        body.textColor = light ? NSColor(srgbRed: 0.30, green: 0.22, blue: 0.32, alpha: 1) : NSColor(white: 1, alpha: 0.8)
-        footnote.textColor = light ? NSColor(srgbRed: 0.45, green: 0.40, blue: 0.48, alpha: 1) : NSColor(white: 1, alpha: 0.55)
-        shield.contentTintColor = footnote.textColor
-        close.contentTintColor = title.textColor
+        // P32-a: the card #FAF7FC, the title, the description and × in one plum (#704067), the note a pale mauve (#B39FB5).
+        layer?.backgroundColor = (light ? NSColor(srgbRed: 0xFA / 255.0, green: 0xF7 / 255.0, blue: 0xFC / 255.0, alpha: 1) : NSColor(white: 0.18, alpha: 1)).cgColor
+        let ink = light ? NSColor(srgbRed: 0x70 / 255.0, green: 0x40 / 255.0, blue: 0x67 / 255.0, alpha: 1) : .white
+        let note = light ? NSColor(srgbRed: 0xB3 / 255.0, green: 0x9F / 255.0, blue: 0xB5 / 255.0, alpha: 1) : NSColor(white: 1, alpha: 0.55)
+        title.textColor = ink
+        body.attributedStringValue = Self.lines(LibraryCopy.mediaIntroBody, font: body.font, height: LibraryDraw.media.introBodyLine.value,
+                                                color: light ? ink : NSColor(white: 1, alpha: 0.8))
+        footnote.attributedStringValue = Self.lines(LibraryCopy.mediaPrivacy, font: footnote.font, height: LibraryDraw.media.introFootnoteLine.value, color: note)
+        shield.contentTintColor = note
+        close.contentTintColor = ink
+    }
+
+    private static func lines(_ text: String, font: NSFont?, height: Double, color: NSColor) -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.minimumLineHeight = height
+        style.maximumLineHeight = height
+        return NSAttributedString(string: text, attributes: [.font: font as Any, .foregroundColor: color, .paragraphStyle: style])
     }
 
     func height(for width: Double) -> Double {
@@ -336,21 +354,25 @@ import BrkUIKit
     private func layout(width: Double) {
         let m = LibraryDraw.media, pad = m.introPadding.value
         let inner = max(0, width - 2 * pad)
-        close.frame = CGRect(x: width - 21 - 22, y: 28, width: 22, height: 22)
+        // × is centred 27 in from the right and 27.5 below the top (P32-a).
+        close.frame = CGRect(x: width - 27 - 11, y: 16.5, width: 22, height: 22)
         let g = m.introGlyph.value
-        glyph.frame = CGRect(x: ((width - g) / 2).rounded(), y: (m.introGlyphCenter.value - g / 2).rounded(), width: g, height: g)
+        glyph.frame = CGRect(x: ((width - 2 * g) / 2).rounded(), y: (m.introGlyphCenter.value - g).rounded(), width: 2 * g, height: 2 * g)
         let th = title.fittingSize.height
         title.frame = CGRect(x: pad, y: (m.introTitleCenter.value - th / 2).rounded(), width: inner, height: th)
-        body.preferredMaxLayoutWidth = inner
-        let bh = body.sizeThatFits(NSSize(width: inner, height: .greatestFiniteMagnitude)).height
-        body.frame = CGRect(x: pad, y: title.frame.maxY + 4, width: inner, height: bh)
+        // The labels draw 2 pt inside their frames: the frames stand 2 pt out so the text starts at the padding, as
+        // Arc's does, and the description's 37-character first line fits.
+        let inset = 2.0
+        body.preferredMaxLayoutWidth = inner + 2 * inset
+        let bh = body.sizeThatFits(NSSize(width: inner + 2 * inset, height: .greatestFiniteMagnitude)).height
+        body.frame = CGRect(x: pad - inset, y: m.introBodyTop.value, width: inner + 2 * inset, height: bh)
         button.frame = CGRect(x: pad, y: body.frame.maxY + 10, width: inner, height: m.introButtonHeight.value)
-        let s = 11.0
-        shield.frame = CGRect(x: pad + 1, y: button.frame.maxY + 15, width: s, height: s)
-        let noteWidth = max(0, inner - s - 6)
+        let s = 12.0
+        shield.frame = CGRect(x: pad + 1.5, y: button.frame.maxY + 18.5 - s / 2, width: s, height: s)
+        let noteWidth = max(0, inner - s - 6 + 2 * inset)
         footnote.preferredMaxLayoutWidth = noteWidth
         let noteHeight = footnote.sizeThatFits(NSSize(width: noteWidth, height: .greatestFiniteMagnitude)).height
-        footnote.frame = CGRect(x: pad + s + 6, y: button.frame.maxY + 12, width: noteWidth, height: noteHeight)
+        footnote.frame = CGRect(x: pad + s + 6 - inset, y: button.frame.maxY + 18.5 - m.introFootnoteLine.value / 2, width: noteWidth, height: noteHeight)
     }
 }
 
@@ -366,8 +388,9 @@ import BrkUIKit
         shape.colors = [NSColor(srgbRed: 0.98, green: 0.62, blue: 0.75, alpha: 0.75).cgColor,
                         NSColor(srgbRed: 0.62, green: 0.58, blue: 1.0, alpha: 0.7).cgColor,
                         NSColor(srgbRed: 0.42, green: 0.48, blue: 1.0, alpha: 0.75).cgColor]
-        shape.startPoint = CGPoint(x: 0, y: 1)
-        shape.endPoint = CGPoint(x: 1, y: 0)
+        // In this flipped view's layer y 0 is the top: pink from the top left, blue to the bottom right.
+        shape.startPoint = CGPoint(x: 0, y: 0)
+        shape.endPoint = CGPoint(x: 1, y: 1)
         shape.cornerRadius = LibraryDraw.media.introRadius.value + 4
         shape.filters = [CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: 16]) as Any].compactMap { $0 }
         layer?.addSublayer(shape)

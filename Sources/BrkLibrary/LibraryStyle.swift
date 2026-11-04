@@ -24,7 +24,7 @@ struct LibraryDrawMetrics: MetricGroup {
 /// A navigation cell (glyph over label) and the buttons at the column's foot.
 struct LibraryNavMetrics: MetricGroup {
     let glyphSize = Metric(21.0, .anatomy("P32-b: the Downloads circle is 21 pt across"))
-    let labelFont = Metric(12.0, .anatomy("P32-b: \"Downloads\" is 61 pt wide, 12 pt semibold"))
+    let labelFont = Metric(11.0, .anatomy("P32-a/b: \"Downloads\" is 60 pt wide and 8.5 tall whether open or not: 11 pt bold for every page"))
     let selectionRadius = Metric(12.0, .guess("the selected cell's corner radius, from the capture's rounding"))
     let footerGlyph = Metric(15.0, .anatomy("P32-a: the exit arrow and the gift glyph are 15 pt"))
     let edgeWidth = Metric(1.0, .anatomy("P32-a: a 1 pt line at x 112"))
@@ -37,10 +37,11 @@ struct LibraryColumnMetrics: MetricGroup {
     let searchHeight = Metric(36.0, .anatomy("cra L1556: Arc's Library search field is 36 pt tall"))
     let searchRadius = Metric(10.0, .guess("search field corner radius, from the capture's rounding"))
     let searchFont = Metric(15.0, .anatomy("P32-a: \"Search Media…\" is 101 pt wide"))
-    let searchGlyph = Metric(16.0, .anatomy("P32-a: the magnifier with its handle is 16 pt"))
+    let searchInset = Metric(8.0, .anatomy("P32-a/b: the search field (or the Filter button) runs from x 120 to 409 in the 112...417 column"))
+    let searchGlyph = Metric(19.0, .anatomy("P32-b: the magnifier's ink is 15 x 14.5, centred 22 into the field (a 16 pt symbol drew 12.5)"))
     let searchGlyphLeading = Metric(12.5, .anatomy("P32-b: the magnifier starts 12.5 from the field's left"))
     let searchTextLeading = Metric(42.0, .anatomy("P32-b: the placeholder starts 42 from the field's left"))
-    let filterWidth = Metric(69.0, .anatomy("P32-b: the Filter button spans x 338...407"))
+    let filterWidth = Metric(71.0, .anatomy("P32-b: the Filter button spans x 338...409"))
     let filterGap = Metric(7.5, .anatomy("P32-b: the field ends at x 330.5, the button starts at 338"))
 }
 
@@ -48,8 +49,8 @@ struct LibraryColumnMetrics: MetricGroup {
 struct LibraryListMetrics: MetricGroup {
     let listTop = Metric(46.0, .anatomy("P32-e: the Today header starts under the search field"))
     let dayHeaderHeight = Metric(37.0, .anatomy("P32-e: \"Today\" is centred at y 72 and the first row starts at 83"))
-    let dayHeaderFont = Metric(13.0, .anatomy("cra L1556: day headers (\"Today\") are 13 pt semibold"))
-    let dayHeaderLeading = Metric(12.0, .anatomy("P32-e: \"Today\" starts at x 124, 12 into the column"))
+    let dayHeaderFont = Metric(12.0, .anatomy("P32-a/e: \"Today\" is 34.5 pt wide, semibold (13 pt measured 37)"))
+    let dayHeaderLeading = Metric(12.5, .anatomy("P32-a/e: \"Today\" starts at x 124.5, 12.5 into the column"))
     let dayHeaderBottom = Metric(3.0, .anatomy("P32-e: \"Today\" ends 3 above the first row"))
     let rowPitch = Metric(56.0, .anatomy("cra L1556: Library rows are 56 pt apart"))
     let rowLeading = Metric(10.0, .anatomy("P32-e: rows span the column inside its 10 pt padding"))
@@ -62,8 +63,8 @@ struct LibraryListMetrics: MetricGroup {
     let rowRadius = Metric(8.0, .guess("hover background radius of a row"))
     let progressHeight = Metric(4.0, .guess("download progress bar thickness"))
     let accessorySize = Metric(24.0, .guess("a row's trailing buttons in a 304 pt column"))
-    let emptyGlyph = Metric(48.0, .anatomy("P32-b: the empty Downloads circle is 48 pt across"))
-    let emptyGlyphGap = Metric(16.0, .anatomy("P32-b: the circle ends 16 above \"Nothing here yet!\""))
+    let emptyGlyph = Metric(57.0, .anatomy("P32-b: the empty Downloads circle is 47.5 pt across (a 48 pt symbol drew 40), centred at y 377"))
+    let emptyGlyphGap = Metric(10.0, .anatomy("P32-b: \"Nothing here yet!\" starts 19.5 under the circle's ink"))
     let emptyTitleFont = Metric(17.0, .anatomy("P32-b: \"Nothing here yet!\" is 136 pt wide, 17 pt semibold"))
     let emptySubtitleFont = Metric(14.0, .anatomy("P32-b: the two grey lines are 14 pt, 17 apart"))
     let emptyTitleGap = Metric(8.0, .anatomy("P32-b: the grey lines start 8 under the title"))
@@ -85,11 +86,14 @@ struct LibraryMediaMetrics: MetricGroup {
     let introGlyph = Metric(42.0, .anatomy("P32-a: the media glyph is 42 pt wide"))
     let introGlyphCenter = Metric(49.0, .anatomy("P32-a: the media glyph is centred 49 below the card's top"))
     let introTitleCenter = Metric(84.5, .anatomy("P32-a: the title is centred 84.5 below the card's top"))
-    let introTitleFont = Metric(13.5, .anatomy("P32-a: \"Your Media in the Library\" is 160 pt wide, bold"))
-    let introBodyFont = Metric(13.0, .anatomy("P32-a: a 37-character description line is 219 pt wide, lines 17 apart"))
+    let introTitleFont = Metric(13.0, .anatomy("P32-a: \"Your Media in the Library\" is 160 pt wide, bold (13.5 pt measured 165.5)"))
+    let introBodyFont = Metric(12.0, .anatomy("P32-a: a 37-character description line is 219 pt wide, lines 17 apart (13 pt wrapped it at 34)"))
+    let introBodyLine = Metric(17.0, .anatomy("P32-a: the description's lines are 17 apart"))
+    let introBodyTop = Metric(99.5, .anatomy("P32-a: the description's first line is centred 108 below the card's top"))
+    let introFootnoteLine = Metric(14.0, .anatomy("P32-a: the footnote's lines are 14 apart, the first centred 18.5 under Show Media"))
     let introButtonHeight = Metric(40.0, .anatomy("P32-a: Show Media spans y 450...490"))
     let introButtonRadius = Metric(8.0, .guess("Show Media's corner radius"))
-    let introFootnoteFont = Metric(10.5, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart"))
+    let introFootnoteFont = Metric(11.0, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart (10.5 pt measured 194)"))
 }
 
 /// The Boosts page: one row per Boost under the search field.
@@ -110,10 +114,10 @@ struct LibrarySpacesMetrics: MetricGroup {
     let cardRadius = Metric(14.0, .guess("a Space card's corner radius, from the capture's rounding"))
     let headerCenter = Metric(25.0, .anatomy("P32-d: the Space name is centred 25 below the card's top"))
     let padding = Metric(16.0, .anatomy("P32-d: the name starts 16 into the card"))
-    let titleFont = Metric(15.0, .anatomy("P32-d: \"Space 1\" is 15 pt"))
+    let titleFont = Metric(13.0, .anatomy("P30-a: \"Space 1\" is 47 pt wide and \"对照\" 24.5, medium (Brk's 15 pt regular measured 51.5 and 28)"))
     let rowTop = Metric(64.0, .anatomy("P32-d: the first row is centred at y 112, 64 below the card's top"))
     let rowPitch = Metric(41.0, .anatomy("P32-d: rows are 41 pt apart"))
-    let rowFont = Metric(15.0, .anatomy("P32-d: \"Interface comparison\" is 15 pt"))
+    let rowFont = Metric(14.0, .anatomy("P30-a: \"Interface comparison\" is 135 pt wide, the sidebar's 14 pt (15 pt measured 143.5)"))
     let favicon = Metric(14.0, .anatomy("P32-d: the favicon squares are 14 pt"))
     let faviconRadius = Metric(3.0, .guess("the small favicon squares' corners"))
     let rowTextLeading = Metric(25.0, .anatomy("P32-d: a row's text starts 25 after its icon's start (x 19 and 44 in the card)"))
@@ -136,36 +140,37 @@ struct HistoryPageMetrics: MetricGroup {
     let headerCenter = Metric(28.0, .anatomy("Q05-a: \"History\" and the search field are centred 28 below the card's top"))
     let logoLeading = Metric(23.0, .anatomy("Q05-a: the logo spans x 23...43"))
     let logoSize = Metric(22.0, .anatomy("Q05-a: the logo is 22 pt"))
-    let titleLeading = Metric(67.0, .anatomy("Q05-a: \"History\" starts at x 67"))
+    let titleLeading = Metric(65.5, .anatomy("Q05-a: \"History\"'s text starts at x 67.5 (its label 2 pt inside the frame)"))
     let titleFont = Metric(23.5, .anatomy("Q05-a: \"History\" is 72 pt wide"))
     let searchLeading = Metric(265.0, .anatomy("Q05-a: the search field spans x 265...962"))
     let searchMaxWidth = Metric(697.0, .anatomy("Q05-a: the search field is 697 pt wide"))
     let searchHeight = Metric(42.0, .anatomy("Q05-a: the search field is 42 pt tall"))
-    let searchFont = Metric(13.0, .anatomy("Q05-a: \"Search history\" is 83 pt wide"))
+    let searchFont = Metric(12.5, .anatomy("Q05-a: the magnifier and \"Search history\" span 93 pt (13 pt measured 96.5)"))
     let searchGlyphLeading = Metric(14.5, .anatomy("Q05-a: the magnifier starts 14.5 into the field"))
     let searchTextLeading = Metric(37.0, .anatomy("Q05-a: the placeholder starts 37 into the field"))
     let navTop = Metric(64.0, .anatomy("Q05-a: \"Arc history\"'s fill spans y 64...104"))
     let navWidth = Metric(252.0, .anatomy("Q05-a: the selected item's fill ends at x 253"))
     let navHeight = Metric(40.0, .anatomy("Q05-a: navigation items are 40 pt apart"))
-    let navIconLeading = Metric(34.0, .anatomy("Q05-a: the item icons are centred at x 44"))
-    let navTextLeading = Metric(64.0, .anatomy("Q05-a: the item labels start at x 64"))
-    let navFont = Metric(14.5, .anatomy("Q05-a: \"Tabs from other devices\" is 159 pt wide, medium"))
+    let navIconLeading = Metric(24.5, .anatomy("Q05-a: the item icons are centred at x 34.5 (a 22 pt frame from 23.5)"))
+    let navTextLeading = Metric(61.0, .anatomy("Q05-a: the item labels' text starts at x 64.5 (62.5 drew it at 66)"))
+    let navFont = Metric(14.0, .anatomy("Q05-a: \"Delete browsing data\" is 138 pt wide, medium (14.5 pt measured 143.5)"))
     let listLeading = Metric(279.0, .anatomy("Q05-a: the visits card spans x 279...1018"))
-    let listTop = Metric(80.0, .anatomy("Q05-a: the visits card starts at y 80"))
+    let listTop = Metric(79.0, .anatomy("Q05-a: the visits card starts at y 79"))
     let listMaxWidth = Metric(739.0, .anatomy("Q05-a: the visits card is 739 pt wide"))
     let listRadius = Metric(8.0, .guess("the visits card's corner radius, Chromium's cr-card"))
-    let dayHeaderHeight = Metric(70.0, .anatomy("Q05-a: the day title is centred at 35; the first row 86 below the card's top"))
+    let dayHeaderHeight = Metric(69.0, .anatomy("Q05-a: the first row is centred 87 below the visits card's top"))
+    let dayTitleCenter = Metric(36.5, .anatomy("Q05-a: the day title's ink spans y 119...134, 30...45 below the visits card's top"))
     let dayFont = Metric(16.0, .anatomy("Q05-a: \"Today - Tuesday, November 3, 2026\" is 16 pt medium"))
     let padding = Metric(25.0, .anatomy("Q05-a: the day title and the checkboxes start 25 into the card"))
     let rowHeight = Metric(36.0, .anatomy("Q05-a: visits are 36 pt apart"))
-    let checkbox = Metric(15.0, .anatomy("Q05-a: the checkbox is 15 pt"))
+    let checkbox = Metric(18.0, .anatomy("Q05-a: the checkbox's outline is 16 pt (drawn 1 pt inside its frame)"))
     let timeLeading = Metric(57.0, .anatomy("Q05-a: the time starts 57 into the card"))
     let faviconLeading = Metric(162.0, .anatomy("Q05-a: the favicon starts 162 into the card"))
     let titleLeadingInRow = Metric(190.0, .anatomy("Q05-a: the title starts 190 into the card"))
-    let rowTitleFont = Metric(12.5, .anatomy("Q05-a: \"Interface comparison\" is 123 pt wide, medium"))
-    let rowDetailFont = Metric(12.5, .anatomy("Q05-a: \"127.0.0.1:8764\" is 81 pt wide"))
+    let rowTitleFont = Metric(12.0, .anatomy("Q05-a: \"Visual fixture\" is 75 pt wide, medium (12.5 pt measured 78)"))
+    let rowDetailFont = Metric(12.0, .anatomy("Q05-a: \"127.0.0.1:8764\" is 79.5 pt wide (12.5 pt measured 82)"))
     let timeFont = Metric(11.5, .anatomy("Q05-a: \"1:06 PM\" is 44 pt wide"))
-    let gapHeight = Metric(16.0, .anatomy("Q05-a: a session break adds a 16 pt line under the time column"))
+    let gapHeight = Metric(15.0, .anatomy("Q05-a: a session break adds 15 pt (12:53 to 12:18 PM is 51 pt), its line the whole height under the time column"))
     let gapMinutes = Metric(15.0, .guess("visits further apart than this show a break, Chromium's history page threshold"))
     let menuTrailing = Metric(32.0, .anatomy("Q05-a: the ⋮ button is centred 32 from the card's right"))
 }
@@ -179,9 +184,15 @@ struct LibraryColors {
     let control: NSColor
     /// The line between the navigation and the page column, and card outlines (P32: #EAE9E8).
     let edge: NSColor
-    /// The navigation glyphs and labels: grey, darker for the open page (P32: #8F8F8F, #5B5B5B).
+    /// Grey controls on the panel (the Space cards' move handle and …: P30-a #888989).
     let navInk: NSColor
+    /// The open page's navigation glyph (P32: #5A5A5A).
     let navInkSelected: NSColor
+    /// The other pages' navigation glyphs and labels (P32-b: #6A6A6A and #737373), and the exit and gift buttons at
+    /// the column's foot (#7A7878).
+    let navGlyph: NSColor
+    let navLabel: NSColor
+    let navFooter: NSColor
     /// PreviewBackgroundColor #FFFFFF / #212222: a page inside the content card (the History page).
     let page: NSColor
     /// ForegroundPrimary / Secondary / Tertiary.
@@ -207,6 +218,9 @@ struct LibraryColors {
             edge: ink.withAlphaComponent(scheme == .light ? 0.075 : 0.12),
             navInk: scheme == .light ? srgb(0x8F8F8F) : NSColor(white: 1, alpha: 0.5),
             navInkSelected: scheme == .light ? srgb(0x5B5B5B) : NSColor(white: 1, alpha: 0.85),
+            navGlyph: scheme == .light ? srgb(0x6A6A6A) : NSColor(white: 1, alpha: 0.6),
+            navLabel: scheme == .light ? srgb(0x737373) : NSColor(white: 1, alpha: 0.55),
+            navFooter: scheme == .light ? srgb(0x7A7878) : NSColor(white: 1, alpha: 0.55),
             page: scheme == .light ? .white : srgb(0x212222),
             foregroundPrimary: scheme == .light ? p3(0x0E0F10, alpha: 0.9) : ink.withAlphaComponent(0.8),
             foregroundSecondary: ink.withAlphaComponent(0.5),
@@ -392,8 +406,9 @@ enum LibraryIcon {
         switch page {
         case .media: "photo.on.rectangle.angled"
         case .downloads: "arrow.down.circle"
-        case .easelsAndNotes: "macwindow.badge.plus"
-        case .spaces: "rectangle.on.rectangle.angled"
+        // P32: Arc's Easels glyph is a window frame with a scribble (no badge), Spaces two portrait cards.
+        case .easelsAndNotes: "macwindow"
+        case .spaces: "rectangle.portrait.on.rectangle.portrait.angled"
         case .boosts: "paintbrush.pointed"
         case .archive: "archivebox"
         }

@@ -106,13 +106,16 @@ final class LayoutSpecTests: XCTestCase {
         d.user(.library(.open(.archive)))
         let archive = d.frames()
         // The Library's panel replaces the sidebar (Arc: max(417, min(window - 56, sidebar width)) wide, here 417 for a
-        // 228 sidebar): a 112 pt navigation column and the archive's column beside it; the content area keeps the page.
+        // 228 sidebar): a 112 pt navigation column and the archive's column beside it; the content area keeps the page
+        // at the width it has beside the sidebar (1280 - 228 - 10), from the panel's edge on, past the window's right
+        // edge (P30-a, P32: Arc slides the page right instead of reflowing it).
         let panel = CGRect(x: 0, y: 0, width: 417, height: 776)
         XCTAssertEqual(archive.library?.frame, panel)
         XCTAssertEqual(archive.library?.strip, panel)
         XCTAssertEqual(archive.library?.nav, CGRect(x: 0, y: 0, width: 112, height: 776))
         XCTAssertEqual(archive.library?.page, CGRect(x: 112, y: 0, width: 305, height: 776))
-        XCTAssertEqual(archive.contentArea, CGRect(x: 427, y: 10, width: 843, height: 756))
+        XCTAssertEqual(archive.contentArea, CGRect(x: 417, y: 10, width: 1042, height: 756))
+        XCTAssertEqual(archive.contentArea.width, bar.contentArea.width, "the page keeps its width")
         XCTAssertEqual(archive.cards.map(\.rect), [archive.contentArea])
         XCTAssertNil(archive.sidebar)
         XCTAssertNil(archive.resizeHandle)
@@ -128,11 +131,12 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertNil(archive.commandBar)
         XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
         XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)
-        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P32-d: two spaces, 745).
+        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P30-a, P32-d: two spaces, 744).
         d.user(.space(.create(title: "Second", icon: .none, theme: .default)))
         d.user(.library(.open(.spaces)))
-        XCTAssertEqual(d.frames().library?.strip.width, 745)
-        XCTAssertEqual(d.frames().contentArea.minX, 755)
+        XCTAssertEqual(d.frames().library?.strip.width, 744)
+        XCTAssertEqual(d.frames().contentArea.minX, 744)
+        XCTAssertEqual(d.frames().contentArea.width, 1042)
         XCTAssertEqual(LibraryLayout.panelWidth(windowWidth: 700, sidebarWidth: 228, page: .spaces, spaces: 2), 644, "never past the window minus 56")
         d.user(.library(.open(.archive)))
         // A wider sidebar keeps its width up to the window minus 56, never below 417; a hidden one is replaced all the same.
@@ -145,7 +149,7 @@ final class LayoutSpecTests: XCTestCase {
         d.user(.library(.open(.archive)))
         let hidden = d.frames()
         XCTAssertEqual(hidden.library?.strip, panel)
-        XCTAssertEqual(hidden.contentArea, CGRect(x: 427, y: 10, width: 843, height: 756))
+        XCTAssertEqual(hidden.contentArea, CGRect(x: 417, y: 10, width: 1260, height: 756), "the width the page has without the sidebar")
         XCTAssertNil(hidden.revealStrip)
         d.user(.commandBar(.dismiss))
         XCTAssertNil(d.frames().library)

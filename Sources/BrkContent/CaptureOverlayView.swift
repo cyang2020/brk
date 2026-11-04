@@ -102,41 +102,48 @@ import BrkUIKit
         let size = Metrics.capture.hintCard.value, radius = Metrics.capture.hintCardRadius.value
         let card = CGRect(x: page.midX - size.width / 2, y: page.maxY - Metrics.capture.hintCardBottom.value - size.height, width: size.width, height: size.height)
         let path = NSBezierPath(roundedRect: card, xRadius: radius, yRadius: radius)
-        for (color, radius) in [(NSColor(srgbRed: 1, green: 0.62, blue: 0.72, alpha: 0.55), CGFloat(34)), (NSColor(srgbRed: 0.55, green: 0.62, blue: 1, alpha: 0.6), 22)] {
+        // Arc's card casts a wide dark shadow, plum on the left and navy on the right, as deep above the card as below
+        // it (P33-a: the dimmed page darkens by about 12 just left of the card, 17 above it, 22 to 42 below it).
+        for (color, offset) in [(NSColor(srgbRed: 0.42, green: 0.22, blue: 0.32, alpha: 0.42), CGSize(width: -24, height: -2)),
+                                (NSColor(srgbRed: 0.12, green: 0.16, blue: 0.48, alpha: 0.48), CGSize(width: 24, height: -4))] {
             NSGraphicsContext.saveGraphicsState()
-            let glow = NSShadow(); glow.shadowColor = color; glow.shadowBlurRadius = radius; glow.shadowOffset = .zero; glow.set()
+            let shadow = NSShadow(); shadow.shadowColor = color; shadow.shadowBlurRadius = 44; shadow.shadowOffset = offset; shadow.set()
             NSColor.white.setFill(); path.fill()
             NSGraphicsContext.restoreGraphicsState()
         }
         NSColor.white.setFill(); path.fill()
+        // A hairline pink rim (#FFE5E5).
+        NSColor(srgbRed: 1, green: 0xE5 / 255.0, blue: 0xE5 / 255.0, alpha: 1).setStroke()
+        let rim = NSBezierPath(roundedRect: card.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5); rim.lineWidth = 1; rim.stroke()
         let text = NSAttributedString(string: portrait ? "Drag to frame a portrait, or click to capture it" : "Drag to capture a portion of this page",
-                                      attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold),
+                                      attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold),
                                                    .foregroundColor: NSColor(srgbRed: 0x67 / 255.0, green: 0x47 / 255.0, blue: 0xB0 / 255.0, alpha: 1)])
         let textSize = text.size()
         text.draw(at: CGPoint(x: card.midX - textSize.width / 2, y: card.midY - textSize.height / 2))
     }
 
-    /// "Next time, hold ⇧⌘ and drag your mouse to capture any time." in the toast style (P15-a), top right.
+    /// "Next time, hold ⇧⌘ and drag your mouse to capture any time." in the toast style (P15-a), top right. P33-a: the
+    /// text is 14.5 pt, 12 and 13 in from the strip's ends, 6.5 from the key chip, which is 15 wider than its keys.
     private func drawShortcutLesson() {
-        let font = NSFont.systemFont(ofSize: 15)
+        let font = NSFont.systemFont(ofSize: 14.5)
         let ink: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
         let before = NSAttributedString(string: "Next time, hold", attributes: ink)
         let keys = NSAttributedString(string: "⇧⌘", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: NSColor.black])
         let after = NSAttributedString(string: "and drag your mouse to capture any time.", attributes: ink)
-        let chip = CGSize(width: keys.size().width + 20, height: 28)
-        let width = 14 + before.size().width + 8 + chip.width + 8 + after.size().width + 16
+        let chip = CGSize(width: keys.size().width + 15, height: 28)
+        let width = 12 + before.size().width + 6.5 + chip.width + 6.5 + after.size().width + 13
         let strip = CGRect(x: page.maxX - 8 - width, y: page.minY + 9, width: width, height: Metrics.capture.lessonHeight.value)
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.12); shadow.shadowBlurRadius = 6; shadow.shadowOffset = CGSize(width: 0, height: -1); shadow.set()
         NSColor(srgbRed: 0xE8 / 255.0, green: 0xF6 / 255.0, blue: 0xF6 / 255.0, alpha: 1).setFill()
         NSBezierPath(roundedRect: strip, xRadius: Metrics.capture.lessonRadius.value, yRadius: Metrics.capture.lessonRadius.value).fill()
         NSGraphicsContext.restoreGraphicsState()
-        var x = strip.minX + 14
-        before.draw(at: CGPoint(x: x, y: strip.midY - before.size().height / 2)); x += before.size().width + 8
+        var x = strip.minX + 12
+        before.draw(at: CGPoint(x: x, y: strip.midY - before.size().height / 2)); x += before.size().width + 6.5
         let chipRect = CGRect(x: x, y: strip.midY - chip.height / 2, width: chip.width, height: chip.height)
         NSColor(srgbRed: 0xC9 / 255.0, green: 0xD5 / 255.0, blue: 0xD5 / 255.0, alpha: 1).setFill()
         NSBezierPath(roundedRect: chipRect, xRadius: 6, yRadius: 6).fill()
-        keys.draw(at: CGPoint(x: chipRect.midX - keys.size().width / 2, y: chipRect.midY - keys.size().height / 2)); x += chip.width + 8
+        keys.draw(at: CGPoint(x: chipRect.midX - keys.size().width / 2, y: chipRect.midY - keys.size().height / 2)); x += chip.width + 6.5
         after.draw(at: CGPoint(x: x, y: strip.midY - after.size().height / 2))
     }
 

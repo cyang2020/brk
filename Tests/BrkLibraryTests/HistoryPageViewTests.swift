@@ -54,7 +54,7 @@ final class HistoryPageViewTests: XCTestCase {
         XCTAssertEqual(shownRows[0].texts, ["3:05 PM", "Fixture Page 2", "127.0.0.1:9"])
         XCTAssertEqual(shownRows[2].texts, ["2:25 PM", "swift.org/blog", "swift.org"], "an untitled visit shows its address")
         let today = try XCTUnwrap(shown(view).compactMap { $0 as? HistoryDayCard }.first)
-        XCTAssertEqual(today.height, 70 + 3 * 36 + 16 + 8, "a break between 3:00 PM and 2:25 PM")
+        XCTAssertEqual(today.height, 69 + 3 * 36 + 15 + 8, "a break between 3:00 PM and 2:25 PM")
         view.render(nil, page: nil, in: nil, scheme: .light, now: now)
         XCTAssertTrue(view.isHidden)
     }
@@ -86,6 +86,32 @@ final class HistoryPageViewTests: XCTestCase {
         XCTAssertEqual(view.searchField.stringValue, "release")
         view.render(visits, page: PageID(window: WindowID("w"), item: ItemID("other")), in: card, scheme: .light, now: now)
         XCTAssertEqual(view.searchField.stringValue, "")
+    }
+
+    /// like Chromium's page (Q05-a), a page shows once a day at its latest visit; removing that row removes the day's
+    /// other visits to it, not other days'
+    func testAPageShowsOnceADayAtItsLatestVisit() throws {
+        let view = makeView()
+        let home = URL(string: "http://127.0.0.1:9/index.html")!, other = URL(string: "http://127.0.0.1:9/page2.html")!
+        let ago = { (m: Int64) in Instant(milliseconds: self.now.milliseconds - m * self.minute) }
+        let visits = [
+            HistoryRow(id: HistoryVisitID("v0"), url: other, title: "Fixture Page 2", visitedAt: ago(1)),
+            HistoryRow(id: HistoryVisitID("v1"), url: home, title: "Fixture Home", visitedAt: ago(0)),   // newest, not first
+            HistoryRow(id: HistoryVisitID("v2"), url: home, title: "Fixture Home", visitedAt: ago(3)),
+            HistoryRow(id: HistoryVisitID("v3"), url: other, title: "Fixture Page 2", visitedAt: ago(4)),
+            HistoryRow(id: HistoryVisitID("v4"), url: home, title: "Fixture Home", visitedAt: ago(26 * 60)),
+        ]
+        view.render(visits, page: page, in: card, scheme: .light, now: now)
+        XCTAssertEqual(rows(view).map { $0.accessibilityIdentifier() }, ["history-1", "history-0", "history-4"])
+        XCTAssertEqual(rows(view).map { $0.texts[0] }, ["3:05 PM", "3:04 PM", "1:05 PM"])
+        let menu = rows(view)[0].actions()
+        let remove = menu.items[1]
+        _ = (remove.target as? NSObject)?.perform(remove.action!, with: remove)
+        XCTAssertEqual(sent, [.library(.removeHistoryVisit(HistoryVisitID("v1"))), .library(.removeHistoryVisit(HistoryVisitID("v2")))])
+        sent = []
+        view.toggle(0)
+        view.deleteSelected()
+        XCTAssertEqual(sent, [.library(.removeHistoryVisit(HistoryVisitID("v0"))), .library(.removeHistoryVisit(HistoryVisitID("v3")))])
     }
 
     /// Delete browsing data asks first, then clears this profile's history; Tabs from other devices says Brk has none

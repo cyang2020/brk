@@ -7,7 +7,9 @@ import BrkUIKit
 /// card of a History tab (`PaneContent.history`): the logo and "History" with a large search field across the top;
 /// on the left "Brk history", "Tabs from other devices" and "Delete browsing data"; on the right one card per day
 /// ("Today - Tuesday, November 3, 2026") listing the visits newest first, each with a checkbox, the time, the
-/// favicon, the title and the host, and a ⋮ menu; a break line marks visits more than 15 minutes apart. A click on a
+/// favicon, the title and the host, and a ⋮ menu; a break line marks visits more than 15 minutes apart. Like
+/// Chromium's page, a page shows once a day, at its latest visit that day (Q05-a: Visual fixture once at 1:06 PM
+/// however often it was opened); removing it removes that day's other visits to it too. A click on a
 /// visit opens it in a new tab; ⋮ offers More from this site and Remove from history; checked visits can be deleted
 /// together. Delete browsing data asks inline, then clears this profile's history (`.library(.clearHistory)`).
 ///
@@ -174,7 +176,11 @@ public final class HistoryPageView: NSView {
     }
 
     @objc func deleteSelected() {
-        for index in selected.sorted() where rows.indices.contains(index) { dispatch(remove(rows[index])) }
+        var commands: [Command] = []
+        for index in selected.sorted() where rows.indices.contains(index) {
+            for command in removals(rows[index]) where !commands.contains(command) { commands.append(command) }
+        }
+        commands.forEach(dispatch)
         selected = []
         rebuild()
     }
@@ -186,13 +192,25 @@ public final class HistoryPageView: NSView {
 
     private func remove(_ row: HistoryRow) -> Command { row.id.map { .library(.removeHistoryVisit($0)) } ?? .library(.removeHistory(row.url)) }
 
+    /// What removing the listed `row` sends: it stands for every visit to its page that day.
+    func removals(_ row: HistoryRow) -> [Command] {
+        let day = calendar.startOfDay(for: LibraryDays.date(row.visitedAt))
+        var commands: [Command] = []
+        for visit in rows where visit.url == row.url && calendar.startOfDay(for: LibraryDays.date(visit.visitedAt)) == day {
+            let command = remove(visit)
+            if !commands.contains(command) { commands.append(command) }
+        }
+        return commands.isEmpty ? [remove(row)] : commands
+    }
+
     // MARK: List
 
     var query: String { searchField.stringValue.trimmingCharacters(in: .whitespaces) }
 
-    /// The visits matching the search, by day; each keeps its index in the projected list (`history-<i>`).
+    /// The visits matching the search, by day, a page once a day at its latest visit; each keeps its index in the
+    /// projected list (`history-<i>`).
     func days() -> [(title: String, visits: [(offset: Int, element: HistoryRow)])] {
-        let indexed = Array(rows.enumerated())
+        let indexed = rows.enumerated().sorted { $0.element.visitedAt == $1.element.visitedAt ? $0.offset < $1.offset : $0.element.visitedAt > $1.element.visitedAt }
         let shown = query.isEmpty ? indexed : indexed.filter { _, row in
             [row.title, row.url.host ?? "", displayURL(row.url)].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         }
@@ -204,7 +222,9 @@ public final class HistoryPageView: NSView {
         return LibraryDays.group(shown, at: \.element.visitedAt, now: now, calendar: calendar).map { day in
             let date = calendar.startOfDay(for: LibraryDays.date(day.items[0].element.visitedAt))
             let prefix = date >= today ? LibraryCopy.todayPrefix : date == calendar.date(byAdding: .day, value: -1, to: today) ? LibraryCopy.yesterdayPrefix : ""
-            return (prefix + formatter.string(from: date), day.items.map { ($0.offset, $0.element) })
+            var listed: Set<URL> = []
+            let latest = day.items.filter { listed.insert($0.element.url).inserted }
+            return (prefix + formatter.string(from: date), latest.map { ($0.offset, $0.element) })
         }
     }
 
@@ -218,7 +238,7 @@ public final class HistoryPageView: NSView {
                 list.addSubview(HistoryDayCard(title: day.title, visits: day.visits, selected: selected, colors: colors, calendar: calendar,
                                                open: { [weak self] url in self?.dispatch(.commandBar(.submit(url.absoluteString))) },
                                                toggle: { [weak self] index in self?.toggle(index) },
-                                               remove: { [weak self] row in if let command = self?.remove(row) { self?.dispatch(command) } },
+                                               remove: { [weak self] row in self?.removals(row).forEach { self?.dispatch($0) } },
                                                search: { [weak self] host in
                                                    self?.searchField.stringValue = host
                                                    self?.rebuild()
@@ -286,6 +306,10 @@ struct HistoryColors {
     let card: NSColor
     let line: NSColor
     let field: NSColor
+    /// A visit's host (Q05-a: #444746, darker than the time's grey).
+    let detail: NSColor
+    /// An unchecked box's outline (Q05-a: #747775).
+    let checkbox: NSColor
 
     static func of(_ scheme: Scheme) -> HistoryColors {
         let light = scheme == .light
@@ -293,11 +317,14 @@ struct HistoryColors {
             page: light ? .white : LibraryColors.srgb(0x202124),
             ink: light ? LibraryColors.srgb(0x1F1F1F) : LibraryColors.srgb(0xE3E3E3),
             secondary: light ? LibraryColors.srgb(0x5F6368) : LibraryColors.srgb(0x9AA0A6),
-            accent: light ? LibraryColors.srgb(0x1F55C5) : LibraryColors.srgb(0x8AB4F8),
-            selection: light ? LibraryColors.srgb(0xE6ECFA) : LibraryColors.srgb(0x394457),
+            // Q05-a: "Arc history" in #1867D2 on #E8EFFE; the focused search field filled #ECEFF7.
+            accent: light ? LibraryColors.srgb(0x1867D2) : LibraryColors.srgb(0x8AB4F8),
+            selection: light ? LibraryColors.srgb(0xE8EFFE) : LibraryColors.srgb(0x394457),
             card: light ? .white : LibraryColors.srgb(0x292A2D),
             line: light ? LibraryColors.srgb(0xC4C7C5) : LibraryColors.srgb(0x5F6368),
-            field: light ? .white : LibraryColors.srgb(0x303134)
+            field: light ? LibraryColors.srgb(0xECEFF7) : LibraryColors.srgb(0x303134),
+            detail: light ? LibraryColors.srgb(0x444746) : LibraryColors.srgb(0xC4C7C5),
+            checkbox: light ? LibraryColors.srgb(0x747775) : LibraryColors.srgb(0x9AA0A6)
         )
     }
 }
@@ -400,7 +427,7 @@ final class HistoryNavItem: NSButton {
         isBordered = false
         wantsLayer = true
         layer?.addSublayer(fill)
-        glyph.image = LibraryIcon.symbol(symbol, size: 17)
+        glyph.image = LibraryIcon.symbol(symbol, size: symbol == "trash" ? 14 : 15.5)
         label.font = .systemFont(ofSize: LibraryDraw.history.navFont.value, weight: .medium)
         external.image = showsExternal ? LibraryIcon.symbol("arrow.up.forward.square", size: 17) : nil
         external.isHidden = !showsExternal
@@ -443,7 +470,8 @@ final class HistoryNavItem: NSButton {
         glyph.frame = CGRect(x: h.navIconLeading.value - 1, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
         let size = label.fittingSize
         label.frame = CGRect(x: h.navTextLeading.value, y: ((bounds.height - size.height) / 2).rounded(), width: size.width, height: size.height)
-        external.frame = CGRect(x: label.frame.maxX + 16, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
+        // Q05-a: the external mark is centred 20 after the label's text (which ends 2 inside its frame).
+        external.frame = CGRect(x: label.frame.maxX + 7, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
     }
 }
 
@@ -461,7 +489,7 @@ final class HistoryDayCard: NSView {
         let heading = NSTextField(labelWithString: title)
         heading.font = .systemFont(ofSize: h.dayFont.value, weight: .medium)
         heading.textColor = colors.ink
-        placed.append((heading, 35 - heading.fittingSize.height / 2, heading.fittingSize.height))
+        placed.append((heading, h.dayTitleCenter.value - heading.fittingSize.height / 2, heading.fittingSize.height))
         var previous: Instant?
         let gap = Int64(h.gapMinutes.value * 60_000)
         for visit in visits {
@@ -500,7 +528,8 @@ final class HistoryDayCard: NSView {
         super.layout()
         let h = LibraryDraw.history
         for (view, y, height) in placed {
-            let x = view is NSTextField ? h.padding.value + 13 : 0
+            // The day title starts with the checkboxes, 25 into the card (its label draws 2 pt inside its frame).
+            let x = view is NSTextField ? h.padding.value - 2 : 0
             view.frame = CGRect(x: x, y: y, width: bounds.width - x, height: height)
         }
     }
@@ -514,7 +543,7 @@ private final class HistoryGapView: NSView {
         wantsLayer = true
         let line = CALayer()
         line.backgroundColor = colors.secondary.cgColor
-        line.frame = CGRect(x: 78, y: 1, width: 1, height: 14)
+        line.frame = CGRect(x: 78, y: 0, width: 1, height: LibraryDraw.history.gapHeight.value)
         layer?.addSublayer(line)
     }
 
@@ -569,10 +598,10 @@ final class HistoryVisitRow: NSView {
         title.textColor = colors.ink
         title.lineBreakMode = .byTruncatingTail
         host.font = .systemFont(ofSize: h.rowDetailFont.value)
-        host.textColor = colors.secondary
+        host.textColor = colors.detail
         host.lineBreakMode = .byTruncatingTail
-        // The globe Chromium shows for a site without a saved icon (visits keep no favicon; nothing is fetched here).
-        favicon.image = LibraryIcon.symbol("globe", size: 14, weight: .medium)
+        // The globe Chromium shows for a site without a saved icon, filled (visits keep no favicon; nothing is fetched here).
+        favicon.image = LibraryIcon.symbol("globe.americas.fill", size: 14, weight: .medium)
         favicon.contentTintColor = colors.secondary
         favicon.imageScaling = .scaleProportionallyUpOrDown
         more.ink = colors.ink
@@ -616,18 +645,23 @@ final class HistoryVisitRow: NSView {
         super.layout()
         let h = LibraryDraw.history, mid = bounds.height / 2
         let box = h.checkbox.value
-        checkbox.frame = CGRect(x: h.padding.value, y: (mid - box / 2).rounded(), width: box, height: box)
+        // The box draws 1 pt inside its frame: its outline starts at the padding (Q05-a: 16 pt at x 25).
+        checkbox.frame = CGRect(x: h.padding.value - 1, y: (mid - box / 2).rounded(), width: box, height: box)
         let t = time.fittingSize
-        time.frame = CGRect(x: h.timeLeading.value, y: (mid - t.height / 2).rounded(), width: t.width, height: t.height)
+        // Labels draw 2 pt inside their frames: the frames start 2 early so the text is where Arc's is. Text rows are
+        // placed to the half point, as Arc's are (Q05-a: the time 0.5 below the title).
+        let half = { (y: Double) in (y * 2).rounded() / 2 }
+        time.frame = CGRect(x: h.timeLeading.value - 2, y: half(mid - t.height / 2 + 0.5), width: t.width, height: t.height)
         let f = 16.0
         favicon.frame = CGRect(x: h.faviconLeading.value, y: (mid - f / 2).rounded(), width: f, height: f)
         more.frame = CGRect(x: bounds.width - h.menuTrailing.value - 12, y: (mid - 12).rounded(), width: 24, height: 24)
-        let x = h.titleLeadingInRow.value, limit = more.frame.minX - 12
+        let x = h.titleLeadingInRow.value - 2, limit = more.frame.minX - 12
         let titleSize = title.fittingSize, hostSize = host.fittingSize
         let titleWidth = min(titleSize.width, max(0, limit - x - min(hostSize.width, 120) - 8))
-        title.frame = CGRect(x: x, y: (mid - titleSize.height / 2).rounded(), width: titleWidth, height: titleSize.height)
-        let hostX = title.frame.maxX + 8
-        host.frame = CGRect(x: hostX, y: (mid - hostSize.height / 2).rounded(), width: max(0, min(hostSize.width, limit - hostX)), height: hostSize.height)
+        title.frame = CGRect(x: x, y: half(mid - titleSize.height / 2), width: titleWidth, height: titleSize.height)
+        // The host's text is 7 after the title's (Q05-a), both 2 inside their frames.
+        let hostX = title.frame.maxX + 3
+        host.frame = CGRect(x: hostX, y: half(mid - hostSize.height / 2), width: max(0, min(hostSize.width, limit - hostX)), height: hostSize.height)
     }
 }
 
@@ -661,9 +695,11 @@ final class HistoryCheckbox: NSButton {
             NSColor.white.setStroke()
             tick.stroke()
         } else {
-            path.lineWidth = 2
-            colors.ink.withAlphaComponent(0.75).setStroke()
-            NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2).stroke()
+            // Q05-a: a 2 pt #747775 outline whose outer edge is the box's.
+            let outline = NSBezierPath(roundedRect: box.insetBy(dx: 1, dy: 1), xRadius: 2, yRadius: 2)
+            outline.lineWidth = 2
+            colors.checkbox.setStroke()
+            outline.stroke()
         }
     }
 }

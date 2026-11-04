@@ -24,7 +24,10 @@ enum RegressionScenarios {
             try expect(library.strip.contains(library.page) && library.page.minX == library.nav.maxX, "library page column \(library.page), panel \(library.strip)")
             let page = try visible(n, .archive), cell = try visible(n, .libraryPage(.archive))
             try expect(near(page.frame, library.page), "archive at \(page.frame), library page column \(library.page)")
-            try expect(n.computed.cards.first.map { $0.rect.minX > library.strip.maxX } == true, "the page's card is not beside the Library")
+            // Arc slides the page right to the panel's edge and keeps its width (P30-a, P32): the card runs past the window.
+            try expect(n.computed.cards.first.map { $0.rect.minX == library.strip.maxX } == true, "the page's card is not at the Library's edge")
+            try expect(n.computed.cards.first.map { $0.rect.width == n.contentSize.width - 2 * Metrics.content.inset.value } == true,
+                       "the page's card does not keep the width it has without the sidebar")
             try expect(near(cell.frame, library.pageCells[.archive] ?? .zero), "archive row at \(cell.frame)")
             try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "the sidebar shows with the Library open")
             return true
