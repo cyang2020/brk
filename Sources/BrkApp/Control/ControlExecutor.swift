@@ -85,6 +85,12 @@ final class ControlExecutor {
             case .press:
                 guard let button = control as? NSButton else { throw Failure(message: "The site control is not a button") }
                 button.performClick(nil)
+            case .locate:
+                let screen = panel.convertToScreen(control.convert(control.visibleRect, to: nil))
+                let top = NSScreen.screens.first?.frame.maxY ?? screen.maxY
+                let editor = (control as? NSTextField)?.currentEditor()
+                let focused = editor != nil && panel.firstResponder === editor
+                return .menuItems([screen.minX, top - screen.maxY, screen.width, screen.height].map { String(Double($0)) } + ["focused:\(focused)"])
             }
             print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
             return .ok

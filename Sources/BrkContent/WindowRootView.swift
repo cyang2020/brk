@@ -107,6 +107,9 @@ public final class WindowRootView: NSView {
 
     public func handleScrollWheel(_ event: NSEvent) -> Bool { sidebar.handleScrollWheel(event) }
 
+    /// The title still being typed on Easel `id`'s board, committed first (`EaselBoardView.commitTitle(of:)`).
+    public func commitEaselTitle(_ id: EaselID) -> String? { easel.commitTitle(of: id) }
+
     /// ⇧⌘-drag on the page (Arc's capture shortcut): the capture that is about to begin starts from this mouse-down.
     public func expectCaptureShortcut(_ expected: Bool) { captureOverlay.expectShortcutDrag(expected) }
 

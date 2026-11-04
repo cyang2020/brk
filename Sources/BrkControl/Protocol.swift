@@ -142,7 +142,9 @@ public enum ControlOp: Codable, Sendable, Equatable {
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
 public enum PointerPhase: String, Codable, Sendable, Equatable { case down, dragged, up }
-public enum SiteControlAction: String, Codable, Sendable, Equatable { case focus, press }
+/// `locate` answers the control's screen rectangle (window-server coordinates, top-left origin) and whether it holds
+/// keyboard focus, so a test can click it with a real pointer event: `menuItems([x, y, width, height, "focused:…"])`.
+public enum SiteControlAction: String, Codable, Sendable, Equatable { case focus, press, locate }
 
 public struct ControlReply: Codable, Sendable, Equatable {
     public var id: Int

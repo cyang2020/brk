@@ -414,16 +414,18 @@ struct StoredDocV3: Codable {
             repairs.append("\(what) \(instant) is outside the supported range: now \(ctx.now)")
             return ctx.now
         }
+        // An Easel's and the History tab's rows keep their brk:// address: their cards draw the saved board or the
+        // profile's visits natively, no page loads it (Arc restores arc://history like any tab).
+        func native(_ url: URL) -> Bool { EaselPage.shows(url) || HistoryPage.shows(url) }
         func opens(_ url: URL?, _ owner: String) -> Bool {
-            // An Easel's row keeps its brk:// address: its card draws the saved board, no page loads it.
-            guard let url, !isOpenableURL(url), !EaselPage.shows(url) else { return true }
+            guard let url, !isOpenableURL(url), !native(url) else { return true }
             repairs.append("\(owner): dropped, its \(url.scheme ?? "schemeless") URL may not open")
             return false
         }
         func tab(_ stored: StoredTab, _ owner: String) -> Tab {
             var tab = Tab(stored)
             tab.lastActiveAt = usable(stored.lastActiveAt, "\(owner): lastActiveAt")
-            if let saved = stored.pinnedURL, !isOpenableURL(saved) {
+            if let saved = stored.pinnedURL, !isOpenableURL(saved), !native(saved) {
                 repairs.append("\(owner): cleared a \(saved.scheme ?? "schemeless") pinnedURL that may not open")
                 tab.pinnedURL = nil
             }

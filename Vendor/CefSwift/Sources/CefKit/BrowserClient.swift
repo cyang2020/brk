@@ -53,6 +53,10 @@ final class BrowserClient {
     var auxiliaryKey: UUID?
     var auxiliaryKind: CefAuxiliaryKind?
     var auxiliaryCancelled = false
+    /// The host this client's popup browser is created in (``CefWindowOpenAction/adoptAsChromeBrowser``).
+    weak var popupHost: CefChromeBrowser?
+    /// Opener side: hosts whose popup CEF has not created yet, by popup id (`on_before_popup_aborted` releases them).
+    var awaitingPopupHosts: [Int: CefChromeBrowser] = [:]
 
     // The most recent context-menu params, captured in on_before_context_menu
     // and replayed to the command/dismiss callbacks (which also receive params,
@@ -181,6 +185,10 @@ final class BrowserClient {
                     guard let popupClient else { return 1 }
                     client.installNativeAuxiliary(.popup(request), replacing: popupClient)
                     return 0  // let CEF create the native popup
+                case .adoptAsChromeBrowser:
+                    guard let popupClient, let host = cefBrowser.delegate?.browser(cefBrowser, hostForPopup: request) else { return 1 }
+                    host.claimPopup(replacing: popupClient, opener: client, popupID: Int(popupID))
+                    return 0  // CEF creates the popup browser with the host's client; its view lands in the host
                 case .openInCurrentBrowser:
                     if let url { cefBrowser.load(url) }
                     return 1
@@ -193,6 +201,7 @@ final class BrowserClient {
             defer { cefRelease(browser.map(UnsafeMutableRawPointer.init)) }
             BrowserClient.withBrowser(raw.map(UnsafeMutableRawPointer.init), default: ()) { client, _ in
                 client.abortNativePopup(Int(id))
+                client.awaitingPopupHosts.removeValue(forKey: Int(id))?.popupAborted()
             }
         }
         lifeSpan.pointee.on_before_dev_tools_popup = { raw, browser, _, client, _, _, _ in

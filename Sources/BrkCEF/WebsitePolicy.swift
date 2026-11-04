@@ -92,7 +92,6 @@ extension ChromePage {
         let literal = Self.jsString(content)
         if websiteStyleOwner?.document != document { websiteStyleOwner = (document, UUID().uuidString) }
         let owner = Self.jsString(websiteStyleOwner!.id)
-        let mediaMarker = Self.jsString("data-brk-media-" + websiteStyleOwner!.id)
         // Dark (P19-b): a page that leaves its canvas to the browser shows Chromium's dark Canvas (#121212) as in Arc,
         // not the Chrome-runtime frame grey (#202020) drawn under it. Pages with their own root or body background
         // keep it (a root background would stop the body's from filling the canvas).
@@ -106,21 +105,22 @@ extension ChromePage {
           if(\(canvas)){const bare=e=>{const c=getComputedStyle(e);return c.backgroundColor==='rgba(0, 0, 0, 0)'&&c.backgroundImage==='none'};
             if(bare(document.documentElement)&&(!document.body||bare(document.body)))s.textContent+=':where(html){background-color:Canvas}';}
           if(!s.textContent||s.textContent===':root{}')s.remove();
-          const marker=\(mediaMarker), installed=marker+'-observed';
-          const reconcile=()=>{for(const media of document.querySelectorAll('audio,video')){
-            if(!media.paused&&!media.ended)media.setAttribute(marker,'');else media.removeAttribute(marker);
-          }};
-          if(!document.documentElement.hasAttribute(installed)){
+          // The playing intent lives in this isolated world (one per document), never in the page's DOM.
+          if(!globalThis.brkMedia){
+            const playing=new WeakSet();
+            const reconcile=()=>{for(const media of document.querySelectorAll('audio,video')){
+              if(!media.paused&&!media.ended)playing.add(media);else playing.delete(media);
+            }};
             const changed=event=>{
               const media=event.target;if(!(media instanceof HTMLMediaElement))return;
-              if(event.type==='play')media.setAttribute(marker,'');
-              else if(event.type==='ended'||!document.hidden)media.removeAttribute(marker);
+              if(event.type==='play')playing.add(media);
+              else if(event.type==='ended'||!document.hidden)playing.delete(media);
             };
             for(const event of ['play','pause','ended'])document.addEventListener(event,changed,true);
             document.addEventListener('visibilitychange',()=>{if(!document.hidden)reconcile();},true);
-            document.documentElement.setAttribute(installed,'');reconcile();
+            globalThis.brkMedia={playing,reconcile};reconcile();
           }
-          if(!document.hidden)reconcile();
+          if(!document.hidden)globalThis.brkMedia.reconcile();
           return true;
         })();
         """
@@ -147,13 +147,28 @@ extension ChromePage {
                     self.autoDark = (document, dark)
                     guard self.policyRevision == revision, self.engine.isLive(self), self.mainDocument.availability == .ready(document) else { return }
                 }
-                let frameTree = try await self.browser.protocolSession.call("Page.getFrameTree")
-                guard let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any], let frameID = frame["id"] as? String,
-                      self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
-                let world = try await self.browser.protocolSession.call("Page.createIsolatedWorld", ["frameId": frameID, "worldName": "brk-site-policy"])
-                guard let contextID = world["executionContextId"] as? Int, self.policyRevision == revision,
-                      self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
-                _ = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": contextID, "returnByValue": true])
+                @MainActor func newWorld() async throws -> Int? {
+                    let frameTree = try await self.browser.protocolSession.call("Page.getFrameTree")
+                    guard let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any], let frameID = frame["id"] as? String,
+                          self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return nil }
+                    let world = try await self.browser.protocolSession.call("Page.createIsolatedWorld", ["frameId": frameID, "worldName": "brk-site-policy"])
+                    guard let created = world["executionContextId"] as? Int, self.policyRevision == revision,
+                          self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return nil }
+                    self.policyWorld = (document, created)
+                    return created
+                }
+                var contextID: Int
+                if let world = self.policyWorld, world.document == document { contextID = world.context }
+                else if let created = try await newWorld() { contextID = created } else { return }
+                do {
+                    _ = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": contextID, "returnByValue": true])
+                } catch where self.policyWorld?.context == contextID {
+                    // The kept world is gone (its context went with a renderer swap): one new world, one more try.
+                    self.policyWorld = nil
+                    guard let created = try await newWorld() else { return }
+                    contextID = created
+                    _ = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": contextID, "returnByValue": true])
+                }
                 guard self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
                 let shouldFreeze = !policy.visible && rule.suspendWhenHidden && !rule.keepAlive && !rule.excludeSuspension
                     && !self.websiteOperationProtected()
@@ -161,7 +176,7 @@ extension ChromePage {
                 if shouldFreeze {
                     // Chromium automatically pauses muted media on hide. Preserve the document's playing
                     // intent until a visible pause, end, removal, or visible reconciliation clears it.
-                    let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||x.hasAttribute(\(mediaMarker))))"
+                    let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||globalThis.brkMedia?.playing.has(x)===true))"
                     let result = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": expression, "returnByValue": true, "contextId": contextID])
                     media = (result["result"] as? [String: Any])?["value"] as? Bool ?? true
                     // The main document cannot see into cross-origin frames; the audio extension's reading can.

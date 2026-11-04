@@ -68,8 +68,10 @@ extension AppStore {
                     self.dispatch(.system(.easel(.failed(window, easel, "Could not add the picture: " + error.localizedDescription))))
                 }
             }
-        case .share(let window, let card):
+        case .share(let window, var card):
             guard let owner = captureWindow(window), owner.isVisible, owner.attachedSheet == nil else { return }
+            // A title typed but not yet committed (the click on Share did not end its editing) is the Easel's title.
+            if let typed = windowController(window)?.root.commitEaselTitle(card.id) { card.title = typed }
             guard let png = EaselExport.png(card) else {
                 dispatch(.system(.easel(.failed(window, card.id, "Could not draw the Easel."))))
                 return

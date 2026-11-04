@@ -52,12 +52,14 @@ enum SidebarPanelControl {
             return .screenshot(path: path, pixelWidth: image.width, pixelHeight: image.height)
         case .inspect:
             let panel = sheet as? NSSavePanel
+            // A save panel's suggested file name comes last ("name:…"); an open panel has none.
+            let name = panel.flatMap { $0 is NSOpenPanel ? nil : ["name:" + $0.nameFieldStringValue] } ?? []
             return .menuItems([sheet.title, panel?.prompt ?? "", String(describing: type(of: sheet))] + views.compactMap { view in
                 if let popup = view as? NSPopUpButton { return "select:" + (popup.identifier?.rawValue ?? "") + ":" + String(popup.indexOfSelectedItem) }
                 if let button = view as? NSButton { return "button:" + button.title }
                 if let field = view as? NSTextField, !field.isEditable { return field.stringValue }
                 return view.identifier.map { "view:" + $0.rawValue }
-            })
+            } + name)
         case .button(let title):
             if sheet is NSSavePanel, title == "Cancel" { try press("escape", in: sheet); return .ok }
             guard let button = views.compactMap({ $0 as? NSButton }).first(where: { ($0.title == title || $0.title.isEmpty && $0.accessibilityLabel() == title) && $0.isEnabled }) else {

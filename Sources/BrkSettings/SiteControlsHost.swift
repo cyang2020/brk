@@ -82,7 +82,7 @@ extension SiteControlsHost {
     static func filterListStatus(_ list: FilterListRecord) -> String {
         var parts: [String] = []
         if let summary = list.summary {
-            parts.append("\(summary.usable.formatted()) rules")
+            parts.append("\(summary.usable.formatted()) " + (summary.usable == 1 ? "rule" : "rules"))
             if summary.skipped > 0 { parts.append("\(summary.skipped.formatted()) skipped") }
         }
         if list.key == nil {

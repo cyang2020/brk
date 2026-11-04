@@ -175,8 +175,11 @@ public final class CefBrowser: Identifiable {
     /// `onbeforeunload` handlers may cancel the close; ``CefBrowserDelegate/browserDidClose(_:)``
     /// fires when the close completes.
     public func close(force: Bool = false) {
+        // A views-hosted or popup browser closed before CEF created it closes as soon as it exists.
+        guard raw != nil else { closeWhenCreated = force || (closeWhenCreated ?? false); return }
         withHost { $0.pointee.close_browser?($0, force ? 1 : 0) }
     }
+    private var closeWhenCreated: Bool?
 
     /// The NSView CEF created for this browser, once available. Add it to
     /// your view hierarchy is not required (CEF parents it automatically);
@@ -203,6 +206,10 @@ public final class CefBrowser: Identifiable {
         raw = newRaw
         id = newRaw.pointee.get_identifier?(newRaw) ?? -1
         CefRuntime.shared.registerBrowser(self)
+        if let force = closeWhenCreated {
+            closeWhenCreated = nil
+            DispatchQueue.main.async { [weak self] in MainActor.assumeIsolated { self?.close(force: force) } }
+        }
     }
 
     /// Whether a live raw cef_browser_t is attached.

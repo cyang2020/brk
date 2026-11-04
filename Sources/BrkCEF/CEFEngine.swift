@@ -254,7 +254,7 @@ public final class CEFEngine: WebEngine {
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let context = contexts.epoch(for: spec.context)
             let incarnation = ledger.create(spec.id)
-            let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
+            let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation, adopting: claimPopupHost(url, context: spec.context))
             resources.insert(page, browser: incarnation, context: context)
             record(.created, page)
             guard phase == .running, contexts.permitsWork(spec.context),
@@ -715,6 +715,23 @@ public final class CEFEngine: WebEngine {
     }
 
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
+
+    /// A popup Chromium is about to create, offered to the page the domain makes for it while `open` runs (the
+    /// domain reduces and reconciles synchronously). True when a page in the same context for the same address
+    /// took it; the popup then keeps its opener.
+    private var offeredPopup: (host: CefChromeBrowser, url: URL, context: BrowsingContext)?
+    func offerPopupHost(_ host: CefChromeBrowser, url: URL, context: BrowsingContext, open: () -> Void) -> Bool {
+        offeredPopup = (host, url, context)
+        open()
+        let taken = offeredPopup == nil
+        offeredPopup = nil
+        return taken
+    }
+    private func claimPopupHost(_ url: URL, context: BrowsingContext) -> CefChromeBrowser? {
+        guard let offer = offeredPopup, offer.url.absoluteString == url.absoluteString, offer.context == context else { return nil }
+        offeredPopup = nil
+        return offer.host
+    }
 
     func auxiliaryCountChanged(_ page: ChromePage, count: Int) {
         let lease = BrowserResources<ChromePage>.Lease.auxiliary("native-children")

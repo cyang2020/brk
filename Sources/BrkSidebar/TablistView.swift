@@ -357,6 +357,10 @@ final class TablistView: NSScrollView {
 final class ListDocumentView: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    /// Focused only on request (Reveal, `focusList`). As a key view AppKit made it the first responder of a window
+    /// that became key before its page existed (a restart into a Space whose profile loads first), and the page
+    /// that arrived later never took focus from it.
+    override var canBecomeKeyView: Bool { false }
     var onKey: ((TabToolsCommand) -> Void)?
     /// A right-click that no row took (the sections' gaps and the space below the last row).
     var onRightClick: ((NSEvent) -> Void)?
