@@ -48,9 +48,14 @@ public final class SidebarView: NSView {
     private var pointerInside = false {
         didSet {
             guard pointerInside != oldValue else { return }
-            urlPill.sidebarHovered = pointerInside
-            tablist.sidebarHovered = pointerInside
+            applyColumnHover()
         }
+    }
+    /// The + popover takes the hover: Arc's column shows neither the accessories nor Clear under it (Q11-a).
+    private var plusMenuOpen = false { didSet { applyColumnHover() } }
+    private func applyColumnHover() {
+        urlPill.sidebarHovered = pointerInside && !plusMenuOpen
+        tablist.sidebarHovered = pointerInside && !plusMenuOpen
     }
 
     /// Everything `render` reads. Equal slices change nothing, so render returns before touching a view.
@@ -89,6 +94,7 @@ public final class SidebarView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         for view in [backdrop, header, urlPill, favorites, spaceHeader, tablist, dock] as [NSView] { addSubview(view) }
+        dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
         drag.sidebar = self
         identify(.sidebar)
     }

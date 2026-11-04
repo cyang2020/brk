@@ -25,6 +25,7 @@ final class DockView: NSView {
     private var grab: (cell: CGRect, x: CGFloat)?
     private let plusMenu: PlusMenu
     private var plusRows: [[PlusMenuRow]] = []
+    var plusMenuChanged: (Bool) -> Void = { _ in }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -32,7 +33,10 @@ final class DockView: NSView {
         super.init(frame: .zero)
         library.action = { _ in dispatch(.library(.open(nil))) }
         plus.action = { [weak self] _ in self?.togglePlusMenu() }
-        plusMenu.onClose = { [weak self] in self?.renderPlus() }
+        plusMenu.onClose = { [weak self] in
+            self?.renderPlus()
+            self?.plusMenuChanged(false)
+        }
         library.toolTip = SidebarCopy.library
         library.identify(.dockLibrary)
         plus.identify(.dockPlus)
@@ -139,13 +143,15 @@ final class DockView: NSView {
         guard let palette = last?.2 else { return }
         plusMenu.open(plusRows, palette: palette, anchor: plus)
         renderPlus()
+        plusMenuChanged(true)
     }
 
     /// The + button; while its menu is open, × on the hover fill (Q11-a).
     private func renderPlus() {
         guard let palette = last?.2 else { return }
         plus.latchedFill = plusMenu.isOpen ? palette.tokens.itemBackground : nil
-        plus.render(plusMenu.isOpen ? .close : .plus, size: Draw.dockButtonGlyph.value, palette: palette, tint: palette.color(palette.tokens.foreground),
+        plus.render(plusMenu.isOpen ? .close : .plus, size: plusMenu.isOpen ? Draw.dockButtonGlyph.value : Draw.dockPlusGlyph.value, palette: palette,
+                    tint: (palette.scheme == .light ? NSColor.black : .white).withAlphaComponent(Draw.dockPlusInk.value),
                     radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
     }
 }

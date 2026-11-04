@@ -69,12 +69,6 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onKeyEquivalent = { [weak self] event in
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
-            // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the Edit menu's Undo.
-            if let self, self.lastSnapshot?.tabTools.toast?.keycap == "⌘Z", event.charactersIgnoringModifiers?.lowercased() == "z",
-               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
-                self.send(.user(self.id, .tabTools(.undoToast)))
-                return true
-            }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
         }
@@ -84,6 +78,12 @@ public class WindowController: NSObject, NSWindowDelegate {
             guard let self, event.keyCode == Key.z.code else { return false }
             let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
             guard flags == .command || flags == [.command, .shift] else { return false }
+            // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the page or the Edit
+            // menu's Undo, wherever the keyboard focus is.
+            if flags == .command, self.lastSnapshot?.tabTools.toast?.keycap == "⌘Z" {
+                self.send(.user(self.id, .tabTools(.undoToast)))
+                return true
+            }
             return self.root.spaceDialog.stepThemeEdit(redo: flags.contains(.shift))
         }
         window.onEscapeBeforePage = { [weak self] event in

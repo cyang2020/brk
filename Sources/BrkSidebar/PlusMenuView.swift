@@ -154,10 +154,9 @@ final class PlusMenuView: NSView {
         triangle.line(to: tip)
         triangle.line(to: CGPoint(x: tip.x + m.arrowHeight.value, y: cardHeight - 1))
         triangle.close()
-        path.append(triangle)
-        path.windingRule = .nonZero
         PlusMenuColors(palette).card.setFill()
         path.fill()
+        triangle.fill()
     }
 
     private func setHighlight(_ index: Int?) {
@@ -284,8 +283,8 @@ enum PlusMenuGlyph {
             path.appendArc(from: CGPoint(x: 2.1, y: 3.1), to: CGPoint(x: 14.2, y: 0.9), radius: 1.6)
             path.appendArc(from: CGPoint(x: 14.2, y: 0.9), to: CGPoint(x: 15.2, y: 4.6), radius: 1.6)
             path.line(to: CGPoint(x: 15.2, y: 4.6))
-            path.append(NSBezierPath(roundedRect: CGRect(x: 7.8, y: 4.9, width: 12.4, height: 16.2), xRadius: 2.4, yRadius: 2.4))
-            plus(path, centre: CGPoint(x: 14, y: 13), arm: 3.1)
+            path.append(NSBezierPath(roundedRect: CGRect(x: 7.6, y: 4.6, width: 12.8, height: 16.6), xRadius: 2.4, yRadius: 2.4))
+            plus(path, centre: CGPoint(x: 14, y: 12.9), arm: 3.3)
         case .newFolder:
             path.move(to: CGPoint(x: 3.4, y: 18.5))
             path.appendArc(from: CGPoint(x: 1.4, y: 18.5), to: CGPoint(x: 1.4, y: 3.8), radius: 2)
@@ -298,17 +297,18 @@ enum PlusMenuGlyph {
             path.close()
             path.move(to: CGPoint(x: 3.9, y: 8.6)); path.line(to: CGPoint(x: 18.1, y: 8.6))
         case .newEasel:
-            path.move(to: CGPoint(x: 1.6, y: 16.2))
-            path.curve(to: CGPoint(x: 8.9, y: 6.1), controlPoint1: CGPoint(x: 4.2, y: 13.8), controlPoint2: CGPoint(x: 8, y: 7))
-            path.curve(to: CGPoint(x: 9.6, y: 9.4), controlPoint1: CGPoint(x: 10.3, y: 4.8), controlPoint2: CGPoint(x: 10.8, y: 7))
-            path.curve(to: CGPoint(x: 9.2, y: 16.6), controlPoint1: CGPoint(x: 8, y: 12.2), controlPoint2: CGPoint(x: 6.8, y: 16.2))
-            path.curve(to: CGPoint(x: 13.3, y: 11.8), controlPoint1: CGPoint(x: 10.8, y: 16.9), controlPoint2: CGPoint(x: 12.2, y: 13))
-            path.curve(to: CGPoint(x: 14, y: 15.6), controlPoint1: CGPoint(x: 14.5, y: 10.8), controlPoint2: CGPoint(x: 14.6, y: 13.8))
-            path.curve(to: CGPoint(x: 20, y: 15.6), controlPoint1: CGPoint(x: 13.4, y: 18), controlPoint2: CGPoint(x: 17.6, y: 18.8))
+            path.move(to: CGPoint(x: 1.4, y: 13.4))
+            path.curve(to: CGPoint(x: 10, y: 3.6), controlPoint1: CGPoint(x: 4, y: 11.4), controlPoint2: CGPoint(x: 8.2, y: 4.2))
+            path.curve(to: CGPoint(x: 10.8, y: 7.4), controlPoint1: CGPoint(x: 11.6, y: 3), controlPoint2: CGPoint(x: 12, y: 5.2))
+            path.curve(to: CGPoint(x: 9.4, y: 15.2), controlPoint1: CGPoint(x: 9.2, y: 10.2), controlPoint2: CGPoint(x: 7.4, y: 14.2))
+            path.curve(to: CGPoint(x: 15, y: 10.4), controlPoint1: CGPoint(x: 11, y: 16), controlPoint2: CGPoint(x: 13.6, y: 11))
+            path.curve(to: CGPoint(x: 15, y: 15), controlPoint1: CGPoint(x: 16.8, y: 9.8), controlPoint2: CGPoint(x: 15.6, y: 13))
+            path.curve(to: CGPoint(x: 20.4, y: 17.6), controlPoint1: CGPoint(x: 14.4, y: 17.4), controlPoint2: CGPoint(x: 18, y: 19))
         case .newBoost:
             // A brush seen at 45 degrees: bristles at the top right, ferrule, then a short handle with a hole.
             let transform = NSAffineTransform()
-            transform.translateX(by: 12.4, yBy: 11.8)
+            transform.translateX(by: 12.2, yBy: 12)
+            transform.scale(by: 1.12)
             transform.rotate(byDegrees: 45)
             let brush = NSBezierPath()
             brush.move(to: CGPoint(x: -4.2, y: -2.2))
@@ -338,12 +338,12 @@ enum PlusMenuGlyph {
     }
 
     private static func sparkle() -> NSBezierPath {
-        let centre = CGPoint(x: 3.6, y: 4.2), reach = 3.4, waist = 0.8
+        let centre = CGPoint(x: 4.2, y: 4.2), reach = 4.0, waist = 1.0
         let star = NSBezierPath()
         for index in 0..<8 {
-            let angle = Double(index) * .pi / 4 - .pi / 2
-            let radius = index.isMultiple(of: 2) ? reach : waist
-            let point = CGPoint(x: centre.x + radius * cos(angle), y: centre.y + radius * sin(angle))
+            let angle: Double = Double(index) * Double.pi / 4 - Double.pi / 2
+            let radius: Double = index.isMultiple(of: 2) ? reach : waist
+            let point = CGPoint(x: Double(centre.x) + radius * cos(angle), y: Double(centre.y) + radius * sin(angle))
             if index == 0 { star.move(to: point) } else { star.line(to: point) }
         }
         star.close()
@@ -368,16 +368,16 @@ struct PlusMenuMetrics: MetricGroup {
     let arrowFromRight = Metric(19.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc: the tip at x 402 px, the card's right edge at 440 px"))
     let iconBox = Metric(22.0, .guess("the box the row icons are drawn in; Arc's are 28 to 32 pt assets with empty margins"))
     let iconCentre = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: icons centred 56 px in from the card's left edge"))
-    let iconStroke = Metric(1.6, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: icon lines about 3 px"))
-    let titleLeft = Metric(48.5, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: titles start 101 px in from the card's left edge; a label draws about 2 pt in from its frame"))
-    let titleFont = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: New Space is 68.5 pt wide"))
+    let iconStroke = Metric(1.9, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: icon lines about 4 px"))
+    let titleLeft = Metric(48.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: titles start 101 px in from the card's left edge; a label draws about 2 pt in from its frame"))
+    let titleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: New Space is 68.5 pt wide"))
     let keyFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: the E's cap height is 18 px"))
     let lastKeyCentre = Metric(186.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: E and T centred 372 px in from the card's left edge"))
     let lastKeyPitch = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: ⇧ and ⌘ centred 24 px before the last key"))
     let keyPitch = Metric(14.5, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: ⌃ centred 29 px before ⇧"))
-    let shadowBlur = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc: the shadow fades within 8 pt below the card"))
-    let shadowAlpha = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc: about 6 percent darker 2 pt below the card"))
-    let shadowOffset = Metric(4.0, .guess("the shadow falls below the card; none shows above it in Q11-a"))
+    let shadowBlur = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: the shadow fades within 4 pt of the card's edges"))
+    let shadowAlpha = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103 Q11-a-menu-arc: about 12 percent darker at the card's edge"))
+    let shadowOffset = Metric(1.0, .guess("the shadow shows on all four sides of the card in Q11-a-menu-arc, a little more below"))
     let windowMargin = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc: the card's left edge in a 228 pt sidebar; a narrower sidebar lets it run over the page"))
     let disabledAlpha = Metric(0.35, .guess("rows a blank or private window cannot run; Arc's are not in the references"))
 }

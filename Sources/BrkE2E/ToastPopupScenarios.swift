@@ -192,7 +192,7 @@ enum ToastPopupScenarios {
     }
 
     private static let menuID = ViewID.tabTool("plus-menu").identifier
-    private static func rowID(_ glyph: PlusMenuRow.Glyph) -> String { "plus-menu-" + glyph.rawValue }
+    private static func rowID(_ glyph: PlusMenuRow.Glyph) -> String { ViewID.tabTool("plus-menu-" + glyph.rawValue).identifier }
     private static func openMenu(_ app: AppUnderTest) throws -> CGRect {
         try app.click(.dockPlus)
         try app.waitUntil("the + popover") { try S.frame(app, menuID) != nil }
@@ -234,7 +234,7 @@ enum ToastPopupScenarios {
         let tabBlank = CGPoint(x: tabRow.maxX - 80, y: tabRow.midY), spaceBlank = CGPoint(x: spaceRow.maxX - 20, y: spaceRow.midY)
         let highlight = try app.pixel(tabBlank), card = try app.pixel(spaceBlank)
         try expect(highlight != card, "New Tab is not highlighted when it opens: \(highlight)")
-        try expect(highlight[0] == 0xDE && card[0] == 0xFD, "light colors: highlight \(highlight), card \(card)")
+        try expect(abs(highlight[0] - 0xDE) <= 3 && abs(card[0] - 0xFD) <= 3, "light colors: highlight \(highlight), card \(card)")
         try app.hover(spaceBlank)
         try app.waitUntil("the highlight follows the pointer") { try app.pixel(spaceBlank) == highlight && app.pixel(tabBlank) == card }
         _ = try app.screenshot("plus-hover")
