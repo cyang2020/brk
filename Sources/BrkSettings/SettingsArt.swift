@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkUIKit
 import SwiftUI
 
 // The drawings Arc 1.170 puts in its settings panes (P38-b, P38-c, P38-e, P38-f), redrawn with shapes: the wavy-edged
@@ -259,7 +260,7 @@ struct MaxThumbnail: View {
             ArtColor.rgb(0xD0CCF0)
             HStack(spacing: 8) {
                 WaveLine().stroke(ArtColor.rgb(0x8A84B8), lineWidth: 1.2).frame(width: 44, height: 6)
-                Image(systemName: "paintbrush.fill").font(.system(size: 9)).foregroundStyle(ArtColor.rgb(0x5E5A86))
+                Image(nsImage: ArcGlyphs.broom(size: 11)).renderingMode(.template).foregroundStyle(ArtColor.rgb(0x5E5A86))
                 Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(ArtColor.rgb(0x5E5A86))
             }
             .offset(x: -2)
@@ -314,9 +315,10 @@ struct MaxThumbnail: View {
                 HStack {
                     Text("Download renamed to:").font(.system(size: 4.5)).foregroundStyle(ArtColor.rgb(0x5960C8))
                     Spacer(minLength: 0)
+                    Image(systemName: "arrow.uturn.backward").font(.system(size: 4)).foregroundStyle(.secondary)
                     Image(systemName: "xmark").font(.system(size: 4)).foregroundStyle(.secondary)
                 }
-                Text("Travel Itinerary.pdf").font(.system(size: 6, weight: .medium)).foregroundStyle(.black)
+                Text("Navan Itinerary.pdf").font(.system(size: 6, weight: .medium)).foregroundStyle(.black)
                 Text("287494875.pdf").font(.system(size: 4.5)).strikethrough().foregroundStyle(ArtColor.rgb(0x5960C8))
             }
             .padding(5)
