@@ -231,6 +231,17 @@ public enum Placement {
         case .today: return kind == .tab || kind == .split || kind == .folder
         }
     }
+
+    /// Whether a tab of `section` may join a split with a tab of `other` in the same space or window: what
+    /// `SectionRole.joinsSplit` allows (the same section, or Pinned with Today; never Favorites), for the sidebar's
+    /// drag feedback.
+    public static func canJoinSplit(_ section: SectionKind, with other: SectionKind) -> Bool {
+        switch (section, other) {
+        case (.favorites, _), (_, .favorites): false
+        case (.pinned, .today), (.today, .pinned): true
+        default: section == other
+        }
+    }
 }
 
 /// Where an insert or move lands. Arc: `SidebarInsertionStrategy`.

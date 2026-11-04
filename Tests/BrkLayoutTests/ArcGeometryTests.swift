@@ -37,6 +37,26 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228).tray, CGSize(width: 228, height: 114), "Arc's Drag to add Favorites box (P07-b)")
         XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228, hintDismissed: true).tray, CGSize(width: 228, height: 0), "dismissed: no room")
     }
+
+    /// The empty box keeps Arc's 228 proportions as the sidebar narrows (P05-f, P07-b): 213 x 94.5 at 228, scaled by
+    /// the box width down to 149 x 66.1 at the 164 minimum; the tray keeps its 7 above and 12.5 below the box.
+    func testTheEmptyFavoritesBoxShrinksWithTheSidebar() throws {
+        let (full, one) = FavoritesGrid.emptyBox(width: 228)
+        XCTAssertEqual(full, CGRect(x: 7.5, y: 7, width: 213, height: 94.5))
+        XCTAssertEqual(one, 1)
+        XCTAssertEqual(FavoritesGrid.emptyBox(width: 300).box, CGRect(x: 7.5, y: 7, width: 285, height: 94.5), "wider: stretched, same height")
+        var previous = full.height
+        for width in stride(from: 212.0, through: 164, by: -16) {
+            let (box, scale) = FavoritesGrid.emptyBox(width: width)
+            XCTAssertEqual(scale, (width - 15) / 213, accuracy: 1e-9, "width \(width)")
+            XCTAssertEqual(box.width, width - 15, "width \(width)")
+            XCTAssertEqual(box.height / box.width, full.height / full.width, accuracy: 1e-9, "width \(width): Arc's proportions")
+            XCTAssertLessThan(box.height, previous)
+            previous = box.height
+            XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: width).tray.height, 19.5 + box.height, accuracy: 1e-9, "width \(width)")
+        }
+        XCTAssertEqual(FavoritesGrid.emptyBox(width: 164).box.height, 66.1, accuracy: 0.05)
+    }
     /// Rows are 40 tall on a 41 pt pitch; the divider is 16; the top spacer is 2 (cra L748: 41, 17, 3).
     func testTablistRowPitch() throws {
         let d = LayoutDriver()

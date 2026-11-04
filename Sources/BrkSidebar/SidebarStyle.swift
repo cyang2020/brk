@@ -86,7 +86,8 @@ struct SidebarDrawMetrics: MetricGroup {
     let emptyTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: Drag to add Favorites is bold, about 132 pt wide"))
     let emptyTitleGap = Metric(6.0, .guess("space between the star badge and the bold title in the empty favorites box"))
     let emptySubtitleGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the subtitle's first line is centred 18 under the title's"))
-    let emptyTextInset = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the subtitle wraps after \"most\", its first line about 136 wide"))
+    let emptyTextInset = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the subtitle wraps after \"most\", its first line about 136 wide; 26 keeps that break at every scale down to 164 (P05-f), where a label's fixed padding makes the text relatively wider"))
+    let emptySubtitleFont = Metric(11.5, .anatomy("verify/visual-pairs/run-20261103/P07/P07-b-arc.png: \"Favorites keep your most\" is 136.5 pt and \"used sites and apps close\" 140.5 pt wide, SF 11.5 (12 measures 141.6 and 146.2)"))
     let emptyCloseSize = Metric(18.0, .guess("hit size of the × on the empty favorites box"))
     let emptyCloseInset = Metric(15.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the × is centred 15 in from the box's top-right corner"))
 
@@ -116,6 +117,16 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragCardShadow = Metric(10.0, .guess("blur of the drag card's shadow: it fades over about 16 pt at the sides, 20 below (P23-d-arc.png)"))
     let dragCardShadowOpacity = Metric(0.16, .guess("the drag card's shadow darkens #FCFCFC to #E4E5E5 at its side (P23-d-arc.png)"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
+    // The split preview over a tab row's middle (P23-e-arc.png: capsule x 15...233.5, slot from 15, chip 22...114,
+    // "Seconda…" from 150, × centred at 216 in the window).
+    let splitJoinChipWidth = Metric(0.42, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the dragged tab's chip is 92 pt of the 218.5 pt capsule"))
+    let splitJoinChipOffset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the darker slot shows 7 pt left of the chip (x 15...22)"))
+    let splitJoinTargetLeading = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title starts 26 pt right of the capsule's middle"))
+    let splitJoinTargetTrailing = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title ends about 7 pt before the ×'s centre"))
+    /// Saturation (a share of the theme's, capped at 0.5 like `HueInk`) and lightness of the slot and the chip.
+    let splitJoinSlotInk = Metric([0.37, 0.586], .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the slot is #82A9A8 (HSL 178, 0.185, 0.586) on the pale teal theme"))
+    let splitJoinChipInk = Metric([0.254, 0.892], .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the chip is #E0E7E7 (HSL 180, 0.127, 0.892)"))
+    let splitJoinTargetInk = Metric(0.15, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title is #D8D8D8 on the #F5F5F5 capsule"))
     let selectedShadowRadius = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's current tab card has a 1.5 pt shadow line under its lower edge, darkest at the edge"))
     let selectedShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the shadow line sits under the card, not around it"))
     let floatingShadowRadius = Metric(16.0, .guess("floating sidebar shadow blur; not recovered (layout-constants.md, Not recovered)"))

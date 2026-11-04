@@ -57,7 +57,7 @@ enum CommandInventory {
         .space(.inSpace(space, .newFolder)),
         .split(.addPane), .split(.addPaneBefore), .split(.movePane(.previous)), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
-        .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)),
+        .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)), .split(.joinRow(item, onto: ItemID("target"))),
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
@@ -369,7 +369,7 @@ enum CommandInventory {
             case .addPane: "addPane"; case .addPaneAt: "addPaneAt"; case .addPaneBefore: "addPaneBefore"; case .movePane: "movePane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
             case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
             case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
-            case .restore: "restore"; case .dropTab: "dropTab"
+            case .restore: "restore"; case .dropTab: "dropTab"; case .joinRow: "joinRow"
             }
         case .sidebar(let c):
             switch c {

@@ -13,6 +13,11 @@ enum SidebarWindowScenarios {
         Scenario("SidebarWindow2", "the focused pane header carries translate, website controls, split menu and close at Arc's places; the menu's move and add commands", cefOnly: "native split pages", paneHeader),
         Scenario("SidebarWindow3", "a dock reorder drag carries the space in a capsule that follows the pointer and drops where it is released", cefOnly: "native pointer sequences", dockCapsule),
         Scenario("SidebarWindow4", "with Today emptied the divider and Clear are gone, New Tab sits under Pinned and the empty card shows", cefOnly: "native sidebar rows", emptyToday),
+        // R4-12 (user reports; P23-e/f, P05-f, P07-b).
+        Scenario("SidebarWindow5", "a Today tab held on the middle of another Today tab's row shows Arc's split capsule there; the release makes the split in the target's place, two panes, the dragged one focused", cefOnly: "native sidebar pointer drags and CEF surfaces", rowJoin),
+        Scenario("SidebarWindow6", "a pinned folder's tab dropped on the middle of a Today tab's row joins it in a split where the Today tab was", cefOnly: "native sidebar pointer drags and CEF surfaces", pinnedRowJoin),
+        Scenario("SidebarWindow7", "a tab dropped on another row's upper or lower edge only reorders, and on a folder's middle goes into the folder; no capsule, no split", cefOnly: "native sidebar pointer drags", rowEdges),
+        Scenario("SidebarWindow8", "from 228 down to 164 in 16 pt steps the empty Favorites box shrinks with its badge, title, two lines and × inside it; Favorites tiles go two by two", cefOnly: "native sidebar layout", narrowSidebar),
     ]
 
     private static func pointer(_ app: AppUnderTest, _ phase: PointerPhase, _ point: CGPoint) throws {
@@ -142,5 +147,161 @@ enum SidebarWindowScenarios {
         try expect(near(newTab.minY - row.maxY, Metrics.tablist.rowSpacing.value), "New Tab is not right under Pinned: \(row) then \(newTab)")
         try expect(isShown(n, .card(0)), "no empty card")
         try app.screenshot("today-empty")
+    }
+
+    // MARK: R4-12
+
+    private static let capsule = ViewID.tabTool("split-join-preview")
+
+    /// Press on `source`'s row and drag in steps to `held` (window points), staying pressed.
+    private static func press(_ app: AppUnderTest, row source: ItemID, to held: CGPoint) throws {
+        let row = try visible(app.native(), .row(source)).frame
+        try pointer(app, .down, CGPoint(x: row.midX, y: row.midY))
+        try pointer(app, .dragged, CGPoint(x: row.midX + 4, y: row.midY + (held.y > row.midY ? 4 : -4)))
+        try pointer(app, .dragged, CGPoint(x: (row.midX + held.x) / 2, y: (row.midY + held.y) / 2))
+        try pointer(app, .dragged, held)
+    }
+
+    /// A point `fraction` of the way down `item`'s row (0 is its top).
+    private static func onRow(_ app: AppUnderTest, _ item: ItemID, _ fraction: Double) throws -> CGPoint {
+        let row = try visible(app.native(), .row(item)).frame
+        return CGPoint(x: row.midX, y: row.minY + row.height * fraction)
+    }
+
+    private static func loadTabs(_ app: AppUnderTest, _ names: [String]) throws -> [ItemID] {
+        try names.map { name in
+            let url = app.site.url("split-tools.html?" + name)
+            let tab = try app.load(url)
+            try app.waitForPageInput(PageID(window: app.window!, item: tab), at: url)
+            return tab
+        }
+    }
+
+    /// Asserts Arc's capsule over `target` while the drag is held: in the target row's place, the chip on its left
+    /// half, the target's title on the right, the dragged row lifted in place with its ×.
+    private static func expectCapsule(_ app: AppUnderTest, over target: ItemID, dragging source: ItemID) throws {
+        let n = try app.native()
+        try expect(isShown(n, capsule), "no split capsule on the middle of the row")
+        let shown = try visible(n, capsule).frame, row = n.actual[ViewID.row(target).identifier]!.frame
+        try expect(near(shown.minX, row.minX) && near(shown.minY, row.minY) && near(shown.width, row.width) && near(shown.height, row.height),
+                   "the capsule \(shown) is not in the target row's place \(row)")
+        let chip = try visible(n, .tabTool("split-join-chip")).frame, rest = try visible(n, .tabTool("split-join-target")).frame
+        try expect(chip.maxX < rest.minX && chip.midX < shown.midX && rest.minX > shown.midX, "the chip \(chip) and the target's title \(rest) are not left and right halves of \(shown)")
+        try expect(isShown(n, .rowClose(source)), "the dragged row is not lifted with its ×")
+    }
+
+    @Sendable static func rowJoin(_ app: AppUnderTest) throws {
+        let tabs = try loadTabs(app, ["inbox", "long", "secondary"])
+        let inbox = tabs[0], secondary = tabs[2]
+        let before = try app.view().space.today.rows.map(\.id)
+        guard let at = before.firstIndex(of: secondary) else { throw Check(description: "no Secondary row") }
+        let held = try onRow(app, secondary, 0.5)
+        try press(app, row: inbox, to: held)
+        try expectCapsule(app, over: secondary, dragging: inbox)
+        try app.screenshot("row-join-capsule")
+        try pointer(app, .up, held)
+        try app.waitUntil("the release to join the two tabs") { try app.view().content.panes.map(\.tab) == [inbox, secondary] }
+        let view = try app.view()
+        guard let split = view.content.split else { throw Check(description: "no split shown") }
+        try expect(view.space.today.rows.map(\.id) == before.filter { $0 != inbox }.map { $0 == secondary ? split : $0 },
+                   "the split is not where Secondary was (index \(at)): \(view.space.today.rows.map(\.id))")
+        try expect(view.content.panes.first(where: \.focused)?.tab == inbox, "the dragged tab is not the focused pane")
+        let n = try app.native()
+        try expect(!isShown(n, capsule), "the capsule stayed after the release")
+        let left = try visible(n, .card(0)).frame, right = try visible(n, .card(1)).frame
+        try expect(left.maxX < right.minX && near(left.width, right.width, 2), "the content is not two side-by-side panes: \(left) \(right)")
+        try expect(isShown(n, .splitSegment(inbox)) && isShown(n, .splitSegment(secondary)), "the sidebar row is not one split row of the two tabs")
+        let menu = try visible(n, .tabTool("pane-split-menu")).frame
+        try expect(menu.minX > left.midX && menu.maxX <= left.maxX, "the focused pane's header buttons are not on the left pane: \(menu) in \(left)")
+        for (pane, page) in [(inbox, "inbox"), (secondary, "secondary")] {
+            try app.waitUntil("\(page) to be on screen in its pane") { try app.native().pages[PageID(window: app.window!, item: pane)]?.surfaceFrame != nil }
+        }
+        try app.screenshot("row-join-split")
+    }
+
+    @Sendable static func pinnedRowJoin(_ app: AppUnderTest) throws {
+        let (target, source) = try pinnedPair(app)
+        let held = try onRow(app, target, 0.5)
+        try press(app, row: source, to: held)
+        try expectCapsule(app, over: target, dragging: source)
+        try app.screenshot("pinned-row-join-capsule")
+        try pointer(app, .up, held)
+        try app.waitUntil("the release to join the pinned tab") { try app.view().content.panes.map(\.tab) == [source, target] }
+        let view = try app.view()
+        try expect(view.space.today.rows.contains { $0.id == view.content.split }, "the split is not in Today where the target was")
+        try expect(!view.space.pinned.rows.contains { row in
+            if case .folder(let f) = row { return f.children.contains { $0.id == source } }
+            return row.id == source
+        }, "the dropped tab is still in Pinned")
+        try app.screenshot("pinned-row-join-split")
+    }
+
+    @Sendable static func rowEdges(_ app: AppUnderTest) throws {
+        let tabs = try loadTabs(app, ["a", "b", "c"])
+        let a = tabs[0], b = tabs[1], c = tabs[2]
+        // Today, newest first: c, b, a, then whatever the window opened with.
+        func order() throws -> [ItemID] { try app.view().space.today.rows.map(\.id).filter { tabs.contains($0) } }
+        let start = try order()
+        try expect(start == [c, b, a], "unexpected start order \(start)")
+        // a onto c's upper quarter: before c.
+        var held = try onRow(app, c, 0.12)
+        try press(app, row: a, to: held)
+        try expect(!isShown(try app.native(), capsule), "a capsule on the row's upper edge")
+        try app.screenshot("row-edge-reorder")
+        try pointer(app, .up, held)
+        try app.waitUntil("a to move above c") { try order() == [a, c, b] }
+        try expect(try app.view().content.split == nil, "an edge drop made a split")
+        // a onto b's lower quarter: after b.
+        held = try onRow(app, b, 0.88)
+        try press(app, row: a, to: held)
+        try expect(!isShown(try app.native(), capsule), "a capsule on the row's lower edge")
+        try pointer(app, .up, held)
+        try app.waitUntil("a to move below b") { try order() == [c, b, a] }
+        // a onto a pinned folder's middle: into the folder.
+        try app.dispatch(.item(.newFolder))
+        try app.dispatch(.commandBar(.dismiss))
+        guard let folder = try app.view().space.pinned.rows.first(where: { $0.kind == .folder })?.id else { throw Check(description: "no pinned folder") }
+        try app.dispatch(.item(.rename(folder, title: "Folder")))
+        held = try onRow(app, folder, 0.5)
+        try press(app, row: a, to: held)
+        try expect(!isShown(try app.native(), capsule), "a capsule on a folder")
+        try pointer(app, .up, held)
+        try app.waitUntil("a to go into the folder") {
+            guard case .folder(let f)? = try app.view().space.pinned.rows.first(where: { $0.id == folder }) else { return false }
+            return f.children.map(\.id) == [a]
+        }
+        try expect(try app.view().content.split == nil, "a folder drop made a split")
+    }
+
+    @Sendable static func narrowSidebar(_ app: AppUnderTest) throws {
+        let parts = ["favorites-empty-badge", "favorites-empty-title", "favorites-empty-subtitle", "favorites-empty-close"].map(ViewID.tabTool)
+        try app.waitUntil("the empty Favorites box") { try isShown(app.native(), parts[1]) }
+        for width in stride(from: Metrics.sidebar.defaultWidth.value, through: Metrics.sidebar.minWidth.value, by: -16) {
+            try app.dispatch(.sidebar(.resize(width: width)))
+            try app.waitUntil("the sidebar at \(width)") { (try app.native().computed.sidebar?.frame.width).map(Double.init) == width }
+            let n = try app.native()
+            guard let f = n.computed.sidebar else { throw Check(description: "no sidebar") }
+            let box = FavoritesGrid.emptyBox(width: f.favoritesTray.width).box.offsetBy(dx: f.favoritesTray.minX, dy: f.favoritesTray.minY)
+            for part in parts {
+                let frame = try visible(n, part).frame
+                try expect(box.insetBy(dx: -0.5, dy: -0.5).contains(frame), "\(part.identifier) \(frame) leaves the box \(box) at \(width)")
+            }
+            try expect(box.maxY <= f.spaceHeader.minY, "the box \(box) reaches the space header \(f.spaceHeader) at \(width)")
+            try app.screenshot("narrow-\(Int(width))-empty")
+        }
+        // Four Favorites at the narrowest width: two rows of two.
+        let root = try app.view().favorites.root
+        for (i, name) in ["w", "m", "g", "a"].enumerated() {
+            let url = app.site.url("split-tools.html?fav-" + name)
+            let tab = try app.load(url)
+            try app.waitForPageInput(PageID(window: app.window!, item: tab), at: url)
+            try app.dispatch(.item(.move(tab, to: .into(parent: root, index: i))))
+        }
+        try app.waitUntil("four Favorites") { try app.view().favorites.tiles.count == 4 }
+        let n = try app.native()
+        let tiles = try app.view().favorites.tiles.map { try visible(n, .favorite($0.id)).frame }
+        try expect(Set(tiles.map(\.minX)).count == 2 && Set(tiles.map(\.minY)).count == 2, "Favorites are not two by two at 164: \(tiles)")
+        try app.screenshot("narrow-164-favorites")
+        try app.dispatch(.sidebar(.resize(width: Metrics.sidebar.defaultWidth.value)))
     }
 }
