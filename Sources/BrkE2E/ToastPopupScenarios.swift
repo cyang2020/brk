@@ -244,6 +244,25 @@ enum ToastPopupScenarios {
         try app.click(.dockPlus)
         try app.waitUntil("× closed it") { try closed(app) }
         try app.waitUntil("the + fill back") { try app.pixel(edge) == idleFill }
+
+        // A dark theme's popover (Q11-plus-user-arc): near-black card, navy highlight, white titles.
+        let space = try app.view().space.id
+        var dark = drabTheme
+        dark.appearance = .dark
+        try app.dispatch(.space(.update(space, title: nil, icon: nil, theme: dark)))
+        app.sleep(0.6)
+        _ = try openMenu(app)
+        try app.waitUntil("the dark popover's colors") {
+            let row = try app.pixel(tabBlank), plain = try app.pixel(spaceBlank)
+            return abs(row[0] - 0x1F) <= 4 && abs(row[1] - 0x29) <= 4 && abs(row[2] - 0x43) <= 4 && plain[0] <= 4 && plain[1] <= 7 && plain[2] <= 16
+        }
+        _ = try app.screenshot("plus-dark")
+        try app.click(.dockPlus)
+        try app.waitUntil("× closed the dark popover") { try closed(app) }
+        try app.dispatch(.space(.update(space, title: nil, icon: nil, theme: drabTheme)))
+        app.sleep(0.6)
+        app.passed("the dark popover")
+
         _ = try openMenu(app)
         if WindowServerKeys.allowed {
             try WindowServerKeys.press(app, KeyChord([], .escape), window: app.window!)
