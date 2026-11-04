@@ -12,7 +12,7 @@ final class ChromePage: CefBrowserDelegate {
     let id: PageID
     /// The request context it was created in; fixed for the page's life (a changed spec replaces the page).
     let isAIReader: Bool
-    /// The ready document's `<html lang>` (CEFEngine.reportLanguage), for the page menu's Translate to English.
+    /// The ready document's language (CEFEngine.reportLanguage), for the page menu's Translate to English.
     var detectedLanguage: String?
     /// The last highlight state reported (`PageEvent.selectionChanged`), reset with each document.
     var reportedSelection = false

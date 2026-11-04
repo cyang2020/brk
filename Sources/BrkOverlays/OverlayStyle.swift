@@ -72,8 +72,8 @@ struct OverlayColors {
 }
 
 /// The command bar's own colors (Arc 1.170, measured on the 2026-11-03 captures in verify/visual-pairs/run-20261103).
-/// In a space's window the centered bar (Cmd+T) is neutral grey and over the URL pill (Cmd+L) its highlight and text
-/// selection are shades of the sidebar theme's primary color; a window without a space (blank, Little, incognito)
+/// In a space's window the highlight and the text selection of both bars (Cmd+T, and Cmd+L over the URL pill) are shades
+/// of the sidebar theme's primary color, grey under a white theme; a window without a space (blank, Little, incognito)
 /// highlights in Arc's blue-violet (P20-a, P21-a, Q03-a). All follow the sidebar's scheme, not the system's (P29-c).
 struct CommandBarColors {
     let card: NSColor
@@ -92,7 +92,7 @@ struct CommandBarColors {
     let tileOnHighlight: NSColor
     let infoCircle: NSColor
 
-    static func of(_ scheme: Scheme, attached: Bool, primary: RGBA, spaceless: Bool = false) -> CommandBarColors {
+    static func of(_ scheme: Scheme, primary: RGBA, spaceless: Bool = false) -> CommandBarColors {
         let base = OverlayColors.of(scheme)
         let ink: NSColor = scheme == .light ? .black : .white
         guard scheme == .light else {
@@ -107,10 +107,13 @@ struct CommandBarColors {
                                     accessory: ink.withAlphaComponent(0.08), accessoryText: base.accessoryForeground,
                                     tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
         }
-        // P02-b over a #F2EAE4 theme: highlight #B8A89B, selection #C8B9AF. Q01-a/b: highlight #ABABAB, selection #BBBBBB.
+        // One rule for both bars, from the theme's dark shade (its hue and saturation at relative luminance 0.097, Arc's
+        // split focus ring): halfway to white for the highlight, 60% for the selected text. Measured: #F2EAE4 (ring
+        // #725137): #B8A89B and #C8B9AF (P02-b). White (ring #585858): #ABABAB and #BBBBBB (Q01-a/b). Teal (ring
+        // #006362): #68B1B1 (P49), whose green and blue this gives; Arc's red is lower, its ring lies outside sRGB.
         // P20-a, P21-a (blank and Little windows): highlight #8F95FF. Q01-a: the card's 0.5 pt edge reads #AEAEAE on #F9F9FA.
-        let highlight = spaceless ? srgb(0x8F95FF) : attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.31)
-        let selection = spaceless ? srgb(0xC9CCFF) : attached ? shade(primary, saturation: 2.16, brightness: 0.826) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25)
+        let highlight = spaceless ? srgb(0x8F95FF) : towardWhite(primary, 0.5)
+        let selection = spaceless ? srgb(0xC9CCFF) : towardWhite(primary, 0.6)
         return CommandBarColors(card: NSColor(srgbRed: 0xF9 / 255.0, green: 0xF9 / 255.0, blue: 0xFA / 255.0, alpha: 1),
                                 border: ink.withAlphaComponent(0.3), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
                                 placeholder: ink.withAlphaComponent(0.45), highlight: highlight, onHighlight: .white, textSelection: selection,
@@ -123,11 +126,10 @@ struct CommandBarColors {
     }
 
     /// `color` with its hue kept, saturation and brightness scaled (sRGB HSB).
-    private static func shade(_ color: RGBA, saturation: Double, brightness: Double) -> NSColor {
-        let rgb = NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        rgb.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        return NSColor(colorSpace: .sRGB, hue: h, saturation: min(1, s * saturation), brightness: b * brightness, alpha: 1)
+    private static func towardWhite(_ primary: RGBA, _ white: Double) -> NSColor {
+        let ring = themeShade(primary, luminance: 0.097)
+        func lift(_ value: Double) -> Double { value + (1 - value) * white }
+        return NSColor(srgbRed: lift(ring.red), green: lift(ring.green), blue: lift(ring.blue), alpha: 1)
     }
 }
 
@@ -168,7 +170,7 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let offerGap = Metric(12.5, .anatomy("\(measured): 14.5 between the completed text and \"Search Google Docs\""))
     let keyGap = Metric(6.5, .anatomy("\(measured): 8.5 between \"Search Google Docs\" and its Tab key"))
     let keyPadding = Metric(4.0, .anatomy("\(measured): the Tab key is 30.5 wide around 13 pt \"Tab\""))
-    let arrowRightInset = Metric(12.5, .anatomy("\(measured): the Switch to Tab arrow ends 12.5 in from the highlight"))
+    let arrowRightInset = Metric(13.0, .anatomy("\(measured): the Switch to Tab arrow ends 13 in from the highlight (Q01-a: its square spans 26 to 50 pt of the crop against Brk's earlier 26.5 to 50.5)"))
     let centeredInputFontSize = Metric(18.0, .anatomy("\(measured): Cmd+T placeholder cap height 12.7"))
     let attachedInputFontSize = Metric(13.0, .anatomy("\(measured): the URL over the pill has a 9.5 ascender"))
     let titleFontSize = Metric(13.0, .anatomy("\(measured): row titles have a 9 pt cap height"))

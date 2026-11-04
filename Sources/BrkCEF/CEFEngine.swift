@@ -109,6 +109,11 @@ public final class CEFEngine: WebEngine {
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            // Chromium's own log, for looking into what a slow quit waits for (r5-2/quit-probe.py).
+            if let log = ProcessInfo.processInfo.environment["BRK_TEST_CEF_LOG"], !log.isEmpty {
+                config.logFile = URL(fileURLWithPath: log)
+                config.logSeverity = .verbose
+            }
             config.safeStorage = .mockKeychain
             config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"
             // The https fixture's certificate (verify/visual-pairs/https-fixture): Chromium accepts this one public key

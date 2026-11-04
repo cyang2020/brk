@@ -58,16 +58,24 @@ extension CEFEngine {
         return HoveredLink(frame: CGRect(x: x * factor, y: y * factor, width: w * factor, height: h * factor), previewSite: object["site"] as? Bool == true)
     }
 
-    /// The ready document's declared language, read once it finished loading (the URL pill's Translation Available,
-    /// the page menu's Translate to English). AI readers and non-web pages are skipped.
+    /// The ready document's language, read once it finished loading (the URL pill's Translation Available, the page
+    /// menu's Translate to English): its `<html lang>`; without one, a sample of its visible text goes to the delegate,
+    /// whose answer comes back here. AI readers and non-web pages are skipped.
     func reportLanguage(_ page: ChromePage) {
         guard !page.isAIReader, let document = page.readyDocument,
               let scheme = page.browser.url?.scheme?.lowercased(), ["http", "https", "file"].contains(scheme) else { return }
         Task { @MainActor [weak self, weak page] in
-            guard let self, let page, let value = try? await self.aiEvaluate(document, AIPageScripts.language) as? String,
+            guard let self, let page, let probe = try? await self.aiEvaluate(document, AIPageScripts.language) as? [String: Any],
                   self.isLive(page), page.readyDocument == document else { return }
-            page.detectedLanguage = value
-            self.pageDidEmit(page, .languageDetected(document, value))
+            let finish: @MainActor (String) -> Void = { [weak self, weak page] language in
+                guard let self, let page, self.isLive(page), page.readyDocument == document else { return }
+                page.detectedLanguage = language
+                self.pageDidEmit(page, .languageDetected(document, language))
+            }
+            if let declared = probe["declared"] as? String, !declared.isEmpty { finish(declared); return }
+            let sample = probe["sample"] as? String ?? ""
+            guard !sample.isEmpty, let delegate = self.delegate else { finish(""); return }
+            delegate.engine(self, recognizeLanguageOf: sample) { finish($0 ?? "") }
         }
     }
 
@@ -141,7 +149,15 @@ enum AIPageScripts {
         if(node.nodeValue!==from)continue;node.nodeValue=to;n++;}return n>0;})()
         """
     }
-    static let language = "(document.documentElement.lang||'').trim().slice(0,40)"
+    /// The declared language and, when there is none, up to 2000 characters of what the page shows.
+    static let language = #"""
+    (()=>{
+      const declared=(document.documentElement.lang||'').trim().slice(0,40);
+      if(declared)return {declared};
+      const root=document.querySelector('main,article,[role="main"]')||document.body;
+      return {declared:'',sample:root?(root.innerText||'').replace(/\s+/g,' ').trim().slice(0,2000):''};
+    })()
+    """#
     /// The innermost hovered link to the address (`[url]`, JSON), its first line box in CSS pixels and the ratio.
     static func hoveredLink(_ json: String) -> String {
         """

@@ -35,6 +35,14 @@ final class KeyRouter: WebEngineDelegate {
         return store.dispatchKeyHandling(page.window, KeyInput(press: key, stage: stage, pressID: pressID))
     }
 
+    /// NaturalLanguage lives here, not in the engine (module-map.md); the recognizer may load its model, so off the main actor.
+    func engine(_ engine: any WebEngine, recognizeLanguageOf sample: String, reply: @escaping @MainActor (String?) -> Void) {
+        Task.detached(priority: .utility) {
+            let language = PageLanguage.recognize(sample)
+            await reply(language)
+        }
+    }
+
     func engine(_ engine: any WebEngine, find update: FindUpdate) { store.dispatch(.system(.find(update))) }
     func engine(_ engine: any WebEngine, output update: OutputUpdate) { store.dispatch(.system(.output(update))) }
     func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) {

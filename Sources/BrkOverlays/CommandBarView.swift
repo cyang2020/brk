@@ -14,7 +14,7 @@ import BrkUIKit
 ///
 /// Two cards, as Arc 1.170 draws them (verify/visual-pairs/run-20261103 P02-b/c, Q01-a/b): centered (Cmd+T) the
 /// card fills the box, with a 64 pt input row (magnifier, 18 pt text, ⓘ) and a hairline over the rows, each recent
-/// tab with "Switch to Tab" and an arrow square, the highlight grey. Over the URL pill (Cmd+L) the card is 350 wide
+/// tab with "Switch to Tab" and an arrow square, the highlight a shade of the theme (grey under a white theme). Over the URL pill (Cmd+L) the card is 350 wide
 /// from the pill's left edge (wider only when its input row needs it), its input row 50 tall with the page's icon
 /// and 13 pt text, no hairline and no Switch to Tab captions, the highlight and the text selection shades of the
 /// sidebar theme. Both follow the sidebar's scheme.
@@ -68,7 +68,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private var fillsWindow = false {
         didSet { if fillsWindow != oldValue { layoutCard() } }
     }
-    private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
+    private var colors = CommandBarColors.of(.light, primary: RGBA(1, 1, 1))
     private let backdrop = NSVisualEffectView()
     private let backdropTint = NSView()
     private var look: (Scheme, Style, RGBA, Bool)?
@@ -491,7 +491,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private func applyColors(_ scheme: Scheme, style: Style, primary: RGBA, spaceless: Bool) {
         look = (scheme, style, primary, spaceless)
         self.style = style
-        colors = CommandBarColors.of(scheme, attached: style == .attached, primary: primary, spaceless: spaceless)
+        colors = CommandBarColors.of(scheme, primary: primary, spaceless: spaceless)
         appearance = .of(scheme)
         let o = OverlayMetrics.commandBar
         input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
@@ -666,7 +666,7 @@ final class ResultRowView: NSView {
         }
         icon.imageScaling = .scaleProportionallyUpOrDown
         arrowGlyph.image = NSImage(systemSymbolName: "arrow.right", accessibilityDescription: nil)
-        arrowGlyph.symbolConfiguration = .init(pointSize: 16, weight: .regular)
+        arrowGlyph.symbolConfiguration = .init(pointSize: 16, weight: .semibold)
         arrow.addSubview(arrowGlyph)
         hintPill.addSubview(hint)
         for view in [tile, icon, label, detail, hintPill, arrow] { addSubview(view) }

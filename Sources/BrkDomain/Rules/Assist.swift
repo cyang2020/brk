@@ -266,7 +266,7 @@ extension Work {
         case .translate(let target):
             guard case .profile(let profile) = request.context else { return }
             let exclusions = state.doc.settings.max.translationExclusions?[profile] ?? AITranslationExclusions()
-            let language = AILanguages.base(content.language)
+            let language = AILanguages.base(content.language.isEmpty ? state.session.live[page]?.language ?? "" : content.language)
             if exclusions.languages.contains(language) || exclusions.sites.contains(content.url.host?.lowercased() ?? "") {
                 completeAI(id, text: "This profile never translates this language or site. Change the choice in Settings → Max."); return
             }
@@ -367,7 +367,9 @@ extension Work {
             // The page's own language stays the first translation's (Choose Another Language translates the
             // translation; Use Original still brings the page's own text back).
             let earlier = state.session.ai.translations[page].flatMap { $0.document == document ? $0.source : nil }
-            let source = earlier ?? AILanguages.base(request.contents[page]?.language ?? "")
+            // A page that declares no language: what its text was recognized as (`PageEvent.languageDetected`).
+            let declared = request.contents[page]?.language ?? ""
+            let source = earlier ?? AILanguages.base(declared.isEmpty ? state.session.live[page]?.language ?? "" : declared)
             state.session.ai.translations[page] = AIPageTranslation(document: document, source: source, target: target, showingTranslation: true)
         }
         completeAI(id, text: success ? "Page translated. Controls and page structure were preserved. Reload to restore the original text." : "The document or text changed. Translation was not applied; reload and retry.", success: success)

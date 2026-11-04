@@ -241,24 +241,21 @@ private struct SiteControlsView: View {
     }
 }
 
+/// One extension command's shortcut, recorded like Chrome's extension shortcuts page and Brk's Shortcuts pane: a click
+/// on the key cap, then the chord; Esc cancels, Delete clears. Chromium's binding is the state shown.
 private struct ExtensionShortcutEditor: View {
     let extensionID: String
     let command: BrowserExtensionCommand
     let dispatch: Dispatch
-    @State private var draft = ""
     var body: some View {
-        VStack(alignment: .leading) {
+        HStack {
             Text(command.description + (command.active ? "" : " (unassigned)"))
-            HStack {
-                SettingsTextField(field: "extension-shortcut-" + extensionID + "-" + command.name, text: draft,
-                                  placeholder: "cmd+shift+u; empty clears", edit: { draft = $0 }) { draft = $0 }
-                SettingsButton(title: "Save shortcut", field: "extension-shortcut-save-" + extensionID + "-" + command.name) {
-                    dispatch(.site(.extensionShortcut(extensionID, command.name, draft)))
-                }
+            Spacer(minLength: ShortcutsPaneMetrics.controlSpacing.value)
+            ChordRecorder(state: ExtensionShortcuts.chord(command.keybinding).map(KeyBindingState.valid) ?? .unset,
+                          identifier: ViewID.settingsField("extension-shortcut-" + extensionID + "-" + command.name).identifier) { chord in
+                dispatch(.site(.extensionShortcut(extensionID, command.name, chord?.description ?? "")))
             }
-            Text("Current: " + (command.keybinding.isEmpty ? "None" : command.keybinding)).font(.caption)
+            .frame(width: ShortcutsPaneMetrics.recorderSize.value.width, height: ShortcutsPaneMetrics.recorderSize.value.height)
         }
-        .onAppear { draft = command.keybinding }
-        .onChange(of: command.keybinding) { _, value in draft = value }
     }
 }

@@ -400,9 +400,6 @@ struct SettingsTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
-            if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, field.accessibilityIdentifier().contains("extension-shortcut-") {
-                print("[extension-control] text edit id=\(field.accessibilityIdentifier()) count=\(field.stringValue.count)")
-            }
             edit?(field.stringValue)
         }
 

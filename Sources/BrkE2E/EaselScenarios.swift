@@ -3,6 +3,7 @@ import BrkControl
 import BrkDomain
 import BrkLayout
 import Foundation
+import ImageIO
 
 /// Easels on the real app (Q09 a, Q09 c, P32 c): File > New Easel and its board, drawing with the toolbar through
 /// real pointer events, selecting, moving and deleting, pictures, the board after a restart, the Library's cards and
@@ -257,23 +258,58 @@ enum EaselScenarios {
         _ = try app.screenshot("easel-capture")
     }
 
-    /// A101's "export the result": the pill's Share (🔒 Share) opens a save panel; Save writes the board as a PNG.
+    /// A101's "export the result": the pill's Share (🔒 Share) opens the real save panel; Cancel writes nothing; Save,
+    /// pressed through Accessibility as `FilePanelScenarios` does (keys posted to this remote panel do not reach it),
+    /// writes the board as a PNG that has the drawn ellipse on it.
     @Sendable static func export(_ app: AppUnderTest) throws {
+        guard FilePanelScenarios.usesAccessibility else { throw Skipped(description: FilePanelScenarios.gestureGap) }
         _ = try make(app)
         try app.press("escape")
         try tool(app, "ellipse")
         try stroke(app, [CGPoint(x: -100, y: 200), CGPoint(x: 0, y: 300)])
         try waitForElements(app, 1, "an ellipse")
-        // With the destination chosen beforehand (the control socket's post-selection fixture, as BB6's outputs), Share
-        // writes the board's PNG there. The save panel itself is not driven: injected keys do not reach this remote
-        // NSSavePanel on the test machine (Return and Escape both left it open), so the panel stays with its unit test.
-        let destination = app.dataDirectory.appendingPathComponent("easel-share.png")
-        try app.perform(.chooseOutputFixture(window: app.window, path: destination.path))
         try app.click(.urlPill)
-        try app.waitUntil("the PNG is written", timeout: 10) { FileManager.default.fileExists(atPath: destination.path) }
-        let bytes = try Data(contentsOf: destination)
-        try expect(bytes.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && bytes.count > 1000, "the shared file is not a drawn PNG (\(bytes.count) bytes)")
+        try ImportSyncScenarios.waitPanel(app, "Share Easel")
+        try ImportSyncScenarios.panel(app, .button("Cancel"))
+        try app.waitUntil("Cancel closes the panel") { try app.native().sheetClass == nil }
+        try expect(try FileManager.default.contentsOfDirectory(atPath: app.dataDirectory.path).filter { $0.hasSuffix(".png") }.isEmpty, "Cancel wrote a file")
+        try app.click(.urlPill)
+        try ImportSyncScenarios.waitPanel(app, "Share Easel")
+        guard case .menuItems(let controls) = try app.send(.sidebarPanel(window: nil, action: .inspect)) else { throw Check(description: "no panel to read") }
+        try expect(controls.last == "name:Untitled Easel.png", "the panel suggests \(controls.last ?? "nothing")")
+        let destination = app.dataDirectory.appendingPathComponent("easel-share.png")
+        try FilePanelScenarios.selectSave(app, destination)
         try app.waitUntil("Saved toast") { try app.view().tabTools.toast?.text == "Saved easel-share.png" }
+        try app.waitUntil("the panel is gone") { try app.native().sheetClass == nil }
+        let bytes = try Data(contentsOf: destination)
+        guard let source = CGImageSourceCreateWithData(bytes as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              CGImageSourceGetType(source) as String? == "public.png" else { throw Check(description: "the shared file is not a PNG (\(bytes.count) bytes)") }
+        let pixels = PixelGrid(image)
+        var inked = 0
+        for y in stride(from: 0, to: pixels.height, by: 2) { for x in stride(from: 0, to: pixels.width, by: 2) where pixels.isInked(x: x, y: y) { inked += 1 } }
+        try expect(inked > 20, "the PNG (\(pixels.width)×\(pixels.height)) has no drawing on it")
+        try FilePanelScenarios.retain(app, destination, label: "easel")
+        app.note("REAL PANEL: Share opened NSSavePanel; AX Cancel wrote nothing; AX set the name and pressed Save; the PNG is \(pixels.width)×\(pixels.height) with \(inked) inked samples.")
+    }
+
+    /// An image's pixels as 8-bit RGBA, for checking that something was drawn on it.
+    private struct PixelGrid {
+        let width: Int, height: Int, bytes: [UInt8]
+        init(_ image: CGImage) {
+            let width = image.width, height = image.height
+            var data = [UInt8](repeating: 0, count: width * height * 4)
+            data.withUnsafeMutableBytes { raw in
+                CGContext(data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                          space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+                    .draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            }
+            self.width = width; self.height = height; bytes = data
+        }
+        /// Darker than the board's near-white background.
+        func isInked(x: Int, y: Int) -> Bool {
+            let o = (y * width + x) * 4
+            return bytes[o + 3] > 0 && min(bytes[o], bytes[o + 1], bytes[o + 2]) < 200
+        }
     }
 
     @Sendable static func reopen(_ app: AppUnderTest) throws {

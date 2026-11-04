@@ -12,7 +12,7 @@ enum ExtScenarios {
         Scenario("Ext-blocking", "main-frame, cross-origin frame, redirect and a selected EasyList file", cefOnly: "CEF IO request filtering", blocking),
         Scenario("Ext-media", "audible WebAudio, suspended WebAudio and hidden media scheduling", cefOnly: "Chromium lifecycle", media),
         Scenario("Ext-controls", "origin/profile readback, copy and local link export", cefOnly: "native site controls", controls),
-        Scenario("Ext-shortcut-physical", "window-server key events edit the shortcut field and fire the extension command",
+        Scenario("Ext-shortcut-physical", "window-server key events record the shortcut on its key cap and fire the extension command",
                  cefOnly: "CEF extension commands", physicalShortcut),
     ]
     static func js(_ text: String) -> String {
@@ -90,25 +90,25 @@ enum ExtScenarios {
                 try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-shortcuts-controls.json"))
             }
         }
-        // Drive the native text editor and its Save action, not the manager's mutation API directly.
-        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
-        try app.press("cmd+a"); try app.type("cmd+shift+u")
-        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
+        // Drive the key cap with real key events, not the manager's mutation API directly.
+        guard let pid = app.hello?.pid else { throw Check(description: "app identity missing") }
+        func record(_ commandName: String, _ chord: KeyChord) throws {
+            try control(app, "extension-shortcut-" + fixture.id + "-" + commandName, .press)
+            try app.waitUntil("the key cap records") { try PageSiteFixScenarios.isRecording(app, owner: app.window!, "extension-shortcut-" + fixture.id + "-" + commandName) }
+            PhysicalKeys.press(chord, pid: pid)
+        }
+        try record(command, KeyChord([.command, .shift], .u))
         try app.waitUntil("edited Chromium shortcut readback") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
             return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
         }
-        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
-        try app.press("cmd+shift+u"); app.sleep(0.5)
+        // While it records, the chord goes to the key cap: it does not run the extension command.
+        try record(command, KeyChord([.command, .shift], .u)); app.sleep(0.5)
         try expect(try tab(item, in: app.view())?.title == "Site policy fixture", "native editor leaked the extension command to the page")
-        try control(app, "extension-shortcut-" + fixture.id + "-_execute_action", .focus)
-        try app.type("cmd+shift+u")
-        try control(app, "extension-shortcut-save-" + fixture.id + "-_execute_action", .press)
-        try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("already assigned") == true, "duplicate shortcut did not report a conflict")
-        try control(app, "extension-shortcut-" + fixture.id + "-" + command, .focus)
-        try app.type("cmd+t")
-        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
-        try expect(try SitePolicyScenarios.controls(app).extensionError?.contains("reserved") == true, "reserved shortcut did not report a conflict")
+        try record("_execute_action", KeyChord([.command, .shift], .u))
+        try app.waitUntil("duplicate shortcut reports a conflict") { try SitePolicyScenarios.controls(app).extensionError?.contains("already assigned") == true }
+        try record(command, KeyChord(.command, .t))
+        try app.waitUntil("reserved shortcut reports a conflict") { try SitePolicyScenarios.controls(app).extensionError?.contains("reserved") == true }
         _ = try app.screenshotSiteControls("shortcut-editor")
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
         try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
@@ -129,10 +129,10 @@ enum ExtScenarios {
         try SitePolicyScenarios.evaluate(app, item, "document.title='extension-count:'+document.documentElement.getAttribute('data-brk-extension-commands')")
         try waitForTitle(app, item, "extension-count:1")
         try app.dispatch(.settings(.shortcuts(.reset(.newTab))))
-        app.note("Owned AppKit focus/press actions plus real key input edited the actual fields and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap. Synthetic physical utility-panel clicks remain a separate verification limitation.")
+        app.note("The key cap's press action plus real key events recorded the chords and exercised duplicate/reserved errors. Chromium binding and command execution survived restart; command count stayed one after a Brk app-priority remap.")
     }
 
-    /// The shortcut editor's text and the shortcut itself arrive as keyboard events from the window server
+    /// The chord recorded on the key cap and the shortcut itself arrive as keyboard events from the window server
     /// (`PhysicalKeys`), not through the control socket's in-process press.
     @Sendable static func physicalShortcut(_ app: AppUnderTest) throws {
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
@@ -140,12 +140,11 @@ enum ExtScenarios {
         let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try catalogValue(app, fixture.id) != nil }
-        try control(app, field, .focus)
-        PhysicalKeys.press(KeyChord([.command], .a), pid: pid)
-        PhysicalKeys.type("cmd+shift+u", pid: pid)
+        try control(app, field, .press)
+        try app.waitUntil("the key cap records") { try PageSiteFixScenarios.isRecording(app, owner: owner, field) }
+        PhysicalKeys.press(KeyChord([.command, .shift], .u), pid: pid)
         app.sleep(0.3)
-        try control(app, "extension-shortcut-save-" + fixture.id + "-" + command, .press)
-        try app.waitUntil("Chromium reads back the typed shortcut") {
+        try app.waitUntil("Chromium reads back the recorded shortcut") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
             return try catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
         }
