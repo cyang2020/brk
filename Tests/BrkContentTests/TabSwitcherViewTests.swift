@@ -83,10 +83,15 @@ final class TabSwitcherViewTests: XCTestCase {
         let cap = try XCTUnwrap(toast.subviews.first { !($0 is NSTextField) && !$0.isHidden && $0.frame.width > 30 && $0.frame.height < 30 })
         XCTAssertEqual(labels.first?.frame.minX, 10.5)
         XCTAssertEqual(cap.frame.width, 36.5)
-        XCTAssertEqual(cap.frame.minX - (labels.first?.frame.maxX ?? 0), 7)
+        // The spacing runs from the text's width; the frames are the cells' whole width, which keeps the last letter.
+        func textEnd(_ label: NSTextField) -> Double { label.frame.minX + ceil(label.intrinsicContentSize.width) }
+        let first = try XCTUnwrap(labels.first)
+        XCTAssertEqual(cap.frame.minX - textEnd(first), 7)
+        XCTAssertEqual(first.frame.width, first.cellWidth)
         let trailing = try XCTUnwrap(labels.last { $0.stringValue == "to undo" })
         XCTAssertEqual(trailing.frame.minX - cap.frame.maxX, 3.5)
-        XCTAssertEqual(toast.frame.width - trailing.frame.maxX, 13.5)
+        XCTAssertEqual(toast.frame.width - textEnd(trailing), 13.5)
+        XCTAssertEqual(trailing.frame.width, trailing.cellWidth)
         XCTAssertEqual(toast.frame.maxX, 1270, "the content area's right edge")
     }
 }

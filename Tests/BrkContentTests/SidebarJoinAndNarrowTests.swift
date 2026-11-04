@@ -94,12 +94,37 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
                         XCTAssertTrue(needed <= field.bounds.height + 0.5 || (lines > 0 && field.cell?.truncatesLastVisibleLine == true),
                                       "\(name): \(needed) tall in a \(field.bounds.height) frame")
                     } else {
-                        let needed = field.attributedStringValue.size().width
-                        XCTAssertTrue(needed <= field.bounds.width + 4 || [.byTruncatingTail, .byTruncatingMiddle, .byTruncatingHead].contains(field.lineBreakMode),
+                        // The cell draws the text 2 in from the frame, 4 when centred.
+                        let needed = field.attributedStringValue.size().width + (field.alignment == .center ? 4 : 2)
+                        XCTAssertTrue(needed <= field.bounds.width + 0.5 || [.byTruncatingTail, .byTruncatingMiddle, .byTruncatingHead].contains(field.lineBreakMode),
                                       "\(name): \(needed) wide in a \(field.bounds.width) frame without an ellipsis")
                     }
                 }
             }
+        }
+    }
+
+    /// Clear whole at every width, the word ending 19 before the sidebar's edge; its intrinsic width cut the r
+    /// (P02-clear-user-brk.png).
+    func testClearIsWholeAndEndsBeforeTheSidebarEdge() throws {
+        for width in stride(from: 228.0, through: 164, by: -16) {
+            let (window, root, _) = try rig(width: width, sink: Sink())
+            defer { window.close() }
+            let sidebar = root.sidebar
+            var found: ClearButton?
+            func walk(_ view: NSView) {
+                if let clear = view as? ClearButton { found = clear }
+                view.subviews.forEach(walk)
+            }
+            walk(sidebar)
+            let clear = try XCTUnwrap(found)
+            clear.superview?.layout()
+            clear.layout()
+            let label = try XCTUnwrap(clear.subviews.first as? NSTextField)
+            let frame = label.convert(label.bounds, to: sidebar)
+            let advance = label.attributedStringValue.size().width
+            XCTAssertGreaterThanOrEqual(frame.width, try XCTUnwrap(label.cell).cellSize.width - 0.5, "at \(width)")
+            XCTAssertEqual(frame.minX + ClearButton.cellInset + advance, width - Draw.clearTrailing.value, accuracy: 0.5, "at \(width)")
         }
     }
 
