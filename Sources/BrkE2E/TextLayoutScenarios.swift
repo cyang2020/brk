@@ -35,14 +35,14 @@ enum TextLayoutScenarios {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
             if let data = try? encoder.encode(report) { try? data.write(to: logs.appendingPathComponent("TextLayout-\(name).json")) }
-            inspected += report.inspected
-            summary.append(["surface": name, "inspected": String(report.inspected), "cut": String(report.findings.count), "ellipsized": String(report.truncated.count)])
+            inspected += report.measured.count
+            summary.append(["surface": name, "inspected": String(report.measured.count), "cut": String(report.findings.count), "ellipsized": String(report.truncated.count)])
             for finding in report.findings {
                 let line = "\(finding.problem.rawValue) \"\(finding.text)\" \(finding.view) frame \(Int(finding.frame.width))x\(Int(finding.frame.height)) needs \(Int(ceil(finding.needed.width)))x\(Int(ceil(finding.needed.height)))"
                     + (finding.clipper.map { " clipped by \($0)" } ?? "")
                 if seen.insert(line).inserted { cut.append("\(name): \(line)") }
             }
-            print("[textlayout] \(name): \(report.inspected) texts, \(report.findings.count) cut, \(report.truncated.count) ellipsized")
+            print("[textlayout] \(name): \(report.measured.count) texts, \(report.findings.count) cut, \(report.truncated.count) ellipsized")
         }
 
         func measure(_ name: String, shot: Bool = true) throws {
@@ -251,7 +251,7 @@ enum TextLayoutScenarios {
             try app.click(.settingsField("route-new"))
         }
         try sweep.surface("settings-previews", close: {
-            try app.click(.settingsField("previewsDone"))
+            try app.press("escape")
             try app.waitUntil("the sheet closed") { try !sheetShown() }
         }) {
             guard case .dispatched = try app.send(.openSettings(pane: .general)) else { throw Check(description: "openSettings did not dispatch") }
@@ -332,7 +332,7 @@ enum TextLayoutScenarios {
             try app.click(.boostControl("start"))
             try app.waitUntil("Boost editor page") { try app.view().boostEditor?.page == .style }
         }
-        try sweep.surface("boost-menu", close: { try app.press("escape") }) {
+        try sweep.surface("boost-menu", close: { try app.click(.boostControl("menu")) }) {
             try app.click(.boostControl("menu"))
         }
         try sweep.surface("boost-code", close: {

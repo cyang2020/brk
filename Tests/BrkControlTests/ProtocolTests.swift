@@ -187,10 +187,13 @@ final class ProtocolTests: XCTestCase {
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),
             .pageLog([PageLogEntry(page: PageID(window: WindowID("w"), item: ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
             .failed("no window"),
-            .textLayout(TextLayoutReport(inspected: 2, windows: ["BrowserWindow 1280x776"], findings: [
-                TextLayoutFinding(problem: .overflowsFrame, window: "BrowserWindow", view: "NSTextField < ClearButton < today-clear", text: "Clear",
-                                  frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14), clipper: nil),
-            ], truncated: [])),
+            .textLayout({
+                var report = TextLayoutReport(windows: ["BrowserWindow 1280x776"])
+                report.note("Clear", frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14))
+                report.findings.append(TextLayoutFinding(problem: .overflowsFrame, window: "BrowserWindow", view: "NSTextField < ClearButton < today-clear", text: "Clear",
+                                                         frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14)))
+                return report
+            }()),
             .native(NativeFacts(window: WindowID("w1"), windowFrame: CGRect(x: 0, y: 0, width: 1280, height: 776),
                                 contentSize: CGSize(width: 1280, height: 776), backingScale: 2, isKey: true,
                                 computed: WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false,

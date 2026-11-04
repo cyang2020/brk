@@ -180,20 +180,20 @@ public enum ControlResult: Codable, Sendable, Equatable {
 }
 
 public struct TextLayoutReport: Codable, Sendable, Equatable {
-    /// How many texts were measured.
-    public var inspected: Int
     /// The windows or menus walked: class, title, size.
     public var windows: [String]
+    /// Every text measured: "text | frame WxH | needs WxH".
+    public var measured: [String] = []
     /// Texts that are cut: what the TextLayout scenario asserts is empty.
-    public var findings: [TextLayoutFinding]
+    public var findings: [TextLayoutFinding] = []
     /// Texts ended by an ellipsis or (SwiftUI, whose text ellipsizes by itself) short of room. A correct way to end a
     /// long title, listed so a person can see the short labels that should have fitted.
-    public var truncated: [TextLayoutFinding]
-    public init(inspected: Int, windows: [String], findings: [TextLayoutFinding], truncated: [TextLayoutFinding]) {
-        self.inspected = inspected
-        self.windows = windows
-        self.findings = findings
-        self.truncated = truncated
+    public var truncated: [TextLayoutFinding] = []
+    public init(windows: [String]) { self.windows = windows }
+
+    public mutating func note(_ text: String, frame: CGRect, needed: CGSize) {
+        func size(_ s: CGSize) -> String { "\((s.width * 10).rounded() / 10)x\((s.height * 10).rounded() / 10)" }
+        measured.append("\(text.prefix(120)) | frame \(size(frame.size)) | needs \(size(needed))")
     }
 }
 

@@ -39,7 +39,8 @@ import XCTest
             root.addSubview(clear)
         }
         XCTAssertEqual(problems(report, "Clear"), [.overflowsFrame])
-        XCTAssertEqual(report.inspected, 1)
+        XCTAssertEqual(report.measured.count, 1)
+        XCTAssertTrue(report.measured[0].hasPrefix("Clear | frame "))
     }
 
     func testAFrameOfTheCellSizeFits() {
@@ -50,6 +51,16 @@ import XCTest
         }
         XCTAssertEqual(report.findings, [])
         XCTAssertEqual(report.truncated, [])
+    }
+
+    /// A clipping label needs its advance and the leading inset only: its ink is whole there.
+    func testAClippingLabelNeedsNoTrailingInset() {
+        let report = audit { root in
+            let clear = label("Clear")
+            clear.frame = CGRect(x: 20, y: 20, width: ceil(clear.attributedStringValue.size().width) + 2, height: clear.fittingSize.height)
+            root.addSubview(clear)
+        }
+        XCTAssertEqual(report.findings, [])
     }
 
     func testATruncatingLabelTooNarrowIsListedNotCut() {
@@ -132,7 +143,7 @@ import XCTest
             clear.frame = CGRect(origin: .zero, size: clear.intrinsicContentSize)
             box.addSubview(clear)
         }
-        XCTAssertEqual(report.inspected, 0)
+        XCTAssertEqual(report.measured, [])
     }
 
     func testTextAViewDrawsItselfIsMeasuredAgainstTheView() {
@@ -146,7 +157,7 @@ import XCTest
         }
         XCTAssertEqual(problems(report, "Fits"), [])
         XCTAssertEqual(problems(report, "Runs past the view"), [.drawnOutsideView])
-        XCTAssertEqual(report.inspected, 2)
+        XCTAssertEqual(report.measured.count, 2)
     }
 
     func testABoxWithoutTruncationIsCutAndWithItIsListed() {
@@ -162,14 +173,74 @@ import XCTest
         XCTAssertEqual(report.truncated.map(\.problem), [.ellipsis])
     }
 
-    func testAPopUpWithoutRoomForItsTitle() {
-        let report = audit { root in
-            let popUp = NSPopUpButton(frame: CGRect(x: 10, y: 10, width: 50, height: 22), pullsDown: false)
-            popUp.addItem(withTitle: "Most Recent Space")
-            root.addSubview(popUp)
+    /// A pop-up is judged by its selected item, not its widest (`cellSize` is the widest's).
+    func testAPopUpIsMeasuredByItsSelectedItem() {
+        func popUp(width: Double) -> TextLayoutReport {
+            audit { root in
+                let popUp = NSPopUpButton(frame: CGRect(x: 10, y: 10, width: width, height: 24), pullsDown: false)
+                popUp.addItems(withTitles: ["Short", "An item a good deal wider than the selected one"])
+                popUp.selectItem(at: 0)
+                root.addSubview(popUp)
+            }
         }
-        XCTAssertEqual(report.inspected, 1)
-        XCTAssertEqual(report.findings.count + report.truncated.count, 1)
+        XCTAssertEqual(popUp(width: 120).truncated, [])
+        XCTAssertEqual(popUp(width: 120).findings, [])
+        XCTAssertEqual(popUp(width: 20).findings.count + popUp(width: 20).truncated.count, 1)
+    }
+
+    /// A button that wraps (the sidebar's auto-archive notice) needs its lines' height, not one line's width.
+    func testAWrappingButtonIsMeasuredAtItsWidth() {
+        func button(height: Double) -> TextLayoutReport {
+            audit { root in
+                let button = NSButton(title: "Idle Today tabs archive after 12 hours. Tabs on screen stay open.", target: nil, action: nil)
+                button.bezelStyle = .regularSquare
+                button.cell?.wraps = true
+                button.cell?.usesSingleLineMode = false
+                button.frame = CGRect(x: 10, y: 10, width: 148, height: height)
+                root.addSubview(button)
+            }
+        }
+        XCTAssertEqual(button(height: 80).findings, [])
+        XCTAssertEqual(button(height: 16).findings.map(\.problem), [.wrapOverflow])
+    }
+
+    func testAPlaceholderIsMeasuredOnceAndAFieldScrollsItsOwnText() {
+        func field(_ width: Double, y: Double, placeholder: String = "", text: String = "") -> NSTextField {
+            let field = NSTextField(frame: CGRect(x: 10, y: y, width: width, height: 24))
+            field.cell?.isScrollable = true
+            field.placeholderString = placeholder
+            field.stringValue = text
+            return field
+        }
+        let report = audit { root in
+            root.addSubview(field(200, y: 10, placeholder: "Space name…"))
+            root.addSubview(field(40, y: 40, placeholder: "A placeholder far wider than its field"))
+            root.addSubview(field(40, y: 70, text: "Typed text far wider than its field scrolls"))
+        }
+        XCTAssertEqual(problems(report, "Space name…"), [])
+        XCTAssertEqual(problems(report, "A placeholder far wider than its field"), [.overflowsFrame])
+        XCTAssertEqual(problems(report, "Typed text far wider than its field scrolls"), [])
+    }
+
+    func testAPlaceholderThatWrapsPastItsFieldIsCut() {
+        let report = audit { root in
+            let search = NSTextField(frame: CGRect(x: 10, y: 10, width: 120, height: 16))
+            search.placeholderString = "Search Reading list with a rather long name…"
+            search.isBordered = false
+            search.cell?.wraps = true
+            root.addSubview(search)
+        }
+        XCTAssertEqual(problems(report, "Search Reading list with a rather long name…"), [.wrapOverflow])
+    }
+
+    /// `draw(at:)` is judged by its glyphs: a line box overhanging the view (the site panel's rows) cuts nothing.
+    func testAnOverhangingLineBoxIsNotCut() {
+        let report = audit { root in
+            let row = DrawnLabel(text: "DEVELOPER MODE", at: CGPoint(x: 2, y: -2))
+            row.frame = CGRect(x: 10, y: 10, width: 140, height: 18)
+            root.addSubview(row)
+        }
+        XCTAssertEqual(report.findings, [])
     }
 
     func testASwiftUITextNarrowerThanItsStringIsListed() {
@@ -189,7 +260,7 @@ import XCTest
         parent.submenu = NSMenu(title: "Move to")
         parent.submenu?.addItem(withTitle: "Research and Development Notes", action: nil, keyEquivalent: "")
         let report = TextLayoutAudit.menu(menu)
-        XCTAssertEqual(report.inspected, 3)
+        XCTAssertEqual(report.measured.count, 3)
         XCTAssertEqual(report.findings, [])
         XCTAssertEqual(report.windows.count, 2)
     }

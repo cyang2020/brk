@@ -7,7 +7,7 @@ import BrkEngine
 ///
 /// What is measured:
 /// - `NSTextField`, `NSButton` (pop-ups included), `NSTextView`: the cell's or layout manager's own size for the text.
-///   A label's frame needs `cellSize`, not `intrinsicContentSize`: the cell draws the text 2 points in on each side,
+///   A label's frame needs `cellSize`, not `intrinsicContentSize`: the cell draws the text 2 points in from each side,
 ///   and on current macOS the intrinsic width leaves that out, so a frame of that width cuts the last letter or, with a
 ///   truncating line break, ends a text that would fit with an ellipsis.
 /// - Text a view draws itself: `draw(_:)` runs once into a throwaway bitmap while `DrawnTextRecorder` notes each string.
@@ -29,14 +29,14 @@ enum TextLayoutAudit {
 
     /// One open or built native menu, its submenus included.
     static func menu(_ menu: NSMenu) -> TextLayoutReport {
-        var report = TextLayoutReport(inspected: 0, windows: [], findings: [], truncated: [])
+        var report = TextLayoutReport(windows: [])
         func visit(_ menu: NSMenu, path: String) {
             report.windows.append("menu \(path.isEmpty ? menu.title : path) \(Int(menu.size.width))x\(Int(menu.size.height))")
             menu.update()
             for item in menu.items where !item.isSeparatorItem && !item.isHidden {
-                report.inspected += 1
                 let text = item.attributedTitle ?? NSAttributedString(string: item.title, attributes: [.font: menu.font ?? NSFont.menuFont(ofSize: 0)])
                 let needed = text.size()
+                report.note(item.title, frame: CGRect(origin: .zero, size: menu.size), needed: needed)
                 if needed.width > menu.size.width || item.view != nil {
                     report.findings.append(TextLayoutFinding(problem: .overflowsFrame, window: "menu", view: item.view.map { NSStringFromClass(type(of: $0)) } ?? "NSMenuItem",
                                                              text: item.title, frame: CGRect(origin: .zero, size: menu.size), needed: needed))
@@ -49,11 +49,12 @@ enum TextLayoutAudit {
     }
 
     nonisolated private static let slack = 0.5
+    nonisolated private static let clippingTrailingInset = 2.0
 
     // MARK: The walk
 
     @MainActor struct Walk {
-        var report = TextLayoutReport(inspected: 0, windows: [], findings: [], truncated: [])
+        var report = TextLayoutReport(windows: [])
         private var windowName = ""
         private var root: NSView = NSView()
 
@@ -88,18 +89,18 @@ enum TextLayoutAudit {
             let placeholder = field.stringValue.isEmpty
             let text = placeholder ? (field.placeholderString ?? field.placeholderAttributedString?.string ?? "") : field.stringValue
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            report.inspected += 1
             let bounds = field.bounds
-            let huge = CGRect(x: 0, y: 0, width: 100_000, height: 100_000)
             let mode = cell.lineBreakMode
             let truncates = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle].contains(mode) || cell.truncatesLastVisibleLine
             let wraps = cell.wraps || mode == .byWordWrapping || mode == .byCharWrapping
 
+            // `cellSize` measures the placeholder when the field is empty.
             if wraps {
                 var needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: bounds.width, height: 100_000))
                 if field.maximumNumberOfLines > 0, let font = field.font {
                     needed.height = min(needed.height, ceil(NSLayoutManager().defaultLineHeight(for: font)) * Double(field.maximumNumberOfLines))
                 }
+                report.note(text, frame: bounds, needed: needed)
                 if needed.height > bounds.height + TextLayoutAudit.slack {
                     add(truncates ? .ellipsis : .wrapOverflow, field, text, needed: needed)
                 }
@@ -108,18 +109,19 @@ enum TextLayoutAudit {
             }
             // An editable field scrolls its text sideways; only its placeholder has to fit.
             let scrolls = (field.isEditable || cell.isScrollable) && !placeholder
-            var needed = cell.cellSize(forBounds: huge)
-            if placeholder, let font = field.font {
-                let inset = needed.width
-                needed.width = ceil((text as NSString).size(withAttributes: [.font: font]).width) + max(inset, 4)
-            }
-            if !scrolls, needed.width > bounds.width + TextLayoutAudit.slack {
+            let needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 100_000))
+            report.note(text, frame: bounds, needed: needed)
+            // Measured on rendered labels: a clipping label's ink is whole from its advance plus the leading inset, one
+            // that truncates turns to an ellipsis below the whole cell width.
+            let room = needed.width - (truncates ? 0 : TextLayoutAudit.clippingTrailingInset)
+            if !scrolls, room > bounds.width + 0.25 {
                 // A frame of the intrinsic width is a frame that forgot the cell's inset: an ellipsis there is a bug.
                 let natural = field.attributedStringValue.size().width
                 let fitsWithoutInset = truncates && !placeholder && bounds.width >= natural - TextLayoutAudit.slack
                 add(truncates && !fitsWithoutInset ? .ellipsis : .overflowsFrame, field, text, needed: needed)
             }
-            if needed.height > bounds.height + TextLayoutAudit.slack { add(.tooShort, field, text, needed: needed) }
+            // The line's height holds leading the glyphs do not reach; a frame is short when it cuts ascent or descent.
+            if let font = field.font, font.ascender - font.descender > bounds.height + TextLayoutAudit.slack { add(.tooShort, field, text, needed: needed) }
             let width = min(needed.width, bounds.width)
             let x: Double = switch field.alignment {
             case .right: bounds.maxX - width
@@ -131,11 +133,24 @@ enum TextLayoutAudit {
 
         private mutating func measure(_ button: NSButton) {
             guard button.bounds.width > 0, button.bounds.height > 0, let cell = button.cell else { return }
-            let text = (button as? NSPopUpButton)?.titleOfSelectedItem ?? button.title
+            let popUp = button as? NSPopUpButton
+            let text = popUp?.titleOfSelectedItem ?? button.title
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, button.imagePosition != .imageOnly else { return }
-            report.inspected += 1
-            let needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 100_000))
-            if needed.width > button.bounds.width + TextLayoutAudit.slack {
+            let huge = CGRect(x: 0, y: 0, width: 100_000, height: 100_000)
+            var needed = cell.cellSize(forBounds: cell.wraps ? CGRect(x: 0, y: 0, width: button.bounds.width, height: 100_000) : huge)
+            var fits = needed.width <= button.bounds.width + TextLayoutAudit.slack
+            if let popUp, let cell = popUp.cell as? NSPopUpButtonCell {
+                // A pop-up's cell size is its widest item's; what shows is the selected one, in the cell's title rectangle.
+                let title = (text as NSString).size(withAttributes: [.font: popUp.font ?? NSFont.menuFont(ofSize: 0)]).width
+                let image = popUp.selectedItem?.image.map { $0.size.width + 2 } ?? 0
+                let available = cell.titleRect(forBounds: popUp.bounds).width
+                needed.width = popUp.bounds.width - available + title + image
+                fits = title + image <= available + TextLayoutAudit.slack
+            }
+            report.note(text, frame: button.bounds, needed: needed)
+            if cell.wraps {
+                if needed.height > button.bounds.height + TextLayoutAudit.slack { add(.wrapOverflow, button, text, needed: needed) }
+            } else if !fits {
                 let truncates = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle].contains(cell.lineBreakMode)
                 add(truncates ? .ellipsis : .overflowsFrame, button, text, needed: needed)
             }
@@ -144,9 +159,9 @@ enum TextLayoutAudit {
 
         private mutating func measure(_ view: NSTextView) {
             guard let manager = view.layoutManager, let container = view.textContainer, !view.string.isEmpty else { return }
-            report.inspected += 1
             manager.ensureLayout(for: container)
             let used = manager.usedRect(for: container).insetBy(dx: -view.textContainerInset.width, dy: -view.textContainerInset.height)
+            report.note(view.string, frame: view.bounds, needed: used.size)
             let scrolled = view.enclosingScrollView != nil
             if used.width > view.bounds.width + TextLayoutAudit.slack || (!scrolled && used.height > view.bounds.height + TextLayoutAudit.slack) {
                 add(.wrapOverflow, view, view.string, needed: used.size)
@@ -157,20 +172,20 @@ enum TextLayoutAudit {
 
         private mutating func measureDrawn(_ view: NSView) {
             for drawn in DrawnTextRecorder.texts(of: view) {
-                report.inspected += 1
                 let text = drawn.string
-                let inner = drawn.clip.intersection(view.bounds)
+                let inner = drawn.clip.intersection(view.bounds).insetBy(dx: -TextLayoutAudit.slack, dy: -TextLayoutAudit.slack)
+                report.note(text, frame: drawn.box ?? drawn.ink, needed: drawn.needed)
                 if let box = drawn.box {
                     if drawn.needed.height > box.height + TextLayoutAudit.slack || drawn.needed.width > box.width + TextLayoutAudit.slack {
                         add(drawn.truncates ? .ellipsis : .wrapOverflow, view, text, needed: drawn.needed, rect: box)
                     }
                     let shown = drawn.truncates ? box : CGRect(origin: box.origin, size: CGSize(width: min(box.width, drawn.needed.width), height: min(box.height, drawn.needed.height)))
-                    if !inner.insetBy(dx: -TextLayoutAudit.slack, dy: -TextLayoutAudit.slack).contains(shown) { add(.drawnOutsideView, view, text, needed: drawn.needed, rect: shown) }
+                    if !inner.contains(shown) { add(.drawnOutsideView, view, text, needed: drawn.needed, rect: shown) }
                     checkClip(view, text, rect: shown, needed: drawn.needed)
                 } else {
-                    let rect = CGRect(origin: drawn.origin, size: drawn.needed)
-                    if !inner.insetBy(dx: -TextLayoutAudit.slack, dy: -TextLayoutAudit.slack).contains(rect) { add(.drawnOutsideView, view, text, needed: drawn.needed, rect: rect) }
-                    checkClip(view, text, rect: rect, needed: drawn.needed)
+                    // Without a box the glyphs themselves say what is cut: a line's box may overhang a tight view.
+                    if !inner.contains(drawn.ink) { add(.drawnOutsideView, view, text, needed: drawn.needed, rect: drawn.ink) }
+                    checkClip(view, text, rect: drawn.ink, needed: drawn.needed)
                 }
             }
         }
@@ -199,9 +214,9 @@ enum TextLayoutAudit {
             }
             collect(host, depth: 0)
             for node in nodes {
-                report.inspected += 1
                 let rect = root.convert(node.frame, from: nil)
                 let needed = SwiftUIText.needed(for: node.text, frame: node.frame.size, isButton: node.isButton)
+                report.note(node.text, frame: node.frame, needed: needed)
                 if needed.width > node.frame.width + 1 || needed.height > node.frame.height + 1 {
                     report.truncated.append(finding(.ellipsis, describe(host) + " SwiftUI", node.text, rect, needed))
                 }
@@ -312,7 +327,8 @@ enum TextLayoutAudit {
 enum DrawnTextRecorder {
     struct Drawn {
         var string: String
-        var origin: CGPoint
+        /// Where the glyphs of `draw(at:)` land, in the view's coordinates.
+        var ink: CGRect
         /// The box of `draw(in:)` and `draw(with:)`, in the view's coordinates; nil for `draw(at:)`.
         var box: CGRect?
         var needed: CGSize
@@ -384,7 +400,17 @@ enum DrawnTextRecorder {
         } else if box == nil {
             truncates = false
         }
-        log?.append(Drawn(string: text.string, origin: (origin ?? box?.origin ?? .zero).applying(toView), box: box?.applying(toView), needed: needed,
+        var ink = CGRect.zero
+        if let origin {
+            let line = CTLineCreateWithAttributedString(text)
+            var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+            _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+            let glyphs = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+            let flipped = NSGraphicsContext.current?.isFlipped ?? false
+            ink = CGRect(x: origin.x + glyphs.minX, y: flipped ? origin.y + ascent - glyphs.maxY : origin.y + descent + glyphs.minY,
+                         width: glyphs.width, height: glyphs.height).applying(toView)
+        }
+        log?.append(Drawn(string: text.string, ink: ink, box: box?.applying(toView), needed: needed,
                           truncates: truncates, clip: context.boundingBoxOfClipPath.applying(toView)))
         return true
     }
