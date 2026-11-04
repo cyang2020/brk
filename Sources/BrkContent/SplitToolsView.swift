@@ -182,14 +182,14 @@ enum SplitMenuModel {
             share = [Row(title: "Share Split View…", glyph: .share, command: .app(.export(.items([split]))), enabled: true)]
         }
         return [
-            [Row(title: side ? "Move Left" : "Move Up", glyph: .moveBack, command: .split(.movePane(.previous)), enabled: p.index > 0),
-             Row(title: side ? "Move Right" : "Move Down", glyph: .moveForward, command: .split(.movePane(.next)), enabled: p.index < p.count - 1)],
+            [Row(title: side ? "Move Left" : "Move Up", glyph: side ? .moveBack : .moveUp, command: .split(.movePane(.previous)), enabled: p.index > 0),
+             Row(title: side ? "Move Right" : "Move Down", glyph: side ? .moveForward : .moveDown, command: .split(.movePane(.next)), enabled: p.index < p.count - 1)],
             // Arc lists the pane after first side by side (Add Right Split, Add Left Split: P23-splitmenu) and the pane
             // before first when stacked (Add Top Split, Add Bottom Split: P23-vsplitmenu).
             side ? [Row(title: "Add Right Split", glyph: .addAfter, command: .split(.addPane), enabled: roomy),
                     Row(title: "Add Left Split", glyph: .addBefore, command: .split(.addPaneBefore), enabled: roomy)]
-                 : [Row(title: "Add Top Split", glyph: .addBefore, command: .split(.addPaneBefore), enabled: roomy),
-                    Row(title: "Add Bottom Split", glyph: .addAfter, command: .split(.addPane), enabled: roomy)],
+                 : [Row(title: "Add Top Split", glyph: .addAbove, command: .split(.addPaneBefore), enabled: roomy),
+                    Row(title: "Add Bottom Split", glyph: .addBelow, command: .split(.addPane), enabled: roomy)],
             [Row(title: "Separate Tab from Split", glyph: .separate, command: .split(.separatePane(.focused)), enabled: true),
              Row(title: side ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", glyph: side ? .stacked : .sideBySide,
                  command: .split(.orientCurrent(side ? .vertical : .horizontal)), enabled: true)],
@@ -201,7 +201,11 @@ enum SplitMenuModel {
 /// The split menu's 16 pt glyphs, drawn as Arc's: a light pane outline with a dark arrow or plus (the separate arrow
 /// blue), P23-splitmenu-arc.png.
 enum SplitMenuGlyph {
-    enum Kind: Equatable { case moveBack, moveForward, addAfter, addBefore, separate, stacked, sideBySide, share }
+    enum Kind: Equatable {
+        case moveBack, moveForward, addAfter, addBefore, separate, stacked, sideBySide, share
+        /// The stacked menu's four (P23-vsplitmenu-arc.png): the side-by-side glyphs turned a quarter, arrow or plus up or down.
+        case moveUp, moveDown, addAbove, addBelow
+    }
 
     static func image(_ kind: Kind, enabled: Bool) -> NSImage {
         let side = PaneHeaderDraw.menuGlyph.value
@@ -221,7 +225,21 @@ enum SplitMenuGlyph {
                 color.setStroke(); path.lineWidth = 1.5; path.lineCapStyle = .round; path.lineJoinStyle = .round; path.stroke()
             }
             let tall = CGRect(x: 2, y: 1.5, width: 12, height: 13)
+            // Swaps the axes: a glyph drawn for side-by-side panes becomes the one for stacked panes.
+            func transposed(_ draw: () -> Void) {
+                NSGraphicsContext.saveGraphicsState()
+                let t = NSAffineTransform()
+                t.transformStruct = NSAffineTransformStruct(m11: 0, m12: 1, m21: 1, m22: 0, tX: 0, tY: 0)
+                t.concat()
+                draw()
+                NSGraphicsContext.restoreGraphicsState()
+            }
+            func draw(_ kind: Kind) {
             switch kind {
+            case .moveUp: transposed { draw(.moveBack) }
+            case .moveDown: transposed { draw(.moveForward) }
+            case .addAbove: transposed { draw(.addBefore) }
+            case .addBelow: transposed { draw(.addAfter) }
             case .moveBack:
                 frame(CGRect(x: 7, y: 1.5, width: 8, height: 13))
                 stroke(ink, [[CGPoint(x: 10, y: 8), CGPoint(x: 1.5, y: 8)], [CGPoint(x: 4.5, y: 5), CGPoint(x: 1.5, y: 8), CGPoint(x: 4.5, y: 11)]])
@@ -245,6 +263,8 @@ enum SplitMenuGlyph {
                 frame(tall, divider: true)
                 stroke(ink, [[CGPoint(x: 8, y: 9), CGPoint(x: 8, y: 1)], [CGPoint(x: 5.5, y: 3.5), CGPoint(x: 8, y: 1), CGPoint(x: 10.5, y: 3.5)]])
             }
+            }
+            draw(kind)
             return true
         }
     }
