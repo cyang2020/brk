@@ -102,8 +102,8 @@ struct CommandBarColors {
             // #676767, the selected address on #7B7B7B.
             return CommandBarColors(card: spaceless ? srgb(0x191A1C) : srgb(0x171919).withAlphaComponent(0.72),
                                     border: ink.withAlphaComponent(spaceless ? 0.12 : 0.27), text: base.textPrimary, secondary: base.textSecondary,
-                                    placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.34),
-                                    onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.43), hairline: base.hairline,
+                                    placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.29),
+                                    onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.36), hairline: base.hairline,
                                     accessory: ink.withAlphaComponent(0.08), accessoryText: base.accessoryForeground,
                                     tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
         }
