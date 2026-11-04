@@ -25,7 +25,9 @@ enum ToastPopupScenarios {
     private static func shows(_ app: AppUnderTest, _ text: String, words: [String]? = nil) throws -> CGRect {
         try app.waitUntil("the toast \(text)") { try S.toast(app) == text && S.frame(app, toastID) != nil }
         guard let frame = try S.frame(app, toastID) else { throw Check(description: "no toast strip for \(text)") }
-        let area = try app.native().computed.contentArea
+        // The Library shifts the page right past the window's edge (A081): the toast keeps to the part on screen.
+        let facts = try app.native()
+        let area = facts.computed.contentArea.intersection(CGRect(origin: .zero, size: facts.contentSize))
         try expect(frame.maxX <= area.maxX + 0.5 && frame.maxX >= area.maxX - 40 && frame.minY < area.minY + 40, "the toast \(text) is not at the content area's top right: \(frame) in \(area)")
         let said = try S.texts(app, in: frame)
         for word in words ?? [text] { try expect(said.contains(word), "the toast's labels read \(said), not \(word)") }

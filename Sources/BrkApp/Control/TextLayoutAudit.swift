@@ -118,7 +118,16 @@ enum TextLayoutAudit {
                 if glyphs > bounds.height + TextLayoutAudit.slack {
                     add(truncates ? .ellipsis : .wrapOverflow, field, text, needed: needed)
                 }
-                checkClip(field, text, rect: bounds, needed: needed)
+                // The lines sit in the frame by the paragraph's alignment (a button's title field is centred and
+                // wider than its button): an ancestor cuts the drawn lines, not the frame's empty margins.
+                let alignment = (string.length > 0 ? string.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle : nil)?.alignment ?? field.alignment
+                let drawnWidth = min(needed.width, bounds.width)
+                let drawnX: Double = switch alignment {
+                case .right: bounds.maxX - drawnWidth
+                case .center: bounds.midX - drawnWidth / 2
+                default: bounds.minX
+                }
+                checkClip(field, text, rect: CGRect(x: drawnX, y: bounds.minY, width: drawnWidth, height: bounds.height), needed: needed)
                 return
             }
             // An editable field scrolls its text sideways; only its placeholder has to fit.
