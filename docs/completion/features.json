@@ -836,7 +836,7 @@
       "arc_evidence": "row 154",
       "description": "Returns every pinned tab of the space to its pinned URL",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Reset every pinned tab in the current space to its saved URL, including nested folders and split panes.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -871,11 +871,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-PinnedReset",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-PinnedReset：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Aggregate reset reaches nested pinned tabs in the invoking window. Add complete multi-profile, split and unloaded native matrix.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求包括嵌套文件夹和分屏在内的每一个置顶标签都重置。原生只有\"一个文件夹里的一个标签\"，分屏和未加载标签既没有原生也没有单元测试（单元测试里重置后检查网址的一个都没有，只有 TabToolsTests 检查了提示条）。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求包括嵌套文件夹和分屏在内的每一个置顶标签都重置。原生只有\"一个文件夹里的一个标签\"，分屏和未加载标签既没有原生也没有单元测试（单元测试里重置后检查网址的一个都没有，只有 TabToolsTests 检查了提示条）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-PinnedReset 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -911,7 +926,7 @@
       "arc_evidence": "rows 93, 94; anatomy-m 1.6 `PinnedSectionExpansionState` (expanded, collapsed, peeked)",
       "description": "Folds the pinned list; \"peeked\" keeps the current pinned tab visible",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Support expanded, collapsed and peeked Pinned states, keeping the selected pinned item available in peeked mode.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -946,11 +961,26 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh",
           "artifact": "verify/completion/sites-extensions-parent/build-expansion-fixed.log",
           "scope": "Full signed build on main a485d69: 735 tests, 3 known skips, 0 failures. The batch's unit tests run inside this merged build."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-PinnedPeek",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-PinnedPeek：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Selected pinned-unit peek is projected and laid out. Add a dedicated nested-current-item native peek scenario.",
-        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景折叠或展开 Pinned 区；\"peeked\"（折叠时仍露出当前置顶项）没有任何测试。单元测试只有 ReduceSpecTests.test_spaceTogglePinnedSectionCollapsesAndExpands…（标志位）和 ArcGeometryTests.testTablistRowPitch（折叠后布局里没有置顶行）。代码在 Sources/BrkDomain/Project.swift:247-250 和 Sources/BrkLayout/SidebarLayout.swift:141，但没有证据。"
+        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景折叠或展开 Pinned 区；\"peeked\"（折叠时仍露出当前置顶项）没有任何测试。单元测试只有 ReduceSpecTests.test_spaceTogglePinnedSectionCollapsesAndExpands…（标志位）和 ArcGeometryTests.testTablistRowPitch（折叠后布局里没有置顶行）。代码在 Sources/BrkDomain/Project.swift:247-250 和 Sources/BrkLayout/SidebarLayout.swift:141，但没有证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-PinnedPeek 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Model.swift",
@@ -1120,13 +1150,29 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SidebarToolsSources, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Badge",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Badge：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "None within the assigned scope.",
         "Opus review: events without an https link are dropped (F5); cancelling a reconnect removes a good badge (F9); 404 and 401 share one state (F10).",
         "R3-6（2026-11-04，合并 2c2f3306）：按 Arc 的类型字段，一个收藏只显示一种标记：日历显示距下一场会议的时间（Now / in 12m / in 3h），GitHub 有未读显示黑色圆点，颜色取自 Arc 资源；去掉了原来的数字角标、状态小点、Access/Expired 字样和常规悬停提示；右键菜单加了 Show Unread Badge、Show Time to Next Meeting、Show Hover Preview 三个按站点的开关和 Connect GitHub Notifications…、Select Calendar Export… 入口（原生场景 R36-FavoriteOverlay）。圆点大小、胶囊尺寸、时间文字格式是猜的，待 P08 的 Arc 图（要在用户的 Arc 里登录 GitHub 和日历）。",
-        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：已有一个正常未读角标时，再点 Connect GitHub Notifications… 然后取消，角标被清掉（Sources/BrkDomain/SiteTools.swift 的 siteResult .cancelled 分支把收藏数据换成 badge 0、\"Selection cancelled. Connect again.\"）。这是台账里 Opus 评审的 F9，还没修。其余验收内容有证据。复现见 REVIEW.md。"
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：已有一个正常未读角标时，再点 Connect GitHub Notifications… 然后取消，角标被清掉（Sources/BrkDomain/SiteTools.swift 的 siteResult .cancelled 分支把收藏数据换成 badge 0、\"Selection cancelled. Connect again.\"）。这是台账里 Opus 评审的 F9，还没修。其余验收内容有证据。复现见 REVIEW.md。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['visual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Badge 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -1163,7 +1209,7 @@
       "arc_evidence": "row 134",
       "description": "Ctrl+Cmd+J opens the next calendar meeting",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ctrl+Cmd+J opens the next available calendar meeting and handles missing or expired meetings.",
       "owner": "batch2-sidebar-tabs",
       "required_checks": [
@@ -1219,12 +1265,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SidebarToolsMeeting, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Meeting",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Meeting：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "None within the assigned scope.",
         "Opus review: a malformed file is later reported as expired (F6); Ctrl+Cmd+J in a private window gives no feedback (F7).",
-        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：在私密窗口（或 Little Arc）里按 Ctrl+Cmd+J 什么也不发生、也没有任何提示，因为 Sources/BrkDomain/SiteTools.swift 的 siteTools 第一行只放行 .standard 窗口（台账 F7）。另外日历文件格式坏掉时，再按快捷键提示的是 \"Calendar expired\"（F6）。普通窗口里的开会、无会议、过期三种情况有原生证据。"
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：在私密窗口（或 Little Arc）里按 Ctrl+Cmd+J 什么也不发生、也没有任何提示，因为 Sources/BrkDomain/SiteTools.swift 的 siteTools 第一行只放行 .standard 窗口（台账 F7）。另外日历文件格式坏掉时，再按快捷键提示的是 \"Calendar expired\"（F6）。普通窗口里的开会、无会议、过期三种情况有原生证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Meeting 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkApp/SiteToolsAdapter.swift",
@@ -1260,7 +1321,7 @@
       "arc_evidence": "rows 143, 144",
       "description": "Opt+Cmd+Down and Up walk the sidebar",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Opt+Cmd+Up and Down traverse sidebar units in order, skip collapsed children and treat a split as one stop.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1281,11 +1342,26 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-StepKeys",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-StepKeys：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Add native shortcut checks, especially same-tab selection in two standard windows.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准里的\"跳过折叠的子项\"既没有原生也没有单元测试；向上和分屏算一站只有单元测试。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准里的\"跳过折叠的子项\"既没有原生也没有单元测试；向上和分屏算一站只有单元测试。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-StepKeys 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -1434,7 +1510,7 @@
       "arc_evidence": "rows 147, 148; `linearTabSwitcherState`",
       "description": "Ctrl+Cmd+Right and Left cycle tabs",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ctrl+Cmd+Left and Right cycle tabs in the defined linear order, including boundary behavior.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1469,11 +1545,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools1, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-StepKeys",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-StepKeys：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Real linear shortcut and wrap passed. Complete collapsed-child and opposite-direction native matrix.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"包括两头的行为\"：到头之后绕回还是停住，既没有原生也没有单元测试。TabTools1 那条断言的文字比它实际检查的多。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"包括两头的行为\"：到头之后绕回还是停住，既没有原生也没有单元测试。TabTools1 那条断言的文字比它实际检查的多。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-StepKeys 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1510,7 +1601,7 @@
       "arc_evidence": "anatomy-m 2.5",
       "description": "Number shortcuts jump to a sidebar item or a space",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Number shortcuts jump to items 1...9 and numbered spaces using documented Favorites and final-item rules.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1545,11 +1636,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools1, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Numbers",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Numbers：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Numeric item shortcuts passed and settings are wired. Add native numbered-space and Favorites-order settings checks.",
-        "R4-6 独立复核（2026-11-04）：证据不足。\"按文档的收藏规则和最后一项规则\"里的收藏规则（includeFavoritesInNumbers）只有默认值和存盘测试，没有行为测试；跳到第 N 个 Space 没有原生效果证据。"
+        "R4-6 独立复核（2026-11-04）：证据不足。\"按文档的收藏规则和最后一项规则\"里的收藏规则（includeFavoritesInNumbers）只有默认值和存盘测试，没有行为测试；跳到第 N 个 Space 没有原生效果证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Numbers 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1587,7 +1693,7 @@
       "arc_evidence": "row 140; anatomy-v 3 \"Double-click to rename\"",
       "description": "Row becomes a text field",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Rename a tab, Favorite or folder inline; Return commits, Escape cancels and collapsed ancestors reveal the editor.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1608,11 +1714,26 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "Wave1ReviewAppRegressionTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Rename",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Rename：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Extend native checks to double-click entry, folder rename and cancel or focus-loss commit; split rename is not supported.",
-        "R4-6 独立复核（2026-11-04）：证据不足。收藏改名、折叠上级展开只有单元测试；Escape 取消只断言退出改名状态、没核对标题保持原样；用户能用的改名入口（菜单 Rename Current Item、右键）在原生里都是用命令代替的。"
+        "R4-6 独立复核（2026-11-04）：证据不足。收藏改名、折叠上级展开只有单元测试；Escape 取消只断言退出改名状态、没核对标题保持原样；用户能用的改名入口（菜单 Rename Current Item、右键）在原生里都是用命令代替的。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Rename 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Sidebar.swift",
@@ -1691,12 +1812,28 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SidebarToolsIcons, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Icons",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Icons：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "None within the assigned scope.",
         "Opus review: Save on an untouched picker replaces the favicon with a star; a plain letter is accepted as an emoji (F11).",
-        "R4-6 独立复核（2026-11-04）：缺陷。功能验收（四种容器选、清、重启保留）通过。画面缺陷：图标选择器 24 格里有 4 格和 Arc 不同——第一行第 6 格 Arc 是粗星号、Brk 是细星号；第二行第 7 格 Arc 是土星、Brk 是地球；第三行第 3 格 Arc 是交叉的刀叉、Brk 是并排的刀叉；第三行第 8 格 Arc 是骷髅、Brk 是虚线圆笑脸（Sources/BrkApp/TabIconPicker.swift 用的是 SF Symbols）。台账里的旧问题 F11（未改动就点 Save）对应的旧选择器已经换成点一下就生效的网格，不再适用。"
+        "R4-6 独立复核（2026-11-04）：缺陷。功能验收（四种容器选、清、重启保留）通过。画面缺陷：图标选择器 24 格里有 4 格和 Arc 不同——第一行第 6 格 Arc 是粗星号、Brk 是细星号；第二行第 7 格 Arc 是土星、Brk 是地球；第三行第 3 格 Arc 是交叉的刀叉、Brk 是并排的刀叉；第三行第 8 格 Arc 是骷髅、Brk 是虚线圆笑脸（Sources/BrkApp/TabIconPicker.swift 用的是 SF Symbols）。台账里的旧问题 F11（未改动就点 Save）对应的旧选择器已经换成点一下就生效的网格，不再适用。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['visual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Icons 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkApp/TabIconPicker.swift",
@@ -1727,7 +1864,7 @@
       "arc_evidence": "anatomy-m 1.4 `SidebarMutation.move`",
       "description": "Reorder rows, drop into folders, onto Favorites, onto a dock space",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Drag to reorder rows, nest items in folders, add or reorder Favorites and move items to a dock space without cycles or lost tabs.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1755,11 +1892,26 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios R5b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Drag",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Drag：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准的四种目标：同区重排、拖进普通文件夹、拖到收藏（加入或重排）、拖到底栏的 Space，都没有真指针拖动的原生证据（拖进的只有标签组）；\"不产生环、不丢标签\"只有单元测试；DragController 本身没有单元测试。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准的四种目标：同区重排、拖进普通文件夹、拖到收藏（加入或重排）、拖到底栏的 Space，都没有真指针拖动的原生证据（拖进的只有标签组）；\"不产生环、不丢标签\"只有单元测试；DragController 本身没有单元测试。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Drag 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkSidebar/DragController.swift",
@@ -1872,7 +2024,7 @@
       "arc_evidence": "row 139",
       "description": "Duplicates the selected tabs",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Duplicate the selected tab or tabs with explicit destination, ordering and fresh identity.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1907,11 +2059,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools1, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Duplicate",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Duplicate：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Fresh identity and committed-address duplication passed in unit tests and actual native menu/CEF navigation. Add explicit destination and multi-selection native cases.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"一个或多个选中的标签、明确的目标位置\"，多选和目标位置既没有原生也没有单元测试。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"一个或多个选中的标签、明确的目标位置\"，多选和目标位置既没有原生也没有单元测试。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Duplicate 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1948,7 +2115,7 @@
       "arc_evidence": "rows 95, 149",
       "description": "Ctrl+Space moves focus to the sidebar on the current tab",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ctrl+Space reveals and scrolls to the current item, focuses the sidebar and supports keyboard navigation.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1983,11 +2150,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Reveal",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Reveal：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Reveal expands ancestors and focuses the sidebar. The final native run proves actual sidebar responder and per-window row visibility. Complete overflow scroll and keyboard navigation cases.",
-        "R4-6 独立复核（2026-11-04）：证据不足。\"滚动到当前项\"和\"支持键盘导航\"既没有原生也没有单元测试（TabToolsTests 里调用了 sidebarStep 但没有断言）。"
+        "R4-6 独立复核（2026-11-04）：证据不足。\"滚动到当前项\"和\"支持键盘导航\"既没有原生也没有单元测试（TabToolsTests 里调用了 sidebarStep 但没有断言）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Reveal 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -2025,7 +2207,7 @@
       "arc_evidence": "row 153; anatomy-v 3 \"Clear Today tabs\"",
       "description": "Archives every unpinned tab not on screen",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Clear Today archives each current-space Today unit that has no pane on screen in any window.",
       "owner": "native-grounding",
       "required_checks": [
@@ -2046,11 +2228,26 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-ClearToday",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-ClearToday：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Verify the Clear button and shortcut with two real windows, including a shared tab and split.",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准是\"任何窗口里都不在屏幕上的 Today 项才归档\"。没有两个窗口的检查（原生和单元都没有，单元测试名字写 AnyWindow 但只有一个窗口）；Clear 按钮本身没有原生点击；单窗口的 Cmd+Shift+K 有原生证据。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准是\"任何窗口里都不在屏幕上的 Today 项才归档\"。没有两个窗口的检查（原生和单元都没有，单元测试名字写 AnyWindow 但只有一个窗口）；Clear 按钮本身没有原生点击；单窗口的 Cmd+Shift+K 有原生证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-ClearToday 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -2471,7 +2668,7 @@
       "arc_evidence": "`HoverCards` module (anatomy-m 3.4); General \"Show Arc Previews\"",
       "description": "Preview cards for Gmail, Calendar, folders and recent pages on hover",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Hover supported Favorites, folders and recent pages or links to show dismissible preview cards controlled by settings.",
       "owner": "batch2-sidebar-tabs",
       "required_checks": [
@@ -2542,6 +2739,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P13",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P13: P13-c 站台未拍 已修（第 7 组：Previews 表单；站台未拍）; P13-a 5.5% 已修；卡片白底，Arc 半透明; P13-b 5.5% 已修；未加载的置顶标签不显示 ×. References in verify/visual-pairs/run-20261103/P13/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-MailCard",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-MailCard：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P13-a 0.64%, P13-b 0.35%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
@@ -2549,7 +2767,8 @@
         "Opus review: links in cross-site iframes get no preview (F2); anchor text becomes the card title when the destination has none (F3); long hosts cut the URL off the card (F4); idle CPU with previews on and many frames (withdrawn Fable review).",
         "Arc 对照（run-20261103 P13）仍有差异或有意不同：P13-c: 已修（第 7 组：Previews 表单；站台未拍） | P13-a: 已修；卡片白底，Arc 半透明 | P13-b: 已修；未加载的置顶标签不显示 ×",
         "R3-6（2026-11-04，合并 2c2f3306）：文件夹预览卡底色改成从 Arc 图量的 #F9F9FA 且不透明；Previews 开着时日历收藏/置顶标签悬停列出一天内的会议（https 会议带 Join），Linear/Notion/Figma 列最近访问的页面，普通网站不弹卡（P13-b 一致），每个站点可单独关；修了卡片在指针离开后关不掉的真问题（卡片没裁剪边界）；网页链接预览卡按 Arc 的预览配色重画。原生场景 R36-HoverCards。未做：Gmail/Outlook 的邮件预览（没有邮件数据来源）。待 Arc 参照：日历悬停卡（P13-d）、链接预览卡（P13-e），Brk 侧图在 verify/completion/browser-basic-parent/r36-merged/station/。",
-        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：Arc 的 Show Arc Previews 列了 Google Mail 和 Outlook Mail（P13-settings-arc.png），Brk 对 Gmail 和 Outlook 邮件收藏不弹任何预览卡（Sources/BrkDomain/TopApps.swift 的 preview 对 .gmail、.outlookMail 返回 nil），实现者自己也写了\"未做\"。Brk 的 Previews 表单只有两个勾选框，Arc 是七个。其余部分有原生证据。"
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：Arc 的 Show Arc Previews 列了 Google Mail 和 Outlook Mail（P13-settings-arc.png），Brk 对 Gmail 和 Outlook 邮件收藏不弹任何预览卡（Sources/BrkDomain/TopApps.swift 的 preview 对 .gmail、.outlookMail 返回 nil），实现者自己也写了\"未做\"。Brk 的 Previews 表单只有两个勾选框，Arc 是七个。其余部分有原生证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-MailCard 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkCEF/PageLinkPreviews.swift",
@@ -2692,7 +2911,7 @@
       "arc_evidence": "`ARC_WebContentBehaviorConfigurationClient` `tidyTitles`; `TidyTabTitles` module",
       "description": "Shortens known site titles without AI",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Apply explicit non-AI title-shortening rules for known sites while preserving user titles.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -2720,11 +2939,26 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh",
           "artifact": "verify/completion/sites-extensions-parent/build-expansion-fixed.log",
           "scope": "Full signed build on main a485d69: 735 tests, 3 known skips, 0 failures. The batch's unit tests run inside this merged build."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Titles",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Titles：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Exact-host title rules and custom-title precedence have production tests. Broaden known-site fixtures if additional sites are required.",
-        "R4-6 独立复核（2026-11-04）：证据不足。required_checks 要求原生，但没有任何原生场景检查标题缩短。"
+        "R4-6 独立复核（2026-11-04）：证据不足。required_checks 要求原生，但没有任何原生场景检查标题缩短。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Titles 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -2760,7 +2994,7 @@
       "arc_evidence": "`Toasts` module (64 types); anatomy-v 3 \"Pinned Tab to “%@”\", \"Auto archived %d tabs\"",
       "description": "Short confirmations at the bottom of the window",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show short dismissible confirmations at the top right of the content area of the correct window (where Arc shows them) and expire them predictably.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -2803,12 +3037,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P15",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P15: P15-c 站台未拍 已修（第 1 组：删除 Space 后弹提示条；站台未拍）; P15-a 8.0% 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）. References in verify/visual-pairs/run-20261103/P15/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Toasts",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Toasts：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P15-a 0.80%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Window-owned replacement toasts, dismissal, four-second timer and clock expiry are implemented. Native timing is asserted in TabTools4b; the final native timing check passes; add a two-window feedback ownership case.",
         "Arc 对照（run-20261103 P15）仍有差异或有意不同：P15-c: 已修（第 1 组：删除 Space 后弹提示条；站台未拍） | P15-a: 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）",
-        "R4-6 独立复核（2026-11-04）：证据不足。没有点掉提示条的原生检查；没有两个窗口时提示条出现在发起操作的那个窗口的检查（实现者也写了）；画出来的提示条视图没有原生断言。另外台账验收写的是\"窗口底部\"，Arc 的提示条在内容区右上角（P15-a-arc、P15-c-arc），Brk 也在右上角，这条措辞应改成右上角。"
+        "R4-6 独立复核（2026-11-04）：证据不足。没有点掉提示条的原生检查；没有两个窗口时提示条出现在发起操作的那个窗口的检查（实现者也写了）；画出来的提示条视图没有原生断言。另外台账验收写的是\"窗口底部\"，Arc 的提示条在内容区右上角（P15-a-arc、P15-c-arc），Brk 也在右上角，这条措辞应改成右上角。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Toasts 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkBase/Metrics.swift",
@@ -2881,12 +3137,28 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Groups",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Groups：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Pinned group placement, title, display, persistence and structural restore passed in native. Complete group close/menu coverage.",
         "R3-6（2026-11-04，合并 2c2f3306）：组标题行无文件夹图标、小号灰字，组内标签不缩进；悬停 × 把整组作为一条记录归档，⌘Z 可撤销；右键四项 Rename Group… / Remove Group Header / Copy All Links / Close Tab Group；拖组到组上合并，拖标签进组出组，组空了自动消失（原生场景 R36-TabGroups）。归档原因记成手动（Arc 的 clearTabGroup 要改资料库页面）；组标题样式是猜的，Arc 的 Tidy 在这台机器上触发不了，没有参照。",
-        "R4-6 独立复核（2026-11-04）：证据不足。建组没有从界面驱动（都是命令）；右键菜单里 Rename Group…、Copy All Links、Close Tab Group 列出但没有选过；普通重启（不经过归档）后组标志是否保留没有原生检查；组标题样式没有 Arc 参照（P14 在这台机器的 Arc 上触发不了）。"
+        "R4-6 独立复核（2026-11-04）：证据不足。建组没有从界面驱动（都是命令）；右键菜单里 Rename Group…、Copy All Links、Close Tab Group 列出但没有选过；普通重启（不经过归档）后组标志是否保留没有原生检查；组标题样式没有 Arc 参照（P14 在这台机器的 Arc 上触发不了）。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['visual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Groups 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -4791,11 +5063,27 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-StayOnTop",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-StayOnTop：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Complete native fullscreen, restart and multiple-window stacking/focus coverage.",
-        "R4-6 独立复核（2026-11-04）：证据不足。全屏下的行为没有任何测试；重启只有单元测试里的存档标志；多窗口只是拿空白窗口当参照。required_checks 的 manual 没做。"
+        "R4-6 独立复核（2026-11-04）：证据不足。全屏下的行为没有任何测试；重启只有单元测试里的存档标志；多窗口只是拿空白窗口当参照。required_checks 的 manual 没做。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-StayOnTop 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -5460,7 +5748,7 @@
       "arc_evidence": "`ARC_WindowThemeUI`; anatomy-m 1.13, 4.5",
       "description": "Metal gradient with grain, sand, denim or tweed texture",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Render a Metal gradient with selectable grain, sand, denim or tweed texture and stable crossfades.",
       "owner": "native-grounding",
       "required_checks": [
@@ -5496,12 +5784,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P29",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P29: P29-b 1.6% 一致; P29-c 7.7% 已修；同 P02-b; P29-d 2.1% 已修（一致）. References in verify/visual-pairs/run-20261103/P29/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Texture",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Texture：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P29-b 0.54%, P29-c 20.11%, P29-d 1.13%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Compare gradient positions, texture appearance and low-power fallback with an authenticated reference; procedural images are approximations.",
         "Arc 对照（run-20261103 P29）仍有差异或有意不同：P29-c: 已修；同 P02-b",
-        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求能选 grain、sand、denim、tweed 纹理并稳定交叉淡入。没有原生场景换过纹理，两个 Space 都是 grain；没有任何测试经过 Metal 画纹理（ThemeRendererTests 的主题纹理透明度是 0）；交叉淡入只有单元测试。另外第三轮简报写明\"主题纹理选项\"是 Arc 1.170 没有而 Brk 有的三样之一，用户还没定去留，这一项的验收标准本身待定。场景 1（卡片切角和背景）在第二批和重跑里都失败：卡片上方背景是 [241,237,234]，和白色差不到 24，场景要求背景明显不是白色才做切角检查，这个前提在现在的浅色默认主题下不成立，是场景断言要更新，不是背景画错。"
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求能选 grain、sand、denim、tweed 纹理并稳定交叉淡入。没有原生场景换过纹理，两个 Space 都是 grain；没有任何测试经过 Metal 画纹理（ThemeRendererTests 的主题纹理透明度是 0）；交叉淡入只有单元测试。另外第三轮简报写明\"主题纹理选项\"是 Arc 1.170 没有而 Brk 有的三样之一，用户还没定去留，这一项的验收标准本身待定。场景 1（卡片切角和背景）在第二批和重跑里都失败：卡片上方背景是 [241,237,234]，和白色差不到 24，场景要求背景明显不是白色才做切角检查，这个前提在现在的浅色默认主题下不成立，是场景断言要更新，不是背景画错。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Texture 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkTheme/ThemeRenderer.swift",
@@ -5523,7 +5833,7 @@
       "arc_evidence": "`ARC_SpaceStyleEditor`; anatomy-m 1.13 `SpaceStyleEditor.State`",
       "description": "Color pad, number of colors, saturation, noise, intensity, preset pages, dark mode bias, undo",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Edit color-pad positions and color count, saturation, noise, intensity, preset pages, dark bias and undo with live preview.",
       "owner": "batch-spaces",
       "required_checks": [
@@ -5587,12 +5897,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P28",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P28: P28-a 6.2% 已修（剩余为数据或他组）; P28-b 站台未拍 已修（第 5 组；站台未拍）; P28-c 站台未拍 已修（预设页序 Brand→Pastel→Drab→Greyscale）; P28-d 站台未拍 有意不同; P28-e 站台未拍 已修（波浪滑杆；见 p28-full）. References in verify/visual-pairs/run-20261103/P28/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-ThemeUndo",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-ThemeUndo：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P28-a 6.41%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Native creation, color count, presets, undo, independent values, save and cancel pass. A complete pointer-driven pad/color-well/slider matrix remains a manual native gate; pure paint and Metal pixel tests cover the generated outputs.",
         "Arc 对照（run-20261103 P28）仍有差异或有意不同：P28-a: 已修（剩余为数据或他组） | P28-b: 已修（第 5 组；站台未拍） | P28-c: 已修（预设页序 Brand→Pastel→Drab→Greyscale） | P28-d: 有意不同 | P28-e: 已修（波浪滑杆；见 p28-full）",
-        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：验收标准和实现者的 current_behavior 都写了\"撤销\"，但主题编辑器没有撤销：ThemeDraft（Sources/BrkOverlays/ThemeEditor.swift:54）只有 theme 和 systemScheme 两个字段，编辑器代码里没有任何 undo；Arc 的 SpaceStyleEditor.State 里有 undoStack（docs/arc-anatomy/model-and-shortcuts.md:281、731）。色盘位置、饱和度、噪点、强度、暗色偏置没有原生驱动，实时预览只断言了草稿模型、没有读像素。"
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：验收标准和实现者的 current_behavior 都写了\"撤销\"，但主题编辑器没有撤销：ThemeDraft（Sources/BrkOverlays/ThemeEditor.swift:54）只有 theme 和 systemScheme 两个字段，编辑器代码里没有任何 undo；Arc 的 SpaceStyleEditor.State 里有 undoStack（docs/arc-anatomy/model-and-shortcuts.md:281、731）。色盘位置、饱和度、噪点、强度、暗色偏置没有原生驱动，实时预览只断言了草稿模型、没有读像素。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-ThemeUndo 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkOverlays/SpaceDialogHost.swift",
@@ -5884,7 +6216,7 @@
       "arc_evidence": "anatomy-v 3 suggestion sources (13 kinds)",
       "description": "Open tabs, history, search suggestions, top domains, calculator, bookmarks",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Rank and execute open-tab, history, search-engine, top-domain, calculator and bookmark suggestions with exact URL precedence.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -5948,11 +6280,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on W2-10, BB5, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Suggestions",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Suggestions：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Complete native mixed-source ranking, unloaded bookmark execution and per-profile network coverage.",
-        "R4-6 独立复核（2026-11-04）：证据不足。历史、热门域名、书签三种建议没有原生证据；书签建议连排序和执行的单元测试都没有（只测了投影里有书签候选）；搜索引擎建议只显示没执行；没有多来源混排的原生检查。"
+        "R4-6 独立复核（2026-11-04）：证据不足。历史、热门域名、书签三种建议没有原生证据；书签建议连排序和执行的单元测试都没有（只测了投影里有书签候选）；搜索引擎建议只显示没执行；没有多来源混排的原生检查。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Suggestions 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/BrowserCalculator.swift",
@@ -5984,7 +6331,7 @@
       "arc_evidence": "anatomy-m 1.11; 114 menu items with `arcTypeTravelID`; 35 `TypeTravelCandidate` cases",
       "description": "Every menu command, space, folder move and extension is searchable",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Search all applicable completed menu actions, spaces, folder destinations and extensions from the command bar.",
       "owner": "native-grounding",
       "required_checks": [
@@ -6012,12 +6359,27 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Actions",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Actions：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Implement the remaining actions, folder destinations and extensions; W2-8 tests Preferences, not every advertised workflow.",
         "R3-6（2026-11-04，合并 2c2f3306）：命令栏补上 Add to / Remove from Favorites、Move to New Folder、Open 某文件夹、Replace Pinned Tab with the Current Site（也加进置顶标签右键的 Edit Pinned Page 子菜单）、四个方向的 Add … Split、Mute / Unmute All Tabs、撤销最近一次可撤销操作；每个带动作按钮的扩展各一行；Open Password Manager（原生场景 R36-TypeTravel）。未做：重做（Brk 没有）；扩展行只有单元测试。",
-        "R4-6 独立复核（2026-11-04）：证据不足。Space（Focus on / Move to）、扩展行、Move to <文件夹>、Replace Pinned Tab、撤销、右和下分屏没有原生证据；Move to <文件夹> 那几行连单元测试都没有。"
+        "R4-6 独立复核（2026-11-04）：证据不足。Space（Focus on / Move to）、扩展行、Move to <文件夹>、Replace Pinned Tab、撤销、右和下分屏没有原生证据；Move to <文件夹> 那几行连单元测试都没有。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Actions 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkOverlays/Suggest.swift",
@@ -6152,7 +6514,7 @@
       "arc_evidence": "Profiles \"Default Search Engine\", `SearchEngine` records",
       "description": "Per-profile default engine and suggestions switch",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Choose the default search engine and suggestion opt-in per profile; both control actual command-bar behavior and persist.",
       "owner": "native-grounding",
       "required_checks": [
@@ -6180,11 +6542,26 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Engines",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Engines：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Add native checks switching profiles with different engines and suggestion preferences; validate outgoing requests as well as UI state.",
-        "R4-6 独立复核（2026-11-04）：证据不足。选默认搜索引擎没有任何原生证据；E2E 给每次运行都设了 BRK_SUGGEST_URL（Sources/BrkE2E/Harness.swift:190），它替换所有引擎的建议地址，所以原生运行看不出换引擎后发出的请求变了；没有两个 Profile 设置不同时的原生检查；BB5 的\"关掉建议不发请求\"用的是计算式，计算式本来就不取建议（CommandBar.swift:53），这条检查不能说明开关起作用。"
+        "R4-6 独立复核（2026-11-04）：证据不足。选默认搜索引擎没有任何原生证据；E2E 给每次运行都设了 BRK_SUGGEST_URL（Sources/BrkE2E/Harness.swift:190），它替换所有引擎的建议地址，所以原生运行看不出换引擎后发出的请求变了；没有两个 Profile 设置不同时的原生检查；BB5 的\"关掉建议不发请求\"用的是计算式，计算式本来就不取建议（CommandBar.swift:53），这条检查不能说明开关起作用。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Engines 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -7205,7 +7582,7 @@
       "arc_evidence": "row 20; `ARC_LittleBrowser`; anatomy-m 1.10",
       "description": "A small one-tab floating window",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Little Brk opens a compact one-page panel with working native chrome, focus and the intended floating behavior, without a sidebar or persistent session restore.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -7273,12 +7650,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P21",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P21: P21-a 4.3% 已修（一致）; P21-b 2.4% 已修（一致）; P21-c 站台未拍 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）; P21-d 站台未拍 一致. References in verify/visual-pairs/run-20261103/P21/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-LittleChrome",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-LittleChrome：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P21-a 2.63%, P21-b 2.33%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Authenticated floating reference, multiple-panel physical activation/input and scratch-link/close/restart matrix remain.",
         "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）",
-        "R4-6 独立复核（2026-11-04）：证据不足。\"能用的原生窗口头部\"没有原生操作证据（Open In 在 W2-5 里是命令派发，头部按钮没点过）；\"不做会话恢复\"没有原生重启检查（只有单元测试）；多个 Little 窗口的情况没有。"
+        "R4-6 独立复核（2026-11-04）：证据不足。\"能用的原生窗口头部\"没有原生操作证据（Open In 在 W2-5 里是命令派发，头部按钮没点过）；\"不做会话恢复\"没有原生重启检查（只有单元测试）；多个 Little 窗口的情况没有。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-LittleChrome 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkApp/LittleWindowController.swift",
@@ -7309,7 +7708,7 @@
       "arc_evidence": "row 137; anatomy-m 2.5 `showLittleArcOpenInMenu`",
       "description": "Move the page into a space or folder",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Little Brk/Peek Open In moves the page to a selected space or folder, closes the temporary host, and follows an explicit live-state and browsing-context continuity contract.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -7377,13 +7776,35 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P21",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P21: P21-a 4.3% 已修（一致）; P21-b 2.4% 已修（一致）; P21-c 站台未拍 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）; P21-d 站台未拍 一致. References in verify/visual-pairs/run-20261103/P21/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-OpenIn",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-OpenIn：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P21-a 2.63%, P21-b 2.33%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Native form/history reset, context-change and ongoing-download continuity need full runtime proof.",
         "No seamless browser/form-state transfer is claimed.",
         "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）",
-        "R4-6 独立复核（2026-11-04）：证据不足。移到选中的其他 Space、移到文件夹、Peek 的 Open In 都没有原生证据；\"实时状态和浏览上下文的延续\"（历史、表单、下载）没有任何测试。"
+        "R4-6 独立复核（2026-11-04）：证据不足。移到选中的其他 Space、移到文件夹、Peek 的 Open In 都没有原生证据；\"实时状态和浏览上下文的延续\"（历史、表单、下载）没有任何测试。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-OpenIn 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -7443,13 +7864,29 @@
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
           "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
           "scenario": "W2-P1"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-LittleEntry",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-LittleEntry：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Implement global shortcut registration and menu-bar entry.",
         "Verify real external-app delivery and physical modifier clicks; retain private links in private context.",
         "R3-6（2026-11-04，合并 2c2f3306）：全局快捷键改成独占注册，别的程序占着时注册失败并报给程序状态，设置 Links 页多一行说明；状态栏菜单入口可用。原生场景 R36-LittleEntry（用自己的数据目录和 ⌃⌥⇧⌘L：Finder 在前台时按下能开 Little Arc；被占用报 -9878；关掉开关无反应；辅助功能点状态栏菜单能开）。注意：每个 Brk 启动时仍先按默认 ⌥⌘N 注册一次（原有行为），要不要给测试实例加一个关掉全局快捷键的环境变量待定。",
-        "R4-6 独立复核（2026-11-04）：证据不足。真实外部程序发来的链接没有验证；标准窗口里 Option+Cmd 点链接开 Little Arc 没有原生证据；目标 Profile 没有原生断言。required_checks 的 manual 没做（外部链接要不改默认浏览器才安全，R4-4 第 3 条在做 brk-test:// 的真实链接）。"
+        "R4-6 独立复核（2026-11-04）：证据不足。真实外部程序发来的链接没有验证；标准窗口里 Option+Cmd 点链接开 Little Arc 没有原生证据；目标 Profile 没有原生断言。required_checks 的 manual 没做（外部链接要不改默认浏览器才安全，R4-4 第 3 条在做 brk-test:// 的真实链接）。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-LittleEntry 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -7528,7 +7965,7 @@
       "arc_evidence": "anatomy-v 3 \"Peek\"; anatomy-m 1.7 `modalV2`",
       "description": "Opens a link in a panel over the page; Shift+click; links from Pinned and Favorites",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Shift-click and qualifying external-site links from Pinned/Favorites open a Peek; all browsing actions target it, dismissal cleans it up, and private/Little Brk contexts stay correctly scoped.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -7596,12 +8033,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P22",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P22: P22-a 0.9% 已修（一致）; P22-b 站台未拍 一致; P22-c 站台未拍 已修（第 4 组：转标签放底部并保留滚动；站台未拍）. References in verify/visual-pairs/run-20261103/P22/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-PeekLinks",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-PeekLinks：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
+          "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P22-a 1.12%；剩余差异见 results.tsv 的合并后两列。"
         }
       ],
       "remaining": [
         "Finish pinned/favorite same/cross-site, iframe, selection, folder Open In and private/Little native matrix.",
         "Arc 对照（run-20261103 P22）仍有差异或有意不同：P22-c: 已修（第 4 组：转标签放底部并保留滚动；站台未拍）",
-        "R4-6 独立复核（2026-11-04）：证据不足。\"从置顶和收藏打开的跨站链接自动进 Peek\"没有原生证据，路由函数 KeyRouter.engine(_:page:shouldNavigateTo:) 也没有单元测试；私密窗口和 Little Arc 里的 Peek 范围没有原生证据。"
+        "R4-6 独立复核（2026-11-04）：证据不足。\"从置顶和收藏打开的跨站链接自动进 Peek\"没有原生证据，路由函数 KeyRouter.engine(_:page:shouldNavigateTo:) 也没有单元测试；私密窗口和 Little Arc 里的 Peek 范围没有原生证据。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-PeekLinks 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
@@ -7662,11 +8121,27 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh",
           "artifact": "verify/completion/sites-extensions-parent/build-expansion-fixed.log",
           "scope": "Full signed build on main a485d69: 735 tests, 3 known skips, 0 failures. The batch's unit tests run inside this merged build."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-PeekEmail",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-PeekEmail：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Loaded Gmail destination/dismissal and authenticated multi-account reference are not proved; only fixtures were used.",
-        "R4-6 独立复核（2026-11-04）：证据不足。没有原生场景看过 Shift+Cmd+E 打开的 Peek（PB1 只查按键路由到了 peekEmail）；非默认 Profile 没有测试；required_checks 的 manual 需要登录的 Gmail，这次没做。"
+        "R4-6 独立复核（2026-11-04）：证据不足。没有原生场景看过 Shift+Cmd+E 打开的 Peek（PB1 只查按键路由到了 peekEmail）；非默认 Profile 没有测试；required_checks 的 manual 需要登录的 Gmail，这次没做。",
+        "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-PeekEmail 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
@@ -7698,7 +8173,7 @@
       "arc_evidence": "row 138; anatomy-m 1.6 `SidebarList`",
       "description": "Nested folders in Pinned; delete archives the tabs inside",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Create and nest folders in Pinned, expand them, rename them and archive their descendants when deleted.",
       "owner": "native-grounding",
       "required_checks": [
@@ -7719,11 +8194,26 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-Folders",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-Folders：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Verify native nested dragging, deletion and restart; container-unit restore and per-window openness remain separate incomplete rows.",
-        "R4-6 独立复核（2026-11-04）：证据不足。嵌套文件夹、删除文件夹归档子孙没有原生证据（没有任何原生场景删除文件夹）；删除时有嵌套子文件夹的情况连单元测试都没有；普通文件夹改名没有原生断言（TabTools2 改名的是标签组）；真指针点文件夹行展开/收起没有原生场景。"
+        "R4-6 独立复核（2026-11-04）：证据不足。嵌套文件夹、删除文件夹归档子孙没有原生证据（没有任何原生场景删除文件夹）；删除时有嵌套子文件夹的情况连单元测试都没有；普通文件夹改名没有原生断言（TabTools2 改名的是标签组）；真指针点文件夹行展开/收起没有原生场景。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Folders 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -7744,7 +8234,7 @@
       "arc_evidence": "rows 141, 142",
       "description": "One command for all folders",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Collapse or expand all folders in the intended space and window without changing hierarchy.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -7772,11 +8262,26 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh",
           "artifact": "verify/completion/sites-extensions-parent/build-expansion-fixed.log",
           "scope": "Full signed build on main a485d69: 735 tests, 3 known skips, 0 failures. The batch's unit tests run inside this merged build."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r49-parent --only R49-FoldersAll",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/REPORT.md",
+          "scope": "父任务在干净工作树（station2，main 9633b81b）独立重跑 R4-9 的场景 R49-FoldersAll：通过（32 个里 31 个通过，R49-WindowMenu 另行重跑）。断言见 Sources/BrkE2E 里的同名场景；R4-9 自己的运行在 verify/completion/review-r4/sidebar-windows-fixes/native/r49-final/。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
         }
       ],
       "remaining": [
         "Aggregate folder commands update only the invoking window/current space. Add native aggregate menu checks with nested folders and active reveal.",
-        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景用 Collapse All Folders / Expand All Folders；\"只作用于当前 Space 和当前窗口、不改层级\"连单元测试都没有（没有第二个窗口、第二个 Space、嵌套文件夹）。两项在 Arc 里也是隐藏菜单项（docs/arc-anatomy/model-and-shortcuts.md 141、142），Brk 一致。"
+        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景用 Collapse All Folders / Expand All Folders；\"只作用于当前 Space 和当前窗口、不改层级\"连单元测试都没有（没有第二个窗口、第二个 Space、嵌套文件夹）。两项在 Arc 里也是隐藏菜单项（docs/arc-anatomy/model-and-shortcuts.md 141、142），Brk 一致。",
+        "R4-9（2026-11-04，合并 9633b81b）：R49-FoldersAll 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
