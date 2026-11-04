@@ -104,6 +104,21 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// Reducer-accepted browser and document observations, including hidden demanded slots.
     case nativeDialogKey(number: Int, chord: String)
     case setAppAppearance(Scheme?)
+    /// The system appearance as this process sees it, with the app's own appearance left unset: AppKit's in-process
+    /// testing override (`+[NSAppearance _setSystemAppearanceTestingOverride:]`), so `NSApp.effectiveAppearance`
+    /// changes the way a System Settings change makes it change, and no system setting is touched. nil restores the
+    /// real system appearance.
+    case simulateSystemAppearance(Scheme?)
+    /// The main menu as it would show now: each item of the menu titled `menu` (and its submenus, indented by two
+    /// spaces per level) as `title<TAB>key<TAB>flags` (flags: disabled, hidden, checked, alternate, submenu), after
+    /// the menu's own update (the delegate's `menuNeedsUpdate`, validation). nil `menu` lists the menu bar's titles.
+    case menuBarItems(menu: String?)
+    /// The texts of one of the app's windows (its labels and text views, top to bottom), each text view's links as
+    /// `link<TAB>text<TAB>url`: what the About window shows.
+    case appWindowTexts(number: Int)
+    /// Clicks the link whose text is `text` (the `occurrence`th from the start) in that window's text view, through
+    /// `NSTextView.clicked(onLink:at:)`, the method a mouse click on a link ends in.
+    case appWindowLink(number: Int, text: String, occurrence: Int)
     case siteControlsScreenshot(window: WindowID, path: String)
     /// Native semantic input in this owner's visible site-controls panel; typing still uses normal key events.
     case siteControlInput(window: WindowID, field: String, action: SiteControlAction)
@@ -210,10 +225,19 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     public var fullscreenTransitioning: Bool? = nil
     public var keyWindowNumber: Int? = nil
     public var appHidden: Bool = false
+    /// `NSApp.isActive`: Brk is the frontmost app (window-server key presses reach it only then).
+    public var appActive: Bool? = nil
     public var sheetClass: String? = nil
     /// The Icon pane's choice the Dock shows now (`NSApp.applicationIconImage` is that drawing), nil when it is none
     /// of them (the bundle's own icon).
     public var dockIcon: String? = nil
+    /// `NSApp.appearance` (the app's own override; nil follows the system) and `NSApp.effectiveAppearance` as
+    /// "light" or "dark".
+    public var appAppearance: String? = nil
+    public var effectiveAppearance: String? = nil
+    /// Every URL the GetURL Apple Event handler received since launch, as the event carried it (before any test
+    /// scheme is mapped), so a scenario can tell a link macOS delivered from one the control socket injected.
+    public var receivedGetURLs: [String]? = nil
     public var window: WindowID
     /// NSWindow frame (screen, bottom-left origin) and content size.
     public var windowFrame: CGRect
@@ -269,6 +293,8 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
     public var isKey: Bool
     public var isVisible: Bool
     public var isPageHost: Bool?
+    /// `NSWindow.level` (0 normal, 3 floating).
+    public var level: Int? = nil
     public init(number: Int, className: String, isKey: Bool, isVisible: Bool, isPageHost: Bool? = nil) {
         self.number = number
         self.className = className

@@ -14,8 +14,11 @@ public enum BoostCodec {
             }
             guard boost.style?.valid ?? true else { throw invalid("Unsupported Boost style values.") }
             if case .host(let host) = boost.scope {
-                guard let url = URL(string: "https://" + host), let origin = SiteOrigin(url), origin.url.host == host,
-                      origin.value == "https://" + host else { throw invalid("Use an exact lowercase hostname without a path or port.") }
+                // An IPv6 address is stored without brackets, as committed URLs report its host (review #21).
+                let ipv6 = host.contains(":") && host.allSatisfy { $0.isHexDigit || $0 == ":" || $0 == "." }
+                let authority = ipv6 ? "[" + host + "]" : host
+                guard let url = URL(string: "https://" + authority), let origin = SiteOrigin(url), origin.url.host == host,
+                      origin.value == "https://" + authority else { throw invalid("Use an exact lowercase hostname without a path or port.") }
             }
         }
     }

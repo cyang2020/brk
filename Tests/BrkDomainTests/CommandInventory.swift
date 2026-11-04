@@ -61,7 +61,7 @@ enum CommandInventory {
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
-        .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
+        .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory), .app(.standardEdit(.copy)),
         .app(.help(.copyInfo)), .page(.navigate(.focused, example)), .site(.toggleDeveloperMode),
         .settings(.autoArchive(.sevenDays)), .settings(.general(.warnBeforeQuitting(true))), .settings(.profile(.default, .searchSuggestions(false))),
         .settings(.links(.shiftClickPeek(false))), .settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))),
@@ -394,6 +394,7 @@ enum CommandInventory {
             case .export: "export"
             case .revealDataDirectory: "revealDataDirectory"
             case .help: "help"
+            case .standardEdit: "standardEdit"
             }
         case .settings(let c):
             switch c {

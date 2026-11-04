@@ -476,6 +476,7 @@ extension Work {
         case .showAbout: effects.append(.app(.showAbout))
         case .setAsDefaultBrowser: effects.append(.app(.registerAsDefaultBrowser))
         case .revealDataDirectory: effects.append(.app(.revealDataDirectory))
+        case .standardEdit(let edit): effects.append(.app(.standardEdit(edit)))
         case .help(.open(let url)):
             // A page a Help row resolved (release notes, help center, a new issue): a new focused tab, in the
             // window's current space or, for a Little or incognito window, its own container.

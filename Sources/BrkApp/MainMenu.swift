@@ -175,6 +175,15 @@ enum MainMenu {
     /// higher index one of its fixed alternates.
     private static func item(_ action: ActionID, binding: Int, title: String?, hidden: Bool, target: MenuTarget,
                              bindings: [ActionID: ResolvedBinding]) -> NSMenuItem {
+        if let edit = action.standardEdit {
+            // Undo to Select All stay AppKit's: the selector goes to the first responder, which validates it; only the
+            // key equivalent is the table's (resolved, refreshed by `MenuTarget.apply`).
+            let item = NSMenuItem(title: title ?? action.title(appName: Product.name), action: Selector((edit.selector)), keyEquivalent: "")
+            item.representedObject = action.rawValue
+            item.tag = 0
+            MenuTarget.apply(bindings[action]?.state, to: item)
+            return item
+        }
         let item = NSMenuItem(title: title ?? action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
         item.target = target
         item.representedObject = action.rawValue
@@ -196,9 +205,7 @@ enum MainMenu {
     /// Arc's rows that repeat a key of an action above them (`ActionID.alternateKeyRows`): items of that action,
     /// with that binding's key, where Arc puts them.
     private static let repeats: [(row: Int, action: ActionID, binding: Int, menu: MenuName, submenu: Submenu?, group: Int, hidden: Bool)] = [
-        (107, .zoomIn, 1, .view, nil, 4, true), (108, .zoomIn, 1, .view, nil, 4, true), (110, .zoomOut, 1, .view, nil, 4, true),
-        (115, .developerTools, 1, .view, .developer, 0, true), (132, .newTab, 0, .tabs, nil, 0, false),
-        (158, .goBack, 1, .archive, nil, 0, true), (160, .goForward, 1, .archive, nil, 0, true),
+        (107, .zoomIn, 1, .view, nil, 4, true), (108, .zoomIn, 1, .view, nil, 4, true), (132, .newTab, 0, .tabs, nil, 0, false),
     ]
 
     /// Arc's submenus that hold table actions, at their rows.
@@ -253,19 +260,16 @@ enum MainMenu {
         Standard(row: row, group: group, title: title, action: nil, role: role, children: children)
     }
 
-    /// Arc rows 8, 12 (Arc menu), 41 to 51 and 59 to 84 (Edit), 169 and 175 (Window): Arc's titles, AppKit's
-    /// selectors (Arc's own Copy is `copyAction:`; AppKit's `copy:` does the same for a text field). In pages
-    /// Chromium handles these keys itself.
+    /// Arc rows 8, 12 (Arc menu), 59 to 84 (Edit), 169 and 175 (Window): Arc's titles, AppKit's selectors. Undo to
+    /// Select All (rows 41 to 51) are table actions now (`ActionID.standardEdit`), built as selector items by `item`
+    /// so the Shortcuts pane can change their keys; Arc's own Copy is `copyAction:`, AppKit's `copy:` does the same for
+    /// a text field and a page's surface.
     private static let standards: [MenuName: [Standard]] = [
         .app: [
             submenu(8, 3, "Services", role: .services, []),
             standard(12, 4, "Show All", "unhideAllApplications:"),
         ],
         .edit: [
-            standard(41, 0, "Undo", "undo:", "z"), standard(42, 0, "Redo", "redo:", "z", [.command, .shift]),
-            standard(43, 1, "Cut", "cut:", "x"), standard(44, 1, "Copy", "copy:", "c"), standard(48, 1, "Paste", "paste:", "v"),
-            standard(49, 1, "Paste and Match Style", "pasteAsPlainText:", "v", [.command, .shift]),
-            standard(50, 1, "Delete", "delete:"), standard(51, 1, "Select All", "selectAll:", "a"),
             submenu(59, 2, "Spelling and Grammar", [
                 standard(60, 0, "Show Spelling and Grammar", "showGuessPanel:", ":"), standard(61, 0, "Check Document Now", "checkSpelling:", ";"),
                 standard(62, 1, "Check Spelling While Typing", "toggleContinuousSpellChecking:"),
@@ -315,6 +319,61 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
         (NSApp?.delegate as? Lifecycle)?.store.map { Dictionary($0.snapshot.settings.shortcuts.map { ($0.action, $0.state) }, uniquingKeysWith: { a, _ in a }) }
     }
 
+    /// Arc's `SpacesMainMenuProvider`: the Spaces menu ends with the window's spaces, the current one checked;
+    /// choosing one switches to it.
+    var focusSpace: ((SpaceID) -> Void)?
+    static let spaceItemTag = 9_000
+
+    @objc func chooseSpace(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        focusSpace?(SpaceID(raw))
+    }
+
+    /// Replaces the space list at the end of the Spaces menu (items tagged `spaceItemTag`, after one separator of
+    /// theirs) with `dock`'s spaces.
+    func fillSpaces(_ menu: NSMenu, dock: [DockItem]) {
+        for item in menu.items.reversed() where item.tag == Self.spaceItemTag { menu.removeItem(item) }
+        guard !dock.isEmpty else { return }
+        let separator = NSMenuItem.separator()
+        separator.tag = Self.spaceItemTag
+        menu.addItem(separator)
+        for space in dock {
+            let item = NSMenuItem(title: space.title, action: #selector(chooseSpace(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = Self.spaceItemTag
+            item.representedObject = space.id.rawValue
+            item.state = space.active ? .on : .off
+            menu.addItem(item)
+        }
+    }
+
+    /// Arc's `WindowMenuProvider`: the Window menu ends with the browser windows (their current tab's title, the key
+    /// one checked); choosing one brings it to the front. AppKit's own list leaves them out (they have no title).
+    var windowList: () -> [(id: WindowID, title: String, key: Bool)] = { [] }
+    var focusWindow: ((WindowID) -> Void)?
+    static let windowItemTag = 9_001
+
+    @objc func chooseWindow(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        focusWindow?(WindowID(raw))
+    }
+
+    func fillWindows(_ menu: NSMenu, windows: [(id: WindowID, title: String, key: Bool)]) {
+        for item in menu.items.reversed() where item.tag == Self.windowItemTag { menu.removeItem(item) }
+        guard !windows.isEmpty else { return }
+        let separator = NSMenuItem.separator()
+        separator.tag = Self.windowItemTag
+        menu.addItem(separator)
+        for window in windows {
+            let item = NSMenuItem(title: window.title, action: #selector(chooseWindow(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = Self.windowItemTag
+            item.representedObject = window.id.rawValue
+            item.state = window.key ? .on : .off
+            menu.addItem(item)
+        }
+    }
+
     @objc func performAction(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let action = ActionID(rawValue: raw) else { return }
         let event = NSApp.currentEvent
@@ -325,6 +384,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     private let log = Logger(subsystem: "brk", category: "keys")
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.tag == Self.spaceItemTag || item.tag == Self.windowItemTag { return true }
         guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { return true }
         if action.spec.later != nil { return false }
         if let checked = isChecked?(action) { item.state = checked ? .on : .off }
@@ -343,6 +403,8 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
         }
         let states = shortcuts() ?? KeyBindings.resolve(overrides: [:]).mapValues(\.state)
         let now = current()
+        if menu.title == MainMenu.title(of: .spaces) { fillSpaces(menu, dock: now.window?.kind == .standard ? now.window?.dock ?? [] : []) }
+        if menu.title == MainMenu.title(of: .window) { fillWindows(menu, windows: windowList()) }
         for item in menu.items where item.tag == 0 {
             guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }
             Self.apply(states[action], to: item)
@@ -351,6 +413,16 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
                 item.isHidden = shown.hidden
             }
             if action == .fullscreen, let symbol = MainMenu.symbol(of: action, fullScreen: now.fullScreen) { item.image = MainMenu.image(symbol) }
+        }
+    }
+
+    /// Writes the resolved shortcuts into every table item of `menu` and its submenus at once, so the Edit items' keys
+    /// (which AppKit matches itself, without opening the menu) follow a remap the moment it is saved.
+    static func applyAll(_ states: [ActionID: KeyBindingState], to menu: NSMenu) {
+        for item in menu.items {
+            if let sub = item.submenu { applyAll(states, to: sub) }
+            guard item.tag == 0, let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }
+            apply(states[action], to: item)
         }
     }
 

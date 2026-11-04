@@ -63,9 +63,14 @@ final class ActionsTests: XCTestCase {
         XCTAssertEqual(chord, KeyChord(.command, .t))
         XCTAssertEqual(with, [.newWindow])
         XCTAssertNil(KeyMap(overrides: [.newWindow: KeyOverride(chord: KeyChord(.command, .t), priority: nil)]).lookup(KeyChord(.command, .t)))
-        // Go Back's Cmd+Left alternate rides along untouched by an override of its primary.
+        // Go Back's Cmd+Left is Arc's goBack_Alternate, an action of its own: unsetting Go Back leaves it, and it
+        // moves on its own.
         let back = KeyMap(overrides: [.goBack: KeyOverride(chord: nil, priority: nil)])
-        XCTAssertEqual(back.lookup(KeyChord(.command, .leftArrow))?.action, .goBack)
+        XCTAssertEqual(back.lookup(KeyChord(.command, .leftArrow))?.action, .goBackAlternate)
+        let moved2 = KeyMap(overrides: [.goBackAlternate: KeyOverride(chord: KeyChord([.control, .option, .command], .b), priority: nil)])
+        XCTAssertEqual(moved2.lookup(KeyChord([.control, .option, .command], .b))?.action, .goBackAlternate)
+        XCTAssertNil(moved2.lookup(KeyChord(.command, .leftArrow)))
+        XCTAssertEqual(moved2.lookup(KeyChord(.command, .leftBracket))?.action, .goBack)
     }
 
     /// Every row of Arc's menu table (anatomy-m 2.3, rows 1 to 189) is an action, an alternate key of one, an AppKit
@@ -78,19 +83,24 @@ final class ActionsTests: XCTestCase {
         let covered = Set(rows).union(ActionID.menuTitleRows).union(ActionID.standardItemRows).union(ActionID.alternateKeyRows)
             .union(ActionID.placeholderRows).union(ActionID.droppedRows)
         XCTAssertEqual(covered, Set(1...189), "missing rows: \(Set(1...189).subtracting(covered).sorted())")
-        XCTAssertEqual(referenceActions.count, 122)
-        XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 119)   // R3-5 Help/Developer rows plus New Easel (R3-3)
-        XCTAssertEqual(ActionID.allCases.count, 162)
+        // R4-4: Undo to Select All (rows 41 to 51) and the second keys of Zoom Out, Developer Tools, Go Back and Go
+        // Forward (rows 110, 115, 158, 160) are actions, so the Shortcuts pane can change them.
+        XCTAssertEqual(referenceActions.count, 134)
+        XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 131)   // R3-5 Help/Developer rows plus New Easel (R3-3)
+        XCTAssertEqual(ActionID.allCases.count, 174)
         XCTAssertEqual(ActionID.allCases.filter { $0.spec.row > 189 }.count, 40)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 159)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 171)
         XCTAssertEqual(Set(ActionID.allCases.map(\.spec.row)).count, ActionID.allCases.count)
     }
 
     /// Every action the bar can run has a listing, except the two that open the bar itself (New Tab…, Open Command
-    /// Bar) and the Tab Switcher, which commits on a Control release a bar choice never has.
+    /// Bar), the Tab Switcher, which commits on a Control release a bar choice never has, and the rows Arc's nib gives
+    /// no type-travel attributes (Undo, Delete, the second keys).
     func testEveryRealActionIsATypeTravelResultButTheBarsOwn() {
         let unlisted = ActionID.allCases.filter { $0.spec.later == nil && $0.spec.commandBar == nil }
-        XCTAssertEqual(unlisted, [.newTab, .addressBar, .cycleNextTab, .cyclePreviousTab])
+        // Arc's nib gives Undo, Delete and the second keys no arcTypeTravelID (Redo to Select All have one).
+        XCTAssertEqual(unlisted, [.newTab, .addressBar, .undo, .delete, .zoomOutAlternate, .developerToolsAlternate, .cycleNextTab, .cyclePreviousTab,
+                                  .goBackAlternate, .goForwardAlternate])
         XCTAssertEqual(ActionID.appearanceDark.barTitle(appName: "Brk"), "Switch to Dark Mode")
         XCTAssertEqual(ActionID.newWindow.barTitle(appName: "Brk"), "New Window")
         XCTAssertEqual(ActionID.hideArc.barTriggers(appName: "Brk"), ["Hide Brk"])
@@ -158,7 +168,7 @@ final class ActionsTests: XCTestCase {
             if action != .share { XCTAssertEqual(listing.title, arc.title, "\(action)") }
             checked += 1
         }
-        XCTAssertEqual(checked, 103, "114 Arc rows have an icon; 11 are dropped rows or AppKit items")
+        XCTAssertEqual(checked, 109, "114 Arc rows have an icon; 5 are dropped rows or AppKit items (Redo to Select All are actions since R4-4)")
     }
 
     /// Chords read as macOS menus write them; Shift+Cmd+= is Arc's "⌘+"; macOS's own chords are flagged.
@@ -271,5 +281,58 @@ final class VocabularyTests: XCTestCase {
             let data = try JSONEncoder().encode(command)
             XCTAssertEqual(try JSONDecoder().decode(Command.self, from: data), command)
         }
+    }
+}
+
+/// R4-4 (A116): the second keys and the Edit menu's AppKit items are remappable actions with their own state, and
+/// routing treats the Edit items as AppKit's while a native view has focus.
+final class RemappableSecondKeysTests: XCTestCase {
+    func testSecondKeysAreTheirOwnActionsWithArcsBindingIDs() {
+        XCTAssertEqual(ActionID.goBackAlternate.rawValue, "goBack_Alternate")
+        XCTAssertEqual(ActionID.goForwardAlternate.rawValue, "goForward_Alternate")
+        XCTAssertEqual(ActionID.developerToolsAlternate.rawValue, "developerTools_Alternate")
+        XCTAssertEqual(ActionID.pasteAndMatchStyle.rawValue, "pasteAndMatchStyle")
+        for (action, primary) in [(ActionID.goBackAlternate, ActionID.goBack), (.goForwardAlternate, .goForward), (.zoomOutAlternate, .zoomOut),
+                                  (.developerToolsAlternate, .developerTools)] {
+            XCTAssertEqual(action.spec.command, primary.spec.command, "\(action)")
+            XCTAssertTrue(action.spec.hidden, "\(action)")
+            XCTAssertEqual(primary.spec.bindings.count, 1, "\(primary) keeps only its first key")
+            XCTAssertEqual(action.title(appName: "Brk"), primary.title(appName: "Brk"))
+        }
+        let resolved = KeyBindings.resolve(overrides: [:])
+        XCTAssertEqual(resolved[.zoomOutAlternate]?.state, .valid(KeyChord([.shift, .command], .minus)))
+        XCTAssertEqual(resolved[.developerToolsAlternate]?.state, .valid(KeyChord([], .f12)))
+        XCTAssertEqual(resolved[.developerToolsAlternate]?.priority, .pageThenApp)
+        XCTAssertEqual(resolved[.selectAll]?.state, .valid(KeyChord(.command, .a)))
+        XCTAssertEqual(resolved[.delete]?.state, .unset)
+    }
+
+    /// The menu rows no other test names (A130's audit, r4-4-remaining/menus): each Edit item asks BrkApp for its
+    /// selector; Help > Essential Keyboard Shortcuts opens the Shortcuts pane.
+    func testTheRowsNoOtherTestNamesDoTheirWork() {
+        let d = Driver()
+        for action in [ActionID.undo, .redo, .cut, .copy, .paste, .pasteAndMatchStyle, .delete, .selectAll] {
+            XCTAssertEqual(d.user(action.spec.command).effects, [.app(.standardEdit(action.standardEdit!))], "\(action)")
+        }
+        d.user(ActionID.keyboardShortcutsEDU.spec.command)
+        XCTAssertEqual(d.snapshot.settings.pane, .shortcuts)
+    }
+
+    func testEditItemsAreLeftToAppKitInNativeViewsAndDispatchAfterAPage() {
+        let map = KeyMap(overrides: [.selectAll: KeyOverride(chord: KeyChord([.control, .option, .command], .a), priority: nil)])
+        let chord = KeyChord([.control, .option, .command], .a)
+        var memory = KeyRoutingMemory.empty
+        func input(_ stage: KeyStage, _ id: Double) -> KeyInput {
+            KeyInput(press: KeyPress(chord: chord, phase: .down, isRepeat: false, editableFieldFocused: true), stage: stage, pressID: PressID(eventTimestamp: id))
+        }
+        let now = Instant(milliseconds: 0)
+        XCTAssertEqual(KeyRouting.decide(input(.menu, 1), map: map, memory: &memory, now: now), .ignore, "the menu item does it in a native field")
+        XCTAssertEqual(KeyRouting.decide(input(.beforePage, 2), map: map, memory: &memory, now: now), .passToPage)
+        XCTAssertEqual(KeyRouting.decide(input(.afterPage, 2), map: map, memory: &memory, now: now), .dispatch(.selectAll))
+        XCTAssertNil(map.lookup(KeyChord(.command, .a)), "the old chord routes to no one")
+        XCTAssertEqual(ActionID.selectAll.standardEdit, .selectAll)
+        XCTAssertEqual(StandardEdit.pasteAndMatchStyle.selector, "pasteAsPlainText:")
+        XCTAssertEqual(StandardEdit.copy.selector, "copy:")
+        XCTAssertNil(ActionID.copyCurrentURL.standardEdit)
     }
 }

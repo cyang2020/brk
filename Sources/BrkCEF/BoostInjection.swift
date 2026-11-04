@@ -46,15 +46,31 @@ extension ChromePage {
                 let world = try await self.boostWorld(target, revision: revision)
                 guard valid() else { return }
                 let css = injections.map { $0.css }.joined(separator: "\n")
+                // A constructed sheet in `document.adoptedStyleSheets` (review #2 and #12): CSSOM, so a page whose
+                // Content-Security-Policy refuses inline styles still gets its Boost, and there is no element for page
+                // scripts to find. The sheet's first rule names its owner (`@supports (--brk-boost: <owner>) {}`, an empty
+                // block), so a later run in another isolated world can find and replace it. Pages without constructable
+                // sheets fall back to a style element, and a style element the page's policy blocks is reported.
                 let script = """
-                (()=>{if(location.origin!==\(Self.jsString(target.origin.value)))return false;
-                const owner=\(Self.jsString(owner));for(const old of document.querySelectorAll('style[data-brk-boost-owner]'))if(old.getAttribute('data-brk-boost-owner')!==owner)old.remove();
-                let s=document.querySelector('style[data-brk-boost-owner="'+owner+'"]');
-                if(!s){s=document.createElement('style');s.setAttribute('data-brk-boost-owner',owner);(document.head||document.documentElement).append(s);}
-                s.textContent=\(Self.jsString(css));if(!s.textContent)s.remove();return true;})()
+                (()=>{if(location.origin!==\(Self.jsString(target.origin.value)))return 'ok';
+                const owner=\(Self.jsString(owner)),css=\(Self.jsString(css)),marker='(--brk-boost: '+owner+')';
+                const ours=s=>{try{const r=s.cssRules[0];return r instanceof CSSSupportsRule&&r.conditionText.startsWith('(--brk-boost')}catch{return false}};
+                for(const old of document.querySelectorAll('style[data-brk-boost-owner]'))old.remove();
+                if(typeof CSSStyleSheet==='function'&&'adoptedStyleSheets' in document){
+                  const kept=document.adoptedStyleSheets.filter(s=>!ours(s));
+                  if(!css){document.adoptedStyleSheets=kept;return 'ok';}
+                  const sheet=new CSSStyleSheet();sheet.replaceSync('@supports '+marker+' {}\\n'+css);
+                  document.adoptedStyleSheets=[...kept,sheet];return 'ok';
+                }
+                if(!css)return 'ok';
+                const s=document.createElement('style');s.setAttribute('data-brk-boost-owner',owner);s.textContent=css;(document.head||document.documentElement).append(s);
+                return s.sheet?'ok':'This page’s Content Security Policy blocks Boost styles.';})()
                 """
-                _ = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true])
+                let styled = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": world, "returnByValue": true])
                 guard valid() else { return }
+                if let value = (styled["result"] as? [String: Any])?["value"] as? String, value != "ok" {
+                    self.boostError = value; self.engine.pageDidEmit(self, .boostFailed(target.document, value))
+                }
                 for boost in injections where !boost.javascript.isEmpty {
                     let key = boost.id + "\n" + boost.scope.label + "\n" + boost.javascript
                     guard !self.boostExecuted.contains(key) else { continue }
@@ -94,17 +110,24 @@ extension ChromePage {
           if(location.origin!==\(Self.jsString(target.origin.value))){resolve(null);return;}
           if(globalThis.__brkZapCancel)globalThis.__brkZapCancel();
           let current=null;const highlight=document.createElement('div');highlight.setAttribute('data-brk-zap-highlight','');highlight.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#ffcc02;mix-blend-mode:multiply;border-radius:4px;box-sizing:border-box;display:none';document.documentElement.append(highlight);
-          const place=()=>{if(!current||!current.isConnected){highlight.style.display='none';return;}const r=current.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:(r.left-2)+'px',top:(r.top-2)+'px',width:(r.width+4)+'px',height:(r.height+4)+'px'});};
+          const place=()=>{placeShields();if(!current||!current.isConnected){highlight.style.display='none';return;}const r=current.getBoundingClientRect();Object.assign(highlight.style,{display:'block',left:(r.left-2)+'px',top:(r.top-2)+'px',width:(r.width+4)+'px',height:(r.height+4)+'px'});};
           const ignored=t=>!t||t===document.documentElement||t===document.body||t===highlight;
-          const finish=value=>{highlight.remove();for(const [n,f] of listeners)window.removeEventListener(n,f,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
-          const over=e=>{const t=e.target instanceof Element?e.target:null;current=ignored(t)?null:t;place();};
+          // A frame from another origin would take the click itself: while picking, a transparent shield lies over each
+          // frame, and a click on it selects that frame's element in this document (review #9). CSSOM, so a page's
+          // Content-Security-Policy cannot refuse it.
+          const shields=Array.from(document.querySelectorAll('iframe,frame,embed,object')).map(f=>{const s=document.createElement('div');s.__brkFrame=f;s.setAttribute('data-brk-zap-shield','');s.style.cssText='position:fixed;z-index:2147483646;background:transparent;margin:0;padding:0;border:0';document.documentElement.append(s);return s;});
+          const placeShields=()=>{for(const s of shields){const r=s.__brkFrame.getBoundingClientRect();Object.assign(s.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',display:s.__brkFrame.isConnected?'block':'none'});}};
+          placeShields();
+          const element=t=>t&&t.__brkFrame?t.__brkFrame:t;
+          const finish=value=>{highlight.remove();for(const s of shields)s.remove();for(const [n,f] of listeners)window.removeEventListener(n,f,true);if(globalThis.__brkZapToken===\(Self.jsString(pickToken))){delete globalThis.__brkZapCancel;delete globalThis.__brkZapToken;}resolve(value);};
+          const over=e=>{const t=element(e.target instanceof Element?e.target:null);current=ignored(t)?null:t;place();};
           const selector=el=>{const parts=[];while(el&&el.nodeType===1){
             if(el.id){const id='#'+CSS.escape(el.id);if(document.querySelectorAll(id).length===1){parts.unshift(id);break;}}
             const tag=el.localName;const siblings=el.parentElement?Array.from(el.parentElement.children).filter(x=>x.localName===tag):[el];
             parts.unshift(CSS.escape(tag)+':nth-of-type('+(siblings.indexOf(el)+1)+')');el=el.parentElement;
           }return parts.join(' > ');};
           const swallow=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();};
-          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();const t=e.target instanceof Element?e.target:null;if(ignored(t))return;finish(selector(t));};
+          const click=e=>{if(!e.isTrusted)return;e.preventDefault();e.stopImmediatePropagation();const t=element(e.target instanceof Element?e.target:null);if(ignored(t))return;finish(selector(t));};
           const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(null);}};
           const listeners=[['mouseover',over],['scroll',place],['resize',place],['mousedown',swallow],['mouseup',swallow],['pointerdown',swallow],['auxclick',swallow],['click',click],['keydown',key]];
           globalThis.__brkZapToken=\(Self.jsString(pickToken));globalThis.__brkZapCancel=()=>finish(null);

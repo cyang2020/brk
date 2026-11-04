@@ -25,6 +25,52 @@ final class ControlExecutor {
         self.clock = clock
     }
 
+    /// The link runs of a text, in order (value and range).
+    static func links(in text: NSAttributedString) -> [(Any, NSRange)] {
+        var out: [(Any, NSRange)] = [], index = 0
+        while index < text.length {
+            var range = NSRange()
+            let value = text.attribute(.link, at: index, longestEffectiveRange: &range, in: NSRange(location: index, length: text.length - index))
+            if let value { out.append((value, range)) }
+            index = max(range.location + range.length, index + 1)
+        }
+        return out
+    }
+
+    nonisolated static func scheme(_ appearance: NSAppearance) -> String {
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
+    }
+
+    /// `title<TAB>key<TAB>flags` per item, after the menu's delegate update and validation, submenus indented.
+    static func lines(of menu: NSMenu, depth: Int) -> [String] {
+        menu.delegate?.menuNeedsUpdate?(menu)
+        menu.update()
+        var out: [String] = []
+        for item in menu.items {
+            let indent = String(repeating: "  ", count: depth)
+            if item.isSeparatorItem { out.append(indent + "---"); continue }
+            let mask = item.keyEquivalentModifierMask
+            var key = ""
+            if !item.keyEquivalent.isEmpty {
+                if mask.contains(.control) { key += "⌃" }
+                if mask.contains(.option) { key += "⌥" }
+                if mask.contains(.shift) || item.keyEquivalent != item.keyEquivalent.lowercased() { key += "⇧" }
+                if mask.contains(.command) { key += "⌘" }
+                let special: [UInt32: String] = [0xF700: "↑", 0xF701: "↓", 0xF702: "←", 0xF703: "→", 0xF70F: "F12", 0x1B: "⎋", 0x09: "⇥", 0x19: "⇥", 0x0D: "↩"]
+                key += item.keyEquivalent.unicodeScalars.first.flatMap { special[$0.value] } ?? item.keyEquivalent.uppercased()
+            }
+            var flags: [String] = []
+            if !item.isEnabled { flags.append("disabled") }
+            if item.isHidden { flags.append("hidden") }
+            if item.state == .on { flags.append("checked") }
+            if item.isAlternate { flags.append("alternate") }
+            if item.submenu != nil { flags.append("submenu") }
+            out.append(indent + item.title + "\t" + key + "\t" + flags.joined(separator: ","))
+            if let sub = item.submenu { out += lines(of: sub, depth: depth + 1) }
+        }
+        return out
+    }
+
     func run(_ op: ControlOp) async -> ControlResult {
         do { return try await execute(op) } catch let failure as Failure {
             return .failed(failure.message)
@@ -100,6 +146,52 @@ final class ControlExecutor {
         case .setAppAppearance(let scheme):
             NSApp.appearance = scheme.map { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua)! }
             return .ok
+        case .simulateSystemAppearance(let scheme):
+            // AppKit's own in-process system appearance override (1 light, 2 dark, 0 none): the app's appearance
+            // stays unset, so the change reaches `NSApp.effectiveAppearance` and its observers as a system change does.
+            guard NSApp.appearance == nil else { throw Failure(message: "The app's own appearance is set; a system change would not show") }
+            let selector = NSSelectorFromString("_setSystemAppearanceTestingOverride:")
+            guard let method = class_getClassMethod(NSAppearance.self, selector) else { throw Failure(message: "AppKit has no system appearance testing override") }
+            typealias Override = @convention(c) (AnyClass, Selector, Int) -> Void
+            unsafeBitCast(method_getImplementation(method), to: Override.self)(NSAppearance.self, selector, scheme.map { $0 == .dark ? 2 : 1 } ?? 0)
+            return .ok
+        case .menuBarItems(let name):
+            guard let bar = NSApp.mainMenu else { throw Failure(message: "No main menu") }
+            guard let name else { return .menuItems(bar.items.map(\.title)) }
+            guard let menu = bar.items.first(where: { $0.title == name || $0.submenu?.title == name })?.submenu else { throw Failure(message: "No menu " + name) }
+            if let window = try? controller(nil).window,
+               let page = (window as? any HostWindow).map({ type(of: $0).surface(containing: window.firstResponder) }) ?? nil {
+                await page.prepareEditingMenu()
+            }
+            return .menuItems(Self.lines(of: menu, depth: 0))
+        case .appWindowTexts(let number):
+            guard let window = NSApp.windows.first(where: { $0.windowNumber == number }), let content = window.contentView else { throw Failure(message: "No window \(number)") }
+            var out: [String] = []
+            func walk(_ view: NSView) {
+                if let field = view as? NSTextField, !field.stringValue.isEmpty { out.append(field.stringValue) }
+                if let text = view as? NSTextView, let storage = text.textStorage {
+                    out.append(storage.string)
+                    for (value, range) in Self.links(in: storage) {
+                        out.append("link\t" + (storage.string as NSString).substring(with: range) + "\t" + "\(value)")
+                    }
+                }
+                for sub in view.subviews.sorted(by: { $0.frame.maxY > $1.frame.maxY }) { walk(sub) }
+            }
+            walk(content)
+            return .menuItems(out)
+        case .appWindowLink(let number, let text, let occurrence):
+            guard let window = NSApp.windows.first(where: { $0.windowNumber == number }), let content = window.contentView else { throw Failure(message: "No window \(number)") }
+            func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
+            for case let view as NSTextView in views(content) {
+                guard let storage = view.textStorage else { continue }
+                var seen = 0, hit: (Any, Int)?
+                for (value, range) in Self.links(in: storage) where (storage.string as NSString).substring(with: range) == text {
+                    if seen == occurrence { hit = (value, range.location); break }
+                    seen += 1
+                }
+                if let hit { view.clicked(onLink: hit.0, at: hit.1); return .ok }
+            }
+            throw Failure(message: "No link \(text) #\(occurrence)")
         case .siteControlsScreenshot(let id, let path):
             guard let window = store.sitePanels.window(for: id) else { throw Failure(message: "Site controls are closed") }
             let image = try capture(window)
@@ -582,8 +674,11 @@ final class ControlExecutor {
         let responder = window.firstResponder
         var focusedPage = ViewTree.page(containing: responder)
         if focusedPage == nil { focusedPage = pages.first(where: { $0.value.hasKeyboardFocus })?.key }
-        let windows = NSApp.windows.map {
-            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible, isPageHost: engine.isPageHostWindow($0))
+        let windows = NSApp.windows.map { window -> AppWindowFact in
+            var fact = AppWindowFact(number: window.windowNumber, className: NSStringFromClass(type(of: window)), isKey: window.isKeyWindow,
+                                     isVisible: window.isVisible, isPageHost: engine.isPageHostWindow(window))
+            fact.level = window.level.rawValue
+            return fact
         }
         var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,
@@ -601,6 +696,10 @@ final class ControlExecutor {
         facts.sheetClass = window.attachedSheet.map { NSStringFromClass(type(of: $0)) }
         // AppKit keeps its own copy of the image it was given, so the store says which drawing it set.
         facts.dockIcon = NSApp.applicationIconImage?.size == CGSize(width: AppStore.dockIconSide, height: AppStore.dockIconSide) ? store.shownIcon?.rawValue : nil
+        facts.appActive = NSApp.isActive
+        facts.appAppearance = NSApp.appearance.map(Self.scheme)
+        facts.effectiveAppearance = Self.scheme(NSApp.effectiveAppearance)
+        facts.receivedGetURLs = GetURLHandler.received
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts

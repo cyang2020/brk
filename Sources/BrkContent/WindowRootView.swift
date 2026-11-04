@@ -173,7 +173,7 @@ public final class WindowRootView: NSView {
         tabTools.frame = bounds
         tabTools.render(snapshot.tabTools, sidebarWidth: snapshot.sidebar.visible ? snapshot.sidebar.width : 0, palette: palette, output: snapshot.output,
                         exported: snapshot.exportOutcome, contentArea: frames.contentArea, thumbnails: thumbnails.images)
-        boostPanel.render(snapshot.boostEditor, parent: window)
+        boostPanel.render(snapshot.boostEditor, parent: window, yielding: barSnapshot != nil)
         zapOverlay.render(snapshot.boostEditor, card: snapshot.boostEditor?.target.flatMap { target in
             frames.cards.first { if case .page(let page) = $0.content { page == target.page } else { false } }?.page
         })

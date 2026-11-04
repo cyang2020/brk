@@ -28,10 +28,12 @@ final class AboutWindow: NSObject, NSTextViewDelegate {
 
     private enum Tag { static let icon = 1 }
 
-    static var versionLine: String {
-        let info = Bundle.main.infoDictionary ?? [:]
+    /// Arc's "Version 1.170.0 (89123)": the marketing version and, in the parentheses, the build. A Brk build is
+    /// named by its commit (`BrkGitCommit`, written by scripts/declare-scripting.sh), the bundle's build number when
+    /// there is none (a SwiftPM run).
+    static func versionLine(_ info: [String: Any] = Bundle.main.infoDictionary ?? [:]) -> String {
         let version = info["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = info["CFBundleVersion"] as? String ?? "1"
+        let build = (info["BrkGitCommit"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? info["CFBundleVersion"] as? String ?? "1"
         return "Version \(version) (\(build))"
     }
 
@@ -75,7 +77,7 @@ final class AboutWindow: NSObject, NSTextViewDelegate {
             y -= gap
         }
         line(Product.name, font: .boldSystemFont(ofSize: About.nameSize.value), gap: About.versionTop.value)
-        line(Self.versionLine, font: .systemFont(ofSize: About.textSize.value), gap: 0)
+        line(Self.versionLine(), font: .systemFont(ofSize: About.textSize.value), gap: 0)
         if let engine = Self.engineLine(engineVersion) { line(engine, font: .systemFont(ofSize: About.textSize.value), gap: 0) }
         y -= About.copyrightTop.value
         line(Self.copyright, font: .systemFont(ofSize: About.textSize.value), gap: About.creditsTop.value)
@@ -98,29 +100,38 @@ final class AboutWindow: NSObject, NSTextViewDelegate {
     }
 
     /// "Brk is made possible by the Chromium open source project, Chromium's open source software, as well as other
-    /// open source software." with Arc's three links.
+    /// open source software." with Arc's three links: Chromium's site, Chromium's credits page and the licences of
+    /// the rest of what Brk ships (Help/credits.html, Arc's Credits.html).
     static var credits: NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         let base: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: About.textSize.value), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph]
         let text = NSMutableAttributedString()
-        func add(_ string: String, link: BrowserPage? = nil) {
+        func add(_ string: String, link: String? = nil) {
             var attributes = base
-            if let link { attributes[.link] = URL(string: "brk-about://\(link.rawValue)")! }
+            if let link { attributes[.link] = URL(string: "brk-about://\(link)")! }
             text.append(NSAttributedString(string: string, attributes: attributes))
         }
         add("\(Product.name) is made possible by the ")
-        add("Chromium", link: .chromium)
+        add("Chromium", link: BrowserPage.chromium.rawValue)
         add(" open source project, Chromium’s ")
-        add("open source software", link: .credits)
+        add("open source software", link: BrowserPage.credits.rawValue)
         add(", as well as other ")
-        add("open source software", link: .credits)
+        add("open source software", link: Self.otherCredits)
         add(".")
         return text
     }
 
+    static let otherCredits = "brk-credits"
+
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-        guard let url = link as? URL, let page = url.host.flatMap(BrowserPage.init(rawValue:)) else { return false }
+        guard let url = link as? URL, let host = url.host else { return false }
+        if host == Self.otherCredits {
+            if let credits = HelpLinks.credits() { send(.app(.help(.open(credits)))) }
+            else { send(.settings(.openBrowserPage(.credits, profile: nil))) }
+            return true
+        }
+        guard let page = BrowserPage(rawValue: host) else { return false }
         send(.settings(.openBrowserPage(page, profile: nil)))
         return true
     }

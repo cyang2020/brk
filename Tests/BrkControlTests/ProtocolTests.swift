@@ -14,7 +14,7 @@ final class ProtocolTests: XCTestCase {
         case chooseOutputFixture, cancelCurrentOutput, selectLinkExportFixture, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case mediaWindowScreenshot, mediaSounds, captureProbe, sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
-        case nativeDialogKey, setAppAppearance, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
+        case nativeDialogKey, setAppAppearance, simulateSystemAppearance, menuBarItems, appWindowTexts, appWindowLink, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer, appleScript
         case activateApp, sendAction, pressHeld, focusAppWindow, windowSheetButton
@@ -39,6 +39,10 @@ final class ProtocolTests: XCTestCase {
         case .screenshotSheet: .screenshotSheet
         case .nativeDialogKey: .nativeDialogKey
         case .setAppAppearance: .setAppAppearance
+        case .simulateSystemAppearance: .simulateSystemAppearance
+        case .menuBarItems: .menuBarItems
+        case .appWindowTexts: .appWindowTexts
+        case .appWindowLink: .appWindowLink
         case .siteControlsScreenshot: .siteControlsScreenshot
         case .siteControls: .siteControls
         case .siteControlInput: .siteControlInput
@@ -104,6 +108,10 @@ final class ProtocolTests: XCTestCase {
         case .screenshotSheet: return [.screenshotSheet(window: nil, path: "/tmp/sheet.png")]
         case .nativeDialogKey: return [.nativeDialogKey(number: 7, chord: "return")]
         case .setAppAppearance: return [.setAppAppearance(.dark), .setAppAppearance(nil)]
+        case .simulateSystemAppearance: return [.simulateSystemAppearance(.dark), .simulateSystemAppearance(nil)]
+        case .menuBarItems: return [.menuBarItems(menu: "Edit"), .menuBarItems(menu: nil)]
+        case .appWindowTexts: return [.appWindowTexts(number: 3)]
+        case .appWindowLink: return [.appWindowLink(number: 3, text: "Chromium", occurrence: 0)]
         case .siteControlsScreenshot: return [.siteControlsScreenshot(window: WindowID("w"), path: "/tmp/panel.png")]
         case .siteControls: return [.siteControls]
         case .siteControlTexts: return [.siteControlTexts(window: WindowID("w"))]

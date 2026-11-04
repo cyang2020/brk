@@ -14,7 +14,8 @@ extension Work {
         // The map is the table plus the user's overrides (F4); a conflicting chord routes to no one.
         let map = state.doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: state.doc.keyOverrides)
         let decision = KeyRouting.decide(key, map: map, memory: &memory, now: ctx.now)
-        if key.press.phase == .down, let (action, _) = map.lookup(key.press.chord), !key.press.isRepeat || action.spec.repeats {
+        // Undo to Select All are no Chromium shortcut: the page's own editing keys go on as before.
+        if key.press.phase == .down, let (action, _) = map.lookup(key.press.chord), !key.press.isRepeat || action.spec.repeats, action.standardEdit == nil {
             keyShortcut = true
         }
         let remembered = memory != state.session.windows[window]!.keyRouting

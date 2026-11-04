@@ -33,7 +33,11 @@ func normalize(_ state: inout AppState) -> [String] {
     for (window, session) in state.session.windows {
         guard let editor = session.boostEditor else { continue }
         if state.boostProfile(in: window) != editor.profile { state.session.windows[window]?.boostEditor = nil }
-        else if editor.picking, state.boostPickingTarget(in: window) != editor.target {
+        else if editor.picking, editor.pickPurpose == .zap, let rebound = state.boostEditorTarget(editor), rebound != editor.target,
+                state.boostPickingTarget(in: window) == rebound {
+            // The page reloaded under Zap: the editor follows its new document; the old pick's end re-arms it there.
+            state.session.windows[window]?.boostEditor?.target = rebound
+        } else if editor.picking, state.boostPickingTarget(in: window) != editor.target {
             state.session.windows[window]?.boostEditor?.picking = false
             state.session.windows[window]?.boostEditor?.pickID = nil
             state.session.windows[window]?.boostEditor?.message = "Zap cancelled because its page is no longer visible."

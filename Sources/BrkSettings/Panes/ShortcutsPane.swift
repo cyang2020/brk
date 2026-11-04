@@ -198,7 +198,9 @@ struct ShortcutRowView: View {
             }
             Spacer(minLength: ShortcutsPaneMetrics.controlSpacing.value)
             menu.opacity(hovering ? 1 : 0)
-            ChordRecorder(state: row.state) { chord in dispatch(.settings(.shortcuts(.setChord(row.action, chord)))) }
+            ChordRecorder(state: row.state, identifier: ViewID.settingsField("shortcut-\(row.action.rawValue)").identifier) { chord in
+                dispatch(.settings(.shortcuts(.setChord(row.action, chord))))
+            }
                 .frame(width: ShortcutsPaneMetrics.recorderSize.value.width, height: ShortcutsPaneMetrics.recorderSize.value.height)
                 .accessibilityIdentifier(ViewID.settingsField("shortcut-\(row.action.rawValue)").identifier)
         }
@@ -241,6 +243,9 @@ struct ShortcutRowView: View {
 /// the row then shows, as in Arc.
 struct ChordRecorder: NSViewRepresentable {
     let state: KeyBindingState
+    /// The key cap's own accessibility identifier (`settings.field.shortcut-<action>`), so the AppKit view itself, not
+    /// only SwiftUI's wrapper, can be found and clicked.
+    var identifier: String? = nil
     let record: @MainActor (KeyChord?) -> Void
 
     func makeNSView(context: NSViewRepresentableContext<ChordRecorder>) -> ChordRecorderView { ChordRecorderView() }
@@ -248,6 +253,7 @@ struct ChordRecorder: NSViewRepresentable {
     func updateNSView(_ view: ChordRecorderView, context: NSViewRepresentableContext<ChordRecorder>) {
         view.state = state
         view.record = record
+        if let identifier, view.accessibilityIdentifier() != identifier { view.setAccessibilityIdentifier(identifier) }
     }
 }
 

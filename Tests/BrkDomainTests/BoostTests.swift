@@ -28,6 +28,36 @@ final class BoostTests: XCTestCase {
             XCTAssertFalse(BoostScope.allSites.matches(URL(string: value)!))
         }
     }
+    /// Review F8 and #21: a typed internationalised host or IPv6 address is stored as committed URLs report it, so the
+    /// scope matches and the file validates.
+    func testTypedHostsAreStoredAsCommittedURLsReportThem() throws {
+        XCTAssertEqual(BoostScope.host(typed: " Bücher.Example "), "xn--bcher-kva.example")
+        XCTAssertEqual(BoostScope.host(typed: "[::1]"), "::1")
+        XCTAssertEqual(BoostScope.host(typed: "::1"), "::1")
+        XCTAssertEqual(BoostScope.host(typed: "example.test:8080"), "example.test")
+        for bad in ["", "a b", "example.test/path"] { XCTAssertNil(BoostScope.host(typed: bad), bad) }
+        XCTAssertTrue(BoostScope.host("xn--bcher-kva.example").matches(URL(string: "https://bücher.example/")!))
+        XCTAssertTrue(BoostScope.host("::1").matches(URL(string: "http://[::1]:8080/a")!))
+        for host in ["xn--bcher-kva.example", "::1"] { XCTAssertNoThrow(try BoostCodec.encode(BoostCatalog(boosts: [boost(.host(host))])), host) }
+    }
+
+    /// Review #18: a reload of the editor's page keeps the preview on the new document of the same origin.
+    func testTheEditorFollowsItsPageThroughAReload() throws {
+        let d = readyDriver(); d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
+        d.user(.boost(.edit("fixture-boost")))
+        var draft = try XCTUnwrap(d.view.boostEditor?.draft); draft.css = "body { color: blue }"
+        d.user(.boost(.update(draft)))
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts.first?.css, draft.css)
+        let page = d.snapshot.pages[0].id
+        let browser = d.state.session.live[page]!.browser!
+        let reloaded = DocumentToken(browser: browser, sequence: 2)
+        d.page(page.item, .documentChanged(.loading(reloaded)))
+        d.page(page.item, .documentChanged(.ready(reloaded)))
+        XCTAssertEqual(d.snapshot.pages[0].boostPolicy.boosts.first?.css, draft.css, "the preview ended with the reload")
+        let editor = try XCTUnwrap(d.view.boostEditor)
+        XCTAssertEqual(d.state.boostEditorTarget(editor)?.document, reloaded)
+    }
+
     func testImportAndExportNeverTransferTrust() throws {
         let original = boost()
         let stored = try BoostCodec.decode(BoostCodec.encode(BoostCatalog(boosts: [original])))

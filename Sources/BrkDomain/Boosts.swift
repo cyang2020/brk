@@ -40,7 +40,9 @@ public enum BoostPickPurpose: String, Hashable, Sendable, Codable { case zap, se
 public struct BoostEditor: Equatable, Sendable, Codable {
     public let id: String
     public let profile: ProfileID
-    public let target: SiteTarget?
+    /// The page and document the editor previews and picks on; a reload of that page rebinds it to the new document
+    /// of the same origin (`AppState.boostEditorTarget`).
+    public var target: SiteTarget?
     public var draft: Boost
     public var page: BoostEditorPage = .style
     public var picking = false

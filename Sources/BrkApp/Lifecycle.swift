@@ -55,6 +55,24 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         self.engineKind = engineKind
     }
 
+    /// A window's row in the Window menu: its focused tab's title, else its space's (Little Brk for a Little Arc).
+    static func menuTitle(of window: WindowSnapshot) -> String {
+        let focused = window.content.panes.first { $0.focused }?.tab ?? window.content.panes.first?.tab
+        func rows(_ list: [Row]) -> [TabRow] {
+            list.flatMap { row -> [TabRow] in
+                switch row {
+                case .tab(let t): [t]
+                case .folder(let f): rows(f.children)
+                case .split(let s): s.panes
+                }
+            }
+        }
+        let tabs = window.favorites.tiles.map { (id: $0.id, title: $0.title) }
+            + (rows(window.space.pinned.rows) + rows(window.space.today.rows) + rows(window.scratch?.rows ?? [])).map { (id: $0.id, title: $0.title) }
+        if let focused, let title = tabs.first(where: { $0.id == focused })?.title, !title.isEmpty { return title }
+        return window.kind == .little ? "Little \(Product.name)" : window.space.title
+    }
+
     public func applicationWillFinishLaunching(_ notification: Notification) {
         // macOS would add its own "Enter Full Screen" (fn F) under View's table row; Arc's View menu has one (P19-a).
         UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
@@ -132,6 +150,22 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             default: return nil
             }
         }
+        menuTarget.focusSpace = { [weak self] space in
+            guard let self, let window = self.store?.windowController(nil)?.id else { return }
+            self.store?.dispatch(.user(window, .space(.focus(space))))
+        }
+        menuTarget.windowList = { [weak self] in
+            guard let store = self?.store else { return [] }
+            return store.snapshot.windows.keys.sorted().compactMap { id in
+                guard let window = store.snapshot.windows[id], let controller = store.windowController(id) else { return nil }
+                let title = Lifecycle.menuTitle(of: window)
+                return (id, title, controller.window.isKeyWindow)
+            }
+        }
+        menuTarget.focusWindow = { [weak self] id in
+            guard let window = self?.store?.windowController(id)?.window else { return }
+            window.makeKeyAndOrderFront(nil)
+        }
         menuTarget.current = { [weak self] in
             let controller = self?.store?.windowController(nil)
             return (controller.flatMap { self?.store?.snapshot.windows[$0.id] }, controller?.window.styleMask.contains(.fullScreen) ?? false)
@@ -142,9 +176,15 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         littleEntryPoints = entryPoints
         let dockTile = DockTile()
         self.dockTile = dockTile
+        var menuShortcuts: [ShortcutRow]?
         store.didPublish = { [weak entryPoints, weak dockTile] in
             entryPoints?.update($0)
             dockTile?.update($0.dockTile)
+            // AppKit matches the Edit items' keys without opening the menu, so a remap is written into the menu now.
+            if menuShortcuts != $0.settings.shortcuts, let menu = NSApp.mainMenu {
+                menuShortcuts = $0.settings.shortcuts
+                MenuTarget.applyAll(Dictionary($0.settings.shortcuts.map { ($0.action, $0.state) }, uniquingKeysWith: { a, _ in a }), to: menu)
+            }
         }
         store.help.restoreConfirmed = { [weak self] backup in
             self?.pendingRestore = backup

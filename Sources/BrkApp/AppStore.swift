@@ -336,6 +336,7 @@ public final class AppStore {
         if icon != shownIcon {
             shownIcon = icon
             NSApp.applicationIconImage = AppIconArt.image(icon, side: Self.dockIconSide)
+            DockTile.publishIcon(icon.rawValue)
         }
         if settingsWindow == nil, snapshot.settings.pane == nil { return }
         if settingsWindow == nil {
@@ -374,10 +375,13 @@ public final class AppStore {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.message = "Choose an unpacked extension folder containing manifest.json."
+        SidebarPanelControl.configureTestDirectory(panel)
         panel.beginSheetModal(for: owner) { [weak self, weak owner] response in
             guard let self, let owner, owner.isVisible, response == .OK, let directory = panel.url,
                   self.snapshot.pages.contains(where: { $0.context == context && $0.id.window == id }) else { return }
-            self.dispatch(.user(id, .site(.installSelectedExtension(directory))))
+            // The open panel is still attached while its completion runs, and the confirmation sheet waits for a free
+            // window (`confirmLocalExtension`): dispatch once AppKit has taken the panel down.
+            Task { @MainActor [weak self] in self?.dispatch(.user(id, .site(.installSelectedExtension(directory)))) }
         }
     }
 
@@ -504,6 +508,17 @@ public final class AppStore {
                         alert.beginSheetModal(for: owner)
                     }
                 case .revealDataDirectory: NSWorkspace.shared.activateFileViewerSelecting([Product.dataDirectory()])
+                case .standardEdit(let edit):
+                    // A remapped Edit chord a page did not take: the item's selector to the page's editing responder (its
+                    // surface runs it on the focused frame, as the Edit menu does), else to the key window's first
+                    // responder.
+                    let selector = Selector((edit.selector))
+                    if let window = NSApp.keyWindow, let host = window as? any HostWindow,
+                       let page = type(of: host).surface(containing: window.firstResponder), let responder = page.editingMenuResponder,
+                       responder.tryToPerform(selector, with: nil) {
+                        break
+                    }
+                    NSApp.sendAction(selector, to: nil, from: nil)
                 case .help(let action, let owner): help.run(action, owner: owner)
                 }
             case .popupMenu(let id, let model, let at):

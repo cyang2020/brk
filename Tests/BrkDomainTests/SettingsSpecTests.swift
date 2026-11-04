@@ -105,6 +105,8 @@ final class SettingsSpecTests: XCTestCase {
         XCTAssertEqual(d.user(.app(.showAbout)).effects, [.app(.showAbout)])
         XCTAssertEqual(d.user(.app(.setAsDefaultBrowser)).effects, [.app(.registerAsDefaultBrowser)])
         XCTAssertEqual(d.user(.app(.revealDataDirectory)).effects, [.app(.revealDataDirectory)])
+        // R4-4: a remapped Edit chord a page passed on runs the item's selector in BrkApp.
+        for edit in StandardEdit.allCases { XCTAssertEqual(d.user(.app(.standardEdit(edit))).effects, [.app(.standardEdit(edit))]) }
         XCTAssertEqual(ActionID.aboutArc.spec.command, .app(.showAbout))
         XCTAssertEqual(ActionID.revealArcData.spec.command, .app(.revealDataDirectory))
     }
