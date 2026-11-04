@@ -71,8 +71,12 @@ enum PageSiteFixScenarios {
         try app.dispatch(.tab(.focus(page.item)))
         try app.waitForPageInput(page, at: app.site.url("page-browsing.html"))
         try app.evaluate(page, "child.close();document.title='closed-child'")
-        try app.waitUntil("window.close from the opener removes the tab") { try !allTabs(app.view()).contains { $0.id == child.id } }
-        app.passed("child.close() from the opener closes the tab")
+        // A page that closes leaves its row unloaded in Brk (R7a); the browser itself is gone, closed by the page.
+        try app.waitUntil("window.close from the opener closes the tab's page") {
+            let entries = try app.pageLog().filter { $0.page == childPage }
+            return try entries.contains { $0.kind == .closed } && !entries.contains { $0.kind == .closeRequested } && row(app, child.id)?.loaded == false
+        }
+        app.passed("child.close() from the opener closes the tab's page")
 
         // noopener and target=_blank (implicit noopener): a tab with no opener, as in Chrome.
         try PageBrowsingScenarios.clicked(app, page, "document.title='noopener-returned:'+(window.open('popup-child.html?noopener','_blank','noopener')===null)")
@@ -245,8 +249,8 @@ enum PageSiteFixScenarios {
             }
             return value
         }
-        try app.waitUntil("the video plays") { try tab(item, in: app.view())?.mediaPlayers.contains { $0.kind == .video && !$0.paused } == true }
-        var dom = try read("DOM read while playing")
+        var dom: [String: Any] = [:]
+        try app.waitUntil("the page's video plays", timeout: 12) { dom = try read("DOM read"); return dom["playing"] as? Bool == true }
         try PageBrowsingScenarios.record(app, "visible", dom.mapValues { "\($0)" })
         try expect((dom["brk"] as? [String])?.isEmpty == true, "Brk's attributes in the page: \(dom)")
         // Hidden with media playing (the policy keeps the page running and remembers it), then shown again.
