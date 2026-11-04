@@ -11,7 +11,7 @@ struct SwitcherMetricsTable: MetricGroup {
     private static let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc captures P09-a/b"
     let maxCards = Metric(5, .anatomy("\(measured): five cards for a longer recent list"))
     let padding = Metric(16.0, .anatomy("\(measured): 16 between the strip's edge and the cards"))
-    let slotWidth = Metric(181.75, .anatomy("\(measured): cards on a 181.75 pitch, the selection as wide"))
+    let slotWidth = Metric(182.0, .anatomy("\(measured): the selection spans x 733 to 1097 px, cards on the same 182 pitch"))
     let slotHeight = Metric(158.0, .anatomy("\(measured): the selection is 158 tall"))
     let stripRadius = Metric(22.0, .anatomy("\(measured): the strip's corners, continuous"))
     let slotRadius = Metric(12.0, .anatomy("\(measured): the selection's corners"))

@@ -23,15 +23,15 @@ final class TabSwitcherViewTests: XCTestCase {
         return view.subviews.first { $0.accessibilityIdentifier() == ViewID.tabTool("switcher").identifier }!
     }
 
-    /// P09-a: five cards on a 181.75 pitch in a 941 x 190 strip centred in the window; the second card chosen on the
+    /// P09-a: five cards on a 182 pitch in a 942 x 190 strip centred in the window; the second card chosen on the
     /// first press, on the theme's color 10% darker
     func testFiveCardsInAStripCentredInTheWindow() throws {
         let strip = switcher(1, of: 7)
         XCTAssertFalse(strip.isHidden)
-        XCTAssertEqual(strip.frame.size, CGSize(width: 940.75, height: 190))
+        XCTAssertEqual(strip.frame.size, CGSize(width: 942, height: 190))
         XCTAssertEqual(strip.frame.midX, 640, accuracy: 0.5)
         XCTAssertEqual(strip.frame.midY, 388, accuracy: 0.5)
-        XCTAssertEqual(strip.subviews.map(\.frame.minX), [16, 197.75, 379.5, 561.25, 743])
+        XCTAssertEqual(strip.subviews.map(\.frame.minX), [16, 198, 380, 562, 744])
         let chosen = strip.subviews.map { $0.accessibilityLabel() ?? "" }
         XCTAssertEqual(chosen, ["Tab 0", "Tab 1", "Tab 2", "Tab 3", "Tab 4"])
         XCTAssertEqual(strip.subviews.map { $0.isAccessibilitySelected() }, [false, true, false, false, false])
@@ -52,7 +52,7 @@ final class TabSwitcherViewTests: XCTestCase {
     /// past the fifth card the strip slides so the chosen one stays the last shown; two tabs make a two-card strip
     func testTheStripSlidesAndShrinks() {
         XCTAssertEqual(switcher(6, of: 7).subviews.map { $0.accessibilityLabel() ?? "" }, ["Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"])
-        XCTAssertEqual(switcher(1, of: 2).frame.width, 2 * 16 + 2 * 181.75)
+        XCTAssertEqual(switcher(1, of: 2).frame.width, 2 * 16 + 2 * 182)
     }
 
     /// P43-a: a notice with a link is Arc's notice banner, a plain one Arc's toast; both at the content area's top-right
