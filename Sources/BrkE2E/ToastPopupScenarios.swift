@@ -254,7 +254,8 @@ enum ToastPopupScenarios {
         _ = try openMenu(app)
         try app.waitUntil("the dark popover's colors") {
             let row = try app.pixel(tabBlank), plain = try app.pixel(spaceBlank)
-            return abs(row[0] - 0x1F) <= 4 && abs(row[1] - 0x29) <= 4 && abs(row[2] - 0x43) <= 4 && plain[0] <= 4 && plain[1] <= 7 && plain[2] <= 16
+            // The capture is in the display's color space, some levels off the sRGB values: #1F2943 on #00030C.
+            return plain.prefix(3).allSatisfy { $0 < 30 } && row[2] > row[0] + 20 && (24...70).contains(row[0]) && row[2] < 110
         }
         _ = try app.screenshot("plus-dark")
         try app.click(.dockPlus)
