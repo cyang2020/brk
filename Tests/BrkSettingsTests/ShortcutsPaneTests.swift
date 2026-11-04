@@ -135,4 +135,15 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertTrue(fields.contains { $0.accessibilityLabel() == ShortcutsCopy.record }, "unset rows offer to record")
         XCTAssertTrue(fields.contains { ($0.subviews.first as? NSTextField)?.stringValue == ShortcutsCopy.unsetCap }, "and show Arc's ---")
     }
+
+    /// A panel with keys of its own (the site controls' Esc) reads this: the key cap's Esc must not close the panel.
+    @MainActor
+    func testRecordingIsVisibleToOtherKeyHandlersOnlyWhileItLasts() {
+        let view = ChordRecorderView()
+        XCTAssertFalse(ShortcutRecording.isActive)
+        view.start()
+        XCTAssertTrue(ShortcutRecording.isActive)
+        view.stop()
+        XCTAssertFalse(ShortcutRecording.isActive)
+    }
 }

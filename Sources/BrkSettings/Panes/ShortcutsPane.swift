@@ -257,6 +257,13 @@ struct ChordRecorder: NSViewRepresentable {
     }
 }
 
+/// Whether a shortcut key cap is recording right now. A panel with keys of its own (the site controls' Esc and ⌘W) leaves
+/// them to the key cap meanwhile: local event monitors run in no fixed order.
+@MainActor
+public enum ShortcutRecording {
+    public fileprivate(set) static var isActive = false
+}
+
 @MainActor
 final class ChordRecorderView: NSView {
     /// What a key-down means to the recorder.
@@ -310,6 +317,7 @@ final class ChordRecorderView: NSView {
     func start() {
         guard !isRecording else { return }
         isRecording = true
+        ShortcutRecording.isActive = true
         note = nil
         window?.makeFirstResponder(self)
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -320,6 +328,7 @@ final class ChordRecorderView: NSView {
 
     func stop() {
         isRecording = false
+        ShortcutRecording.isActive = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         refresh()
