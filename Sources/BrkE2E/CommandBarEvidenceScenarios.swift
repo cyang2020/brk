@@ -30,7 +30,7 @@ enum CommandBarEvidenceScenarios {
     /// Opens the bar with Cmd+T, types `text` with real key events and waits for a row whose texts contain `needle`;
     /// returns its index and every row's texts.
     @discardableResult
-    static func type(_ app: AppUnderTest, _ text: String, until needle: String, open: String = "cmd+t", from start: Int = 0) throws -> (Int, [[String]]) {
+    static func type(_ app: AppUnderTest, _ text: String, until needle: String, open: String = "cmd+t", from start: Int = 0, exact: Bool = true) throws -> (Int, [[String]]) {
         if !isCommandBar(try app.view().overlay) {
             try app.press(open)
             try app.waitUntil("the command bar") { isCommandBar(try app.view().overlay) }
@@ -40,16 +40,21 @@ enum CommandBarEvidenceScenarios {
         var found = -1, rows: [[String]] = []
         try app.waitUntil("a row reading \(needle)", timeout: 6) {
             rows = try rowTexts(app)
-            found = rows.indices.first { $0 >= start && rows[$0].contains { $0.contains(needle) } } ?? -1
+            found = rows.indices.first { $0 >= start && rows[$0].contains { exact ? $0 == needle : $0.contains(needle) } } ?? -1
             return found >= 0
         }
         return (found, rows)
     }
-    /// Arrow keys to row `index` (row 0 starts highlighted), then Return.
-    static func run(_ app: AppUnderTest, row index: Int) throws {
+    /// Arrow keys to row `index` (row 0 starts highlighted), then Return. A split row leaves the bar open for the
+    /// new empty pane (`closes` false).
+    static func run(_ app: AppUnderTest, row index: Int, closes: Bool = true) throws {
+        let opening: Int? = if case .commandBar(let bar)? = try app.view().overlay { bar.openID } else { nil }
         for _ in 0..<index { try app.press("down") }
         try app.press("return")
-        try app.waitUntil("the bar closed") { !isCommandBar(try app.view().overlay) }
+        try app.waitUntil("the row ran") {
+            guard case .commandBar(let bar)? = try app.view().overlay else { return true }
+            return !closes && bar.openID != opening
+        }
     }
     static func dismiss(_ app: AppUnderTest) throws {
         while isCommandBar(try app.view().overlay) { try app.press("escape"); app.sleep(0.2) }
@@ -66,6 +71,7 @@ enum CommandBarEvidenceScenarios {
         try app.waitUntil("the visited tab closed") { try tab(visited, in: app.view()) == nil }
         var (index, rows) = try type(app, "hist=alpha", until: "Fixture Page 2", from: 1)
         record += "hist=alpha rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try expect(index > 0, "the history row should rank under the typed row: \(rows)")
         try run(app, row: index)
         try app.waitUntil("Return on the history row reopened the page") { try currentTab(app.view())?.url == app.site.url("page2.html?hist=alpha") }
@@ -80,16 +86,19 @@ enum CommandBarEvidenceScenarios {
         _ = marks
         (index, rows) = try type(app, "Bookmark Beta", until: "Bookmark Beta", from: 1)
         record += "Bookmark Beta rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("Return on the bookmark row showed its page") { try currentTab(app.view())?.url == app.site.url("page2.html?bm=beta") }
         try app.dispatch(.space(.focus(first)))
         try app.waitUntil("first space") { try app.view().space.id == first }
         // A top domain (not run: it is a remote site) and the calculator.
-        (index, rows) = try type(app, "wikip", until: "Wikipedia")
+        (index, rows) = try type(app, "wikip", until: "Wikipedia", exact: false)
         record += "wikip rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try dismiss(app)
         (index, rows) = try type(app, "12*12", until: "144")
         record += "12*12 rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try app.perform(.pasteboard(nil))
         try run(app, row: index)
         try app.waitUntil("Return on the calculator row copied 144") {
@@ -99,6 +108,7 @@ enum CommandBarEvidenceScenarios {
         // The engine's suggestions (the fixture answers swift and swim), run with the arrows and Return.
         (index, rows) = try type(app, "swi", until: "swift")
         record += "swi rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         let typedRow = rows.firstIndex { $0.contains("swi") } ?? 0
         try expect(index > typedRow, "the engine suggestion ranks above the typed row: \(rows)")
         try run(app, row: index)
@@ -122,6 +132,7 @@ enum CommandBarEvidenceScenarios {
         // Focus on <space>.
         var (index, rows) = try type(app, "Focus on Elsewhere", until: "Focus on Elsewhere")
         record += "focus rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("Focus on Elsewhere switched spaces") { try app.view().space.id == second }
         try app.dispatch(.space(.focus(first)))
@@ -130,6 +141,7 @@ enum CommandBarEvidenceScenarios {
         let mover = try E.loadReady(app, "page2.html?action=move")
         (index, rows) = try type(app, "Move to Elsewhere", until: "Move to Elsewhere", open: "cmd+l")
         record += "move rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("the tab moved to Elsewhere") { try tab(mover, in: app.view()) == nil || app.view().space.id == second }
         try app.dispatch(.space(.focus(first)))
@@ -139,6 +151,7 @@ enum CommandBarEvidenceScenarios {
         let filed = try E.loadReady(app, "page2.html?action=folder")
         (index, rows) = try type(app, "Move to Crate", until: "Move to Crate", open: "cmd+l")
         record += "folder rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("the tab in Crate") { E.folder(crate, in: try app.view().space.pinned.rows)?.children.contains { $0.id == filed } == true }
         // Replace Pinned Tab with the Current Site: the saved address becomes the current one, so Reset Tab has nothing to do.
@@ -146,8 +159,9 @@ enum CommandBarEvidenceScenarios {
         try app.dispatch(.item(.move(pin, to: .into(parent: try app.view().space.pinned.root, index: 0))))
         try E.navigate(app, pin, to: "red.html?action=replaced")
         try app.waitUntil("Reset Tab offered") { try app.view().enabledActions.contains(.resetTab) }
-        (index, rows) = try type(app, "Replace Pinned", until: "Replace Pinned Tab", open: "cmd+l")
+        (index, rows) = try type(app, "Replace Pinned", until: "Replace Pinned Tab", open: "cmd+l", exact: false)
         record += "replace rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("the pinned address replaced") { try !app.view().enabledActions.contains(.resetTab) }
         try app.dispatch(.tabTools(.resetPinned))
@@ -158,8 +172,9 @@ enum CommandBarEvidenceScenarios {
         try app.dispatch(.tab(.focus(home)))
         try app.press("shift+cmd+k")
         try app.waitUntil("Clear Today's undo toast") { try S.toast(app)?.contains("Cleared") == true && tab(spare, in: app.view()) == nil }
-        (index, rows) = try type(app, "Undo", until: "Undo Cleared", open: "cmd+l")
+        (index, rows) = try type(app, "Undo", until: "Undo Cleared", open: "cmd+l", exact: false)
         record += "undo rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         try app.waitUntil("Undo brought the cleared tab back") { try allTabs(app.view()).contains { $0.url == app.site.url("page2.html?action=undo") } }
         // Add Right Split, then Add Bottom Split.
@@ -167,13 +182,17 @@ enum CommandBarEvidenceScenarios {
         try app.waitForPageInput(S.page(app, home), at: app.site.url("index.html"))
         (index, rows) = try type(app, "Add Right Split", until: "Add Right Split", open: "cmd+l")
         record += "right rows: \(rows)\n"
-        try run(app, row: index)
+        S.log(app, "rows.txt", record)
+        try run(app, row: index, closes: false)
         try app.waitUntil("a side-by-side split") { let c = try app.view().content; return c.panes.count == 2 && c.orientation == .horizontal }
         try dismiss(app)
         try app.dispatch(.tab(.focus(home)))
+        try app.waitUntil("home focused in the split") { try app.view().content.panes.first(where: \.focused)?.tab == home }
+        try dismiss(app)
         (index, rows) = try type(app, "Add Bottom Split", until: "Add Bottom Split", open: "cmd+l")
         record += "bottom rows: \(rows)\n"
-        try run(app, row: index)
+        S.log(app, "rows.txt", record)
+        try run(app, row: index, closes: false)
         try app.waitUntil("a pane added below") { let c = try app.view().content; return c.panes.count >= 3 || c.orientation == .vertical }
         try dismiss(app)
         _ = try app.screenshot("splits")
@@ -182,6 +201,7 @@ enum CommandBarEvidenceScenarios {
         try app.dispatch(.site(.closeControls))
         (index, rows) = try type(app, "Brk harmless", until: fixture.name)
         record += "extension rows: \(rows)\n"
+        S.log(app, "rows.txt", record)
         try run(app, row: index)
         S.log(app, "rows.txt", record)
         app.note("The extension row runs the action command; the action's popup is blocked on CEF 154 (A097), so only the row and its dispatch are shown.")

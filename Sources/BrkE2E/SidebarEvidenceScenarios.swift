@@ -608,7 +608,7 @@ enum SidebarEvidenceScenarios {
             _ = try app.send(.activate(window: first))
             try app.waitUntil("Brk shown") { try !app.native().appHidden }
         }
-        _ = try app.send(.activate(window: first))
+        try WindowServerKeys.ensureFrontmost(app, first)
         try app.waitUntil("the page kept focus through Hide") { try pageFocused(app, page) }
         app.note("Hide Others (Opt+Cmd+H) is not run: it hides every other application on this shared machine, other agents' windows and the user's Arc included.")
     }
