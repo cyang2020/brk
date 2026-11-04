@@ -5,10 +5,11 @@ import BrkLayout
 import BrkUIKit
 
 /// A split pane's own header (Arc 1.170: every pane of a split view has one, P23a/b/c of the 2026-11-03 capture): back
-/// and forward at the left, the pane's host after a link glyph in the middle, close at the right. The focused pane
-/// adds reload at the left and, right to left before close, the split menu, website controls and translate, as
-/// Arc's four (P23-c), dropping them when the pane is too narrow to keep room for the host. A click on the strip
-/// focuses its pane. Metrics.content.paneHeader*, PaneHeaderDraw.
+/// and forward at the left, the pane's host after a link glyph in the middle, close at the right (on an unfocused pane
+/// only while the pointer is in the window, `pointerInWindow`). The focused pane adds reload at the left and,
+/// right to left before close, the split menu, website controls and translate, as Arc's four (P23-c), dropping them
+/// when the pane is too narrow to keep room for the host. A click on the strip focuses its pane.
+/// Metrics.content.paneHeader*, PaneHeaderDraw.
 @MainActor
 final class PaneHeaderView: NSView {
     private let dispatch: Dispatch
@@ -25,6 +26,10 @@ final class PaneHeaderView: NSView {
     private var pane: Pane?
     private var orientation = SplitOrientation.horizontal
     private var position = SplitMenuModel.Position(split: nil, index: 0, count: 1)
+    /// The pointer is in the window. Arc shows an unfocused pane's × only then (P23-a, b, c and P12-e, taken with the
+    /// pointer on a page or on the sidebar, show it; P23-f, taken with the pointer away after a drop, does not); the
+    /// focused pane's × always shows.
+    var pointerInWindow = false { didSet { if pointerInWindow != oldValue { needsLayout = true } } }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -106,7 +111,7 @@ final class PaneHeaderView: NSView {
         place(back, centerX: edge, shown: true)
         place(forward, centerX: edge + pitch, shown: true)
         place(reload, centerX: edge + 2 * pitch, shown: extras.reload)
-        place(close, centerX: bounds.width - edge, shown: true)
+        place(close, centerX: bounds.width - edge, shown: pane.focused || pointerInWindow)
         // Right to left from close: the split menu 32 in, then 36 apart (Arc, P23-c).
         var x = bounds.width - edge
         for (button, shown) in zip([splitMenu, siteControls, translate], right()) {
