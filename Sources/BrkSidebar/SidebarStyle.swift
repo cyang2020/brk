@@ -15,7 +15,7 @@ struct SidebarDrawMetrics: MetricGroup {
     // Type: one family, the system font (visual-and-copy.md, Fonts: the default UI font is `system`).
     let rowTitleFont = Metric(14.0, .anatomy("cra L115: sidebar rows have 14 pt titles"))
     let groupTitleFont = Metric(12.0, .guess("tab group header title; Arc's TabGroupHeaderCellView was not captured, drawn as a section label"))
-    let spaceHeaderFont = Metric(14.0, .anatomy("cra L180: space header 14 pt medium, secondary color"))
+    let spaceHeaderFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 P01-a, P20-a: 对照 is 24.5 x 12 and This Window 80 wide, 13 pt semibold (cra L180 had 14 medium)"))
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
     let captionFont = Metric(11.0, .guess("favorites empty subtitle; Arc's secondary row line is 11 pt (cra L115)"))
@@ -129,14 +129,19 @@ struct SidebarDrawMetrics: MetricGroup {
 /// scheme, like every sidebar token.
 struct Ink {
     let scheme: Scheme
+    /// The space's primary color: light titles take its hue (`sidebarInk`).
+    var accent = RGBA(0.5, 0.5, 0.5)
 
     private func bw(_ lightAlpha: Double, _ darkAlpha: Double) -> NSColor {
         scheme == .light ? NSColor(white: 0, alpha: lightAlpha) : NSColor(white: 1, alpha: darkAlpha)
     }
 
-    /// ForegroundPrimary: #0E0F10 @ 0.9 light, #FFFFFF @ 0.8 dark (Base tokens). Row titles; cra L1220 sees ~87%.
+    /// Row titles. Light: the theme's own near-black (`sidebarInk`; Arc writes a #F2EAE4 space's rows in #221910, not
+    /// the ForegroundPrimary token #0E0F10 @ 0.9). Dark: #FFFFFF @ 0.8 (Base tokens).
     var text: NSColor {
-        scheme == .light ? NSColor(srgbRed: 14 / 255, green: 15 / 255, blue: 16 / 255, alpha: 0.9) : NSColor(white: 1, alpha: 0.8)
+        guard scheme == .light else { return NSColor(white: 1, alpha: 0.8) }
+        let ink = sidebarInk(accent)
+        return NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: 1)
     }
     /// CommandBarPlaceholderText @ 0.6: the URL in the pill, and enabled title-row glyphs (cra L1220: ~59%).
     var secondary: NSColor { bw(0.6, 0.6) }
@@ -158,7 +163,7 @@ struct Ink {
 }
 
 extension Palette {
-    var ink: Ink { Ink(scheme: scheme) }
+    var ink: Ink { Ink(scheme: scheme, accent: accent) }
 }
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).

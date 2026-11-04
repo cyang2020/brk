@@ -69,4 +69,24 @@ final class TabSwitcherViewTests: XCTestCase {
         XCTAssertEqual(banner.frame.maxX, 1270, "the content area's right edge (the window less its 10 pt inset here)")
         XCTAssertEqual(banner.frame.minY, 4)
     }
+
+    /// P15-a: Arc's undo toast. The text starts 13 in, "Use" ends 10 before a 36.5 wide ⌘Z key cap, "to undo" starts 6
+    /// after it; the labels draw their glyphs about 2.5 in from their frames.
+    func testTheUndoToastSpacesItsKeyCapAsArcDoes() throws {
+        let view = TabToolsOverlayView(dispatch: { _ in })
+        view.frame = bounds
+        view.render(TabToolsSnapshot(toast: ToastSnapshot(text: "Cleared Tabs! Use", expiresAt: Instant(milliseconds: .max), keycap: "⌘Z", trailing: "to undo")),
+                    sidebarWidth: 228, palette: palette)
+        let toast = try XCTUnwrap(view.subviews.first { $0.accessibilityIdentifier() == ViewID.tabTool("toast").identifier })
+        toast.layoutSubtreeIfNeeded()
+        let labels = toast.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden }.sorted { $0.frame.minX < $1.frame.minX }
+        let cap = try XCTUnwrap(toast.subviews.first { !($0 is NSTextField) && !$0.isHidden && $0.frame.width > 30 && $0.frame.height < 30 })
+        XCTAssertEqual(labels.first?.frame.minX, 10.5)
+        XCTAssertEqual(cap.frame.width, 36.5)
+        XCTAssertEqual(cap.frame.minX - (labels.first?.frame.maxX ?? 0), 7)
+        let trailing = try XCTUnwrap(labels.last { $0.stringValue == "to undo" })
+        XCTAssertEqual(trailing.frame.minX - cap.frame.maxX, 3.5)
+        XCTAssertEqual(toast.frame.width - trailing.frame.maxX, 13.5)
+        XCTAssertEqual(toast.frame.maxX, 1270, "the content area's right edge")
+    }
 }

@@ -108,6 +108,8 @@ final class TablistView: NSScrollView {
     /// `newTabCurrent`: the New Tab row draws as the current row (a blank window showing nothing, as Arc's does).
     func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot,
                 newTabCurrent: Bool = false, now: Instant = Instant(milliseconds: 0)) {
+        // While New Tab is the current row the tab on screen draws like any other (Arc, Q01-a: one white card).
+        let space = newTabCurrent ? space.idlingCurrent : space
         self.tools = tools
         self.now = now
         multiselection = tools.selected
@@ -1026,7 +1028,7 @@ final class SpaceHeaderView: HoverView {
         background.wantsLayer = true
         background.layer?.cornerCurve = .continuous
         background.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
-        label.font = .systemFont(ofSize: Draw.spaceHeaderFont.value, weight: .medium)
+        label.font = .systemFont(ofSize: Draw.spaceHeaderFont.value, weight: .semibold)
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         more.action = { [weak self] _ in self?.showMenu() }
@@ -1159,5 +1161,31 @@ final class LivePlaceholderView: HoverView {
     override func mouseUp(with event: NSEvent) {
         guard let folder, live?.state != .loading, bounds.contains(local(event)) else { return }
         dispatch(.tabTools(.site(.refreshFolder(folder))))
+    }
+}
+
+private extension SpaceSnapshot {
+    /// The space with its current row, wherever it is, drawn idle.
+    var idlingCurrent: SpaceSnapshot {
+        var space = self
+        space.pinned.rows = space.pinned.rows.map(\.idlingCurrent)
+        space.today.rows = space.today.rows.map(\.idlingCurrent)
+        return space
+    }
+}
+
+private extension Row {
+    var idlingCurrent: Row {
+        switch self {
+        case .tab(var tab):
+            if tab.status == .current { tab.status = .idle }
+            return .tab(tab)
+        case .split(var split):
+            if split.status == .current { split.status = .idle }
+            return .split(split)
+        case .folder(var folder):
+            folder.children = folder.children.map(\.idlingCurrent)
+            return .folder(folder)
+        }
     }
 }

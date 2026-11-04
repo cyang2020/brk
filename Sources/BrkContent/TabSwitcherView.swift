@@ -61,11 +61,13 @@ final class TabSwitcherView: NSView {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = SwitcherMetrics.stripRadius.value
         layer?.borderWidth = 0.5
+        // P09-a: 17% black just under the strip, 9% 37 pt lower, next to nothing above it. The view is flipped, so a
+        // positive height drops the shadow.
         shadow = {
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
-            shadow.shadowBlurRadius = 30
-            shadow.shadowOffset = NSSize(width: 0, height: -10)
+            shadow.shadowBlurRadius = 25
+            shadow.shadowOffset = NSSize(width: 0, height: 35)
             return shadow
         }()
     }
@@ -86,7 +88,8 @@ final class TabSwitcherView: NSView {
         frame = CGRect(x: ((bounds.width - size.width) / 2).rounded(), y: ((bounds.height - size.height) / 2).rounded(), width: size.width, height: size.height)
         let dark = palette.scheme == .dark
         layer?.backgroundColor = (dark ? NSColor(srgbRed: 0.16, green: 0.16, blue: 0.17, alpha: 1) : NSColor(srgbRed: 0xF9 / 255.0, green: 0xF9 / 255.0, blue: 0xFA / 255.0, alpha: 1)).cgColor
-        layer?.borderColor = NSColor.black.withAlphaComponent(dark ? 0.5 : 0.2).cgColor
+        // P09-a: the strip's 0.5 pt edge reads #AEAEAE on its #F9F9FA, as the command bar's does
+        layer?.borderColor = NSColor.black.withAlphaComponent(dark ? 0.5 : 0.3).cgColor
         while cards.count < shown.count {
             let card = SwitcherCard()
             cards.append(card)

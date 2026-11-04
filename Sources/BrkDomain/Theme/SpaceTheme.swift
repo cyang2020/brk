@@ -251,6 +251,21 @@ private func rgb(hue: Double, saturation s: Double, lightness l: Double) -> RGBA
     return RGBA(clamp01(r + m), clamp01(g + m), clamp01(b + m), 1)
 }
 
+/// The light sidebar's title ink: the space's primary hue and saturation, as dark as #1A1A1A (relative luminance
+/// 0.0103). Measured on Arc 1.170 (verify/visual-pairs/run-20261103): the #F2EAE4 theme writes its rows in #221910
+/// (this gives #221811), a neutral theme in #1A1A1A, a teal one in #001E1D and a blank window's lavender in #090D4F;
+/// all four sit within 0.001 of that luminance.
+public func sidebarInk(_ primary: RGBA) -> RGBA {
+    let (h, s, _) = hsl(opaque(primary))
+    let target = relativeLuminance(RGBA(26 / 255, 26 / 255, 26 / 255))
+    var lo = 0.0, hi = 0.5
+    for _ in 0..<32 {
+        let mid = (lo + hi) / 2
+        if relativeLuminance(rgb(hue: h, saturation: s, lightness: mid)) < target { lo = mid } else { hi = mid }
+    }
+    return rgb(hue: h, saturation: s, lightness: (lo + hi) / 2)
+}
+
 /// WCAG relative luminance of an sRGB color.
 public func relativeLuminance(_ c: RGBA) -> Double {
     func lin(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }

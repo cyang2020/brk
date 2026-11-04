@@ -104,11 +104,11 @@ struct CommandBarColors {
                                     tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
         }
         // P02-b over a #F2EAE4 theme: highlight #B8A89B, selection #C8B9AF. Q01-a/b: highlight #ABABAB, selection #BBBBBB.
-        // P20-a, P21-a (blank and Little windows): highlight #8F95FF.
+        // P20-a, P21-a (blank and Little windows): highlight #8F95FF. Q01-a: the card's 0.5 pt edge reads #AEAEAE on #F9F9FA.
         let highlight = spaceless ? srgb(0x8F95FF) : attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.31)
         let selection = spaceless ? srgb(0xC9CCFF) : attached ? shade(primary, saturation: 2.16, brightness: 0.826) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25)
         return CommandBarColors(card: NSColor(srgbRed: 0xF9 / 255.0, green: 0xF9 / 255.0, blue: 0xFA / 255.0, alpha: 1),
-                                border: ink.withAlphaComponent(0.2), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
+                                border: ink.withAlphaComponent(0.3), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
                                 placeholder: ink.withAlphaComponent(0.45), highlight: highlight, onHighlight: .white, textSelection: selection,
                                 hairline: ink.withAlphaComponent(0.09), accessory: ink.withAlphaComponent(0.04), accessoryText: ink.withAlphaComponent(0.48),
                                 tileOnHighlight: .white, infoCircle: .white)
@@ -176,10 +176,12 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let hintHeight = Metric(20.0, .guess("hint pill height"))
     let hintRadius = Metric(6.0, .anatomy("\(measured): the Tab key and the arrow square have about 6 pt corners"))
     let shadowRadius = Metric(24.0, .guess("popover shadow blur; the color is PopoverShadow"))
-    /// The command bar's own shadow is much wider (P02-b: 32% black at the card's edge, fading over about 90 pt).
-    let cardShadowRadius = Metric(96.0, .anatomy("\(measured): the shadow fades like a 48 pt Gaussian"))
-    let cardShadowAlpha = Metric(0.32, .anatomy("\(measured): 15% black just outside the card's edge"))
-    let cardShadowOffset = Metric(6.0, .guess("a small drop under the wide shadow, as popovers have"))
+    /// The command bar's own shadow is much wider than a popover's. Arc's, measured round the centered card (Q01-a)
+    /// and the one over the pill (P02-b): 22% black just outside a side, a Gaussian fall-off of about 46 pt, and the
+    /// whole shadow 22 pt lower than the card (8% black 19 pt above the top, 30% under the bottom).
+    let cardShadowRadius = Metric(46.0, .anatomy("\(measured): the sides fade like a 46 pt Gaussian (12.5% at 27 pt, 3% at 67 pt)"))
+    let cardShadowAlpha = Metric(0.44, .anatomy("\(measured): 22% black just outside the card's right side, half the shadow's own"))
+    let cardShadowOffset = Metric(22.0, .anatomy("\(measured): 8% black 19 pt above the card, 30% just under it"))
     let shadowOffset = Metric(8.0, .guess("popover shadow drop"))
     /// A spring from Metrics.commandBar.openBounceFrom to 1 (Arc: `arc_commandBarBounce`, scale only, no fade).
     let bounceStiffness = Metric(420.0, .guess("spring stiffness of the opening bounce; settles in about 0.3 s"))
