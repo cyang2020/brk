@@ -55,8 +55,8 @@ extension Work {
         state.session.windows[window]?.toastUndo = nil
     }
     /// Arc's undo toast ("Cleared Tabs! Use ⌘Z to undo"), about 5 s; ⌘Z meanwhile runs `undo`.
-    mutating func undoToast(_ text: String, undo: ToastUndo, in window: WindowID) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(5)), keycap: "⌘Z", trailing: "to undo")
+    mutating func undoToast(_ text: String, trailing: String = "to undo", undo: ToastUndo, in window: WindowID) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(5)), keycap: "⌘Z", trailing: trailing)
         state.session.windows[window]?.toastUndo = undo
     }
 

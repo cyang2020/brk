@@ -32,7 +32,8 @@ extension Work {
         case .useOriginal:
             guard let page = state.findPage(in: window), let translation = state.session.ai.translations[page], translation.showingTranslation else { return }
             showTranslation(page, false)
-            undoToast("Translated back to \(AILanguages.name(translation.source))! Use", undo: .translation(page), in: window)
+            // P50-e: Arc's sentence here ends with a full stop.
+            undoToast("Translated back to \(AILanguages.name(translation.source))! Use", trailing: "to undo.", undo: .translation(page), in: window)
             return
         case .languageSettings:
             guard let url = URL(string: "chrome://settings/languages"), let doc = state.doc.windows[window] else { return }

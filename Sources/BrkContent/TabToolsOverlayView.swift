@@ -262,8 +262,9 @@ final class ToastView: NSView {
         var x = m.padding.value
         func place(_ field: NSTextField) {
             let size = field.intrinsicContentSize
-            field.frame = CGRect(x: x, y: mid - size.height / 2, width: ceil(size.width), height: size.height)
-            x = field.frame.maxX
+            // The frame runs a little past the text so its last letter is not clipped; the next part starts at the text's end.
+            field.frame = CGRect(x: x, y: mid - size.height / 2, width: ceil(size.width) + m.textSlack.value, height: size.height)
+            x += ceil(size.width)
         }
         place(label)
         if !cap.isHidden {
@@ -287,6 +288,7 @@ let ToastDraw = ToastMetrics()
 
 struct ToastMetrics: MetricGroup {
     let top = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: Arc's toast spans y 4 to 50.5 at the content area's top-right"))
+    let textSlack = Metric(2.0, .guess("room past a label's measured width: the last letter of Use and undo was clipped by a pixel or two (station P50-e)"))
     let height = Metric(46.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the toast is 46.5 tall"))
     /// The labels draw their glyphs about 2.5 in from their frames, so the paddings and gaps below are the measured
     /// distances less that.
