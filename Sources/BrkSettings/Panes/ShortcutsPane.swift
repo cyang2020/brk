@@ -70,13 +70,14 @@ struct ShortcutsPane: View {
             }
             .padding(.horizontal, K.searchInset.value)
             .frame(height: K.searchHeight.value)
+            .offset(y: -0.5)
             CardDivider(inset: 0)
             ScrollView {
                 // Not lazy: every row's key cap exists, so the control socket and tests can find any of them.
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
                         Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
-                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value)
+                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value).offset(y: -0.5)
                         CardDivider(inset: 0)
                         ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
                             if index > 0 { RowDivider() }
@@ -371,8 +372,9 @@ final class ChordRecorderView: NSView {
             spoken = ShortcutsCopy.chord(state) ?? ShortcutsCopy.record
         }
         label.stringValue = text
-        label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : NSFont.systemFontSize)
-        label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor
+        // Arc's key caps (P38-e): a 12 pt chord, a shade lighter than the row titles.
+        label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : ShortcutsPaneMetrics.capFont.value)
+        label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor.withAlphaComponent(0.85)
         layer?.borderColor = (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
         layer?.borderWidth = isRecording ? 2 * ShortcutsPaneMetrics.recorderBorder.value : ShortcutsPaneMetrics.recorderBorder.value
         layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
@@ -469,6 +471,7 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38/P38-e-arc.png"
     let recorderSize = Metric(CGSize(width: 64, height: 24), .anatomy("\(capture): the key caps span x 632 to 760 px, y 530 to 578 px"))
     let recorderRadius = Metric(6.0, .guess("the key cap's corner"))
+    let capFont = Metric(12.0, .anatomy("\(capture): ⌃⇧= spans x 668 to 723 px, 17 px tall, a 12 pt line"))
     let recorderBorder = Metric(1.0, .anatomy("\(capture): a 2 px grey edge"))
     let sectionSpacing = Metric(12.0, .guess("space between the pane's header, filter row and sections"))
     let controlSpacing = Metric(8.0, .guess("space between a row's title, menu and key cap"))

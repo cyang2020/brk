@@ -298,7 +298,7 @@ struct MaxPaneMetricsTable: MetricGroup {
     let descriptionLeading = Metric(2.0, .anatomy("\(capture): description lines 32 px apart"))
     let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
     let footerTop = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
-    let footerGap = Metric(-1.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
-    let footerBottom = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
+    let footerGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
+    let footerBottom = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
     let popoverWidth = Metric(320.0, .guess("the privacy note's popover"))
 }
