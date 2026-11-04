@@ -194,6 +194,11 @@ final class AppUnderTest {
             environment["BRK_TEST_FILTER_BASE"] = scenarioID == "SiteFilters-offline" ? "http://127.0.0.1:9/filter-lists" : site.url("filter-lists").absoluteString
         }
         if scenarioID.hasPrefix("SiteSecurity"), let spki = HTTPSFixture.trustedSPKI(siteRoot: site.root) { environment["BRK_TEST_TRUSTED_SPKI"] = spki }
+        // run-native.py asks for no system-wide shortcut, so its instances leave ⌥⌘N to the other apps; the Little Arc
+        // entry scenario is about that registration and keeps it.
+        if ProcessInfo.processInfo.environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] == "1", scenarioID != "R36-LittleEntry" {
+            environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] = "1"
+        }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)
