@@ -182,6 +182,10 @@ enum ToastUndo: Sendable, Equatable {
     case space(Space, index: Int, entries: [ArchiveID])
     /// Remove Group Header: the header and the tabs it held.
     case regroup(id: ItemID, folder: Folder, parent: ItemID, children: [ItemID])
+    /// Use Original on a translated page (P50-e "Translated back to French! Use ⌘Z to undo."): the translation again.
+    case translation(PageID)
+    /// Tidy on the Today divider: the Today order before the tab groups.
+    case tidy
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]
@@ -201,6 +205,8 @@ public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     public var revealGeneration: UInt64 = 0
     public var recent: RecentTabsSnapshot?
     public var toast: ToastSnapshot?
+    /// The auto-archive banner at the bottom of a fresh profile's first space: the profile's threshold ("12 hours")
+    /// for Arc's "Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in Settings."
     public var archiveEducation: String?
     public var hoverPreviews = false
     public var includeFavoritesInNumbers = true

@@ -124,6 +124,19 @@ public struct EaselElement: Hashable, Sendable, Codable, Identifiable {
         return copy
     }
 
+    /// The element stretched from `from` to `to` (a corner handle's drag on the selection): its box and its points keep
+    /// their place relative to the selection's box. A text keeps its font size.
+    public func resized(from: CGRect, to: CGRect) -> EaselElement {
+        guard from.width > 0, from.height > 0 else { return self }
+        let sx = to.width / from.width, sy = to.height / from.height
+        func map(_ p: CGPoint) -> CGPoint { CGPoint(x: to.minX + (p.x - from.minX) * sx, y: to.minY + (p.y - from.minY) * sy) }
+        var copy = self
+        copy.points = points.map(map)
+        let origin = map(frame.origin)
+        copy.frame = points.isEmpty ? CGRect(x: origin.x, y: origin.y, width: frame.width * sx, height: frame.height * sy) : EaselElement.bounds(of: copy.points)
+        return copy
+    }
+
     /// The smallest box around `points` (an arrow's or a stroke's frame).
     public static func bounds(of points: [CGPoint]) -> CGRect {
         guard let first = points.first else { return .zero }

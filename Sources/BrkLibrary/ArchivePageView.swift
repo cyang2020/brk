@@ -42,6 +42,7 @@ final class ArchivePageView: NSView {
         filterField.onChange = { [weak self] in self?.searchChanged() }
         filterField.onEscape = { [weak self] in self?.dispatch(.library(.close)) }
         filterButton.menuProvider = { [weak self] in self?.filterMenu() ?? NSMenu() }
+        filterButton.identify(.tabTool("archive-filter-menu"))
         cancelClearButton.identify(.tabTool("archive-cancel-clear"))
         confirmText.identify(.tabTool("archive-confirmation"))
         clearButton.identify(.archiveClear)

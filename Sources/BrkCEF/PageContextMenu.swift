@@ -21,10 +21,14 @@ import CefKit
     }
     private var pending: Pending?
 
-    func show(_ model: CefMenuModel, at point: CGPoint, in surface: NSView, link: Bool = false,
-              callback: CefRunContextMenuCallback, valid: @escaping @MainActor () -> Bool) {
+    /// Brk's own row's command: outside Chromium's ids (MENU_ID_USER_FIRST 26500 to MENU_ID_USER_LAST 28500); Chromium
+    /// never sees it, the menu cancels and `onTranslate` runs instead.
+    static let translateCommand = 28_400
+
+    func show(_ model: CefMenuModel, at point: CGPoint, in surface: NSView, link: Bool = false, translateTo: String? = nil,
+              callback: CefRunContextMenuCallback, onTranslate: @escaping @MainActor () -> Void = {}, valid: @escaping @MainActor () -> Bool) {
         cancel()
-        let items = Self.trimmed(snapshot(model), link: link)
+        let items = Self.withTranslate(Self.trimmed(snapshot(model), link: link), translateTo)
         guard !items.isEmpty, let owner = surface.window else { callback.cancel(); return }
         let request = Pending(callback)
         pending = request
@@ -38,8 +42,9 @@ import CefKit
             _ = menu.popUp(positioning: nil, at: point, in: surface)
             guard self.pending === request else { return }
             self.pending = nil
-            if let command = request.selected, valid() { callback.select(commandID: command) }
-            else { callback.cancel() }
+            if let command = request.selected, valid() {
+                if command == Self.translateCommand { callback.cancel(); onTranslate() } else { callback.select(commandID: command) }
+            } else { callback.cancel() }
         }
     }
 
@@ -65,6 +70,18 @@ import CefKit
     static let removed: Set<String> = ["Create QR Code for this Page", "Create QR Code for this Image"]
     static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window", "Open Link in Incognito Window",
                                         "Save Link As…", "Copy Link Address", "Copy", "Inspect"]
+
+    /// "Translate to English" closes the Save As… / Print… / Cast… group, as in Arc's page menu (Q07-a); without that
+    /// group it goes before the last group.
+    private static func withTranslate(_ items: [Item], _ language: String?) -> [Item] {
+        guard let language else { return items }
+        let row = Item(title: "Translate to \(language)", command: translateCommand, separator: false, enabled: true, checked: false, children: nil)
+        var out = items
+        if let cast = out.firstIndex(where: { $0.title.replacingOccurrences(of: "...", with: "…") == "Cast…" }) { out.insert(row, at: cast + 1) }
+        else if let separator = out.lastIndex(where: \.separator) { out.insert(row, at: separator) }
+        else { out.append(row) }
+        return out
+    }
 
     private static func trimmed(_ items: [Item], link: Bool) -> [Item] {
         let kept = items.filter { item in

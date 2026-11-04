@@ -39,7 +39,7 @@ final class TabToolsOverlayView: NSView {
         recent.identify(.tabTool("switcher"))
         toast.identify(.tabTool("toast"))
         banner.identify(.tabTool("notice"))
-        education.identify(.tabTool("education"))
+        education.identify(.tabTool("education-overlay"))
         toast.onClick = { [weak self] in
             if let command = self?.toastClick { self?.dispatch(command) }
             self?.dispatch(.tabTools(.dismissToast))
@@ -112,7 +112,7 @@ final class TabToolsOverlayView: NSView {
         banner.isHidden = notice == nil
         if let notice, let link = notice.link { banner.show(notice.text, link: link, right: right, top: ToastDraw.top.value) }
         education.isHidden = true
-        education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
+        education.title = tools.archiveEducation.map(Copy.archiveEducation) ?? ""
         education.cell?.wraps = true
         education.frame = NSRect(x: 8, y: bounds.height - 130, width: max(0, sidebarWidth - 16), height: 68)
     }
@@ -329,6 +329,7 @@ let ToastDraw = ToastMetrics()
 
 struct ToastMetrics: MetricGroup {
     let top = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: Arc's toast spans y 4 to 50.5 at the content area's top-right"))
+    let textSlack = Metric(2.0, .guess("room past a label's measured width: the last letter of Use and undo was clipped by a pixel or two (station P50-e)"))
     let height = Metric(46.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the toast is 46.5 tall"))
     /// The labels draw their glyphs about 2.5 in from their frames, so the paddings and gaps below are the measured
     /// distances less that.

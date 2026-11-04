@@ -155,6 +155,11 @@ final class TabToolsTests: XCTestCase {
         d.system(.clockTick)
         XCTAssertNil(d.view.tabTools.toast)
         d.user(.tabTools(.dismissToast))
+        // Arc's banner names the profile's threshold ("… haven’t used in the past 12 hours."); none while it is Never.
+        XCTAssertEqual(d.view.tabTools.archiveEducation, "12 hours")
+        d.user(.settings(.profile(.default, .autoArchive(.never))))
+        XCTAssertNil(d.view.tabTools.archiveEducation)
+        d.user(.settings(.profile(.default, .autoArchive(.twelveHours))))
         d.user(.tabTools(.dismissArchiveEducation))
         XCTAssertNil(Driver(file: d.savedFile).view.tabTools.archiveEducation)
         d.user(.tabTools(.preferences(includeFavorites: false, previews: false)))

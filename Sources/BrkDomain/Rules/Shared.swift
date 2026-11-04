@@ -38,11 +38,11 @@ extension Work {
     /// A new tab at the top of `space`'s Today. Focused in `window` when `focus`; otherwise only marked loaded (a
     /// background tab loads like Arc and Chromium do, and normalize keeps a loaded entry for an existing tab).
     @discardableResult
-    mutating func openTab(_ url: URL, inSpace space: SpaceID, window: WindowID, focus focusIt: Bool) -> ItemID? {
+    mutating func openTab(_ url: URL, inSpace space: SpaceID, window: WindowID, focus focusIt: Bool, at index: Int = 0) -> ItemID? {
         guard let today = state.doc.spaces[space]?.todayRoot else { return nil }
         let id = ItemID(ctx.newID())
         do {
-            try state.doc.tree.insert(id, .tab(Tab(url: nil, title: "", lastActiveAt: ctx.now)), at: .into(parent: today, index: 0), createdAt: ctx.now)
+            try state.doc.tree.insert(id, .tab(Tab(url: nil, title: "", lastActiveAt: ctx.now)), at: .into(parent: today, index: index), createdAt: ctx.now)
         } catch { return nil }
         request(url, for: PageID(window: window, item: id))
         if focusIt { focus(id, in: window) }

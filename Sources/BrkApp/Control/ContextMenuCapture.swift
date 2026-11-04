@@ -12,9 +12,12 @@ import BrkEngine
     private var choice: String?
     /// `TextLayoutAudit.menu` of the menu that opened, measured while it is on screen.
     private(set) var measured: TextLayoutReport?
+    /// A left click's own menu (a pop-up button, the Library's Filter): the first menu that tracks is it.
+    private var clicked = false
 
-    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
+    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil, left: Bool = false) async throws -> [String] {
         choice = choose
+        clicked = left
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(100))
@@ -25,7 +28,10 @@ import BrkEngine
         center.addObserver(self, selector: #selector(began(_:)), name: Self.willPresent, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: PageSurfaceView.contextMenuDidClose, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
-        try events.rightClick(at: point, in: window)
+        if left {
+            // The click's own menu tracking runs inside it; the timer set when tracking begins picks the row.
+            DispatchQueue.main.async { try? events.click(at: point, modifiers: [], count: 1, in: window) }
+        } else { try events.rightClick(at: point, in: window) }
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         while !tracking.ended && ProcessInfo.processInfo.systemUptime < deadline { try await Task.sleep(for: .milliseconds(20)) }
         return items
@@ -35,7 +41,7 @@ import BrkEngine
         precondition(Thread.isMainThread)
         guard let current = note.object as? NSMenu else { return }
         // Actual popup delegates identify the menu; AppKit may report a distinct menu-bar object first.
-        let fromDelegate = note.name == PageSurfaceView.contextMenuWillOpen || note.name == Self.willPresent
+        let fromDelegate = clicked || note.name == PageSurfaceView.contextMenuWillOpen || note.name == Self.willPresent
         guard tracking.begin(current, fromDelegate: fromDelegate) else { return }
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         measured = TextLayoutAudit.menu(current)

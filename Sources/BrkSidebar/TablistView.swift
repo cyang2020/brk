@@ -20,7 +20,7 @@ final class TablistView: NSScrollView {
     private let pinnedSection = FlippedView()
     private let todaySection = FlippedView()
     private let divider: DividerRowView
-    private let education: NSButton
+    private let education: ArchiveEducationView
     private let newTab: NewTabRowView
     private let dropLine = NSView()
     private let topEdge = NSView()
@@ -47,7 +47,7 @@ final class TablistView: NSScrollView {
         self.dispatch = dispatch
         self.drag = drag
         divider = DividerRowView(dispatch: dispatch)
-        education = NSButton(title: "", target: nil, action: nil)
+        education = ArchiveEducationView(dispatch: dispatch)
         newTab = NewTabRowView(dispatch: dispatch)
         super.init(frame: .zero)
         document.onKey = { [weak self] command in self?.dispatch(.tabTools(command)) }
@@ -66,14 +66,6 @@ final class TablistView: NSScrollView {
         todaySection.addSubview(divider)
         todaySection.addSubview(newTab)
         document.addSubview(education)
-        education.target = self
-        education.action = #selector(dismissEducation)
-        education.bezelStyle = .regularSquare
-        education.cell?.wraps = true
-        education.cell?.usesSingleLineMode = false
-        education.cell?.lineBreakMode = .byWordWrapping
-        education.font = .systemFont(ofSize: 11)
-        education.identify(.tabTool("education"))
         dropLine.wantsLayer = true
         dropLine.isHidden = true
         for edge in [topEdge, bottomEdge] {
@@ -146,7 +138,7 @@ final class TablistView: NSScrollView {
         todaySection.frame = todayRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         contentBottom = Double(f.rows.last?.rect.maxY ?? 0)
         education.isHidden = tools.archiveEducation == nil
-        education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
+        education.render(tools.archiveEducation, palette: palette)
         education.frame = NSRect(x: 8, y: contentBottom + 10, width: max(0, width - 16), height: 68)
         if tools.archiveEducation != nil { contentBottom += 88 }
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
@@ -166,7 +158,8 @@ final class TablistView: NSScrollView {
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
-                divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, palette: palette)
+                divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, canTidy: space.today.canTidy,
+                               tidying: space.today.tidying, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette, current: newTabCurrent)
@@ -210,8 +203,6 @@ final class TablistView: NSScrollView {
         }
         updateEdges()
     }
-
-    @objc private func dismissEducation() { dispatch(.tabTools(.dismissArchiveEducation)) }
 
     private func makeRow(_ id: ItemID) -> RowView {
         let view = RowView(dispatch: dispatch, drag: drag)
@@ -896,26 +887,41 @@ final class PeekMarkerView: NSView {
 final class DividerRowView: HoverView {
     private let line = NSView()
     private let clear: ClearButton
+    /// Max's Tidy Tabs (P46-b): 🧹 Tidy left of Clear while the pointer is on the divider and Today has more than six
+    /// tabs, a bar between them.
+    private let tidy: TidyButton
+    private let tidyBar = NSView()
     private var palette: Palette?
     private var canClear = false
+    private var canTidy = false, tidying = false
     /// Arc shows Clear whenever the pointer is over the sidebar, not only over the divider.
     var sidebarHovered = false { didSet { if sidebarHovered != oldValue { stateChanged() } } }
 
     init(dispatch: @escaping Dispatch) {
         clear = ClearButton { dispatch(.tab(.clearToday)) }
+        tidy = TidyButton { dispatch(.assist(.organizeToday)) }
         super.init(frame: .zero)
         line.wantsLayer = true
+        tidyBar.wantsLayer = true
         addSubview(line)
         addSubview(clear)
+        addSubview(tidyBar)
+        addSubview(tidy)
         clear.identify(.todayClear)
+        tidy.identify(.todayTidy)
     }
 
-    func render(canClear: Bool, palette: Palette) {
+    func render(canClear: Bool, canTidy: Bool = false, tidying: Bool = false, palette: Palette) {
         self.palette = palette
         self.canClear = canClear
+        self.canTidy = canTidy
+        self.tidying = tidying
         line.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
+        tidyBar.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
         clear.render(palette: palette)
+        tidy.render(palette: palette, busy: tidying)
         clear.isHidden = !canClear
+        tidy.isHidden = !canTidy
         stateChanged()
     }
 
@@ -926,14 +932,82 @@ final class DividerRowView: HoverView {
         // The word ends `clearTrailing` before the sidebar's edge; the label's cell draws it 2 in from the frame.
         let textStart = ((bounds.width - Draw.clearTrailing.value - clear.textWidth) * 2).rounded() / 2
         clear.frame = CGRect(x: textStart - ClearButton.cellInset, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
-        let end = clear.alphaValue > 0 && !clear.isHidden ? textStart - Draw.clearGap.value : bounds.width - inset
-        let hairline = Draw.hairline.value
+        var end = clear.alphaValue > 0 && !clear.isHidden ? textStart - Draw.clearGap.value : bounds.width - inset
+        // Tidy keeps its place while it is invisible too, so the pointer finds it where it appears.
+        let gaps = Draw.tidyGaps.value, hairline = Draw.hairline.value, barHeight = Draw.tidySeparatorHeight.value
+        let right = clear.isHidden ? bounds.width - Draw.clearTrailing.value : textStart - gaps[3]
+        tidyBar.frame = CGRect(x: right - hairline, y: (bounds.height - barHeight) / 2, width: hairline, height: barHeight)
+        let tidySize = tidy.fittingSize
+        tidy.frame = CGRect(x: (clear.isHidden ? right : tidyBar.frame.minX - gaps[2]) - tidySize.width, y: (bounds.height - tidySize.height) / 2,
+                            width: tidySize.width, height: tidySize.height)
+        let tidyShown = tidy.alphaValue > 0 && !tidy.isHidden
+        tidyBar.isHidden = !tidyShown || clear.isHidden
+        if tidyShown { end = tidy.frame.minX - gaps[0] }
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
     }
 
     override func stateChanged() {
-        clear.alphaValue = canClear && (sidebarHovered || isHovered || clear.isHovered) ? 1 : 0
+        clear.alphaValue = canClear && (sidebarHovered || isHovered || clear.isHovered || tidy.isHovered) ? 1 : 0
+        tidy.alphaValue = canTidy && (isHovered || clear.isHovered || tidy.isHovered || tidying) ? 1 : 0
         needsLayout = true
+    }
+}
+
+/// "🧹 Tidy" (Arc's SidebarTidyButton): the broom and the word in Clear's colours, the tooltip "Organize Today Tabs".
+/// While Max makes the plan it dims and takes no click.
+@MainActor
+final class TidyButton: HoverView {
+    private let glyph = NSImageView()
+    private let label = NSTextField(labelWithString: AICopy.tidy)
+    private let action: () -> Void
+    private var palette: Palette?
+    private var busy = false
+
+    init(action: @escaping () -> Void) {
+        self.action = action
+        super.init(frame: .zero)
+        label.font = .systemFont(ofSize: Draw.captionFont.value, weight: .semibold)
+        label.isSelectable = false
+        glyph.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(glyph)
+        addSubview(label)
+        toolTip = AICopy.tidyTooltip
+    }
+
+    override var fittingSize: NSSize {
+        let g = Draw.tidyGlyph.value, text = label.intrinsicContentSize
+        return NSSize(width: g[1] + Draw.tidyGaps.value[1] - (g[1] - g[0]) / 2 + text.width, height: max(g[1], text.height))
+    }
+
+    func render(palette: Palette, busy: Bool) {
+        self.palette = palette
+        self.busy = busy
+        stateChanged()
+    }
+
+    override func layout() {
+        super.layout()
+        let g = Draw.tidyGlyph.value, text = label.intrinsicContentSize
+        // The broom is drawn in a square; its strokes take the middle 7 of its 11.5 points.
+        glyph.frame = CGRect(x: -(g[1] - g[0]) / 2, y: (bounds.height - g[1]) / 2, width: g[1], height: g[1])
+        label.frame = CGRect(x: bounds.width - text.width, y: (bounds.height - text.height) / 2, width: text.width, height: text.height)
+    }
+
+    override func stateChanged() {
+        guard let palette else { return }
+        let color = palette.color(isHovered && !busy ? palette.tokens.foregroundStrong : palette.tokens.foreground)
+        label.textColor = color
+        glyph.image = ArcGlyphs.broom(size: Draw.tidyGlyph.value[1])
+        glyph.contentTintColor = color
+        for view in [glyph, label] as [NSView] { view.alphaValue = busy ? Draw.unloadedAlpha.value : 1 }
+        (superview as? HoverView)?.stateChanged()
+    }
+
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if !busy, bounds.contains(local(event)) { action() }
     }
 }
 
@@ -1198,6 +1272,80 @@ final class LivePlaceholderView: HoverView {
     override func mouseUp(with event: NSEvent) {
         guard let folder, live?.state != .loading, bounds.contains(local(event)) else { return }
         dispatch(.tabTools(.site(.refreshFolder(folder))))
+    }
+}
+
+/// Arc's auto-archive banner (`bin:0x103a0cc20`): "Arc archives tabs that you haven’t used in the past 12 hours. You
+/// can adjust this in Settings." with Settings a link (Settings → Profiles, where Archive tabs after lives) and a ×
+/// that dismisses it for good. A click on the words does nothing.
+@MainActor
+final class ArchiveEducationView: HoverView {
+    private let text = NSTextView()
+    private let link = LinkHotspot()
+    private let close = GlyphButton()
+    private let dispatch: Dispatch
+    private var shown: String?
+    private var ink: NSColor?
+
+    init(dispatch: @escaping Dispatch) {
+        self.dispatch = dispatch
+        super.init(frame: .zero)
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        text.isEditable = false
+        text.isSelectable = false
+        text.drawsBackground = false
+        text.textContainerInset = .zero
+        text.textContainer?.lineFragmentPadding = 0
+        addSubview(text)
+        addSubview(link)
+        addSubview(close)
+        identify(.tabTool("education"))
+        link.identify(.tabTool("education-settings"))
+        close.identify(.tabTool("education-close"))
+        close.toolTip = SidebarCopy.dismissArchiveEducation
+        close.action = { _ in dispatch(.tabTools(.dismissArchiveEducation)) }
+        link.action = { dispatch(.settings(.openPane(.profiles))) }
+    }
+
+    func render(_ threshold: String?, palette: Palette) {
+        layer?.backgroundColor = palette.color(palette.tokens.itemHover).cgColor
+        close.render(.close, size: Draw.smallFont.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+        guard let threshold else { shown = nil; return }
+        let sentence = Copy.archiveEducation(threshold)
+        guard sentence != shown || ink != palette.ink.text else { return }
+        shown = sentence
+        ink = palette.ink.text
+        let body = NSMutableAttributedString(string: sentence, attributes: [.font: NSFont.systemFont(ofSize: Draw.captionFont.value), .foregroundColor: palette.ink.text])
+        let range = (sentence as NSString).range(of: Copy.archiveEducationLink, options: .backwards)
+        body.addAttributes([.foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue], range: range)
+        text.textStorage?.setAttributedString(body)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let inset = Draw.educationInset.value, button = Draw.educationClose.value
+        close.frame = CGRect(x: bounds.width - inset - button, y: inset, width: button, height: button)
+        text.frame = CGRect(x: inset, y: inset, width: max(0, close.frame.minX - inset * 2), height: max(0, bounds.height - inset * 2))
+        text.textContainer?.containerSize = CGSize(width: text.frame.width, height: .greatestFiniteMagnitude)
+        guard let manager = text.layoutManager, let container = text.textContainer, let sentence = shown else { return }
+        manager.ensureLayout(for: container)
+        let glyphs = manager.glyphRange(forCharacterRange: (sentence as NSString).range(of: Copy.archiveEducationLink, options: .backwards), actualCharacterRange: nil)
+        let rect = manager.boundingRect(forGlyphRange: glyphs, in: container)
+        link.frame = rect.offsetBy(dx: text.frame.minX, dy: text.frame.minY)
+    }
+}
+
+/// A clickable spot over a word of a text (the banner's Settings): the pointing hand, a click runs `action`.
+@MainActor
+final class LinkHotspot: HoverView {
+    var action: () -> Void = {}
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if bounds.contains(local(event)) { action() }
     }
 }
 

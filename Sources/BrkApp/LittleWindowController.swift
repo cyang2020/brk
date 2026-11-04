@@ -597,6 +597,7 @@ public final class BrowserPanel: NSPanel, HostWindow {
     public var onKeyBeforePage: ((NSEvent) -> Bool)?
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
+    public var onPageSelectionMayChange: ((PageID, _ typing: Bool) -> Void)?
     /// Where the header puts the lights (top-left content coordinates); nil hides them.
     var lightsOrigin: CGPoint?
 

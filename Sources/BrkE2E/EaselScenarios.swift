@@ -14,6 +14,9 @@ enum EaselScenarios {
         Scenario("EaselReopen", "a drawn board and its picture are the same after quitting and relaunching", reopen),
         Scenario("EaselLibrary", "the Library's Easels page lists a card per Easel; a card opens its Easel", library),
         Scenario("EaselDelete", "a card's menu asks first (Q09 c); Cancel keeps it, Delete removes the board, its row and its pictures", delete),
+        Scenario("EaselResize", "a selected shape's corner handle resizes it through pointer events; the opposite corner stays", resize),
+        Scenario("EaselCapture", "a Media capture's Insert in Easel puts the screenshot on the shown board as a picture", insertCapture),
+        Scenario("EaselExport", "the pill's Share saves the board as a PNG through the save panel", export),
     ]
 
     /// A two-colour 160 x 100 PNG (left blue #3478F6, right red #F25E6B).
@@ -200,6 +203,77 @@ enum EaselScenarios {
         app.sleep(0.8)
         try expect(try board(app).elements.count == 5, "cancelling the panel changed the board")
         _ = try app.screenshot("easel-after-delete")
+    }
+
+    /// A101: the corner handles do what they show. Drag the bottom-right handle of a selected rectangle: it grows from
+    /// its top-left corner, which stays; the board keeps the new size after a restart.
+    @Sendable static func resize(_ app: AppUnderTest) throws {
+        _ = try make(app)
+        try tool(app, "rectangle")
+        try stroke(app, [CGPoint(x: -300, y: 200), CGPoint(x: -250, y: 240), CGPoint(x: -160, y: 290)])
+        try waitForElements(app, 1, "a rectangle")
+        let before = try board(app).elements[0]
+        try app.waitUntil("the new shape is selected") { isShown(try app.native(), .easelControl("selection")) }
+        let outset = 6.0
+        try stroke(app, [CGPoint(x: before.frame.maxX + outset, y: before.frame.maxY + outset), CGPoint(x: before.frame.maxX + 40, y: before.frame.maxY + 30),
+                         CGPoint(x: before.frame.maxX + 80, y: before.frame.maxY + 60)])
+        try app.waitUntil("the handle resized the rectangle") { try board(app).elements.first.map { abs($0.frame.width - before.frame.width) > 40 } ?? false }
+        let after = try board(app).elements[0]
+        try expect(abs(after.frame.minX - before.frame.minX) <= 1 && abs(after.frame.minY - before.frame.minY) <= 1, "the top-left corner moved: \(before.frame) -> \(after.frame)")
+        try expect(abs(after.frame.maxX - (before.frame.maxX + 80)) <= 2 && abs(after.frame.maxY - (before.frame.maxY + 60)) <= 2, "the corner did not follow the pointer: \(after.frame)")
+        _ = try app.screenshot("easel-resized")
+        try app.flush(); try app.restart()
+        try app.waitUntil("the board is shown after the restart") { !(try app.view().easels.isEmpty) }
+        try expect(try near(board(app).elements[0].frame, after.frame, tolerance: 0.5), "the new size did not survive a restart")
+    }
+
+    /// A101's "with captures": a full-page capture saved to the Library, then Media's Insert in Easel with an Easel
+    /// under the Library puts the capture's PNG on that board.
+    @Sendable static func insertCapture(_ app: AppUnderTest) throws {
+        let item = try app.load(app.site.url("page2.html"))
+        try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("page2.html"))
+        try app.dispatch(.capture(.begin(.fullPage)))
+        try app.waitUntil("Screenshot Copied to Clipboard toast", timeout: 20) { try app.view().capture == nil && app.view().tabTools.toast?.text == "Screenshot Copied to Clipboard" }
+        try app.dispatch(.capture(.act(.library)))   // the toast's Save
+        let (_, _) = try make(app)
+        try app.dispatch(.library(.open(.media)))
+        var record: String?
+        try app.waitUntil("the capture is in Media", timeout: 20) {
+            guard case .library(let library)? = try app.view().overlay else { return false }
+            record = library.captures.first?.id
+            guard let record else { return false }
+            return isShown(try app.native(), .tabTool("capture-card-" + record))
+        }
+        let card = try visible(app.native(), .tabTool("capture-card-" + record!)).frame
+        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: card.midX, y: card.midY), choose: "Insert in Easel")) else {
+            throw Check(description: "the capture card's menu did not open")
+        }
+        try expect(titles.contains("Insert in Easel"), "the capture card's menu has \(titles)")
+        try app.waitUntil("the capture is on the board", timeout: 15) { try board(app).elements.contains { $0.shape == .image && $0.image != nil } }
+        guard let picture = try board(app).elements.first(where: { $0.shape == .image }), let file = picture.image else { throw Check(description: "no picture") }
+        try expect(file.path.hasPrefix(app.dataDirectory.appendingPathComponent("Easels").path), "the picture is not in the board's folder: \(file.path)")
+        try expect(try Data(contentsOf: file).prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), "the picture is not a PNG")
+        try app.dispatch(.library(.close))
+        _ = try app.screenshot("easel-capture")
+    }
+
+    /// A101's "export the result": the pill's Share (🔒 Share) opens a save panel; Save writes the board as a PNG.
+    @Sendable static func export(_ app: AppUnderTest) throws {
+        _ = try make(app)
+        try app.press("escape")
+        try tool(app, "ellipse")
+        try stroke(app, [CGPoint(x: -100, y: 200), CGPoint(x: 0, y: 300)])
+        try waitForElements(app, 1, "an ellipse")
+        // With the destination chosen beforehand (the control socket's post-selection fixture, as BB6's outputs), Share
+        // writes the board's PNG there. The save panel itself is not driven: injected keys do not reach this remote
+        // NSSavePanel on the test machine (Return and Escape both left it open), so the panel stays with its unit test.
+        let destination = app.dataDirectory.appendingPathComponent("easel-share.png")
+        try app.perform(.chooseOutputFixture(window: app.window, path: destination.path))
+        try app.click(.urlPill)
+        try app.waitUntil("the PNG is written", timeout: 10) { FileManager.default.fileExists(atPath: destination.path) }
+        let bytes = try Data(contentsOf: destination)
+        try expect(bytes.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && bytes.count > 1000, "the shared file is not a drawn PNG (\(bytes.count) bytes)")
+        try app.waitUntil("Saved toast") { try app.view().tabTools.toast?.text == "Saved easel-share.png" }
     }
 
     @Sendable static func reopen(_ app: AppUnderTest) throws {

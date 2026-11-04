@@ -64,10 +64,12 @@ enum IconContent: Equatable {
     case glyph(Glyph)
     /// A space without an icon: a dot in its theme color.
     case dot(RGBA)
+    /// Max's flower outline (an Instant Links row, P48-a).
+    case flower
     case none
 
     init(tab: TabRow) {
-        if let icon = tab.icon { self = .custom(icon) } else { self = .favicon(tab.favicon) }
+        if tab.instant != nil { self = .flower } else if let icon = tab.icon { self = .custom(icon) } else { self = .favicon(tab.favicon) }
     }
 
     init(space: SpaceIcon, color: RGBA) {
@@ -156,6 +158,10 @@ final class IconView: NSView {
         case .glyph(let glyph):
             image.isHidden = false
             image.image = glyph.image(size: side * 0.8)
+            image.contentTintColor = tint
+        case .flower:
+            image.isHidden = false
+            image.image = ArcGlyphs.flower(size: side * 0.9)
             image.contentTintColor = tint
         case .dot(let color):
             dot.isHidden = false

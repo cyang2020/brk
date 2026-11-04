@@ -501,6 +501,29 @@ final class ControlExecutor {
             guard let measured = capture.measured else { throw Failure(message: "no menu opened at \(point)") }
             return .textLayout(measured)
 
+        case .captureClickMenu(let viewID, let choice):
+            let c = try controller(nil)
+            store.inputWindow = c.window
+            // The browser window first, then any other app window (the settings window's pop-ups).
+            let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
+                ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
+            guard let (view, window) = found, !view.isHiddenOrHasHiddenAncestor else { throw Failure(message: "no visible view \(viewID.identifier)") }
+            if view.enclosingScrollView != nil, view.visibleRect.size != view.bounds.size { view.scrollToVisible(view.bounds); window.displayIfNeeded() }
+            // A pop-up button (the settings panes' pickers): its own menu's items, and the choice made the way its menu
+            // makes it (select the item, send the button's action to its target).
+            if let popUp = view as? NSPopUpButton {
+                let titles = popUp.itemTitles
+                if let choice {
+                    guard let item = popUp.item(withTitle: choice), item.isEnabled else { throw Failure(message: "no enabled item \(choice) in \(titles)") }
+                    popUp.select(item)
+                    guard let action = popUp.action, NSApp.sendAction(action, to: popUp.target, from: popUp) else { throw Failure(message: "the pop-up's action failed") }
+                }
+                return .menuItems(titles)
+            }
+            let capture = ContextMenuCapture()
+            return .menuItems(try await capture.run(at: view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil), in: window,
+                                                    events: events, choose: choice, left: true))
+
         case .screenshot(let window, let path):
             let c = try controller(window)
             // A snapshot can be newer than the WindowServer/CEF compositor frame. Yield to its commit first.

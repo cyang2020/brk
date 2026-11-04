@@ -37,7 +37,11 @@ public enum Effect: Hashable, Sendable {
     case aiRead(AIRequestID, DocumentToken)
     case aiTranslate(AIRequestID, AIPageContent, [AITextNode])
     case aiWatch(AIRequestID, seconds: Int)
-    case aiHover(WindowID, URL?)
+    /// The link under the pointer in the window's shown document, or none: BrkApp waits for Shift held over it (Arc's
+    /// 5-Second Previews), asks the document where the link is and answers `SystemEvent.aiHoverReady`.
+    case aiHover(WindowID, URL?, DocumentToken?)
+    /// Swap a translated page between the translation and its own text (Use Original, ⌘Z after it).
+    case aiShowTranslation(DocumentToken, translated: Bool)
     case aiRenameDownload(DownloadID, originalPath: String, filename: String)
     /// Fetch the default engine's OpenSearch suggestions for `query` (BrkApp debounces by
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.

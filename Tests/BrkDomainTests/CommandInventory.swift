@@ -20,8 +20,9 @@ enum CommandInventory {
     static let commands: [Command] = [
         .assist(.open(.question)), .assist(.ask("why")), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
         .assist(.instant("query")), .assist(.translate("English")), .assist(.organizeToday), .assist(.undoOrganize),
-        .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss), .assist(.searchFallback),
+        .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss),
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
+        .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -48,7 +49,7 @@ enum CommandInventory {
         .tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: false)), .tabTools(.closeGroup(item)), .tabTools(.removeGroupHeader(item)),
         .tabTools(.openFolder(item)), .tabTools(.replacePinned(item)), .tabTools(.muteAll(true)), .split(.addPaneAt(.left)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
-        .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)),
+        .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)), .page(.shareQuote),
         .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
@@ -136,7 +137,7 @@ enum CommandInventory {
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
-        .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example), .aiTranslated(AIRequestID("ghost"), false),
+        .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example, nil), .aiTranslated(AIRequestID("ghost"), false),
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
@@ -206,9 +207,12 @@ enum CommandInventory {
             case .renameDownload: "renameDownload"
             case .cancel: "cancel"
             case .dismiss: "dismiss"
-            case .searchFallback: "searchFallback"
             case .neverTranslateSite: "neverTranslateSite"
             case .neverTranslateLanguage: "neverTranslateLanguage"
+            case .useOriginal: "useOriginal"
+            case .languageSettings: "languageSettings"
+            case .previewHover: "previewHover"
+            case .sharePreview: "sharePreview"
             }
         case .easel(let c):
             switch c {
@@ -339,6 +343,7 @@ enum CommandInventory {
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"
+            case .shareQuote: "shareQuote"
             case .navigate: "navigate"
             }
         case .item(let c):
@@ -510,6 +515,9 @@ enum CommandInventory {
             case .loadProgress: "page.loadProgress"
             case .rendererGone: "page.rendererGone"
             case .closedByPage: "page.closedByPage"
+            case .languageDetected: "page.languageDetected"
+            case .translateRequested: "page.translateRequested"
+            case .selectionChanged: "page.selectionChanged"
             case .gainedFocus: "page.gainedFocus"
             case .openRequested: "page.openRequested"
             case .closed: "page.closed"

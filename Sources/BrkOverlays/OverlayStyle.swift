@@ -96,10 +96,14 @@ struct CommandBarColors {
         let base = OverlayColors.of(scheme)
         let ink: NSColor = scheme == .light ? .black : .white
         guard scheme == .light else {
-            // Q03-a (incognito): a neutral #191A1C card, the highlight #424ADD with a white tile under its glyph.
-            return CommandBarColors(card: srgb(0x191A1C), border: ink.withAlphaComponent(0.12), text: base.textPrimary, secondary: base.textSecondary,
-                                    placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.16),
-                                    onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.25), hairline: base.hairline,
+            // Q03-a (incognito): a neutral #191A1C card, the highlight #424ADD with a white tile under its glyph. P29-c (a
+            // standard window in the system's dark appearance): a dark card over a blur, reading #2E3336 over the light
+            // sidebar and #161818 over the page (this tint over the HUD material), a #565656 edge, the highlight
+            // #676767, the selected address on #7B7B7B.
+            return CommandBarColors(card: spaceless ? srgb(0x191A1C) : srgb(0x171919).withAlphaComponent(0.72),
+                                    border: ink.withAlphaComponent(spaceless ? 0.12 : 0.27), text: base.textPrimary, secondary: base.textSecondary,
+                                    placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.29),
+                                    onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.36), hairline: base.hairline,
                                     accessory: ink.withAlphaComponent(0.08), accessoryText: base.accessoryForeground,
                                     tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
         }
@@ -217,6 +221,8 @@ struct DialogOverlayMetrics: MetricGroup {
 enum OverlayCopy {
     /// Observed caption.
     static let switchToTab = "Switch to Tab"
+    /// Arc's "Ask ChatGPT" caption on the Ask row (P49), with the local tool's name.
+    static func ask(_ provider: String) -> String { "Ask \(provider)" }
     /// GUESS: the verb on the "search or navigate what you typed" row.
     static let searchVerb = "Search"
     static let openVerb = "Open"

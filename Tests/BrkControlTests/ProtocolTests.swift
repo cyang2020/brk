@@ -13,7 +13,7 @@ final class ProtocolTests: XCTestCase {
     enum Tag: String, CaseIterable {
         case chooseOutputFixture, cancelCurrentOutput, selectLinkExportFixture, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
         case mediaWindowScreenshot, mediaSounds, captureProbe, sidebarData, sidebarPanel
-        case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
+        case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, captureClickMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case nativeDialogKey, setAppAppearance, simulateSystemAppearance, menuBarItems, appWindowTexts, appWindowLink, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer, appleScript
@@ -60,6 +60,7 @@ final class ProtocolTests: XCTestCase {
         case .type: .type
         case .click: .click
         case .captureContextMenu: .captureContextMenu
+        case .captureClickMenu: .captureClickMenu
         case .pointerDrag: .pointerDrag
         case .scrollGesture: .scrollGesture
         case .sheetButton: .sheetButton
@@ -125,6 +126,7 @@ final class ProtocolTests: XCTestCase {
         case .activate: return [.activate(window: WindowID("w"))]
         case .native: return [.native(window: WindowID("w1"))]
         case .captureContextMenu: return [.captureContextMenu(window: WindowID("w1"), point: CGPoint(x: 40, y: 60))]
+        case .captureClickMenu: return [.captureClickMenu(view: .tabTool("archive-filter-menu"), choose: "Archive tabs after › 1 hour")]
         case .dispatch:
             return [.dispatch(window: nil, command: .space(.focus(SpaceID("s2")))),
                     .dispatch(window: WindowID("w1"), command: .space(.create(title: "Work", icon: .none, theme: .default))),

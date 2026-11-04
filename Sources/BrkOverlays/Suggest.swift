@@ -16,6 +16,8 @@ public struct Suggestion: Equatable, Sendable {
         case searchSuggestion
         /// A site from Arc's top domains list (Arc: `topDomains`).
         case topDomain
+        /// Max's Ask row (Arc's "Ask ChatGPT →", P49): the query, the local tool's name and the arrow square.
+        case ask
     }
     public let kind: Kind
     public let title: String
@@ -169,13 +171,42 @@ public enum Suggest {
         let typedRow = typed.map { [$0] } ?? []
         // Filling an empty split pane, a typed address opens in that pane: it leads, the tab showing it follows.
         let (lead, trail) = bar.fillsPane && isAddress ? ([], switches) : (switches, [])
-        let rows: [Suggestion]
+        var rows: [Suggestion]
         if let completed {
             rows = [completed] + typedRow + switches + related + history + domains + bookmarks + suggestions + travel.prefix(actionCap).map(\.suggestion)
         } else {
             rows = top + lead + typedRow + trail + related + domains + bookmarks + suggestions + history + travel.prefix(actionCap).map(\.suggestion)
         }
+        // Max's Ask row is the third (P49: the search, one suggestion, then Ask ChatGPT →) for a search of two words or
+        // more, or a question.
+        if let provider = bar.askProvider, !isAddress, completed == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
+            rows.insert(askRow(text, provider: provider), at: min(2, rows.count))
+        }
         return Array(rows.prefix(limit))
+    }
+
+    /// The Ask row: the query after Max's flower, "Ask <tool>" and the arrow square on the right.
+    static func askRow(_ text: String, provider: String) -> Suggestion {
+        Suggestion(kind: .ask, title: text, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.ask(provider), command: .assist(.ask(text)))
+    }
+
+    /// Instant Links (Shift+Return, P48-a): the query when the typed text is a web search on the bar's engine, nil for
+    /// an address, a calculation or nothing.
+    public static func instantQuery(_ typed: String, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard bar.instantLinks, bar.aiMode == nil, !text.isEmpty, BrowserCalculator.result(text) == nil else { return nil }
+        let engine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+        guard let url = (resolve ?? { resolveTypedInput($0, engine: engine) })(text) else { return nil }
+        return url == engine.searchURL(text) || isSearch(url, for: text) ? text : nil
+    }
+
+    /// Typing the local tool's name (three letters at least) and Tab asks it (Arc: start typing "ChatGPT", hit Tab).
+    public static func asksProvider(_ typed: String, bar: CommandBarSnapshot) -> Bool {
+        guard let provider = bar.askProvider?.lowercased(), bar.aiMode == nil else { return false }
+        let text = typed.trimmingCharacters(in: .whitespaces).lowercased()
+        return text.count >= 3 && provider.hasPrefix(text)
     }
 
     // MARK: Inline completion and site search beside the input

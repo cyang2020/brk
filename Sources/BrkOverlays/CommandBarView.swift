@@ -69,6 +69,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         didSet { if fillsWindow != oldValue { layoutCard() } }
     }
     private var colors = CommandBarColors.of(.light, attached: false, primary: RGBA(1, 1, 1))
+    private let backdrop = NSVisualEffectView()
+    private let backdropTint = NSView()
     private var look: (Scheme, Style, RGBA, Bool)?
     private var leadingFavicon: URL?
     private var eventMonitor: Any?
@@ -108,7 +110,18 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         keyLabel.alignment = .center
         keyCap.addSubview(keyLabel)
         info.onClick = { [weak self] in self?.dispatch(.settings(.openPane(.shortcuts))) }
-        for view in [leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
+        // The dark card is translucent (P29-c); what shows through it is blurred, so the sidebar's text is not readable.
+        backdrop.material = .hudWindow
+        backdrop.blendingMode = .withinWindow
+        backdrop.state = .active
+        backdrop.appearance = NSAppearance(named: .darkAqua)
+        backdrop.wantsLayer = true
+        backdrop.layer?.cornerCurve = .continuous
+        backdrop.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
+        backdrop.layer?.masksToBounds = true
+        backdropTint.wantsLayer = true
+        backdrop.addSubview(backdropTint)
+        for view in [backdrop, leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
@@ -133,7 +146,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         guard let bar, let frame = frames.commandBar else { return hide() }
         // The bar that is its whole window (an empty Little window) leaves the ⓘ's place to the window's close button.
         fillsWindow = frame.size == frames.contentSize
-        show(bar, in: frame, scheme: palette.scheme, primary: palette.accent, spaceless: window != .standard)
+        // Arc's card follows the system's dark appearance even over a light Space theme (P29-c); the sidebar does not.
+        let system: Scheme = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light
+        show(bar, in: frame, scheme: palette.scheme == .dark || system == .dark ? .dark : .light, primary: palette.accent, spaceless: window != .standard)
     }
 
     /// `render` once the slice and its frame are known. A new `openID` resets the query to `initialQuery` and the
@@ -203,17 +218,33 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard !textView.hasMarkedText() else { return false }   // an input method is composing
         switch selector {
-        case #selector(NSResponder.insertNewline(_:)):
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
             // A held Return auto-repeats; only the first press chooses (`isARepeat` exists on key events only).
             let event = NSApp?.currentEvent
-            if !(event?.type == .keyDown && event?.isARepeat == true) { choose(highlighted) }
+            if event?.type == .keyDown && event?.isARepeat == true { return true }
+            // Max's Instant Links: Shift+Return on a web search opens its top results instead (P48-a).
+            if event?.modifierFlags.contains(.shift) == true, let bar {
+                // A site search is a web search too: its engine's name and the query go to Instant Links whole (Arc's P48
+                // "wikipedia arc browser").
+                if let siteSearch, bar.instantLinks, !typed.trimmingCharacters(in: .whitespaces).isEmpty {
+                    dispatch(.assist(.instant((namedBy.isEmpty ? siteSearch.name : namedBy) + " " + typed.trimmingCharacters(in: .whitespaces))))
+                    return true
+                }
+                if siteSearch == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
+                    dispatch(.assist(.instant(query)))
+                    return true
+                }
+            }
+            choose(highlighted)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
             if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
-            // Tab never leaves the bar; with a site-search offer beside the input it enters site search.
+            // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
+            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab).
             if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
+            else if siteSearch == nil, let bar, Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
             leaveSiteSearch()
@@ -413,6 +444,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let needed = o.textX.value + textWidth + o.offerGap.value + accessoryWidth + o.accessoryRightInset.value
         let width = attached ? min(bounds.width, max(m.attachedCardWidth.value, needed)) : bounds.width
         card.frame = CGRect(x: 0, y: 0, width: width, height: min(bounds.height, inputHeight + listHeight))
+        backdrop.frame = card.bounds
+        backdropTint.frame = backdrop.bounds
         card.layer?.shadowPath = CGPath(roundedRect: card.bounds, cornerWidth: o.cornerRadius.value, cornerHeight: o.cornerRadius.value, transform: nil)
 
         let mid = inputHeight / 2
@@ -462,7 +495,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         appearance = .of(scheme)
         let o = OverlayMetrics.commandBar
         input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
-        card.layer?.backgroundColor = colors.card.cgColor
+        let translucent = colors.card.alphaComponent < 1
+        card.layer?.backgroundColor = translucent ? nil : colors.card.cgColor
+        backdropTint.layer?.backgroundColor = translucent ? colors.card.cgColor : nil
+        backdrop.isHidden = !translucent
         card.layer?.borderColor = colors.border.cgColor
         card.shadow = {
             let shadow = NSShadow()
@@ -645,8 +681,10 @@ final class ResultRowView: NSView {
     func update(_ suggestion: Suggestion, highlighted: Bool, colors: CommandBarColors, captions: Bool) {
         self.suggestion = suggestion
         self.captions = captions
-        isSwitch = suggestion.kind == .switchToTab
-        let symbol = NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
+        // The Ask row lays out like Switch to Tab: the caption and the arrow square (P49).
+        isSwitch = suggestion.kind == .switchToTab || suggestion.kind == .ask
+        let symbol = suggestion.kind == .ask ? ArcGlyphs.flower(size: OverlayMetrics.commandBar.iconSize.value, lineWidth: 1.2)
+            : NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
         icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)
         favicon = suggestion.favicon
         hasFavicon = false
@@ -665,6 +703,8 @@ final class ResultRowView: NSView {
         hint.stringValue = suggestion.hint ?? ""
         hintPill.isHidden = suggestion.hint == nil || (isSwitch && !captions)
         arrow.isHidden = !(isSwitch && captions)
+        // The Ask row's arrow square names it for the control socket (rows are otherwise known by index).
+        if suggestion.kind == .ask { arrow.identify(.aiControl("ask-row")) } else { arrow.setAccessibilityIdentifier(nil) }
         setAccessibilityLabel(suggestion.title)
         setHighlighted(highlighted, colors)
         needsLayout = true

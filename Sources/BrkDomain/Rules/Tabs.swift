@@ -148,6 +148,10 @@ extension Work {
                 effects.append(.copyToPasteboard(SharedQuote.plain(url: url, title: t.displayTitle, format: format)))
             }
             copiedURLToast(tab, in: window)
+        case .shareQuote:
+            guard state.doc.settings.advanced.sharedQuotes, let tab = state.resolveTab(.focused, in: window) else { return }
+            pages(.copyURL(.plain), in: window)
+            if state.session.live[PageID(window: window, item: tab)]?.hasSelection == true { toast("Copied Shared URL", in: window) }
         case .navigate(let ref, let url):
             // AppleScript's `set URL`: an address the command bar could open, in place, like the bar's edit-current.
             guard isOpenableURL(url), let tab = state.resolveTab(ref, in: window) else { return }
@@ -181,6 +185,16 @@ extension Work {
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
         case .linkHovered(let url): aiHover(url, in: window)
+        case .languageDetected(let document, let language):
+            guard live.document == .ready(document) else { return }
+            live.language = String(language.prefix(40))
+        case .selectionChanged(let document, let selected):
+            guard live.document == .ready(document) else { return }
+            live.hasSelection = selected
+        case .translateRequested(let language):
+            state.session.live[page] = live
+            translatePage(page, to: language, in: window)
+            return
         case .browserCreated: break
         case .documentChanged(let document):
             switch document {
@@ -188,6 +202,8 @@ extension Work {
                 guard doc.browser == token, doc.sequence > live.documentSequence else { return }
                 live.documentSequence = doc.sequence
                 live.loadProgress = 0
+                live.language = nil
+                live.hasSelection = false
             case .ready(let doc):
                 guard doc.browser == token, doc.sequence == live.documentSequence,
                       live.document == .loading(doc) || live.document == .ready(doc) else { return }

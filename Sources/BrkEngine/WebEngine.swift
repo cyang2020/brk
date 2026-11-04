@@ -46,6 +46,9 @@ public protocol WebEngine: AnyObject {
     /// The text highlighted in a live page's focused frame (nil when nothing is, or the page is not live). For
     /// Shared Quotes' Copy Link to Highlight.
     func selectedText(_ page: PageID) async -> String?
+    /// Reads whether the page has text highlighted and reports a change as `PageEvent.selectionChanged` (the URL
+    /// pill's Share Quote). Called after a mouse-up or key-up in the page.
+    func checkSelection(_ page: PageID)
 
     /// The browser engine's version as the About window shows it ("154.0.8037.98" for Chromium); nil without one.
     var engineVersion: String? { get }
@@ -59,6 +62,13 @@ public protocol WebEngine: AnyObject {
 
     func readAIPage(_ document: DocumentToken) async throws -> AIPageContent
     func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool
+    /// Swaps a translated document between the translation and its own text (`translateAIPage` keeps both); false
+    /// when nothing could be swapped (the text changed since).
+    func showAITranslation(_ document: DocumentToken, translated: Bool) async -> Bool
+    /// The link under the pointer in `document` that leads to `url`, nil when none is hovered: its box (points in the
+    /// page's surface, top-left origin), where the 5-Second Preview card opens, and whether it is one of the links Arc
+    /// previews without Shift (`HoveredLink.previewSite`).
+    func hoveredLink(_ document: DocumentToken, url: URL) async -> HoveredLink?
 
     func capture(_ request: CaptureRequest) async throws -> CaptureImage
     func captureProbe(_ page: PageID, directory: URL) async throws -> String
@@ -138,6 +148,7 @@ public protocol WebEngineDelegate: AnyObject {
 
 extension WebEngine {
     public func selectedText(_ page: PageID) async -> String? { nil }
+    public func checkSelection(_ page: PageID) {}
     public func cancelBoostPick(_ target: SiteTarget) {}
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }
@@ -217,9 +228,20 @@ extension WebEngine {
     public func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String? { "This engine cannot install extensions" }
 }
 
+/// What `WebEngine.hoveredLink` reports.
+public struct HoveredLink: Sendable, Equatable {
+    public let frame: CGRect
+    /// Arc's 5-Second Previews open without Shift on "certain websites" (the selectors in Arc 1.170: Hacker News
+    /// story titles, Google's news headings, links in posts and cards on X).
+    public let previewSite: Bool
+    public init(frame: CGRect, previewSite: Bool) { self.frame = frame; self.previewSite = previewSite }
+}
+
 extension WebEngine {
     public func readAIPage(_ document: DocumentToken) async throws -> AIPageContent { throw AIPageFailure.unavailable }
     public func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool { throw AIPageFailure.unavailable }
+    public func showAITranslation(_ document: DocumentToken, translated: Bool) async -> Bool { false }
+    public func hoveredLink(_ document: DocumentToken, url: URL) async -> HoveredLink? { nil }
 }
 
 extension WebEngine {

@@ -32,6 +32,7 @@ struct EaselBoardMetrics: MetricGroup {
     let arrowHead = Metric(14.0, .guess("the arrow head's sides"))
     let imageRadius = Metric(8.0, .guess("a picture's corner radius on the board"))
     let hitSlop = Metric(8.0, .guess("how far from a line or a stroke a click still picks it"))
+    let minimumResize = Metric(8.0, .guess("the smallest box a corner-handle drag leaves"))
 }
 
 /// The bottom toolbar (select, image, text, ellipse, rectangle, arrow, freehand | duplicate) and the person button.

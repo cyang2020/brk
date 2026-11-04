@@ -12,6 +12,7 @@ import SwiftUI
 struct MaxPane: View {
     let context: PaneContext
     @State private var explaining = false
+    @State private var note: MaxCopy.Note?
     private var max: MaxSnapshot { context.settings.max }
     /// Max is on when a tool may run and at least one feature uses it; Brk's default (the automatic tool, no
     /// feature switched on) shows "Turn On Max", as Arc's default does.
@@ -68,12 +69,10 @@ struct MaxPane: View {
             // Only the picture keeps the gap from the text: the text runs to within 8.5 points of the switch (P38-c:
             // "…shorter titles when you" ends at x 1131 px, the switch starts at 1148 px).
             HStack(alignment: .top, spacing: 0) {
-                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value).padding(.trailing, M.thumbGap.value)
+                MaxThumbnail(feature: feature, provider: max.askProvider).padding(.top, M.thumbTop.value).padding(.trailing, M.thumbGap.value)
                 VStack(alignment: .leading, spacing: M.titleGap.value) {
-                    Text(feature.title).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
-                    Text(feature.description).font(.system(size: M.descriptionSize.value)).foregroundStyle(SettingsStyle.secondaryText)
-                        .lineSpacing(M.descriptionLeading.value)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(MaxCopy.title(feature, provider: max.askProvider)).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
+                    description(feature)
                 }
                 .padding(.top, M.titleTop.value)
                 Spacer(minLength: M.textToSwitch.value)
@@ -84,6 +83,28 @@ struct MaxPane: View {
             .padding(.trailing, CardMetrics.rowPadding.value)
             .frame(minHeight: M.featureRowHeight.value, alignment: .top)
         }
+    }
+
+    /// Arc's descriptions: the Tidy Tabs broom inline, the blue parts as links (Arc's open help articles; Brk's say
+    /// in a note what the words promise here).
+    private func description(_ feature: MaxFeature) -> some View {
+        let parts = MaxCopy.description(feature, provider: max.askProvider)
+        let body = parts.reduce(Text("")) { result, part in
+            switch part {
+            case .text(let words): result + Text(words)
+            case .broom: result + Text(Image(nsImage: ArcGlyphs.broom(size: M.descriptionSize.value + 2))).foregroundColor(SettingsStyle.secondaryText)
+            case .link(let words, _): result + Text(words).foregroundColor(SettingsStyle.link)
+            }
+        }
+        return body.font(.system(size: M.descriptionSize.value)).foregroundStyle(SettingsStyle.secondaryText)
+            .lineSpacing(M.descriptionLeading.value)
+            .fixedSize(horizontal: false, vertical: true)
+            .onTapGesture { if let link = parts.lazy.compactMap({ if case .link(_, let note) = $0 { note } else { nil } }).first { note = link } }
+            .popover(isPresented: Binding(get: { note != nil && parts.contains { if case .link(_, let n) = $0 { n == note } else { false } } },
+                                          set: { if !$0 { note = nil } })) {
+                Text(note?.text ?? "").font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
+                    .frame(width: M.popoverWidth.value).padding()
+            }
     }
 
     private var footer: some View {
@@ -144,8 +165,7 @@ enum MaxFeature: String, Hashable, CaseIterable {
         }
     }
 
-    var title: String { MaxCopy.title(self) }
-    var description: String { MaxCopy.description(self) }
+    var title: String { MaxCopy.title(self, provider: nil) }
 }
 
 /// The Max pane's words: Arc's where Brk does the same thing (observed in P38-b and P38-c), Brk's where the local
@@ -161,25 +181,44 @@ enum MaxCopy {
     static let learnMore = "Learn more about what we send"
     static var whereToChoose: String { "Choose the tool, and turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off, in Advanced → More Settings…." }
 
-    static func title(_ feature: MaxFeature) -> String {
+    /// "ChatGPT in the Command Bar" names the local tool (`AppState.askProviderName`: Claude, Codex).
+    static func title(_ feature: MaxFeature, provider: String?) -> String {
         switch feature {
         case .tidyTabs: "Tidy Tabs"
         case .instantLinks: "Instant Links"
         case .linkPreviews: "5-Second Previews"
         case .tidyTitles: "Tidy Tab Titles"
         case .tidyDownloads: "Tidy Downloads"
-        case .askInCommandBar: "Ask Max in the Command Bar"
+        case .askInCommandBar: "\(provider ?? "Max") in the Command Bar"
         }
     }
 
-    static func description(_ feature: MaxFeature) -> String {
+    enum Part: Equatable {
+        case text(String), broom, link(String, Note)
+    }
+    /// What a description's blue words lead to in Brk: a short note (Arc's open help-center articles).
+    enum Note: String, Identifiable {
+        case multipleQueries, previewSites
+        var id: String { rawValue }
+        var text: String {
+            switch self {
+            case .multipleQueries: "Ask for several things at once (“weather in Paris and Tokyo”): each top result opens in its own tab."
+            case .previewSites: "Without Shift, previews open on Hacker News stories, Google’s news headings and links in posts on X."
+            }
+        }
+    }
+
+    /// Arc's words for the six features Arc has (P38-max-list), the local tool's name for ChatGPT's; Brk's for its own
+    /// three.
+    static func description(_ feature: MaxFeature, provider: String?) -> [Part] {
+        let tool = provider ?? "Max"
         switch feature {
-        case .tidyTabs: "Choose Organize Today Tabs in the Tabs menu to let your Sidebar sort your Today Tabs into folders by topic."
-        case .instantLinks: "Choose Instant Links… in the Tabs menu or the Command Bar and describe a page to open the top result."
-        case .linkPreviews: "A short summary appears when you hover over a link deliberately. Never in private windows."
-        case .tidyTitles: "Have your tabs automatically renamed with tidier, shorter titles when you Pin them."
-        case .tidyDownloads: "Keep your many files more organized with smartly renamed downloads — and make them a little easier to find later."
-        case .askInCommandBar: "Type “Ask Max” in the Command Bar, or press ⌥⌘G, to ask your local AI tool any question instantly."
+        case .tidyTabs: return [.text("Press the "), .broom, .text(" icon to let your Sidebar organize itself whenever you have more than six Today Tabs.")]
+        case .instantLinks: return [.text("Press Shift + Enter for any web search to instantly open the top result. "), .link("You can also search multiple queries!", .multipleQueries)]
+        case .linkPreviews: return [.text("Instant summaries appear when you hover over links on "), .link("certain websites.", .previewSites), .text(" Or hold Shift while hovering to preview any link.")]
+        case .tidyTitles: return [.text("Have your tabs automatically renamed with tidier, shorter titles when you Pin them.")]
+        case .tidyDownloads: return [.text("Keep your many files more organized with smartly renamed downloads — and make them a little easier to find later.")]
+        case .askInCommandBar: return [.text("Add \(tool) to your Search suggestions, or start typing “\(tool)”, hit Tab, to ask any question instantly.")]
         }
     }
 }

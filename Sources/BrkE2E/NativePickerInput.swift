@@ -307,6 +307,18 @@ enum NativeSystemInput {
         down.post(tap: .cghidEventTap); usleep(40_000); up.post(tap: .cghidEventTap)
         PhysicalKeys.clearSystemModifiers(chord)
     }
+    /// Left Shift down or up the way the keyboard reports it (the window server's modifier state, which
+    /// `NSEvent.modifierFlags` reads): Max's 5-Second Previews wait for Shift held over a link. Callers release it.
+    static func setShift(_ down: Bool) throws {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: 56, keyDown: down) else { throw Check(description: "no CGEvent") }
+        event.type = .flagsChanged
+        event.flags = down ? .maskShift : []
+        event.post(tap: .cghidEventTap)
+        usleep(60_000)
+    }
+    /// Whether Shift is down for the session (any keyboard or process), as `NSEvent.modifierFlags` reads it.
+    static var shiftHeld: Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskShift) }
     static func activateFinder() {
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
         try? p.run(); p.waitUntilExit()

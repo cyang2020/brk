@@ -30,6 +30,14 @@ struct SidebarDrawMetrics: MetricGroup {
     let dividerInset = Metric(18.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the Pinned/Today hairline runs from x 18 to 18 before the sidebar edge"))
     let clearTrailing = Metric(19.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: Clear ends 19 before the sidebar edge"))
     let clearGap = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: the hairline stops 10 before Clear"))
+    /// Tidy on the Today divider (P46-b, 2x): the hairline stops at x 241 px, the broom spans 259 to 273 px (y 790 to
+    /// 813), "Tidy" 290 to 327 px, a separator at 344 px, Clear from 366 px.
+    let tidyGaps = Metric([9.0, 8.5, 8.5, 10.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
+    /// The auto-archive banner's padding and its × (the banner itself keeps the sidebar's 8 pt inset and 68 pt height).
+    let educationInset = Metric(8.0, .guess("Arc's banner was not captured (P16-a needs a new Arc profile); the rows' 8 pt inset"))
+    let educationClose = Metric(18.0, .guess("a small × in the banner's top right corner"))
+    let tidyGlyph = Metric([7.0, 11.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: the broom is 14 x 23 px"))
+    let tidySeparatorHeight = Metric(10.0, .guess("the bar between Tidy and Clear, about the height of the capitals"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(6.0, .guess("the hover button's right padding inside the selection: (36 - 24) / 2"))
     let emptyFavicon = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))
@@ -71,6 +79,15 @@ struct SidebarDrawMetrics: MetricGroup {
     let shareLockGlyph = Metric([10.0, 13.0, 13.0], .anatomy("Q09 a: the pill's lock is 10 x 13 at x 21 (13 into the pill)"))
     let shareEdge = Metric(1.0, .anatomy("Q09 a: an Easel's pill has a 1 pt #CFCFCF edge"))
     let pillTextLeading = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: pill at x 8, host text at x 21"))
+    /// The pill's second line (Translation Available, Translated): P45-a and P50-b measured in the 36 pt pill.
+    let pillSubtitleFont = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P45/P45-a-arc.png: Translation Available's capitals are 17 px (8.5 pt) tall, #272B2C"))
+    let pillHostCenter = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/P45/P45-a-arc.png: with a second line the host's digits span y 101 to 119 px in the pill at 92 px"))
+    let pillSubtitleCenter = Metric(25.5, .anatomy("verify/visual-pairs/run-20261103/P45/P45-a-arc.png: Translation Available's capitals span y 134 to 151 px in the pill at 92 px"))
+    /// The translation popover (P50-d-popover, 2x): body 237 x 101 pt; the Aa disc, the sentence, two buttons.
+    let translationPopover = Metric([237.0, 101.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the body spans x 25 to 499 px and y 25 to 226 px"))
+    let translationDisc = Metric([10.5, 10.5, 32.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the Aa disc spans x and y 46 to 110 px"))
+    let translationTextLeading = Metric(54.5, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
+    let translationButtons = Metric([10.5, 58.5, 104.0, 32.0, 8.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Options x 46 to 254 px, Use Original x 270 to 478 px, both y 142 to 206 px"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
     let pillAccessoryGap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: copy link and site controls centred 29 apart (cra L1222-1223)"))
@@ -182,6 +199,7 @@ extension Palette {
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).
 enum SidebarCopy {
+    static let dismissArchiveEducation = "Dismiss"
     static let closeKeepPinned = "Close and Keep Pinned"
     /// The group header's × (Arc: "Tooltip for the button to close a group of tabs in the sidebar"; the text itself
     /// is not in the static strings).

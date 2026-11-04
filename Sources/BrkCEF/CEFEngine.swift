@@ -405,6 +405,18 @@ public final class CEFEngine: WebEngine {
         return text
     }
 
+    public func checkSelection(_ id: PageID) {
+        guard phase == .running, let page = live[id], !page.isAIReader, let document = page.readyDocument else { return }
+        Task { @MainActor [weak self, weak page] in
+            let text = await self?.selectedText(id)
+            guard let self, let page, self.isLive(page), page.readyDocument == document else { return }
+            let selected = !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            guard page.reportedSelection != selected else { return }
+            page.reportedSelection = selected
+            self.pageDidEmit(page, .selectionChanged(document, selected))
+        }
+    }
+
     public func facts(for id: PageID) -> PageFacts? {
         guard let page = live[id] else { return nil }
         var facts = page.facts

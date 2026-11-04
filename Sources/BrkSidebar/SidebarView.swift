@@ -421,6 +421,8 @@ final class URLPillView: HoverView {
     private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
     private let siteInfo = GlyphButton()
+    /// Arc's second line: Translation Available / Translated (P01-a, P50-b).
+    private let translationLine: PillTranslationLine
     private var pill: URLPillSnapshot?
     private var palette: Palette?
     private let dispatch: Dispatch
@@ -429,6 +431,7 @@ final class URLPillView: HoverView {
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
+        translationLine = PillTranslationLine(dispatch: dispatch)
         super.init(frame: .zero)
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.urlPill.cornerRadius.value
@@ -451,6 +454,7 @@ final class URLPillView: HoverView {
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
         addSubview(siteInfo)
+        addSubview(translationLine)
         identify(.urlPill)
     }
 
@@ -479,6 +483,7 @@ final class URLPillView: HoverView {
         layer?.borderWidth = pill.share == nil ? 0 : Draw.shareEdge.value
         layer?.borderColor = NSColor.black.withAlphaComponent(0.13).cgColor
         if pill.share != nil { label.textColor = palette.ink.secondary }
+        translationLine.render(search || pill.share != nil ? nil : pill.translation, shareQuote: !search && pill.share == nil && pill.shareQuote, palette: palette)
         stateChanged()
         needsLayout = true
     }
@@ -506,7 +511,16 @@ final class URLPillView: HoverView {
             trailing = badge.frame.minX - BadgeDraw.gap.value
         }
         let height = max(label.intrinsicContentSize.height, Metrics.urlPill.textMinHeight.value)
-        label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
+        if translationLine.isHidden {
+            label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
+        } else {
+            // Two lines: the host higher, the translation line under it (P45-a).
+            let text = label.intrinsicContentSize.height
+            label.frame = CGRect(x: leading, y: Draw.pillHostCenter.value - text / 2, width: max(0, trailing - leading), height: text)
+            let line = ceil(NSFont.systemFont(ofSize: Draw.pillSubtitleFont.value).boundingRectForFont.height)
+            translationLine.frame = CGRect(x: leading, y: Draw.pillSubtitleCenter.value - line / 2,
+                                           width: min(max(0, trailing - leading), translationLine.textWidth + 4), height: line)
+        }
     }
 
     /// Copy link and the site controls, shown while the pointer is over the sidebar and the tab has an address.
