@@ -1840,6 +1840,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P10-a 0.49%, P10-c 2.12%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P10-a 0.56%, P10-c 1.39%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -9606,6 +9613,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P37",
           "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P37-a 6.96%, P37-a-editor 8.70%, P37-b 4.63%, P37-b-editor 4.77%, P37-c 5.85%, P37-c-editor 4.82%, P37-c2 5.98%, P37-d 20.19%, P37-d-editor 3.62%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P37-a 1.51%, P37-b 1.32%, P37-c 2.56%, P37-d 1.61%, P37-d-main 0.24%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -10895,6 +10909,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P38",
           "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-a 2.53%, P38-b 5.10%, P38-c 6.44%, P38-d 4.09%, P38-e 2.26%, P38-f 3.50%, P38-g 4.03%, P38-h 4.35%, P38-max-list 6.63%, P38-max-on 5.20%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P38-a 2.61%, P38-b 2.88%, P38-c 3.78%, P38-d 1.56%, P38-e 1.89%, P38-f 2.75%, P38-g 1.20%, P38-h 4.35%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -11805,6 +11826,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P39",
           "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P39-a 5.35%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P39-a 4.63%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12302,6 +12330,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P45-a 7.07%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P45-a 0.56%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12409,6 +12444,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P46-a 5.81%, P46-b 6.09%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P46-a 0.29%, P46-b 0.43%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12522,6 +12564,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P47-a 5.92%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P47-a 0.29%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12628,6 +12677,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P48-a 5.35%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P48-a 0.27%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12662,7 +12718,7 @@
       "arc_evidence": "`ARC_AskArc`",
       "description": "Reads several pages and builds an answer page",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Read selected web sources in the correct browsing context and present an answer whose citations refer to those sources.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12740,6 +12796,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P49-cmd 18.89%；Brk 只有一条搜索建议（列表三行对五行）、选中行颜色不同，没有达到可判一致的程度。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P49-cmd 0.35%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12846,6 +12909,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P50-b 5.58%, P50-c 5.62%, P50-d 5.97%, P50-e 6.07%, P50-f 8.05%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P50-b 0.38%, P50-c 0.41%, P50-d 0.60%, P50-e 0.81%, P50-f 0.46%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
@@ -12979,6 +13049,13 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-max-list 6.69%, P38-max-on 5.01%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
+          "scope": "R5-1 合并后（main 2f752467）整站台：P38-max-list 3.85%, P38-max-on 2.98%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
         }
       ],
       "remaining": [
