@@ -116,9 +116,9 @@ enum TextLayoutAudit {
             let needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 100_000))
             report.note(text, frame: bounds, needed: needed)
             // An attributed string with no paragraph style wraps whatever the label's own line break says, and the frame
-            // of one line hides what wrapped, with no ellipsis.
+            // of one line hides what wrapped, with no ellipsis (unless the cell ends its last visible line with one).
             let atWidth = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: bounds.width, height: 100_000))
-            if !scrolls, atWidth.height > max(bounds.height, needed.height) + TextLayoutAudit.slack {
+            if !scrolls, !cell.truncatesLastVisibleLine, atWidth.height >= needed.height * 1.5, atWidth.height > bounds.height + TextLayoutAudit.slack {
                 add(.wrapOverflow, field, text, needed: atWidth)
                 return
             }

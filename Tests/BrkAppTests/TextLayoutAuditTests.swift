@@ -92,6 +92,15 @@ import XCTest
             }
         }
         XCTAssertEqual(title([:]).findings.map(\.problem), [.wrapOverflow])
+        let ended = audit { root in
+            let title = NSTextField(labelWithString: "")
+            title.lineBreakMode = .byTruncatingTail
+            title.cell?.truncatesLastVisibleLine = true
+            title.attributedStringValue = NSAttributedString(string: text, attributes: [.font: font])
+            title.frame = CGRect(x: 10, y: 10, width: 374, height: 20)
+            root.addSubview(title)
+        }
+        XCTAssertEqual(ended.findings, [], "the command bar's rows: their last visible line ends with an ellipsis")
         let tail = NSMutableParagraphStyle()
         tail.lineBreakMode = .byTruncatingTail
         XCTAssertEqual(title([.paragraphStyle: tail]).findings, [])
