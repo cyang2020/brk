@@ -308,6 +308,8 @@ struct HistoryColors {
     let field: NSColor
     /// A visit's host (Q05-a: #444746, darker than the time's grey).
     let detail: NSColor
+    /// An unchecked box's outline (Q05-a: #747775).
+    let checkbox: NSColor
 
     static func of(_ scheme: Scheme) -> HistoryColors {
         let light = scheme == .light
@@ -321,7 +323,8 @@ struct HistoryColors {
             card: light ? .white : LibraryColors.srgb(0x292A2D),
             line: light ? LibraryColors.srgb(0xC4C7C5) : LibraryColors.srgb(0x5F6368),
             field: light ? LibraryColors.srgb(0xECEFF7) : LibraryColors.srgb(0x303134),
-            detail: light ? LibraryColors.srgb(0x444746) : LibraryColors.srgb(0xC4C7C5)
+            detail: light ? LibraryColors.srgb(0x444746) : LibraryColors.srgb(0xC4C7C5),
+            checkbox: light ? LibraryColors.srgb(0x747775) : LibraryColors.srgb(0x9AA0A6)
         )
     }
 }
@@ -692,9 +695,11 @@ final class HistoryCheckbox: NSButton {
             NSColor.white.setStroke()
             tick.stroke()
         } else {
-            path.lineWidth = 2
-            colors.ink.withAlphaComponent(0.75).setStroke()
-            NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2).stroke()
+            // Q05-a: a 2 pt #747775 outline whose outer edge is the box's.
+            let outline = NSBezierPath(roundedRect: box.insetBy(dx: 1, dy: 1), xRadius: 2, yRadius: 2)
+            outline.lineWidth = 2
+            colors.checkbox.setStroke()
+            outline.stroke()
         }
     }
 }

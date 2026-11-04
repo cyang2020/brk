@@ -102,13 +102,12 @@ import BrkUIKit
         let size = Metrics.capture.hintCard.value, radius = Metrics.capture.hintCardRadius.value
         let card = CGRect(x: page.midX - size.width / 2, y: page.maxY - Metrics.capture.hintCardBottom.value - size.height, width: size.width, height: size.height)
         let path = NSBezierPath(roundedRect: card, xRadius: radius, yRadius: radius)
-        // Arc's card casts a wide dark shadow, plum on the left and navy on the right, heavier below the card (P33-a:
-        // the dimmed page darkens by about 12 just left of the card, 17 above it, 22 to 42 below it). The view is
-        // flipped, so a positive height offset moves the shadow up.
-        for (color, offset) in [(NSColor(srgbRed: 0.42, green: 0.22, blue: 0.32, alpha: 0.42), CGSize(width: -24, height: -10)),
-                                (NSColor(srgbRed: 0.12, green: 0.16, blue: 0.48, alpha: 0.48), CGSize(width: 24, height: -12))] {
+        // Arc's card casts a wide dark shadow, plum on the left and navy on the right, as deep above the card as below
+        // it (P33-a: the dimmed page darkens by about 12 just left of the card, 17 above it, 22 to 42 below it).
+        for (color, offset) in [(NSColor(srgbRed: 0.42, green: 0.22, blue: 0.32, alpha: 0.42), CGSize(width: -24, height: -2)),
+                                (NSColor(srgbRed: 0.12, green: 0.16, blue: 0.48, alpha: 0.48), CGSize(width: 24, height: -4))] {
             NSGraphicsContext.saveGraphicsState()
-            let shadow = NSShadow(); shadow.shadowColor = color; shadow.shadowBlurRadius = 40; shadow.shadowOffset = offset; shadow.set()
+            let shadow = NSShadow(); shadow.shadowColor = color; shadow.shadowBlurRadius = 44; shadow.shadowOffset = offset; shadow.set()
             NSColor.white.setFill(); path.fill()
             NSGraphicsContext.restoreGraphicsState()
         }
@@ -124,7 +123,7 @@ import BrkUIKit
     }
 
     /// "Next time, hold ⇧⌘ and drag your mouse to capture any time." in the toast style (P15-a), top right. P33-a: the
-    /// text is 14.5 pt, 13 in from the strip's ends, 7 from the key chip, which is 15 wider than its keys.
+    /// text is 14.5 pt, 12 and 13 in from the strip's ends, 6.5 from the key chip, which is 15 wider than its keys.
     private func drawShortcutLesson() {
         let font = NSFont.systemFont(ofSize: 14.5)
         let ink: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
@@ -132,7 +131,7 @@ import BrkUIKit
         let keys = NSAttributedString(string: "⇧⌘", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: NSColor.black])
         let after = NSAttributedString(string: "and drag your mouse to capture any time.", attributes: ink)
         let chip = CGSize(width: keys.size().width + 15, height: 28)
-        let width = 12 + before.size().width + 7 + chip.width + 7 + after.size().width + 13
+        let width = 12 + before.size().width + 6.5 + chip.width + 6.5 + after.size().width + 13
         let strip = CGRect(x: page.maxX - 8 - width, y: page.minY + 9, width: width, height: Metrics.capture.lessonHeight.value)
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.12); shadow.shadowBlurRadius = 6; shadow.shadowOffset = CGSize(width: 0, height: -1); shadow.set()
@@ -140,11 +139,11 @@ import BrkUIKit
         NSBezierPath(roundedRect: strip, xRadius: Metrics.capture.lessonRadius.value, yRadius: Metrics.capture.lessonRadius.value).fill()
         NSGraphicsContext.restoreGraphicsState()
         var x = strip.minX + 12
-        before.draw(at: CGPoint(x: x, y: strip.midY - before.size().height / 2)); x += before.size().width + 7
+        before.draw(at: CGPoint(x: x, y: strip.midY - before.size().height / 2)); x += before.size().width + 6.5
         let chipRect = CGRect(x: x, y: strip.midY - chip.height / 2, width: chip.width, height: chip.height)
         NSColor(srgbRed: 0xC9 / 255.0, green: 0xD5 / 255.0, blue: 0xD5 / 255.0, alpha: 1).setFill()
         NSBezierPath(roundedRect: chipRect, xRadius: 6, yRadius: 6).fill()
-        keys.draw(at: CGPoint(x: chipRect.midX - keys.size().width / 2, y: chipRect.midY - keys.size().height / 2)); x += chip.width + 7
+        keys.draw(at: CGPoint(x: chipRect.midX - keys.size().width / 2, y: chipRect.midY - keys.size().height / 2)); x += chip.width + 6.5
         after.draw(at: CGPoint(x: x, y: strip.midY - after.size().height / 2))
     }
 
