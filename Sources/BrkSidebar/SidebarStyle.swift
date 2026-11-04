@@ -32,7 +32,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let clearGap = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: the hairline stops 10 before Clear"))
     /// Tidy on the Today divider (P46-b, 2x): the hairline stops at x 241 px, the broom spans 259 to 273 px (y 790 to
     /// 813), "Tidy" 290 to 327 px, a separator at 344 px, Clear from 366 px.
-    let tidyGaps = Metric([9.0, 8.5, 8.5, 10.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
+    let tidyGaps = Metric([9.0, 6.5, 6.5, 9.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
     /// The auto-archive banner's padding and its × (the banner itself keeps the sidebar's 8 pt inset and 68 pt height).
     let educationInset = Metric(8.0, .guess("Arc's banner was not captured (P16-a needs a new Arc profile); the rows' 8 pt inset"))
     let educationClose = Metric(18.0, .guess("a small × in the banner's top right corner"))

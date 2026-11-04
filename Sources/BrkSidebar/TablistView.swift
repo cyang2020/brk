@@ -980,7 +980,8 @@ final class TidyButton: HoverView {
 
     override var fittingSize: NSSize {
         let g = Draw.tidyGlyph.value, text = label.intrinsicContentSize
-        return NSSize(width: g[1] + Draw.tidyGaps.value[1] - (g[1] - g[0]) / 2 + text.width, height: max(g[1], text.height))
+        // The label's cell, not its intrinsic size, which cut the last letter; the cell draws the word 2 in from each side.
+        return NSSize(width: g[0] + Draw.tidyGaps.value[1] + label.cellWidth, height: max(g[1], text.height))
     }
 
     func render(palette: Palette, busy: Bool) {
@@ -994,7 +995,7 @@ final class TidyButton: HoverView {
         let g = Draw.tidyGlyph.value, text = label.intrinsicContentSize
         // The broom is drawn in a square; its strokes take the middle 7 of its 11.5 points.
         glyph.frame = CGRect(x: -(g[1] - g[0]) / 2, y: (bounds.height - g[1]) / 2, width: g[1], height: g[1])
-        label.frame = CGRect(x: bounds.width - text.width, y: (bounds.height - text.height) / 2, width: text.width, height: text.height)
+        label.frame = CGRect(x: bounds.width - label.cellWidth, y: (bounds.height - text.height) / 2, width: label.cellWidth, height: text.height)
     }
 
     override func stateChanged() {

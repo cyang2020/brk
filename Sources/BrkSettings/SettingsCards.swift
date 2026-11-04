@@ -14,14 +14,25 @@ private var C: SettingsCardMetricsTable { CardMetrics }
 /// The window's colours, measured on the captures (light appearance) and given a dark counterpart.
 enum SettingsStyle {
     /// Row labels: #505050 on the card.
-    static let text = Color.primary.opacity(0.8)
-    /// Descriptions under a title (#8C8C8C).
-    static let secondaryText = Color.primary.opacity(0.53)
+    static let text = Color.primary.opacity(0.855)
+    /// Descriptions under a title (#9A9A9A at the darkest).
+    static let secondaryText = Color.primary.opacity(0.51)
     /// Section headers above a card ("Your Data and Settings", #ADADAD) and list headers (#9E9E9E).
     static let header = Color.primary.opacity(0.42)
     /// The small notes ("Note: This only affects Favorites and Pinned tabs", #9C9C9C).
     static let note = Color.primary.opacity(0.45)
+    /// Peek's italic note, a shade darker than the Advanced subtitle (#9C9C9C).
+    static let italicNote = Color.primary.opacity(0.48)
     static let link = Color(nsColor: .linkColor)
+    /// The blue words inside a Max description (P38-max-list: #95B4EA, paler than a plain link).
+    static let descriptionLink = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor.linkColor.withAlphaComponent(0.6)
+            : NSColor(srgbRed: 0x95 / 255.0, green: 0xB4 / 255.0, blue: 0xEA / 255.0, alpha: 1)
+    })
+    /// Push buttons' and pop-ups' titles (P38-a, d, g: #4B4B4B to #4F4F4F on the button's grey, less than the system's label colour).
+    static let controlTitle = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.8) : NSColor(white: 0, alpha: 0.69)
+    }
     static let cardFill = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.05) : NSColor(white: 0xFC / 255.0, alpha: 1)
     })
@@ -272,7 +283,7 @@ struct SettingsCardMetricsTable: MetricGroup {
     let dividerInset = Metric(10.0, .anatomy("\(capture)/P38-a-arc.png: the second card's hairline spans x 148 to 1220 px"))
     let controlGap = Metric(8.0, .guess("space between a row's label and its control"))
     let switchSize = Metric(CGSize(width: 36, height: 16), .anatomy("\(capture)/P38-d-arc.png: the switch track spans x 1148 to 1220 px, y 520 to 552 px (AppKit's mini switch)"))
-    let popUpChrome = Metric(44.0, .anatomy("\(capture)/P38-f-arc.png: '6 hours (default)' is about 104 pt of text in a 148.5 pt pop-up"))
+    let popUpChrome = Metric(45.0, .anatomy("\(capture)/P38-f-arc.png: '6 hours (default)' starts at x 896 px, its arrows end at 1148 px"))
     let popUpImageGap = Metric(4.0, .guess("space after a pop-up item's icon"))
     let profilePopUpMinimum = Metric(135.0, .anatomy("\(capture)/P38-d-arc.png: the Google and Downloads pop-ups are 135 to 136 pt wide"))
     let rowHeight = Metric(36.0, .anatomy("\(capture)/P38-a-arc.png: switch rows 216 to 288 to 360 px"))
@@ -281,7 +292,7 @@ struct SettingsCardMetricsTable: MetricGroup {
     let rowIconSize = Metric(20.0, .anatomy("\(capture)/P38-g-arc.png: the speaker square spans x 148 to 188 px"))
     let rowIconRadiusRatio = Metric(0.24, .guess("the Advanced squares' corner, about 5 pt of 20"))
     let rowIconGlyphRatio = Metric(0.55, .guess("the white symbol inside an Advanced square"))
-    let rowIconGap = Metric(9.0, .anatomy("\(capture)/P38-g-arc.png: square ends at x 188 px, its label starts at 206 px"))
+    let rowIconGap = Metric(8.0, .anatomy("\(capture)/P38-g-arc.png: square ends at x 188 px, its label's ink starts at 206 px (the glyph's own bearing is 2 px)"))
     let advancedCardSpacing = Metric(10.0, .anatomy("\(capture)/P38-g-arc.png: card 1 ends at y 378 px, card 2 starts at 398 px"))
     let bottomButtonsGap = Metric(10.0, .anatomy("\(capture)/P38-g-arc.png: last card ends near y 1008 px, buttons start at 1028 px"))
     let buttonGap = Metric(8.0, .anatomy("\(capture)/P38-g-arc.png: More Settings… ends at x 366 px, the next button starts at 382 px"))
@@ -291,7 +302,10 @@ struct SettingsCardMetricsTable: MetricGroup {
     let popUpTrailing = Metric(26.0, .anatomy("\(capture)/P38-f-arc.png: the pop-up ends at x 1168 px, the row's switches at 1220 px"))
     let wrappedLabelWidth = Metric(340.0, .anatomy("\(capture)/P38-a-arc.png: 'Manage your default search engine, Auto-Archive, and' wraps at x 806 px"))
     let subtitleGap = Metric(4.0, .anatomy("\(capture)/P38-f-arc.png: the Peek title and its Note are 40 px apart"))
-    let noteFontSize = Metric(12.0, .anatomy("\(capture)/P38-g-arc.png: the Shared Quotes subtitle is a size smaller than its title"))
+    let noteFontSize = Metric(11.0, .anatomy("\(capture)/P38-g-arc.png: the Shared Quotes subtitle spans x 206 to 823 px, an 11 pt line (12 pt is 659 px)"))
+    let peekNoteFontSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Note spans x 150 to 700 px, a 12 pt italic line (13 pt is 589 px wide)"))
+    /// Arc's pop-up row keeps its label and pop-up half a point above the row's middle.
+    let popUpRowBottom = Metric(1.0, .anatomy("\(capture)/P38-f-arc.png: the row spans y 826 to 914 px, the label is centred at 871 px"))
     let introTop = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the banner's wave is lowest at y 446 px, the paragraph's first line is centred at 511 px"))
     let introToCard = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the paragraph's last line is centred at 543 px, the card starts at 606 px"))
     let sheetSize = Metric(CGSize(width: 422, height: 372), .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the sheet spans x 263 to 1105 px, y 278 to 1022 px"))

@@ -50,16 +50,19 @@ struct MaxPane: View {
                         .frame(width: M.enableIcon.value, height: M.enableIcon.value)
                         .background(RoundedRectangle(cornerRadius: M.enableIconRadius.value, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: M.enableIconRadius.value, style: .continuous).strokeBorder(SettingsStyle.cardBorder))
-                    CardLabel(MaxCopy.enable)
+                    CardLabel(MaxCopy.enable).padding(.top, M.enableLabelDrop.value)
                 }
             } trailing: {
                 EnableMaxButton(title: on ? MaxCopy.turnOff : MaxCopy.turnOn, prominent: !on) { send(.enable(!on)) }
                     .padding(.top, M.enableButtonDrop.value)
             }
             CardDivider()
-            SwitchRow(title: MaxCopy.autoEnable, field: "autoEnableFutureFeatures", isOn: max.settings.autoEnableFutureFeatures == true,
-                      height: M.autoRowHeight.value) { send(.autoEnableFutureFeatures($0)) }
-                .padding(.bottom, M.autoRowBottom.value)
+            CardRow(height: M.autoRowHeight.value) {
+                CardLabel(MaxCopy.autoEnable).padding(.leading, M.autoLabelInset.value)
+            } trailing: {
+                SettingsSwitch(field: "autoEnableFutureFeatures", isOn: max.settings.autoEnableFutureFeatures == true) { send(.autoEnableFutureFeatures($0)) }
+            }
+            .padding(.bottom, M.autoRowBottom.value)
         }
     }
 
@@ -93,7 +96,7 @@ struct MaxPane: View {
             switch part {
             case .text(let words): result + Text(words)
             case .broom: result + Text(Image(nsImage: ArcGlyphs.broom(size: M.descriptionSize.value + 2))).foregroundColor(SettingsStyle.secondaryText)
-            case .link(let words, _): result + Text(words).foregroundColor(SettingsStyle.link)
+            case .link(let words, _): result + Text(words).foregroundColor(SettingsStyle.descriptionLink)
             }
         }
         return body.font(.system(size: M.descriptionSize.value)).foregroundStyle(SettingsStyle.secondaryText)
@@ -319,6 +322,8 @@ struct MaxPaneMetricsTable: MetricGroup {
     let enableRowHeight = Metric(45.0, .anatomy("\(capture): the Enable Max row spans y 592 to 682 px"))
     let autoRowHeight = Metric(32.0, .anatomy("\(capture): the Automatically enable row spans y 684 to 758 px, its switch centred at 716 px"))
     let autoRowBottom = Metric(6.0, .anatomy("\(capture): the row's switch is centred 32 px below its top and 42 px above the card's edge"))
+    let autoLabelInset = Metric(3.0, .anatomy("\(capture): 'Automatically enable' starts at x 155 px, the other rows' text at 149 px"))
+    let enableLabelDrop = Metric(2.0, .anatomy("\(capture): 'Enable Max' spans y 629 to 649 px, a point lower than the row's middle"))
     let enableIcon = Metric(24.0, .anatomy("\(capture): the white icon square spans x 148 to 196 px"))
     let enableGlyph = Metric(17.0, .anatomy("\(capture): the flower inside spans x 156 to 188 px"))
     let enableIconRadius = Metric(6.0, .guess("the icon square's corner"))
@@ -332,11 +337,11 @@ struct MaxPaneMetricsTable: MetricGroup {
     let textToSwitch = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
     let thumbGap = Metric(17.0, .anatomy("\(capture): the thumbnail ends at x 330 px, the title starts at 368 px"))
     let titleTop = Metric(10.0, .anatomy("\(capture): the title is centred at y 845 px in a row that starts at 808 px"))
-    let titleGap = Metric(4.5, .anatomy("\(capture): title centred at y 845 px, the description's first line at 884 px"))
+    let titleGap = Metric(4.0, .anatomy("\(capture): a title's top at y 996 px, the description's first line at 1035 px"))
     let descriptionSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
-    let descriptionLeading = Metric(2.0, .anatomy("\(capture): description lines 32 px apart"))
+    let descriptionLeading = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: description lines 28 px apart, an 11 pt line's own height"))
     let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
-    let footerTop = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
+    let footerTop = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
     let footerGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
     let footerBottom = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
     let popoverWidth = Metric(320.0, .guess("the privacy note's popover"))

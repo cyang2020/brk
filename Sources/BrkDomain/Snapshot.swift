@@ -172,6 +172,8 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
     /// pointer (P46-b); `tidying` while its plan is being made.
     public var canTidy: Bool = false
     public var tidying: Bool = false
+    /// Today only: Max's Tidy Tabs is on, however many tabs there are; Arc keeps the divider row taller (P45-a, P46-a).
+    public var tidyEnabled: Bool = false
 }
 
 public enum Row: Sendable, Equatable, Codable {

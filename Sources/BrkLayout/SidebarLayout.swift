@@ -154,7 +154,7 @@ public enum TablistLayout {
         }
         add(.topSpacer, height: t.topSpacerHeight.value)
         if !space.pinned.collapsed || space.pinned.peeked { addRows(space.pinned.rows, depth: 0) }
-        if divider && !space.pinned.rows.isEmpty && !space.today.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value) }
+        if divider && !space.pinned.rows.isEmpty && !space.today.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value + (space.today.tidyEnabled ? t.tidyDividerExtra.value : 0)) }
         add(.newTab, height: t.rowHeight.value)
         addRows(space.today.rows, depth: 0)
         return out

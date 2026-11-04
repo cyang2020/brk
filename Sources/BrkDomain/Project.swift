@@ -256,6 +256,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     )
     if doc.kind == .standard, state.doc.settings.max.tidyTabs {
         let todayTabs = (tree[space.todayRoot]?.children ?? []).filter { tree[$0]?.kind == .tab }.count
+        spaceSnapshot.today.tidyEnabled = true
         spaceSnapshot.today.canTidy = todayTabs > 6
         spaceSnapshot.today.tidying = state.session.ai.tidying.contains(id)
     }

@@ -102,7 +102,7 @@ struct ShortcutsPane: View {
             }
             Text(ShortcutsCopy.title).font(.system(size: K.titleSize.value, weight: .semibold)).foregroundStyle(.primary)
                 .padding(.top, K.titleTop.value)
-            Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
+            Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(Color.primary.opacity(K.subtitleOpacity.value))
                 .lineSpacing(K.subtitleLeading.value)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, K.subtitleTop.value)
@@ -380,7 +380,7 @@ final class ChordRecorderView: NSView {
         label.stringValue = text
         // Arc's key caps (P38-e): a 12 pt chord, a shade lighter than the row titles.
         label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : ShortcutsPaneMetrics.capFont.value)
-        label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor.withAlphaComponent(0.85)
+        label.textColor = isRecording ? .secondaryLabelColor : .labelColor.withAlphaComponent(ShortcutsPaneMetrics.capOpacity.value)
         layer?.borderColor = (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
         layer?.borderWidth = isRecording ? 2 * ShortcutsPaneMetrics.recorderBorder.value : ShortcutsPaneMetrics.recorderBorder.value
         layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
@@ -477,6 +477,7 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38/P38-e-arc.png"
     let recorderSize = Metric(CGSize(width: 64, height: 24), .anatomy("\(capture): the key caps span x 632 to 760 px, y 530 to 578 px"))
     let recorderRadius = Metric(6.0, .guess("the key cap's corner"))
+    let capOpacity = Metric(0.6, .anatomy("\(capture): a chord and '---' are #858585 at their darkest"))
     let capFont = Metric(12.0, .anatomy("\(capture): ⌃⇧= spans x 668 to 723 px, 17 px tall, a 12 pt line"))
     let recorderBorder = Metric(1.0, .anatomy("\(capture): a 2 px grey edge"))
     let sectionSpacing = Metric(12.0, .guess("space between the pane's header, filter row and sections"))
@@ -507,11 +508,12 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let listPadding = Metric(8.0, .guess("space under the last row"))
     let keyGap = Metric(1.5, .anatomy("\(capture): the first key cap ends at x 970 px, the second starts at 974 px"))
     let titleSize = Metric(14.0, .anatomy("\(capture): 'Custom Shortcuts' spans x 841 to 1083 px, a 14 pt semibold line"))
-    let titleTop = Metric(23.5, .anatomy("\(capture): the key caps end at y 477 px, the heading is centred at 542 px"))
+    let titleTop = Metric(23.0, .anatomy("\(capture): the key caps end at y 477 px, the heading is centred at 542 px"))
     let subtitleSize = Metric(12.0, .anatomy("\(capture): 'Change shortcuts for your favorite' spans x 841 to 1226 px, a 12 pt line"))
     let subtitleTop = Metric(7.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
-    let subtitleLeading = Metric(1.0, .anatomy("\(capture): paragraph lines 30 px apart"))
+    let subtitleLeading = Metric(0.0, .anatomy("\(capture): paragraph lines 30 px apart, a 12 pt line's own height"))
+    let subtitleOpacity = Metric(0.55, .anatomy("\(capture): the side paragraph is #8F8F8F at its darkest"))
     let inkOpacity = Metric(0.6, .anatomy("\(capture): 'Default Shortcuts' and the side paragraph are darker than the pane's grey descriptions"))
-    let essentialsWidth = Metric(215.0, .anatomy("\(capture): Learn the Essential Shortcuts spans x 602 to 1032 px"))
+    let essentialsWidth = Metric(215.5, .anatomy("\(capture): Learn the Essential Shortcuts spans x 601 to 1032 px"))
     let moreGap = Metric(1.0, .anatomy("\(capture): Reset All Shortcuts ends at x 1118 px, the … circle starts at 1127 px"))
 }

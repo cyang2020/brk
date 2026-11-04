@@ -42,7 +42,7 @@ struct IconPane: View {
                 Text(AppIconArt.name(choice)).font(.system(size: I.nameSize.value, weight: .semibold)).foregroundStyle(.primary)
                 if choice == current {
                     Text(IconCopy.current).font(.system(size: I.badgeSize.value, weight: .semibold)).kerning(I.badgeKerning.value)
-                        .foregroundStyle(Color(nsColor: .systemBlue))
+                        .foregroundStyle(ArtColor.keyBlue)
                 }
             }
             .padding(.leading, I.nameLeading.value)

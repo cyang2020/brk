@@ -20,6 +20,10 @@ final class SiteControlsOverview: NSView {
     private let extensionsTitle = SectionTitle("Extensions", field: "siteExtensionsDetails")
     private let settingsTitle = SectionTitle("Settings", field: "siteSettingsDetails")
     private let developer = SiteRow(title: "Developer Mode", symbol: "hammer.fill", field: "siteDeveloperMode")
+    /// Arc's row for a secure page (P36-b): the site's own switch for automatic Picture in Picture. Chromium offers it
+    /// only in secure contexts, so the plain http page of P36-a has no such row.
+    private let pictureInPicture = SiteRow(title: "Automatic Picture-In-Picture", symbol: "gearshape.fill", field: "sitePictureInPicture",
+                                           onColor: NSColor(srgbRed: 0, green: 0x63 / 255.0, blue: 0x62 / 255.0, alpha: 1))
     private let divider = NSView()
     private let security = SecurityChip(field: "siteSecurity")
     private let more = SiteTile(symbol: "ellipsis", tip: "More Site Settings", field: "siteMore", filled: true, round: true)
@@ -34,8 +38,9 @@ final class SiteControlsOverview: NSView {
         }
         for control in [extensionsTitle, settingsTitle, security, more] as [NSControl] { control.target = self; control.action = #selector(details) }
         developer.target = self; developer.action = #selector(toggleDeveloperMode)
+        pictureInPicture.target = self; pictureInPicture.action = #selector(togglePictureInPicture)
         divider.wantsLayer = true
-        for view in [share, boost, capture, fullPage, extensionsTitle, add, settingsTitle, developer, divider, security, more] as [NSView] { addSubview(view) }
+        for view in [share, boost, capture, fullPage, extensionsTitle, add, settingsTitle, developer, pictureInPicture, divider, security, more] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -68,6 +73,10 @@ final class SiteControlsOverview: NSView {
         }
         developer.subtitle = value.rule.developerMode == true ? "On" : "Off"
         developer.isOn = value.rule.developerMode == true
+        let allowed = value.rule.pictureInPictureExempt != true
+        pictureInPicture.subtitle = allowed ? "Allowed" : "Blocked"
+        pictureInPicture.isOn = allowed
+        pictureInPicture.isHidden = !(value.target != nil && value.secure)
         // Only web pages have the row (Arc's History page has none). Secure needs https with a clean certificate and
         // no insecure content (`SiteControlSnapshot.secure`, from Chromium's SSL status).
         let web = value.target != nil
@@ -85,13 +94,14 @@ final class SiteControlsOverview: NSView {
         for (tile, rect) in zip([share, boost, capture, fullPage], f.actions) { tile.frame = rect }
         for (tile, rect) in zip(extensionTiles + [add], f.extensions) { tile.frame = rect }
         extensionsTitle.frame = f.extensionsTitle; settingsTitle.frame = f.settingsTitle; developer.frame = f.developer
+        pictureInPicture.frame = f.pictureInPicture
         divider.frame = f.divider; security.frame = f.security; more.frame = f.more
         divider.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
     }
 
     private struct Frames {
         var actions: [CGRect] = [], extensions: [CGRect] = []
-        var extensionsTitle = CGRect.zero, settingsTitle = CGRect.zero, developer = CGRect.zero
+        var extensionsTitle = CGRect.zero, settingsTitle = CGRect.zero, developer = CGRect.zero, pictureInPicture = CGRect.zero
         var divider = CGRect.zero, security = CGRect.zero, more = CGRect.zero
         var height = 0.0
     }
@@ -114,9 +124,14 @@ final class SiteControlsOverview: NSView {
         f.settingsTitle = CGRect(x: inset, y: settingsBaseline - ascender, width: width - 2 * inset, height: titleHeight)
         let rowTop = settingsBaseline + m.rowGap.value
         f.developer = CGRect(x: inset, y: rowTop, width: width - 2 * inset, height: m.rowIcon.value)
-        f.height = rowTop + m.rowIcon.value + m.bottom.value
+        var lastRow = f.developer
+        if !pictureInPicture.isHidden {
+            f.pictureInPicture = CGRect(x: inset, y: f.developer.maxY + m.rowSpacing.value, width: width - 2 * inset, height: m.rowIcon.value)
+            lastRow = f.pictureInPicture
+        }
+        f.height = lastRow.maxY + m.bottom.value
         guard !security.isHidden else { return f }
-        f.divider = CGRect(x: inset, y: f.developer.maxY + m.securityDividerGap.value, width: width - 2 * inset, height: 1)
+        f.divider = CGRect(x: inset, y: lastRow.maxY + m.securityDividerGap.value, width: width - 2 * inset, height: 1)
         let row = f.divider.maxY + m.securityGap.value, height = m.securityHeight.value
         f.security = CGRect(x: inset, y: row, width: security.fittingWidth, height: height)
         f.more = CGRect(x: width - inset - height, y: row, width: height, height: height)
@@ -136,6 +151,12 @@ final class SiteControlsOverview: NSView {
     @objc private func addExtension() { dispatch?(.site(.addExtension)) }
     @objc private func invokeExtension(_ sender: SiteTile) { if let id = sender.extensionID { run(.site(.invokeExtension(id))) } }
     @objc private func details() { openDetails?() }
+    @objc private func togglePictureInPicture() {
+        guard let value, let target = value.target else { NSSound.beep(); return }
+        var rule = value.rule
+        rule.pictureInPictureExempt = rule.pictureInPictureExempt != true
+        dispatch?(.site(.rule(target, rule)))
+    }
     @objc private func toggleDeveloperMode() {
         guard let value, let target = value.target else { NSSound.beep(); return }
         var rule = value.rule
@@ -299,10 +320,10 @@ final class SectionTitle: NSButton {
 final class SiteRow: NSButton {
     var subtitle = "Off" { didSet { needsDisplay = true } }
     var isOn = false { didSet { needsDisplay = true } }
-    private let text: String, symbol: String
+    private let text: String, symbol: String, onColor: NSColor
 
-    init(title: String, symbol: String, field: String) {
-        self.text = title; self.symbol = symbol
+    init(title: String, symbol: String, field: String, onColor: NSColor = .controlAccentColor) {
+        self.text = title; self.symbol = symbol; self.onColor = onColor
         super.init(frame: .zero)
         self.title = ""; isBordered = false; setButtonType(.momentaryChange)
         setAccessibilityLabel(title)
@@ -316,7 +337,7 @@ final class SiteRow: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let m = Metrics.siteControls, size = m.rowIcon.value
         let circle = NSBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size))
-        (isOn ? NSColor.controlAccentColor : NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.3 : 0.22)).setFill()
+        (isOn ? onColor : NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.3 : 0.22)).setFill()
         circle.fill()
         let configuration = NSImage.SymbolConfiguration(pointSize: m.rowGlyph.value, weight: .medium).applying(.init(paletteColors: [.white]))
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) {
@@ -324,8 +345,10 @@ final class SiteRow: NSButton {
             image.draw(in: rect.integral, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
         let font = NSFont.systemFont(ofSize: m.rowTitleFont.value, weight: .semibold)
-        NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.9)])
-            .draw(at: CGPoint(x: m.rowText.value - m.inset.value, y: m.rowTitleBaseline.value - font.ascender))
+        let cut = NSMutableParagraphStyle()
+        cut.lineBreakMode = .byTruncatingTail
+        NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.9), .paragraphStyle: cut])
+            .draw(in: CGRect(x: m.rowText.value - m.inset.value, y: m.rowTitleBaseline.value - font.ascender, width: m.rowTitleWidth.value, height: ceil(font.ascender - font.descender)))
         let small = NSFont.systemFont(ofSize: m.rowFont.value)
         NSAttributedString(string: subtitle, attributes: [.font: small, .foregroundColor: NSColor.secondaryLabelColor])
             .draw(at: CGPoint(x: m.rowText.value - m.inset.value, y: m.rowSubtitleBaseline.value - small.ascender))
