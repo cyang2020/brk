@@ -630,12 +630,17 @@ enum PageSiteFixScenarios {
             for character in text {
                 guard let (code, shift) = codes[character] else { throw Check(description: "no key code for \(character)") }
                 guard try app.native(owner).isKey else { throw Check(description: "Brk's window lost key status while typing") }
-                for down in [true, false] {
-                    guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { continue }
-                    if shift { event.flags = .maskShift }
+                // Shift is its own key down and up, and every event carries its flags, so no state carries over.
+                func post(_ key: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+                    guard let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down) else { return }
+                    event.flags = flags
                     event.post(tap: .cghidEventTap)
                     usleep(30_000)
                 }
+                let flags: CGEventFlags = shift ? .maskShift : []
+                if shift { post(56, true, .maskShift) }
+                post(code, true, flags); post(code, false, flags)
+                if shift { post(56, false, []) }
             }
         }
         func typed(_ text: String) throws -> String {
