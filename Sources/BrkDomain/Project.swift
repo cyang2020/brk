@@ -669,6 +669,7 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
         }
         result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
     }
+    result.littleTip = !state.doc.tabPreferences.littleTipDismissed && state.doc.windows[window]?.kind == .little
     // Only a fresh profile's first space explains auto-archive; a space made later does not (Arc 1.170).
     if !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
        let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }),

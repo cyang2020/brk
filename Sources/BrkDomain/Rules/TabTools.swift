@@ -205,6 +205,8 @@ extension Work {
         case .quoteLinkCopied: toast(ToastCopy.copiedLink, in: window, subtitle: ToastCopy.withQuote)
         case .dismissArchiveEducation:
             if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
+        case .dismissLittleTip:
+            state.doc.tabPreferences.littleTipDismissed = true
         case .dismissFavoritesHint:
             if w.kind == .standard { state.doc.tabPreferences.favoritesHintDismissed = true }
         case .preferences(let favorites, let previews):

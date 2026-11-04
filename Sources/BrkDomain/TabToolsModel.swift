@@ -33,6 +33,8 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     case mute(ItemRef)
     case dismissToast
     case dismissArchiveEducation
+    /// The × of the Little window's first-run tip ("Links Open in Little Arc").
+    case dismissLittleTip
     /// The × on the empty favorites box (Arc's "Drag to add Favorites"): the box goes away for good.
     case dismissFavoritesHint
     /// ⌘Z while an undo toast shows: brings back what the cleared Today or the deleted space held.
@@ -78,6 +80,7 @@ struct TabPreferences: Equatable, Sendable, Codable {
     var hoverPreviews = false
     var archiveEducationDismissed = false
     var favoritesHintDismissed = false
+    var littleTipDismissed = false
     /// Hosts whose Favorite hides its unread dot (Arc: `topAppsBadgingDisabledHosts`).
     var badgeHiddenHosts: Set<String> = []
     /// Hosts whose calendar Favorite hides the time to the next meeting (Arc: `topAppsSubtitleDisabledHosts`).
@@ -86,7 +89,7 @@ struct TabPreferences: Equatable, Sendable, Codable {
     var previewHiddenHosts: Set<String> = []
 
     private enum CodingKeys: String, CodingKey {
-        case includeFavoritesInNumbers, hoverPreviews, archiveEducationDismissed, favoritesHintDismissed, badgeHiddenHosts, subtitleHiddenHosts, previewHiddenHosts
+        case includeFavoritesInNumbers, hoverPreviews, archiveEducationDismissed, favoritesHintDismissed, littleTipDismissed, badgeHiddenHosts, subtitleHiddenHosts, previewHiddenHosts
     }
 
     init() {}
@@ -98,6 +101,7 @@ struct TabPreferences: Equatable, Sendable, Codable {
         hoverPreviews = try c.decodeIfPresent(Bool.self, forKey: .hoverPreviews) ?? false
         archiveEducationDismissed = try c.decodeIfPresent(Bool.self, forKey: .archiveEducationDismissed) ?? false
         favoritesHintDismissed = try c.decodeIfPresent(Bool.self, forKey: .favoritesHintDismissed) ?? false
+        littleTipDismissed = try c.decodeIfPresent(Bool.self, forKey: .littleTipDismissed) ?? false
         badgeHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .badgeHiddenHosts) ?? []
         subtitleHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .subtitleHiddenHosts) ?? []
         previewHiddenHosts = try c.decodeIfPresent(Set<String>.self, forKey: .previewHiddenHosts) ?? []
@@ -110,6 +114,7 @@ struct TabPreferences: Equatable, Sendable, Codable {
         try c.encode(hoverPreviews, forKey: .hoverPreviews)
         try c.encode(archiveEducationDismissed, forKey: .archiveEducationDismissed)
         if favoritesHintDismissed { try c.encode(true, forKey: .favoritesHintDismissed) }
+        if littleTipDismissed { try c.encode(true, forKey: .littleTipDismissed) }
         if !badgeHiddenHosts.isEmpty { try c.encode(badgeHiddenHosts.sorted(), forKey: .badgeHiddenHosts) }
         if !subtitleHiddenHosts.isEmpty { try c.encode(subtitleHiddenHosts.sorted(), forKey: .subtitleHiddenHosts) }
         if !previewHiddenHosts.isEmpty { try c.encode(previewHiddenHosts.sorted(), forKey: .previewHiddenHosts) }
@@ -208,6 +213,8 @@ public struct TabToolsSnapshot: Equatable, Sendable, Codable {
     /// The auto-archive banner at the bottom of a fresh profile's first space: the profile's threshold ("12 hours")
     /// for Arc's "Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in Settings."
     public var archiveEducation: String?
+    /// A Little window's first-run tip is still to be dismissed.
+    public var littleTip = false
     public var hoverPreviews = false
     public var includeFavoritesInNumbers = true
 }

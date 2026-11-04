@@ -372,11 +372,11 @@ final class PeekRoundButton: NSView {
 
 /// Shades of the space's primary color, same hue, for chrome Arc tints with the theme: the split view's focus ring
 /// and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
-enum ThemeAccent {
+public enum ThemeAccent {
     /// Light: the primary's hue and saturation (HSL) at the lightness whose relative luminance is Arc's 0.097. That is
     /// the ring in both Arc captures, which is also Arc's folder outline there: #725137 under the #F2EAE4 theme
     /// (P23-a) and #006362 under the cyan one (P23-c, the round-2 Arc space). Dark keeps a light shade.
-    static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
+    public static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
         guard theme.scheme == .light else { return shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: 0.8) }
         return luminanceMatched(theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1), luminance: ThemeAccentDraw.ringLuminance.value)
     }

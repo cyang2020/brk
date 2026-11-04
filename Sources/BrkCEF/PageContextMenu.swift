@@ -1,4 +1,5 @@
 import AppKit
+import BrkBase
 import BrkEngine
 import CefKit
 
@@ -24,11 +25,15 @@ import CefKit
     /// Brk's own row's command: outside Chromium's ids (MENU_ID_USER_FIRST 26500 to MENU_ID_USER_LAST 28500); Chromium
     /// never sees it, the menu cancels and `onTranslate` runs instead.
     static let translateCommand = 28_400
+    /// Arc's own link rows (Q07-b), handled the same way: "Open Link in Split View" and "Open Link in Little Arc" (with
+    /// the product's name) go in after "Open Link in New Window".
+    static let splitLinkCommand = 28_401, littleLinkCommand = 28_402
 
     func show(_ model: CefMenuModel, at point: CGPoint, in surface: NSView, link: Bool = false, translateTo: String? = nil,
-              callback: CefRunContextMenuCallback, onTranslate: @escaping @MainActor () -> Void = {}, valid: @escaping @MainActor () -> Bool) {
+              callback: CefRunContextMenuCallback, onTranslate: @escaping @MainActor () -> Void = {},
+              onLink: @escaping @MainActor (PageLinkTarget) -> Void = { _ in }, valid: @escaping @MainActor () -> Bool) {
         cancel()
-        let items = Self.withTranslate(Self.trimmed(snapshot(model), link: link), translateTo)
+        let items = Self.withLinkRows(Self.withTranslate(Self.trimmed(snapshot(model), link: link), translateTo), link: link)
         guard !items.isEmpty, let owner = surface.window else { callback.cancel(); return }
         let request = Pending(callback)
         pending = request
@@ -43,7 +48,12 @@ import CefKit
             guard self.pending === request else { return }
             self.pending = nil
             if let command = request.selected, valid() {
-                if command == Self.translateCommand { callback.cancel(); onTranslate() } else { callback.select(commandID: command) }
+                switch command {
+                case Self.translateCommand: callback.cancel(); onTranslate()
+                case Self.splitLinkCommand: callback.cancel(); onLink(.splitView)
+                case Self.littleLinkCommand: callback.cancel(); onLink(.littleWindow)
+                default: callback.select(commandID: command)
+                }
             } else { callback.cancel() }
         }
     }
@@ -65,11 +75,13 @@ import CefKit
         }
     }
 
-    /// Chromium rows Arc 1.170 does not show (Q07): the QR code row everywhere; on a plain link everything but
-    /// opening, saving and copying it, Copy and Inspect. Separators left next to each other or at an end go too.
+    /// Chromium rows Arc 1.170 does not show (Q07): the QR code row everywhere. On a plain link (Q07-b, Arc's menu with
+    /// the link's words highlighted): opening, saving and copying it, Copy, Copy Link to Highlight, Search, Print…,
+    /// Inspect and Speech. Separators left next to each other or at an end go too.
     static let removed: Set<String> = ["Create QR Code for this Page", "Create QR Code for this Image"]
     static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window", "Open Link in Incognito Window",
-                                        "Save Link As…", "Copy Link Address", "Copy", "Inspect"]
+                                        "Save Link As…", "Copy Link Address", "Copy", "Copy Link to Highlight", "Print…", "Inspect", "Speech"]
+    static func isLinkRow(_ title: String) -> Bool { linkRows.contains(title) || (title.hasPrefix("Search ") && title.contains(" for ")) }
 
     /// "Translate to English" closes the Save As… / Print… / Cast… group, as in Arc's page menu (Q07-a); without that
     /// group it goes before the last group.
@@ -83,10 +95,18 @@ import CefKit
         return out
     }
 
+    private static func withLinkRows(_ items: [Item], link: Bool) -> [Item] {
+        guard link, let window = items.firstIndex(where: { $0.title == "Open Link in New Window" }) else { return items }
+        func row(_ title: String, _ command: Int) -> Item { Item(title: title, command: command, separator: false, enabled: true, checked: false, children: nil) }
+        var out = items
+        out.insert(contentsOf: [row("Open Link in Split View", splitLinkCommand), row("Open Link in Little \(Product.name)", littleLinkCommand)], at: window + 1)
+        return out
+    }
+
     private static func trimmed(_ items: [Item], link: Bool) -> [Item] {
         let kept = items.filter { item in
             let title = item.title.replacingOccurrences(of: "...", with: "…")
-            return item.separator || (!removed.contains(title) && (!link || linkRows.contains(title)))
+            return item.separator || (!removed.contains(title) && (!link || isLinkRow(title)))
         }
         var out: [Item] = []
         for item in kept {

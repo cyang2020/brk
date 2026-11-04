@@ -64,6 +64,17 @@ struct CardDivider: View {
     }
 }
 
+/// The thin rule under a list box's header (P38-d, P38-e: one 2x pixel of #E2E2E2 at the bottom of a point of height).
+struct ListRule: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Rectangle().fill(Color.primary.opacity(C.listRuleOpacity.value)).frame(height: C.listRule.value)
+        }
+        .frame(height: C.borderWidth.value)
+    }
+}
+
 /// One row of a card: a label (or anything) at the left, a control at the right, at least `height` tall.
 struct CardRow<Leading: View, Trailing: View>: View {
     var height: CGFloat = CardMetrics.rowHeight.value
@@ -278,6 +289,8 @@ struct SettingsCardMetricsTable: MetricGroup {
     let paneInset = Metric(64.0, .anatomy("\(capture)/P38-a-arc.png: cards span x 128 to 1240 px of 1368"))
     let cornerRadius = Metric(7.0, .anatomy("\(capture)/P38-a-arc.png: the card's corner curve spans about 14 px"))
     let borderWidth = Metric(1.0, .anatomy("\(capture)/P38-a-arc.png: 2 px #EAEAEA card edge and row hairline"))
+    let listRule = Metric(0.5, .anatomy("\(capture)/P38-d-arc.png: under 'Your Profiles' the rule is one pixel of #E6E6E6 at y 375 px; the cards' rules are two"))
+    let listRuleOpacity = Metric(0.15, .anatomy("\(capture)/P38-e-arc.png: 'Default Shortcuts' rule reads #E1E1E1 on white"))
     let cardSpacing = Metric(8.0, .anatomy("\(capture)/P38-a-arc.png: card 1 ends at y 362 px, card 2 starts at 378 px"))
     let rowPadding = Metric(10.0, .anatomy("\(capture)/P38-a-arc.png: labels start at x 148 px, switches end at 1220 px"))
     let dividerInset = Metric(10.0, .anatomy("\(capture)/P38-a-arc.png: the second card's hairline spans x 148 to 1220 px"))

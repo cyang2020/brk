@@ -145,6 +145,11 @@ public struct PageOpenMetadata: Hashable, Sendable, Codable {
 
 /// What a live page reports. Delivered as `SystemEvent.page(browser, event)`; never written to the page's tab by
 /// anything but the reducer.
+/// Where the page menu's two Arc rows open a link.
+public enum PageLinkTarget: Hashable, Sendable, Codable {
+    case splitView, littleWindow
+}
+
 public enum PageEvent: Hashable, Sendable, Codable {
     /// First event for an incarnation, before any native observations.
     case browserCreated(BrowsingContext, DocumentAvailability)
@@ -159,6 +164,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case languageDetected(DocumentToken, String)
     /// The page menu's "Translate to English" (Arc's item, Q07-a), naming the system language the page goes into.
     case translateRequested(String)
+    /// The page menu's "Open Link in Split View" / "Open Link in Little Arc" (Q07-b).
+    case linkMenuRequested(URL, PageLinkTarget)
     /// Text became highlighted in the document (true) or no longer is (false): the URL pill's Share Quote.
     case selectionChanged(DocumentToken, Bool)
     case faviconChanged(URL?)

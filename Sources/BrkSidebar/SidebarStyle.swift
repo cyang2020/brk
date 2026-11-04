@@ -86,7 +86,9 @@ struct SidebarDrawMetrics: MetricGroup {
     /// The translation popover (P50-d-popover, 2x): body 237 x 101 pt; the Aa disc, the sentence, two buttons.
     let translationPopover = Metric([237.0, 101.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the body spans x 25 to 499 px and y 25 to 226 px"))
     let translationDisc = Metric([10.5, 10.5, 32.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the Aa disc spans x and y 46 to 110 px"))
-    let translationTextLeading = Metric(54.5, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
+    let translationTextFont = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/P50/P50-f-arc.png: 'Translated from French.' is 152.5 points wide"))
+    let translationMenuOffset = Metric([2.75, 15.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-f-arc.png: the menu's left edge at x 117 pt and its top at y 161 pt"))
+    let translationTextLeading = Metric(51.0, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
     let translationButtons = Metric([10.5, 58.5, 104.0, 32.0, 8.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Options x 46 to 254 px, Use Original x 270 to 478 px, both y 142 to 206 px"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))

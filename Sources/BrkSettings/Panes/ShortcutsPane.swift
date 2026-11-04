@@ -78,7 +78,7 @@ struct ShortcutsPane: View {
                     ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
                         Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
                             .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value).offset(y: -0.5)
-                        CardDivider(inset: 0)
+                        ListRule()
                         ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
                             if index > 0 { RowDivider() }
                             ShortcutRowView(row: row, others: rows, dispatch: dispatch)
@@ -91,7 +91,7 @@ struct ShortcutsPane: View {
         }
         .background(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
         .clipShape(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+        .overlay(RoundedRectangle(cornerRadius: K.boxRadius.value, style: .continuous).strokeBorder(Color.primary.opacity(K.boxEdgeOpacity.value)))
     }
 
     private var side: some View {
@@ -494,13 +494,14 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let listBottom = Metric(27.0, .anatomy("\(capture): the list ends at y 1246 px of 1300"))
     let listMinHeight = Metric(200.0, .guess("the list's height on a short screen"))
     let boxRadius = Metric(8.0, .guess("the list box's corner"))
-    let searchHeight = Metric(41.0, .anatomy("\(capture): the search row spans y 348 to 430 px"))
+    let searchHeight = Metric(40.0, .anatomy("\(capture): the search row spans y 348 to 428 px"))
+    let boxEdgeOpacity = Metric(0.18, .anatomy("\(capture): the list box's edge reads #DBDBDB on white"))
     let searchInset = Metric(16.0, .anatomy("\(capture): the magnifier starts at x 162 px"))
     let searchGap = Metric(4.0, .anatomy("\(capture): the magnifier ends near x 188 px, the placeholder starts at 201 px"))
     let searchGlyph = Metric(13.0, .anatomy("\(capture): the magnifier is about 26 px tall, a medium weight"))
     let headerHeight = Metric(27.0, .anatomy("\(capture): the Default Shortcuts row spans y 430 to 484 px, its hairline 484 to 486 px"))
     let headerSize = Metric(11.0, .anatomy("\(capture): 'Default Shortcuts' spans x 162 to 345 px, an 11 pt semibold line (13 pt is 223 px)"))
-    let firstRowTop = Metric(9.5, .anatomy("\(capture): the first row spans y 486 to 600 px, the others 94 px between hairlines"))
+    let firstRowTop = Metric(10.5, .anatomy("\(capture): the first row spans y 486 to 600 px, the others 94 px between hairlines"))
     let headerInset = Metric(16.0, .anatomy("\(capture): 'Default Shortcuts' starts at x 160 px"))
     let rowHeight = Metric(47.0, .anatomy("\(capture): hairlines at y 600, 696, 792 px, 2 px each"))
     let rowInset = Metric(24.0, .anatomy("\(capture): titles start at x 176 px, hairlines span 176 to 776 px, key caps end at 760 px"))

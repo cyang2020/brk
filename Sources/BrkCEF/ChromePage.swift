@@ -412,6 +412,9 @@ final class ChromePage: CefBrowserDelegate {
                          onTranslate: { [weak self] in
                              guard let self, let translate, self.engine.isLive(self) else { return }
                              self.engine.pageDidEmit(self, .translateRequested(translate))
+                         }, onLink: { [weak self, url = params.linkURL] target in
+                             guard let self, let url, self.engine.isLive(self) else { return }
+                             self.engine.pageDidEmit(self, .linkMenuRequested(url, target))
                          }) { [weak self] in
             guard let self else { return false }; return self.engine.isLive(self) && !self.surface.isHiddenOrHasHiddenAncestor
         }

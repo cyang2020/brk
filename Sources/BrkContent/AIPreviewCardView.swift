@@ -60,9 +60,9 @@ final class AIPreviewCardView: NSView {
     }
 }
 
-/// The card itself. Its geometry comes from P45-a (2x pixels halved): 299 points wide, the title at 15.5, the details'
-/// icons centred at 21 and their text at 39.5, 19 point lines, 5 points between details, the share button 32 points
-/// across, 7 from the right edge and 2.5 from the bottom.
+/// The card itself. Its geometry comes from P45-a (2x pixels halved): 300 points wide, the title at 13, the details'
+/// icons centred at 21 and their text at 37, 19 point lines, 5 points between details, the share button 33 points
+/// across, 7 from the right edge and 7.5 from the bottom.
 @MainActor
 private final class PreviewCard: NSView {
     var onHover: (Bool) -> Void = { _ in }
@@ -107,7 +107,7 @@ private final class PreviewCard: NSView {
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
-    static let ink = NSColor(srgbRed: 0x1D / 255.0, green: 0x1F / 255.0, blue: 0x1F / 255.0, alpha: 1)
+    static let ink = NSColor(srgbRed: 0x16 / 255.0, green: 0x16 / 255.0, blue: 0x16 / 255.0, alpha: 1)
 
     func render(_ preview: AIPreviewSnapshot) {
         let m = PreviewCardMetrics.self
@@ -117,7 +117,7 @@ private final class PreviewCard: NSView {
             let icon = NSImageView()
             icon.image = NSImage(systemSymbolName: detail.icon, accessibilityDescription: nil) ?? NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
             icon.symbolConfiguration = .init(pointSize: m.iconSize.value, weight: .regular)
-            icon.contentTintColor = NSColor(srgbRed: 0x9A / 255.0, green: 0xA0 / 255.0, blue: 0xA3 / 255.0, alpha: 1)
+            icon.contentTintColor = NSColor(white: 0xBF / 255.0, alpha: 1)
             let text = NSTextField(wrappingLabelWithString: "")
             let style = NSMutableParagraphStyle()
             style.minimumLineHeight = m.lineHeight.value; style.maximumLineHeight = m.lineHeight.value
@@ -158,7 +158,7 @@ private final class PreviewCard: NSView {
             let height = row.text.sizeThatFits(NSSize(width: textWidth, height: .greatestFiniteMagnitude)).height
             if layingOut {
                 row.text.frame = CGRect(x: m.textLeading.value, y: y, width: textWidth, height: height)
-                row.icon.frame = CGRect(x: m.iconCenter.value - m.iconBox.value / 2, y: y + (m.lineHeight.value - m.iconBox.value) / 2, width: m.iconBox.value, height: m.iconBox.value)
+                row.icon.frame = CGRect(x: m.iconCenter.value - m.iconBox.value / 2, y: y + m.iconDrop.value + (m.lineHeight.value - m.iconBox.value) / 2, width: m.iconBox.value, height: m.iconBox.value)
             }
             y += height + m.detailGap.value
         }
@@ -197,11 +197,16 @@ private final class PreviewShareButton: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layer?.borderWidth = PreviewCardMetrics.edge.value
-        layer?.borderColor = NSColor(srgbRed: 0xC8 / 255.0, green: 0xC8 / 255.0, blue: 0xC8 / 255.0, alpha: 1).cgColor
-        layer?.backgroundColor = NSColor(srgbRed: 0xF7 / 255.0, green: 0xF7 / 255.0, blue: 0xF7 / 255.0, alpha: 1).cgColor
+        layer?.borderColor = NSColor(white: 0xCC / 255.0, alpha: 1).cgColor
+        layer?.backgroundColor = NSColor(white: 0xFD / 255.0, alpha: 1).cgColor
+        shadow = NSShadow()
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.14
+        layer?.shadowRadius = 2
+        layer?.shadowOffset = CGSize(width: 0, height: -1)
         glyph.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Share")
-        glyph.symbolConfiguration = .init(pointSize: PreviewCardMetrics.iconSize.value, weight: .regular)
-        glyph.contentTintColor = NSColor(srgbRed: 0x8E / 255.0, green: 0x8E / 255.0, blue: 0x8E / 255.0, alpha: 1)
+        glyph.symbolConfiguration = .init(pointSize: PreviewCardMetrics.shareGlyph.value, weight: .regular)
+        glyph.contentTintColor = NSColor(white: 0x39 / 255.0, alpha: 1)
         addSubview(glyph)
         toolTip = "Copy Link"
     }
@@ -218,26 +223,28 @@ private final class PreviewShareButton: NSView {
 /// P45-a in points (the 2x pixels halved): the card at x 373 under the link box ending at y 99.5, the card 299 wide.
 enum PreviewCardMetrics {
     private static let capture = "verify/visual-pairs/run-20261103/P45/P45-a-arc.png"
-    static let width = Metric(299.0, .anatomy("\(capture): the card spans x 746 to 1344 px"))
+    static let width = Metric(300.0, .anatomy("\(capture): the card spans x 746 to 1346 px"))
     static let offset = Metric([6.0, 6.5], .anatomy("\(capture): the link box starts at x 758 px and ends at y 199 px; the card starts at x 746 px, y 212 px"))
     static let radius = Metric(12.0, .anatomy("\(capture): the card's corners round over about 24 px"))
-    static let edge = Metric(1.0, .anatomy("\(capture): a 1 pt #E8E8E8 edge"))
-    static let fillAlpha = Metric(0.94, .anatomy("\(capture): the page's heading shows faintly through the card"))
+    static let edge = Metric(0.5, .anatomy("\(capture): a 1 px #E8E8E8 edge"))
+    static let fillAlpha = Metric(0.97, .anatomy("\(capture): the page's heading shows faintly through the card"))
     static let shadow = Metric([0.12, 14.0, 3.0], .guess("a soft popover shadow; the capture shows a faint halo"))
-    static let top = Metric(15.0, .anatomy("\(capture): the title's capitals span y 246 to 270 px in the card at 212 px"))
-    static let titleInset = Metric(15.5, .anatomy("\(capture): the title starts at x 777 px"))
+    static let top = Metric(14.5, .anatomy("\(capture): the title's capitals span y 247 to 272 px in the card at 212 px"))
+    static let titleInset = Metric(13.0, .anatomy("\(capture): the title starts at x 777 px"))
     static let titleFont = Metric(13.0, .anatomy("\(capture): bold capitals 19 px tall"))
-    static let titleGap = Metric(4.5, .anatomy("\(capture): the first detail's line is centred at y 307 px, the title at 259 px (station run 1 drew it 5 px lower with 7)"))
+    static let titleGap = Metric(5.0, .anatomy("\(capture): the first detail's line is centred at y 307 px, the title at 259 px (station run 1 drew it 5 px lower with 7)"))
     static let textFont = Metric(13.0, .anatomy("\(capture): the details' capitals are 19 px tall"))
     static let lineHeight = Metric(19.0, .anatomy("\(capture): a detail's two lines are centred 38 px apart"))
     static let detailGap = Metric(5.0, .anatomy("\(capture): details start 86 px apart with two 38 px lines each"))
-    static let textLeading = Metric(39.5, .anatomy("\(capture): the details' text starts at x 825 px"))
-    static let textTrailing = Metric(28.0, .anatomy("\(capture): the longest line ends at x 1260 px"))
+    static let textLeading = Metric(37.0, .anatomy("\(capture): the details' text starts at x 825 px"))
+    static let textTrailing = Metric(30.5, .anatomy("\(capture): the longest line ends at x 1260 px"))
     static let iconCenter = Metric(21.0, .anatomy("\(capture): the icons are centred at x 788 px"))
     static let iconBox = Metric(17.0, .anatomy("\(capture): the eye spans x 772 to 804 px"))
-    static let iconSize = Metric(13.0, .guess("the icons' symbol size"))
-    static let footer = Metric(44.5, .anatomy("\(capture): the last line ends at y 410 px, the card at 711 px with the share button in between"))
-    static let share = Metric([32.0, 7.0, 2.5], .anatomy("\(capture): the share button spans x 1266 to 1330 px and y 644 to 706 px"))
+    static let iconSize = Metric(15.0, .anatomy("\(capture): the eye's ink is 33 x 21 px"))
+    static let iconDrop = Metric(2.0, .anatomy("\(capture): the icons are centred 2 pt under the middle of the first line"))
+    static let shareGlyph = Metric(16.0, .anatomy("\(capture): the share glyph's ink is 27 x 30 px"))
+    static let footer = Metric(42.0, .anatomy("\(capture): the last line ends at y 410 px, the card at 711 px with the share button in between"))
+    static let share = Metric([33.0, 7.0, 7.5], .anatomy("\(capture): the share button spans x 1266 to 1332 px and y 630 to 696 px"))
     static let highlightAlpha = Metric(0.07, .anatomy("\(capture): the hovered link's box is #ECF0EF on white"))
-    static let highlightRadius = Metric(3.0, .guess("the link box's slightly rounded corners"))
+    static let highlightRadius = Metric(1.0, .anatomy("\(capture): the link box's corners are nearly square"))
 }

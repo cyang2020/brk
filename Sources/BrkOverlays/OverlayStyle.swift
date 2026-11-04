@@ -91,6 +91,9 @@ struct CommandBarColors {
     let accessoryText: NSColor
     let tileOnHighlight: NSColor
     let infoCircle: NSColor
+    /// The magnifier beside the input (Q01-a, P49: pure black) and the glyphs in the rows (P49: #545454).
+    let inputGlyph: NSColor
+    let rowGlyph: NSColor
 
     static func of(_ scheme: Scheme, attached: Bool, primary: RGBA, spaceless: Bool = false) -> CommandBarColors {
         let base = OverlayColors.of(scheme)
@@ -105,17 +108,18 @@ struct CommandBarColors {
                                     placeholder: ink.withAlphaComponent(0.4), highlight: spaceless ? srgb(0x424ADD) : ink.withAlphaComponent(0.29),
                                     onHighlight: .white, textSelection: spaceless ? srgb(0x2E3485) : ink.withAlphaComponent(0.36), hairline: base.hairline,
                                     accessory: ink.withAlphaComponent(0.08), accessoryText: base.accessoryForeground,
-                                    tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12))
+                                    tileOnHighlight: spaceless ? .white : ink.withAlphaComponent(0.2), infoCircle: ink.withAlphaComponent(0.12),
+                                    inputGlyph: base.textPrimary, rowGlyph: base.textPrimary)
         }
         // P02-b over a #F2EAE4 theme: highlight #B8A89B, selection #C8B9AF. Q01-a/b: highlight #ABABAB, selection #BBBBBB.
         // P20-a, P21-a (blank and Little windows): highlight #8F95FF. Q01-a: the card's 0.5 pt edge reads #AEAEAE on #F9F9FA.
-        let highlight = spaceless ? srgb(0x8F95FF) : attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.31)
+        let highlight = spaceless ? srgb(0x8F95FF) : attached ? shade(primary, saturation: 2.73, brightness: 0.759) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.35)
         let selection = spaceless ? srgb(0xC9CCFF) : attached ? shade(primary, saturation: 2.16, brightness: 0.826) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25)
         return CommandBarColors(card: NSColor(srgbRed: 0xF9 / 255.0, green: 0xF9 / 255.0, blue: 0xFA / 255.0, alpha: 1),
-                                border: ink.withAlphaComponent(0.3), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
+                                border: ink.withAlphaComponent(0.34), text: base.textPrimary, secondary: ink.withAlphaComponent(0.3),
                                 placeholder: ink.withAlphaComponent(0.45), highlight: highlight, onHighlight: .white, textSelection: selection,
-                                hairline: ink.withAlphaComponent(0.09), accessory: ink.withAlphaComponent(0.04), accessoryText: ink.withAlphaComponent(0.48),
-                                tileOnHighlight: .white, infoCircle: .white)
+                                hairline: ink.withAlphaComponent(0.105), accessory: ink.withAlphaComponent(0.04), accessoryText: ink.withAlphaComponent(0.48),
+                                tileOnHighlight: .white, infoCircle: .white, inputGlyph: .black, rowGlyph: ink.withAlphaComponent(0.66))
     }
 
     private static func srgb(_ hex: Int) -> NSColor {
@@ -165,7 +169,7 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let accessoryRightInset = Metric(22.0, .anatomy("\(measured): ⓘ and the Tab key end 22 from the right"))
     let accessorySize = Metric(24.0, .anatomy("\(measured): ⓘ circle, Tab key, Switch to Tab arrow and icon tiles are 24 tall"))
     /// Text-to-text gaps less the 2 pt a label keeps inside its frame on each side.
-    let offerGap = Metric(12.5, .anatomy("\(measured): 14.5 between the completed text and \"Search Google Docs\""))
+    let offerGap = Metric(11.5, .anatomy("verify/visual-pairs/run-20261103/P02/P02-c-arc.png: the card ends at x 734 px, 359 points wide with \"Search Google Docs\""))
     let keyGap = Metric(6.5, .anatomy("\(measured): 8.5 between \"Search Google Docs\" and its Tab key"))
     let keyPadding = Metric(4.0, .anatomy("\(measured): the Tab key is 30.5 wide around 13 pt \"Tab\""))
     let arrowRightInset = Metric(12.5, .anatomy("\(measured): the Switch to Tab arrow ends 12.5 in from the highlight"))
@@ -175,7 +179,10 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let keyFontSize = Metric(13.0, .anatomy("\(measured): \"Tab\" is as tall as \"Search Wikipedia\" beside it"))
     let hintFontSize = Metric(11.0, .guess("an action's key hint pill; Arc's were not in these captures"))
     let iconSize = Metric(16.0, .guess("favicon and SF Symbol size in a result row"))
-    let symbolPointSize = Metric(13.0, .anatomy("\(measured): the globe and magnifier glyphs are about 13 wide"))
+    let symbolPointSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P49/P49-cmd-arc.png: the magnifier spans x 566 to 589 px, 12 points of ink"))
+    let inputRaise = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/Q01/Q01-a-arc.png: the placeholder's ink starts at y 481 px, half a point above the row's middle"))
+    let hairlineInset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q01/Q01-b-arc.png: the hairline spans x 538 to 2022 px, the highlight 534 to 2026 px"))
+    let detailMaxWidth = Metric(178.0, .anatomy("verify/visual-pairs/run-20261103/P21/P21-a-arc.png: '— youtube.c...wsercompany' ends about 175 points after it starts"))
     let hintPadding = Metric(6.0, .guess("horizontal padding inside a hint pill"))
     let hintHeight = Metric(20.0, .guess("hint pill height"))
     let hintRadius = Metric(6.0, .anatomy("\(measured): the Tab key and the arrow square have about 6 pt corners"))

@@ -195,6 +195,18 @@ extension Work {
             state.session.live[page] = live
             translatePage(page, to: language, in: window)
             return
+        case .linkMenuRequested(let url, let target):
+            state.session.live[page] = live
+            switch target {
+            case .littleWindow:
+                run(.window(.newLittle(url)), in: window)
+            case .splitView:
+                // A new pane, filled with the link through the command bar that adding a pane opens. A window that
+                // cannot add one (a Little window, a Favorite shown) opens no bar and nothing happens.
+                run(.split(.addPane), in: window)
+                if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(url.absoluteString)), in: window) }
+            }
+            return
         case .browserCreated: break
         case .documentChanged(let document):
             switch document {

@@ -517,6 +517,7 @@ enum CommandInventory {
             case .closedByPage: "page.closedByPage"
             case .languageDetected: "page.languageDetected"
             case .translateRequested: "page.translateRequested"
+            case .linkMenuRequested: "page.linkMenuRequested"
             case .selectionChanged: "page.selectionChanged"
             case .gainedFocus: "page.gainedFocus"
             case .openRequested: "page.openRequested"

@@ -44,7 +44,9 @@ struct ProfilesPane: View {
                         .frame(width: CardMetrics.popoverWidth.value).padding()
                 }
             HStack(alignment: .top, spacing: P.columnGap.value) {
-                profileList.frame(width: P.listWidth.value, height: listHeight)
+                // Half a point wider than its place in the row, to the left (the cards keep their column).
+                profileList.frame(width: P.listWidth.value + P.listOverhang.value, height: listHeight)
+                    .frame(width: P.listWidth.value).offset(x: -P.listOverhang.value / 2)
                 if let row = selected {
                     VStack(alignment: .leading, spacing: CardMetrics.cardSpacing.value) {
                         switch subpage {
@@ -104,8 +106,8 @@ struct ProfilesPane: View {
     private var profileList: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(ProfilesCopy.yourProfiles).font(.system(size: P.listCaptionFont.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(P.listCaptionOpacity.value))
-                .padding(.leading, P.listInset.value).frame(height: P.listHeader.value)
-            CardDivider(inset: 0)
+                .padding(.leading, P.listInset.value).frame(height: P.listHeader.value).offset(y: P.listCaptionDrop.value)
+            ListRule()
             ScrollView {
                 VStack(alignment: .leading, spacing: P.listRowGap.value) {
                     ForEach(settings.profiles, id: \.profile.id) { row in listRow(row) }
@@ -130,7 +132,7 @@ struct ProfilesPane: View {
             bottomBar
         }
         .background(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).strokeBorder(SettingsStyle.cardBorder))
+        .overlay(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).strokeBorder(Color(nsColor: P.listEdge)))
         .contextMenu {
             Button(ProfileCopy.deleteUnusedTitle + "…") { deletingUnused = true }.disabled(Self.unused(settings.profiles).isEmpty)
         }
@@ -424,6 +426,11 @@ struct ProfilesPaneMetricsTable: MetricGroup {
     let introToColumns = Metric(20.0, .anatomy("\(capture): the paragraph ends near y 280 px, the columns start at 320 px"))
     let listWidth = Metric(205.5, .anatomy("\(capture): the list spans x 128 to 539 px"))
     let columnGap = Metric(9.5, .anatomy("\(capture): the list ends at x 539 px, the cards start at 558 px"))
+    let listOverhang = Metric(0.5, .anatomy("\(capture): the list's left edge is at x 127 px, the cards' column is 128 px"))
+    let listCaptionDrop = Metric(0.5, .anatomy("\(capture): 'Your Profiles' spans y 339 to 355 px"))
+    let listEdge = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.12) : NSColor(white: 0xE0 / 255.0, alpha: 1)
+    }
     let listCaptionOpacity = Metric(0.47, .anatomy("\(capture): 'Your Profiles' is #9E9E9E at its darkest"))
     // The data rows' squares and arrows are lighter than the system colours the Advanced pane's squares use.
     let dataBlue = NSColor(srgbRed: 0x48 / 255.0, green: 0x9A / 255.0, blue: 0xFE / 255.0, alpha: 1)
