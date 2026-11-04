@@ -6,7 +6,8 @@ import CoreGraphics
 import Foundation
 
 /// Round 5's remaining behaviours: the command bar's list for a question (P49, A140), the language of a page that
-/// declares none (A141), the auto-archive banner as Arc's binary describes it (A082), Ask on Page's rows (A135).
+/// declares none (A141), the auto-archive banner as Arc's binary describes it (A082), Ask on Page's rows (A135). A page
+/// closing itself (Q12, A049) is in `PageSiteFixScenarios.openerTab` and `RegressionScenarios.pageCloses`.
 enum RemainingBehaviourScenarios {
     static let all = [
         Scenario("AIAskRows", "P49: a question lists the typed row, a suggestion, the Ask row and two more suggestions; the highlight is the theme's shade, grey under white", cefOnly: "native command bar", askRows),
@@ -22,11 +23,29 @@ enum RemainingBehaviourScenarios {
         zip(pixel.prefix(3), expected).allSatisfy { abs($0 - $1) <= tolerance }
     }
 
+    /// A screenshot's pixel at a window point, as the visual pairs read it (converted to sRGB). `AppUnderTest.pixel` reads
+    /// mid greys some 6 levels lighter than the same screenshot does (#ABABAB as [177, 177, 177]).
+    private static func shotPixel(_ app: AppUnderTest, _ name: String, _ point: CGPoint) throws -> [Int] {
+        let shot = try app.screenshot(name), frame = try app.native().windowFrame
+        guard let provider = CGDataProvider(url: shot.url as CFURL), let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else {
+            throw Check(description: "cannot read \(shot.url.path)")
+        }
+        let scale = Double(image.width) / frame.width
+        var bytes = [UInt8](repeating: 0, count: 4)
+        bytes.withUnsafeMutableBytes { raw in
+            let context = CGContext(data: raw.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.translateBy(x: -(point.x * scale).rounded(.down), y: -(Double(image.height) - (point.y * scale).rounded(.down) - 1))
+            context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        }
+        return bytes.map(Int.init)
+    }
+
     // MARK: AIAskRows (A140)
 
     @Sendable static func askRows(_ app: AppUnderTest) throws {
         for feature in AIFeature.allCases { try app.dispatch(.settings(.max(.feature(feature, true)))) }
-        guard let space = Optional(try app.view().space.id) else { return }
+        let space = try app.view().space.id
         // White, as the parent's retake of P49: grey highlight (Q01-a #ABABAB).
         try app.dispatch(.space(.update(space, title: nil, icon: nil, theme: SpaceTheme(colors: [RGBA(1, 1, 1, 1)], texture: .grain, intensity: 0.8, appearance: .auto))))
         try CommandBarEvidenceScenarios.type(app, "how do browsers render fonts", until: "how do browsers render html")
@@ -36,18 +55,16 @@ enum RemainingBehaviourScenarios {
         try expect(titles == ["how do browsers render fonts", "how do browsers render text", "how do browsers render fonts", "browser font rendering", "how do browsers render html"], "the rows are \(rows)")
         guard case .commandBar(let bar)? = try app.view().overlay, let provider = bar.askProvider else { throw Check(description: "no Ask provider") }
         try expect(rows[2].contains("Ask " + provider), "the third row is \(rows[2])")
-        _ = try app.screenshot("rows-white")
         let row = try visible(app.native(), .commandBarResult(0)).frame
-        let pixel = try app.pixel(CGPoint(x: row.maxX - 40, y: row.midY))
+        let pixel = try shotPixel(app, "rows-white", CGPoint(x: row.maxX - 40, y: row.midY))
         try expect(near(pixel, [0xAB, 0xAB, 0xAB]), "the white theme's highlight is \(pixel)")
         try app.press("escape")
         try app.waitUntil("the bar closed") { try !isCommandBarOpen(app) }
         // The fixture's #F2EAE4: the highlight takes the theme (P02-b measured #B8A89B over the pill).
         try app.dispatch(.space(.update(space, title: nil, icon: nil, theme: SpaceTheme(colors: [RGBA(0xF2 / 255, 0xEA / 255, 0xE4 / 255, 1)], texture: .grain, intensity: 0.25, appearance: .auto))))
         try CommandBarEvidenceScenarios.type(app, "how do browsers render fonts", until: "how do browsers render html")
-        _ = try app.screenshot("rows-beige")
         let beigeRow = try visible(app.native(), .commandBarResult(0)).frame
-        let beige = try app.pixel(CGPoint(x: beigeRow.maxX - 40, y: beigeRow.midY))
+        let beige = try shotPixel(app, "rows-beige", CGPoint(x: beigeRow.maxX - 40, y: beigeRow.midY))
         try expect(near(beige, [0xB8, 0xA8, 0x9B]), "the #F2EAE4 theme's highlight is \(beige)")
         app.passed("Five rows in Arc's order; the highlight is #ABABAB under white and #B8A89B under #F2EAE4 (\(pixel), \(beige))")
         // Browse for Me stays in Advanced → More Settings… (the user's decision): no bar row and no menu item.
@@ -122,9 +139,8 @@ enum RemainingBehaviourScenarios {
         try expect(question.height == row.height && question.minX == row.minX && question.width == row.width, "the question row is \(question), the bar's rows \(row)")
         let texts = try SidebarReviewScenarios.texts(app, in: question)
         try expect(texts.contains("what does this page say"), "the question row reads \(texts)")
-        _ = try app.screenshot("question-row")
-        let highlight = try app.pixel(CGPoint(x: question.maxX - 120, y: question.midY))
-        let other = try app.pixel(CGPoint(x: row.maxX - 120, y: row.midY))
+        let highlight = try shotPixel(app, "question-row", CGPoint(x: question.maxX - 120, y: question.midY))
+        let other = try shotPixel(app, "question-row", CGPoint(x: row.maxX - 120, y: row.midY))
         try expect(near(highlight, other, tolerance: 6), "the question row's highlight \(highlight) against the bar's \(other)")
         app.passed("Ask on Page's rows have the size, inset and highlight of the bar's other rows")
         try app.press("escape")
@@ -154,9 +170,8 @@ enum RemainingBehaviourScenarios {
         try expect(abs(button.minX - (card.minX + 12)) < 0.5 && abs(card.maxX - button.maxX - 12) < 0.5 && abs(card.maxY - button.maxY - 12) < 0.5, "the button \(button) is not 12 in from the card \(card)")
         let texts = try SidebarReviewScenarios.texts(app, in: card)
         try expect(texts.contains("We cleaned up!") && texts.contains("Got it"), "the card reads \(texts)")
-        _ = try app.screenshot("banner")
         // Under the fixture's default theme the button is the theme's dark shade with white words on it.
-        let fill = try app.pixel(CGPoint(x: button.minX + 10, y: button.midY))
+        let fill = try shotPixel(app, "banner", CGPoint(x: button.minX + 10, y: button.midY))
         try expect(fill[0] < 120 && fill[1] < 120 && fill[2] < 120, "the button's fill is \(fill)")
         try app.click(.tabTool("education"))
         try expect(try app.view().tabTools.archiveEducation != nil, "a click on the card's words dismissed it")

@@ -118,15 +118,25 @@ extension Work {
         else { state.doc.windows[window]?.emptySelections.remove(space) }
     }
 
+    /// A page closed itself (window.close(), also its opener's child.close()). As Cmd+W on its row: a Today tab leaves
+    /// for the archive (Arc, Q12-c), a Pinned tab keeps its row. The window goes back to the page that opened it when it
+    /// was showing this one on its own (not as a split's pane); with no opener left, Cmd+W's own choice stands. While
+    /// another window still has a page of the tab, only this window's page goes: the row is that window's too.
     mutating func closePage(_ page: PageID) {
-        if state.locate(page.item) == .window(page.window) {
-            closeTab(page.item, in: page.window)
+        if state.session.loaded.contains(where: { $0.item == page.item && $0.window != page.window }) {
+            unload(page)
+            guard let window = state.doc.windows[page.window] else { return }
+            for (space, shown) in window.activeBySpace where state.panes(of: shown).contains(page.item) {
+                select(state.mostRecentLoaded(in: space, window: page.window, excluding: shown), in: page.window, space: space)
+            }
             return
         }
-        unload(page)
-        guard let window = state.doc.windows[page.window] else { return }
-        for (space, shown) in window.activeBySpace where state.panes(of: shown).contains(page.item) {
-            select(state.mostRecentLoaded(in: space, window: page.window, excluding: shown), in: page.window, space: space)
+        let wasFront = state.doc.windows[page.window].map { window in window.activeBySpace[window.space] == page.item } ?? false
+        let opener = state.session.pageOpeners.removeValue(forKey: page.item)
+        closeTab(page.item, in: page.window)
+        // A Favorite has no space of its own; one in another space (moved since) stays there.
+        if wasFront, let opener, let role = state.role(of: opener), role.space == nil || role.space == state.doc.windows[page.window]?.space {
+            focus(opener, in: page.window)
         }
     }
 }

@@ -344,15 +344,15 @@ extension Work {
         }
         // A link opened from an ephemeral window's tab stays in that window's own container.
         if state.doc.windows[window]?.kind != .standard, state.locate(opener) == .window(window) {
-            openScratchTab(url, in: window, focus: disposition != .backgroundTab)
+            if let opened = openScratchTab(url, in: window, focus: disposition != .backgroundTab) { state.session.pageOpeners[opened] = opener }
             return
         }
         switch disposition {
         case .foregroundTab, .popup, .newWindow:
             commitCycle(in: window)
-            openTab(url, inSpace: target, window: window, focus: true)
+            if let opened = openTab(url, inSpace: target, window: window, focus: true) { state.session.pageOpeners[opened] = opener }
         case .backgroundTab:
-            openTab(url, inSpace: target, window: window, focus: false)
+            if let opened = openTab(url, inSpace: target, window: window, focus: false) { state.session.pageOpeners[opened] = opener }
             // Arc's background-tab toast: there is no row to see the new tab in.
             if target != state.doc.windows[window]?.space { toast(ToastCopy.newTabCreated(in: state.displayTitle(of: target)), in: window) }
             else if state.doc.windows[window]?.sidebarVisible == false { toast(ToastCopy.newTabCreated, in: window) }

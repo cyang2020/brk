@@ -67,16 +67,43 @@ enum PageSiteFixScenarios {
         try app.evaluate(childPage, "document.title='typed:'+document.getElementById('f').value")
         try app.waitUntil("keys reach the tab's page") { try row(app, child.id)?.title == "typed:abc" }
 
-        // The opener closes the window it opened: the tab goes, as Chrome closes the tab.
+        // The opener closes the window it opened: the row goes (Arc, Q12), the opener stays in front.
         try app.dispatch(.tab(.focus(page.item)))
         try app.waitForPageInput(page, at: app.site.url("page-browsing.html"))
         try app.evaluate(page, "child.close();document.title='closed-child'")
-        // A page that closes leaves its row unloaded in Brk (R7a); the browser itself is gone, closed by the page.
-        try app.waitUntil("window.close from the opener closes the tab's page") {
+        try app.waitUntil("child.close() from the opener closes the tab's page and its row") {
             let entries = try app.pageLog().filter { $0.page == childPage }
-            return try entries.contains { $0.kind == .closed } && !entries.contains { $0.kind == .closeRequested } && row(app, child.id)?.loaded == false
+            return try entries.contains { $0.kind == .closed } && !entries.contains { $0.kind == .closeRequested } && row(app, child.id) == nil
         }
-        app.passed("child.close() from the opener closes the tab's page")
+        try expect(try currentTab(app.view())?.id == page.item, "the opener is not in front after child.close()")
+        try expect(try archived(app).contains { $0 == child.url }, "child.close() did not archive the row")
+        app.passed("child.close() from the opener removes the row and leaves it in the archive")
+
+        // A sign-in style tab reports to its opener and closes itself (Q12): Today is back to what it was, the opener in front.
+        let rows = try app.view().space.today.rows.count
+        try PageBrowsingScenarios.clicked(app, page, "window.selfCloser=window.open('popup-child.html?selfclose');document.title='opened-self-closer'")
+        var signIn: TabRow?
+        try app.waitUntil("the self-closing tab in front", timeout: 12) {
+            signIn = currentTab(try app.view())
+            return signIn?.url == app.site.url("popup-child.html?selfclose") && signIn?.title.hasPrefix("child:") == true
+        }
+        guard let signIn else { throw Check(description: "no self-closing tab") }
+        // A more recently used tab must not take over from the opener.
+        guard let other = tabRows(try app.view().space.today.rows).first(where: { $0.id != page.item && $0.id != signIn.id }) else { throw Check(description: "no other tab") }
+        try app.dispatch(.tab(.focus(other.id)))
+        try app.dispatch(.tab(.focus(signIn.id)))
+        let signInPage = PageID(window: page.window, item: signIn.id)
+        try app.waitForPageInput(signInPage, at: app.site.url("popup-child.html?selfclose"))
+        try app.screenshot("self-closing-tab")
+        try expect(try app.view().space.today.rows.count == rows + 1, "the tab did not add a row")
+        try app.evaluate(signInPage, "window.opener.postMessage({kind:'popup-report',value:{signedIn:'token-43'}},location.origin);window.close()")
+        try app.waitUntil("the tab's own window.close() removes its row") { try row(app, signIn.id) == nil }
+        try app.waitUntil("the opener in front") { try currentTab(app.view())?.id == page.item }
+        try expect(try app.view().space.today.rows.count == rows, "Today did not return to \(rows) rows")
+        try app.waitForPageInput(page, at: app.site.url("page-browsing.html"))
+        try app.waitUntil("the message reached the opener") { try PageBrowsingScenarios.title(app, page) == "popup:{\"signedIn\":\"token-43\"}" }
+        try app.screenshot("self-closed")
+        app.passed("the tab's window.close(): Today back to \(rows) rows, focus on the opener, not on the more recent \(other.title)")
 
         // noopener and target=_blank (implicit noopener): a tab with no opener, as in Chrome.
         try PageBrowsingScenarios.clicked(app, page, "document.title='noopener-returned:'+(window.open('popup-child.html?noopener','_blank','noopener')===null)")
@@ -101,9 +128,25 @@ enum PageSiteFixScenarios {
         try app.dispatch(.tab(.close(.item(page.item))))
         try app.waitUntil("opener archived") { try !allTabs(app.view()).contains { $0.id == page.item } }
         try expect(try allTabs(app.view()).contains { $0.id == blank.id }, "closing the opener closed the tab it opened")
+        // With its opener gone a tab that closes itself follows the close rule (the most recent other tab).
+        try app.dispatch(.tab(.focus(blank.id)))
+        try app.dispatch(.tab(.focus(noopener.id)))
+        let noopenerPage = PageID(window: page.window, item: noopener.id)
+        try app.waitForPageInput(noopenerPage, at: app.site.url("popup-child.html?noopener"))
+        try app.evaluate(noopenerPage, "window.close()")
+        try app.waitUntil("the orphan's window.close() removes its row") { try row(app, noopener.id) == nil }
+        try app.waitUntil("the most recent other tab in front") { try currentTab(app.view())?.id == blank.id }
         try app.flush(); try app.restart()
         try app.waitUntil("the opened tab restored") { try allTabs(app.view()).contains { $0.url == app.site.url("popup-child.html?blank") } }
         app.note("CEF creates the popup browser (on_before_popup allowed, OnPopupBrowserViewCreated places its view in a frameless host window) and Brk embeds it as the tab's page instead of creating a new browser; Chromium's own opener and noopener rules apply.")
+    }
+
+    /// The addresses in the Library's archive.
+    static func archived(_ app: AppUnderTest) throws -> [URL?] {
+        try app.dispatch(.library(.open(.archive)))
+        defer { try? app.dispatch(.library(.close)) }
+        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "no Library") }
+        return library.archive?.groups.flatMap(\.entries).map(\.url) ?? []
     }
 
     // MARK: EaselShareTypedTitle (A101)

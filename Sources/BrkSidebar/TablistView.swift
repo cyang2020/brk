@@ -1322,6 +1322,7 @@ final class ArchiveEducationView: NSView {
         text.drawsBackground = false
         text.textContainerInset = .zero
         text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.widthTracksTextView = false
         addSubview(card)
         card.addSubview(band)
         band.addSubview(icon)

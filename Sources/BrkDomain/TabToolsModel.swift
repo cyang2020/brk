@@ -113,7 +113,8 @@ struct TabPreferences: Equatable, Sendable, Codable {
         try c.encode(includeFavoritesInNumbers, forKey: .includeFavoritesInNumbers)
         try c.encode(hoverPreviews, forKey: .hoverPreviews)
         try c.encode(archiveEducationDismissed, forKey: .archiveEducationDismissed)
-        try c.encode(archiveEducationEarned, forKey: .archiveEducationEarned)
+        // Only once earned: an older file reads back byte for byte until then.
+        if archiveEducationEarned { try c.encode(archiveEducationEarned, forKey: .archiveEducationEarned) }
         if favoritesHintDismissed { try c.encode(true, forKey: .favoritesHintDismissed) }
         if !badgeHiddenHosts.isEmpty { try c.encode(badgeHiddenHosts.sorted(), forKey: .badgeHiddenHosts) }
         if !subtitleHiddenHosts.isEmpty { try c.encode(subtitleHiddenHosts.sorted(), forKey: .subtitleHiddenHosts) }

@@ -2,8 +2,8 @@ import BrkBase
 import BrkControl
 import BrkDomain
 import BrkLayout
+import CoreGraphics
 import Foundation
-import ImageIO
 
 /// Easels on the real app (Q09 a, Q09 c, P32 c): File > New Easel and its board, drawing with the toolbar through
 /// real pointer events, selecting, moving and deleting, pictures, the board after a restart, the Library's cards and
@@ -282,8 +282,10 @@ enum EaselScenarios {
         try app.waitUntil("Saved toast") { try app.view().tabTools.toast?.text == "Saved easel-share.png" }
         try app.waitUntil("the panel is gone") { try app.native().sheetClass == nil }
         let bytes = try Data(contentsOf: destination)
-        guard let source = CGImageSourceCreateWithData(bytes as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-              CGImageSourceGetType(source) as String? == "public.png" else { throw Check(description: "the shared file is not a PNG (\(bytes.count) bytes)") }
+        guard bytes.prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), let provider = CGDataProvider(data: bytes as CFData),
+              let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else {
+            throw Check(description: "the shared file is not a PNG (\(bytes.count) bytes)")
+        }
         let pixels = PixelGrid(image)
         var inked = 0
         for y in stride(from: 0, to: pixels.height, by: 2) { for x in stride(from: 0, to: pixels.width, by: 2) where pixels.isInked(x: x, y: y) { inked += 1 } }

@@ -61,7 +61,7 @@ enum Scenarios {
         Scenario("R5a", "a tab left with Ctrl+Tab after 11h is not archived an hour later", RegressionScenarios.ctrlTabStamps),
         Scenario("R5b", "a tab dropped on another space after 13h is not archived by the next sweep", RegressionScenarios.moveStamps),
         Scenario("R6", "Ctrl+Tab, then Ctrl+Tab again, returns to the starting tab", RegressionScenarios.ctrlTabTwice),
-        Scenario("R7a", "a page that calls window.close() leaves no blank card behind a current row", cefOnly: "window.close() in a page",
+        Scenario("R7a", "a page that calls window.close() loses its row as Cmd+W does and leaves no blank card", cefOnly: "window.close() in a page",
                  RegressionScenarios.pageCloses),
         Scenario("R7b", "a crashed renderer is recovered without any other input", cefOnly: "a renderer process to crash",
                  RegressionScenarios.rendererCrash),
