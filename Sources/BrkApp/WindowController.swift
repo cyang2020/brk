@@ -69,11 +69,6 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onKeyEquivalent = { [weak self] event in
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
-            // ⌘Z and ⇧⌘Z while Edit Theme is open step through the panel's edits, before the Edit menu's Undo.
-            if let self, event.charactersIgnoringModifiers?.lowercased() == "z" {
-                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                if flags == .command || flags == [.command, .shift], self.root.spaceDialog.stepThemeEdit(redo: flags.contains(.shift)) { return true }
-            }
             // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the Edit menu's Undo.
             if let self, self.lastSnapshot?.tabTools.toast?.keycap != nil, event.charactersIgnoringModifiers?.lowercased() == "z",
                event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
@@ -82,6 +77,14 @@ public class WindowController: NSObject, NSWindowDelegate {
             }
             guard let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
+        }
+        // ⌘Z and ⇧⌘Z while Edit Theme is open step through the panel's edits, before the page or the Edit menu's
+        // Undo sees them (the panel is never key, so the browser window has the keys).
+        window.onKeyBeforePage = { [weak self] event in
+            guard let self, event.keyCode == Key.z.code else { return false }
+            let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            guard flags == .command || flags == [.command, .shift] else { return false }
+            return self.root.spaceDialog.stepThemeEdit(redo: flags.contains(.shift))
         }
         window.onEscapeBeforePage = { [weak self] event in
             // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
@@ -301,6 +304,8 @@ public protocol HostWindow: NSWindow {
     /// decides before AppKit's menu, so hidden rows and user remaps work. Returns whether it was consumed.
     var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
     var onEscapeBeforePage: ((NSEvent) -> Bool)? { get set }
+    /// A key-down the window takes before the focused page or the menu, when it answers true (the theme panel's ⌘Z).
+    var onKeyBeforePage: ((NSEvent) -> Bool)? { get set }
     var onPagePointerDown: ((PageID) -> Void)? { get set }
     /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
     func placeTrafficLights(origin: CGPoint?)
@@ -321,6 +326,7 @@ extension HostWindow {
         // Chrome handles fullscreen Escape before CEF's pre-key callback. Give an open native overlay the
         // table's menu path first, so Exit dismisses it before Chrome leaves the document's fullscreen.
         if event.type == .keyDown, event.keyCode == Key.escape.code, onEscapeBeforePage?(event) == true { return true }
+        if event.type == .keyDown, onKeyBeforePage?(event) == true { return true }
         if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(event.type) { onActivity?() }
         if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
         switch event.type {
@@ -400,6 +406,7 @@ public final class BrowserWindow: NSWindow, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
+    public var onKeyBeforePage: ((NSEvent) -> Bool)?
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
     /// Arc's ⇧⌘-drag capture: whether this ⇧⌘ mouse-down is over the focused page, and, once it moves, starting
@@ -435,7 +442,9 @@ public final class BrowserWindow: NSWindow, HostWindow {
     }
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        hostKeyEquivalent(event, handledByViews: super.performKeyEquivalent(with: event))
+        // AppKit offers Command chords here before the window's sendEvent: the theme panel's ⌘Z goes first.
+        if event.type == .keyDown, onKeyBeforePage?(event) == true { return true }
+        return hostKeyEquivalent(event, handledByViews: super.performKeyEquivalent(with: event))
     }
 
     private var lightsOrigin: CGPoint?

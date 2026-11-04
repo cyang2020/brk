@@ -403,7 +403,7 @@ enum SidebarEvidenceScenarios {
         try app.dispatch(.tab(.focus(home)))
         try app.waitForPageInput(S.page(app, home), at: app.site.url("index.html"))
         // Scroll the list to its top so the current (bottom) row is off screen.
-        let viewport = try app.native().computed.sidebar!.tablistViewport
+        guard let viewport = try app.native().computed.sidebar?.tablistViewport else { throw Check(description: "no sidebar frames") }
         func onScreen(_ id: ItemID) throws -> Bool {
             guard let f = try S.frame(app, ViewID.row(id).identifier) else { return false }
             return viewport.insetBy(dx: -1, dy: -1).contains(f)
@@ -418,7 +418,8 @@ enum SidebarEvidenceScenarios {
         try app.waitUntil("the sidebar has focus") { try app.view().focus == .sidebar && app.native().firstResponder.contains("ListDocumentView") }
         _ = try app.screenshot("revealed")
         let rows = tabRows(try app.view().space.today.rows).map(\.id)
-        let above = rows[rows.firstIndex(of: home)! - 1]
+        guard let at = rows.firstIndex(of: home), at > 0 else { throw Check(description: "home is not below another Today row: \(rows)") }
+        let above = rows[at - 1]
         try app.press("up")
         try app.waitUntil("Up moved to the row above") { try shown(app.view()) == above }
         try app.press("down")
@@ -442,9 +443,12 @@ enum SidebarEvidenceScenarios {
         _ = try app.send(.activate(window: first))
         app.window = first
         try app.waitUntil("the first window key") { try app.native(first).isKey }
-        // Clear sits on the divider and shows on hover.
-        let divider = try app.native().computed.sidebar!.rows.first { $0.kind == .divider }!.rect
-        let viewport = try app.native().computed.sidebar!.tablistViewport
+        // Clear sits on the Pinned/Today divider (drawn only while Pinned has something) and shows on hover.
+        _ = try newFolder(app, "Keeps the divider")
+        guard let frames = try app.native().computed.sidebar, let divider = frames.rows.first(where: { $0.kind == .divider })?.rect else {
+            throw Check(description: "no Pinned/Today divider")
+        }
+        let viewport = frames.tablistViewport
         try app.hover(CGPoint(x: viewport.minX + divider.midX, y: viewport.minY + divider.midY))
         try app.waitUntil("Clear on screen") { isShown(try app.native(), .todayClear) }
         try app.click(.todayClear)

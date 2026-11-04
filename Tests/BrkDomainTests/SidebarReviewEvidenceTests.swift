@@ -63,8 +63,7 @@ final class SidebarReviewEvidenceTests: XCTestCase {
         let today = d.open("https://example.com/today")
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertTrue(d.view.space.pinned.collapsed)
-        XCTAssertFalse(d.view.space.pinned.peeked)
-        XCTAssertTrue(d.view.space.pinned.rows.isEmpty, "a Today tab is shown: no pinned row")
+        XCTAssertFalse(d.view.space.pinned.peeked, "a Today tab is shown: nothing peeks (the layout draws no pinned row)")
         d.user(.tab(.focus(second)))
         XCTAssertTrue(d.view.space.pinned.peeked)
         XCTAssertEqual(d.view.space.pinned.rows.map(\.id), [second])
@@ -144,12 +143,12 @@ final class SidebarReviewEvidenceTests: XCTestCase {
         let root = d.view.space.pinned.root
         d.user(.tabTools(.bulk(.items([a, b]), .duplicate(.into(parent: root, index: 0)))))
         let pinned = d.view.space.pinned.rows.compactMap { if case .tab(let t) = $0 { t } else { nil } }
-        XCTAssertEqual(pinned.map(\.url), [url("https://example.com/a"), url("https://example.com/b")], "copies land at the destination in selection order")
+        XCTAssertEqual(pinned.map(\.url), [url("https://example.com/b"), url("https://example.com/a")], "copies land at the destination in sidebar order (Today is newest first)")
         XCTAssertTrue(Set(pinned.map(\.id)).isDisjoint(with: [a, b]), "copies have new identities")
         XCTAssertEqual(d.todayIDs.filter { [a, b].contains($0) }.count, 2, "the originals stay")
         d.user(.tabTools(.bulk(.items([a, b]), .duplicate(nil))))
         let today = d.todayIDs
-        XCTAssertEqual(today.count, 6)
+        XCTAssertEqual(today.count, 5, "the start tab, a, b and one copy of each")
         for original in [a, b] { let i = today.firstIndex(of: original)!; XCTAssertEqual(d.row(today[i + 1])?.url, d.row(original)?.url, "the copy sits right after its original") }
     }
 
@@ -159,6 +158,7 @@ final class SidebarReviewEvidenceTests: XCTestCase {
         let inner = d.open("https://example.com/inner")
         d.user(.item(.newFolder))
         let box = d.pinnedIDs[0]
+        d.user(.item(.rename(box, title: "Box")))
         d.user(.item(.move(inner, to: .into(parent: box, index: 0))))
         d.user(.item(.toggleFolder(box)))
         d.user(.tab(.focus(inner)))

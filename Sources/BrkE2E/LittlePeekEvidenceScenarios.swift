@@ -424,7 +424,7 @@ enum LittlePeekEvidenceScenarios {
         try app.dispatch(.item(.move(a, to: .into(parent: outer, index: 0))))
         try app.dispatch(.tabTools(.newNestedFolder(outer)))
         try app.press("cmd+a"); try app.type("Inner"); try app.press("return")
-        let inner = E.folder(outer, in: try app.view().space.pinned.rows)!.children.first { $0.kind == .folder }!.id
+        guard let inner = E.folder(outer, in: try app.view().space.pinned.rows)?.children.first(where: { $0.kind == .folder })?.id else { throw Check(description: "no nested folder") }
         let b = try E.loadReady(app, "page2.html?all=b")
         try app.dispatch(.item(.move(b, to: .into(parent: inner, index: 0))))
         func shape(_ rows: [Row]) -> [String] {

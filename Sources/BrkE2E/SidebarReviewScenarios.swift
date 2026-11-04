@@ -272,34 +272,59 @@ enum SidebarReviewScenarios {
 
     // MARK: A062
 
+    /// RGBA bytes of `rect` (window points) in a fresh window screenshot.
+    static func pixels(_ app: AppUnderTest, _ name: String, _ rect: CGRect) throws -> [UInt8] {
+        let shot = try app.screenshot(name)
+        guard let provider = CGDataProvider(url: shot.url as CFURL),
+              let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else {
+            throw Check(description: "screenshot \(shot.url.lastPathComponent) unreadable")
+        }
+        let scale = Double(image.width) / max(1, try app.native().contentSize.width)
+        let box = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale).integral
+        guard let crop = image.cropping(to: box) else { throw Check(description: "crop \(box) outside \(image.width)x\(image.height)") }
+        var bytes = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(data: raw.baseAddress, width: crop.width, height: crop.height, bitsPerComponent: 8, bytesPerRow: crop.width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+            return true
+        }
+        guard drawn else { throw Check(description: "no bitmap context") }
+        return bytes
+    }
+    /// Mean absolute difference per color channel between two same-size RGBA buffers.
+    static func meanDifference(_ a: [UInt8], _ b: [UInt8]) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return .infinity }
+        var total = 0, count = 0
+        for i in stride(from: 0, to: a.count, by: 4) { for c in 0..<3 { total += abs(Int(a[i + c]) - Int(b[i + c])); count += 1 } }
+        return Double(total) / Double(count)
+    }
+
     @Sendable static func texture(_ app: AppUnderTest) throws {
         let space = try app.view().space.id
-        // A band of the window background above the card, right of the sidebar, where nothing else draws.
+        // The window background above the card, right of the sidebar, where nothing else draws.
         let area = try app.native().computed.contentArea
-        let points = (0..<24).map { CGPoint(x: area.minX + 40 + Double($0) * 9, y: max(2, area.minY - 5)) }
-        func samples() throws -> [[Int]] { try points.map { try app.pixel($0) } }
-        func set(_ texture: Texture) throws -> [[Int]] {
+        let band = CGRect(x: area.minX + 20, y: 1, width: area.width - 40, height: max(4, area.minY - 2))
+        func set(_ texture: Texture, _ label: String) throws -> [UInt8] {
             let theme = SpaceTheme(colors: [ThemePresets.drab[8]], texture: texture, noise: 1, intensity: 0.6, appearance: .light)
             try app.dispatch(.space(.update(space, title: nil, icon: nil, theme: theme)))
             try app.waitUntil("the space shows \(texture.rawValue)") { try app.view().theme.texture == texture }
-            app.sleep(1.2)   // the crossfade
-            _ = try settledPixel(app, points[0])
-            _ = try app.screenshot("texture-\(texture.rawValue)")
-            return try samples()
+            app.sleep(1.5)   // the crossfade
+            _ = try settledPixel(app, CGPoint(x: band.midX, y: band.midY))
+            return try pixels(app, "texture-\(label)", band)
         }
-        var drawn: [Texture: [[Int]]] = [:]
-        for texture in Texture.allCases { drawn[texture] = try set(texture) }
-        var record = "background samples at \(points.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: " "))\n"
-        for texture in Texture.allCases { record += "\(texture.rawValue): \(drawn[texture]!.map { "\($0[0]),\($0[1]),\($0[2])" }.joined(separator: " "))\n" }
-        log(app, "samples.txt", record)
-        for (a, b) in [(Texture.grain, Texture.sand), (.sand, .denim), (.denim, .tweed), (.grain, .tweed)] {
-            let differing = zip(drawn[a]!, drawn[b]!).filter { distance($0, $1) >= 2 }.count
-            try expect(differing >= 4, "\(a.rawValue) and \(b.rawValue) draw the same background (\(differing) of \(points.count) samples differ)")
-        }
-        // Same texture twice draws the same pixels (the pattern is seeded, not random per frame).
-        let again = try set(.grain)
-        let unstable = zip(again, drawn[.grain]!).filter { distance($0, $1) > 3 }.count
-        try expect(unstable <= 2, "grain drew differently the second time (\(unstable) samples)")
+        _ = try set(.grain, "warmup")   // the colors change once, so every later change is the texture alone
+        var drawn: [Texture: [UInt8]] = [:]
+        for texture in Texture.allCases { drawn[texture] = try set(texture, texture.rawValue) }
+        let again = try set(.grain, "grain-again")
+        let stable = meanDifference(again, drawn[.grain]!)
+        var record = String(format: "band %@ (points); grain drawn twice differs by %.3f per channel\n", "\(band)", stable)
+        var pairs: [(Texture, Texture, Double)] = []
+        for (i, a) in Texture.allCases.enumerated() { for b in Texture.allCases.dropFirst(i + 1) { pairs.append((a, b, meanDifference(drawn[a]!, drawn[b]!))) } }
+        for (a, b, d) in pairs { record += String(format: "%@ vs %@: %.3f\n", a.rawValue, b.rawValue, d) }
+        log(app, "differences.txt", record)
+        try expect(stable < 0.5, "grain drew differently the second time (\(stable) per channel)")
+        for (a, b, d) in pairs { try expect(d > max(0.3, 2 * stable), "\(a.rawValue) and \(b.rawValue) draw the same background (\(d) per channel, grain against itself \(stable))") }
         app.note("Textures are a Brk option Arc 1.170 does not have (ROUND3-BRIEF); set through the space update command, which no Brk control sends today.")
     }
 }
