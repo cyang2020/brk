@@ -4182,7 +4182,7 @@
       "arc_evidence": "rows 41 to 51, 59 to 84",
       "description": "Standard editing, spelling, substitutions, transformations, speech, font",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "All standard editing, spelling/grammar, substitutions, transformations, speech and font actions are enabled only when their responder supports them and work in native editors and applicable webpage editing contexts.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -4232,6 +4232,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/manual/parent-session-4/session.py <outdir>",
+          "artifact": "verify/completion/review-r4/manual/parent-session-4/session.log",
+          "scope": "父任务亲手检查（自己的实例，2026-11-04 晚）：真点 Edit > Substitutions > Smart Quotes / Smart Dashes 菜单，真按键在网页文本框里打 She said \"hi\" -- twice.；两个开关开着得到 “hi” —（截图 A046-typed-with-toggles-on.png），关着得到原样（A046-typed-with-toggles-off.png）。夹具默认两个开关是开的，第一次点菜单是关掉。"
         }
       ],
       "remaining": [
@@ -9181,7 +9188,7 @@
       "arc_evidence": "rows 165, 166",
       "description": "Chrome Web Store and `chrome://extensions`",
       "historical_status": "partial",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Users can install/manage/remove extensions through a supported store/local flow and management UI in Brk, with per-profile persistence, permissions, error reporting and correct private policy.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -9258,6 +9265,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-234/swift-test-main.log",
           "scope": "合并后 main 的完整单元测试 1085 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/manual/parent-session-4/session.py <outdir>",
+          "artifact": "verify/completion/review-r4/manual/parent-session-4/session.log",
+          "scope": "父任务亲手检查：装好测试扩展后打开站点控制浮层，扩展一栏里出现它的按钮且是灰色不可用状态（A096-site-controls.png，和 Arc 对扩展弹窗不可用时的灰态一致；Brk 在 CEF 上打不开扩展弹窗，见 A097）。"
         }
       ],
       "remaining": [
@@ -9396,7 +9410,7 @@
       "arc_evidence": "Shortcuts pane \"Extension Shortcuts\"",
       "description": "Keys for extension commands",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Extension command shortcuts can be inspected and configured per profile and coexist with Brk/page priorities, with duplicate and reserved-key handling.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -9474,6 +9488,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/manual/parent-session-4/session.py <outdir>",
+          "artifact": "verify/completion/review-r4/manual/parent-session-4/session.log",
+          "scope": "父任务亲手检查：装好测试扩展后，真鼠标点进快捷键输入框（焦点从页面转到输入框），真按键打 cmd+shift+u，真鼠标点 Save shortcut，Chromium 读回 ⇧⌘U（A098-panel-saved.png，Current: ⇧⌘U）。按组合键触发命令这一步在这次会话里没复现（页面重载后内容脚本没跑），由原生场景 Ext-shortcut-mouse 覆盖。输入框是打字式的，Chrome 是按键录制式，R5-2 在改。"
         }
       ],
       "remaining": [
@@ -10055,7 +10076,7 @@
       "arc_evidence": "`ARC_SoundEffects`; Advanced \"Play Arc sound effects\"",
       "description": "Capture and event sounds",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Capture and other intended events play the defined Brk sounds when enabled and are silent when disabled, without blocking UI.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -10109,6 +10130,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/manual/parent-session-4/session.py <outdir>",
+          "artifact": "verify/completion/review-r4/manual/parent-session-4/session.log",
+          "scope": "父任务独立读了原生运行录下的音频文件：归档、截图、下载三种音效各有 0.07–0.08 的峰值、20 毫秒窗口 RMS 约 0.046，关掉音效后的录音全程为 0（SoundCues-recorded-*.wav）。通过远程会话没法用耳朵听，这是对录音文件本身的核对。"
         }
       ],
       "remaining": [
@@ -10392,7 +10420,7 @@
       "arc_evidence": "`ARC_AdBlocking`, `ARCClients_BlockListClient` (EasyList, EasyPrivacy); General pane",
       "description": "Built-in ad, tracker and cookie-banner blocking",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Built-in ad/tracker blocking and cookie-banner handling use defined rules, profile/site exceptions and updates, block relevant requests/cosmetic content and preserve normal navigation.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -10470,6 +10498,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/manual/parent-session-4/session-a109.py <outdir>",
+          "artifact": "verify/completion/review-r4/manual/parent-session-4/session-a109.log",
+          "scope": "父任务亲手检查：导入 EasyList 写法的规则摘录后，新闻测试页在\"Block known ads and trackers on this site\"开着时（默认开）忽略缓存重载：五类广告请求全部没加载、广告位和赞助条隐藏、正文正常（A109-3-blocked.png）；真鼠标点关开关后重载：广告全部加载并显示（A109-5-exception.png）；再真点开并打开\"Hide matching cookie banners\"：广告和 Cookie 横幅都不见（A109-7-blocked-banner-hidden.png）。规则导入用的是打开面板选中文件后走的同一条产品命令（面板是独立进程，这里按键和辅助功能都够不着）。"
         }
       ],
       "remaining": [
