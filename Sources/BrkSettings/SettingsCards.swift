@@ -291,7 +291,7 @@ struct SettingsCardMetricsTable: MetricGroup {
     let wrappedLabelWidth = Metric(340.0, .anatomy("\(capture)/P38-a-arc.png: 'Manage your default search engine, Auto-Archive, and' wraps at x 806 px"))
     let subtitleGap = Metric(4.0, .anatomy("\(capture)/P38-f-arc.png: the Peek title and its Note are 40 px apart"))
     let noteFontSize = Metric(12.0, .anatomy("\(capture)/P38-g-arc.png: the Shared Quotes subtitle is a size smaller than its title"))
-    let introTop = Metric(23.5, .anatomy("\(capture)/P38-f-arc.png: the banner's wave is lowest at y 446 px, the paragraph's first line is centred at 511 px"))
+    let introTop = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the banner's wave is lowest at y 446 px, the paragraph's first line is centred at 511 px"))
     let introToCard = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the paragraph's last line is centred at 543 px, the card starts at 606 px"))
     let sheetSize = Metric(CGSize(width: 422, height: 372), .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the sheet spans x 263 to 1105 px, y 278 to 1022 px"))
     let sheetPadding = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the title starts at x 310 px, the Done button ends at 1058 px"))
