@@ -41,10 +41,12 @@ final class LinkStatusCapsule: NSView {
         isHidden = false
         if label.stringValue != status.text { label.stringValue = status.text }
         let height = M.height.value, padding = M.padding.value
-        let width = min(ceil(label.intrinsicContentSize.width) + 2 * padding, max(height, card.width * M.maxWidthShare.value))
+        // The label draws its text 2 points inside its frame; the frame keeps a point spare, or a text that just fits gets cut.
+        let text = ceil(label.attributedStringValue.size().width)
+        let width = min(text + 2 * (padding + 2), max(height, card.width * M.maxWidthShare.value))
         frame = CGRect(x: card.minX + M.inset.value, y: card.maxY - M.bottom.value - height, width: width, height: height)
         layer?.cornerRadius = height / 2
-        label.frame = CGRect(x: padding, y: (height - label.intrinsicContentSize.height) / 2, width: width - 2 * padding, height: label.intrinsicContentSize.height)
+        label.frame = CGRect(x: padding, y: (height - label.intrinsicContentSize.height) / 2, width: width - 2 * padding + 1, height: label.intrinsicContentSize.height)
     }
 }
 
@@ -53,7 +55,7 @@ enum LinkStatusMetrics {
     static let inset = Metric(10.0, .anatomy("\(capture): the capsule starts at x 238 pt, the card at 228"))
     static let bottom = Metric(10.5, .anatomy("\(capture): the capsule ends at y 755.5 pt, the card at 766"))
     static let height = Metric(23.5, .anatomy("\(capture): the capsule spans y 732 to 755.5 pt"))
-    static let padding = Metric(7.5, .anatomy("\(capture): the words start 9.5 points into the capsule (the label's cell adds 2)"))
+    static let padding = Metric(7.25, .anatomy("\(capture): the words start 9.25 points into the capsule (the label's cell adds 2), which is 233 points wide"))
     static let font = Metric(13.0, .anatomy("\(capture): '127.0.0.1:8764/visual.html?preview=1' is 214 points wide"))
     static let edge = Metric(1.0, .anatomy("\(capture): a 2 px #D8D8D8 edge"))
     static let maxWidthShare = Metric(0.6, .guess("a long address is cut in the middle at this share of the card's width"))
