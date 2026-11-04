@@ -8242,14 +8242,15 @@
       "arc_evidence": "rows 28, 29, 183; `ARC_ArcRichTextEditor`, `ARC_TextEditor`",
       "description": "Rich text notes in the sidebar and in a split; Arc is retiring them",
       "historical_status": "planned",
-      "status": "missing",
+      "status": "excluded",
       "acceptance": "Create and edit rich-text notes in the sidebar and split view; persist and export them without leaking private-session drafts.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
       "verification": [],
       "remaining": [
         "No complete user-facing workflow is implemented in current source.",
-        "R3-3（2026-11-04）：Note 没做。Arc 1.170 的菜单和命令栏都没有 New Note 入口（results.tsv Q09-b），菜单里的三项 Note 已隐藏；要不要做 Brk 自己的 Note 等用户定。"
+        "R3-3（2026-11-04）：Note 没做。Arc 1.170 的菜单和命令栏都没有 New Note 入口（results.tsv Q09-b），菜单里的三项 Note 已隐藏；要不要做 Brk 自己的 Note 等用户定。",
+        "2026-11-04：按完全复刻 Arc 的目标，Arc 1.170 没有 Note 入口（菜单和命令栏都没有，results.tsv Q09-b），Brk 也不做；菜单里的三项 Note 已隐藏。"
       ]
     },
     {
