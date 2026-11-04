@@ -66,6 +66,7 @@ public class WindowController: NSObject, NSWindowDelegate {
                   self.lastSnapshot?.content.presentedPanes.contains(where: { $0.content == .page(page) }) == true else { return }
             self.send(.user(self.id, .tab(.focus(page.item))))
         }
+        window.onPageSelectionMayChange = { [engine] page in engine.checkSelection(page) }
         window.onKeyEquivalent = { [weak self] event in
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
@@ -297,6 +298,8 @@ public protocol HostWindow: NSWindow {
     var onKeyEquivalent: ((NSEvent) -> Bool)? { get set }
     var onEscapeBeforePage: ((NSEvent) -> Bool)? { get set }
     var onPagePointerDown: ((PageID) -> Void)? { get set }
+    /// A mouse-up or key-up with a page focused: its highlight may have changed (the URL pill's Share Quote).
+    var onPageSelectionMayChange: ((PageID) -> Void)? { get set }
     /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
     func placeTrafficLights(origin: CGPoint?)
 }
@@ -319,6 +322,8 @@ extension HostWindow {
         if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(event.type) { onActivity?() }
         if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
         switch event.type {
+        case .leftMouseUp, .keyUp:
+            if let surface = Self.surface(containing: firstResponder), surface.window === self { onPageSelectionMayChange?(surface.page) }
         case .flagsChanged: onFlagsChanged?(event.modifierFlags)
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             // Control stays the keyboard's report alone: a click while Control is held mid Ctrl+Tab walk would otherwise
@@ -454,6 +459,7 @@ public final class BrowserWindow: NSWindow, HostWindow {
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
+    public var onPageSelectionMayChange: ((PageID) -> Void)?
     /// Arc's ⇧⌘-drag capture: whether this ⇧⌘ mouse-down is over the focused page, and, once it moves, starting
     /// the capture (true when the overlay is up to take the held mouse-down).
     var canStartCaptureDrag: ((NSEvent) -> Bool)?

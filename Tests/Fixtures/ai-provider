@@ -53,6 +53,7 @@ elif prompt.startswith('BRK_DOWNLOAD_NAME'):
     print('Reading.' + prompt.splitlines()[-1].split('.')[-1])
 elif prompt.startswith('BRK_INSTANT_LINK'):
     query = prompt.splitlines()[-1]
+    if 'slowly' in query: time.sleep(2)
     urls = [word for word in query.replace(',', ' ').split() if word.startswith('http')]
     print('\n'.join(urls) if urls else 'javascript:alert(1)')
 elif prompt.startswith('BRK_BROWSE'):

@@ -805,6 +805,11 @@ public enum AIReplyCodec {
         guard let data = text.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode([AITextNode].self, from: data)
     }
+    /// The 5-Second Preview card's answer (`AIPreviewReply`), nil when it is not that JSON.
+    public static func preview(_ text: String) -> AIPreviewReply? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(AIPreviewReply.self, from: data)
+    }
     public static func nodesJSON(_ nodes: [AITextNode]) throws -> String {
         String(decoding: try JSONEncoder().encode(nodes), as: UTF8.self)
     }

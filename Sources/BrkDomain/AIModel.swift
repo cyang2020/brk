@@ -25,7 +25,7 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case translate(String)
     case organizeToday, undoOrganize
     case renameDownload(DownloadID)
-    case cancel, dismiss, searchFallback
+    case cancel, dismiss
     case neverTranslateSite, neverTranslateLanguage
     /// The translation popover's Use Original (P50-e): the page's own text comes back, "Translated back to French!
     /// Use ⌘Z to undo." shows, and ⌘Z puts the translation back.
@@ -115,7 +115,6 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var text: String
     public var busy: Bool
     public var sources: [AISource]
-    public var searchQuery: String?
     public var isPreview: Bool = false
     public var canUndo: Bool = false
     public var language: String? = nil
@@ -188,6 +187,8 @@ public enum AICopy {
     public static let tidy = "Tidy"
     public static let tidyTooltip = "Organize Today Tabs"
     public static let translationAvailable = "Translation Available"
+    /// "Title for the share quote affordance below the URL".
+    public static let shareQuote = "Share Quote"
     public static let translated = "Translated"
     public static let translating = "Translating…"
     public static func translatedFrom(_ language: String) -> String { "Translated from \(language)." }
@@ -240,7 +241,11 @@ public enum AIValidation {
     public static func destinations(_ text: String) -> [URL] {
         var out: [URL] = []
         for part in text.split(whereSeparator: \.isWhitespace) {
-            guard out.count < 6, let url = destination(String(part).trimmingCharacters(in: CharacterSet(charactersIn: "<>()[],;\"'"))), !out.contains(url) else { continue }
+            var token = String(part).trimmingCharacters(in: CharacterSet(charactersIn: "<>[],;\"'"))
+            // A closing parenthesis ends the address only when it opened none (Arc_(web_browser) keeps its own).
+            while token.hasSuffix(")"), token.filter({ $0 == ")" }).count > token.filter({ $0 == "(" }).count { token.removeLast() }
+            if token.hasPrefix("("), token.filter({ $0 == "(" }).count > token.filter({ $0 == ")" }).count { token.removeFirst() }
+            guard out.count < 6, let url = destination(token), !out.contains(url) else { continue }
             out.append(url)
         }
         return out
@@ -257,7 +262,7 @@ public enum AIValidation {
                 AIPreviewDetail(label: String($0.label.prefix(40)), icon: $0.icon.isEmpty || $0.icon.count > 60 ? "circle.fill" : $0.icon, info: String($0.info.prefix(160)))
             }
         }
-        if let data = body.data(using: .utf8), var reply = try? JSONDecoder().decode(AIPreviewReply.self, from: data) {
+        if var reply = AIReplyCodec.preview(body) {
             reply.quickSummary = reply.quickSummary.map { String($0.prefix(120)) }
             reply.details = clean(reply.details ?? [])
             return reply.blocked == true || reply.quickSummary?.isEmpty == false || reply.details?.isEmpty == false ? reply : nil

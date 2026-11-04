@@ -98,6 +98,11 @@ final class ActionsTests: XCTestCase {
         XCTAssertEqual(ActionID.printPage.spec.bindings.first?.priority, .pageThenApp)
         XCTAssertEqual(ActionID.find.spec.submenu, .find)
         XCTAssertTrue(ActionID.cycleNextTab.spec.hidden)
+        // Arc 1.170's Tabs menu has no AI rows; their entry points are where Arc's are (R4-11).
+        for action in [ActionID.askOnPage, .aiInstantLink, .aiBrowse, .aiTranslate, .aiOrganizeToday, .aiUndoOrganize] {
+            XCTAssertTrue(action.spec.hidden, "\(action) shows in the Tabs menu")
+            XCTAssertNotNil(action.spec.commandBar, "\(action) left the command bar")
+        }
         XCTAssertTrue(ActionID.forceReloadPage.spec.alternate)
     }
 

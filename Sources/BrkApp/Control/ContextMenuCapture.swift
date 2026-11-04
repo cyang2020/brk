@@ -10,7 +10,7 @@ import BrkEngine
     private var items: [String] = []
     private var choice: String?
 
-    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
+    func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil, left: Bool = false) async throws -> [String] {
         choice = choose
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -22,7 +22,10 @@ import BrkEngine
         center.addObserver(self, selector: #selector(began(_:)), name: Self.willPresent, object: nil)
         center.addObserver(self, selector: #selector(finished(_:)), name: PageSurfaceView.contextMenuDidClose, object: nil)
         defer { center.removeObserver(self); menu?.cancelTracking() }
-        try events.rightClick(at: point, in: window)
+        if left {
+            // The click's own menu tracking runs inside it; the timer set when tracking begins picks the row.
+            DispatchQueue.main.async { try? events.click(at: point, modifiers: [], count: 1, in: window) }
+        } else { try events.rightClick(at: point, in: window) }
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         while !tracking.ended && ProcessInfo.processInfo.systemUptime < deadline { try await Task.sleep(for: .milliseconds(20)) }
         return items

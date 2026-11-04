@@ -254,7 +254,21 @@ enum TabToolsScenarios {
         guard case .library(let cleared)? = try app.view().overlay else { throw Check(description: "archive closed") }
         try expect(cleared.archive?.groups.isEmpty == true, "confirmed clear retained entry")
         try app.dispatch(.library(.close))
+        // A082: Arc's banner ("… haven’t used in the past 12 hours. You can adjust this in Settings."): a click on the
+        // words keeps it, Settings opens the Profiles pane, only the × dismisses it.
+        let education = try app.view().tabTools.archiveEducation
+        try expect(education == "12 hours", "the banner names \(String(describing: education))")
+        _ = try app.screenshot("TabTools6-education")
         try app.click(.tabTool("education"))
+        try expect(try app.view().tabTools.archiveEducation != nil, "a click on the banner's words dismissed it")
+        try app.click(.tabTool("education-settings"))
+        try app.waitUntil("Settings opens on Profiles") {
+            guard case .settings(let settings) = try app.send(.settings) else { return false }
+            return settings.pane == .profiles
+        }
+        try app.dispatch(.settings(.closeWindow))
+        try app.click(.tabTool("education-close"))
+        try app.waitUntil("the × dismisses the banner") { try app.view().tabTools.archiveEducation == nil }
         try app.flush(); try app.restart()
         try expect(try app.view().tabTools.archiveEducation == nil, "education dismissal did not persist")
         try expect(try allTabs(app.view()).contains { $0.id == a } && !allTabs(app.view()).contains { $0.id == copy }, "archive controls changed surviving tabs")

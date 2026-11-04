@@ -313,6 +313,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
         }
         pill.translation = state.pillTranslation(PageID(window: id, item: focusedPane), in: id, systemLanguage: ctx.systemLanguage)
+        pill.shareQuote = state.doc.settings.advanced.sharedQuotes && state.session.live[PageID(window: id, item: focusedPane)]?.hasSelection == true
         // An Easel's pill is its Share button (Q09 a: a lock and "Share").
         if let easel = EaselPage.id(of: t.url), state.doc.easels[easel] != nil {
             pill.share = easel

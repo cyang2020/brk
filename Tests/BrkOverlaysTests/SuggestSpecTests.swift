@@ -393,3 +393,46 @@ final class SuggestWave2Tests: XCTestCase {
     }
 }
 
+/// Max in the command bar (R4-11): Arc's Ask row (P49) and Instant Links' Shift+Return (P48).
+final class MaxCommandBarSuggestTests: XCTestCase {
+    private func bar(ask: String? = "Claude", instant: Bool = true) -> CommandBarSnapshot {
+        var bar = commandBar([], [], suggestions: ["how do browsers render text", "browser font rendering", "how do browsers render html"],
+                             suggestedFor: "how do browsers render fonts")
+        bar.askProvider = ask
+        bar.instantLinks = instant
+        return bar
+    }
+
+    func testTheAskRowIsThirdForAQuestion() {
+        let rows = Suggest.rank(query: "how do browsers render fonts", bar: bar(), appName: "Brk")
+        XCTAssertEqual(rows.count, 5)
+        XCTAssertEqual(rows[2].kind, .ask)
+        XCTAssertEqual(rows[2].title, "how do browsers render fonts")
+        XCTAssertEqual(rows[2].hint, "Ask Claude")
+        XCTAssertEqual(rows[2].command, .assist(.ask("how do browsers render fonts")))
+        XCTAssertEqual(rows[0].kind, .openTyped)
+    }
+
+    func testNoAskRowWhenOffForAnAddressOrOneWord() {
+        XCTAssertFalse(Suggest.rank(query: "how do browsers render fonts", bar: bar(ask: nil), appName: "Brk").contains { $0.kind == .ask })
+        XCTAssertFalse(Suggest.rank(query: "example.com/fonts", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
+        XCTAssertFalse(Suggest.rank(query: "fonts", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
+        XCTAssertTrue(Suggest.rank(query: "fonts?", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
+    }
+
+    func testShiftReturnSearchesOnlyAWebSearch() {
+        XCTAssertEqual(Suggest.instantQuery(" wikipedia arc browser ", bar: bar()), "wikipedia arc browser")
+        XCTAssertNil(Suggest.instantQuery("wikipedia arc browser", bar: bar(instant: false)))
+        XCTAssertNil(Suggest.instantQuery("example.com", bar: bar()))
+        XCTAssertNil(Suggest.instantQuery("2+2", bar: bar()))
+        XCTAssertNil(Suggest.instantQuery("", bar: bar()))
+    }
+
+    func testTypingTheToolsNameThenTabAsks() {
+        XCTAssertTrue(Suggest.asksProvider("Cla", bar: bar()))
+        XCTAssertTrue(Suggest.asksProvider("claude", bar: bar()))
+        XCTAssertFalse(Suggest.asksProvider("cl", bar: bar()))
+        XCTAssertFalse(Suggest.asksProvider("claudette", bar: bar()))
+        XCTAssertFalse(Suggest.asksProvider("Claude", bar: bar(ask: nil)))
+    }
+}

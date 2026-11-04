@@ -91,7 +91,8 @@ final class PageLinkPreviews: NSObject, NSPopoverDelegate {
                     if ticks % 12 == 0 { try await self.refreshFrames() }
                     ticks += 1
                     if self.suspended, self.surface?.window?.isKeyWindow == true { self.suspended = false }
-                    if self.available(), !self.suspended {
+                    // Shift held over a link is Max's 5-Second Preview (Arc's answer card, P45-a): this card stays away.
+                    if self.available(), !self.suspended, !NSEvent.modifierFlags.contains(.shift) {
                         var candidate: (FrameWorld, [String: Any])?
                         for frame in self.frameWorlds {
                             if let value = try? await self.evaluate("globalThis.__brkPreview.read()", context: frame.context) as? [String: Any], value["href"] is String {

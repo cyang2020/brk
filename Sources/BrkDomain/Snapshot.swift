@@ -132,8 +132,10 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var developerMode = false
     /// The focused card shows an Easel: the pill reads "Share" after a lock (Q09 a) and a click shares the board.
     public var share: EaselID? = nil
-    /// The second line under the host: Translation Available, Translating…, Translated (P01-a, P50-b).
+    /// The second line under the host: Translation Available, Translating…, Translated (P01-a, P50-b); Share Quote
+    /// instead while text is highlighted and Shared Quotes is on.
     public var translation: PillTranslation? = nil
+    public var shareQuote = false
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {

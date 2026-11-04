@@ -159,6 +159,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case languageDetected(DocumentToken, String)
     /// The page menu's "Translate to English" (Arc's item, Q07-a), naming the system language the page goes into.
     case translateRequested(String)
+    /// Text became highlighted in the document (true) or no longer is (false): the URL pill's Share Quote.
+    case selectionChanged(DocumentToken, Bool)
     case faviconChanged(URL?)
     case documentPictureInPictureChanged(DocumentToken, Bool, error: String?)
     case mediaChanged(DocumentToken, [MediaPlayer], error: String?)

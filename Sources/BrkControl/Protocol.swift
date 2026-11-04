@@ -72,6 +72,9 @@ public enum ControlOp: Codable, Sendable, Equatable {
     case click(view: ViewID?, point: CGPoint?, modifiers: String?, count: Int)
     /// Opens a real page context menu, records its native items, and cancels tracking without selecting an action.
     case captureContextMenu(window: WindowID?, point: CGPoint, choose: String? = nil)
+    /// Left-clicks the view that pops a native menu (the Library's Filter), records its items and picks `choose`
+    /// ("Submenu › Row") the way `captureContextMenu` does.
+    case captureClickMenu(view: ViewID, choose: String? = nil)
     /// Moves the pointer (hover: peek the hidden sidebar).
     case hover(point: CGPoint)
     /// A native pointer sequence. The down target keeps receiving dragged/up events, as with a physical mouse.

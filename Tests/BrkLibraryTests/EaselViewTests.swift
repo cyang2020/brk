@@ -111,6 +111,29 @@ final class EaselViewTests: XCTestCase {
         XCTAssertEqual(view.tool, .pen, "freehand stays on for the next stroke")
     }
 
+    /// A101: the selection's corner handles resize it (the opposite corner stays); Shift keeps the proportions.
+    func testDraggingACornerHandleResizesTheSelection() throws {
+        let shape = EaselElement(id: "r", shape: .rectangle, frame: CGRect(x: -100, y: 200, width: 120, height: 80))
+        let arrow = EaselElement(id: "a", shape: .arrow, frame: CGRect(x: 0, y: 0, width: 10, height: 10), points: [CGPoint(x: 0, y: 0), CGPoint(x: 10, y: 10)])
+        let (view, window) = board(snapshot([shape, arrow]))
+        view.mouseDown(with: event(.leftMouseDown, at: CGPoint(x: -40, y: 240), in: view, window: window))
+        view.mouseUp(with: event(.leftMouseUp, at: CGPoint(x: -40, y: 240), in: view, window: window))
+        XCTAssertEqual(view.selection, ["r"])
+        sent = []
+        // The bottom-right handle sits on the selection box's corner, the element's corner plus the frame's outset.
+        let outset = EaselDraw.board.elementOutset.value
+        view.mouseDown(with: event(.leftMouseDown, at: CGPoint(x: 20 + outset, y: 280 + outset), in: view, window: window))
+        view.mouseDragged(with: event(.leftMouseDragged, at: CGPoint(x: 60, y: 300), in: view, window: window))
+        view.mouseUp(with: event(.leftMouseUp, at: CGPoint(x: 80, y: 320), in: view, window: window))
+        guard case .easel(.update(let easel, let changed))? = sent.last else { return XCTFail("\(sent)") }
+        XCTAssertEqual(easel, id)
+        XCTAssertEqual(changed.map(\.frame), [CGRect(x: -100, y: 200, width: 180, height: 120)], "the top-left corner stays, the box follows the pointer")
+        // Arrows and strokes scale their points with the box.
+        let scaled = arrow.resized(from: CGRect(x: 0, y: 0, width: 10, height: 10), to: CGRect(x: 0, y: 0, width: 20, height: 40))
+        XCTAssertEqual(scaled.points, [CGPoint(x: 0, y: 0), CGPoint(x: 20, y: 40)])
+        XCTAssertEqual(scaled.frame, CGRect(x: 0, y: 0, width: 20, height: 40))
+    }
+
     func testTheImageToolAndThePersonButtonAskTheApp() throws {
         let (view, _) = board(snapshot())
         (id(view, "tool-image") as? NSButton)?.performClick(nil)

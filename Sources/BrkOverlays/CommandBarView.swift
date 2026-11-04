@@ -673,6 +673,8 @@ final class ResultRowView: NSView {
         hint.stringValue = suggestion.hint ?? ""
         hintPill.isHidden = suggestion.hint == nil || (isSwitch && !captions)
         arrow.isHidden = !(isSwitch && captions)
+        // The Ask row's arrow square names it for the control socket (rows are otherwise known by index).
+        if suggestion.kind == .ask { arrow.identify(.aiControl("ask-row")) } else { arrow.setAccessibilityIdentifier(nil) }
         setAccessibilityLabel(suggestion.title)
         setHighlighted(highlighted, colors)
         needsLayout = true

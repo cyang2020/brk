@@ -46,6 +46,9 @@ public protocol WebEngine: AnyObject {
     /// The text highlighted in a live page's focused frame (nil when nothing is, or the page is not live). For
     /// Shared Quotes' Copy Link to Highlight.
     func selectedText(_ page: PageID) async -> String?
+    /// Reads whether the page has text highlighted and reports a change as `PageEvent.selectionChanged` (the URL
+    /// pill's Share Quote). Called after a mouse-up or key-up in the page.
+    func checkSelection(_ page: PageID)
 
     /// The browser engine's version as the About window shows it ("154.0.8037.98" for Chromium); nil without one.
     var engineVersion: String? { get }
@@ -145,6 +148,7 @@ public protocol WebEngineDelegate: AnyObject {
 
 extension WebEngine {
     public func selectedText(_ page: PageID) async -> String? { nil }
+    public func checkSelection(_ page: PageID) {}
     public func cancelBoostPick(_ target: SiteTarget) {}
     public func pickBoostElement(_ target: SiteTarget) async throws -> String? { throw CocoaError(.featureUnsupported) }
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage { throw CocoaError(.featureUnsupported) }

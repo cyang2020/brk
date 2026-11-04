@@ -391,6 +391,18 @@ final class ControlExecutor {
             let capture = ContextMenuCapture()
             return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice))
 
+        case .captureClickMenu(let viewID, let choice):
+            let c = try controller(nil)
+            store.inputWindow = c.window
+            // The browser window first, then any other app window (the settings window's pop-ups).
+            let found = ViewTree.find(viewID.identifier, in: c.window).map { ($0, c.window) }
+                ?? NSApp.windows.lazy.filter(\.isVisible).compactMap { w in ViewTree.find(viewID.identifier, in: w).map { ($0, w) } }.first
+            guard let (view, window) = found, !view.isHiddenOrHasHiddenAncestor else { throw Failure(message: "no visible view \(viewID.identifier)") }
+            if view.enclosingScrollView != nil, view.visibleRect.size != view.bounds.size { view.scrollToVisible(view.bounds); window.displayIfNeeded() }
+            let capture = ContextMenuCapture()
+            return .menuItems(try await capture.run(at: view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil), in: window,
+                                                    events: events, choose: choice, left: true))
+
         case .screenshot(let window, let path):
             let c = try controller(window)
             // A snapshot can be newer than the WindowServer/CEF compositor frame. Yield to its commit first.

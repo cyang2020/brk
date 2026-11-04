@@ -3,14 +3,16 @@ import BrkBase
 import BrkDomain
 import BrkUIKit
 
-/// The URL pill's second line (Arc's translation affordance below the URL, P01-a, P50-b/c): "Translation Available"
-/// takes no click of its own (a click edits the address, as on the rest of the pill); "Translated" underlines under
-/// the pointer and opens the translation popover.
+/// The URL pill's second line (Arc's affordances below the URL, P01-a, P50-b/c): "Share Quote" while text is
+/// highlighted (a click copies the link to the highlight); otherwise "Translation Available", which takes no click of
+/// its own (a click edits the address, as on the rest of the pill), or "Translated", which underlines under the
+/// pointer and opens the translation popover.
 @MainActor
 final class PillTranslationLine: HoverView {
     private let label = NSTextField(labelWithString: "")
     private let dispatch: Dispatch
     private var state: PillTranslation?
+    private var shareQuote = false
     private var palette: Palette?
     private lazy var popover = TranslationPopover(dispatch: dispatch)
 
@@ -24,12 +26,19 @@ final class PillTranslationLine: HoverView {
         identify(.aiControl("pill-translation"))
     }
 
-    func render(_ state: PillTranslation?, palette: Palette) {
+    func render(_ state: PillTranslation?, shareQuote: Bool = false, palette: Palette) {
         self.state = state
+        self.shareQuote = shareQuote
         self.palette = palette
-        isHidden = state == nil
-        if state == nil { popover.close() }
+        isHidden = state == nil && !shareQuote
+        if state == nil || shareQuote { popover.close() }
         stateChanged()
+    }
+
+    private var clickable: Bool {
+        if shareQuote { return true }
+        if case .translated? = state { return true }
+        return false
     }
 
     /// The width the text needs, so the line's hover area is the word, not the whole pill.
@@ -41,25 +50,30 @@ final class PillTranslationLine: HoverView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard case .translated? = state else { return nil }
+        guard clickable else { return nil }
         return super.hitTest(point)
     }
 
     override func stateChanged() {
-        guard let palette, let state else { return }
-        let text: String = switch state {
-        case .available: AICopy.translationAvailable
-        case .translating: AICopy.translating
-        case .translated: AICopy.translated
+        guard let palette, state != nil || shareQuote else { return }
+        let text: String = switch (shareQuote, state) {
+        case (true, _): AICopy.shareQuote
+        case (false, .available?): AICopy.translationAvailable
+        case (false, .translating?): AICopy.translating
+        case (false, .translated?): AICopy.translated
+        case (false, nil): ""
         }
         var attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: Draw.pillSubtitleFont.value), .foregroundColor: palette.ink.text]
-        if case .translated = state, isHovered { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if clickable, isHovered { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         label.attributedStringValue = NSAttributedString(string: text, attributes: attributes)
+        setAccessibilityValue(text)
     }
 
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
-        guard case .translated(let source)? = state, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        if shareQuote { dispatch(.page(.shareQuote)); return }
+        guard case .translated(let source)? = state else { return }
         popover.show(from: label, source: source)
     }
 }

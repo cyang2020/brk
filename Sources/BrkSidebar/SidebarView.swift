@@ -476,7 +476,7 @@ final class URLPillView: HoverView {
         layer?.borderWidth = pill.share == nil ? 0 : Draw.shareEdge.value
         layer?.borderColor = NSColor.black.withAlphaComponent(0.13).cgColor
         if pill.share != nil { label.textColor = palette.ink.secondary }
-        translationLine.render(search || pill.share != nil ? nil : pill.translation, palette: palette)
+        translationLine.render(search || pill.share != nil ? nil : pill.translation, shareQuote: !search && pill.share == nil && pill.shareQuote, palette: palette)
         stateChanged()
         needsLayout = true
     }

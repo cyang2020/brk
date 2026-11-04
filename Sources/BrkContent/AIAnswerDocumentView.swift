@@ -74,7 +74,6 @@ final class AIAnswerDocumentView: NSView {
                 button.onPress = { [weak self] in self?.dispatch(.assist(intent)) }; controls.append(button)
             }
             if answer.canUndo { control("Undo Organize Today", .undoOrganize, "ai-undo") }
-            if answer.searchQuery != nil { control("Search Instead", .searchFallback, "ai-search-fallback") }
             if answer.site != nil { control("Never translate this site", .neverTranslateSite, "ai-never-site") }
             if let language = answer.language, !language.isEmpty { control("Never translate \(language)", .neverTranslateLanguage, "ai-never-language") }
             let settings = AIActionButton("Max Settings…")

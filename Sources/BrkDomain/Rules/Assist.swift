@@ -10,11 +10,6 @@ extension Work {
             cancelAI(in: window, slot: .panel)
             if intent == .dismiss { state.session.ai.answers[window] = nil }
             return
-        case .searchFallback:
-            guard let query = state.session.ai.answers[window]?.searchQuery else { return }
-            cancelAI(in: window, slot: .panel)
-            commandBar(.submit(query), in: window)
-            return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
@@ -138,7 +133,7 @@ extension Work {
     }
     private mutating func aiMessage(_ text: String, in window: WindowID) {
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
-        state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: "Max", text: text, busy: false, sources: [], searchQuery: nil)
+        state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: "Max", text: text, busy: false, sources: [])
     }
     /// A new request replaces the window's earlier one of the same slot (one answer, one preview, one translation,
     /// one tidy); Instant Links searches run side by side, one Today row each. Only the panel's purposes write the
@@ -149,7 +144,7 @@ extension Work {
         state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose)
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         if !purpose.inPlace {
-            state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [], searchQuery: nil)
+            state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [])
         }
         state.session.windows[window]?.overlay = nil
         effects.append(.aiWatch(id, seconds: 120))
@@ -180,6 +175,13 @@ extension Work {
         guard let live = state.session.live[page], case .ready(let document) = live.document,
               live.requestContext == state.libraryContext(in: window) else {
             toast("Wait for this page to finish loading, then retry.", in: window); return
+        }
+        if case .profile(let profile) = state.browsingContext(of: page.item), let exclusions = state.doc.settings.max.translationExclusions?[profile] {
+            let source = state.session.ai.translations[page]?.source ?? live.language.map(AILanguages.base) ?? ""
+            let host = state.address(of: page.item, in: window, for: .visible)?.host?.lowercased() ?? ""
+            if exclusions.languages.contains(source) || exclusions.sites.contains(host) {
+                toast("This profile never translates this language or site. Change the choice in Settings → Max.", in: window); return
+            }
         }
         if let translation = state.session.ai.translations[page], translation.document == document, translation.target == language {
             if !translation.showingTranslation { showTranslation(page, true) }
@@ -438,6 +440,16 @@ extension Work {
     }
     mutating func reconcileAI(from previous: AppState) {
         let providerChanged = previous.doc.settings.max.provider != state.doc.settings.max.provider
+        // Max's Tidy Tab Titles: a Today tab that became Pinned by any route (Pin Tab, a drag into Pinned, a move from
+        // the menu) asks for its tidier title; Arc renames a tab dragged into Pinned within a few seconds (P47-a).
+        if state.doc.settings.max.renamePinnedTabs {
+            let asked = Set(state.session.pendingAI.values.compactMap { if case .renameTab(let tab, _, _) = $0 { tab } else { nil } })
+            for tab in state.doc.tree.allTabs() where !asked.contains(tab) && state.role(of: tab)?.kind == .pinned && previous.role(of: tab)?.kind == .today {
+                guard let window = state.doc.windows.first(where: { state.displayedTab(tab, in: $0.key) != nil })?.key,
+                      let t = state.displayedTab(tab, in: window), let url = state.tab(tab)?.pinnedURL ?? t.url, t.customTitle == nil else { continue }
+                requestAI(.renameTab(tab, title: t.displayTitle, url: url))
+            }
+        }
         for (id, task) in state.session.pendingAI where state.session.ai.requests[id] == nil {
             let valid: Bool
             switch task {

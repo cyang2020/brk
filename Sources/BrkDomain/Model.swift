@@ -429,6 +429,8 @@ struct LivePage: Sendable, Equatable {
     /// The ready document's language as the page declares it (`<html lang>`), for the URL pill's Translation
     /// Available and the page menu's Translate to English.
     var language: String? = nil
+    /// Text is highlighted in the ready document (`PageEvent.selectionChanged`).
+    var hasSelection = false
 }
 
 public struct LoadFailure: Hashable, Sendable, Codable {

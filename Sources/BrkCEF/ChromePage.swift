@@ -14,6 +14,8 @@ final class ChromePage: CefBrowserDelegate {
     let isAIReader: Bool
     /// The ready document's `<html lang>` (CEFEngine.reportLanguage), for the page menu's Translate to English.
     var detectedLanguage: String?
+    /// The last highlight state reported (`PageEvent.selectionChanged`), reset with each document.
+    var reportedSelection = false
     let context: BrowsingContext
     let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
@@ -401,6 +403,7 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
         detectedLanguage = nil
+        reportedSelection = false
         closeDocumentPiP()
         settlePermissionGrants(keeping: nil)
         subframeMediaIntent = false
