@@ -369,11 +369,13 @@ extension HostWindow {
     }
 
     /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top. `origin` is in
-    /// the window's top-left content space; nil hides them (sidebar hidden).
+    /// the window's top-left content space; nil hides them (sidebar hidden). At rest Arc draws them as grey circles,
+    /// key window or not, and the colored buttons only while the pointer is over them (`RestingTrafficLights`).
     func placeArcTrafficLights(origin: CGPoint?) {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
         guard let origin, let container = buttons.first?.superview else {
             buttons.forEach { $0.isHidden = true }
+            RestingTrafficLights.find(in: buttons.first?.superview)?.isHidden = true
             return
         }
         let pitch = Metrics.window.trafficLightSize.value + Metrics.window.trafficLightSpacing.value
@@ -385,7 +387,62 @@ extension HostWindow {
             let y = container.bounds.height - origin.y - size.height
             button.setFrameOrigin(CGPoint(x: x, y: y))
         }
+        let resting = RestingTrafficLights.find(in: container) ?? {
+            let made = RestingTrafficLights(buttons: buttons)
+            container.addSubview(made, positioned: .below, relativeTo: buttons.first)
+            return made
+        }()
+        resting.isHidden = false
+        resting.frame = buttons.map(\.frame).reduce(buttons[0].frame) { $0.union($1) }
+        resting.needsDisplay = true
     }
+}
+
+/// Arc's traffic lights at rest (verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
+/// the key window and P01-d with another app frontmost): three flat circles of black at 8.5% over the sidebar
+/// (#DCD5D3 on #F0EAE6), the colored buttons with their glyphs only while the pointer is over them (P01-c). Sits
+/// under the standard buttons, which stay clickable and turn transparent at rest.
+@MainActor
+final class RestingTrafficLights: NSView {
+    private let buttons: [NSButton]
+    private var tracking: NSTrackingArea?
+
+    init(buttons: [NSButton]) {
+        self.buttons = buttons
+        super.init(frame: .zero)
+        identifier = Self.id
+        buttons.forEach { $0.alphaValue = 0 }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    static let id = NSUserInterfaceItemIdentifier("resting-traffic-lights")
+    static func find(in container: NSView?) -> RestingTrafficLights? {
+        container?.subviews.first { $0.identifier == id } as? RestingTrafficLights
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(white: 0, alpha: 0.085).setFill()
+        for button in buttons {
+            let side = Metrics.window.trafficLightSize.value - 1
+            let frame = convert(button.frame, from: superview)
+            NSBezierPath(ovalIn: CGRect(x: frame.midX - side / 2, y: frame.midY - side / 2, width: side, height: side)).fill()
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { buttons.forEach { $0.alphaValue = 1 } }
+    override func mouseExited(with event: NSEvent) { buttons.forEach { $0.alphaValue = 0 } }
 }
 
 /// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
