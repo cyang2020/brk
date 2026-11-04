@@ -123,7 +123,8 @@ public final class LittleWindowController: WindowController {
         header.isHidden = !hasPage
         header.frame = CGRect(x: 0, y: 0, width: width, height: Metrics.littleArc.headerHeight.value)
         header.render(host: page?.url.flatMap { $0.host ?? displayURL($0) } ?? snapshot.urlPill.text, space: snapshot.space,
-                      canOpenIn: snapshot.enabledActions.contains(.openTabIn), accent: ThemeAccent.splitFocusRing(snapshot.theme), palette: palette)
+                      canOpenIn: snapshot.enabledActions.contains(.openTabIn),
+                      accent: snapshot.dock.first { $0.id == snapshot.space.id }.map { ThemeAccent.ring(of: $0.color) } ?? ThemeAccent.splitFocusRing(snapshot.theme), palette: palette)
         let tipFrame = Metrics.littleArc.tipFrame.value
         tip.isHidden = !(hasPage && snapshot.tabTools.littleTip)
         tip.frame = CGRect(x: width - tipFrame.minX - 8, y: tipFrame.minY, width: tipFrame.width, height: tipFrame.height)
@@ -189,7 +190,7 @@ final class LittleFirstRunTip: NSView {
         let spacing = NSMutableParagraphStyle(); spacing.minimumLineHeight = m.tipBodyLine.value; spacing.maximumLineHeight = m.tipBodyLine.value
         body.attributedStringValue = NSAttributedString(string: PeekCopy.hint, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: body.textColor!, .paragraphStyle: spacing])
         close.isBordered = false
-        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")?.withSymbolConfiguration(.init(pointSize: 8, weight: .bold))
+        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")?.withSymbolConfiguration(.init(pointSize: 9, weight: .heavy))
         close.contentTintColor = NSColor(srgbRed: 0xB7 / 255.0, green: 0xBB / 255.0, blue: 1, alpha: 1)
         close.target = self
         close.action = #selector(dismissTip)
@@ -208,7 +209,7 @@ final class LittleFirstRunTip: NSView {
         let m = Metrics.littleArc, inset = m.tipInset.value - 2
         let titleHeight = title.intrinsicContentSize.height
         title.frame = CGRect(x: inset, y: m.tipTitleTop.value, width: bounds.width - inset - 24, height: titleHeight)
-        body.frame = CGRect(x: inset, y: m.tipTitleTop.value + titleHeight + 3, width: bounds.width - 2 * inset - 6, height: 2 * m.tipBodyLine.value)
+        body.frame = CGRect(x: inset, y: m.tipTitleTop.value + titleHeight + 3, width: bounds.width - 2 * inset - 18, height: 2 * m.tipBodyLine.value)
         close.frame = CGRect(x: bounds.width - 21, y: 4, width: 16, height: 16)
     }
 

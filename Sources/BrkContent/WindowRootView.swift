@@ -378,6 +378,9 @@ public enum ThemeAccent {
     /// Light: the primary's hue and saturation (HSL) at the lightness whose relative luminance is Arc's 0.097. That is
     /// the ring in both Arc captures, which is also Arc's folder outline there: #725137 under the #F2EAE4 theme
     /// (P23-a) and #006362 under the cyan one (P23-c, the round-2 Arc space). Dark keeps a light shade.
+    /// The ring's colour for a space's primary colour (a Little window names its space in this colour, P21-b).
+    public static func ring(of primary: RGBA) -> NSColor { luminanceMatched(primary, luminance: ThemeAccentDraw.ringLuminance.value) }
+
     public static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
         guard theme.scheme == .light else { return shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: 0.8) }
         return luminanceMatched(theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1), luminance: ThemeAccentDraw.ringLuminance.value)
