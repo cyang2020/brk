@@ -347,6 +347,33 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
         }
     }
 
+    /// Arc's `WindowMenuProvider`: the Window menu ends with the browser windows (their current tab's title, the key
+    /// one checked); choosing one brings it to the front. AppKit's own list leaves them out (they have no title).
+    var windowList: () -> [(id: WindowID, title: String, key: Bool)] = { [] }
+    var focusWindow: ((WindowID) -> Void)?
+    static let windowItemTag = 9_001
+
+    @objc func chooseWindow(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        focusWindow?(WindowID(raw))
+    }
+
+    func fillWindows(_ menu: NSMenu, windows: [(id: WindowID, title: String, key: Bool)]) {
+        for item in menu.items.reversed() where item.tag == Self.windowItemTag { menu.removeItem(item) }
+        guard !windows.isEmpty else { return }
+        let separator = NSMenuItem.separator()
+        separator.tag = Self.windowItemTag
+        menu.addItem(separator)
+        for window in windows {
+            let item = NSMenuItem(title: window.title, action: #selector(chooseWindow(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = Self.windowItemTag
+            item.representedObject = window.id.rawValue
+            item.state = window.key ? .on : .off
+            menu.addItem(item)
+        }
+    }
+
     @objc func performAction(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let action = ActionID(rawValue: raw) else { return }
         let event = NSApp.currentEvent
@@ -357,7 +384,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
     private let log = Logger(subsystem: "brk", category: "keys")
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.tag == Self.spaceItemTag { return true }
+        if item.tag == Self.spaceItemTag || item.tag == Self.windowItemTag { return true }
         guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { return true }
         if action.spec.later != nil { return false }
         if let checked = isChecked?(action) { item.state = checked ? .on : .off }
@@ -377,6 +404,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation, NSMenuDelegate {
         let states = shortcuts() ?? KeyBindings.resolve(overrides: [:]).mapValues(\.state)
         let now = current()
         if menu.title == MainMenu.title(of: .spaces) { fillSpaces(menu, dock: now.window?.kind == .standard ? now.window?.dock ?? [] : []) }
+        if menu.title == MainMenu.title(of: .window) { fillWindows(menu, windows: windowList()) }
         for item in menu.items where item.tag == 0 {
             guard let raw = item.representedObject as? String, let action = ActionID(rawValue: raw) else { continue }
             Self.apply(states[action], to: item)

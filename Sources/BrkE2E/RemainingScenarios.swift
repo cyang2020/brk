@@ -154,11 +154,15 @@ enum RemainingScenarios {
     @Sendable static func launchServices(_ app: AppUnderTest) throws {
         let bundle = app.executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let root = app.dataDirectory.appendingPathComponent("links")
-        let copy = root.appendingPathComponent("Brk Links Test.app"), data = root.appendingPathComponent("data")
+        // Launch Services binds no URL handler to an app under /tmp, where the runner's data lives, so the copy sits in
+        // the checkout's build folder (next to dist/) and is deleted afterwards; its data and socket stay in /tmp.
+        let shelf = bundle.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".build/e2e-links-" + UUID().uuidString.prefix(8))
+        let copy = shelf.appendingPathComponent("Brk Links Test.app"), data = root.appendingPathComponent("data")
         let socket = root.appendingPathComponent("control.sock").path
         let scheme = "brk-test", bundleID = "dev.brk.e2e.links." + UUID().uuidString.prefix(8).lowercased()
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: shelf, withIntermediateDirectories: true)
         // An APFS clone of the built bundle under its own bundle id, declaring only brk-test (never http or https),
         // with the e2e environment in LSEnvironment so a Launch Services cold launch is a controllable instance.
         try run("/bin/cp", ["-cR", bundle.path, copy.path])
@@ -183,7 +187,7 @@ enum RemainingScenarios {
                 if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
             }
             _ = try? run(lsregister, ["-u", copy.path])
-            try? FileManager.default.removeItem(at: copy)
+            try? FileManager.default.removeItem(at: shelf)
         }
         let log = shotsLog(app, "launch-services.log")
         var record = "copy \(copy.path)\nbundle id \(bundleID), scheme \(scheme)\nlsregister -f done\n"
@@ -422,7 +426,7 @@ enum RemainingScenarios {
             guard case .menuItems(let lines) = try app.send(.menuBarItems(menu: name)) else { throw Check(description: "no \(name) menu") }
             return lines
         }
-        func row(_ lines: [String], _ title: String) -> String? { lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix(title + "\t") } }
+        func row(_ lines: [String], _ title: String) -> String? { lines.first { $0.drop(while: { $0 == " " }).hasPrefix(title + "\t") } }
         // Spaces: the window's spaces at the end, the current one checked; choosing one switches to it.
         let first = try app.view().space
         let second = try createSpace(app, title: "Menu Space")
@@ -455,6 +459,8 @@ enum RemainingScenarios {
         let before = try menu("Window").count
         try app.dispatch(.window(.new))
         try app.waitUntil("the Window menu lists the new window") { try menu("Window").count > before }
+        let windowMenu = try menu("Window")
+        try expect(windowMenu.filter { $0.hasSuffix("checked") }.count == 1, "the Window menu does not check exactly the key window: \(windowMenu)")
         // Go Back is enabled only with history.
         try expect(row(try menu("Archive"), "Go Back")?.contains("disabled") == true, "Go Back is enabled in a fresh window")
         guard case .menuItems(let titlesAfter) = try app.send(.menuBarItems(menu: nil)) else { throw Check(description: "no menu bar") }

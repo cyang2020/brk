@@ -5,6 +5,6 @@
 <iframe id="frame" width="320" height="120"></iframe>
 <script>
 document.getElementById('frame').src=location.href.replace('127.0.0.1','localhost').replace('r44-csp.html','page2.html');
-window.boostReport=tag=>{document.title='boost:'+tag+':'+JSON.stringify({color:getComputedStyle(document.getElementById('style-target')).color,display:getComputedStyle(document.getElementById('zap-target')).display,frame:getComputedStyle(document.getElementById('frame')).display,styles:document.querySelectorAll('style').length,adopted:(document.adoptedStyleSheets||[]).length,origin:location.origin})};
+window.boostReport=tag=>{document.title='boost:'+tag+':'+JSON.stringify({color:getComputedStyle(document.getElementById('style-target')).color,display:getComputedStyle(document.getElementById('zap-target')).display,frame:getComputedStyle(document.getElementById('frame')).display,styles:document.querySelectorAll('style[data-brk-boost-owner]').length,adopted:(document.adoptedStyleSheets||[]).length,origin:location.origin})};
 window.inlineAllowed=()=>{const s=document.createElement('style');s.textContent='#zap-target{color:rgb(1,2,3)}';document.head.append(s);document.title='inline:'+(s.sheet?'applied':'blocked');s.remove()};
 </script>

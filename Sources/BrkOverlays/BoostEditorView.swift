@@ -239,6 +239,8 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         let previous = editor
         editor = value
         if opening || previous?.page != value.page { menuOpen = false }
+        // A new editor starts from its own draft's scope, not the text the last one could not take.
+        if opening { settings.forgetTypedScope() }
         syncing = true
         defer { syncing = false }
         let style = value.draft.style ?? BoostStyle()
@@ -333,7 +335,8 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     }
     /// × keeps the edits (`.close`), but never past an origin the settings card could not read.
     private func closePanel() {
-        if menuOpen || settings.unreadable, var draft = editor?.draft, !settings.apply(to: &draft) { message.stringValue = Self.scopeRefusal; return }
+        // A draft with nothing in it saves nothing, so its scope cannot be wrong: it closes.
+        if menuOpen || settings.unreadable, var draft = editor?.draft, !draft.isBlank, !settings.apply(to: &draft) { message.stringValue = Self.scopeRefusal; return }
         dispatch(.boost(.close))
     }
     static let scopeRefusal = "Enter an HTTP(S) origin or a host name."
@@ -745,6 +748,7 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
         enabled.state = draft.enabled ? .on : .off
         privateAllowed.state = draft.allowPrivate ? .on : .off
     }
+    func forgetTypedScope() { unreadable = false }
     /// False when the typed origin is not an HTTP(S) origin.
     func apply(to draft: inout Boost) -> Bool {
         draft.name = name.stringValue

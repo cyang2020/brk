@@ -80,4 +80,20 @@ final class RemainingFeaturesAppTests: XCTestCase {
         target.fillSpaces(spaces, dock: [])
         XCTAssertEqual(spaces.items.count, fixed)
     }
+
+    func testTheWindowMenuEndsWithTheBrowserWindows() throws {
+        let target = MenuTarget()
+        let main = MainMenu.build(target: target)
+        let window = try XCTUnwrap(main.items.first { $0.title == "Window" }?.submenu)
+        let fixed = window.items.count
+        target.fillWindows(window, windows: [(WindowID("a"), "Fixture Home", false), (WindowID("b"), "Red", true)])
+        XCTAssertEqual(window.items.suffix(2).map(\.title), ["Fixture Home", "Red"])
+        XCTAssertEqual(window.items.suffix(2).map(\.state), [.off, .on])
+        var chosen: WindowID?
+        target.focusWindow = { chosen = $0 }
+        target.chooseWindow(window.items[fixed + 1])
+        XCTAssertEqual(chosen, WindowID("a"))
+        target.fillWindows(window, windows: [])
+        XCTAssertEqual(window.items.count, fixed)
+    }
 }

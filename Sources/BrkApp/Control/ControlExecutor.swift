@@ -56,7 +56,8 @@ final class ControlExecutor {
                 if mask.contains(.option) { key += "⌥" }
                 if mask.contains(.shift) || item.keyEquivalent != item.keyEquivalent.lowercased() { key += "⇧" }
                 if mask.contains(.command) { key += "⌘" }
-                key += item.keyEquivalent.uppercased()
+                let special: [UInt32: String] = [0xF700: "↑", 0xF701: "↓", 0xF702: "←", 0xF703: "→", 0xF70F: "F12", 0x1B: "⎋", 0x09: "⇥", 0x19: "⇥", 0x0D: "↩"]
+                key += item.keyEquivalent.unicodeScalars.first.flatMap { special[$0.value] } ?? item.keyEquivalent.uppercased()
             }
             var flags: [String] = []
             if !item.isEnabled { flags.append("disabled") }

@@ -375,10 +375,13 @@ public final class AppStore {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.message = "Choose an unpacked extension folder containing manifest.json."
+        SidebarPanelControl.configureTestDirectory(panel)
         panel.beginSheetModal(for: owner) { [weak self, weak owner] response in
             guard let self, let owner, owner.isVisible, response == .OK, let directory = panel.url,
                   self.snapshot.pages.contains(where: { $0.context == context && $0.id.window == id }) else { return }
-            self.dispatch(.user(id, .site(.installSelectedExtension(directory))))
+            // The open panel is still attached while its completion runs, and the confirmation sheet waits for a free
+            // window (`confirmLocalExtension`): dispatch once AppKit has taken the panel down.
+            Task { @MainActor [weak self] in self?.dispatch(.user(id, .site(.installSelectedExtension(directory)))) }
         }
     }
 

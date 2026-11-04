@@ -307,6 +307,17 @@ final class RemappableSecondKeysTests: XCTestCase {
         XCTAssertEqual(resolved[.delete]?.state, .unset)
     }
 
+    /// The menu rows no other test names (A130's audit, r4-4-remaining/menus): each Edit item asks BrkApp for its
+    /// selector; Help > Essential Keyboard Shortcuts opens the Shortcuts pane.
+    func testTheRowsNoOtherTestNamesDoTheirWork() {
+        let d = Driver()
+        for action in [ActionID.undo, .redo, .cut, .copy, .paste, .pasteAndMatchStyle, .delete, .selectAll] {
+            XCTAssertEqual(d.user(action.spec.command).effects, [.app(.standardEdit(action.standardEdit!))], "\(action)")
+        }
+        d.user(ActionID.keyboardShortcutsEDU.spec.command)
+        XCTAssertEqual(d.snapshot.settings.pane, .shortcuts)
+    }
+
     func testEditItemsAreLeftToAppKitInNativeViewsAndDispatchAfterAPage() {
         let map = KeyMap(overrides: [.selectAll: KeyOverride(chord: KeyChord([.control, .option, .command], .a), priority: nil)])
         let chord = KeyChord([.control, .option, .command], .a)
