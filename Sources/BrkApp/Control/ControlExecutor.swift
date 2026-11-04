@@ -25,6 +25,18 @@ final class ControlExecutor {
         self.clock = clock
     }
 
+    /// The link runs of a text, in order (value and range).
+    static func links(in text: NSAttributedString) -> [(Any, NSRange)] {
+        var out: [(Any, NSRange)] = [], index = 0
+        while index < text.length {
+            var range = NSRange()
+            let value = text.attribute(.link, at: index, longestEffectiveRange: &range, in: NSRange(location: index, length: text.length - index))
+            if let value { out.append((value, range)) }
+            index = max(range.location + range.length, index + 1)
+        }
+        return out
+    }
+
     nonisolated static func scheme(_ appearance: NSAppearance) -> String {
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
     }
@@ -158,8 +170,7 @@ final class ControlExecutor {
                 if let field = view as? NSTextField, !field.stringValue.isEmpty { out.append(field.stringValue) }
                 if let text = view as? NSTextView, let storage = text.textStorage {
                     out.append(storage.string)
-                    storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-                        guard let value else { return }
+                    for (value, range) in Self.links(in: storage) {
                         out.append("link\t" + (storage.string as NSString).substring(with: range) + "\t" + "\(value)")
                     }
                 }
@@ -173,9 +184,8 @@ final class ControlExecutor {
             for case let view as NSTextView in views(content) {
                 guard let storage = view.textStorage else { continue }
                 var seen = 0, hit: (Any, Int)?
-                storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
-                    guard let value, (storage.string as NSString).substring(with: range) == text else { return }
-                    if seen == occurrence { hit = (value, range.location); stop.pointee = true }
+                for (value, range) in Self.links(in: storage) where (storage.string as NSString).substring(with: range) == text {
+                    if seen == occurrence { hit = (value, range.location); break }
                     seen += 1
                 }
                 if let hit { view.clicked(onLink: hit.0, at: hit.1); return .ok }
@@ -656,8 +666,11 @@ final class ControlExecutor {
         let responder = window.firstResponder
         var focusedPage = ViewTree.page(containing: responder)
         if focusedPage == nil { focusedPage = pages.first(where: { $0.value.hasKeyboardFocus })?.key }
-        let windows = NSApp.windows.map {
-            AppWindowFact(number: $0.windowNumber, className: NSStringFromClass(type(of: $0)), isKey: $0.isKeyWindow, isVisible: $0.isVisible, isPageHost: engine.isPageHostWindow($0))
+        let windows = NSApp.windows.map { window -> AppWindowFact in
+            var fact = AppWindowFact(number: window.windowNumber, className: NSStringFromClass(type(of: window)), isKey: window.isKeyWindow,
+                                     isVisible: window.isVisible, isPageHost: engine.isPageHostWindow(window))
+            fact.level = window.level.rawValue
+            return fact
         }
         var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,
                            backingScale: Double(window.backingScaleFactor), isKey: window.isKeyWindow, computed: computed,

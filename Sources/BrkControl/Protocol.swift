@@ -293,6 +293,8 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
     public var isKey: Bool
     public var isVisible: Bool
     public var isPageHost: Bool?
+    /// `NSWindow.level` (0 normal, 3 floating).
+    public var level: Int? = nil
     public init(number: Int, className: String, isKey: Bool, isVisible: Bool, isPageHost: Bool? = nil) {
         self.number = number
         self.className = className

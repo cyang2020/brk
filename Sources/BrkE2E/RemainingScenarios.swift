@@ -74,9 +74,9 @@ enum RemainingScenarios {
         _ = try app.screenshotSheet("open-panel")
         guard FilePanelScenarios.usesAccessibility else { throw Skipped(description: FilePanelScenarios.gestureGap) }
         try ImportSyncScenarios.panel(app, .open(path: folder.path))
-        try app.waitUntil("the install confirmation for the picked folder") { isShown(try app.native(), .settingsField("confirmExtensionInstall")) }
+        try app.waitUntil("the install confirmation sheet") { try app.native().sheetClass?.contains("Alert") == true || app.native().sheetClass?.contains("Panel") == true }
         _ = try app.screenshotSheet("confirm")
-        try app.click(.settingsField("confirmExtensionInstall"))
+        try app.waitUntil("Install in the confirmation") { (try? app.click(.settingsField("confirmExtensionInstall"))) != nil }
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("Chromium lists the picked extension", timeout: 15) {
             let controls = try SitePolicyScenarios.controls(app)
@@ -218,7 +218,7 @@ enum RemainingScenarios {
         var work: SpaceID?
         try brk.wait("the Work space") { work = try brk.view(standard).dock.first { $0.title == "Work" }?.id; return work != nil }
         _ = try brk.send(.dispatch(window: standard, command: .space(.focus(try brk.view(standard).dock[0].id))))
-        _ = try brk.send(.dispatch(window: standard, command: .settings(.links(.addRoute(LinkRoute(id: LinkRouteID("r44"), pattern: "route-me", destination: .space(work!)))))))
+        _ = try brk.send(.dispatch(window: standard, command: .settings(.links(.addRoute(LinkRoute(id: LinkRouteID("r44"), pattern: "route-me", destination: .space(work!), match: .contains))))))
         let routed = "\(scheme)://127.0.0.1:\(app.site.port)/red.html?route-me"
         try run("/usr/bin/open", [routed])
         try brk.wait("the routed link at the top of Work's Today") {
@@ -516,18 +516,19 @@ enum RemainingScenarios {
         let card = try app.native().computed.contentArea
         // The fixture puts the frame below the two text lines; its centre is about 200 points down the card.
         try app.click(at: CGPoint(x: card.minX + 40 + 160, y: card.minY + 8 + 110))
-        try app.waitUntil("Zap selected the frame element") { try editor().draft.css.contains("iframe") }
+        try app.waitUntil("Zap selected the frame element") { try editor().draft.css.contains("#frame") }
         try app.waitUntil("the frame is hidden") { try report(item)["frame"] as? String == "none" }
         _ = try app.screenshot("csp-zap-frame")
         try app.click(.boostControl("zap"))
         // The command bar over the editor: the panel drops behind the window while the bar is open.
         try app.press("cmd+t")
         try app.waitUntil("the command bar") { isCommandBar(try app.view().overlay) }
-        let panelLevel = { try app.native().appWindows.first { $0.className.hasSuffix("BoostPanelWindow") } }
-        try expect(try panelLevel() != nil, "no panel window")
+        func panelLevel() throws -> Int? { try app.native().appWindows.first { $0.className.hasSuffix("BoostPanelWindow") }?.level }
+        try app.waitUntil("the Boost panel drops to the normal window level under the bar") { try panelLevel() == 0 }
         _ = try app.screenshot("command-bar-over-editor")
         try app.press("escape")
         try app.waitUntil("the command bar closed") { !isCommandBar(try app.view().overlay) }
+        try app.waitUntil("the Boost panel floats again") { try panelLevel() == 3 }
         // Scope: a typed internationalised host and an IPv6 address match as committed URLs report them.
         try expect(BoostScope.host(typed: "Bücher.Example") == "xn--bcher-kva.example", "IDN host not normalised")
         try expect(BoostScope.host(typed: "[::1]") == "::1" && BoostScope.host(typed: "::1") == "::1", "IPv6 host not normalised")
