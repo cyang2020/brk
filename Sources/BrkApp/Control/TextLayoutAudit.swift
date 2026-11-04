@@ -107,11 +107,13 @@ enum TextLayoutAudit {
                     needed.height = min(needed.height, ceil(NSLayoutManager().defaultLineHeight(for: font)) * Double(field.maximumNumberOfLines))
                 }
                 report.note(text, frame: bounds, needed: needed)
-                // The last line's glyphs end at the font's descent, which is short of the cell's rounded line.
+                // The last line's glyphs end at the font's descent, which is short of the cell's rounded line. A bezel's
+                // insets are not lines.
                 var glyphs = needed.height
                 if let font = field.font {
                     let line = ceil(NSLayoutManager().defaultLineHeight(for: font))
-                    glyphs = ((needed.height / line).rounded() - 1) * line + font.ascender - font.descender
+                    let chrome = bounds.height - cell.drawingRect(forBounds: bounds).height
+                    glyphs = (((needed.height - chrome) / line).rounded() - 1) * line + font.ascender - font.descender + chrome
                 }
                 if glyphs > bounds.height + TextLayoutAudit.slack {
                     add(truncates ? .ellipsis : .wrapOverflow, field, text, needed: needed)

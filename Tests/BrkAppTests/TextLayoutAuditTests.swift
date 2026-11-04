@@ -166,6 +166,18 @@ import XCTest
         XCTAssertEqual(report.findings, [])
     }
 
+    /// The Boost menu's fields: one line in a bezel, the cell's height is not two lines.
+    func testABezelledWrappingFieldIsOneLine() {
+        let report = audit { root in
+            let field = NSTextField(string: "My Boost")
+            field.font = .systemFont(ofSize: 12)
+            field.bezelStyle = .roundedBezel
+            field.frame = CGRect(x: 20, y: 20, width: 147, height: 22)
+            root.addSubview(field)
+        }
+        XCTAssertEqual(report.findings, [])
+    }
+
     func testAnAncestorThatClipsCutsATruncatedLabel() {
         let report = audit { root in
             let box = NSView(frame: CGRect(x: 20, y: 20, width: 60, height: 30))
