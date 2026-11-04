@@ -184,8 +184,12 @@ enum SplitMenuModel {
         return [
             [Row(title: side ? "Move Left" : "Move Up", glyph: .moveBack, command: .split(.movePane(.previous)), enabled: p.index > 0),
              Row(title: side ? "Move Right" : "Move Down", glyph: .moveForward, command: .split(.movePane(.next)), enabled: p.index < p.count - 1)],
-            [Row(title: side ? "Add Right Split" : "Add Bottom Split", glyph: .addAfter, command: .split(.addPane), enabled: roomy),
-             Row(title: side ? "Add Left Split" : "Add Top Split", glyph: .addBefore, command: .split(.addPaneBefore), enabled: roomy)],
+            // Arc lists the pane after first side by side (Add Right Split, Add Left Split: P23-splitmenu) and the pane
+            // before first when stacked (Add Top Split, Add Bottom Split: P23-vsplitmenu).
+            side ? [Row(title: "Add Right Split", glyph: .addAfter, command: .split(.addPane), enabled: roomy),
+                    Row(title: "Add Left Split", glyph: .addBefore, command: .split(.addPaneBefore), enabled: roomy)]
+                 : [Row(title: "Add Top Split", glyph: .addBefore, command: .split(.addPaneBefore), enabled: roomy),
+                    Row(title: "Add Bottom Split", glyph: .addAfter, command: .split(.addPane), enabled: roomy)],
             [Row(title: "Separate Tab from Split", glyph: .separate, command: .split(.separatePane(.focused)), enabled: true),
              Row(title: side ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", glyph: side ? .stacked : .sideBySide,
                  command: .split(.orientCurrent(side ? .vertical : .horizontal)), enabled: true)],
