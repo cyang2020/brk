@@ -425,8 +425,13 @@ final class RestingTrafficLights: NSView {
         self.buttons = buttons
         super.init(frame: .zero)
         identifier = Self.id
-        buttons.forEach { $0.alphaValue = 0 }
+        buttons.forEach { $0.alphaValue = Self.restingAlpha }
     }
+
+    /// The standard buttons at rest: effectively invisible under the grey circles. Not 0: AppKit treats a fully
+    /// transparent miniaturize button as absent and `miniaturize(_:)` then does nothing (Cmd+M, Window > Minimize and
+    /// the Dock all stopped minimizing the window when this was 0; BB3 and R49-WindowMenu caught it).
+    static let restingAlpha: CGFloat = 0.01
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -456,7 +461,7 @@ final class RestingTrafficLights: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) { buttons.forEach { $0.alphaValue = 1 } }
-    override func mouseExited(with event: NSEvent) { buttons.forEach { $0.alphaValue = 0 } }
+    override func mouseExited(with event: NSEvent) { buttons.forEach { $0.alphaValue = Self.restingAlpha } }
 }
 
 /// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
