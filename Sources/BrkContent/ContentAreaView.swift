@@ -92,6 +92,7 @@ public final class ContentAreaView: NSView {
                         palette: palette, dispatch: dispatch)
             // Arc rings the focused pane of a split in a dark shade of the theme (Metrics.content.highlightBorder).
             let ringed = content.split != nil && content.presentedPanes.count > 1 && pane?.focused == true
+            shadow.lifted = ringed
             card.layer?.borderWidth = ringed ? Metrics.content.highlightBorder.value : 0
             card.layer?.borderColor = ThemeAccent.splitFocusRing(theme).cgColor
             // An empty card follows the appearance: dark under a dark theme (Arc's incognito window, Q03a: #2A2B2F).
@@ -131,9 +132,6 @@ public final class ContentAreaView: NSView {
             divider.fractions = content.panes.map(\.fraction)
             divider.area = frames.contentArea
             divider.orientation = content.orientation
-            // Arc's gap between panes is darker than the window round them (P23-a: #D8D4D0 mid-gap on #F0EAE6, P23-c
-            // likewise): black at 7%, the cards' shadows adding the rest at the edges.
-            divider.layer?.backgroundColor = palette.scheme == .light ? NSColor(white: 0, alpha: SplitDropDraw.gapShade.value).cgColor : nil
         }
         // Arc's slot (P23-d): the window shows through it, ringed in the split focus color at reduced strength.
         dropPreview.layer?.backgroundColor = nil
@@ -181,20 +179,25 @@ public final class ContentAreaView: NSView {
 /// cleared the values set on the layer directly, so no shadow showed.
 @MainActor
 final class ShadowView: NSView {
+    /// The focused pane of a split: Arc lifts it with a wider shadow (SplitDropDraw.liftedShadow*).
+    var lifted = false { didSet { if lifted != oldValue { shadow = Self.shadow(lifted: lifted) } } }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.backgroundColor = NSColor.white.cgColor
         layer?.cornerCurve = .continuous
-        shadow = {
-            let s = NSShadow()
-            s.shadowColor = NSColor.black.withAlphaComponent(Metrics.content.shadowOpacity.value)
-            s.shadowBlurRadius = Metrics.content.shadowRadius.value
-            // in the flipped content area a positive height drops the shadow
-            s.shadowOffset = NSSize(width: 0, height: Metrics.content.shadowOffset.value)
-            return s
-        }()
+        shadow = Self.shadow(lifted: false)
         isHidden = !Metrics.content.showsShadow.value
+    }
+
+    private static func shadow(lifted: Bool) -> NSShadow {
+        let s = NSShadow()
+        s.shadowColor = NSColor.black.withAlphaComponent(lifted ? SplitDropDraw.liftedShadowAlpha.value : Metrics.content.shadowOpacity.value)
+        s.shadowBlurRadius = lifted ? SplitDropDraw.liftedShadowBlur.value : Metrics.content.shadowRadius.value
+        // in the flipped content area a positive height drops the shadow
+        s.shadowOffset = NSSize(width: 0, height: lifted ? 0.4 : Metrics.content.shadowOffset.value)
+        return s
     }
 
     @available(*, unavailable)
@@ -432,7 +435,10 @@ struct SplitDropMetrics: MetricGroup {
     let handleAlpha = Metric(0.18, .anatomy("verify/visual-pairs/run-20261103/P23: #B2AFAC over #DCD5D2 and #BBBBBB over #E1E1E1, black at about 18%"))
     let stackedHandleLength = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: between stacked panes it spans x 717...781, centred"))
     let stackedHandleAlpha = Metric(0.39, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: #8B8B8B over #E3E3E3"))
-    let gapShade = Metric(0.07, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the 10 pt gap reads #D0CBC7 at its edges and #DBD6D2 mid-way over the #F0EAE6 window"))
+    /// The focused pane of a split casts a wider shadow than a card does (P23-a, P23-c: 13% just over it and 15%
+    /// just under it, 4% still 9 pt away; with the other pane's own shadow the 10 pt gap reads #D0CBC7 to #DBD6D2).
+    let liftedShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the focused pane's edges fade like an 8 pt Gaussian"))
+    let liftedShadowAlpha = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: 13% above plus 15% below the focused pane"))
     let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }
 

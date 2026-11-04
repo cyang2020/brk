@@ -1028,7 +1028,7 @@ final class SpaceHeaderView: HoverView {
         background.wantsLayer = true
         background.layer?.cornerCurve = .continuous
         background.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
-        label.font = .systemFont(ofSize: Draw.spaceHeaderFont.value, weight: .medium)
+        label.font = .systemFont(ofSize: Draw.spaceHeaderFont.value, weight: .semibold)
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         more.action = { [weak self] _ in self?.showMenu() }

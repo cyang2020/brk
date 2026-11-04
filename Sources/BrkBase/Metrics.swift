@@ -191,7 +191,7 @@ public struct ContentMetrics: MetricGroup {
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
     /// Measured round Arc's card (verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
-    /// within 9 pt, 7% just above it within 5; between two split panes the two shadows meet (#D0CBC7 on #F0EAE6).
+    /// within 9 pt, 7% just above it within 5. A split's focused pane casts a wider one (BrkContent's SplitDropDraw).
     public let shadowRadius = Metric(2.9, .anatomy("verify/visual-pairs/run-20261103 P01-a: the edges fade like a 2.9 pt Gaussian"))
     public let shadowOpacity = Metric(0.22, .anatomy("verify/visual-pairs/run-20261103 P01-a: 12% under the card plus 7% over it"))
     public let shadowOffset = Metric(1.4, .anatomy("verify/visual-pairs/run-20261103 P01-a: the shadow sits 1.4 pt below the card"))

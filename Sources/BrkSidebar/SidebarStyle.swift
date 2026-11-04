@@ -15,7 +15,7 @@ struct SidebarDrawMetrics: MetricGroup {
     // Type: one family, the system font (visual-and-copy.md, Fonts: the default UI font is `system`).
     let rowTitleFont = Metric(14.0, .anatomy("cra L115: sidebar rows have 14 pt titles"))
     let groupTitleFont = Metric(12.0, .guess("tab group header title; Arc's TabGroupHeaderCellView was not captured, drawn as a section label"))
-    let spaceHeaderFont = Metric(14.0, .anatomy("cra L180: space header 14 pt medium, secondary color"))
+    let spaceHeaderFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 P01-a, P20-a: 对照 is 24.5 x 12 and This Window 80 wide, 13 pt semibold (cra L180 had 14 medium)"))
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
     let captionFont = Metric(11.0, .guess("favorites empty subtitle; Arc's secondary row line is 11 pt (cra L115)"))
