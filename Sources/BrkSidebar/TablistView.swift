@@ -334,8 +334,9 @@ final class TablistView: NSScrollView {
     }
 
     /// Arc's split preview in place of `target`'s row while `dragged` is held on its middle (P23-e); the row under it
-    /// is hidden meanwhile. Nil clears it.
-    func showSplitJoin(_ target: ItemID?, dragged: TabRow?, frames f: SidebarFrames, space: SpaceSnapshot, palette: Palette?) {
+    /// is hidden meanwhile. Nil clears it. The capsule follows the pointer sideways by `shift` (Arc's sits 7 pt right
+    /// of the row in P23-e), as far as the list's side insets, so it never leaves the list.
+    func showSplitJoin(_ target: ItemID?, dragged: TabRow?, shift: Double = 0, frames f: SidebarFrames, space: SpaceSnapshot, palette: Palette?) {
         if splitJoinTarget != target, let old = splitJoinTarget { rowViews[old]?.alphaValue = 1 }
         splitJoinTarget = nil
         guard let target, let dragged, let palette, let frame = f.rows.first(where: { $0.kind == .item(target) }),
@@ -349,7 +350,8 @@ final class TablistView: NSScrollView {
             splitJoin = made
             return made
         }()
-        preview.frame = frame.rect
+        let inset = Metrics.tablist.selectionInset.value
+        preview.frame = frame.rect.offsetBy(dx: min(inset, max(-inset, shift)).rounded(), dy: 0)
         preview.render(dragged: dragged, onto: row, depth: frame.depth, palette: palette)
         preview.layoutSubtreeIfNeeded()
         preview.isHidden = false
@@ -668,7 +670,8 @@ final class RowView: HoverView {
         layer?.borderColor = palette.color(tokens.dragHintStrong).cgColor
         layer?.borderWidth = dropInto ? Draw.hairline.value : 0
         // AppKit owns a layer-backed view's shadow (`NSView.shadow`); its offset is not flipped, so negative is down.
-        if status == .current && !dropInto && !dragLifted {
+        // A lifted row keeps the current tab's shadow (Arc's lifted Inbox, P23-e); a lifted other row has none (P23-d).
+        if status == .current && !dropInto {
             let shadow = NSShadow()
             shadow.shadowColor = palette.color(tokens.tabShadow)
             shadow.shadowBlurRadius = Draw.selectedShadowRadius.value

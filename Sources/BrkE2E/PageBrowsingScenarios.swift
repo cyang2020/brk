@@ -444,6 +444,7 @@ enum WindowServerKeys {
         event.flags = flags
         if autorepeat { event.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
         event.post(tap: .cghidEventTap)
+        if !down { PhysicalKeys.clearSystemModifiers(chord) }
     }
 
     static func press(_ app: AppUnderTest, _ chord: KeyChord, window: WindowID) throws {

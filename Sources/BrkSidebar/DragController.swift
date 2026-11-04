@@ -54,6 +54,8 @@ final class DragController {
         let source: NSView
         let preview: NSView
         let grab: CGPoint
+        /// Where the press was, in window coordinates.
+        let start: CGPoint
         var target: Target?
         /// Arc's drag card for a tab row over the content (P23-d); nil for anything else.
         let card: ContentDragCard?
@@ -90,7 +92,7 @@ final class DragController {
         if session == nil {
             guard let pressed, hypot(event.locationInWindow.x - pressed.start.x, event.locationInWindow.y - pressed.start.y) >= Draw.dragThreshold.value
             else { return false }
-            begin(pressed.item, source: pressed.source, event: event)
+            begin(pressed.item, source: pressed.source, start: pressed.start, event: event)
         }
         guard var session, let sidebar, let context else { return session != nil }
         let local = session.preview.superview?.convert(event.locationInWindow, from: nil) ?? sidebar.convert(event.locationInWindow, from: nil)
@@ -112,7 +114,7 @@ final class DragController {
             (session.source as? RowView)?.dragLifted = session.overContent || joining
         }
         if hapticsEnabled, session.target?.destination != nil, session.target?.destination != previous?.destination { haptic() }
-        show(session.target, item: session.item, context: context)
+        show(session.target, item: session.item, context: context, shift: event.locationInWindow.x - session.start.x)
         self.session = session
         return true
     }
@@ -148,7 +150,7 @@ final class DragController {
 
     // MARK: Session
 
-    private func begin(_ item: Item, source: NSView, event: NSEvent) {
+    private func begin(_ item: Item, source: NSView, start: CGPoint, event: NSEvent) {
         guard let sidebar, let palette = sidebar.currentPalette else { return }
         sidebar.beginContentDrop?(item.id)
         // Lifted on the selected-row card (TabCellBackgroundCurrent), whatever it was dragged from.
@@ -188,7 +190,8 @@ final class DragController {
             host.addSubview(made)
             contentCard = made
         }
-        session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY), card: contentCard)
+        session = Session(item: item, source: source, preview: preview, grab: CGPoint(x: local.x - preview.frame.minX, y: local.y - preview.frame.minY),
+                          start: start, card: contentCard)
         (source as? RowView)?.dragSource = true
         if !(source is RowView) { source.alphaValue = Draw.dragSourceAlpha.value }
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -251,7 +254,8 @@ final class DragController {
         return TablistView.find(target, in: folder.children) != nil
     }
 
-    private func show(_ target: Target?, item: Item, context: Context) {
+    /// `shift`: how far the pointer has moved right since the press; Arc's split capsule follows it (P23-e).
+    private func show(_ target: Target?, item: Item, context: Context, shift: Double = 0) {
         guard let sidebar else { return }
         let f = context.frames
         if case .favorites(let index)? = target {
@@ -266,7 +270,7 @@ final class DragController {
         }
         if case .dock(let space)? = target { sidebar.dock.showDrop(space: space) } else { sidebar.dock.showDrop(space: nil) }
         if case .split(let tab)? = target, let row = session?.source as? RowView, case .tab(let dragged)? = row.row {
-            sidebar.tablist.showSplitJoin(tab, dragged: dragged, frames: f, space: context.space, palette: sidebar.currentPalette)
+            sidebar.tablist.showSplitJoin(tab, dragged: dragged, shift: shift, frames: f, space: context.space, palette: sidebar.currentPalette)
         } else {
             sidebar.tablist.showSplitJoin(nil, dragged: nil, frames: f, space: context.space, palette: nil)
         }

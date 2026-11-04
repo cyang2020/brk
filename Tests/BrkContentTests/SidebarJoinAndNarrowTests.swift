@@ -19,7 +19,7 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
 
     /// A window with Today [Inbox, a long title, Secondary reference, Visual fixture] and a pinned folder holding Design
     /// notes, rendered offscreen at `width`.
-    private func rig(width: Double, favorites: Bool = false, sink: Sink) throws -> (NSWindow, WindowRootView, WindowSnapshot) {
+    private func rig(width: Double, favorites: Bool = false, sink: Sink, then: ((WindowSnapshot) -> [Command])? = nil) throws -> (NSWindow, WindowRootView, WindowSnapshot) {
         let ids = IDs()
         let ctx = Context(now: now, newID: ids.next)
         let projection = ProjectionContext(now: now, calendar: Calendar(identifier: .gregorian))
@@ -43,6 +43,7 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
         }
         user(.tab(.focus(today().last!)))
         user(.sidebar(.resize(width: width)))
+        for command in then?(project(state, projection).windows[id]!) ?? [] { user(command) }
         let view = try XCTUnwrap(project(state, projection).windows[id])
         let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: 100, y: 100), size: Self.size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -222,5 +223,67 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
         XCTAssertFalse(preview.isHidden)
         source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
         XCTAssertEqual(sink.commands.last, .split(.joinRow(design, onto: inbox)))
+    }
+
+    /// The capsule follows the pointer sideways (Arc's sits 7 pt right of the row in P23-e), no further than the list's
+    /// 8 pt side inset.
+    func testTheCapsuleFollowsThePointerSideways() throws {
+        for (dx, expected) in [(7.0, 7.0), (-5.0, -5.0), (30.0, 8.0)] {
+            let sink = Sink()
+            let (window, root, view) = try rig(width: 228, sink: sink)
+            defer { window.close() }
+            let today = view.space.today.rows.map(\.id)
+            let source = try row(today[0], in: root), target = try row(today[2], in: root)
+            let start = point(in: source, fraction: 0.5), middle = point(in: target, fraction: 0.5)
+            drag(source, to: CGPoint(x: start.x + dx, y: middle.y), in: window)
+            let preview = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-preview").identifier, in: root))
+            XCTAssertFalse(preview.isHidden)
+            XCTAssertEqual(preview.convert(preview.bounds, to: nil).minX - target.convert(target.bounds, to: nil).minX, expected, accuracy: 0.5, "pointer moved \(dx)")
+            source.mouseUp(with: mouse(.leftMouseUp, CGPoint(x: start.x + dx, y: middle.y), in: window))
+        }
+    }
+
+    /// Arc's lifted row keeps the current tab's shadow (P23-e: Inbox is the shown tab); a lifted row that is not the
+    /// current tab has none (P23-d).
+    func testALiftedRowKeepsTheCurrentTabsShadow() throws {
+        for current in [true, false] {
+            let (window, root, view) = try rig(width: 228, sink: Sink())
+            defer { window.close() }
+            let today = view.space.today.rows.map(\.id)   // Inbox, Long title, Secondary, Visual fixture (shown)
+            let source = try row(current ? today[3] : today[0], in: root), target = try row(today[1], in: root)
+            drag(source, to: point(in: target, fraction: 0.5), in: window)
+            XCTAssertTrue(source.dragLifted)
+            let card = try XCTUnwrap(source.subviews.first, "the row's card")
+            XCTAssertEqual(card.shadow != nil, current, current ? "the lifted current tab lost its shadow" : "a lifted other row got a shadow")
+            source.mouseUp(with: mouse(.leftMouseUp, point(in: target, fraction: 0.5), in: window))
+        }
+    }
+
+    /// P23-f: an unfocused pane's header shows only back, forward and its address while the pointer is out of the
+    /// window; with the pointer in the window its × shows too (P23-a/b/c, P12-e). The focused pane's × always shows.
+    func testAnUnfocusedPanesCloseShowsOnlyWithThePointerInTheWindow() throws {
+        let (window, root, view) = try rig(width: 228, sink: Sink()) { view in
+            let today = view.space.today.rows.map(\.id)
+            return [.split(.joinRow(today[0], onto: today[2]))]
+        }
+        defer { window.close() }
+        XCTAssertEqual(view.content.panes.count, 2)
+        func headers(_ v: NSView) -> [PaneHeaderView] { (v as? PaneHeaderView).map { [$0] } ?? v.subviews.flatMap(headers) }
+        func closeShown(_ header: PaneHeaderView) -> Bool {
+            header.layoutSubtreeIfNeeded()
+            return header.subviews.contains { ($0 as? PaneHeaderButton)?.toolTip == "Close this Split Pane" && !$0.isHidden }
+        }
+        let found = headers(root).filter { !$0.isHidden }.sorted { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }
+        XCTAssertEqual(found.count, 2)
+        XCTAssertEqual(view.content.panes.map(\.focused), [true, false], "the dragged tab is the focused left pane")
+        let content = try XCTUnwrap(sequence(first: found[0] as NSView, next: \.superview).first { $0 is ContentAreaView } as? ContentAreaView)
+        // The state starts from wherever the real pointer is; leave the window first.
+        content.mouseEntered(with: mouse(.mouseMoved, CGPoint(x: 900, y: 400), in: window))
+        content.mouseExited(with: mouse(.mouseMoved, CGPoint(x: 100, y: 400), in: window))
+        XCTAssertEqual(found.map(closeShown), [true, false], "out of the window only the focused pane shows ×")
+        content.mouseEntered(with: mouse(.mouseMoved, CGPoint(x: 900, y: 400), in: window))
+        XCTAssertEqual(found.map(closeShown), [true, true], "with the pointer in the window both panes show ×")
+        content.mouseExited(with: mouse(.mouseMoved, CGPoint(x: 100, y: 400), in: window))
+        XCTAssertEqual(found.map(closeShown), [true, false])
     }
 }

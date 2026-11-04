@@ -26,6 +26,9 @@ public final class ContentAreaView: NSView {
     private var resting: [(card: CGRect, shadow: CGRect)] = []
     private var accent = NSColor.gray
     var isDropEnabled = true
+    /// Whether the pointer is in the window, for the pane headers' ×.
+    private var pointerTracking: NSTrackingArea?
+    private var pointerInside = false
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -90,6 +93,7 @@ public final class ContentAreaView: NSView {
             card.header(frame.header.flatMap { _ in pane }, orientation: content.orientation,
                         position: SplitMenuModel.Position(split: content.split, index: frame.pane, count: content.panes.count),
                         palette: palette, dispatch: dispatch)
+            card.pointerInWindow(pointerInside)
             // Arc rings the focused pane of a split in a dark shade of the theme (Metrics.content.highlightBorder).
             let ringed = content.split != nil && content.presentedPanes.count > 1 && pane?.focused == true
             shadow.lifted = ringed
@@ -141,6 +145,28 @@ public final class ContentAreaView: NSView {
         addSubview(dropPreview, positioned: .above, relativeTo: cards.last)
         if let offer = dragOffer, let point = dragPosition { _ = dropCommand(offer.source, at: point) }
         else { clearDrop() }
+    }
+
+    // MARK: Pointer in the window (the pane headers' ×)
+
+    /// This view spans the window, so one tracking area over its bounds says whether the pointer is in the window. A
+    /// new area does not report a pointer already inside it, so the state is read from the window then.
+    public override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerTracking { removeTrackingArea(pointerTracking) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        pointerTracking = area
+        if let window { setPointerInside(bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))) }
+    }
+
+    public override func mouseEntered(with event: NSEvent) { setPointerInside(true) }
+    public override func mouseExited(with event: NSEvent) { setPointerInside(false) }
+
+    private func setPointerInside(_ inside: Bool) {
+        guard inside != pointerInside else { return }
+        pointerInside = inside
+        for card in cards { card.pointerInWindow(inside) }
     }
 
     func dropCommand(_ source: ItemID, at point: CGPoint) -> Command? {
@@ -225,6 +251,9 @@ final class CardView: NSView {
         let top = Metrics.content.paneHeaderHeight.value
         return CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
     }
+
+    /// The pointer is in the window (`PaneHeaderView.pointerInWindow`).
+    func pointerInWindow(_ inside: Bool) { paneHeader?.pointerInWindow = inside }
 
     /// Shows the split header for `pane` (nil hides it).
     func header(_ pane: Pane?, orientation: SplitOrientation, position: SplitMenuModel.Position, palette: Palette, dispatch: @escaping Dispatch) {

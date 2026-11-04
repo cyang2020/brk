@@ -27,6 +27,18 @@ enum PhysicalKeys {
         for (modifier, code, flag) in modifierKeys.reversed() where chord.modifiers.contains(modifier) { flags.remove(flag); post(code, false) }
     }
 
+    /// A key-up posted at the HID tap with its modifier flags on it leaves those flags set for the whole session,
+    /// across processes, until an event without them arrives: the next run's first mouse press then reads as a ⌘-click
+    /// (the station's P23-d, 2026-11-04). Posting the chord's modifiers up without flags clears them.
+    static func clearSystemModifiers(_ chord: KeyChord) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        for (modifier, code, _) in modifierKeys where chord.modifiers.contains(modifier) {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) else { continue }
+            event.flags = []
+            event.post(tap: .cghidEventTap)
+        }
+    }
+
     /// Text as key events carrying their characters (no modifiers), one per character.
     static func type(_ text: String, pid: pid_t) {
         let source = CGEventSource(stateID: .hidSystemState)
