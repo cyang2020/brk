@@ -105,6 +105,14 @@ import XCTest
         tail.lineBreakMode = .byTruncatingTail
         XCTAssertEqual(title([.paragraphStyle: tail]).findings, [])
         XCTAssertEqual(title([.paragraphStyle: tail]).truncated.map(\.problem), [.ellipsis])
+        let styled = audit { root in
+            let title = NSTextField(labelWithString: "")
+            title.attributedStringValue = NSAttributedString(string: text, attributes: [.font: font, .paragraphStyle: tail])
+            title.frame = CGRect(x: 10, y: 10, width: 374, height: 20)
+            root.addSubview(title)
+        }
+        XCTAssertEqual(styled.findings, [], "the paragraph style truncates, whatever the label's own line break says")
+        XCTAssertEqual(styled.truncated.map(\.problem), [.ellipsis])
     }
 
     func testATruncatingLabelTooNarrowIsListedNotCut() {

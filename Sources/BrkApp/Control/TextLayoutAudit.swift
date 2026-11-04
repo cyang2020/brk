@@ -94,7 +94,9 @@ enum TextLayoutAudit {
             let text = placeholder ? (field.placeholderString ?? field.placeholderAttributedString?.string ?? "") : field.stringValue
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             let bounds = field.bounds
-            let mode = cell.lineBreakMode
+            // An attributed string's own paragraph style decides, not the label's line break.
+            let string = field.attributedStringValue
+            let mode = (string.length > 0 ? string.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle : nil)?.lineBreakMode ?? cell.lineBreakMode
             let truncates = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle].contains(mode) || cell.truncatesLastVisibleLine
             let wraps = cell.wraps || mode == .byWordWrapping || mode == .byCharWrapping
 
@@ -105,9 +107,13 @@ enum TextLayoutAudit {
                     needed.height = min(needed.height, ceil(NSLayoutManager().defaultLineHeight(for: font)) * Double(field.maximumNumberOfLines))
                 }
                 report.note(text, frame: bounds, needed: needed)
-                // The last line's leading holds no glyphs.
-                let leading = field.font.map { max(0, ceil(NSLayoutManager().defaultLineHeight(for: $0)) - ($0.ascender - $0.descender)) } ?? 0
-                if needed.height - leading > bounds.height + TextLayoutAudit.slack {
+                // The last line's glyphs end at the font's descent, which is short of the cell's rounded line.
+                var glyphs = needed.height
+                if let font = field.font {
+                    let line = ceil(NSLayoutManager().defaultLineHeight(for: font))
+                    glyphs = ((needed.height / line).rounded() - 1) * line + font.ascender - font.descender
+                }
+                if glyphs > bounds.height + TextLayoutAudit.slack {
                     add(truncates ? .ellipsis : .wrapOverflow, field, text, needed: needed)
                 }
                 checkClip(field, text, rect: bounds, needed: needed)
@@ -333,7 +339,8 @@ enum TextLayoutAudit {
         for size in sizes {
             let line = ceil(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: size)))
             let lines = (frame.height / line).rounded()
-            guard lines >= 1, abs(lines * line - frame.height) <= lines * 2 else { continue }
+            // The miniature sizes are one-line captions: reading a 13 pt line as four lines of 3 pt would fit anything.
+            guard lines >= 1, lines == 1 || size >= 9, abs(lines * line - frame.height) <= lines * 2 else { continue }
             let needed = lines == 1 ? natural(size) : wrapped(size, width: frame.width)
             if needed.width <= frame.width + 1, needed.height <= frame.height + 1 { return needed }
             if smallest == nil { smallest = needed }
