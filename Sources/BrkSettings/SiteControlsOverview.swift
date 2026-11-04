@@ -345,10 +345,12 @@ final class SiteRow: NSButton {
             image.draw(in: rect.integral, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
         let font = NSFont.systemFont(ofSize: m.rowTitleFont.value, weight: .semibold)
+        // Inside the row's bounds: the line starts at the row's top and its baseline is lifted to where the title belongs.
+        let top = m.rowTitleBaseline.value - font.ascender
         let cut = NSMutableParagraphStyle()
         cut.lineBreakMode = .byTruncatingTail
-        NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.9), .paragraphStyle: cut])
-            .draw(in: CGRect(x: m.rowText.value - m.inset.value, y: m.rowTitleBaseline.value - font.ascender, width: m.rowTitleWidth.value, height: ceil(font.ascender - font.descender)))
+        NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.9), .paragraphStyle: cut, .baselineOffset: max(0, -top)])
+            .draw(in: CGRect(x: m.rowText.value - m.inset.value, y: max(0, top), width: m.rowTitleWidth.value, height: ceil(font.ascender - font.descender) + 1))
         let small = NSFont.systemFont(ofSize: m.rowFont.value)
         NSAttributedString(string: subtitle, attributes: [.font: small, .foregroundColor: NSColor.secondaryLabelColor])
             .draw(at: CGPoint(x: m.rowText.value - m.inset.value, y: m.rowSubtitleBaseline.value - small.ascender))
