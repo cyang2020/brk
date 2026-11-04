@@ -66,7 +66,13 @@ struct SiteFeed: Equatable, Sendable {
 
 extension Work {
     mutating func siteTools(_ command: SiteToolsCommand, in window: WindowID) {
-        guard let w = state.doc.windows[window], w.kind == .standard, let space = state.doc.spaces[w.space] else { return }
+        guard let w = state.doc.windows[window] else { return }
+        // Sources belong to a regular window's profile. In a private window or Little Arc nothing is read or opened;
+        // Ctrl+Cmd+J says so instead of doing nothing.
+        guard w.kind == .standard, let space = state.doc.spaces[w.space] else {
+            if command == .joinMeeting { toast(TopAppCopy.joinMeetingNeedsStandardWindow, in: window) }
+            return
+        }
         var folder: ItemID?
         let kind: SiteRequestKind
         switch command {
@@ -104,8 +110,10 @@ extension Work {
         }
         state.session.siteRequests[request.id] = pending
         effects.append(.siteRequest(request))
-        if case .calendar(join: true) = kind, state.session.calendars[space.profile] != nil {
-            toast("Calendar expired. Select the export again.", in: window)
+        if case .calendar(join: true) = kind, let feed = state.session.calendars[space.profile] {
+            // A file that was never read is reported as such, not as an expired calendar.
+            if case .failed = feed.access { toast(TopAppCopy.calendarUnreadable, in: window) }
+            else { toast("Calendar expired. Select the export again.", in: window) }
         } else if folder == nil { toast("Loading selected source…", in: window) }   // a Live Folder shows its own spinner
     }
     mutating func siteResult(_ id: String, _ outcome: SiteOutcome) {
@@ -115,7 +123,8 @@ extension Work {
         switch outcome {
         case .cancelled:
             if let folder = pending.folder { state.session.liveFolders[folder]?.phase = .idle }
-            if case .favorite(let favorite) = pending.target {
+            // Cancelling a reconnect leaves the source as it was: a Favorite that already shows its unread dot keeps it.
+            if case .favorite(let favorite) = pending.target, state.session.favoriteFeeds[favorite] == nil {
                 state.session.favoriteFeeds[favorite] = SiteFeed(access: .cancelled, profile: pending.request.profile, fetchedAt: ctx.now, badge: 0, subtitle: "Selection cancelled. Connect again.")
             }
             toast("Source selection cancelled", in: window)

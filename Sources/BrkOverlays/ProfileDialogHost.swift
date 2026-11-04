@@ -202,7 +202,7 @@ struct ProfileGlyph: View {
         switch icon {
         case nil: Image(systemName: Self.defaultSymbol)
         case .emoji(let emoji)?: Text(emoji)
-        case .named(let name)?: Image(systemName: NamedIconSymbol.of(name))
+        case .named(let name)?: NamedIconImage(icon: name)
         case .symbol(let symbol)?: Image(systemName: symbol)
         }
     }

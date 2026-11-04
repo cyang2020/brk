@@ -45,8 +45,15 @@ enum PlanScenarios {
         let computed = n.computed.cards.first?.rect
         try expect(computed.map { near($0, card.frame) } == true, "computed card \(computed.map { "\($0)" } ?? "none") differs from actual \(card.frame)")
 
+        let beside = CGPoint(x: card.frame.minX + 1, y: card.frame.minY - 3)
+        var outside = try app.pixel(beside)
+        if distance(outside, white) <= 24 {
+            // The default light theme is almost white beside the card; a darker theme makes the cut corner measurable.
+            try app.dispatch(.space(.update(v.space.id, title: nil, icon: nil, theme: drabTheme)))
+            try app.waitUntil("the darker theme") { try app.view().theme.gradient.first == drabTheme.colors.first || distance(app.pixel(beside), white) > 24 }
+            outside = try settledPixel(app, beside)
+        }
         let corner = try app.pixel(CGPoint(x: card.frame.minX + 1, y: card.frame.minY + 1))
-        let outside = try app.pixel(CGPoint(x: card.frame.minX + 1, y: card.frame.minY - 3))
         try expect(distance(outside, white) > 24, "the background next to the card is \(outside), too close to white for the corner check")
         try expect(distance(corner, outside) <= 24,
                    "pixel 1 pt inside the card corner is \(corner), the background just outside is \(outside): the corner is not cut")

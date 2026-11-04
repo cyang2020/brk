@@ -136,7 +136,9 @@ final class IconView: NSView {
         case .custom(.emoji(let text)):
             showEmoji(text, side: side)
         case .custom(.named(let name)):
-            showSymbol(name.symbol, side: side)
+            image.isHidden = false
+            image.image = NamedIconArt.image(name, pointSize: side * 0.8, weight: .medium)
+            image.contentTintColor = tint
         case .custom(.symbol(let name)):
             if symbolImage(name, size: side) != nil { showSymbol(name, side: side) } else { showEmoji(String(name.prefix(1)).uppercased(), side: side) }
         case .folder(let open):

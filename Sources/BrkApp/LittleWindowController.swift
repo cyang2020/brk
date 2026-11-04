@@ -171,6 +171,7 @@ final class LittleHeaderView: NSView {
         addSubview(openIn)
         pill.onClick = { dispatch(.commandBar(.open(.editCurrent))) }
         pill.onCopy = { dispatch(.page(.copyURL(.plain))) }
+        pill.identify(.tabTool("little-host"))
         identify(.littleHint)
     }
 
@@ -490,6 +491,7 @@ final class LittleSpacePicker: NSView, NSTextFieldDelegate {
         for (i, (row, space)) in zip(rows, list).enumerated() {
             row.frame = CGRect(x: 0, y: top + Double(i) * m.pickerRowHeight.value, width: frame.width, height: m.pickerRowHeight.value)
             row.render(space, current: space.id == current, palette: palette, last: i == list.count - 1)
+            row.identify(.tabTool("little-space-\(space.id)"))
             row.onClick = { [weak self, dispatch] in
                 self?.isHidden = true
                 dispatch(.window(.openIn(.space(space.id))))
@@ -590,6 +592,7 @@ public final class BrowserPanel: NSPanel, HostWindow {
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?
     public var onKeyEquivalent: ((NSEvent) -> Bool)?
+    public var onKeyBeforePage: ((NSEvent) -> Bool)?
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
     /// Where the header puts the lights (top-left content coordinates); nil hides them.

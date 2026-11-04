@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 
 /// Arc's "Change Icon…" for a tab, folder or split (P10-a): a popover hanging from the row's icon, titled "Icon",
 /// with three rows of eight glyphs. A click sets that icon and closes; clicking the current icon again restores
@@ -95,8 +96,7 @@ private final class IconGridController: NSViewController {
             button.isBordered = false
             button.bezelStyle = .regularSquare
             button.title = ""
-            button.image = NSImage(systemSymbolName: icon.systemSymbolName, accessibilityDescription: icon.rawValue)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
+            button.image = NamedIconArt.image(icon, pointSize: 11)
             button.imagePosition = .imageOnly
             button.contentTintColor = .secondaryLabelColor
             button.tag = i

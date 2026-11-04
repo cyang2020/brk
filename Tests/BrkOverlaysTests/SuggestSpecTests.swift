@@ -393,3 +393,29 @@ final class SuggestWave2Tests: XCTestCase {
     }
 }
 
+
+/// A067 (R4-9): saved Pinned and Favorites addresses are bookmark rows: after the typed row, the open tabs and the top
+/// domains, before the engine's suggestions and history; Return opens the address; at most two.
+final class SuggestBookmarkTests: XCTestCase {
+    func testBookmarksRankAfterTabsAndBeforeHistoryAndOpenTheirAddress() {
+        var bar = commandBar([candidate("t0", "Fixture Home", "http://127.0.0.1:4000/", focused: true),
+                              candidate("t1", "Bookmark beta notes", "https://open.example.com/beta")],
+                             [visit("Bookmark beta history", "https://history.example.com/beta", 300)],
+                             actions: [], suggestions: ["bookmark beta ft"], suggestedFor: "bookmark beta")
+        bar.bookmarks = [visit("Bookmark Beta", "https://saved.example.com/beta", 200),
+                         visit("Bookmark beta two", "https://saved.example.com/two", 100),
+                         visit("Bookmark beta three", "https://saved.example.com/three", 50),
+                         visit("Bookmark beta notes", "https://open.example.com/beta", 10)]
+        let list = suggest("bookmark beta", bar)
+        let kinds = list.map(\.kind)
+        guard let first = kinds.firstIndex(of: .bookmark) else { return XCTFail("no bookmark row: \(kinds)") }
+        XCTAssertLessThan(kinds.firstIndex(of: .openTyped)!, first)
+        XCTAssertLessThan(kinds.firstIndex(of: .switchToTab)!, first)
+        if let history = kinds.firstIndex(of: .history) { XCTAssertLessThan(first, history) }
+        if let suggestion = kinds.firstIndex(of: .searchSuggestion) { XCTAssertLessThan(first, suggestion) }
+        let bookmarks = list.filter { $0.kind == .bookmark }
+        XCTAssertLessThanOrEqual(bookmarks.count, 2)
+        XCTAssertEqual(bookmarks.first?.title, "Bookmark Beta")
+        XCTAssertEqual(bookmarks.first?.command, .commandBar(.submit("https://saved.example.com/beta")), "Return opens the saved address")
+    }
+}

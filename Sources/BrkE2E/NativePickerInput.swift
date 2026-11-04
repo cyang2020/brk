@@ -333,6 +333,69 @@ enum NativeSystemInput {
         guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else { throw Check(description: "status menu press failed") }
     }
 
+    /// Every text Accessibility reads under the element whose identifier is `identifier` (an `NSView`'s accessibility
+    /// identifier, a `ViewID` string) in the app's windows: what a sidebar row shows as its title, for example.
+    static func texts(pid: Int32, identifier: String) -> [String] {
+        let root = AXUIElementCreateApplication(pid)
+        let windows = NativePickerInput.attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        for window in windows {
+            guard let element = NativePickerInput.find(window, { node, _ in NativePickerInput.string(node, kAXIdentifierAttribute) == identifier }) else { continue }
+            var out: [String] = [], queue = [element], seen = 0
+            while !queue.isEmpty, seen < 200 {
+                let node = queue.removeFirst(); seen += 1
+                for name in [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] {
+                    if let text = NativePickerInput.attribute(node, name) as? String, !text.isEmpty, !out.contains(text) { out.append(text) }
+                }
+                queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            }
+            return out
+        }
+        return []
+    }
+
+    /// Every static text Accessibility exposes in the app's windows with its frame in global screen coordinates (top
+    /// left origin, as Accessibility reports them). Brk's sidebar rows and command bar rows are not AX elements of
+    /// their own, but their labels are, so a row's text is the labels inside the row's frame.
+    static func staticTexts(pid: Int32) -> [(text: String, frame: CGRect)] {
+        let root = AXUIElementCreateApplication(pid)
+        var out: [(String, CGRect)] = []
+        var queue = NativePickerInput.attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? [], seen = 0
+        while !queue.isEmpty, seen < 4000 {
+            let node = queue.removeFirst(); seen += 1
+            if NativePickerInput.string(node, kAXRoleAttribute) == kAXStaticTextRole,
+               let text = NativePickerInput.attribute(node, kAXValueAttribute) as? String, !text.isEmpty {
+                var point = CGPoint.zero, size = CGSize.zero
+                if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+                if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+                out.append((text, CGRect(origin: point, size: size)))
+            }
+            queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        }
+        return out
+    }
+
+    /// Opens the pop-up button whose identifier is `identifier` in the app's windows with AXPress and presses its item
+    /// titled `title`, as a user picking from it does.
+    static func choosePopUp(pid: Int32, identifier: String, title: String) throws {
+        let root = AXUIElementCreateApplication(pid)
+        let windows = NativePickerInput.attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        guard let button = windows.lazy.compactMap({ NativePickerInput.find($0, { node, _ in NativePickerInput.string(node, kAXIdentifierAttribute) == identifier }) }).first else {
+            throw Check(description: "no pop-up \(identifier) through Accessibility")
+        }
+        guard AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else { throw Check(description: "AXPress on \(identifier) failed") }
+        usleep(400_000)
+        guard let item = NativePickerInput.find(button, { node, role in role == kAXMenuItemRole && NativePickerInput.string(node, kAXTitleAttribute) == title }) else {
+            AXUIElementPerformAction(button, kAXCancelAction as CFString)
+            throw Check(description: "the pop-up \(identifier) has no \(title)")
+        }
+        guard AXUIElementPerformAction(item, kAXPressAction as CFString) == .success else { throw Check(description: "AXPress on \(title) failed") }
+    }
+
+    /// The app Launch Services opens `url` with now (the user's default browser for http and https), by path.
+    static func defaultHandler(for url: URL) -> String? {
+        (LSCopyDefaultApplicationURLForURL(url as CFURL, .all, nil)?.takeRetainedValue() as URL?)?.path
+    }
+
     /// Registers `chord` exclusively for this runner; the returned closure releases it.
     static func hold(_ chord: KeyChord) throws -> () -> Void {
         var flags: UInt32 = 0
