@@ -242,7 +242,9 @@ final class SuggestSpecTests: XCTestCase {
             "open:pa",
             "domain:paypal.com",
             "history:https://ha.test/",
-            "action:Refresh the Page:⌘R", // The executable Page action leads the matching actions in this catalog.
+            // Edit > Paste has Arc's type-travel attributes (arcTypeTravelID=paste), so since R4-4 it is an action in
+            // the bar, and "Paste" starts with "pa" where "Refresh the Page" only has a word that does.
+            "action:Paste:⌘V",
         ])
     }
 
