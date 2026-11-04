@@ -116,9 +116,12 @@ final class ControlExecutor {
                 control.scrollToVisible(control.bounds); panel.displayIfNeeded()
             }
             guard !control.visibleRect.intersection(control.bounds).isEmpty else { throw Failure(message: "The owned site control is off screen: " + field) }
-            NSApp.activate(ignoringOtherApps: true)
-            panel.makeKeyAndOrderFront(nil)
-            store.inputWindow = panel
+            // Looking only: ordering the panel front again can make it choose a new first responder, which ends a recording key cap.
+            if action != .locate {
+                NSApp.activate(ignoringOtherApps: true)
+                panel.makeKeyAndOrderFront(nil)
+                store.inputWindow = panel
+            }
             switch action {
             case .focus:
                 guard let text = control as? NSTextField, text.isEditable, panel.makeFirstResponder(text) else {
