@@ -105,7 +105,6 @@ final class ArcDialogView: NSView {
         icon.imageScaling = .scaleProportionallyUpOrDown
         if picture != nil { card.addSubview(icon) }
         title.attributedStringValue = text
-        title.lineBreakMode = .byTruncatingMiddle
         card.addSubview(title)
         for row in rows { card.addSubview(row.view) }
         cancel.action = { [weak self] in self?.onCancel() }
@@ -207,7 +206,11 @@ final class ArcDialogView: NSView {
 
     static func title(_ text: String, bold: [String] = [], scheme: Scheme) -> NSAttributedString {
         let color = OverlayColors.of(scheme).foregroundPrimary
-        let result = NSMutableAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: ArcDialog.titleSize.value, weight: .semibold), .foregroundColor: color])
+        // The title is one line: without a paragraph style of its own an attributed string wraps, whatever the label's
+        // line break says, and a long Space name lost the rest of the sentence with no ellipsis.
+        let oneLine = NSMutableParagraphStyle()
+        oneLine.lineBreakMode = .byTruncatingTail
+        let result = NSMutableAttributedString(string: text, attributes: [.paragraphStyle: oneLine, .font: NSFont.systemFont(ofSize: ArcDialog.titleSize.value, weight: .semibold), .foregroundColor: color])
         for part in bold {
             let range = (text as NSString).range(of: part)
             if range.location != NSNotFound { result.addAttribute(.font, value: NSFont.systemFont(ofSize: ArcDialog.titleSize.value, weight: .heavy), range: range) }

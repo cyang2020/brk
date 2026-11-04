@@ -219,6 +219,8 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         }()
         glass.image = symbolImage("magnifyingglass", size: PreviewDraw.glyph.value, weight: .semibold)
         glass.contentTintColor = NSColor(white: 0, alpha: 0.55)
+        search.cell?.usesSingleLineMode = true
+        search.lineBreakMode = .byTruncatingTail
         search.isBordered = false
         search.drawsBackground = false
         search.focusRingType = .none

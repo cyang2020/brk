@@ -19,6 +19,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
     let captionFont = Metric(11.0, .guess("favorites empty subtitle; Arc's secondary row line is 11 pt (cra L115)"))
+    let clearFont = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/P05/P05-d-arc.png: Clear's ink is 26 x 8 points, 10 pt semibold (11 pt is 28 x 8.5)"))
 
     // Row interior, measured from the sidebar edge: favicon centred at 26, title at 45 (cra L141, L180).
     let faviconLeading = Metric(10.0, .anatomy("cra L141: favicon 16 pt centred 26 pt from the sidebar edge = selection inset 8 + 10"))

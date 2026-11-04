@@ -403,7 +403,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
         }
         let offerWidth = width(offerLabel) + 4
-        let keyWidth = width(keyLabel) + 2 * o.keyPadding.value
+        // Half points, as Arc's 30.5 pt Tab key.
+        let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
         let accessoryWidth = offer != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
@@ -422,7 +423,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         if offer != nil {
             keyCap.frame = CGRect(x: right - keyWidth, y: (mid - side / 2).rounded(), width: keyWidth, height: side)
             let keyHeight = keyLabel.intrinsicContentSize.height
-            keyLabel.frame = CGRect(x: o.keyPadding.value - 2, y: ((side - keyHeight) / 2).rounded(), width: keyWidth - 2 * o.keyPadding.value + 4, height: keyHeight)
+            // The whole key: a centred label keeps 4 on each side, so a frame about the text's width draws it right of centre.
+            keyLabel.frame = CGRect(x: 0, y: ((side - keyHeight) / 2).rounded(), width: keyWidth, height: keyHeight)
             let offerHeight = offerLabel.intrinsicContentSize.height
             offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
             accessoryLeft = offerLabel.frame.minX

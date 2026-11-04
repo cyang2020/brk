@@ -18,6 +18,7 @@ final class ProtocolTests: XCTestCase {
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
         case setWindowFrame, pageLog, pageObservations, flush, settle, quit, settings, openSettings, externalURL, pointer, appleScript
         case activateApp, sendAction, pressHeld, focusAppWindow, windowSheetButton
+        case textLayout, textLayoutMenu
     }
 
     static func tag(of op: ControlOp) -> Tag {
@@ -80,6 +81,8 @@ final class ProtocolTests: XCTestCase {
         case .openSettings: .openSettings
         case .externalURL: .externalURL
         case .appleScript: .appleScript
+        case .textLayout: .textLayout
+        case .textLayoutMenu: .textLayoutMenu
         case .activateApp: .activateApp
         case .sendAction: .sendAction
         case .pressHeld: .pressHeld
@@ -156,6 +159,8 @@ final class ProtocolTests: XCTestCase {
         case .openSettings: return [.openSettings(pane: .links)]
         case .externalURL: return [.externalURL(url: URL(string: "https://example.com/from-another-app")!)]
         case .appleScript: return [.appleScript(script: "tell me to return 1")]
+        case .textLayout: return [.textLayout]
+        case .textLayoutMenu: return [.textLayoutMenu(window: WindowID("w"), point: CGPoint(x: 40, y: 80))]
         case .activateApp: return [.activateApp(window: WindowID("w"))]
         case .sendAction: return [.sendAction(selector: "changeSpelling:", text: "sentence"), .sendAction(selector: "checkTextInDocument:", text: nil)]
         case .pressHeld: return [.pressHeld(chord: "cmd+=", repeats: 3)]
@@ -190,6 +195,13 @@ final class ProtocolTests: XCTestCase {
             .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),
             .pageLog([PageLogEntry(page: PageID(window: WindowID("w"), item: ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
             .failed("no window"),
+            .textLayout({
+                var report = TextLayoutReport(windows: ["BrowserWindow 1280x776"])
+                report.note("Clear", frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14))
+                report.findings.append(TextLayoutFinding(problem: .overflowsFrame, window: "BrowserWindow", view: "NSTextField < ClearButton < today-clear", text: "Clear",
+                                                         frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14)))
+                return report
+            }()),
             .native(NativeFacts(window: WindowID("w1"), windowFrame: CGRect(x: 0, y: 0, width: 1280, height: 776),
                                 contentSize: CGSize(width: 1280, height: 776), backingScale: 2, isKey: true,
                                 computed: WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false,

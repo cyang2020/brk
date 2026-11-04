@@ -330,12 +330,14 @@ final class LittleOpenInButton: NSView {
     override func layout() {
         super.layout()
         layer?.cornerRadius = Metrics.littleArc.openInRadius.value
+        // The labels' frames take their cells' whole width (the text would lose its last letter otherwise) and overlap
+        // what follows; the positions stay on the bare text's width.
         let text = label.intrinsicContentSize
-        label.frame = CGRect(x: 10, y: (bounds.height - text.height) / 2, width: ceil(text.width), height: text.height)
+        label.frame = CGRect(x: 10, y: (bounds.height - text.height) / 2, width: label.cellWidth, height: text.height)
         let key = shortcut.intrinsicContentSize
-        badge.frame = CGRect(x: label.frame.maxX + 6, y: (bounds.height - 20) / 2, width: ceil(key.width) + 8, height: 20)
+        badge.frame = CGRect(x: label.frame.minX + ceil(text.width) + 6, y: (bounds.height - 20) / 2, width: ceil(key.width) + 8, height: 20)
         badge.layer?.cornerRadius = Metrics.littleArc.badgeRadius.value
-        shortcut.frame = CGRect(x: badge.frame.minX + 4, y: (bounds.height - key.height) / 2, width: ceil(key.width), height: key.height)
+        shortcut.frame = CGRect(x: badge.frame.minX + 4, y: (bounds.height - key.height) / 2, width: shortcut.cellWidth, height: key.height)
         rule.frame = CGRect(x: chevronZone.minX, y: 7, width: 1, height: max(0, bounds.height - 14))
         chevron.frame = CGRect(x: chevronZone.midX - 6, y: (bounds.height - 12) / 2, width: 12, height: 12)
     }

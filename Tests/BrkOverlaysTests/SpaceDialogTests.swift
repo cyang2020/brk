@@ -310,3 +310,16 @@ final class ThemeEditorUndoTests: XCTestCase {
         XCTAssertEqual(model.draft.style.noise, 0.4, accuracy: 1e-9)
     }
 }
+
+/// A long Space name: the title ends with an ellipsis on its one line. It used to wrap out of its frame, which lost the
+/// end of the sentence with no sign of it.
+@MainActor
+final class ArcDialogTitleTests: XCTestCase {
+    func testALongTitleStaysOnItsOneLine() {
+        let title = NSTextField(labelWithString: "")
+        title.attributedStringValue = ArcDialogView.title("Delete your “Research and Development Notes” Space?", scheme: .light)
+        let cell = title.cell!
+        let oneLine = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 10_000)).height
+        XCTAssertEqual(cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 374, height: 10_000)).height, oneLine)
+    }
+}

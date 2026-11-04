@@ -357,6 +357,15 @@ enum NativeSystemInput {
     /// Every static text Accessibility exposes in the app's windows with its frame in global screen coordinates (top
     /// left origin, as Accessibility reports them). Brk's sidebar rows and command bar rows are not AX elements of
     /// their own, but their labels are, so a row's text is the labels inside the row's frame.
+    /// Asks the app for its windows and their children as an accessibility client does: SwiftUI builds a hosting view's
+    /// accessibility nodes only once a client has asked. False when this process may not ask.
+    static func wakeAccessibilityTree(pid: Int32) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        for window in windows { _ = NativePickerInput.attribute(window, kAXChildrenAttribute) }
+        return true
+    }
+
     static func staticTexts(pid: Int32) -> [(text: String, frame: CGRect)] {
         let root = AXUIElementCreateApplication(pid)
         var out: [(String, CGRect)] = []

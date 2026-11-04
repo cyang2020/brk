@@ -153,6 +153,11 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// asking), then "result: …" or "error <number>: …". Apple Events an app sends itself need no Automation
     /// consent; a separate osascript process does (macOS asks the user once per sender).
     case appleScript(script: String)
+    /// Every text the app's visible windows show against the room it was given (`TextLayoutAudit`). Reply: `textLayout`.
+    case textLayout
+    /// Right-clicks a window point and measures the native menu that opens, submenus included, then cancels it.
+    /// Reply: `textLayout`.
+    case textLayoutMenu(window: WindowID?, point: CGPoint)
 }
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
@@ -185,7 +190,62 @@ public enum ControlResult: Codable, Sendable, Equatable {
     case siteControls([WindowID: SiteControlSnapshot])
     case pageObservations([PageID: PageObservation])
     case settings(SettingsSnapshot)
+    case textLayout(TextLayoutReport)
     case failed(String)
+}
+
+public struct TextLayoutReport: Codable, Sendable, Equatable {
+    /// The windows or menus walked: class, title, size.
+    public var windows: [String]
+    /// Every text measured: "text | frame WxH | needs WxH".
+    public var measured: [String] = []
+    /// Texts that are cut: what the TextLayout scenario asserts is empty.
+    public var findings: [TextLayoutFinding] = []
+    /// Texts ended by an ellipsis or (SwiftUI, whose text ellipsizes by itself) short of room. A correct way to end a
+    /// long title, listed so a person can see the short labels that should have fitted.
+    public var truncated: [TextLayoutFinding] = []
+    public init(windows: [String]) { self.windows = windows }
+
+    public mutating func note(_ text: String, frame: CGRect, needed: CGSize) {
+        func size(_ s: CGSize) -> String { "\((s.width * 10).rounded() / 10)x\((s.height * 10).rounded() / 10)" }
+        measured.append("\(text.prefix(120)) | frame \(size(frame.size)) | needs \(size(needed))")
+    }
+}
+
+public struct TextLayoutFinding: Codable, Sendable, Equatable {
+    public enum Problem: String, Codable, Sendable {
+        /// One line, no truncation, wider than its frame (or a frame of the text's width without the cell's inset).
+        case overflowsFrame
+        /// A frame shorter than the text's line.
+        case tooShort
+        /// Wrapped lines taller than the frame.
+        case wrapOverflow
+        /// The text's rectangle runs past an ancestor that clips.
+        case clippedByAncestor
+        /// Text a view draws itself, outside the view or the clip it set.
+        case drawnOutsideView
+        /// Not a failure: see `TextLayoutReport.truncated`.
+        case ellipsis
+    }
+    public var problem: Problem
+    public var window: String
+    /// Class, parent's class and the nearest accessibility identifier.
+    public var view: String
+    public var text: String
+    /// In the window's frame view (`NSThemeFrame`), whose origin is its bottom-left corner.
+    public var frame: CGRect
+    public var needed: CGSize
+    /// The ancestor that cuts the text, for `clippedByAncestor`.
+    public var clipper: String?
+    public init(problem: Problem, window: String, view: String, text: String, frame: CGRect, needed: CGSize, clipper: String? = nil) {
+        self.problem = problem
+        self.window = window
+        self.view = view
+        self.text = text
+        self.frame = frame
+        self.needed = needed
+        self.clipper = clipper
+    }
 }
 
 public enum SidebarPanelControlAction: Codable, Sendable, Equatable {

@@ -490,6 +490,17 @@ final class ControlExecutor {
             let capture = ContextMenuCapture()
             return .menuItems(try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events, choose: choice))
 
+        case .textLayout:
+            return .textLayout(TextLayoutAudit.run())
+
+        case .textLayoutMenu(let window, let point):
+            let c = try controller(window)
+            store.inputWindow = c.window
+            let capture = ContextMenuCapture()
+            _ = try await capture.run(at: c.root.convert(point, to: nil), in: c.window, events: events)
+            guard let measured = capture.measured else { throw Failure(message: "no menu opened at \(point)") }
+            return .textLayout(measured)
+
         case .screenshot(let window, let path):
             let c = try controller(window)
             // A snapshot can be newer than the WindowServer/CEF compositor frame. Yield to its commit first.
