@@ -600,7 +600,7 @@ enum PageSiteFixScenarios {
     /// R3-7 made the Substitutions panel's Replace buttons work in web editors; typing itself never substituted.
     /// Chromium's input view does substitute while typing when its switches are on; Brk now hands it the menu's toggles.
     @Sendable static func substitutionsWhileTyping(_ app: AppUnderTest) throws {
-        guard WindowServerKeys.allowed, let pid = app.hello?.pid, let owner = app.window else { throw Check(description: "window-server input unavailable") }
+        guard WindowServerKeys.allowed, let owner = app.window else { throw Check(description: "window-server input unavailable") }
         let page = try PageBrowsingScenarios.load(app, "page-browsing.html")
         try app.evaluate(page, "document.body.innerHTML='<textarea id=t style=\"position:fixed;left:20px;top:20px;width:600px;height:200px;font:20px sans-serif\"></textarea>';document.title='editor ready'")
         try app.waitUntil("editor ready") { try PageBrowsingScenarios.title(app, page) == "editor ready" }
@@ -620,11 +620,29 @@ enum PageSiteFixScenarios {
             }
             throw Check(description: "\(title) did not reach \(on): \(try services().suffix(3))")
         }
+        /// Real key codes (ANSI layout) through the HID event tap, posted only while Brk's window is key: the keys a
+        /// keyboard sends, so Chromium's input view gets them through the field editor's insertText path.
+        func typeText(_ text: String) throws {
+            let codes: [Character: (CGKeyCode, Bool)] = [
+                "S": (1, true), "s": (1, false), "h": (4, false), "e": (14, false), "a": (0, false), "i": (34, false), "d": (2, false),
+                "t": (17, false), "w": (13, false), "c": (8, false), " ": (49, false), "\"": (39, true), "-": (27, false), ".": (47, false)]
+            let source = CGEventSource(stateID: .hidSystemState)
+            for character in text {
+                guard let (code, shift) = codes[character] else { throw Check(description: "no key code for \(character)") }
+                guard try app.native(owner).isKey else { throw Check(description: "Brk's window lost key status while typing") }
+                for down in [true, false] {
+                    guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { continue }
+                    if shift { event.flags = .maskShift }
+                    event.post(tap: .cghidEventTap)
+                    usleep(30_000)
+                }
+            }
+        }
         func typed(_ text: String) throws -> String {
             try app.evaluate(page, "document.getElementById('t').value='';document.getElementById('t').focus();document.title='cleared'")
             try app.waitUntil("cleared") { try PageBrowsingScenarios.title(app, page) == "cleared" }
             try WindowServerKeys.ensureFrontmost(app, owner)
-            PhysicalKeys.type(text, pid: pid)
+            try typeText(text)
             app.sleep(1.0)
             var value = ""
             try app.waitUntil("typed text read back") {
@@ -651,7 +669,7 @@ enum PageSiteFixScenarios {
         app.passed("each toggle switches its substitution off while typing")
         guard case .failed = try app.send(.menuAction("Correct Spelling Automatically")) else { throw Check(description: "Correct Spelling Automatically is enabled in a web editor") }
         try set("Smart Quotes", "quotes", true); try set("Smart Dashes", "dashes", true)
-        app.note("Typed with window-server key events posted to Brk (the field editor of Chromium's input view, not a script). Chromium has no automatic spelling correction in web content, so that row is greyed there, as in Chrome.")
+        app.note("Typed with real key codes posted through the window server's HID tap while Brk's window was key (Chromium's input view, not a script). Chromium has no automatic spelling correction in web content, so that row is greyed there, as in Chrome.")
     }
 
     // MARK: ProfileSettingsApplied (A093)
