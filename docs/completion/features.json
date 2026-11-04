@@ -4947,10 +4947,26 @@
         "native",
         "manual"
       ],
-      "verification": [],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-smoke-d07a0162 --only BB1,BB2,BB3,BB4,N1,N2,N3,N4,R49-WindowMenu",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-smoke-d07a0162/REPORT.md",
+          "scope": "父任务在自己的工作树（main d07a0162）独立重跑 R49-WindowMenu：Zoom、Cmd+M 最小化、Bring All to Front、Hide、Show All 都作用在 Brk 自己的窗口上且页面焦点保留；Hide Others 没跑（共用机器）。同一轮 9 个冒烟场景全部通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
+          "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过。"
+        }
+      ],
       "remaining": [
         "Verify actual native window ordering, minimize/restore and responder recovery from menus and keys on multiple windows; selector existence alone is insufficient.",
-        "R4-6 独立复核（2026-11-04）：证据不足。Hide Others、Show All、Zoom、Bring All to Front 没有任何原生效果证据，单元测试只核了菜单项的 selector；六项都没有通过真实菜单项驱动；多窗口时作用到哪个窗口没有检查。required_checks 里的 manual 也没有：这台机器是共用的，Hide Others / Show All 会隐藏或显示别的程序（包括其他任务的 Brk 和用户的 Arc），复核没有做。"
+        "R4-6 独立复核（2026-11-04）：证据不足。Hide Others、Show All、Zoom、Bring All to Front 没有任何原生效果证据，单元测试只核了菜单项的 selector；六项都没有通过真实菜单项驱动；多窗口时作用到哪个窗口没有检查。required_checks 里的 manual 也没有：这台机器是共用的，Hide Others / Show All 会隐藏或显示别的程序（包括其他任务的 Brk 和用户的 Arc），复核没有做。",
+        "2026-11-04：R49-WindowMenu 在父任务工作树独立通过（main d07a0162）。父任务查出并修了一个回退：R4-1 把红黄绿按钮静止时的透明度设成 0，AppKit 因此不再最小化窗口（Cmd+M、Window > Minimize、Dock 都失效，8fbb7648 起），改成 0.01 后恢复。Hide Others 在共用机器上不跑。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
