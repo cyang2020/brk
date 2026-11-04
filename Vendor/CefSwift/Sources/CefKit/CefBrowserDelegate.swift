@@ -78,6 +78,10 @@ public protocol CefBrowserDelegate: AnyObject {
     /// The default implementation bridges the legacy `requestsPopupFor` result
     /// (so existing apps keep working), then applies the OSR safety downgrade.
     func browser(_ b: CefBrowser, decideWindowOpenFor request: CefWindowOpenRequest) -> CefWindowOpenAction
+    /// After ``CefWindowOpenAction/adoptAsChromeBrowser``: the host the popup's browser is created in, made with
+    /// ``CefChromeBrowser/popupHost(options:)`` and already owned by the app (its browser gets its raw browser and
+    /// its window once CEF has created them). `nil` blocks the popup.
+    func browser(_ b: CefBrowser, hostForPopup request: CefWindowOpenRequest) -> CefChromeBrowser?
     /// The browser finished closing; release any references to it.
     func browserDidClose(_ b: CefBrowser)
     /// A console message was logged by the page.
@@ -220,6 +224,7 @@ extension CefBrowserDelegate {
         let legacy = browser(b, requestsPopupFor: request.targetURL)
         return CefWindowOpenPolicy.action(for: legacy, request: request)
     }
+    public func browser(_ b: CefBrowser, hostForPopup request: CefWindowOpenRequest) -> CefChromeBrowser? { nil }
     public func browserDidClose(_ b: CefBrowser) {}
     public func browser(_ b: CefBrowser, didReceiveConsoleMessage message: String, level: CefLogSeverity, source: String, line: Int) {}
     public func browser(_ b: CefBrowser, decidePolicyForDownload download: CefDownload, suggestedName: String) -> CefDownloadDecision {

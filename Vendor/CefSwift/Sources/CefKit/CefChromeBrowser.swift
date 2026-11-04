@@ -172,6 +172,89 @@ public final class CefChromeBrowser {
         return chrome
     }
 
+    // MARK: Popup hosts (Brk addition)
+
+    /// A host for a popup CEF creates itself (``CefWindowOpenAction/adoptAsChromeBrowser``), so the popup keeps
+    /// `window.opener` and its browsing context. Its ``browser`` gets the raw browser once CEF has created it, and
+    /// the popup's browser view is placed in a top-level window made from `options` (frame, bounds, prepare hooks),
+    /// exactly like a window from ``create(url:options:delegate:)``. `options.profile` is ignored: a popup browses in
+    /// its opener's request context. Return it from ``CefBrowserDelegate/browser(_:hostForPopup:)``; a host that is
+    /// not returned must be given back with ``discardPopupHost()``.
+    public static func popupHost(options: CefChromeBrowserOptions) -> CefChromeBrowser {
+        let client = BrowserClient()
+        if let rules = options.requestRules { client.requestFilter.configure(enabled: rules.enabled, hosts: rules.hosts, paths: rules.paths, urlPrefixes: rules.urlPrefixes) }
+        let cefBrowser = CefBrowser(raw: nil, client: client, delegate: nil)
+        client.attach(cefBrowser)
+        let chrome = CefChromeBrowser(browser: cefBrowser, options: options)
+        chrome.popupState = .offered
+        client.popupHost = chrome
+        liveInstances[ObjectIdentifier(chrome)] = chrome
+        return chrome
+    }
+
+    /// The popup's browser view has not arrived yet: no window, no raw browser. Embedders poll on.
+    public var isAwaitingPopupView: Bool { popupState == .offered || popupState == .claimed }
+
+    /// CEF decided not to create the claimed popup (`on_before_popup_aborted`): the host never gets a browser.
+    public var onPopupAborted: (() -> Void)?
+
+    private enum PopupState { case none, offered, claimed, attached, gone }
+    private var popupState = PopupState.none
+    private weak var popupOpener: BrowserClient?
+    private var popupID = 0
+
+    /// A host the delegate did not return: it never gets a browser.
+    public func discardPopupHost() {
+        guard popupState == .offered else { return }
+        popupState = .gone
+        Self.liveInstances[ObjectIdentifier(self)] = nil
+    }
+
+    /// on_before_popup: CEF creates the popup with this host's client (the incoming client carries a +1 we drop).
+    func claimPopup(replacing pointer: UnsafeMutablePointer<UnsafeMutablePointer<cef_client_t>?>, opener: BrowserClient, popupID id: Int) {
+        guard popupState == .offered, let client = browser.client else { return }
+        popupState = .claimed
+        popupOpener = opener; popupID = id
+        opener.awaitingPopupHosts[id] = self
+        cefRelease(pointer.pointee.map(UnsafeMutableRawPointer.init))
+        pointer.pointee = client.makeClient()
+    }
+
+    func popupAborted() {
+        guard popupState == .claimed else { return }
+        popupState = .gone
+        onPopupAborted?()
+        Self.liveInstances[ObjectIdentifier(self)] = nil
+    }
+
+    /// The opener's view delegate hands over the popup's view for this host's own delegate.
+    func makePopupViewDelegate() -> UnsafeMutablePointer<cef_browser_view_delegate_t> {
+        let delegate = ChromeBrowserViewDelegate(chrome: self, options: options)
+        viewDelegate = delegate
+        return delegate.makeStruct()
+    }
+
+    /// on_popup_browser_view_created: the popup's view goes into this host's own top-level window.
+    func attachPopupView(_ view: UnsafeMutablePointer<cef_browser_view_t>) -> Bool {
+        guard popupState == .claimed, rawBrowserView == nil else { return false }
+        popupState = .attached
+        popupOpener?.awaitingPopupHosts[popupID] = nil
+        cefAddRef(UnsafeMutableRawPointer(view))
+        rawBrowserView = view
+        let windowDelegate = ChromeWindowDelegate(chrome: self, options: options)
+        self.windowDelegate = windowDelegate
+        rawWindow = cef_window_create_top_level(windowDelegate.makeStruct())
+        return true
+    }
+
+    /// The host behind a popup browser view's delegate, if that view is one of ours.
+    static func popupHost(of view: UnsafeMutablePointer<cef_browser_view_t>) -> CefChromeBrowser? {
+        let base = UnsafeMutableRawPointer(view).assumingMemoryBound(to: cef_view_t.self)
+        guard let delegate = base.pointee.get_delegate?(base) else { return nil }
+        defer { cefRelease(UnsafeMutableRawPointer(delegate)) }
+        return cefOwner(ChromeBrowserViewDelegate.self, UnsafeMutableRawPointer(delegate))?.chrome
+    }
+
     // MARK: Window controls
 
     /// Shows (or re-shows) the window.
@@ -317,8 +400,8 @@ public final class CefChromeBrowser {
 /// popup toolbar configuration is inherited without cross-wiring browsers.
 @MainActor
 final class ChromeBrowserViewDelegate {
-    /// nil for popup-view delegates (no CefChromeBrowser to wire back to).
-    private weak var chrome: CefChromeBrowser?
+    /// nil for popup-view delegates (no CefChromeBrowser to wire back to), the host for an adopted popup.
+    fileprivate(set) weak var chrome: CefChromeBrowser?
     private let options: CefChromeBrowserOptions
 
     init(chrome: CefChromeBrowser?, options: CefChromeBrowserOptions) {
@@ -363,6 +446,7 @@ final class ChromeBrowserViewDelegate {
 
         d.pointee.get_delegate_for_popup_browser_view = { delegateSelf, browserView, _, popupClient, _ in
             cefRelease(browserView.map(UnsafeMutableRawPointer.init))
+            let popupOwner = cefOwner(BrowserClient.self, popupClient.map(UnsafeMutableRawPointer.init))
             cefRelease(popupClient.map(UnsafeMutableRawPointer.init))
             guard let me = ChromeBrowserViewDelegate.owner(delegateSelf.map(UnsafeMutableRawPointer.init)) else {
                 return nil
@@ -370,6 +454,11 @@ final class ChromeBrowserViewDelegate {
             // (Pointer return types aren't Sendable, so hop manually.)
             nonisolated(unsafe) var result: UnsafeMutablePointer<cef_browser_view_delegate_t>?
             MainActor.assumeIsolated {
+                // An adopted popup's view gets its host's delegate, so its browser lands in the host's wrapper.
+                if let host = popupOwner?.popupHost, host.isAwaitingPopupView {
+                    result = host.makePopupViewDelegate()
+                    return
+                }
                 // Fresh delegate so the popup inherits toolbar config but has
                 // no back-reference to the originating CefChromeBrowser.
                 let popupDelegate = ChromeBrowserViewDelegate(chrome: nil, options: me.options)
@@ -379,12 +468,17 @@ final class ChromeBrowserViewDelegate {
             return result
         }
 
-        d.pointee.on_popup_browser_view_created = { _, browserView, popupBrowserView, _ in
+        d.pointee.on_popup_browser_view_created = { _, browserView, popupBrowserView, isDevTools in
             cefRelease(browserView.map(UnsafeMutableRawPointer.init))
-            cefRelease(popupBrowserView.map(UnsafeMutableRawPointer.init))
-            // Return 0: CEF creates a default top-level window for the popup
+            defer { cefRelease(popupBrowserView.map(UnsafeMutableRawPointer.init)) }
+            // An adopted popup goes into its host's own window (1). Otherwise
+            // return 0: CEF creates a default top-level window for the popup
             // (DevTools windows included), using the popup view delegate above.
-            return 0
+            guard isDevTools == 0, let popupBrowserView else { return 0 }
+            return MainActor.assumeIsolated {
+                guard let host = CefChromeBrowser.popupHost(of: popupBrowserView) else { return 0 }
+                return host.attachPopupView(popupBrowserView) ? 1 : 0
+            }
         }
 
         d.pointee.get_chrome_toolbar_type = { delegateSelf, browserView in

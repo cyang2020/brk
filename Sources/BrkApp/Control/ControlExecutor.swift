@@ -131,6 +131,21 @@ final class ControlExecutor {
             case .press:
                 guard let button = control as? NSButton else { throw Failure(message: "The site control is not a button") }
                 button.performClick(nil)
+            case .locate:
+                // The editable field itself when the identifier sits on a container around it.
+                func field(in view: NSView) -> NSTextField? {
+                    if let text = view as? NSTextField, text.isEditable { return text }
+                    for child in view.subviews { if let found = field(in: child) { return found } }
+                    return nil
+                }
+                let target: NSView = field(in: control) ?? control
+                let screen = panel.convertToScreen(target.convert(target.bounds, to: nil))
+                let top = NSScreen.screens.first?.frame.maxY ?? screen.maxY
+                let editor = (target as? NSTextField)?.currentEditor()
+                let focused = editor != nil && panel.firstResponder === editor
+                return .menuItems([screen.minX, top - screen.maxY, screen.width, screen.height].map { String(Double($0)) } + ["focused:\(focused)",
+                                  "key:\(panel.isKeyWindow) level:\(panel.level.rawValue) number:\(panel.windowNumber) class:\(type(of: control))/\(type(of: target)) window:\(Int(panel.frame.minX)),\(Int(top - panel.frame.maxY)),\(Int(panel.frame.width))x\(Int(panel.frame.height)) responder:" + ViewTree.describe(panel.firstResponder),
+                                  "value:" + ((target as? NSTextField)?.stringValue ?? "")])
             }
             print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
             return .ok

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Daily Fixture News</title>
+<style>
+body{margin:0;font:16px/1.5 -apple-system,sans-serif;color:#222;background:#fff}
+header{padding:14px 24px;border-bottom:1px solid #ddd;font-weight:700;font-size:22px}
+main{display:flex;gap:24px;padding:16px 24px}
+article{flex:1}
+aside{width:300px}
+.adsbygoogle,[id^="div-gpt-ad-"]{display:block;background:#ffe9a8;border:1px dashed #c90;min-height:90px;margin:10px 0;text-align:center;line-height:90px}
+.sponsored-strip{background:#ffd6d6;padding:8px;margin:10px 0}
+iframe.ad-frame{width:300px;height:250px;border:1px solid #c90}
+#cookie-notice{position:fixed;left:0;right:0;bottom:0;background:#333;color:#fff;padding:12px 24px}
+</style>
+<!-- The requests a typical ad-funded news page makes, served by the fixture server under a second host name
+     (localhost, a third party to 127.0.0.1): AdSense, Google Publisher Tag, gtag.js, an analytics hit pixel and an
+     ad iframe. First-party script and image keep working when they are blocked. -->
+<script>
+const AD = location.protocol + '//localhost:' + location.port;
+window.report = {};
+window.mark = (name, ok) => { window.report[name] = ok; };
+</script>
+<script src="/news-assets/app.js" onload="mark('app',true)" onerror="mark('app',false)"></script>
+</head><body>
+<header>Daily Fixture News</header>
+<main>
+<article>
+<h1 id="headline">Local council approves new riverside park</h1>
+<img id="hero" src="/news-assets/hero.svg" width="480" height="160" alt="" onload="mark('hero',true)" onerror="mark('hero',false)">
+<p>The plan adds two kilometres of footpath and a playground near the old ferry landing. Work starts in spring.</p>
+<ins class="adsbygoogle" data-ad-client="ca-pub-0000000000000000" data-ad-slot="1234567890">Advertisement</ins>
+<p>Residents asked for more benches and lighting along the path; the council said both are in the second phase.</p>
+<div class="sponsored-strip">Sponsored: try FixtureCola today</div>
+</article>
+<aside>
+<div id="div-gpt-ad-1700000000000-0">Advertisement</div>
+<div id="frame-slot"></div>
+</aside>
+</main>
+<div id="cookie-notice" aria-label="cookie consent">We use cookies. <button>Accept all</button></div>
+<script>
+const load = (name, src) => { const s = document.createElement('script'); s.src = src; s.onload = () => mark(name, true); s.onerror = () => mark(name, false); document.head.append(s); };
+load('adsbygoogle', AD + '/pagead/js/adsbygoogle.js?client=ca-pub-0000000000000000');
+load('gpt', AD + '/tag/js/gpt.js');
+load('gtag', AD + '/gtag/js?id=G-FIXTURE01');
+const pixel = new Image(); pixel.onload = () => mark('collect', true); pixel.onerror = () => mark('collect', false);
+pixel.src = AD + '/collect?v=1&tid=UA-000000-1&t=pageview&dl=' + encodeURIComponent(location.href);
+const frame = document.createElement('iframe'); frame.className = 'ad-frame'; frame.src = AD + '/ads/frame.html';
+document.getElementById('frame-slot').append(frame);
+window.reportNow = () => {
+  const shown = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).display !== 'none' : null; };
+  return JSON.stringify({loaded: window.report, appReady: window.newsAppReady === true,
+    shown: {adsense: shown('.adsbygoogle'), gpt: shown('[id^="div-gpt-ad-"]'), sponsored: shown('.sponsored-strip'), banner: shown('#cookie-notice'), headline: shown('#headline'), hero: shown('#hero')}});
+};
+</script>
+</body></html>

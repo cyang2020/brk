@@ -254,7 +254,7 @@ public final class CEFEngine: WebEngine {
             guard let url = spec.initialURL, isReady(spec.context) else { continue }
             let context = contexts.epoch(for: spec.context)
             let incarnation = ledger.create(spec.id)
-            let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation)
+            let page = ChromePage(spec: spec, url: url, engine: self, incarnation: incarnation, adopting: claimPopupHost(url, context: spec.context))
             resources.insert(page, browser: incarnation, context: context)
             record(.created, page)
             guard phase == .running, contexts.permitsWork(spec.context),
@@ -603,7 +603,14 @@ public final class CEFEngine: WebEngine {
     ///    skip the runtime shutdown (cef_shutdown with browsers alive is the crash), `.timedOut`. Nothing touches CEF
     ///    after this either way.
     private func runShutdown() async -> ShutdownOutcome {
-        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil { FileHandle.standardError.write(Data("fixture cef: shutdown started\n".utf8)) }
+        // Test instances log each step's time: R4-7 and R4-10 saw quits pass 10 s under load, ending in Chromium's
+        // own "Teardown watchdog expired" (chrome/browser/shutdown_watchdog_mac.cc) inside cef_shutdown.
+        let traced = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, began = ProcessInfo.processInfo.systemUptime
+        func trace(_ step: String) {
+            guard traced else { return }
+            FileHandle.standardError.write(Data(String(format: "fixture cef: %@ at +%.2f s\n", step, ProcessInfo.processInfo.systemUptime - began).utf8))
+        }
+        if traced { FileHandle.standardError.write(Data("fixture cef: shutdown started\n".utf8)) }
         appearanceObservation = nil
         phase = .restoringViews
         audioLoop?.cancel(); audioLoop = nil
@@ -618,6 +625,7 @@ public final class CEFEngine: WebEngine {
             !self.reconciliation.isApplying && self.pictureInPictureWindows.isEmpty && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty && self.resources.entries.isEmpty && self.contexts.readinessDrained && self.disposals.isEmpty
                 && self.audioObservers.values.allSatisfy(\.drained) && self.clearingContexts.isEmpty
         }
+        trace(drained ? "browsers closed" : "browsers did not close")
         guard drained else {
             outputs.reportTimeout()
             transfers.reportTimeout()
@@ -637,7 +645,9 @@ public final class CEFEngine: WebEngine {
         HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
         releaseTaskManager()
+        trace("runtime shutdown starting")
         CefRuntime.shared.shutdown()
+        trace("runtime shut down")
         phase = .done
         log.notice("shutdown: clean")
         return .clean
@@ -727,6 +737,23 @@ public final class CEFEngine: WebEngine {
     }
 
     func pageWindowDidClose(_ page: ChromePage) { resources.hostClosed(page.incarnation) }
+
+    /// A popup Chromium is about to create, offered to the page the domain makes for it while `open` runs (the
+    /// domain reduces and reconciles synchronously). True when a page in the same context for the same address
+    /// took it; the popup then keeps its opener.
+    private var offeredPopup: (host: CefChromeBrowser, url: URL, context: BrowsingContext)?
+    func offerPopupHost(_ host: CefChromeBrowser, url: URL, context: BrowsingContext, open: () -> Void) -> Bool {
+        offeredPopup = (host, url, context)
+        open()
+        let taken = offeredPopup == nil
+        offeredPopup = nil
+        return taken
+    }
+    private func claimPopupHost(_ url: URL, context: BrowsingContext) -> CefChromeBrowser? {
+        guard let offer = offeredPopup, offer.url.absoluteString == url.absoluteString, offer.context == context else { return nil }
+        offeredPopup = nil
+        return offer.host
+    }
 
     func auxiliaryCountChanged(_ page: ChromePage, count: Int) {
         let lease = BrowserResources<ChromePage>.Lease.auxiliary("native-children")

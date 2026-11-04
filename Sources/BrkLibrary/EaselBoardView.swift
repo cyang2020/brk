@@ -477,6 +477,16 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
         return true
     }
 
+    /// Share asks before it draws: a title still being typed into Easel `id` is committed (its rename dispatched)
+    /// and returned, so the saved file's name and picture carry it. Nil when the title is not being edited.
+    public func commitTitle(of id: EaselID) -> String? {
+        guard editingTitle, easel?.id == id else { return nil }
+        let typed = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        endTitleEditing()
+        if window?.firstResponder == nil || window?.firstResponder === window { window?.makeFirstResponder(self) }
+        return typed.isEmpty ? nil : typed
+    }
+
     private func endTitleEditing() {
         guard editingTitle else { return }
         editingTitle = false

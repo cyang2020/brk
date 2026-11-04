@@ -17,6 +17,13 @@ import Foundation
 ///   survive. Smart Copy/Paste and Data Detectors have no counterpart in a web editor and stay disabled.
 /// - Start/Stop Speaking speak the selection, else the editor's text, else the page's text.
 /// - Bold and Italic (NSFontManager's `changeFont:`) and Underline run the editor's formatting commands.
+/// - While the user types, Smart Quotes, Smart Dashes and Text Replacement are Chromium's own: its input view checks
+///   each insertion with `NSSpellChecker` and replaces as AppKit text views do, reading the three switches from the
+///   `WebAutomatic…Enabled` user defaults. Brk publishes its toggles there in the registration domain (this process
+///   only, nothing written to disk), so the menu's check marks are what typing does.
+/// - Correct Spelling Automatically and Smart Links have no counterpart while typing in Chromium (its input view
+///   implements neither), so in a web editor they are greyed as in Arc and Chrome; the Replace buttons still apply
+///   Smart Links in a rich editor.
 /// Toggle states are app-wide, start from the system's text settings, and are kept in the data directory.
 @MainActor enum WebTextServices {
     struct State: Equatable {
@@ -43,13 +50,24 @@ import Foundation
             let flags = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Bool] }
             let loaded = flags.map(State.init) ?? State()
             cached = loaded
+            publish(loaded)
             return loaded
         }
         set {
             cached = newValue
+            publish(newValue)
             if let file, let data = try? JSONSerialization.data(withJSONObject: newValue.flags, options: [.sortedKeys]) { try? data.write(to: file, options: .atomic) }
         }
     }
+    /// The switches Chromium's `RenderWidgetHostViewCocoa` reads before it asks for substitutions of typed text.
+    static let chromiumDefaults = ["quotes": "WebAutomaticQuoteSubstitutionEnabled", "dashes": "WebAutomaticDashSubstitutionEnabled",
+                                   "replacement": "WebAutomaticTextReplacementEnabled"]
+    private static func publish(_ state: State) {
+        let flags = state.flags
+        UserDefaults.standard.register(defaults: chromiumDefaults.reduce(into: [String: Any]()) { $0[$1.value] = flags[$1.key] ?? false })
+    }
+    /// Loads (and publishes) the toggles before a page's input view first types.
+    static func prepare() { _ = state }
     static let speech = NSSpeechSynthesizer()
     static let spellTag = NSSpellChecker.uniqueSpellDocumentTag()
 }
@@ -308,7 +326,13 @@ extension EmbeddedSurface {
             #selector(toggleAutomaticTextReplacement(_:)): WebTextServices.state.replacement,
             #selector(toggleAutomaticLinkDetection(_:)): WebTextServices.state.links,
         ]
-        if let on = toggles[action] { item.state = on ? .on : .off; return editingBrowser != nil }
+        if let on = toggles[action] {
+            item.state = on ? .on : .off
+            // Chromium does not correct spelling or make links while typing; only the Replace buttons do links.
+            if action == #selector(toggleAutomaticSpellingCorrection(_:)) { return false }
+            if action == #selector(toggleAutomaticLinkDetection(_:)) { return editingBrowser != nil && richEditableFocused }
+            return editingBrowser != nil
+        }
         if action == #selector(toggleContinuousSpellChecking(_:)) {
             guard let browser = editingBrowser else { return false }
             item.state = browser.boolPreference("browser.enable_spellchecking") ?? true ? .on : .off

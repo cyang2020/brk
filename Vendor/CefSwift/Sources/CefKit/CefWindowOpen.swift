@@ -156,6 +156,12 @@ public enum CefWindowOpenAction: Sendable, Equatable {
     /// The app will open its own tab/window for this URL (e.g. a new
     /// `CefWebView`/`CefChromeWindow`). CEF's native popup is blocked.
     case handled
+    /// Let CEF create the popup's browser (so it keeps `window.opener`, its
+    /// name and its browsing context group) inside a ``CefChromeBrowser`` the
+    /// app embeds like any other: CefSwift asks the delegate for that host
+    /// (``CefBrowserDelegate/browser(_:hostForPopup:)``); no host blocks it.
+    /// Brk addition. Downgraded to ``openInCurrentBrowser`` for OSR browsers.
+    case adoptAsChromeBrowser
 }
 
 /// The policy CefSwift applies when no delegate is present, or when bridging
@@ -183,7 +189,7 @@ public enum CefWindowOpenPolicy {
     /// becomes ``CefWindowOpenAction/openInCurrentBrowser`` (or ``deny`` if
     /// there is no URL).
     public static func resolve(_ action: CefWindowOpenAction, for request: CefWindowOpenRequest) -> CefWindowOpenAction {
-        guard action == .allowNativePopup, request.isSourceOffscreen else { return action }
+        guard action == .allowNativePopup || action == .adoptAsChromeBrowser, request.isSourceOffscreen else { return action }
         return request.targetURL != nil ? .openInCurrentBrowser : .deny
     }
 

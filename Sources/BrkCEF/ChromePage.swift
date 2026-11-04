@@ -77,6 +77,9 @@ final class ChromePage: CefBrowserDelegate {
     var extensionInstallerDocument: DocumentToken?
     var approvedExtensionDirectory: (document: DocumentToken, directory: URL)?
     var websiteStyleOwner: (document: DocumentToken, id: String)?
+    /// The isolated world the site policy runs in for the current document. Its media observer and playing marks
+    /// live in that world's globals, so nothing of it shows in the page's DOM; one world per document keeps them.
+    var policyWorld: (document: DocumentToken, context: Int)?
     var websitePolicy = WebsitePolicy()
     var boostPolicy = BoostPolicy()
     var boostRevision: UInt64 = 0
@@ -128,7 +131,26 @@ final class ChromePage: CefBrowserDelegate {
     /// moved into a card. The card then sets the real size.
     static let offscreenBounds = CGRect(x: -20_000, y: -20_000, width: 1024, height: 768)
 
-    init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation) {
+    /// The host window every page browser is made in: frameless, off screen, never activated before its views move
+    /// into a card. A popup the page opens as a tab gets the same host (`popupHost`).
+    private static func hostOptions(_ policy: WebsitePolicy, url: URL, profile: CefProfile?) -> CefChromeBrowserOptions {
+        var options = CefChromeBrowserOptions()
+        options.isFrameless = true
+        options.prepareNativeWindow = { HostWindows.adopt($0, parent: nil) }
+        let initialRule = SiteOrigin(url).map { policy.preferences.rule(for: $0) } ?? SiteRule()
+        let list = policy.preferences.blockingRules ?? .builtIn
+        options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes, urlPrefixes: list.blockedURLPrefixes ?? [])
+        options.showsChromeToolbar = false
+        options.prepareWindow = { HostWindows.adopt($0, parent: nil) }
+        options.backgroundColor = .white
+        options.initialBounds = Self.offscreenBounds
+        options.profile = profile
+        return options
+    }
+
+    /// `popup`: a host CEF is creating this page's browser in, because this page's tab is a popup another page
+    /// opened (`hostForPopup`); the browser then keeps `window.opener`. Otherwise a new browser loads `url`.
+    init(spec: PageSpec, url: URL, engine: CEFEngine, incarnation: PageLedger.Incarnation, adopting popup: CefChromeBrowser? = nil) {
         isAIReader = spec.isAIReader
         id = spec.id
         context = spec.context
@@ -139,22 +161,23 @@ final class ChromePage: CefBrowserDelegate {
         mainDocument = MainDocumentState(browser: incarnation)
         self.engine = engine
         surface = EmbeddedSurface(page: spec.id)
-        var options = CefChromeBrowserOptions()
-        options.isFrameless = true
-        options.prepareNativeWindow = { HostWindows.adopt($0, parent: nil) }
-        let initialRule = SiteOrigin(url).map { spec.websitePolicy.preferences.rule(for: $0) } ?? SiteRule()
-        let list = spec.websitePolicy.preferences.blockingRules ?? .builtIn
-        options.requestRules = CefRequestRules(enabled: initialRule.blocking, hosts: list.blockedHosts, paths: list.blockedPathPrefixes, urlPrefixes: list.blockedURLPrefixes ?? [])
-        options.showsChromeToolbar = false
-        options.prepareWindow = { HostWindows.adopt($0, parent: nil) }
-        options.backgroundColor = .white
-        options.initialBounds = Self.offscreenBounds
-        // The page's request context: nil (the runtime's cache) for the default profile, a profile's persistent
-        // context, or the shared incognito one (W2-2 and W2-3 prove the isolation on the real engine).
-        options.profile = engine.profile(for: spec.context)
-        chrome = CefChromeBrowser.create(url: url, options: options, delegate: nil)
+        if let popup {
+            chrome = popup
+        } else {
+            // The page's request context: nil (the runtime's cache) for the default profile, a profile's persistent
+            // context, or the shared incognito one (W2-2 and W2-3 prove the isolation on the real engine).
+            chrome = CefChromeBrowser.create(url: url, options: Self.hostOptions(spec.websitePolicy, url: url, profile: engine.profile(for: spec.context)), delegate: nil)
+        }
         if let host = chrome.nsWindow { HostWindows.adopt(host,parent:nil) }
         chrome.browser.delegate = self
+        chrome.onPopupAborted = { [weak self] in
+            guard let self else { return }
+            self.log.notice("page \(self.id.description, privacy: .public): Chromium did not create its popup browser")
+            self.surface.returnViews()
+            self.windowDestroyed = true
+            self.engine.pageWindowDidClose(self)
+            self.engine.pageDidClose(self)
+        }
         chrome.onFullscreenTransition = { [weak self] nativeFullscreen, completed in
             guard let self else { return }
             self.surface.nativeFullscreenChanged(nativeFullscreen, completed: completed)
@@ -498,13 +521,29 @@ final class ChromePage: CefBrowserDelegate {
         // dialogs come back to this page. A hidden source has no window to anchor one; its popup becomes a tab.
         let onScreen = surface.window?.isVisible == true && !surface.isHiddenOrHasHiddenAncestor
         if request.disposition == .newPopup, onScreen, request.targetURL.map({ !$0.absoluteString.isEmpty }) == true { return .allowNativePopup }
+        // Everything else with an address becomes a tab, as in Chrome: `window.open(url)` without features,
+        // target=_blank, and a hidden page's popup. Chromium still creates the browser (`hostForPopup`), so the tab
+        // keeps `window.opener` unless the page asked for noopener; a sign-in or payment page can report back.
         if !namedWindow, let url = request.targetURL, !url.absoluteString.isEmpty,
            url.absoluteString != "about:blank", [.newForegroundTab, .newBackgroundTab, .newPopup].contains(request.disposition) {
-            engine.pageDidEmit(self, .openRequested(url, request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab,
-                                                  metadata: openMetadata(request)))
-            return .handled
+            return .adoptAsChromeBrowser
         }
         return .allowNativePopup
+    }
+
+    /// The tab for a popup this page opens: the domain decides where it goes (`openRequested`); when the page it
+    /// creates for it is in this page's context, that page wraps the host Chromium creates the popup in. Otherwise
+    /// (another profile, refused, deferred) the popup is blocked and the domain's tab, if any, loads the address.
+    func browser(_ b: CefBrowser, hostForPopup request: CefWindowOpenRequest) -> CefChromeBrowser? {
+        guard engine.isLive(self), let url = request.targetURL else { return nil }
+        let host = CefChromeBrowser.popupHost(options: Self.hostOptions(websitePolicy, url: url, profile: nil))
+        let disposition: OpenDisposition = request.disposition == .newBackgroundTab ? .backgroundTab : .foregroundTab
+        let adopted = engine.offerPopupHost(host, url: url, context: context) {
+            engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
+        }
+        auxiliaryEvents.append("popup-tab:\(adopted):" + url.absoluteString)
+        guard adopted else { host.discardPopupHost(); return nil }
+        return host
     }
 
     /// A JavaScript dialog of a native child this page opened (forwarded by CefKit, `b` is the child): a sheet on

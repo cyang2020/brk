@@ -212,6 +212,25 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertNil(d.view.history)
     }
 
+    /// The History tab comes back after a relaunch like any other tab (Arc restores arc://history), in its place and
+    /// still drawn natively; restore used to drop it with the other brk:// addresses (R4-7, A050).
+    func test_theHistoryTabIsRestoredAfterARelaunch() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        d.page(home, .committed(url("http://127.0.0.1:9/one")))
+        d.user(.library(.openHistory))
+        let tab = try XCTUnwrap(d.todayIDs.first)
+        d.user(.tab(.togglePin(.focused)))
+        XCTAssertEqual(d.state.tab(tab)?.pinnedURL, HistoryPage.url)
+        let restored = Driver(file: d.savedFile)
+        XCTAssertNotNil(restored.state.tab(tab), "the History tab was dropped at restore")
+        XCTAssertEqual(restored.state.tab(tab)?.url, HistoryPage.url)
+        XCTAssertEqual(restored.state.tab(tab)?.pinnedURL, HistoryPage.url, "the pinned History tab lost its saved address")
+        restored.user(.tab(.focus(tab)))
+        XCTAssertEqual(restored.view.content.panes.map(\.content), [.history(PageID(window: restored.window, item: tab))])
+        XCTAssertFalse(restored.snapshot.pages.contains { $0.id.item == tab }, "the restored History page has no browser")
+    }
+
     /// the Downloads page lists the window's profile's downloads with their progress; Clear acts on that profile only
     func test_theDownloadsPageListsTheProfilesDownloadsWithProgress() throws {
         let d = Driver()

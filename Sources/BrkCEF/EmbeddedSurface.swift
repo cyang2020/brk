@@ -57,7 +57,7 @@ final class EmbeddedSurface: PageSurfaceView {
     }
 
     private func tryEmbed() {
-        guard !retired, !isEmbedded, let chrome, chrome.isWindowAlive else { return }
+        guard !retired, !isEmbedded, let chrome, chrome.isWindowAlive || chrome.isAwaitingPopupView else { return }
         if let hostWindow = chrome.nsWindow, let content = hostWindow.contentView,
            let compositor = Self.find("ViewsCompositorSuperview", in: content),
            let webContents = Self.find("WebContentsViewCocoa", in: content) {
@@ -86,7 +86,7 @@ final class EmbeddedSurface: PageSurfaceView {
     private func waitForInputView(attempt: Int) {
         guard !retired else { return }
         if isReadyForFocus {
-            if let input = Self.find("RenderWidgetHostViewCocoa", in: self) { PanelActionRouting.install(on: input) }
+            if let input = Self.find("RenderWidgetHostViewCocoa", in: self) { PanelActionRouting.install(on: input); WebTextServices.prepare() }
             log.notice("page \(self.page.description, privacy: .public): input view ready after \(attempt, privacy: .public) polls")
             onReadyForFocus?()
             return
