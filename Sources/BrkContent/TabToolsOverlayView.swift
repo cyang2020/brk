@@ -181,7 +181,8 @@ final class ToastView: NSView {
     private let cap = NSTextField(labelWithString: "")
     private let capBackground = NSView()
     private let trailing = NSTextField(labelWithString: "")
-    /// Arc's "Screenshot Copied to Clipboard" · Save (P33-d): a white bordered button at the end of the toast.
+    /// Arc's "Screenshot Copied to Clipboard" · Save (P33-d): a small bordered button at the end of the toast, a shade
+    /// lighter than the toast (#F3F9F9 inside a #C2C8C8 edge).
     private let actionBox = NSView()
     private let actionLabel = NSTextField(labelWithString: "")
     var onClick: (() -> Void)?
@@ -214,11 +215,11 @@ final class ToastView: NSView {
         actionBox.wantsLayer = true
         actionBox.layer?.cornerCurve = .continuous
         actionBox.layer?.cornerRadius = m.capRadius.value
-        actionBox.layer?.backgroundColor = NSColor.white.cgColor
-        actionBox.layer?.borderColor = NSColor(srgbRed: 0xC9 / 255, green: 0xD2 / 255, blue: 0xD3 / 255, alpha: 1).cgColor
+        actionBox.layer?.backgroundColor = NSColor(srgbRed: 0xF3 / 255, green: 0xF9 / 255, blue: 0xF9 / 255, alpha: 1).cgColor
+        actionBox.layer?.borderColor = NSColor(srgbRed: 0xC2 / 255, green: 0xC8 / 255, blue: 0xC8 / 255, alpha: 1).cgColor
         actionBox.layer?.borderWidth = 1
         actionBox.identify(.tabTool("toast-action"))
-        actionLabel.font = .systemFont(ofSize: m.font.value, weight: .semibold)
+        actionLabel.font = .systemFont(ofSize: m.actionFont.value, weight: .semibold)
         actionLabel.textColor = .black
         actionLabel.alignment = .center
         for view in [label, capBackground, cap, trailing, actionBox, actionLabel] as [NSView] { addSubview(view) }
@@ -294,8 +295,9 @@ struct ToastMetrics: MetricGroup {
     let border = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: a 1 px #AFB9B9 edge"))
     let shadowBlur = Metric(12.0, .guess("soft popover shadow under the toast"))
     let shadowAlpha = Metric(0.12, .guess("the toast's shadow is faint in P15"))
-    let actionHeight = Metric(32.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the toast's Save button, 64 px tall"))
-    let actionPadding = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: Save sits 24 px in from its button's edges"))
+    let actionHeight = Metric(27.5, .anatomy("verify/visual-pairs/run-20261103/P33-d: the toast's Save button spans y 13.5...41"))
+    let actionPadding = Metric(9.25, .anatomy("verify/visual-pairs/run-20261103/P33-d: the button is 47 wide around a 28.5 pt Save"))
+    let actionFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/P33-d: Save is 28.5 pt wide, semibold"))
     let actionInset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the Save button ends 14 px before the toast's right edge"))
     let capHeight = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
     let capMinWidth = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))

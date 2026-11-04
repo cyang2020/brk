@@ -129,11 +129,11 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertNil(archive.commandBar)
         XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
         XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)
-        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P32-d: two spaces, 745).
+        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P30-a, P32-d: two spaces, 744).
         d.user(.space(.create(title: "Second", icon: .none, theme: .default)))
         d.user(.library(.open(.spaces)))
-        XCTAssertEqual(d.frames().library?.strip.width, 745)
-        XCTAssertEqual(d.frames().contentArea.minX, 745)
+        XCTAssertEqual(d.frames().library?.strip.width, 744)
+        XCTAssertEqual(d.frames().contentArea.minX, 744)
         XCTAssertEqual(d.frames().contentArea.width, 1042)
         XCTAssertEqual(LibraryLayout.panelWidth(windowWidth: 700, sidebarWidth: 228, page: .spaces, spaces: 2), 644, "never past the window minus 56")
         d.user(.library(.open(.archive)))

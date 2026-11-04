@@ -24,7 +24,7 @@ struct LibraryDrawMetrics: MetricGroup {
 /// A navigation cell (glyph over label) and the buttons at the column's foot.
 struct LibraryNavMetrics: MetricGroup {
     let glyphSize = Metric(21.0, .anatomy("P32-b: the Downloads circle is 21 pt across"))
-    let labelFont = Metric(12.0, .anatomy("P32-b: \"Downloads\" is 61 pt wide, 12 pt semibold"))
+    let labelFont = Metric(11.0, .anatomy("P32-a/b: \"Downloads\" is 60 pt wide and 8.5 tall whether open or not: 11 pt bold for every page"))
     let selectionRadius = Metric(12.0, .guess("the selected cell's corner radius, from the capture's rounding"))
     let footerGlyph = Metric(15.0, .anatomy("P32-a: the exit arrow and the gift glyph are 15 pt"))
     let edgeWidth = Metric(1.0, .anatomy("P32-a: a 1 pt line at x 112"))
@@ -87,6 +87,9 @@ struct LibraryMediaMetrics: MetricGroup {
     let introTitleCenter = Metric(84.5, .anatomy("P32-a: the title is centred 84.5 below the card's top"))
     let introTitleFont = Metric(13.5, .anatomy("P32-a: \"Your Media in the Library\" is 160 pt wide, bold"))
     let introBodyFont = Metric(13.0, .anatomy("P32-a: a 37-character description line is 219 pt wide, lines 17 apart"))
+    let introBodyLine = Metric(17.0, .anatomy("P32-a: the description's lines are 17 apart"))
+    let introBodyTop = Metric(99.5, .anatomy("P32-a: the description's first line is centred 108 below the card's top"))
+    let introFootnoteLine = Metric(14.0, .anatomy("P32-a: the footnote's lines are 14 apart, the first centred 18.5 under Show Media"))
     let introButtonHeight = Metric(40.0, .anatomy("P32-a: Show Media spans y 450...490"))
     let introButtonRadius = Metric(8.0, .guess("Show Media's corner radius"))
     let introFootnoteFont = Metric(10.5, .anatomy("P32-a: the footnote fits two lines, a 36-character line 202 pt wide, 14 apart"))
@@ -179,9 +182,15 @@ struct LibraryColors {
     let control: NSColor
     /// The line between the navigation and the page column, and card outlines (P32: #EAE9E8).
     let edge: NSColor
-    /// The navigation glyphs and labels: grey, darker for the open page (P32: #8F8F8F, #5B5B5B).
+    /// Grey controls on the panel (the Space cards' move handle and …: P30-a #888989).
     let navInk: NSColor
+    /// The open page's navigation glyph (P32: #5A5A5A).
     let navInkSelected: NSColor
+    /// The other pages' navigation glyphs and labels (P32-b: #6A6A6A and #737373), and the exit and gift buttons at
+    /// the column's foot (#7A7878).
+    let navGlyph: NSColor
+    let navLabel: NSColor
+    let navFooter: NSColor
     /// PreviewBackgroundColor #FFFFFF / #212222: a page inside the content card (the History page).
     let page: NSColor
     /// ForegroundPrimary / Secondary / Tertiary.
@@ -207,6 +216,9 @@ struct LibraryColors {
             edge: ink.withAlphaComponent(scheme == .light ? 0.075 : 0.12),
             navInk: scheme == .light ? srgb(0x8F8F8F) : NSColor(white: 1, alpha: 0.5),
             navInkSelected: scheme == .light ? srgb(0x5B5B5B) : NSColor(white: 1, alpha: 0.85),
+            navGlyph: scheme == .light ? srgb(0x6A6A6A) : NSColor(white: 1, alpha: 0.6),
+            navLabel: scheme == .light ? srgb(0x737373) : NSColor(white: 1, alpha: 0.55),
+            navFooter: scheme == .light ? srgb(0x7A7878) : NSColor(white: 1, alpha: 0.55),
             page: scheme == .light ? .white : srgb(0x212222),
             foregroundPrimary: scheme == .light ? p3(0x0E0F10, alpha: 0.9) : ink.withAlphaComponent(0.8),
             foregroundSecondary: ink.withAlphaComponent(0.5),

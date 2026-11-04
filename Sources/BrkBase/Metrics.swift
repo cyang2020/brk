@@ -347,7 +347,7 @@ public struct LibraryMetrics: MetricGroup {
     public let spacesCardWidth = Metric(240.0, .anatomy("visual-pairs/run-20261103/REPORT.md, P32-d: a Space card is 240 pt wide"))
     public let spacesCardGap = Metric(24.0, .anatomy("visual-pairs/run-20261103/REPORT.md, P32-d: cards at x 140 and 404"))
     public let spacesLeading = Metric(28.0, .anatomy("visual-pairs/run-20261103/REPORT.md, P32-d: the first card starts 28 after the navigation column"))
-    public let spacesTrailing = Metric(101.0, .anatomy("visual-pairs/run-20261103/REPORT.md, P32-d: the panel ends 101 after the last card (the + button centred 48 after it)"))
+    public let spacesTrailing = Metric(100.0, .anatomy("visual-pairs/run-20261103/P30-a: the panel ends 100 after the last card, where the page card starts (x 744 with two spaces); the + button is centred 48 after the card"))
 }
 
 /// The settings window (Arc: `PreferencesFeature`, a `Settings` package window with a pane toolbar). Arc builds its
@@ -532,8 +532,10 @@ public struct BoostPanelMetrics: MetricGroup {
 
 /// Arc's capture mode, measured on this run's 2x shots (P33-a/b/c/d-arc.png).
 public struct CaptureMetrics: MetricGroup {
-    public let pageDim = Metric(0.224, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: white page under the mask reads #C6C6C6"))
-    public let sidebarFade = Metric(0.55, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: sidebar text #1A1A1A reads #959594 on an unchanged background"))
+    /// The nominal alphas, calibrated on the window: at 0.224 Brk's mask read white as #CDCDCD (Arc #C6C6C6), at 0.55
+    /// its fade read #2A2A2A text as #A6A6A6 (Arc's #1A1A1A reads #949494), so both are set by that ratio.
+    public let pageDim = Metric(0.256, .anatomy("verify/visual-pairs/run-20261103/P33-a: white page under the mask reads #C6C6C6"))
+    public let sidebarFade = Metric(0.507, .anatomy("verify/visual-pairs/run-20261103/P33-a: sidebar text #1A1A1A reads #949494 on an unchanged background"))
     public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
     public let hintCardRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
     public let hintCardBottom = Metric(35.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card ends 70 px above the page bottom"))

@@ -7,7 +7,9 @@ import BrkUIKit
 /// card of a History tab (`PaneContent.history`): the logo and "History" with a large search field across the top;
 /// on the left "Brk history", "Tabs from other devices" and "Delete browsing data"; on the right one card per day
 /// ("Today - Tuesday, November 3, 2026") listing the visits newest first, each with a checkbox, the time, the
-/// favicon, the title and the host, and a ⋮ menu; a break line marks visits more than 15 minutes apart. A click on a
+/// favicon, the title and the host, and a ⋮ menu; a break line marks visits more than 15 minutes apart. Like
+/// Chromium's page, a page shows once a day, at its latest visit that day (Q05-a: Visual fixture once at 1:06 PM
+/// however often it was opened); removing it removes that day's other visits to it too. A click on a
 /// visit opens it in a new tab; ⋮ offers More from this site and Remove from history; checked visits can be deleted
 /// together. Delete browsing data asks inline, then clears this profile's history (`.library(.clearHistory)`).
 ///
@@ -174,7 +176,11 @@ public final class HistoryPageView: NSView {
     }
 
     @objc func deleteSelected() {
-        for index in selected.sorted() where rows.indices.contains(index) { dispatch(remove(rows[index])) }
+        var commands: [Command] = []
+        for index in selected.sorted() where rows.indices.contains(index) {
+            for command in removals(rows[index]) where !commands.contains(command) { commands.append(command) }
+        }
+        commands.forEach(dispatch)
         selected = []
         rebuild()
     }
@@ -186,13 +192,25 @@ public final class HistoryPageView: NSView {
 
     private func remove(_ row: HistoryRow) -> Command { row.id.map { .library(.removeHistoryVisit($0)) } ?? .library(.removeHistory(row.url)) }
 
+    /// What removing the listed `row` sends: it stands for every visit to its page that day.
+    func removals(_ row: HistoryRow) -> [Command] {
+        let day = calendar.startOfDay(for: LibraryDays.date(row.visitedAt))
+        var commands: [Command] = []
+        for visit in rows where visit.url == row.url && calendar.startOfDay(for: LibraryDays.date(visit.visitedAt)) == day {
+            let command = remove(visit)
+            if !commands.contains(command) { commands.append(command) }
+        }
+        return commands.isEmpty ? [remove(row)] : commands
+    }
+
     // MARK: List
 
     var query: String { searchField.stringValue.trimmingCharacters(in: .whitespaces) }
 
-    /// The visits matching the search, by day; each keeps its index in the projected list (`history-<i>`).
+    /// The visits matching the search, by day, a page once a day at its latest visit; each keeps its index in the
+    /// projected list (`history-<i>`).
     func days() -> [(title: String, visits: [(offset: Int, element: HistoryRow)])] {
-        let indexed = Array(rows.enumerated())
+        let indexed = rows.enumerated().sorted { $0.element.visitedAt == $1.element.visitedAt ? $0.offset < $1.offset : $0.element.visitedAt > $1.element.visitedAt }
         let shown = query.isEmpty ? indexed : indexed.filter { _, row in
             [row.title, row.url.host ?? "", displayURL(row.url)].contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         }
@@ -204,7 +222,9 @@ public final class HistoryPageView: NSView {
         return LibraryDays.group(shown, at: \.element.visitedAt, now: now, calendar: calendar).map { day in
             let date = calendar.startOfDay(for: LibraryDays.date(day.items[0].element.visitedAt))
             let prefix = date >= today ? LibraryCopy.todayPrefix : date == calendar.date(byAdding: .day, value: -1, to: today) ? LibraryCopy.yesterdayPrefix : ""
-            return (prefix + formatter.string(from: date), day.items.map { ($0.offset, $0.element) })
+            var listed: Set<URL> = []
+            let latest = day.items.filter { listed.insert($0.element.url).inserted }
+            return (prefix + formatter.string(from: date), latest.map { ($0.offset, $0.element) })
         }
     }
 
@@ -218,7 +238,7 @@ public final class HistoryPageView: NSView {
                 list.addSubview(HistoryDayCard(title: day.title, visits: day.visits, selected: selected, colors: colors, calendar: calendar,
                                                open: { [weak self] url in self?.dispatch(.commandBar(.submit(url.absoluteString))) },
                                                toggle: { [weak self] index in self?.toggle(index) },
-                                               remove: { [weak self] row in if let command = self?.remove(row) { self?.dispatch(command) } },
+                                               remove: { [weak self] row in self?.removals(row).forEach { self?.dispatch($0) } },
                                                search: { [weak self] host in
                                                    self?.searchField.stringValue = host
                                                    self?.rebuild()

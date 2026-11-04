@@ -142,8 +142,8 @@ public final class LibraryView: NSView {
         }
         exit.frame = local(LibraryLayout.closeButton(in: f.strip))
         gift.frame = local(LibraryLayout.giftButton(in: f.nav))
-        exit.contentTintColor = colors.navInkSelected
-        gift.contentTintColor = colors.navInkSelected
+        exit.contentTintColor = colors.navFooter
+        gift.contentTintColor = colors.navFooter
         let page = local(f.page)
         if library.page == .archive, let snapshot = library.archive { archive.show(snapshot, in: page, scheme: scheme) } else { archive.hide() }
         if library.page == .downloads { downloads.show(library.downloads, openID: library.openID, in: page, scheme: scheme, now: now) } else { downloads.hide() }
@@ -219,9 +219,9 @@ final class LibraryNavCell: NSButton {
     func render(selected: Bool, colors: LibraryColors) {
         self.selected = selected
         self.colors = colors
-        let ink = selected ? colors.navInkSelected : colors.navInk
-        label.font = .systemFont(ofSize: LibraryDraw.nav.labelFont.value, weight: selected ? .bold : .semibold)
-        label.textColor = selected ? colors.foregroundPrimary : colors.navInk
+        let ink = selected ? colors.navInkSelected : colors.navGlyph
+        label.font = .systemFont(ofSize: LibraryDraw.nav.labelFont.value, weight: .bold)
+        label.textColor = selected ? colors.foregroundPrimary : colors.navLabel
         glyph.contentTintColor = ink
         setAccessibilityValue(selected ? "selected" : nil)
         paintFill()
