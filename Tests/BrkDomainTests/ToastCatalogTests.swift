@@ -176,6 +176,14 @@ final class ToastCatalogTests: XCTestCase {
         XCTAssertEqual(toast(d)?.text, "Only some of your data imported. Please try again!")
     }
 
+    func testDeletingAFolderSaysSo() throws {
+        let d = Driver()
+        d.user(.item(.newFolder))
+        let folder = try XCTUnwrap(d.pinnedIDs.first)
+        d.user(.item(.deleteFolder(folder)))
+        XCTAssertEqual(toast(d)?.text, "Folder deleted")
+    }
+
     func testPlusMenuRows() {
         let d = Driver()
         let rows = d.view.plusMenu

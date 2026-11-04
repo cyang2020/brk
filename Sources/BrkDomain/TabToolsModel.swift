@@ -146,6 +146,7 @@ public enum ToastCopy {
     public static let tabMoved = "Tab moved! Click to go there."
     public static let newSpaceCreated = "New Space Created"
     public static let archiveCleared = "Archive Cleared"
+    public static let folderDeleted = "Folder deleted"
     public static let cannotAddPane = "Cannot Add New Pane"
     public static let newTabCreated = "New Tab Created"
     public static let captureInProgress = "Capture in Progress…"

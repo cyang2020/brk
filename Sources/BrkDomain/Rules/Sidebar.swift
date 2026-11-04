@@ -83,6 +83,7 @@ extension Work {
             // "Deleting this folder will archive the tabs inside it."
             guard let scope = state.locate(id), case .folder? = state.tree(scope)?[id]?.body else { return }
             archiveTabs([id], reason: .containerDeleted, in: window, preservingStructure: false)
+            toast(ToastCopy.folderDeleted, in: window)
         case .setIcon(let id, let icon):
             guard let scope = state.locate(id) else { return }
             state.withTree(scope) { tree in

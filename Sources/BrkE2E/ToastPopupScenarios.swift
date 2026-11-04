@@ -11,7 +11,7 @@ import Foundation
 enum ToastPopupScenarios {
     static let all = [
         Scenario("R414-CopyToast", "Cmd+Shift+C, Copy URL as Markdown and as Quote say Copied Current URL with a Share button that opens the export; a highlight says Copied Link / With Quote", cefOnly: "native toast and pasteboard", copyToast),
-        Scenario("R414-Toasts", "pin, unpin, a move to another Space (click goes there), Clear, restore from the Library, Archive Cleared, a full split, Copied Info, a new Space from a folder, a background tab under a hidden sidebar and auto-archive each show their toast and let it go", cefOnly: "native toast", toasts),
+        Scenario("R414-Toasts", "pin, unpin, a move to another Space (click goes there), Clear, restore from the Library, Archive Cleared, a full split, Copied Info, a deleted folder, a new Space from a folder, a background tab under a hidden sidebar and auto-archive each show their toast and let it go", cefOnly: "native toast", toasts),
         Scenario("R414-FullScreenToast", "a page going full screen shows To exit full screen, press [esc]", cefOnly: "native full screen", fullScreenToast),
         Scenario("R414-PlusMenu", "the + button opens Arc's popover: rows, shortcuts, × on grey, hover highlight, Escape, × and a click elsewhere close it, each row runs its command", cefOnly: "native popover", plusMenu),
     ]
@@ -146,6 +146,10 @@ enum ToastPopupScenarios {
         try app.dispatch(.app(.help(.copyInfo)))
         try app.waitUntil("the info toast") { try S.toast(app)?.hasPrefix("Copied ") == true }
         try showsAndLeaves(app, try S.toast(app) ?? "")
+
+        let doomed = try E.newFolder(app, "Gets deleted")
+        try app.dispatch(.item(.deleteFolder(doomed)))
+        try showsAndLeaves(app, ToastCopy.folderDeleted)
 
         // A folder becomes a Space in the background.
         let folder = try E.newFolder(app, "Becomes Space")
