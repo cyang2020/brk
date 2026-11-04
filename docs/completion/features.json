@@ -617,7 +617,7 @@
       "arc_evidence": "anatomy-m 1.9; `NewTabCellView`",
       "description": "Unpinned tabs, newest at top; the \"+ New Tab\" row opens the command bar",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show Today tabs newest first and open the new-tab command bar from the New Tab row.",
       "owner": "native-grounding",
       "required_checks": [
@@ -645,12 +645,27 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ReduceSpecTests.test_commandbarSubmitWithTheNewTabBarOpenAddsATabAtTheTopOfTheCurrentSpaceToday（新标签插在 Today 最上面）；ArcGeometryTests.testNoDividerWhileTodayIsEmpty（Today 为空时不画分隔线）。没覆盖：New Tab 行发出的命令本身没有单元测试，由原生场景覆盖。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "TabTools1：真指针点 New Tab 行打开命令栏，输入地址回车后新标签成为当前标签并加载，随后 Cmd+1 选中的正是它（它排在 Today 最上面）；2：Cmd+T 回车后 Today 多一行、行的地址就是输入的地址；SidebarWindow4：Today 清空后分隔线和 Clear 消失、New Tab 紧挨置顶区、内容区出现空白卡片（标签用命令关掉）。没覆盖：New Tab 行打开的命令栏只断言\"是命令栏\"，没有断言是新标签模式；Today 行数超过一屏时的滚动没有检查。"
         }
       ],
       "remaining": [
         "Add a native New Tab row click check and verify overflow and empty states against the reference.",
         "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）",
-        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：Today 清空后不画置顶区与 Today 之间的分隔线和 Clear；无当前标签时内容区是不透明 #FCFCFC 白卡片带阴影（新建 Space 后的空白页同样）。站台 Q02-b 1.1%，一致。"
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：Today 清空后不画置顶区与 Today 之间的分隔线和 Clear；无当前标签时内容区是不透明 #FCFCFC 白卡片带阴影（新建 Space 后的空白页同样）。站台 Q02-b 1.1%，一致。",
+        "R4-6 独立复核（2026-11-04）：通过。验收标准两条（Today 新的在上、New Tab 行打开新标签命令栏）都有真输入的原生证据。台账 remaining 里的\"溢出\"不在验收标准里。Q02-b（Today 清空）这次在 cb5ffb7d 上重拍仍是 15.22%（第三轮收尾 sheet 15.21%）：拍摄脚本先选中 Today 里的 Visual fixture 再逐个关掉 Today 标签，Brk 关掉当前标签后改选最近用过的置顶标签 Home（前面 P21、P22 场景碰过它），所以画面是 Home 的页面而不是 Arc 那样的空白卡片；04a507f3 的修正只在全量连拍的顺序下得到 1.1%。这条画面对照不算通过，没写进 verification（A008 的 required_checks 不含 visual）；关掉最后一个 Today 标签后 Arc 选不选置顶标签，见 REVIEW.md 留给父任务的问题。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -671,7 +686,7 @@
       "arc_evidence": "row 32; anatomy-v 3 \"Archive this tab\"",
       "description": "Cmd+W or the hover x moves a Today tab to the Archive",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Cmd+W and a row close button archive a Today tab and close its page; private tabs leave no archive record.",
       "owner": "native-grounding",
       "required_checks": [
@@ -699,10 +714,32 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ActionsTests.testCoreKeysMatchArc（Cmd+W 绑定 Archive Tab）；ReduceSpecTests.test_tabCloseOnATodayTabArchivesItWithReasonManualAndFocusesTheMostRecentOther；WindowsSpecTests.test_incognitoCloseNeverArchivesAndSelectsAnotherPrivateTab。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "8：真按 Cmd+W，行离开 Today，页面日志依次是 created、closeRequested、closed，窗口里不留页面；TabTools1：悬停后真指针点行尾 ×，标签和它的浏览器都关掉，归档里有这个网址；TabTools6：Cmd+W 后能打开归档。没覆盖：Cmd+W 的两处原生断言没有核对归档里那条正是被关的标签（单元测试核了）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "W2-3：私密窗口的标签关掉并重启后，归档里没有它的记录（关闭用命令派发，和 Cmd+W 绑定的是同一个命令）。"
         }
       ],
       "remaining": [
-        "Native scenario 8 proves Cmd+W closure; add row-button and shared-tab window behavior checks."
+        "Native scenario 8 proves Cmd+W closure; add row-button and shared-tab window behavior checks.",
+        "R4-6 独立复核（2026-11-04）：通过。验收标准三条（Cmd+W 和行尾 × 归档并关页面、私密标签不留归档）都有原生证据。两个窗口共用一个标签时的关闭不在验收标准里，没查。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -723,7 +760,7 @@
       "arc_evidence": "row 136, 155; anatomy-m 1.6; anatomy-v 3 \"Pinned\"",
       "description": "Cmd+D pins; pinned tabs keep their URL, \"Close and Keep Pinned\", \"Back to Pinned URL\"",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Pin or unpin with Cmd+D; retain the pinned URL, unload while keeping the row, and reset a drifted URL.",
       "owner": "native-grounding",
       "required_checks": [
@@ -751,10 +788,32 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ReduceSpecTests.test_tabTogglePinMovesTodayEndOfPinnedAndSetsPinnedUrlUrlAgainMovesItToTheTop；ReduceSpecTests.test_tabCloseOnAPinnedTabKeepsTheRowDropsItFromLoadedAndMovesActiveBySpaceTo；ReduceSpecTests.test_tabResetOnAPinnedTabWhoseUrlDriftedRestoresPinnedUrlAndEmitsEffectPageNavigate；Wave1ReviewRegressionTests.testNavigatingAPinnedTabFromTheBarKeepsItsSavedURL。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "3 和 R6：真按 Cmd+D 置顶、再按取消，行确实进出 Pinned 区；TabTools3：置顶标签悬停后真指针点 ×，行保留、两个窗口里的页面都关掉；地址改走后重置回保存的地址。没覆盖：重置是用整个 Space 的重置命令派发的，单个标签的 Reset Tab to Original URL 菜单项没有原生驱动（只有单元测试）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "Audio1：置顶标签关闭后它的浏览器退役。"
         }
       ],
       "remaining": [
-        "CEF scenario 3 covers pin or unpin only; verify close-and-keep and reset navigation through actual menus."
+        "CEF scenario 3 covers pin or unpin only; verify close-and-keep and reset navigation through actual menus.",
+        "R4-6 独立复核（2026-11-04）：通过。置顶/取消、保留置顶地址、关闭后保留行、重置漂移的地址都有原生证据；单个标签的重置菜单项只有单元测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -813,7 +872,8 @@
         }
       ],
       "remaining": [
-        "Aggregate reset reaches nested pinned tabs in the invoking window. Add complete multi-profile, split and unloaded native matrix."
+        "Aggregate reset reaches nested pinned tabs in the invoking window. Add complete multi-profile, split and unloaded native matrix.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求包括嵌套文件夹和分屏在内的每一个置顶标签都重置。原生只有\"一个文件夹里的一个标签\"，分屏和未加载标签既没有原生也没有单元测试（单元测试里重置后检查网址的一个都没有，只有 TabToolsTests 检查了提示条）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -887,7 +947,8 @@
         }
       ],
       "remaining": [
-        "Selected pinned-unit peek is projected and laid out. Add a dedicated nested-current-item native peek scenario."
+        "Selected pinned-unit peek is projected and laid out. Add a dedicated nested-current-item native peek scenario.",
+        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景折叠或展开 Pinned 区；\"peeked\"（折叠时仍露出当前置顶项）没有任何测试。单元测试只有 ReduceSpecTests.test_spaceTogglePinnedSectionCollapsesAndExpands…（标志位）和 ArcGeometryTests.testTablistRowPitch（折叠后布局里没有置顶行）。代码在 Sources/BrkDomain/Project.swift:247-250 和 Sources/BrkLayout/SidebarLayout.swift:141，但没有证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Model.swift",
@@ -1062,7 +1123,8 @@
       "remaining": [
         "None within the assigned scope.",
         "Opus review: events without an https link are dropped (F5); cancelling a reconnect removes a good badge (F9); 404 and 401 share one state (F10).",
-        "R3-6（2026-11-04，合并 2c2f3306）：按 Arc 的类型字段，一个收藏只显示一种标记：日历显示距下一场会议的时间（Now / in 12m / in 3h），GitHub 有未读显示黑色圆点，颜色取自 Arc 资源；去掉了原来的数字角标、状态小点、Access/Expired 字样和常规悬停提示；右键菜单加了 Show Unread Badge、Show Time to Next Meeting、Show Hover Preview 三个按站点的开关和 Connect GitHub Notifications…、Select Calendar Export… 入口（原生场景 R36-FavoriteOverlay）。圆点大小、胶囊尺寸、时间文字格式是猜的，待 P08 的 Arc 图（要在用户的 Arc 里登录 GitHub 和日历）。"
+        "R3-6（2026-11-04，合并 2c2f3306）：按 Arc 的类型字段，一个收藏只显示一种标记：日历显示距下一场会议的时间（Now / in 12m / in 3h），GitHub 有未读显示黑色圆点，颜色取自 Arc 资源；去掉了原来的数字角标、状态小点、Access/Expired 字样和常规悬停提示；右键菜单加了 Show Unread Badge、Show Time to Next Meeting、Show Hover Preview 三个按站点的开关和 Connect GitHub Notifications…、Select Calendar Export… 入口（原生场景 R36-FavoriteOverlay）。圆点大小、胶囊尺寸、时间文字格式是猜的，待 P08 的 Arc 图（要在用户的 Arc 里登录 GitHub 和日历）。",
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：已有一个正常未读角标时，再点 Connect GitHub Notifications… 然后取消，角标被清掉（Sources/BrkDomain/SiteTools.swift 的 siteResult .cancelled 分支把收藏数据换成 badge 0、\"Selection cancelled. Connect again.\"）。这是台账里 Opus 评审的 F9，还没修。其余验收内容有证据。复现见 REVIEW.md。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -1159,7 +1221,8 @@
       ],
       "remaining": [
         "None within the assigned scope.",
-        "Opus review: a malformed file is later reported as expired (F6); Ctrl+Cmd+J in a private window gives no feedback (F7)."
+        "Opus review: a malformed file is later reported as expired (F6); Ctrl+Cmd+J in a private window gives no feedback (F7).",
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：在私密窗口（或 Little Arc）里按 Ctrl+Cmd+J 什么也不发生、也没有任何提示，因为 Sources/BrkDomain/SiteTools.swift 的 siteTools 第一行只放行 .standard 窗口（台账 F7）。另外日历文件格式坏掉时，再按快捷键提示的是 \"Calendar expired\"（F6）。普通窗口里的开会、无会议、过期三种情况有原生证据。"
       ],
       "implementation": [
         "Sources/BrkApp/SiteToolsAdapter.swift",
@@ -1219,7 +1282,8 @@
         }
       ],
       "remaining": [
-        "Add native shortcut checks, especially same-tab selection in two standard windows."
+        "Add native shortcut checks, especially same-tab selection in two standard windows.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准里的\"跳过折叠的子项\"既没有原生也没有单元测试；向上和分屏算一站只有单元测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -1240,7 +1304,7 @@
       "arc_evidence": "rows 145, 146; `ModalItemSwitcher`",
       "description": "Ctrl+Tab walks recent tabs with an on-screen switcher panel",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ctrl+Tab and reverse cycling show a recent-tab panel, maintain a stable order during the hold and commit on Control release.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -1297,11 +1361,40 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P09",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P09: P09-a 4.1% 已修（一致）; P09-b 4.0% 已修（一致）; P09-behaviour 站台未拍 待定. References in verify/visual-pairs/run-20261103/P09/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ReduceSpecTests.test_tabCycleRecentFreezesTheRecentOrderOnTheFirstPressTheCommitStampsTheNet（按住期间顺序冻结、反向、松开提交）；ArcBehaviourAlignmentTests.testCtrlTabSwitchesOnlyWhenControlIsReleased；ArcBehaviourAlignmentTests.testEscapeDuringCtrlTabKeepsThePageAndStampsNothing；KeyRoutingSpecTests.testControlReleaseCommitsTheCycle；F3WindowRegressionTests.testControlClicksKeepTheRecentTabWalkUntilControlRelease（真 flagsChanged 事件经过窗口）；TabSwitcherViewTests.testFiveCardsInAStripCentredInTheWindow。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "TabTools4：发出 Ctrl+Tab 的命令后切换器视图真的显示、页面没有切走（只移动选中框），真按 Escape 关掉切换器且不换页；R6：两次真按住 Control 按 Tab 再松开，先切到 B 再回到 C；R5a：按住松开后离开的标签一小时后不被归档。没覆盖：harness 的 hold 是一次性按下松开，看不到按住期间的中间状态（这部分靠单元测试里的真 flagsChanged 事件）；反向 Ctrl+Shift+Tab 只有 PB1 的路由检查。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-check P09（第三轮收尾是在 main cfa87d56 上用 all 全量连拍）",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv",
+          "scope": "第三轮收尾 sheet（main cfa87d56）：P09-a 4.55%，P09-b 4.49%。剩余差异：results.tsv 结论\"已修（一致）\"；R4-1 还在处理这对的残差（见 ROUND4-BRIEF）。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "~/.t3/projects/brk/verify/visual-pairs/run-20261103/tools/station.sh t3/r4-6-review-sidebar-windows /tmp/station-r4-6/1 P06,P08,P09,P13,P15,P21,P22,P28,P29,Q01,Q02",
+          "artifact": "verify/completion/review-r4/sidebar-windows/station/sheet.tsv",
+          "scope": "本次复核在 cb5ffb7d 上重拍：P09-a 4.58%，P09-b 4.53%（热图见同目录 sheet.png）。剩余差异：results.tsv 结论\"已修（一致）\"；R4-1 还在处理这对的残差（见 ROUND4-BRIEF）。"
         }
       ],
       "remaining": [
         "Fresh native-capture pixels show the recent panel and current-item marker, and Escape cancellation passes before the separate audible-state failure. Complete held-Control visual/order matrix.",
-        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Ctrl+Tab 期间每按一次只移动切换器的选中框，松开 Control 才切页，Esc 只关切换器；两个真按住再松开的原生场景（R5a、R6）通过。"
+        "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Ctrl+Tab 期间每按一次只移动切换器的选中框，松开 Control 才切页，Esc 只关切换器；两个真按住再松开的原生场景（R5a、R6）通过。",
+        "R4-6 独立复核（2026-11-04）：通过。面板出现、按下只移选中框、松开 Control 才切页、Escape 取消有原生证据；按住期间顺序冻结和反向的效果有单元测试（用真事件对象）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -1377,7 +1470,8 @@
         }
       ],
       "remaining": [
-        "Real linear shortcut and wrap passed. Complete collapsed-child and opposite-direction native matrix."
+        "Real linear shortcut and wrap passed. Complete collapsed-child and opposite-direction native matrix.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"包括两头的行为\"：到头之后绕回还是停住，既没有原生也没有单元测试。TabTools1 那条断言的文字比它实际检查的多。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1452,7 +1546,8 @@
         }
       ],
       "remaining": [
-        "Numeric item shortcuts passed and settings are wired. Add native numbered-space and Favorites-order settings checks."
+        "Numeric item shortcuts passed and settings are wired. Add native numbered-space and Favorites-order settings checks.",
+        "R4-6 独立复核（2026-11-04）：证据不足。\"按文档的收藏规则和最后一项规则\"里的收藏规则（includeFavoritesInNumbers）只有默认值和存盘测试，没有行为测试；跳到第 N 个 Space 没有原生效果证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1514,7 +1609,8 @@
         }
       ],
       "remaining": [
-        "Extend native checks to double-click entry, folder rename and cancel or focus-loss commit; split rename is not supported."
+        "Extend native checks to double-click entry, folder rename and cancel or focus-loss commit; split rename is not supported.",
+        "R4-6 独立复核（2026-11-04）：证据不足。收藏改名、折叠上级展开只有单元测试；Escape 取消只断言退出改名状态、没核对标题保持原样；用户能用的改名入口（菜单 Rename Current Item、右键）在原生里都是用命令代替的。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Sidebar.swift",
@@ -1597,7 +1693,8 @@
       ],
       "remaining": [
         "None within the assigned scope.",
-        "Opus review: Save on an untouched picker replaces the favicon with a star; a plain letter is accepted as an emoji (F11)."
+        "Opus review: Save on an untouched picker replaces the favicon with a star; a plain letter is accepted as an emoji (F11).",
+        "R4-6 独立复核（2026-11-04）：缺陷。功能验收（四种容器选、清、重启保留）通过。画面缺陷：图标选择器 24 格里有 4 格和 Arc 不同——第一行第 6 格 Arc 是粗星号、Brk 是细星号；第二行第 7 格 Arc 是土星、Brk 是地球；第三行第 3 格 Arc 是交叉的刀叉、Brk 是并排的刀叉；第三行第 8 格 Arc 是骷髅、Brk 是虚线圆笑脸（Sources/BrkApp/TabIconPicker.swift 用的是 SF Symbols）。台账里的旧问题 F11（未改动就点 Save）对应的旧选择器已经换成点一下就生效的网格，不再适用。"
       ],
       "implementation": [
         "Sources/BrkApp/TabIconPicker.swift",
@@ -1659,7 +1756,8 @@
         }
       ],
       "remaining": [
-        "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag."
+        "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准的四种目标：同区重排、拖进普通文件夹、拖到收藏（加入或重排）、拖到底栏的 Space，都没有真指针拖动的原生证据（拖进的只有标签组）；\"不产生环、不丢标签\"只有单元测试；DragController 本身没有单元测试。"
       ],
       "implementation": [
         "Sources/BrkSidebar/DragController.swift",
@@ -1810,7 +1908,8 @@
         }
       ],
       "remaining": [
-        "Fresh identity and committed-address duplication passed in unit tests and actual native menu/CEF navigation. Add explicit destination and multi-selection native cases."
+        "Fresh identity and committed-address duplication passed in unit tests and actual native menu/CEF navigation. Add explicit destination and multi-selection native cases.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求\"一个或多个选中的标签、明确的目标位置\"，多选和目标位置既没有原生也没有单元测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1885,7 +1984,8 @@
         }
       ],
       "remaining": [
-        "Reveal expands ancestors and focuses the sidebar. The final native run proves actual sidebar responder and per-window row visibility. Complete overflow scroll and keyboard navigation cases."
+        "Reveal expands ancestors and focuses the sidebar. The final native run proves actual sidebar responder and per-window row visibility. Complete overflow scroll and keyboard navigation cases.",
+        "R4-6 独立复核（2026-11-04）：证据不足。\"滚动到当前项\"和\"支持键盘导航\"既没有原生也没有单元测试（TabToolsTests 里调用了 sidebarStep 但没有断言）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -1947,7 +2047,8 @@
         }
       ],
       "remaining": [
-        "Verify the Clear button and shortcut with two real windows, including a shared tab and split."
+        "Verify the Clear button and shortcut with two real windows, including a shared tab and split.",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准是\"任何窗口里都不在屏幕上的 Today 项才归档\"。没有两个窗口的检查（原生和单元都没有，单元测试名字写 AnyWindow 但只有一个窗口）；Clear 按钮本身没有原生点击；单窗口的 Cmd+Shift+K 有原生证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -1968,7 +2069,7 @@
       "arc_evidence": "row 21",
       "description": "Shift+Cmd+T reopens the newest closed tab",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Shift+Cmd+T restores the latest manually closed or cleared tab, with a defined auto-archive fallback and valid destination.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1989,10 +2090,32 @@
           "command": "swift test",
           "artifact": "verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ReduceSpecTests.test_archiveRestoreLastRestoresArchive0AndFocusesItWithAnEmptyArchiveItIsANo；ReduceSpecTests.test_archiveRestoreLastPrefersTheNewestManualClearEntryOverAnAutoArchivedOne（优先手动关的）；ReduceSpecTests.test_aRestoredTabIsNotSweptAgainAtOnceEvenIfItWasIdleForLong（只有自动归档时退回到它）；TabToolsTests.testArchiveRestoresNestedSplitWithBlankPaneIconOrientationAndFractions；TabToolsTests.testStructuralRestoreDoesNotFollowASpaceIntoAnotherProfile（目标位置有效）。没覆盖：\"清理 Today 归档的项\"作为优先对象没有单独的测试。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "TabTools2：归档一个带分屏的标签组、重启后真按 Shift+Cmd+T，组的结构、分屏的方向和比例都恢复。没覆盖：归档里只有一条记录，所以\"选最新的手动关闭项\"和\"退回到自动归档项\"没有原生检查；源 Space 被删后的恢复没有原生检查。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "7：闲置标签自动归档后能在归档里看到并点恢复（用的是恢复按钮，不是快捷键）。"
         }
       ],
       "remaining": [
-        "Add native keyboard, source-space deletion and restarted-session restore checks."
+        "Add native keyboard, source-space deletion and restarted-session restore checks.",
+        "R4-6 独立复核（2026-11-04）：通过。快捷键、重启后恢复有原生证据；选哪一条、退回规则、目标位置有效有单元测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Archive.swift",
@@ -2208,7 +2331,7 @@
       "arc_evidence": "`ARC_GlowProgressLoadingIndicator` (Metal shaders)",
       "description": "A glow shows page load progress",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show the intended loading glow during page loads and clear it on completion, failure or cancellation.",
       "owner": "batch2-sidebar-tabs",
       "required_checks": [
@@ -2265,12 +2388,55 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P06",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P06: P06-a 0.8% 已修（一致）; P06-b 站台未拍 已修（第 1 组：失败后标签行加载态结束；站台未拍）. References in verify/visual-pairs/run-20261103/P06/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：SidebarToolsTests.testProgressUsesRealReadingsAndClearsAtAllTerminalPaths（完成、停止、失败、被新导航取代、崩溃、关闭都清掉进度）；WindowRootViewTests.testTodayFolderRendersItsChildIconHoverMetadataGlowAndSadTab（加载中 loading-bar 可见、之后隐藏）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "SidebarToolsGlow：真实 CEF 进度在 0 和 1 之间时处于加载中；停止后清掉（停止用命令派发）；加载完成后清掉。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "I4：加载失败后地址栏不再处于加载中。SidebarToolsReviewGlow（失败后进度归零的专门检查）写在 unregistered 里，--only 点到也不会执行。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "查看本次原生运行的截图",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/shots/SidebarToolsGlow-loading-glow.png",
+          "scope": "SidebarToolsGlow-loading-glow：内容卡片上方正中画出一条进度条（深色是已加载部分）；SidebarToolsGlow-glow-cleared：加载完成后进度条消失。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-check P06（第三轮收尾是在 main cfa87d56 上用 all 全量连拍）",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv",
+          "scope": "第三轮收尾 sheet（main cfa87d56）：P06-a 0.77%。剩余差异：一致；P06-b（失败页）站台未拍。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "~/.t3/projects/brk/verify/visual-pairs/run-20261103/tools/station.sh t3/r4-6-review-sidebar-windows /tmp/station-r4-6/1 P06,P08,P09,P13,P15,P21,P22,P28,P29,Q01,Q02",
+          "artifact": "verify/completion/review-r4/sidebar-windows/station/sheet.tsv",
+          "scope": "本次复核在 cb5ffb7d 上重拍：P06-a 0.77%（热图见同目录 sheet.png）。剩余差异：一致；P06-b（失败页）站台未拍。"
         }
       ],
       "remaining": [
         "None within the assigned scope.",
         "Opus review: no indicator while the sidebar is hidden (F8); placement has no anatomy source.",
-        "Arc 对照（run-20261103 P06）仍有差异或有意不同：P06-b: 已修（第 1 组：失败后标签行加载态结束；站台未拍）"
+        "Arc 对照（run-20261103 P06）仍有差异或有意不同：P06-b: 已修（第 1 组：失败后标签行加载态结束；站台未拍）",
+        "R4-6 独立复核（2026-11-04）：通过。加载中显示、完成/取消/失败后清除都有证据；进度条画在当前内容卡片上方，侧栏隐藏时也在（台账 F8 已不成立，见 Sources/BrkContent/WindowRootView.swift:146）。原生断言读的是模型，画面靠本次截图。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -2380,7 +2546,8 @@
         "None within the assigned scope.",
         "Opus review: links in cross-site iframes get no preview (F2); anchor text becomes the card title when the destination has none (F3); long hosts cut the URL off the card (F4); idle CPU with previews on and many frames (withdrawn Fable review).",
         "Arc 对照（run-20261103 P13）仍有差异或有意不同：P13-c: 已修（第 7 组：Previews 表单；站台未拍） | P13-a: 已修；卡片白底，Arc 半透明 | P13-b: 已修；未加载的置顶标签不显示 ×",
-        "R3-6（2026-11-04，合并 2c2f3306）：文件夹预览卡底色改成从 Arc 图量的 #F9F9FA 且不透明；Previews 开着时日历收藏/置顶标签悬停列出一天内的会议（https 会议带 Join），Linear/Notion/Figma 列最近访问的页面，普通网站不弹卡（P13-b 一致），每个站点可单独关；修了卡片在指针离开后关不掉的真问题（卡片没裁剪边界）；网页链接预览卡按 Arc 的预览配色重画。原生场景 R36-HoverCards。未做：Gmail/Outlook 的邮件预览（没有邮件数据来源）。待 Arc 参照：日历悬停卡（P13-d）、链接预览卡（P13-e），Brk 侧图在 verify/completion/browser-basic-parent/r36-merged/station/。"
+        "R3-6（2026-11-04，合并 2c2f3306）：文件夹预览卡底色改成从 Arc 图量的 #F9F9FA 且不透明；Previews 开着时日历收藏/置顶标签悬停列出一天内的会议（https 会议带 Join），Linear/Notion/Figma 列最近访问的页面，普通网站不弹卡（P13-b 一致），每个站点可单独关；修了卡片在指针离开后关不掉的真问题（卡片没裁剪边界）；网页链接预览卡按 Arc 的预览配色重画。原生场景 R36-HoverCards。未做：Gmail/Outlook 的邮件预览（没有邮件数据来源）。待 Arc 参照：日历悬停卡（P13-d）、链接预览卡（P13-e），Brk 侧图在 verify/completion/browser-basic-parent/r36-merged/station/。",
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：Arc 的 Show Arc Previews 列了 Google Mail 和 Outlook Mail（P13-settings-arc.png），Brk 对 Gmail 和 Outlook 邮件收藏不弹任何预览卡（Sources/BrkDomain/TopApps.swift 的 preview 对 .gmail、.outlookMail 返回 nil），实现者自己也写了\"未做\"。Brk 的 Previews 表单只有两个勾选框，Arc 是七个。其余部分有原生证据。"
       ],
       "implementation": [
         "Sources/BrkCEF/PageLinkPreviews.swift",
@@ -2554,7 +2721,8 @@
         }
       ],
       "remaining": [
-        "Exact-host title rules and custom-title precedence have production tests. Broaden known-site fixtures if additional sites are required."
+        "Exact-host title rules and custom-title precedence have production tests. Broaden known-site fixtures if additional sites are required.",
+        "R4-6 独立复核（2026-11-04）：证据不足。required_checks 要求原生，但没有任何原生场景检查标题缩短。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -2591,7 +2759,7 @@
       "description": "Short confirmations at the bottom of the window",
       "historical_status": "not started",
       "status": "implemented",
-      "acceptance": "Show short dismissible confirmations at the bottom of the correct window and expire them predictably.",
+      "acceptance": "Show short dismissible confirmations at the top right of the content area of the correct window (where Arc shows them) and expire them predictably.",
       "owner": "batch-tabs",
       "required_checks": [
         "unit",
@@ -2637,7 +2805,8 @@
       ],
       "remaining": [
         "Window-owned replacement toasts, dismissal, four-second timer and clock expiry are implemented. Native timing is asserted in TabTools4b; the final native timing check passes; add a two-window feedback ownership case.",
-        "Arc 对照（run-20261103 P15）仍有差异或有意不同：P15-c: 已修（第 1 组：删除 Space 后弹提示条；站台未拍） | P15-a: 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）"
+        "Arc 对照（run-20261103 P15）仍有差异或有意不同：P15-c: 已修（第 1 组：删除 Space 后弹提示条；站台未拍） | P15-a: 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）",
+        "R4-6 独立复核（2026-11-04）：证据不足。没有点掉提示条的原生检查；没有两个窗口时提示条出现在发起操作的那个窗口的检查（实现者也写了）；画出来的提示条视图没有原生断言。另外台账验收写的是\"窗口底部\"，Arc 的提示条在内容区右上角（P15-a-arc、P15-c-arc），Brk 也在右上角，这条措辞应改成右上角。"
       ],
       "implementation": [
         "Sources/BrkBase/Metrics.swift",
@@ -2714,7 +2883,8 @@
       ],
       "remaining": [
         "Pinned group placement, title, display, persistence and structural restore passed in native. Complete group close/menu coverage.",
-        "R3-6（2026-11-04，合并 2c2f3306）：组标题行无文件夹图标、小号灰字，组内标签不缩进；悬停 × 把整组作为一条记录归档，⌘Z 可撤销；右键四项 Rename Group… / Remove Group Header / Copy All Links / Close Tab Group；拖组到组上合并，拖标签进组出组，组空了自动消失（原生场景 R36-TabGroups）。归档原因记成手动（Arc 的 clearTabGroup 要改资料库页面）；组标题样式是猜的，Arc 的 Tidy 在这台机器上触发不了，没有参照。"
+        "R3-6（2026-11-04，合并 2c2f3306）：组标题行无文件夹图标、小号灰字，组内标签不缩进；悬停 × 把整组作为一条记录归档，⌘Z 可撤销；右键四项 Rename Group… / Remove Group Header / Copy All Links / Close Tab Group；拖组到组上合并，拖标签进组出组，组空了自动消失（原生场景 R36-TabGroups）。归档原因记成手动（Arc 的 clearTabGroup 要改资料库页面）；组标题样式是猜的，Arc 的 Tidy 在这台机器上触发不了，没有参照。",
+        "R4-6 独立复核（2026-11-04）：证据不足。建组没有从界面驱动（都是命令）；右键菜单里 Rename Group…、Copy All Links、Close Tab Group 列出但没有选过；普通重启（不经过归档）后组标志是否保留没有原生检查；组标题样式没有 Arc 参照（P14 在这台机器的 Arc 上触发不了）。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -4289,7 +4459,8 @@
       ],
       "verification": [],
       "remaining": [
-        "Verify actual native window ordering, minimize/restore and responder recovery from menus and keys on multiple windows; selector existence alone is insufficient."
+        "Verify actual native window ordering, minimize/restore and responder recovery from menus and keys on multiple windows; selector existence alone is insufficient.",
+        "R4-6 独立复核（2026-11-04）：证据不足。Hide Others、Show All、Zoom、Bring All to Front 没有任何原生效果证据，单元测试只核了菜单项的 selector；六项都没有通过真实菜单项驱动；多窗口时作用到哪个窗口没有检查。required_checks 里的 manual 也没有：这台机器是共用的，Hide Others / Show All 会隐藏或显示别的程序（包括其他任务的 Brk 和用户的 Arc），复核没有做。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -4405,7 +4576,8 @@
         }
       ],
       "remaining": [
-        "Complete native fullscreen, restart and multiple-window stacking/focus coverage."
+        "Complete native fullscreen, restart and multiple-window stacking/focus coverage.",
+        "R4-6 独立复核（2026-11-04）：证据不足。全屏下的行为没有任何测试；重启只有单元测试里的存档标志；多窗口只是拿空白窗口当参照。required_checks 的 manual 没做。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -5110,7 +5282,8 @@
       ],
       "remaining": [
         "Compare gradient positions, texture appearance and low-power fallback with an authenticated reference; procedural images are approximations.",
-        "Arc 对照（run-20261103 P29）仍有差异或有意不同：P29-c: 已修；同 P02-b"
+        "Arc 对照（run-20261103 P29）仍有差异或有意不同：P29-c: 已修；同 P02-b",
+        "R4-6 独立复核（2026-11-04）：证据不足。验收标准要求能选 grain、sand、denim、tweed 纹理并稳定交叉淡入。没有原生场景换过纹理，两个 Space 都是 grain；没有任何测试经过 Metal 画纹理（ThemeRendererTests 的主题纹理透明度是 0）；交叉淡入只有单元测试。另外第三轮简报写明\"主题纹理选项\"是 Arc 1.170 没有而 Brk 有的三样之一，用户还没定去留，这一项的验收标准本身待定。场景 1（卡片切角和背景）在第二批和重跑里都失败：卡片上方背景是 [241,237,234]，和白色差不到 24，场景要求背景明显不是白色才做切角检查，这个前提在现在的浅色默认主题下不成立，是场景断言要更新，不是背景画错。"
       ],
       "implementation": [
         "Sources/BrkTheme/ThemeRenderer.swift",
@@ -5200,7 +5373,8 @@
       ],
       "remaining": [
         "Native creation, color count, presets, undo, independent values, save and cancel pass. A complete pointer-driven pad/color-well/slider matrix remains a manual native gate; pure paint and Metal pixel tests cover the generated outputs.",
-        "Arc 对照（run-20261103 P28）仍有差异或有意不同：P28-a: 已修（剩余为数据或他组） | P28-b: 已修（第 5 组；站台未拍） | P28-c: 已修（预设页序 Brand→Pastel→Drab→Greyscale） | P28-d: 有意不同 | P28-e: 已修（波浪滑杆；见 p28-full）"
+        "Arc 对照（run-20261103 P28）仍有差异或有意不同：P28-a: 已修（剩余为数据或他组） | P28-b: 已修（第 5 组；站台未拍） | P28-c: 已修（预设页序 Brand→Pastel→Drab→Greyscale） | P28-d: 有意不同 | P28-e: 已修（波浪滑杆；见 p28-full）",
+        "R4-6 独立复核（2026-11-04）：缺陷。缺陷：验收标准和实现者的 current_behavior 都写了\"撤销\"，但主题编辑器没有撤销：ThemeDraft（Sources/BrkOverlays/ThemeEditor.swift:54）只有 theme 和 systemScheme 两个字段，编辑器代码里没有任何 undo；Arc 的 SpaceStyleEditor.State 里有 undoStack（docs/arc-anatomy/model-and-shortcuts.md:281、731）。色盘位置、饱和度、噪点、强度、暗色偏置没有原生驱动，实时预览只断言了草稿模型、没有读像素。"
       ],
       "implementation": [
         "Sources/BrkOverlays/SpaceDialogHost.swift",
@@ -5411,7 +5585,7 @@
       "arc_evidence": "rows 16, 22; anatomy-m 1.11 `CommandBarDestinationType`",
       "description": "Cmd+T centered bar makes a tab; Cmd+L edits the current tab",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Cmd+T opens a centered bar that creates a tab; Cmd+L edits the current tab, preserving exact destinations.",
       "owner": "native-grounding",
       "required_checks": [
@@ -5439,10 +5613,39 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 2,N2,W2-10a. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：ReduceSpecTests.test_commandbarSubmitWithTheNewTabBarOpenAddsATabAtTheTopOfTheCurrentSpaceToday；ReduceSpecTests.test_commandbarSubmitWithANavigateTargetSetsTheTabUrlAndEmitsEffectPageNavigate；SuggestSpecTests.test_aTypedAddressPrecedesTabsWithDifferentDestinations；SuggestSpecTests.test_anExactURLMatchStillSwitchesBeforeTheTypedAddress；CommandBarViewTests.testReturnNavigatesToTheTypedURLInsteadOfAPrefixMatch；CommandBarViewTests.testTheCardOverThePillIs350WideAndTheCenteredOneFillsTheBox。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "2：真按 Cmd+T，命令栏在窗口正中、宽度等于计算值、输入框有焦点，回车后 Today 多一行且地址就是输入的地址。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "BB4：真按 Cmd+L、Cmd+A，经菜单 Paste 粘入地址后真按回车，同一个页面导航到新地址；N2：Cmd+L 焦点进命令栏、关掉后回到页面；I1：两个窗口显示同一标签时各自 Cmd+L 的编辑框互不影响；W2-10a：输入完整网址打开确切的地址，已打开标签的确切网址跨 Space 切过去而不是新建。没覆盖：真按键改地址后重启（I1 的重启检查是命令派发的）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-c --only 1,N1,SpaceTools-2,SpaceTools-3,BB2,PB1,PB1H --run-timeout 2400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-c/REPORT.md",
+          "scope": "BB2：真按 Cmd+L、真打字地址、回车，同一个标签导航过去，后退前进正常（第二批里第一次失败在场景结束后的退出超时，单独重跑通过）。"
         }
       ],
       "remaining": [
-        "Add a complete native Cmd+L navigate and restart check, including same-tab multiwindow selection; current N2 proves focus transfer."
+        "Add a complete native Cmd+L navigate and restart check, including same-tab multiwindow selection; current N2 proves focus transfer.",
+        "R4-6 独立复核（2026-11-04）：通过。Cmd+T 建标签、Cmd+L 改当前标签、确切地址都有真输入的原生证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/CommandBar.swift",
@@ -5530,7 +5733,8 @@
         }
       ],
       "remaining": [
-        "Complete native mixed-source ranking, unloaded bookmark execution and per-profile network coverage."
+        "Complete native mixed-source ranking, unloaded bookmark execution and per-profile network coverage.",
+        "R4-6 独立复核（2026-11-04）：证据不足。历史、热门域名、书签三种建议没有原生证据；书签建议连排序和执行的单元测试都没有（只测了投影里有书签候选）；搜索引擎建议只显示没执行；没有多来源混排的原生检查。"
       ],
       "implementation": [
         "Sources/BrkDomain/BrowserCalculator.swift",
@@ -5594,7 +5798,8 @@
       ],
       "remaining": [
         "Implement the remaining actions, folder destinations and extensions; W2-8 tests Preferences, not every advertised workflow.",
-        "R3-6（2026-11-04，合并 2c2f3306）：命令栏补上 Add to / Remove from Favorites、Move to New Folder、Open 某文件夹、Replace Pinned Tab with the Current Site（也加进置顶标签右键的 Edit Pinned Page 子菜单）、四个方向的 Add … Split、Mute / Unmute All Tabs、撤销最近一次可撤销操作；每个带动作按钮的扩展各一行；Open Password Manager（原生场景 R36-TypeTravel）。未做：重做（Brk 没有）；扩展行只有单元测试。"
+        "R3-6（2026-11-04，合并 2c2f3306）：命令栏补上 Add to / Remove from Favorites、Move to New Folder、Open 某文件夹、Replace Pinned Tab with the Current Site（也加进置顶标签右键的 Edit Pinned Page 子菜单）、四个方向的 Add … Split、Mute / Unmute All Tabs、撤销最近一次可撤销操作；每个带动作按钮的扩展各一行；Open Password Manager（原生场景 R36-TypeTravel）。未做：重做（Brk 没有）；扩展行只有单元测试。",
+        "R4-6 独立复核（2026-11-04）：证据不足。Space（Focus on / Move to）、扩展行、Move to <文件夹>、Replace Pinned Tab、撤销、右和下分屏没有原生证据；Move to <文件夹> 那几行连单元测试都没有。"
       ],
       "implementation": [
         "Sources/BrkOverlays/Suggest.swift",
@@ -5615,7 +5820,7 @@
       "arc_evidence": "anatomy-v 3 \"Change Site Search\", Tab and Space hints",
       "description": "Type a site name, press Tab, search that site",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Type a site's name, enter its search mode with Tab, and submit an encoded query for that site.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -5679,10 +5884,25 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB5, W2-10, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：SuggestWave2Tests.test_siteSearchRowsAndMode；CommandBarViewTests.testSiteSearchModeWithTabSpaceBackspaceAndEscape；BrowserBasicTests.testConfiguredSiteSearchPersistsEncodesAndMakesNoDefaultSuggestionRequest（a b&c/中 的编码、存盘）；CommandBarWave2SpecTests.test_siteSearchSubmitsOnTheNamedEngine。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "BB5：真按 Cmd+T、打 fixture、按 Tab、打 \"a b&c\"、回车，夹具页面拿到的 q 正是 \"a b&c\"（& 被编码了）且只请求一次；W2-10：真打 bing 按 Tab 后输入框前出现 Bing 的胶囊（位置变化）、Escape 退出、回车提交到 Bing 的地址。没覆盖：站内搜索的配置是命令派发的（设置里增删改的控件没有原生测试）；只在默认 Profile 上。"
         }
       ],
       "remaining": [
-        "Finish native add/edit/remove settings-control and site-mode exit coverage on the final bundle."
+        "Finish native add/edit/remove settings-control and site-mode exit coverage on the final bundle.",
+        "R4-6 独立复核（2026-11-04）：通过。打站点名、Tab 进站内搜索、提交编码后的查询都有真输入原生证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/SiteSearch.swift",
@@ -5745,7 +5965,8 @@
         }
       ],
       "remaining": [
-        "Add native checks switching profiles with different engines and suggestion preferences; validate outgoing requests as well as UI state."
+        "Add native checks switching profiles with different engines and suggestion preferences; validate outgoing requests as well as UI state.",
+        "R4-6 独立复核（2026-11-04）：证据不足。选默认搜索引擎没有任何原生证据；E2E 给每次运行都设了 BRK_SUGGEST_URL（Sources/BrkE2E/Harness.swift:190），它替换所有引擎的建议地址，所以原生运行看不出换引擎后发出的请求变了；没有两个 Profile 设置不同时的原生检查；BB5 的\"关掉建议不发请求\"用的是计算式，计算式本来就不取建议（CommandBar.swift:53），这条检查不能说明开关起作用。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -6835,7 +7056,8 @@
       ],
       "remaining": [
         "Authenticated floating reference, multiple-panel physical activation/input and scratch-link/close/restart matrix remain.",
-        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）"
+        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）",
+        "R4-6 独立复核（2026-11-04）：证据不足。\"能用的原生窗口头部\"没有原生操作证据（Open In 在 W2-5 里是命令派发，头部按钮没点过）；\"不做会话恢复\"没有原生重启检查（只有单元测试）；多个 Little 窗口的情况没有。"
       ],
       "implementation": [
         "Sources/BrkApp/LittleWindowController.swift",
@@ -6939,7 +7161,8 @@
       "remaining": [
         "Native form/history reset, context-change and ongoing-download continuity need full runtime proof.",
         "No seamless browser/form-state transfer is claimed.",
-        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）"
+        "Arc 对照（run-20261103 P21）仍有差异或有意不同：P21-c: 已修（第 4 组自测：Open in 浮层带搜索；站台未拍）",
+        "R4-6 独立复核（2026-11-04）：证据不足。移到选中的其他 Space、移到文件夹、Peek 的 Open In 都没有原生证据；\"实时状态和浏览上下文的延续\"（历史、表单、下载）没有任何测试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -7004,7 +7227,8 @@
       "remaining": [
         "Implement global shortcut registration and menu-bar entry.",
         "Verify real external-app delivery and physical modifier clicks; retain private links in private context.",
-        "R3-6（2026-11-04，合并 2c2f3306）：全局快捷键改成独占注册，别的程序占着时注册失败并报给程序状态，设置 Links 页多一行说明；状态栏菜单入口可用。原生场景 R36-LittleEntry（用自己的数据目录和 ⌃⌥⇧⌘L：Finder 在前台时按下能开 Little Arc；被占用报 -9878；关掉开关无反应；辅助功能点状态栏菜单能开）。注意：每个 Brk 启动时仍先按默认 ⌥⌘N 注册一次（原有行为），要不要给测试实例加一个关掉全局快捷键的环境变量待定。"
+        "R3-6（2026-11-04，合并 2c2f3306）：全局快捷键改成独占注册，别的程序占着时注册失败并报给程序状态，设置 Links 页多一行说明；状态栏菜单入口可用。原生场景 R36-LittleEntry（用自己的数据目录和 ⌃⌥⇧⌘L：Finder 在前台时按下能开 Little Arc；被占用报 -9878；关掉开关无反应；辅助功能点状态栏菜单能开）。注意：每个 Brk 启动时仍先按默认 ⌥⌘N 注册一次（原有行为），要不要给测试实例加一个关掉全局快捷键的环境变量待定。",
+        "R4-6 独立复核（2026-11-04）：证据不足。真实外部程序发来的链接没有验证；标准窗口里 Option+Cmd 点链接开 Little Arc 没有原生证据；目标 Profile 没有原生断言。required_checks 的 manual 没做（外部链接要不改默认浏览器才安全，R4-4 第 3 条在做 brk-test:// 的真实链接）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -7026,7 +7250,7 @@
       "arc_evidence": "Links \"Archive Little Arcs after:\"",
       "description": "Closes idle Little Arc windows",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Little Brk auto-archive respects configured thresholds and never closes a panel that is actively used; expired panels archive/close once and can be restored appropriately.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -7041,12 +7265,27 @@
           "artifact": "verify/swift/focus-parent/evidence/build.log",
           "scope": "WindowsSpecTests.test_idleLittleArcsAreArchivedAfterTheLinksThreshold checks clock threshold, never, idempotence and archive restore; no active-user test.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：WindowsSpecTests.test_idleLittleArcsAreArchivedAfterTheLinksThreshold（阈值、Never、只归档一次、恢复进 Today）；TabsLittleBarTests.testLittleArcIdlenessIsRealInputNotKeyStatus；TabsLittleBarTests.testLittleArcPlayingSoundIsNeverArchived；BrowserBasicTests.testLittleActivityAndWindowActivationDriveArchiveAndRouting。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-b --only 1,4,7,N1,N2,W2-1-edit,W2-3,W2-4,W2-5,W2-6,W2-7,W2-8,W2-10,W2-10a,W2-12,W2-P1,W2-P1C,BB2,BB3,BB4,BB5,SpaceTools-1,SpaceTools-2,SpaceTools-3,R36-LittleEntry,R36-LittleArchive,R36-TypeTravel,PB1,PB1H,PB1R,I1,I2,I4,Audio1 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-b/REPORT.md",
+          "scope": "R36-LittleArchive（测试时钟）：只是停在前台、超过一小时就归档且标签进归档；1000 秒前有过一次真点击则保留，点击后满一小时再归档；有正在进行的下载时保留；这次运行里测试音真的响了，出声时保留（截图 R36-little-playing）；Never 时保留；阈值设置重启后保留。没覆盖：视频和画中画的保护；\"只归档一次\"和恢复只有单元测试。"
         }
       ],
       "remaining": [
         "Define idle using actual relevant interaction/activity; protect actively used panels and media/download work.",
         "Add native active-vs-idle and restart/never threshold checks.",
-        "R3-6（2026-11-04，合并 2c2f3306）：闲置 = 距最后一次真实输入（按键、点击、滚动、面板进出前台）超过阈值；只停在前台不算在用；正在下载、出声、播视频、开着画中画不归档。原生场景 R36-LittleArchive 五种情况通过，阈值设置重启后保留。"
+        "R3-6（2026-11-04，合并 2c2f3306）：闲置 = 距最后一次真实输入（按键、点击、滚动、面板进出前台）超过阈值；只停在前台不算在用；正在下载、出声、播视频、开着画中画不归档。原生场景 R36-LittleArchive 五种情况通过，阈值设置重启后保留。",
+        "R4-6 独立复核（2026-11-04）：通过。阈值、正在使用不归档（点击、下载、出声）有原生证据；只归档一次和恢复有单元证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Archive.swift",
@@ -7140,7 +7379,8 @@
       ],
       "remaining": [
         "Finish pinned/favorite same/cross-site, iframe, selection, folder Open In and private/Little native matrix.",
-        "Arc 对照（run-20261103 P22）仍有差异或有意不同：P22-c: 已修（第 4 组：转标签放底部并保留滚动；站台未拍）"
+        "Arc 对照（run-20261103 P22）仍有差异或有意不同：P22-c: 已修（第 4 组：转标签放底部并保留滚动；站台未拍）",
+        "R4-6 独立复核（2026-11-04）：证据不足。\"从置顶和收藏打开的跨站链接自动进 Peek\"没有原生证据，路由函数 KeyRouter.engine(_:page:shouldNavigateTo:) 也没有单元测试；私密窗口和 Little Arc 里的 Peek 范围没有原生证据。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
@@ -7204,7 +7444,8 @@
         }
       ],
       "remaining": [
-        "Loaded Gmail destination/dismissal and authenticated multi-account reference are not proved; only fixtures were used."
+        "Loaded Gmail destination/dismissal and authenticated multi-account reference are not proved; only fixtures were used.",
+        "R4-6 独立复核（2026-11-04）：证据不足。没有原生场景看过 Shift+Cmd+E 打开的 Peek（PB1 只查按键路由到了 peekEmail）；非默认 Profile 没有测试；required_checks 的 manual 需要登录的 Gmail，这次没做。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
@@ -7260,7 +7501,8 @@
         }
       ],
       "remaining": [
-        "Verify native nested dragging, deletion and restart; container-unit restore and per-window openness remain separate incomplete rows."
+        "Verify native nested dragging, deletion and restart; container-unit restore and per-window openness remain separate incomplete rows.",
+        "R4-6 独立复核（2026-11-04）：证据不足。嵌套文件夹、删除文件夹归档子孙没有原生证据（没有任何原生场景删除文件夹）；删除时有嵌套子文件夹的情况连单元测试都没有；普通文件夹改名没有原生断言（TabTools2 改名的是标签组）；真指针点文件夹行展开/收起没有原生场景。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -7312,7 +7554,8 @@
         }
       ],
       "remaining": [
-        "Aggregate folder commands update only the invoking window/current space. Add native aggregate menu checks with nested folders and active reveal."
+        "Aggregate folder commands update only the invoking window/current space. Add native aggregate menu checks with nested folders and active reveal.",
+        "R4-6 独立复核（2026-11-04）：证据不足。没有任何原生场景用 Collapse All Folders / Expand All Folders；\"只作用于当前 Space 和当前窗口、不改层级\"连单元测试都没有（没有第二个窗口、第二个 Space、嵌套文件夹）。两项在 Arc 里也是隐藏菜单项（docs/arc-anatomy/model-and-shortcuts.md 141、142），Brk 一致。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -7348,7 +7591,7 @@
       "arc_evidence": "anatomy-m 1.6 `WindowState.expandedItems`",
       "description": "Each window remembers which folders are open",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Each standard window maintains independent folder expansion state and restores it according to the window persistence contract.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -7390,10 +7633,25 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools3, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：TabToolsTests.testFolderExpansionIsPerWindowAndMigratesLegacyV3（两个窗口各自展开状态，用存档文件重建状态后各自保留）；TabToolsTests.testLegacyOptionalFieldsDefaultAndRenameRevealDoesNotTouchOtherWindow。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "TabTools3：在第一个窗口收起文件夹，第二个窗口模型里仍展开、第二个窗口里文件夹的子行视图还在，第一个窗口里不在。没覆盖：只测了一个方向；场景重启后没有断言（重启后的保留靠单元测试里的存档往返）。"
         }
       ],
       "remaining": [
-        "Independent window expansion and restart passed in unit and scoped native checks. Final native run adds actual row visibility assertions and all inherited cases pass; preserve this contract during parent integration."
+        "Independent window expansion and restart passed in unit and scoped native checks. Final native run adds actual row visibility assertions and all inherited cases pass; preserve this contract during parent integration.",
+        "R4-6 独立复核（2026-11-04）：通过。窗口之间互不影响有原生证据；重启后按窗口恢复有单元证据（经过真实存档文件），原生重启后没有断言。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -7432,7 +7690,7 @@
       "arc_evidence": "anatomy-m 1.6 `AutomaticLiveFolderData` (GitHub); `LiveFoldersFeature`",
       "description": "A folder filled from GitHub pull requests",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Maintain a GitHub pull-request Live Folder with refresh, opening items and useful loading, empty and error states.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -7467,11 +7725,26 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools5, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/sidebar-windows/unit/swift-test.log",
+          "scope": "完整单元测试 1034 个、0 失败、1 个原本就跳过（cb5ffb7d）。这一项靠的测试：TabsLittleBarTests.testLiveFolderStatesLoadingFailedEmptyStaleAndOpenRefreshes；TabsLittleBarLayoutTests.testGroupTabsAreNotIndentedAndAnEmptyLiveFolderHasANote。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r46-sidebar-a --only 2,3,8,9,R5a,R5b,R6,TabTools1,TabTools2,TabTools3,TabTools4,TabTools4b,TabTools5,TabTools6,TabTools7,SidebarToolsSources,SidebarToolsMeeting,SidebarToolsIcons,SidebarToolsGlow,SidebarToolsPreview,SidebarToolsReviewHostile,SidebarToolsReviewToken,SidebarToolsReviewMeeting,SidebarToolsReviewGlow,R36-HoverCards,R36-FavoriteOverlay,R36-TabGroups,R36-LiveStates,SidebarWindow1,SidebarWindow3,SidebarWindow4 --run-timeout 5400",
+          "artifact": "verify/completion/review-r4/sidebar-windows/native/r46-sidebar-a/REPORT.md",
+          "scope": "TabTools5：真点输入框打字选仓库，夹具 HTTP 返回 PR 后出现行、真点 PR 行打开对应文档、刷新后变空态且请求次数为 2、配置重启后保留；R36-LiveStates：刷新中行尾转圈视图、出错后警告视图且原有行保留、真指针悬停点刷新按钮后空态说明视图出现、超过 5 分钟后打开文件夹自动刷新一次、重启后不自动刷新。没覆盖：出错原因文字（提示）没有断言；用的是本机夹具服务器，不是真 GitHub；打开文件夹是命令派发。"
         }
       ],
       "remaining": [
         "Explicit repository selection, real fixture HTTP fetch/refresh, PR document opening, empty state and saved config passed in native. Error/loading/freshness and authenticated private-repository refresh requires a reauthorization flow because refresh is currently anonymous; tokens are never saved.",
-        "R3-6（2026-11-04，合并 2c2f3306）：Live Folder 的状态改成单独字段：加载中行尾转圈，出错行尾警告图标（提示里是原因，原有行保留），空时展开多一行 No open pull requests，过期（超过 5 分钟）或本次启动后没刷新过的打开时自动刷新，行尾悬停按钮改成刷新（原生场景 R36-LiveStates）。样式是猜的，没有 Arc 图。"
+        "R3-6（2026-11-04，合并 2c2f3306）：Live Folder 的状态改成单独字段：加载中行尾转圈，出错行尾警告图标（提示里是原因，原有行保留），空时展开多一行 No open pull requests，过期（超过 5 分钟）或本次启动后没刷新过的打开时自动刷新，行尾悬停按钮改成刷新（原生场景 R36-LiveStates）。样式是猜的，没有 Arc 图。",
+        "R4-6 独立复核（2026-11-04）：通过。刷新、打开项、加载中/空/出错三种状态都有原生证据。样式没有 Arc 参照。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -8251,7 +8524,8 @@
         "No complete user-facing workflow is implemented in current source.",
         "R3-3（2026-11-04）：Note 没做。Arc 1.170 的菜单和命令栏都没有 New Note 入口（results.tsv Q09-b），菜单里的三项 Note 已隐藏；要不要做 Brk 自己的 Note 等用户定。",
         "2026-11-04：按完全复刻 Arc 的目标，Arc 1.170 没有 Note 入口（菜单和命令栏都没有，results.tsv Q09-b），Brk 也不做；菜单里的三项 Note 已隐藏。"
-      ]
+      ],
+      "decision": "Excluded on 2026-11-04 under the user's standing goal of a complete Arc 1.170 replica: Arc 1.170 has no Notes entry point (results.tsv Q09-b: no menu item, no command-bar result); the three Notes menu rows are hidden. Recorded in .audit/arc-clone.tsv (round-4 dispatch)."
     },
     {
       "id": "A101",
