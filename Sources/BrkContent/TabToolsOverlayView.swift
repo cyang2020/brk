@@ -90,7 +90,8 @@ final class TabToolsOverlayView: NSView {
         // A notice with a way out is Arc's notice banner (P43-a); any other toast is Arc's toast (P15). Both sit at the
         // top-right corner of the content area, overlapping the window margin above the card.
         let notice = tools.toast?.link != nil ? tools.toast : nil
-        let right = contentArea?.maxX ?? bounds.width - Metrics.content.inset.value
+        // Beside the Library the card runs past the window's right edge: the toast stays at the window's.
+        let right = min(contentArea?.maxX ?? .infinity, bounds.width - Metrics.content.inset.value)
         toast.isHidden = tools.toast == nil || notice != nil
         if let snapshot = tools.toast, notice == nil {
             toast.render(snapshot)

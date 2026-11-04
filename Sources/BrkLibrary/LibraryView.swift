@@ -114,7 +114,10 @@ public final class LibraryView: NSView {
             return
         }
         let scheme = palette.scheme
-        let previewCard = frames.cards.first?.rect ?? frames.contentArea
+        // The card keeps its closed width and runs past the window's right edge; the preview takes its visible part.
+        let card = frames.cards.first?.rect ?? frames.contentArea
+        let shown = card.intersection(CGRect(x: 0, y: 0, width: frames.contentSize.width - Metrics.content.inset.value, height: frames.contentSize.height))
+        let previewCard = shown.isNull ? card : shown
         let slice = Slice(library: library, frames: f, scheme: scheme, day: Calendar.current.startOfDay(for: LibraryDays.date(now)), preview: previewCard)
         guard slice != last else { return }
         last = slice
