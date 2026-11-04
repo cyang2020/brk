@@ -574,7 +574,10 @@ enum SidebarEvidenceScenarios {
         try app.perform(.menuAction("Zoom"))
         try app.waitUntil("Zoom again restored it") { near(try app.native().windowFrame, start, tolerance: 2) }
         try app.waitUntil("the page kept focus through Zoom") { try pageFocused(app, page) }
-        // Cmd+M minimizes; bringing it back keeps the page focus.
+        // Cmd+M minimizes; bringing it back keeps the page focus. The press goes to the key window of the active app, and
+        // on this shared machine another task's app can take activation between steps, so the window is made frontmost
+        // again right before the press (it was in the implementer's run, by timing).
+        try WindowServerKeys.ensureFrontmost(app, app.window!)
         try app.press("cmd+m")
         try app.waitUntil("Cmd+M minimized the window") { try app.native().miniaturized }
         _ = try app.send(.activate(window: app.window!))
