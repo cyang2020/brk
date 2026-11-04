@@ -37,6 +37,8 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     case dismissFavoritesHint
     /// ⌘Z while an undo toast shows: brings back what the cleared Today or the deleted space held.
     case undoToast
+    /// BrkApp copied a link to the highlighted text (Shared Quotes): Arc's "Copied Link" / "With Quote".
+    case quoteLinkCopied
     case preferences(includeFavorites: Bool, previews: Bool)
     /// A Favorite's or Pinned tab's per-site switch ("Show Unread Badge", "Show Time to Next Meeting", "Show Hover
     /// Preview"), kept by host like Arc's `topAppsBadgingDisabledHosts`.
@@ -126,11 +128,45 @@ public struct ToastSnapshot: Equatable, Sendable, Codable {
     /// Arc's undo toasts: "Cleared Tabs! Use", the key cap "⌘Z", then "to undo".
     public var keycap: String? = nil
     public var trailing: String? = nil
-    /// One button on the toast (Arc: "Screenshot Copied to Clipboard" · Save).
+    /// One button on the toast (Arc: "Screenshot Copied to Clipboard" · Save; "Copied Current URL" · Share).
     public var action: ToastAction? = nil
+    /// A second, smaller line under the text (Arc's sublabel: "Copied Link" / "With Quote").
+    public var subtitle: String? = nil
+    /// What a click on the strip does before it closes (Arc: "Tab moved! Click to go there.").
+    public var click: Command? = nil
+}
+/// Arc's toast copy (the strings in its binary beside "Letting user know…", `ToastController`), for the toasts two rules
+/// or a rule and a test share.
+public enum ToastCopy {
+    public static let copiedCurrentURL = "Copied Current URL"
+    public static let share = "Share"
+    public static let copiedItemLinks = "Copied item links"
+    public static let copiedLink = "Copied Link"
+    public static let withQuote = "With Quote"
+    public static let tabMoved = "Tab moved! Click to go there."
+    public static let newSpaceCreated = "New Space Created"
+    public static let archiveCleared = "Archive Cleared"
+    public static let folderDeleted = "Folder deleted"
+    public static let cannotAddPane = "Cannot Add New Pane"
+    public static let newTabCreated = "New Tab Created"
+    public static let captureInProgress = "Capture in Progress…"
+    public static let exitFullScreen = "To exit full screen, press"
+    public static let escapeKey = "esc"
+    public static let downloadRenamed = "Download renamed!"
+    public static let boostInstalled = "Boost installed!"
+    public static let importSucceeded = "Success! We imported all of your stuff"
+    public static let importPartly = "Only some of your data imported. Please try again!"
+    public static func pinned(to space: String) -> String { "Pinned Tab to “\(space)”" }
+    public static func unpinned(from space: String) -> String { "Un-Pinned Tab from “\(space)”" }
+    public static func newTabCreated(in space: String) -> String { "New Tab Created in \(space)" }
+    public static func restored(folder: Bool, to space: String) -> String { "\(folder ? "Folder" : "Tab") restored to \(space)" }
+    public static func restoredClickToView(folder: Bool, to space: String) -> String { restored(folder: folder, to: space) + ". Click to view." }
+    public static func autoArchived(_ count: Int) -> String { "Auto archived \(count) tabs" }
 }
 public struct ToastAction: Equatable, Sendable, Codable {
     public var title: String
+    /// An icon in place of the title (Q11-b's Share button).
+    public var symbol: String? = nil
     public var command: Command
 }
 public struct ToastLink: Equatable, Sendable, Codable {

@@ -65,6 +65,7 @@ extension Work {
             let position: TreePosition = role.kind == .pinned ? .into(parent: space.pinnedRoot, index: Int.max) : .into(parent: space.todayRoot, index: 0)
             guard moveItem(id, to: position) else { return }
             stamp(Set(state.doc.tree.tabs(under: id)))
+            movedToast(id, to: target, in: window)
         case .newFolder:
             guard state.doc.windows[window]?.kind == .standard else { return }
             // "New Folder" at the top of the current space's Pinned, which expands; the folder is in rename mode.
@@ -82,6 +83,7 @@ extension Work {
             // "Deleting this folder will archive the tabs inside it."
             guard let scope = state.locate(id), case .folder? = state.tree(scope)?[id]?.body else { return }
             archiveTabs([id], reason: .containerDeleted, in: window, preservingStructure: false)
+            toast(ToastCopy.folderDeleted, in: window)
         case .setIcon(let id, let icon):
             guard let scope = state.locate(id) else { return }
             state.withTree(scope) { tree in
@@ -304,14 +306,6 @@ extension Work {
                 entry("New Folder with \(n) Items", .tabTools(.bulk(.items(rows), .newFolder(group: false))), enabled: standard && publicIDs.count == n), .separator,
                 entry("Archive Tabs", .tabTools(.bulk(.items(rows), .archive))),
                 entry("Archive Tabs Below", .tabTools(.bulk(.below(rows[n - 1]), .archive)), enabled: false),
-            ])
-        case .plusButton:
-            return MenuModel(entries: [
-                entry("New Tab", .commandBar(.open(.newTab))),
-                entry("New Folder", .item(.newFolder), enabled: standard),
-                entry("New Space", .sidebar(.openDialog(.newSpace))),
-                entry("New GitHub Live Folder…", .tabTools(.site(.connectGitHub(favorite: nil))), enabled: standard),
-                entry("Connect Calendar File…", .tabTools(.site(.connectCalendar)), enabled: standard),
             ])
         case .spaceControls(let id):
             var model = menuModel(for: .space(id), in: window)

@@ -14,7 +14,7 @@ extension Work {
     mutating func closeGroup(_ id: ItemID, in window: WindowID) {
         guard isGroup(id) else { return }
         let entries = archiving { $0.archiveTabs([id], reason: .manual, in: window) }
-        if !entries.isEmpty { undoToast("Closed Tab Group!", undo: .restore(entries), in: window) }
+        if !entries.isEmpty { undoToast("Closed Tab Group! Use", undo: .restore(entries), in: window) }
     }
 
     /// "Remove Group Header": the tabs stay where they are, the header goes. ⌘Z while the toast shows puts it back.
@@ -27,7 +27,7 @@ extension Work {
             _ = moveItem(child, to: .into(parent: parent, index: index + 1 + offset))
         }
         _ = removeItem(id)
-        undoToast("Removed Group Header!", undo: .regroup(id: id, folder: folder, parent: parent, children: children), in: window)
+        undoToast("Removed Group Header! Use", undo: .regroup(id: id, folder: folder, parent: parent, children: children), in: window)
     }
 
     /// ⌘Z after "Remove Group Header": the header comes back above its tabs that are still in place.

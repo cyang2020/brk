@@ -555,7 +555,7 @@ enum SidebarEvidenceScenarios {
         try expect(restored.group && restored.title == "Reading" && Set(restored.children.map(\.id)) == [a, b], "after restart: \(restored)")
         try S.contextMenu(app, at: S.centre(try visible(app.native(), .row(group)).frame), choose: "Close Tab Group")
         try app.waitUntil("the group closed into the archive") { try folder(group, in: app.view().space.pinned.rows) == nil && tab(a, in: app.view()) == nil }
-        try expect(try S.toast(app) == "Closed Tab Group!", "no close toast")
+        try expect(try S.toast(app) == "Closed Tab Group! Use", "no close toast")
         try app.press("cmd+z")
         try app.waitUntil("Cmd+Z on the toast brought the group back") { try app.view().space.pinned.rows.contains { if case .folder(let f) = $0 { return f.group && f.title == "Reading" } else { return false } } }
     }

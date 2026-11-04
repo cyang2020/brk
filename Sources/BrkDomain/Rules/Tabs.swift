@@ -69,7 +69,11 @@ extension Work {
                 if state.doc.settings.max.renamePinnedTabs, let t = state.displayedTab(tab, in: window), let url = t.url, t.customTitle == nil {
                     requestAI(.renameTab(tab, title: t.displayTitle, url: url))
                 }
-            case .pinned, .favorites: moveItem(unit, to: .into(parent: space.todayRoot, index: 0))
+                toast(ToastCopy.pinned(to: state.displayTitle(of: space.id)), in: window)
+            case .pinned:
+                guard moveItem(unit, to: .into(parent: space.todayRoot, index: 0)) else { return }
+                toast(ToastCopy.unpinned(from: state.displayTitle(of: space.id)), in: window)
+            case .favorites: moveItem(unit, to: .into(parent: space.todayRoot, index: 0))
             case .scratch: break
             }
         case .reset(let ref):
@@ -143,6 +147,7 @@ extension Work {
             } else {
                 effects.append(.copyToPasteboard(SharedQuote.plain(url: url, title: t.displayTitle, format: format)))
             }
+            copiedURLToast(tab, in: window)
         case .navigate(let ref, let url):
             // AppleScript's `set URL`: an address the command bar could open, in place, like the bar's edit-current.
             guard isOpenableURL(url), let tab = state.resolveTab(ref, in: window) else { return }
@@ -220,7 +225,11 @@ extension Work {
             }
         case .zoomChanged(let percent): live.zoomPercent = min(500, max(25, percent))
         case .fullscreenChanged(let full):
-            if live.fullscreen != full { effects.append(.window(window, .pageFullScreen(full))) }
+            if live.fullscreen != full {
+                effects.append(.window(window, .pageFullScreen(full)))
+                if full { toast(ToastCopy.exitFullScreen, in: window, keycap: ToastCopy.escapeKey) }
+                else if state.session.windows[window]?.toast?.keycap == ToastCopy.escapeKey { state.session.windows[window]?.toast = nil }
+            }
             live.fullscreen = full
         case .faviconChanged(let url): state.doc.windows[window]!.slots[tab]?.favicon = url
         case .loadProgress(let progress):
@@ -328,6 +337,9 @@ extension Work {
             openTab(url, inSpace: target, window: window, focus: true)
         case .backgroundTab:
             openTab(url, inSpace: target, window: window, focus: false)
+            // Arc's background-tab toast: there is no row to see the new tab in.
+            if target != state.doc.windows[window]?.space { toast(ToastCopy.newTabCreated(in: state.displayTitle(of: target)), in: window) }
+            else if state.doc.windows[window]?.sidebarVisible == false { toast(ToastCopy.newTabCreated, in: window) }
         }
     }
 

@@ -48,9 +48,14 @@ public final class SidebarView: NSView {
     private var pointerInside = false {
         didSet {
             guard pointerInside != oldValue else { return }
-            urlPill.sidebarHovered = pointerInside
-            tablist.sidebarHovered = pointerInside
+            applyColumnHover()
         }
+    }
+    /// The + popover takes the hover: Arc's column shows neither the accessories nor Clear under it (Q11-a).
+    private var plusMenuOpen = false { didSet { applyColumnHover() } }
+    private func applyColumnHover() {
+        urlPill.sidebarHovered = pointerInside && !plusMenuOpen
+        tablist.sidebarHovered = pointerInside && !plusMenuOpen
     }
 
     /// Everything `render` reads. Equal slices change nothing, so render returns before touching a view.
@@ -61,6 +66,7 @@ public final class SidebarView: NSView {
         var favorites: FavoritesSnapshot
         var space: SpaceSnapshot
         var dock: [DockItem]
+        var plusMenu: [[PlusMenuRow]]
         var renaming: ItemID?
         var theme: ResolvedTheme
         var frames: SidebarFrames?
@@ -88,6 +94,7 @@ public final class SidebarView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         for view in [backdrop, header, urlPill, favorites, spaceHeader, tablist, dock] as [NSView] { addSubview(view) }
+        dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
         drag.sidebar = self
         identify(.sidebar)
     }
@@ -159,7 +166,7 @@ public final class SidebarView: NSView {
         let creating: Bool = if case .commandBar(let bar)? = snapshot.overlay { bar.createsTab } else { false }
         let newTabCurrent = (thisWindow && snapshot.content.panes.isEmpty) || creating
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
-                          dock: dockItems, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
+                          dock: dockItems, plusMenu: snapshot.plusMenu, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace)
         guard slice != last else { return }
@@ -199,7 +206,7 @@ public final class SidebarView: NSView {
                        newTabCurrent: newTabCurrent, now: snapshot.now)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
-        dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace)
+        dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)
         // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
         if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
         else { tablist.isHidden = false }

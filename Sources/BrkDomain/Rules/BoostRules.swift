@@ -237,6 +237,7 @@ extension Work {
             // Imported Boosts arrive disabled so nothing runs before the user has looked at them (review #11).
             var next = state.session.boosts[profile] ?? BoostCatalog(); next.boosts += values.map { var b = $0; b.enabled = false; return b }
             effects.append(.boost(.write(window, profile, next, editor: nil)))
+            if !values.isEmpty { toast(ToastCopy.boostInstalled, in: window) }
         }
     }
 }

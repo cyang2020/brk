@@ -407,6 +407,7 @@ extension Work {
     }
 
     mutating func aiDownloadRenamed(_ id: DownloadID, original: String, new: String?, error: String?) {
+        let asked = state.session.ai.requests.values.first { if case .renameDownload(id, _) = $0.task { true } else { false } }?.window
         for (requestID, request) in state.session.ai.requests {
             if case .renameDownload(let downloadID, _) = request.task, downloadID == id {
                 completeAI(requestID, text: new.map { "Renamed download to " + ($0 as NSString).lastPathComponent } ?? error ?? "The file could not be renamed.")
@@ -415,6 +416,7 @@ extension Work {
         guard let index = state.doc.downloads.firstIndex(where: { $0.id == id && $0.path == original && $0.state == .finished }), let new else { return }
         state.doc.downloads[index].path = new
         state.doc.downloads[index].filename = (new as NSString).lastPathComponent
+        if let asked { toast(ToastCopy.downloadRenamed, in: asked) }
     }
 
     mutating func suggestions(_ window: WindowID, query: String, _ results: [String]) {

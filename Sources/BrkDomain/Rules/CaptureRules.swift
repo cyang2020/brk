@@ -12,7 +12,11 @@ extension Work {
             state.session.windows[window]?.copiedCapture = nil
             let request = CaptureRequest(id: ctx.newID(), document: document, context: context, mode: mode, title: value.displayTitle, url: url, createdAt: ctx.now)
             state.session.windows[window]?.capture = CaptureSnapshot(request: request)
-            if mode == .fullPage { state.session.windows[window]?.capture?.rendering = true; effects.append(.capture(.render(request))) }
+            if mode == .fullPage {
+                state.session.windows[window]?.capture?.rendering = true
+                effects.append(.capture(.render(request)))
+                toast(ToastCopy.captureInProgress, in: window)
+            }
         case .select(let region):
             guard region.valid, var capture = state.session.windows[window]?.capture, !capture.rendering, capture.image == nil else { return }
             capture.request.region = region; capture.rendering = true

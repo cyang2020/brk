@@ -101,6 +101,8 @@ final class GlyphButton: HoverView {
     private var radius = 0.0
     /// Fill when hovered; pressed uses the pressed token.
     private var hoverFill: RGBA?
+    /// Fill that stays while the button's popover is open.
+    var latchedFill: RGBA?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -134,7 +136,7 @@ final class GlyphButton: HoverView {
     override func stateChanged() {
         guard let palette else { return }
         layer?.cornerRadius = radius
-        let fill: RGBA? = !isEnabled ? nil : isPressed ? palette.tokens.tabPressed : isHovered ? hoverFill : nil
+        let fill: RGBA? = !isEnabled ? nil : isPressed ? palette.tokens.tabPressed : latchedFill ?? (isHovered ? hoverFill : nil)
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
     }
 

@@ -209,7 +209,7 @@ public final class SpaceDialogHost: NSView {
             dispatch(.sidebar(.openDialog(nil)))
         })
         iconPopover = popover
-        popover.show(relativeTo: CGRect(x: header.minX + 8, y: header.minY, width: 22, height: header.height), of: self, scheme: scheme)
+        popover.show(relativeTo: CGRect(x: header.minX + 14, y: header.minY, width: 22, height: max(0, header.height - 6)), of: self, scheme: scheme)
     }
 
     /// Cmd+Z (or Shift+Cmd+Z with `redo`) while Edit Theme is open undoes (redoes) one edit in the panel. False when

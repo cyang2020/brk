@@ -66,6 +66,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var theme: ResolvedTheme
     public var websiteTheme: WebsiteThemeValues { theme.websiteValues }
     public var sidebar: SidebarSnapshot
+    /// The dock's + popover (Q11-a), its groups in order.
+    public var plusMenu: [[PlusMenuRow]] = []
     public var urlPill: URLPillSnapshot
     public var favorites: FavoritesSnapshot
     public var space: SpaceSnapshot

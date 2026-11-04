@@ -240,6 +240,7 @@ struct Work {
         if case .tab(.cycleRecent) = command { return }
         if case .tabTools(.cancelRecent) = command { return }
         if case .tabTools(.dismissToast) = command { return }
+        if case .tabTools(.quoteLinkCopied) = command { return }
         if command == .app(.exit), state.session.windows[window]?.recentCycle != nil { return }
         commitCycle(in: window)
     }

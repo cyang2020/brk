@@ -55,7 +55,8 @@ enum TabIconPicker {
         if let row = ViewTree.find(ViewID.row(item).identifier, in: window) ?? ViewTree.find(ViewID.favorite(item).identifier, in: window),
            !row.isHiddenOrHasHiddenAncestor {
             let favorite = row.accessibilityIdentifier() == ViewID.favorite(item).identifier
-            let anchor = favorite ? row.bounds : CGRect(x: min(18, row.bounds.width), y: 0, width: 16, height: row.bounds.height)
+            // The arrow touches the row's icon, 8 above the row's bottom edge (P10-a: the card's top at y 762 px).
+            let anchor = favorite ? row.bounds : CGRect(x: min(18, row.bounds.width), y: 0, width: 16, height: max(0, row.bounds.height - 8))
             popover.show(relativeTo: anchor, of: row, preferredEdge: row.isFlipped ? .maxY : .minY)
         } else if let content = window.contentView {
             popover.show(relativeTo: CGRect(x: content.bounds.midX, y: content.bounds.midY, width: 1, height: 1), of: content, preferredEdge: .maxY)
