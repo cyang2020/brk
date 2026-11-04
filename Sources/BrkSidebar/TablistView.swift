@@ -920,8 +920,10 @@ final class DividerRowView: HoverView {
         super.layout()
         let inset = Draw.dividerInset.value
         let size = clear.fittingSize
-        clear.frame = CGRect(x: bounds.width - Draw.clearTrailing.value - size.width, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
-        let end = clear.alphaValue > 0 && !clear.isHidden ? clear.frame.minX - Draw.clearGap.value : bounds.width - inset
+        // The word ends `clearTrailing` before the sidebar's edge; the label's cell draws it 2 in from the frame.
+        let textStart = ((bounds.width - Draw.clearTrailing.value - clear.textWidth) * 2).rounded() / 2
+        clear.frame = CGRect(x: textStart - ClearButton.cellInset, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+        let end = clear.alphaValue > 0 && !clear.isHidden ? textStart - Draw.clearGap.value : bounds.width - inset
         let hairline = Draw.hairline.value
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
     }
@@ -942,12 +944,16 @@ final class ClearButton: HoverView {
     init(action: @escaping () -> Void) {
         self.action = action
         super.init(frame: .zero)
-        label.font = .systemFont(ofSize: Draw.captionFont.value, weight: .semibold)
+        label.font = .systemFont(ofSize: Draw.clearFont.value, weight: .semibold)
         label.isSelectable = false
         addSubview(label)
     }
 
-    override var fittingSize: NSSize { label.intrinsicContentSize }
+    /// The label's cell, not its intrinsic size, which cut the last letter (P02-clear-user-brk.png).
+    override var fittingSize: NSSize { NSSize(width: label.cellWidth, height: label.intrinsicContentSize.height) }
+
+    static let cellInset = 2.0
+    var textWidth: Double { label.attributedStringValue.size().width }
 
     func render(palette: Palette) {
         self.palette = palette

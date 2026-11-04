@@ -448,7 +448,7 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let sectionSpacing = Metric(12.0, .guess("space between the pane's header, filter row and sections"))
     let controlSpacing = Metric(8.0, .guess("space between a row's title, menu and key cap"))
     let lineSpacing = Metric(4.0, .guess("space between a title and its note"))
-    let rowPadding = Metric(4.0, .guess("the key cap's text inset"))
+    let rowPadding = Metric(2.0, .guess("the key cap's text inset; ⌃Space needs 58 of the 64 pt key cap"))
     let basicsHeight = Metric(36.0, .anatomy("\(capture): the basics box spans y 216 to 288 px"))
     let basicsPadding = Metric(16.0, .anatomy("\(capture): its text starts at x 336 px in a box that starts at 304 px"))
     let basicsGap = Metric(17.0, .anatomy("\(capture): the text ends near x 584 px, the button starts at 601 px"))

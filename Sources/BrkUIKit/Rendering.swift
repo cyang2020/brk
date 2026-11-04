@@ -22,6 +22,13 @@ extension NSView {
     }
 }
 
+extension NSTextField {
+    /// The frame width a one-line label needs. Its cell draws the text 2 points in from each side, and on current macOS
+    /// `intrinsicContentSize` leaves one of those out: a frame of that width cuts the last letter or, with a truncating
+    /// line break, ends a text that fits with an ellipsis.
+    public var cellWidth: Double { ceil(cell?.cellSize.width ?? fittingSize.width) }
+}
+
 /// NSColors for the current theme, built once per theme change from `ResolvedTheme.tokens`.
 public struct Palette: Equatable {
     public let scheme: Scheme

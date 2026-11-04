@@ -174,7 +174,8 @@ private struct SiteControlsView: View {
                     Toggle("Block known ads and trackers on this site", isOn: Binding(get: { value.rule.blocking }, set: { on in change { $0.blocking = on } }))
                     Toggle("Hide matching cookie banners", isOn: Binding(get: { value.rule.hideCookieBanners }, set: { on in change { $0.hideCookieBanners = on } }))
                     Text("Rules v\(value.rulesVersion). Hiding a banner does not give consent.").font(.caption).foregroundStyle(.secondary)
-                    HStack {
+                    // Both titles whole: at the default spacing the row is a point wider than the panel.
+                    HStack(spacing: 6) {
                         SettingsButton(title: "Import blocking rules…", field: "siteImportRules") { dispatch(.site(.loadBlockingRules)) }
                         SettingsButton(title: "Restore built-in rules", field: "siteResetRules") { dispatch(.site(.resetBlockingRules)) }
                     }

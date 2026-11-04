@@ -261,9 +261,10 @@ final class ToastView: NSView {
         let m = ToastDraw, mid = bounds.midY
         var x = m.padding.value
         func place(_ field: NSTextField) {
+            // The frame takes the cell's whole width (the last letter was cut otherwise); what follows stays on the text's.
             let size = field.intrinsicContentSize
-            field.frame = CGRect(x: x, y: mid - size.height / 2, width: ceil(size.width), height: size.height)
-            x = field.frame.maxX
+            field.frame = CGRect(x: x, y: mid - size.height / 2, width: field.cellWidth, height: size.height)
+            x += ceil(size.width)
         }
         place(label)
         if !cap.isHidden {

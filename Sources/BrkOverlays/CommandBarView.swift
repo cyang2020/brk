@@ -422,7 +422,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         if offer != nil {
             keyCap.frame = CGRect(x: right - keyWidth, y: (mid - side / 2).rounded(), width: keyWidth, height: side)
             let keyHeight = keyLabel.intrinsicContentSize.height
-            keyLabel.frame = CGRect(x: o.keyPadding.value - 2, y: ((side - keyHeight) / 2).rounded(), width: keyWidth - 2 * o.keyPadding.value + 4, height: keyHeight)
+            // The whole key: a centred label keeps 4 on each side, so a frame about the text's width draws it right of centre.
+            keyLabel.frame = CGRect(x: 0, y: ((side - keyHeight) / 2).rounded(), width: keyWidth, height: keyHeight)
             let offerHeight = offerLabel.intrinsicContentSize.height
             offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
             accessoryLeft = offerLabel.frame.minX
