@@ -155,6 +155,27 @@ final class ToastCatalogTests: XCTestCase {
         XCTAssertTrue(d.todayIDs.contains(one) && d.todayIDs.contains(two))
     }
 
+    func testBoostImportSaysInstalled() throws {
+        let d = Driver()
+        _ = d.open("example.com/one")
+        let profile = try XCTUnwrap(d.state.boostProfile(in: d.window))
+        d.system(.boost(.imported(d.window, profile, [])))
+        XCTAssertNil(toast(d), "an empty file installed nothing")
+        d.system(.boost(.imported(d.window, profile, [Boost(id: "b", name: "One", scope: .allSites)])))
+        XCTAssertEqual(toast(d)?.text, "Boost installed!")
+    }
+
+    func testImportSaysSoInArcsWords() throws {
+        let d = Driver()
+        let target = try XCTUnwrap(d.state.sidebarImportTarget(in: d.window))
+        d.system(.sidebarData(.imported(d.window, target: target, SidebarImportPreview(visits: []), favorites: false)))
+        XCTAssertEqual(toast(d)?.text, "Success! We imported all of your stuff")
+        var partly = SidebarImportPreview(visits: [])
+        partly.rejected = 2
+        d.system(.sidebarData(.imported(d.window, target: target, partly, favorites: false)))
+        XCTAssertEqual(toast(d)?.text, "Only some of your data imported. Please try again!")
+    }
+
     func testPlusMenuRows() {
         let d = Driver()
         let rows = d.view.plusMenu
