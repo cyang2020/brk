@@ -1755,7 +1755,7 @@
       "arc_evidence": "anatomy-m 1.4 `SidebarCustomIcon`, 61 `SidebarIconType`; `ARC_CustomInfoPicker`, `ARC_Emojis`",
       "description": "Pick an icon or emoji for a tab, folder, split or space",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Choose or clear a custom icon or emoji for tabs, folders, splits and spaces, and retain it after restart.",
       "owner": "batch2-sidebar-tabs",
       "required_checks": [
@@ -1826,6 +1826,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P10-a 0.49%, P10-c 2.12%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -3058,6 +3072,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-15 all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-8a465b03-sheet.tsv",
           "scope": "Arc 1.170 对照（run-20261103）在 main 8a465b03 上的站台数字：P15-a 0.80%；剩余差异见 results.tsv 的合并后两列。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only R414-CopyToast,R414-FullScreenToast,R414-PlusMenu,R49-Toasts,R49-ClearToday",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：R414-CopyToast, R414-FullScreenToast, R414-PlusMenu, R49-Toasts, R49-ClearToday 通过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups-b --only R414-Toasts",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups-b/REPORT.md",
+          "scope": "父任务独立重跑（修正提示条位置检查与裁切检测后）：R414-Toasts 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：Q11-a 0.62%, Q11-a-menu 1.53%, Q11-b 0.92%, P15-a 0.79%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -4176,6 +4218,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on BB4, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only WebSubstitutionsTyping",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：WebSubstitutionsTyping 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -4561,7 +4617,7 @@
       "arc_evidence": "anatomy-m 1.10 `browserPopup`; RS spec",
       "description": "Cmd+click opens a background tab; popups open",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Cmd+click opens a background tab; foreground-modifier opens and popups retain correct disposition, opener/context and requested window behavior, including private and hidden source pages.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -4646,6 +4702,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on W2-P1, W2-P2, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only OpenerTab",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：OpenerTab 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -4789,6 +4859,20 @@
           "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
           "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
           "scope": "With a Little Arc window holding b.html?little and a standard window with seven tabs and a split: flush, quit, relaunch without a start URL. Back came one standard window only (no Little Arc), its Today tabs in order, one loaded page (the current one: one new request for open.html, none for a.html, b.html or the Little Arc page)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only HistoryRestore",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：HistoryRestore 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -7402,7 +7486,7 @@
       "arc_evidence": "rows 162, 163; anatomy-v 3 \"Archive page\"",
       "description": "Grouped list, filter, restore, clear, threshold picker",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show archive entries in date groups, filter them, restore an entry, confirm clearing and edit the profile threshold.",
       "owner": "native-grounding",
       "required_checks": [
@@ -7430,6 +7514,20 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 7. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only ArchiveThreshold",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：ArchiveThreshold 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -7455,7 +7553,7 @@
       "arc_evidence": "anatomy-m 1.9 `ArchivedItem` keeps the full sidebar item",
       "description": "A folder or split comes back as one unit",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Archive and restore an entire folder or split as one structural unit, preserving title, icon, children and layout.",
       "owner": "batch-tabs",
       "required_checks": [
@@ -7497,6 +7595,20 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only ArchiveRestoreCases",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：ArchiveRestoreCases 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -7660,6 +7772,20 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on TabTools6, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only TabTools6",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：TabTools6 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -8644,7 +8770,7 @@
       "arc_evidence": "rows 27, 127; `ARC_ProfilesUI`; anatomy-m 1.12",
       "description": "Separate browser data per space; own Favorites, search engine, archive time, extensions",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Spaces can use independent profiles with isolated cookies/storage, Favorites, search, archive/download preferences and extensions; reassignment/deletion cannot leak old context callbacks.",
       "owner": "batch2-privacy-data",
       "required_checks": [
@@ -8706,6 +8832,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on DataTransferReassign, DataTransferDelete, T9, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only DataExtensionProfiles",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：DataExtensionProfiles 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -9320,6 +9460,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on Ext-shortcuts, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only Ext-shortcut-mouse",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：Ext-shortcut-mouse 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -9497,7 +9651,22 @@
       "acceptance": "Create and reopen an Easel with captures, drawing and text; edit its objects and export the result.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
-      "verification": [],
+      "verification": [
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only EaselShareTypedTitle,EaselResize,EaselCapture,EaselExport",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：EaselShareTypedTitle, EaselResize, EaselCapture, EaselExport 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        }
+      ],
       "remaining": [
         "No complete user-facing workflow is implemented in current source.",
         "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。",
@@ -9835,6 +10004,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P33",
           "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P33-a 1.02%, P33-b 1.23%, P33-c 1.26%, P33-d 0.76%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only PageDOMClean",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：PageDOMClean 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -9912,6 +10095,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on MediaSounds, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only SoundCues-recorded",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：SoundCues-recorded 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -10259,6 +10456,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on SitePolicy-blocking, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only SiteFilters-realsite",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：SiteFilters-realsite 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -10400,7 +10611,7 @@
       "arc_evidence": "Links pane; anatomy-v 3 \"Air Traffic Control\"; `StorableLinkRouting.json`",
       "description": "Routes send matching links to a chosen space or Little Arc",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ordered Air Traffic Control rules route matching external hosts to selected space or Little Brk, support edit/reorder/delete/default behavior and follow true most-recent standard-window context.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -10453,6 +10664,20 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on W2-7, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only ATC-routes",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：ATC-routes 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -10739,7 +10964,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Search engine, document app, download location, archive after",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Profile settings control search, default document app, download location and archive threshold for that profile.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10767,6 +10992,20 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10,W2-11. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only ProfilePerSettings",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：ProfilePerSettings 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -11275,13 +11514,6 @@
           "scope": "AX selects the fixture row, verifies the full real panel URL, then presses Preview. ImportSync-Import proves preview Cancel, accept, unchanged bookmark/history bytes, History UI and CEF DOM execution. The same History JSON fails under HTML and passes under the selected History menu."
         },
         {
-          "kind": "manual",
-          "result": "skipped",
-          "command": "Not executed in this slice",
-          "artifact": "verify/completion/batch2-file-panels/REPORT.md",
-          "scope": "MANUAL: real LocalAuthentication and protected app-specific Keychain writes need an interactive owned OS identity. Website autofill remains out of scope. Real bookmark/history selection, preview, cancel, acceptance and source preservation pass."
-        },
-        {
           "kind": "unit",
           "result": "pass",
           "artifact": "verify/completion/batch2-parent/integration-final-2/build.log",
@@ -11294,6 +11526,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on ImportSync-Import, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only Review-NoPanelImport",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：Review-NoPanelImport 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -11896,6 +12142,20 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIPage, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIPage",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIPage 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -11929,7 +12189,7 @@
       "arc_evidence": "Max \"5-Second Previews\"",
       "description": "Link summaries on hover",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Show a bounded link-summary preview on deliberate hover, with cancellation and an unavailable state.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -11986,6 +12246,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIHover, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIHover",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIHover 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P45-a 7.07%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
         }
       ],
       "remaining": [
@@ -12022,7 +12303,7 @@
       "arc_evidence": "Max `tidyTabs`; anatomy-v 3 \"Organize Today Tabs\"",
       "description": "Groups Today tabs into folders",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Group only the current eligible Today tabs using a validated AI plan; reject stale or foreign IDs and provide undo.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12072,6 +12353,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIOrganize, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIOrganize",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIOrganize 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P46-a 5.81%, P46-b 6.09%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
         }
       ],
       "remaining": [
@@ -12107,7 +12409,7 @@
       "arc_evidence": "Max `renamedPinnedTabs`, `renameDownloads`",
       "description": "Shorter tab titles on pin; renamed downloads",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Rename pinned tabs and completed downloads with the configured local AI provider, safe filenames and collision handling.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12138,11 +12440,11 @@
           "scope": "Build log (kind was recorded as \"build\", which the ledger does not define; relabelled static on 2026-11-03). 772 tests, one inherited native export-panel skip, zero failures; ad hoc bundle signature verified. Final source and binary comparisons are in delivery-identities.json."
         },
         {
-          "kind": "real-provider",
+          "kind": "manual",
           "result": "pass",
           "command": "/Users/administrator/.local/bin/claude -p 'This is a harmless Brk integration smoke test. Reply with exactly BRK_AI_OK. Do not use any tools.' --output-format text --tools '' --no-session-persistence --disable-slash-commands",
           "artifact": "verify/completion/batch2-ai-features/real-provider-smoke.json",
-          "scope": "Exactly one real request: exit 0, BRK_AI_OK, empty stderr, 9.992 s. All other provider calls are offline fixtures."
+          "scope": "（原标签 real-provider）Exactly one real request: exit 0, BRK_AI_OK, empty stderr, 9.992 s. All other provider calls are offline fixtures."
         },
         {
           "kind": "visual",
@@ -12164,6 +12466,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIDownload, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AITidyTitles,AIDownload",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AITidyTitles, AIDownload 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P47-a 5.92%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
         }
       ],
       "remaining": [
@@ -12199,7 +12522,7 @@
       "arc_evidence": "Max `instantLinks`; `InstantLinks` module",
       "description": "Opens the best result directly from the bar",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Resolve a query to a relevant validated web destination and open it, with ordinary search as an explicit fallback.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12249,6 +12572,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIInstant, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIInstant",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIInstant 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P48-a 5.35%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
         }
       ],
       "remaining": [
@@ -12340,6 +12684,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AIBrowse, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIAskRow,AIBrowse",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIAskRow, AIBrowse 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "fail",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P49-cmd 18.89%；Brk 只有一条搜索建议（列表三行对五行）、选中行颜色不同，没有达到可判一致的程度。"
         }
       ],
       "remaining": [
@@ -12375,7 +12740,7 @@
       "arc_evidence": "`ARC_Translation` `TranslateBubble`; General translation setting",
       "description": "Translate a page, never-translate lists",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Translate page content while preserving controls; remember profile-scoped never-translate language and site choices.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12425,6 +12790,27 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on AITranslate, all PASS."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AITranslate",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AITranslate 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P50-b 5.58%, P50-c 5.62%, P50-d 5.97%, P50-e 6.07%, P50-f 8.05%；剩余 5–8% 主要是参照图的侧栏底色和 Arc 左下的 New Arc Version Available 横条（R4-11 报告）。"
         }
       ],
       "remaining": [
@@ -12537,6 +12923,27 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-234 P38",
           "artifact": "verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-a 2.53%, P38-b 5.10%, P38-c 6.44%, P38-d 4.09%, P38-e 2.26%, P38-f 3.50%, P38-g 4.03%, P38-h 4.35%, P38-max-list 6.63%, P38-max-on 5.20%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only AIMax",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：AIMax 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r4-all-4ae4527b all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-4ae4527b-sheet.tsv",
+          "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P38-max-list 6.69%, P38-max-on 5.01%；剩余差异见 results.tsv。"
         }
       ],
       "remaining": [
@@ -12739,6 +13146,20 @@
           "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
           "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
           "scope": "Easel (the supported creative document): New Easel, Share in the URL pill opened a real NSSavePanel (a144-save-panel.png, it defaults to ~/Documents, nothing was saved there). Attempt 1 with typed text went to a wrong folder and was cancelled with nothing written. Attempt 2: the harness op configureSavePanel pointed the next panel at the owned /tmp/r47/m/data/exports/review-easel.png, Share opened the panel there (a144-save-panel-owned-destination.png) and a window-server Return confirmed it: a 462x218 PNG of the board was written (a144-exported-review-easel.png)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r4-5groups --only Review-ExportSelectedFailureAlert,Review-CrossWindowExport",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/parent-gate-r4-5groups/REPORT.md",
+          "scope": "父任务在自己的工作树（main 4ae4527b，R4-12b/R4-14/R4-13/R4-11/R4-10 合并后）独立重跑：Review-ExportSelectedFailureAlert, Review-CrossWindowExport 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
+          "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
