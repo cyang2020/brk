@@ -5,10 +5,10 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
-/// The Max pane as Arc 1.170 lays it out (P38-b, P38-c): the MAX banner, Arc's paragraph, the Enable Max card, one
-/// card row per feature with its picture and switch, the note about what is sent. Brk's difference is deliberate:
-/// Max runs the local `claude` or `codex` command-line tool, so the Enable card also picks the tool and says what was
-/// found on PATH, and the note names the tool instead of Arc's AI partners. The pane scrolls.
+/// The Max pane as Arc 1.170 lays it out (P38-b, P38-c, P38-max-on, P38-max-list): the MAX banner, Arc's paragraph,
+/// the Enable Max card, one card row per feature with its picture and switch, the note about what is sent. Max runs
+/// the local `claude` or `codex` command-line tool; which one, and Brk's own three AI features (Ask on Page, Browse
+/// for Me, Translate Pages), are in Advanced's More Settings…, so this pane keeps Arc's six rows. The pane scrolls.
 struct MaxPane: View {
     let context: PaneContext
     @State private var explaining = false
@@ -32,8 +32,7 @@ struct MaxPane: View {
                     .padding(.horizontal, M.introInset.value)
                     .padding(.top, M.introTop.value)
                 enableCard.padding(.top, CardMetrics.introToCard.value)
-                SettingsCard { rows(MaxFeature.arcs) }.padding(.top, M.cardGap.value)
-                SettingsCard { rows(MaxFeature.brks) }.padding(.top, M.cardGap.value)
+                SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
             }
             .frame(width: Metrics.settings.contentWidth.value, alignment: .leading)
@@ -46,39 +45,30 @@ struct MaxPane: View {
         SettingsCard {
             CardRow(height: M.enableRowHeight.value) {
                 HStack(spacing: CardMetrics.controlGap.value) {
-                    MaxFlower(size: M.enableGlyph.value)
+                    MaxFlower(size: M.enableGlyph.value, hole: ArtColor.rgb(0x3C3FF6), outline: 1)
                         .frame(width: M.enableIcon.value, height: M.enableIcon.value)
                         .background(RoundedRectangle(cornerRadius: M.enableIconRadius.value, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: M.enableIconRadius.value, style: .continuous).strokeBorder(SettingsStyle.cardBorder))
                     CardLabel(MaxCopy.enable)
                 }
             } trailing: {
-                ProminentButton(title: on ? MaxCopy.turnOff : MaxCopy.turnOn, field: "enableMax", prominent: !on, minimumWidth: M.turnOnWidth.value) {
-                    send(.enable(!on))
-                }
+                EnableMaxButton(title: on ? MaxCopy.turnOff : MaxCopy.turnOn, prominent: !on) { send(.enable(!on)) }
+                    .padding(.top, M.enableButtonDrop.value)
             }
             CardDivider()
             SwitchRow(title: MaxCopy.autoEnable, field: "autoEnableFutureFeatures", isOn: max.settings.autoEnableFutureFeatures == true,
                       height: M.autoRowHeight.value) { send(.autoEnableFutureFeatures($0)) }
-            CardDivider()
-            CardRow(height: M.providerRowHeight.value) {
-                VStack(alignment: .leading, spacing: CardMetrics.subtitleGap.value) {
-                    CardLabel(MaxCopy.provider)
-                    SettingsLabel(text: SettingsCopy.detected(max.detected, active: max.active), field: "aiStatus", secondary: true)
-                }
-            } trailing: {
-                SettingsPopUp(field: "aiProvider", entries: AIProviderChoice.allCases.map { .option(SettingsCopy.provider($0), $0) },
-                              selected: max.settings.provider) { send(.provider($0)) }
-                    .fixedSize()
-            }
+                .padding(.bottom, M.autoRowBottom.value)
         }
     }
 
     @ViewBuilder private func rows(_ features: [MaxFeature]) -> some View {
         ForEach(Array(features.enumerated()), id: \.element) { index, feature in
             if index > 0 { CardDivider() }
-            HStack(alignment: .top, spacing: M.thumbGap.value) {
-                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value)
+            // Only the picture keeps the gap from the text: the text runs to within 8.5 points of the switch (P38-c:
+            // "…shorter titles when you" ends at x 1131 px, the switch starts at 1148 px).
+            HStack(alignment: .top, spacing: 0) {
+                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value).padding(.trailing, M.thumbGap.value)
                 VStack(alignment: .leading, spacing: M.titleGap.value) {
                     Text(feature.title).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
                     Text(feature.description).font(.system(size: M.descriptionSize.value)).foregroundStyle(SettingsStyle.secondaryText)
@@ -86,7 +76,7 @@ struct MaxPane: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, M.titleTop.value)
-                Spacer(minLength: CardMetrics.controlGap.value)
+                Spacer(minLength: M.textToSwitch.value)
                 SettingsSwitch(field: feature.field, isOn: feature.isOn(max.settings)) { send(feature.setting($0)) }
                     .frame(height: M.featureRowHeight.value)
             }
@@ -98,11 +88,16 @@ struct MaxPane: View {
 
     private var footer: some View {
         VStack(spacing: M.footerGap.value) {
-            Text(MaxCopy.footer).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
-            LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], color: SettingsStyle.link, underline: true) { _ in explaining = true }
+            Text(MaxCopy.footer).font(.system(size: M.footerSize.value)).foregroundStyle(SettingsStyle.secondaryText)
+            LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], font: .system(size: M.footerSize.value), color: SettingsStyle.link, underline: true) { _ in explaining = true }
                 .popover(isPresented: $explaining) {
-                    Text(SettingsCopy.maxPrivacy).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
-                        .frame(width: M.popoverWidth.value).padding()
+                    VStack(alignment: .leading, spacing: CardMetrics.controlGap.value) {
+                        Text(SettingsCopy.maxPrivacy).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
+                        Text(SettingsCopy.detected(max.detected, active: max.active)).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
+                        Text(MaxCopy.whereToChoose).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(width: M.popoverWidth.value).padding()
                 }
         }
         .multilineTextAlignment(.center)
@@ -110,13 +105,9 @@ struct MaxPane: View {
     }
 }
 
-/// A Max feature as the pane lists it: Arc's six in Arc's order, then Brk's three (Ask on Page, Browse for Me,
-/// Translate Pages).
+/// A Max feature as the pane lists it: Arc's six in Arc's order.
 enum MaxFeature: String, Hashable, CaseIterable {
-    case tidyTabs, instantLinks, linkPreviews, tidyTitles, tidyDownloads, askInCommandBar, askOnPage, browse, translation
-
-    static let arcs: [MaxFeature] = [.tidyTabs, .instantLinks, .linkPreviews, .tidyTitles, .tidyDownloads, .askInCommandBar]
-    static let brks: [MaxFeature] = [.askOnPage, .browse, .translation]
+    case tidyTabs, instantLinks, linkPreviews, tidyTitles, tidyDownloads, askInCommandBar
 
     /// The `settings-field-<name>` of the feature's switch (the model's names, which the scenarios click).
     var field: String {
@@ -134,9 +125,6 @@ enum MaxFeature: String, Hashable, CaseIterable {
         case .linkPreviews: .linkPreviews
         case .tidyDownloads: .downloadRename
         case .askInCommandBar: .commandBar
-        case .askOnPage: .askPage
-        case .browse: .browse
-        case .translation: .translation
         }
     }
 
@@ -168,8 +156,10 @@ enum MaxCopy {
     static let turnOff = "Turn Off Max"
     static var autoEnable: String { "Automatically enable future \(Product.name) Max features" }
     static let provider = "Local AI tool"
-    static let footer = "Max features send your question and the page text it needs to the tool you choose."
+    /// Arc: "Max features require that we send data to our AI partners."; Brk sends it to the local tool.
+    static let footer = "Max features require that we send data to your local AI tool."
     static let learnMore = "Learn more about what we send"
+    static var whereToChoose: String { "Choose the tool, and turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off, in Advanced → More Settings…." }
 
     static func title(_ feature: MaxFeature) -> String {
         switch feature {
@@ -179,9 +169,6 @@ enum MaxCopy {
         case .tidyTitles: "Tidy Tab Titles"
         case .tidyDownloads: "Tidy Downloads"
         case .askInCommandBar: "Ask Max in the Command Bar"
-        case .askOnPage: "Ask on Page"
-        case .browse: "Browse for Me"
-        case .translation: "Translate Pages"
         }
     }
 
@@ -193,10 +180,45 @@ enum MaxCopy {
         case .tidyTitles: "Have your tabs automatically renamed with tidier, shorter titles when you Pin them."
         case .tidyDownloads: "Keep your many files more organized with smartly renamed downloads — and make them a little easier to find later."
         case .askInCommandBar: "Type “Ask Max” in the Command Bar, or press ⌥⌘G, to ask your local AI tool any question instantly."
-        case .askOnPage: "Ask about the page you are reading. The tool receives the page’s text."
-        case .browse: "Let the tool read the pages you choose and answer from them."
-        case .translation: "Translate the page you are reading. Never-translate choices are kept per site and language."
         }
+    }
+}
+
+/// Arc's Enable Max button (P38-b "Turn On Max", P38-max-on "Turn Off Max"): a rounded rectangle with a grey hairline
+/// edge, filled blue with white text while Max is off, white with dark text while it is on. An NSButton, so it is
+/// clicked and identified like the pane's other controls.
+struct EnableMaxButton: NSViewRepresentable {
+    let title: String
+    let prominent: Bool
+    let action: @MainActor () -> Void
+
+    func makeCoordinator() -> SettingsButton.Coordinator { SettingsButton.Coordinator() }
+
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(SettingsButton.Coordinator.clicked(_:)))
+        button.isBordered = false
+        button.wantsLayer = true
+        button.layer?.cornerRadius = M.enableButtonRadius.value
+        button.layer?.cornerCurve = .continuous
+        button.layer?.borderWidth = 0.5
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: NSViewRepresentableContext<Self>) {
+        context.coordinator.action = action
+        button.identify(.settingsField("enableMax"))
+        button.isEnabled = context.environment.isEnabled
+        button.layer?.backgroundColor = (prominent ? ProminentButton.arcBlue : NSColor.white).cgColor
+        button.layer?.borderColor = NSColor(white: 0xB4 / 255.0, alpha: 1).cgColor
+        let font = NSFont.systemFont(ofSize: M.enableButtonFont.value, weight: .semibold)
+        let color: NSColor = prominent ? .white : NSColor(white: 0x2B / 255.0, alpha: 1)
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        button.attributedTitle = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: style])
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSButton, context: NSViewRepresentableContext<Self>) -> CGSize? {
+        M.enableButtonSize.value
     }
 }
 
@@ -206,8 +228,14 @@ struct ProminentButton: NSViewRepresentable {
     let field: String
     var prominent = true
     var symbol: String? = nil
-    var accent: NSColor = NSColor(srgbRed: 0x31 / 255.0, green: 0x37 / 255.0, blue: 0xF8 / 255.0, alpha: 1)
+    static let arcBlue = NSColor(srgbRed: 0x31 / 255.0, green: 0x37 / 255.0, blue: 0xF8 / 255.0, alpha: 1)
+    static let arcBlueColor = Color(nsColor: arcBlue)
+    var accent: NSColor = ProminentButton.arcBlue
     var minimumWidth: CGFloat = 0
+    /// The prominent title's weight (Arc's "Learn the Essential Shortcuts" is regular).
+    var weight: NSFont.Weight = .semibold
+    /// A fixed width instead of the title's.
+    var width: CGFloat? = nil
     let action: @MainActor () -> Void
 
     func makeCoordinator() -> SettingsButton.Coordinator { SettingsButton.Coordinator() }
@@ -223,7 +251,7 @@ struct ProminentButton: NSViewRepresentable {
         button.identify(.settingsField(field))
         button.isEnabled = context.environment.isEnabled
         button.bezelColor = prominent ? accent : nil
-        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: prominent ? .semibold : .regular)
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: prominent ? weight : .regular)
         let color: NSColor = prominent ? .white : .labelColor
         button.attributedTitle = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: color])
         if let symbol {
@@ -236,7 +264,7 @@ struct ProminentButton: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSButton, context: NSViewRepresentableContext<Self>) -> CGSize? {
-        CGSize(width: max(button.intrinsicContentSize.width, minimumWidth), height: button.intrinsicContentSize.height)
+        CGSize(width: width ?? max(button.intrinsicContentSize.width, minimumWidth), height: button.intrinsicContentSize.height)
     }
 }
 
@@ -247,25 +275,30 @@ let MaxPaneMetrics = MaxPaneMetricsTable()
 struct MaxPaneMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38/P38-b-arc.png"
     let introInset = Metric(5.0, .anatomy("\(capture): the paragraph starts at x 138 px, the cards at 128 px"))
-    let introTop = Metric(29.0, .anatomy("\(capture): the wave's middle at y 422 px, the paragraph's first line centred at 497 px"))
+    let introTop = Metric(26.5, .anatomy("\(capture): the wave's lowest at y 427 px, the paragraph's first line centred at 497 px"))
     let cardGap = Metric(24.0, .anatomy("\(capture): the Enable card ends at y 760 px, the features card starts at 808 px"))
     let enableRowHeight = Metric(45.0, .anatomy("\(capture): the Enable Max row spans y 592 to 682 px"))
-    let autoRowHeight = Metric(38.0, .anatomy("\(capture): the Automatically enable row spans y 682 to 758 px"))
-    let providerRowHeight = Metric(48.0, .guess("Brk's tool row: a label over the PATH note"))
+    let autoRowHeight = Metric(32.0, .anatomy("\(capture): the Automatically enable row spans y 684 to 758 px, its switch centred at 716 px"))
+    let autoRowBottom = Metric(6.0, .anatomy("\(capture): the row's switch is centred 32 px below its top and 42 px above the card's edge"))
     let enableIcon = Metric(24.0, .anatomy("\(capture): the white icon square spans x 148 to 196 px"))
     let enableGlyph = Metric(17.0, .anatomy("\(capture): the flower inside spans x 156 to 188 px"))
     let enableIconRadius = Metric(6.0, .guess("the icon square's corner"))
-    let turnOnWidth = Metric(117.0, .anatomy("\(capture): Turn On Max spans x 986 to 1220 px"))
+    let enableButtonSize = Metric(CGSize(width: 117.5, height: 28), .anatomy("\(capture): Turn On Max spans x 986 to 1221 px, y 611 to 667 px with its grey edge"))
+    let enableButtonRadius = Metric(6.0, .anatomy("\(capture): 4 px in from the button's left edge its corner starts 3 px down"))
+    let enableButtonDrop = Metric(2.0, .anatomy("\(capture): the button is centred at y 639 px in a row centred at 638 px"))
+    let enableButtonFont = Metric(12.0, .anatomy("\(capture): the Turn On Max lettering spans x 1035 to 1174 px, a 12 pt semibold line (13 pt is 159 px wide)"))
     let featureRowHeight = Metric(80.0, .anatomy("\(capture): feature rows 808 to 968 to 1130 px"))
     let thumbInset = Metric(11.5, .anatomy("\(capture): a thumbnail's rim starts at x 151 px"))
     let thumbTop = Metric(10.5, .anatomy("\(capture): the thumbnail starts at y 832 px in a row that starts at 808 px"))
+    let textToSwitch = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
     let thumbGap = Metric(17.0, .anatomy("\(capture): the thumbnail ends at x 330 px, the title starts at 368 px"))
     let titleTop = Metric(10.0, .anatomy("\(capture): the title is centred at y 845 px in a row that starts at 808 px"))
-    let titleGap = Metric(3.0, .anatomy("\(capture): title centred at y 845 px, the description's first line at 884 px"))
-    let descriptionSize = Metric(12.0, .anatomy("\(capture): the description's P stem is 16 px, the title's T 19 px"))
+    let titleGap = Metric(4.5, .anatomy("\(capture): title centred at y 845 px, the description's first line at 884 px"))
+    let descriptionSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
     let descriptionLeading = Metric(2.0, .anatomy("\(capture): description lines 32 px apart"))
-    let footerTop = Metric(22.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
-    let footerGap = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
-    let footerBottom = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
+    let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
+    let footerTop = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
+    let footerGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
+    let footerBottom = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
     let popoverWidth = Metric(320.0, .guess("the privacy note's popover"))
 }

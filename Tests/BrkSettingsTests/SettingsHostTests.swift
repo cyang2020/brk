@@ -193,7 +193,8 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertNil(f.view("webAppearance"), "Appearance is the View menu's")
 
         f.render(snapshot(pane: .max))
-        XCTAssertEqual(f.pick("aiProvider", "codex"), [.settings(.max(.provider(.codex)))])
+        XCTAssertNil(f.view("aiProvider"), "the tool is chosen in Advanced's More Settings…, Arc's Max pane has two Enable rows")
+        XCTAssertNil(f.view("askPage"), "Arc's Max pane lists its six features only")
         XCTAssertEqual(f.click("renamePinnedTabs"), [.settings(.max(.renamePinnedTabs(true)))])
         XCTAssertEqual(f.click("tidyTabs"), [.settings(.max(.tidyTabs(true)))])
         XCTAssertEqual(f.click("commandBar"), [.settings(.max(.feature(.commandBar, true)))])
@@ -495,16 +496,22 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.pick("newDocuments-default", "Google Docs"), [.settings(.profile(.default, .documentApp(.googleDocs)))])
     }
 
-    /// Max shows what launch found on PATH and what the choice resolves to
-    func testTheMaxPaneShowsTheDetectedTools() {
+    /// Advanced's More Settings… picks the local tool, shows what launch found on PATH and what the choice resolves
+    /// to, and switches Brk's three AI features that Arc's Max pane does not list
+    func testMoreSettingsShowsTheDetectedTools() {
         let f = Fixture()
         var max = MaxSettings.default
         max.provider = .auto
-        f.render(snapshot(pane: .max, max: MaxSnapshot(settings: max, detected: [.codex], active: .codex)))
+        f.render(snapshot(pane: .advanced, max: MaxSnapshot(settings: max, detected: [.codex], active: .codex)))
+        _ = f.click("moreSettings")
+        XCTAssertEqual(f.pick("aiProvider", "codex"), [.settings(.max(.provider(.codex)))])
+        XCTAssertEqual(f.click("askPage"), [.settings(.max(.feature(.askPage, true)))])
+        XCTAssertEqual(f.click("browse"), [.settings(.max(.feature(.browse, true)))])
+        XCTAssertEqual(f.click("translation"), [.settings(.max(.feature(.translation, true)))])
         XCTAssertEqual(f.view("aiStatus", NSTextField.self)?.stringValue, "Found on PATH: codex. Using codex.")
         XCTAssertEqual(f.view("aiProvider", NSPopUpButton.self)?.itemTitles, ["Off", "Automatic", "claude", "codex"])
         XCTAssertEqual(f.view("aiProvider", NSPopUpButton.self)?.titleOfSelectedItem, "Automatic")
-        f.render(snapshot(pane: .max, max: MaxSnapshot(settings: max, detected: [], active: nil)))
+        f.render(snapshot(pane: .advanced, max: MaxSnapshot(settings: max, detected: [], active: nil)))
         XCTAssertEqual(f.view("aiStatus", NSTextField.self)?.stringValue, "No local AI command-line tool found on PATH.")
     }
 

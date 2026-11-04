@@ -91,6 +91,11 @@ final class ThemeDraftTests: XCTestCase {
         let angle = atan2(cream.y - 0.5, cream.x - 0.5) * 180 / .pi
         XCTAssertEqual(angle, HSL(ThemePresets.brand[0]).hue, accuracy: 0.5)
         XCTAssertEqual(hypot(cream.x - 0.5, cream.y - 0.5) / 0.5, 0.82, accuracy: 0.02)
+        // P28 a: the Greyscale page's white sits on the left-hand axis at the pad's edge; a grey has no hue.
+        let white = ThemePad.point(of: ThemePresets.greyscale[0])
+        XCTAssertEqual(white.y, 0.5, accuracy: 0.001)
+        XCTAssertLessThan(white.x, 0.05)
+        XCTAssertLessThan(ThemePad.point(of: ThemePresets.greyscale[4]).x, 0.5, "mid grey left of the centre")
         // Round trip: a dot dragged to where a color sits picks that color.
         for color in [ThemePresets.brand[3], ThemePresets.drab[7], ThemePresets.pastel[4]] {
             let back = ThemePad.color(at: ThemePad.point(of: color), saturation: HSL(color).saturation)

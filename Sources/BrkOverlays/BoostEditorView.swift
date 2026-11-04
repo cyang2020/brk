@@ -48,8 +48,10 @@ public final class BoostPanel {
 
     /// Centred on the window's right edge, its top a third of the way down the window (P37-a), kept on screen.
     static func initialFrame(size: CGSize, parent: CGRect, screen: CGRect?) -> CGRect {
+        // Whole points, as Arc lands (P37-a: the panel's edge at x 2377 px, its top at 516 px of a 776-point window,
+        // so the window is at 91 points in from the window's right and 258 down).
         let base = Metrics.boostPanel.size.value.width
-        var frame = CGRect(x: parent.maxX - base / 2 - (size.width - base), y: parent.maxY - parent.height / 3 - size.height,
+        var frame = CGRect(x: (parent.maxX - base / 2).rounded(.up) - (size.width - base), y: parent.maxY - (parent.height / 3).rounded(.down) - size.height,
                            width: size.width, height: size.height)
         if let screen {
             frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - frame.width)
@@ -504,7 +506,9 @@ final class BoostColorSquare: NSView {
     }
     override func draw(_ dirtyRect: NSRect) {
         let outer = NSBezierPath(roundedRect: bounds, xRadius: 20, yRadius: 20)
-        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: -62)
+        // Dark at the top-left, light at the bottom-left, mid grey down the right (P37-b). The view is flipped, so
+        // pointing down and to the right is a positive angle.
+        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: 62)
         let field = NSBezierPath(roundedRect: inner, xRadius: 13, yRadius: 13)
         NSGraphicsContext.saveGraphicsState()
         field.addClip()
@@ -773,13 +777,16 @@ public final class BoostZapOverlayView: NSView {
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
     public override var isFlipped: Bool { true }
+    static let hintShift = Metric(-30.0, .anatomy("verify/visual-pairs/run-20261103/P37/P37-c-arc.png: 'Click elements on the page to Zap them' spans x 1198 to 1679 px, the card 456 to 2540 px"))
     /// `card`: the page rect of the content card showing the Boost's page.
     public func render(_ editor: BoostEditor?, card: CGRect?) {
         guard let editor, editor.picking, editor.pickPurpose == .zap, let card else { isHidden = true; return }
         isHidden = false
         frame = card
         let height = Metrics.boostPanel.zapHintHeight.value
-        label.frame = CGRect(x: 0, y: bounds.height - height + (height - 18) / 2 + 1, width: bounds.width, height: 18)
+        // Arc centres the line 30 points left of the card's middle (P37-c: the text spans x 1198 to 1679 px in a card
+        // from 456 to 2540 px), its middle 3 px above the strip's.
+        label.frame = CGRect(x: Self.hintShift.value, y: bounds.height - height + (height - 18) / 2 - 0.5, width: bounds.width, height: 18)
         needsDisplay = true
     }
     public override func draw(_ dirtyRect: NSRect) {

@@ -221,7 +221,8 @@ final class SiteTile: NSButton {
             text.draw(at: CGPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
         }
         guard let symbol else { return }
-        let m = Metrics.siteControls, glyph = m.buttonGlyph.value, shift = badge == nil ? .zero : m.badgeOffset.value
+        // Arc's + and … on the grey buttons are smaller and heavier than the action glyphs (P36-a: the + is 10 pt across).
+        let m = Metrics.siteControls, glyph = filled ? m.buttonGlyph.value - 3 : m.buttonGlyph.value, shift = badge == nil ? .zero : m.badgeOffset.value
         // Arc's Boost brush points up and right; SF paintbrush.pointed points down and left.
         draw(symbol, size: glyph, tint: tint, center: CGPoint(x: bounds.midX + shift.x, y: bounds.midY + shift.y), turned: badge != nil)
         let scale = m.badgeScale.value
@@ -240,7 +241,8 @@ final class SiteTile: NSButton {
     }
 
     private func draw(_ name: String, size: Double, tint: NSColor, center: CGPoint, turned: Bool = false) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular).applying(.init(paletteColors: [tint]))
+        // Arc's glyph strokes are a full 2 px of #393939 at 2x (P36-a), a medium weight.
+        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: filled ? .semibold : .medium).applying(.init(paletteColors: [tint]))
         guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
         NSGraphicsContext.saveGraphicsState()
         if turned {
@@ -321,7 +323,7 @@ final class SiteRow: NSButton {
             let rect = CGRect(x: (size - image.size.width) / 2, y: (size - image.size.height) / 2, width: image.size.width, height: image.size.height)
             image.draw(in: rect.integral, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
-        let font = NSFont.systemFont(ofSize: m.rowFont.value, weight: .semibold)
+        let font = NSFont.systemFont(ofSize: m.rowTitleFont.value, weight: .semibold)
         NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.9)])
             .draw(at: CGPoint(x: m.rowText.value - m.inset.value, y: m.rowTitleBaseline.value - font.ascender))
         let small = NSFont.systemFont(ofSize: m.rowFont.value)

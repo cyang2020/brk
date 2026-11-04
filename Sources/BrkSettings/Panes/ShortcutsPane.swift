@@ -50,7 +50,8 @@ struct ShortcutsPane: View {
         HStack(spacing: K.basicsGap.value) {
             Text(ShortcutsCopy.basics).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
             ProminentButton(title: essentials ? ShortcutsCopy.showAll : ShortcutsCopy.learnEssentials, field: "shortcut-essentials",
-                            prominent: true, symbol: "command.circle.fill", accent: .controlAccentColor) { essentials.toggle() }
+                            prominent: true, symbol: "command.circle.fill", accent: .controlAccentColor, weight: .regular,
+                            width: K.essentialsWidth.value) { essentials.toggle() }
         }
         .padding(.horizontal, K.basicsPadding.value)
         .frame(height: K.basicsHeight.value)
@@ -61,7 +62,7 @@ struct ShortcutsPane: View {
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: K.searchGap.value) {
-                Image(systemName: "magnifyingglass").font(.system(size: K.searchGlyph.value)).foregroundStyle(SettingsStyle.secondaryText)
+                Image(systemName: "magnifyingglass").font(.system(size: K.searchGlyph.value, weight: .medium)).foregroundStyle(SettingsStyle.secondaryText)
                 TextField(ShortcutsCopy.filter, text: $filter)
                     .textFieldStyle(.plain)
                     .font(SettingsStyle.font)
@@ -69,17 +70,19 @@ struct ShortcutsPane: View {
             }
             .padding(.horizontal, K.searchInset.value)
             .frame(height: K.searchHeight.value)
+            .offset(y: -0.5)
             CardDivider(inset: 0)
             ScrollView {
                 // Not lazy: every row's key cap exists, so the control socket and tests can find any of them.
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
-                        Text(section.title).font(SettingsStyle.font.weight(.semibold)).foregroundStyle(SettingsStyle.secondaryText)
-                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value)
+                        Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
+                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value).offset(y: -0.5)
                         CardDivider(inset: 0)
                         ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
-                            if index > 0 { CardDivider(inset: K.rowInset.value) }
+                            if index > 0 { RowDivider() }
                             ShortcutRowView(row: row, others: rows, dispatch: dispatch)
+                                .padding(.top, index == 0 ? K.firstRowTop.value : 0)
                         }
                     }
                 }
@@ -94,23 +97,23 @@ struct ShortcutsPane: View {
     private var side: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: K.keyGap.value) {
-                KeyCapArt(symbol: "command")
-                KeyCapArt(symbol: "face.smiling")
+                KeyCapArt(glyph: .command)
+                KeyCapArt(glyph: .smile)
             }
             Text(ShortcutsCopy.title).font(.system(size: K.titleSize.value, weight: .semibold)).foregroundStyle(.primary)
                 .padding(.top, K.titleTop.value)
-            Text(ShortcutsCopy.subtitle).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
+            Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
                 .lineSpacing(K.subtitleLeading.value)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, K.subtitleTop.value)
             Spacer(minLength: 0)
-            HStack(spacing: K.searchGap.value) {
+            HStack(spacing: K.moreGap.value) {
                 SettingsButton(title: ShortcutsCopy.resetAll, field: "shortcut-reset-all") { dispatch(.settings(.shortcuts(.resetAll))) }
                     .disabled(!rows.contains { $0.source == .userDefined })
                 Menu {
                     Toggle(ShortcutsCopy.customizedOnly, isOn: $customizedOnly)
                 } label: {
-                    Image(systemName: "ellipsis.circle").font(.system(size: K.moreGlyph.value))
+                    Image(nsImage: MoreCircle.image)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -132,7 +135,18 @@ struct ShortcutsPane: View {
         .reopenLastClosedTab, .pinTab, .focusNextSpace, .focusPreviousSpace, .find, .viewLibrary,
     ]
 
-    /// "Customized Shortcuts" (the user's), then "Default Shortcuts", each by title as Arc sorts them ("Capture Full
+    /// The rows of Arc 1.170's menu and shortcut table that carry an `arcKeyBindingID` (docs/arc-anatomy/
+    /// model-and-shortcuts.md 2.3): the actions Arc's Shortcuts pane lists (P38-e: Add Split View, Archive Tab, Blank
+    /// Window, Capture Full Page, …). `ActionSpec.row` is the table's row.
+    static let arcRows: Set<Int> = [
+        3, 10, 11, 14, 16, 17, 18, 19, 20, 21, 22, 28, 29, 30, 31, 32, 33, 35, 36, 37, 38, 39, 45, 46, 47, 49, 53, 54, 55, 56,
+        57, 58, 91, 92, 95, 96, 97, 98, 99, 101, 102, 103, 105, 106, 109, 111, 113, 114, 115, 116, 117, 118, 120, 121, 122,
+        124, 128, 129, 130, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 153, 154,
+        155, 157, 158, 159, 160, 161, 162, 163, 168, 170, 171,
+    ]
+
+    /// "Customized Shortcuts" (the user's), then "Default Shortcuts" (the actions Arc's pane lists), then "More
+    /// Shortcuts" (Brk's other remappable actions, after Arc's list), each by title as Arc sorts them ("Capture Full
     /// Page", "Capture in Portrait Mode", "Capture…"); rows whose title or shortcut does not match `filter` are left
     /// out.
     static func sections(_ rows: [ShortcutRow], filter: String) -> [Section] {
@@ -148,9 +162,19 @@ struct ShortcutsPane: View {
         var sections: [Section] = []
         let custom = shown.filter { $0.source == .userDefined }
         if !custom.isEmpty { sections.append(Section(title: ShortcutsCopy.customized, rows: byTitle(custom))) }
-        let defaults = shown.filter { $0.source == .default }
+        let defaults = shown.filter { $0.source == .default && arcRows.contains($0.action.spec.row) }
         if !defaults.isEmpty { sections.append(Section(title: ShortcutsCopy.defaults, rows: byTitle(defaults))) }
+        let more = shown.filter { $0.source == .default && !arcRows.contains($0.action.spec.row) }
+        if !more.isEmpty { sections.append(Section(title: ShortcutsCopy.more, rows: byTitle(more))) }
         return sections
+    }
+}
+
+/// The hairline between two shortcut rows: from the titles' left edge to 16 points short of the box's right edge.
+private struct RowDivider: View {
+    var body: some View {
+        Rectangle().fill(SettingsStyle.cardBorder).frame(height: CardMetrics.borderWidth.value)
+            .padding(.leading, K.rowInset.value).padding(.trailing, K.dividerTrailing.value)
     }
 }
 
@@ -348,8 +372,9 @@ final class ChordRecorderView: NSView {
             spoken = ShortcutsCopy.chord(state) ?? ShortcutsCopy.record
         }
         label.stringValue = text
-        label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : NSFont.systemFontSize)
-        label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor
+        // Arc's key caps (P38-e): a 12 pt chord, a shade lighter than the row titles.
+        label.font = .systemFont(ofSize: isRecording ? NSFont.smallSystemFontSize : ShortcutsPaneMetrics.capFont.value)
+        label.textColor = isRecording || ShortcutsCopy.chord(state) == nil ? .secondaryLabelColor : .labelColor.withAlphaComponent(0.85)
         layer?.borderColor = (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
         layer?.borderWidth = isRecording ? 2 * ShortcutsPaneMetrics.recorderBorder.value : ShortcutsPaneMetrics.recorderBorder.value
         layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
@@ -370,6 +395,8 @@ enum ShortcutsCopy {
     static let subtitle = "Change shortcuts for your favorite actions, and even choose whether \(Product.name) or a website takes priority."
     static let customized = "Customized Shortcuts"
     static let defaults = "Default Shortcuts"
+    /// Brk's: the remappable actions Arc's pane does not list.
+    static let more = "More Shortcuts"
     static let resetAll = "Reset All Shortcuts"
     static let resetOne = "Reset Shortcut to Default"
     static let removeConflicting = "Remove Conflicting Shortcut"
@@ -444,6 +471,7 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38/P38-e-arc.png"
     let recorderSize = Metric(CGSize(width: 64, height: 24), .anatomy("\(capture): the key caps span x 632 to 760 px, y 530 to 578 px"))
     let recorderRadius = Metric(6.0, .guess("the key cap's corner"))
+    let capFont = Metric(12.0, .anatomy("\(capture): ⌃⇧= spans x 668 to 723 px, 17 px tall, a 12 pt line"))
     let recorderBorder = Metric(1.0, .anatomy("\(capture): a 2 px grey edge"))
     let sectionSpacing = Metric(12.0, .guess("space between the pane's header, filter row and sections"))
     let controlSpacing = Metric(8.0, .guess("space between a row's title, menu and key cap"))
@@ -451,7 +479,7 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let rowPadding = Metric(4.0, .guess("the key cap's text inset"))
     let basicsHeight = Metric(36.0, .anatomy("\(capture): the basics box spans y 216 to 288 px"))
     let basicsPadding = Metric(16.0, .anatomy("\(capture): its text starts at x 336 px in a box that starts at 304 px"))
-    let basicsGap = Metric(17.0, .anatomy("\(capture): the text ends near x 584 px, the button starts at 601 px"))
+    let basicsGap = Metric(8.5, .anatomy("\(capture): the text ends near x 584 px, the button starts at 601 px"))
     let basicsRadius = Metric(8.0, .guess("the basics box's corner"))
     let basicsToColumns = Metric(30.0, .anatomy("\(capture): the basics box ends at y 288 px, the list at 348 px"))
     let columnGap = Metric(16.0, .anatomy("\(capture): the list ends at x 808 px, the drawing starts at 840 px"))
@@ -461,17 +489,23 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let boxRadius = Metric(8.0, .guess("the list box's corner"))
     let searchHeight = Metric(41.0, .anatomy("\(capture): the search row spans y 348 to 430 px"))
     let searchInset = Metric(16.0, .anatomy("\(capture): the magnifier starts at x 162 px"))
-    let searchGap = Metric(6.0, .anatomy("\(capture): the magnifier ends near x 188 px, the placeholder starts at 200 px"))
-    let searchGlyph = Metric(15.0, .anatomy("\(capture): the magnifier is about 26 px tall"))
-    let headerHeight = Metric(28.0, .anatomy("\(capture): the Default Shortcuts row spans y 430 to 486 px"))
+    let searchGap = Metric(4.0, .anatomy("\(capture): the magnifier ends near x 188 px, the placeholder starts at 201 px"))
+    let searchGlyph = Metric(13.0, .anatomy("\(capture): the magnifier is about 26 px tall, a medium weight"))
+    let headerHeight = Metric(27.0, .anatomy("\(capture): the Default Shortcuts row spans y 430 to 484 px, its hairline 484 to 486 px"))
+    let headerSize = Metric(11.0, .anatomy("\(capture): 'Default Shortcuts' spans x 162 to 345 px, an 11 pt semibold line (13 pt is 223 px)"))
+    let firstRowTop = Metric(9.5, .anatomy("\(capture): the first row spans y 486 to 600 px, the others 94 px between hairlines"))
     let headerInset = Metric(16.0, .anatomy("\(capture): 'Default Shortcuts' starts at x 160 px"))
-    let rowHeight = Metric(48.0, .anatomy("\(capture): rows centred at y 554, 650, 746 px"))
+    let rowHeight = Metric(47.0, .anatomy("\(capture): hairlines at y 600, 696, 792 px, 2 px each"))
     let rowInset = Metric(24.0, .anatomy("\(capture): titles start at x 176 px, hairlines span 176 to 776 px, key caps end at 760 px"))
+    let dividerTrailing = Metric(16.0, .anatomy("\(capture): the row hairlines end at x 776 px in a box that ends at 808 px"))
     let listPadding = Metric(8.0, .guess("space under the last row"))
-    let keyGap = Metric(4.0, .anatomy("\(capture): the key caps are 7 px apart"))
-    let titleSize = Metric(15.0, .guess("'Custom Shortcuts' is a heading, larger than the rows"))
-    let titleTop = Metric(22.0, .anatomy("\(capture): the key caps end at y 476 px, the heading is centred at 542 px"))
-    let subtitleTop = Metric(8.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
-    let subtitleLeading = Metric(2.0, .anatomy("\(capture): paragraph lines 30 px apart"))
-    let moreGlyph = Metric(17.0, .anatomy("\(capture): the … circle is 46 px wide"))
+    let keyGap = Metric(1.5, .anatomy("\(capture): the first key cap ends at x 970 px, the second starts at 974 px"))
+    let titleSize = Metric(14.0, .anatomy("\(capture): 'Custom Shortcuts' spans x 841 to 1083 px, a 14 pt semibold line"))
+    let titleTop = Metric(23.5, .anatomy("\(capture): the key caps end at y 477 px, the heading is centred at 542 px"))
+    let subtitleSize = Metric(12.0, .anatomy("\(capture): 'Change shortcuts for your favorite' spans x 841 to 1226 px, a 12 pt line"))
+    let subtitleTop = Metric(7.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
+    let subtitleLeading = Metric(1.0, .anatomy("\(capture): paragraph lines 30 px apart"))
+    let inkOpacity = Metric(0.6, .anatomy("\(capture): 'Default Shortcuts' and the side paragraph are darker than the pane's grey descriptions"))
+    let essentialsWidth = Metric(215.0, .anatomy("\(capture): Learn the Essential Shortcuts spans x 602 to 1032 px"))
+    let moreGap = Metric(1.0, .anatomy("\(capture): Reset All Shortcuts ends at x 1118 px, the … circle starts at 1127 px"))
 }

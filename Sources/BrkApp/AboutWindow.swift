@@ -148,12 +148,12 @@ struct AboutMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P39/P39-a-arc.png"
     let window = Metric(CGSize(width: 360, height: 262), .anatomy("\(capture): 720 x 524 px"))
     let icon = Metric(64.0, .anatomy("\(capture): the icon's tile spans x 308 to 412 px, a 64-point canvas"))
-    let iconTop = Metric(17.0, .anatomy("\(capture): the title bar ends at y 64 px, the tile starts near 122 px"))
-    let nameTop = Metric(8.0, .anatomy("\(capture): the tile ends near y 212 px, the name is centred at 257 px"))
-    let nameSize = Metric(14.0, .guess("the standard About panel's bold name"))
-    let versionTop = Metric(5.0, .anatomy("\(capture): the name centred at y 257 px, the version line at 300 px"))
+    let iconTop = Metric(16.5, .anatomy("\(capture): the title bar ends at y 64 px, the tile starts near 122 px"))
+    let nameTop = Metric(7.5, .anatomy("\(capture): the tile ends near y 212 px, the name is centred at 257 px"))
+    let nameSize = Metric(13.0, .anatomy("\(capture): the name's capitals are 18 px tall (y 247 to 265 px), a 13 pt bold line"))
+    let versionTop = Metric(8.0, .anatomy("\(capture): the name centred at y 257 px, the version line at 300 px"))
     let textSize = Metric(11.0, .anatomy("\(capture): the version lines are 29 px apart"))
     let copyrightTop = Metric(8.0, .anatomy("\(capture): the engine line centred at y 329 px, the copyright at 374 px"))
-    let creditsTop = Metric(9.0, .anatomy("\(capture): the copyright centred at y 374 px, the credits' first line at 418 px"))
+    let creditsTop = Metric(8.0, .anatomy("\(capture): the copyright centred at y 374 px, the credits' first line at 418 px"))
     let creditsInset = Metric(20.0, .anatomy("\(capture): the credits span about x 48 to 682 px"))
 }

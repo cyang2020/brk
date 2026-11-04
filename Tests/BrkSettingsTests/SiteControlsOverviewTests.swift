@@ -28,13 +28,14 @@ final class SiteControlsOverviewTests: XCTestCase {
     func testSecurityRowShowsOnlyForWebPagesWithArcsHeights() throws {
         let host = SiteControlsHost(frame: .zero)
         host.render(snapshot(nil)) { _ in }
-        XCTAssertEqual(host.preferredSize, CGSize(width: 237, height: 202))
+        XCTAssertEqual(host.preferredSize, CGSize(width: 237, height: 199.5))
         XCTAssertEqual(try XCTUnwrap(chip(in: host)).isHidden, true)
 
         var resized: CGSize?
         host.onResize = { resized = $0 }
         host.render(snapshot("http://127.0.0.1:8764/home.html")) { _ in }
-        XCTAssertEqual(host.preferredSize, CGSize(width: 237, height: 255))
+        // P36-a: the body spans y 182 to 689 px (253.5 pt) in Arc's capture.
+        XCTAssertEqual(host.preferredSize, CGSize(width: 237, height: 254))
         XCTAssertEqual(resized, host.preferredSize, "the popover grows with the security row")
         let insecure = try XCTUnwrap(chip(in: host))
         XCTAssertFalse(insecure.isHidden)
