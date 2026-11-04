@@ -6958,7 +6958,8 @@
         }
       ],
       "remaining": [
-        "Native scenario 7 covers sweep and restore; add full filter, clear-confirmation and threshold UI checks, including restart."
+        "Native scenario 7 covers sweep and restore; add full filter, clear-confirmation and threshold UI checks, including restart.",
+        "R4-8 独立复核（2026-11-04）：证据不足。证据不足：验收里的“修改 Profile 的阈值”只有单元测试，没有原生场景经归档页 Filter 菜单改阈值、再看归档跟着变，也没有重启后的阈值检查——这正是台账 remaining 写明要补的“threshold UI checks, including restart”。按日期分组、过滤、恢复、清空确认都有原生证据。Arc 改阈值时的两句提示（应用到全部 Profile 还是本 Profile、Arc will now archive your tabs after…）Brk 没有，Arc 画面未拍到，见 A115。"
       ],
       "implementation": [
         "Sources/BrkLibrary/ArchivePageView.swift",
@@ -7024,7 +7025,8 @@
         }
       ],
       "remaining": [
-        "Native nested group/split structural restore passed. New unit tests cover blank panes, fractions and profile-safe fallback. Complete collision/deleted-space native cases."
+        "Native nested group/split structural restore passed. New unit tests cover blank panes, fractions and profile-safe fallback. Complete collision/deleted-space native cases.",
+        "R4-8 独立复核（2026-11-04）：证据不足。整组和分屏作为一个整体归档、恢复的主路径通过。证据不足：台账 remaining 写明要补的“恢复时位置冲突、原 Space 已删除”两种原生场景仍然没有；这次的原生恢复走的是 Cmd+Shift+T，不是归档页里的 Restore（两者在 Rules/Archive.swift 里是同一个恢复函数）；文件夹自己的图标没有断言（断言的是分屏的图标）。IndependentTabsReviewTests.testArchiveCollisionRemapsAndInvalidBulkArchiveIsAtomic 覆盖冲突，但不在本次跑的测试里。"
       ],
       "implementation": [
         "Sources/BrkDomain/Model.swift",
@@ -7165,7 +7167,8 @@
       ],
       "remaining": [
         "Threshold copy and dismissal persistence are implemented. Initial capture exposed truncation; the button now uses a wrapping square style. Inspect a final native capture and dismissal/restart result.",
-        "Arc 对照（run-20261103 P16）仍有差异或无参照：P16-a: 未比较（待用户决定是否在 Arc 里新建 Profile 取参照） | P16-b: 一致"
+        "Arc 对照（run-20261103 P16）仍有差异或无参照：P16-a: 未比较（待用户决定是否在 Arc 里新建 Profile 取参照） | P16-b: 一致",
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷：文字和样子与 Arc 不同。Arc 1.170 二进制里的提示是“Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in Settings.”（Settings 是链接）；Brk 是“Idle Today tabs archive after 12 hours. Tabs on screen stay open.”（阈值为 Never 时是 “Auto-archive is off. Change it in Archive.”），没有指向设置的链接；整块是一个系统方形按钮，文字后面接一个 ×，点哪里都会关掉。画面检查做不了：P16-a 没有 Arc 参照（要在 Arc 里新建 Profile 才会出现，待用户决定），P16 不在站台 sheet 上。"
       ],
       "implementation": [
         "Sources/BrkDomain/Model.swift",
@@ -8819,7 +8822,8 @@
       "verification": [],
       "remaining": [
         "No complete user-facing workflow is implemented in current source.",
-        "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。"
+        "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。",
+        "R4-8 独立复核（2026-11-04）：缺陷。新建、画、文字、改动（选中、移动、删除、复制）、重开、Library 列表、删除都通过。缺陷：选中元素时四个角画出了把手，但拖把手不会改大小（按下把手落到移动或框选），是只画不响应的控件；复现：新建 Easel → 方形工具画一个方块 → 选择工具点中它 → 拖右下角把手，方块只会整体移动或开始框选，大小不变。验收里的“带截图”和“导出结果”只有单元测试：Media 卡片 Insert in Easel 把截图放进白板、胶囊 Share 存成 PNG 都没有原生场景。撤销、选颜色没做（R3-3 已写明），Arc 是否有这两样这次没有核对。"
       ]
     },
     {
@@ -9809,7 +9813,7 @@
       "arc_evidence": "row 3; anatomy-m 4.1 (nine panes)",
       "description": "Account, General, Max, Profiles, Shortcuts, Links, Advanced, App Icon",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Provide General, Max, Profiles, Shortcuts, Links, Advanced and App Icon panes in a native settings window; omit excluded Account features.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9845,12 +9849,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test --filter 'SettingsSpecTests|SharedQuoteTests|SettingsBehaviourTests|SettingsHostTests|QuitModalRunLoopTests|PageDragStripTests|ReorderHapticsTests|ProfilesSpecTests|MediaSoundTests|BoostTests|SpaceToolsTests|SitePolicyTests|CaptureTests|BrowserBasicTests'",
+          "artifact": "verify/completion/review-r4/ai-settings-library/unit-settings.log",
+          "scope": "本次在 R4-8 工作树重跑，137 个测试 0 失败。SettingsHostTests、SettingsSpecTests.test_openPaneAndCloseWindowDriveTheSettingsWindow、test_theSnapshotCarriesWhatEveryPaneShows 通过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-settings-library --only W2-1,W2-1-edit,W2-10,W2-11,SettingsQuit,SettingsPageDrag,SettingsQuotes,SettingsIcon,BB3,MediaSounds,PB6,SpaceTools-1,SitePolicy-appearance,R36-HoverCards,7,TabTools2,TabTools6,EaselNew,EaselDraw,EaselReopen,EaselLibrary,EaselDelete --run-timeout 1200",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-settings-library/REPORT.md",
+          "scope": "22 个场景 19 通过、3 失败（MediaSounds、EaselNew 退出时 CEF 关停超时被看门狗结束，断言本身已过；R36-HoverCards 等文件夹悬停卡 4 秒超时），三个失败项已单独重跑通过（见 r4-8-rerun1）。W2-1（Preferences… 打开 Links 页，开关经真实控件改动并在重启后保留）、W2-1-edit（General、Max、Advanced、Profiles、Shortcuts 各页经真实控件编辑，Escape、Cmd+,、Cmd+W 开关窗口，重启后编辑都在）、SettingsIcon（Icon 页）都通过。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-r3 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv",
+          "scope": "站台 main cfa87d56 与真实 Arc 1.170 并排（Brk 图在 /tmp/station-parent/final-r3/，参照在 verify/visual-pairs/run-20261103/<编号>/）：P38-a 2.53%、P38-d 4.09%、P38-e 5.20%、P38-g 4.03%、P38-h 5.26%（父任务第三轮逐项核过为一致）、P38-f 6.92%（剩余为数据或他组）、P38-b 10.45% 与 P38-c 15.09%（Max 页，见 A142）。窗口顶部七个分页的顺序和 Arc 去掉账号页后一致；剩余差异：Max、Icon 两个分页的小图标是 Brk 自己的（Arc 用 Max 花形和 Arc 标志）。"
         }
       ],
       "remaining": [
         "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features.",
         "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
-        "R3-2（2026-11-04，合并 05c81d7b）：Icon 页补上，各页开关接到了行为（见 A114–A117）。"
+        "R3-2（2026-11-04，合并 05c81d7b）：Icon 页补上，各页开关接到了行为（见 A114–A117）。",
+        "R4-8 独立复核（2026-11-04）：通过。设置窗口有 General、Profiles、Max、Links、Shortcuts、Icon、Advanced 七页，没有账号页（排除项）。各页开关的实际效果分别在 A114、A115、A117、A118、A142 里判断。P38 各对图降到 2% 以内是 R4-3 的任务。"
       ],
       "implementation": [
         "Sources/BrkApp/SettingsWindowController.swift",
@@ -9871,7 +9897,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Warn before quitting, auto update, previews, ad blocker, translation",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "General settings must actually warn before quit and control previews, ad blocking and translation; updater remains deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -9899,11 +9925,33 @@
           "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
           "artifact": "verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test --filter 'SettingsSpecTests|SharedQuoteTests|SettingsBehaviourTests|SettingsHostTests|QuitModalRunLoopTests|PageDragStripTests|ReorderHapticsTests|ProfilesSpecTests|MediaSoundTests|BoostTests|SpaceToolsTests|SitePolicyTests|CaptureTests|BrowserBasicTests'",
+          "artifact": "verify/completion/review-r4/ai-settings-library/unit-settings.log",
+          "scope": "本次在 R4-8 工作树重跑，137 个测试 0 失败。SettingsSpecTests.test_warnBeforeQuittingIsSavedAndTheQuitStaysOrdered、QuitModalRunLoopTests、SettingsBehaviourTests.test_adBlockingDefaultsReachEveryPolicy（关掉后没有自己规则的网站不拦截，保存后仍是关）、test_translationFollowsItsSwitch（翻译开关关着时不读网页、开着才读）、SettingsHostTests 里 blockAds / hideCookieBanners 点击发出对应命令，均通过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-settings-library --only W2-1,W2-1-edit,W2-10,W2-11,SettingsQuit,SettingsPageDrag,SettingsQuotes,SettingsIcon,BB3,MediaSounds,PB6,SpaceTools-1,SitePolicy-appearance,R36-HoverCards,7,TabTools2,TabTools6,EaselNew,EaselDraw,EaselReopen,EaselLibrary,EaselDelete --run-timeout 1200",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-settings-library/REPORT.md",
+          "scope": "22 个场景 19 通过、3 失败（MediaSounds、EaselNew 退出时 CEF 关停超时被看门狗结束，断言本身已过；R36-HoverCards 等文件夹悬停卡 4 秒超时），三个失败项已单独重跑通过（见 r4-8-rerun1）。SettingsQuit 通过：开着时 Cmd+Q 弹确认，Cancel 不退出，勾“不再询问”后 Quit 经有序退出并把开关存为关，关着时 Cmd+Q 立刻退出。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-rerun1 --only MediaSounds,EaselNew,R36-HoverCards --run-timeout 600",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-rerun1/REPORT.md",
+          "scope": "单独重跑上一轮失败的 MediaSounds、EaselNew、R36-HoverCards：3 通过，18.9 秒。R36-HoverCards 单独重跑通过：Previews 开着时文件夹和日历收藏有悬停卡，普通标签没有，关掉 Previews 后不再出卡（第一轮整批跑时等卡超时，单独重跑通过）。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
         }
       ],
       "remaining": [
         "Wire quit confirmation into ordered shutdown; implement previews, blocker and translation controls with their platform consumers.",
-        "R3-2（2026-11-04，合并 05c81d7b）：Warn before quitting 接到有序退出（Cmd+Q、菜单、Dock 退出先问，SIGTERM/控制口/注销不问；对话框挂在当前窗口上，不是独立对话框，Arc 的样子没拍到，待补拍）；Previews 原来就接好；拦截广告和跟踪器（默认开）、Block Cookie Banners（默认关）两个开关放在 Advanced 的 More Settings… 里（Arc 的 General 页截图里没有这两项）；翻译用现有的 Translate Pages 开关，补了开关关着时不读网页的测试。原生场景 SettingsQuit 通过。"
+        "R3-2（2026-11-04，合并 05c81d7b）：Warn before quitting 接到有序退出（Cmd+Q、菜单、Dock 退出先问，SIGTERM/控制口/注销不问；对话框挂在当前窗口上，不是独立对话框，Arc 的样子没拍到，待补拍）；Previews 原来就接好；拦截广告和跟踪器（默认开）、Block Cookie Banners（默认关）两个开关放在 Advanced 的 More Settings… 里（Arc 的 General 页截图里没有这两项）；翻译用现有的 Translate Pages 开关，补了开关关着时不读网页的测试。原生场景 SettingsQuit 通过。",
+        "R4-8 独立复核（2026-11-04）：通过。退出确认、Previews、翻译（Max 页 Translate Pages）都有开和关两种行为的证据。拦截广告和 Cookie 横幅两个开关按父任务的决定放在 Advanced → More Settings…，关掉后的效果只有单元测试（域层规则变化），网页真的不再拦截没有原生跑（拦截规则本身在 SiteFilters 场景里有原生证据，本次未重跑）。退出确认对话框是挂在当前窗口上的表单，Arc 的样子还没拍到（父任务在补拍），拍到后需再对一次。更新器按台账推迟。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -9957,7 +10005,8 @@
       ],
       "remaining": [
         "Add default document app behavior and native per-profile checks for each setting.",
-        "R3-2（2026-11-04，合并 05c81d7b）：New documents 下拉能选七个网页文档应用（Google Docs/Sheets/Slides、Word、Notion、Figma、FigJam），每个 Profile 各存一份；选了之后命令栏输入 new doc 出现 New Google Doc 这类一行，回车新开该应用的新建文档页。除 Google Doc 外几个应用的命令栏文案是任务起的。"
+        "R3-2（2026-11-04，合并 05c81d7b）：New documents 下拉能选七个网页文档应用（Google Docs/Sheets/Slides、Word、Notion、Figma、FigJam），每个 Profile 各存一份；选了之后命令栏输入 new doc 出现 New Google Doc 这类一行，回车新开该应用的新建文档页。除 Google Doc 外几个应用的命令栏文案是任务起的。",
+        "R4-8 独立复核（2026-11-04）：证据不足。证据不足：台账 remaining 要求的“每项设置按 Profile 的原生检查”还缺两项——没有原生场景在 Profiles 页选 New documents 应用后从命令栏新建文档，也没有原生场景改 Archive tabs after 阈值（grep Sources/BrkE2E 里没有 documentApp( 和 autoArchive(.，见 static-library-easel.txt）；这两项只有单元测试。另外 Arc 的二进制里有改阈值时的提示“Would you like to apply this change to all of your Profiles, or only your %@ Profile?”和“Arc will now archive your tabs after %@”，Brk 没有；Arc 这一步的画面没拍到，拍到后再判断是不是缺陷。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
@@ -10033,7 +10082,7 @@
       "arc_evidence": "anatomy-m 4.2",
       "description": "Restore windows, sounds, haptics, toolbar URL, window dragging, auto PiP, theme CSS, Boosts, shared quotes, update channel",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Each Advanced switch must change the named runtime behavior; updates and update-channel selection may remain deferred.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10068,11 +10117,33 @@
           "command": "python3 verify/completion/native-grounding/run-probes.py",
           "artifact": "verify/completion/native-grounding/probe-output.txt",
           "scope": "Reproduces the documented limitation with unchanged production code; this pass is a successful reproduction, not feature acceptance."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test --filter 'SettingsSpecTests|SharedQuoteTests|SettingsBehaviourTests|SettingsHostTests|QuitModalRunLoopTests|PageDragStripTests|ReorderHapticsTests|ProfilesSpecTests|MediaSoundTests|BoostTests|SpaceToolsTests|SitePolicyTests|CaptureTests|BrowserBasicTests'",
+          "artifact": "verify/completion/review-r4/ai-settings-library/unit-settings.log",
+          "scope": "本次在 R4-8 工作树重跑，137 个测试 0 失败。九个开关各自的开关行为：BrowserBasicTests.testRestoreOffKeepsDocumentsButStartsOneEmptyWindow（恢复窗口）、MediaSoundTests 两项（音效）、ReorderHapticsTests.testReorderingTicksOnlyWithTheSwitchOn（重排触感）、SpaceToolsTests.testToolbarUsesWindowAddressAndFullURLPreference（工具栏完整网址）、PageDragStripTests（页面顶部拖动）、CaptureTests 两项（自动画中画）、SitePolicyTests 的 themeToCSS 几项（主题 CSS）、BoostTests.testGlobalPreferenceRemovesAllInjectionAndZapTogglePreservesDraft（Boosts 关掉后页面不再注入）、SharedQuoteTests 两项（Shared Quotes），均通过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-settings-library --only W2-1,W2-1-edit,W2-10,W2-11,SettingsQuit,SettingsPageDrag,SettingsQuotes,SettingsIcon,BB3,MediaSounds,PB6,SpaceTools-1,SitePolicy-appearance,R36-HoverCards,7,TabTools2,TabTools6,EaselNew,EaselDraw,EaselReopen,EaselLibrary,EaselDelete --run-timeout 1200",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-settings-library/REPORT.md",
+          "scope": "22 个场景 19 通过、3 失败（MediaSounds、EaselNew 退出时 CEF 关停超时被看门狗结束，断言本身已过；R36-HoverCards 等文件夹悬停卡 4 秒超时），三个失败项已单独重跑通过（见 r4-8-rerun1）。BB3（恢复窗口关掉后重启只开一个空窗口、不加载保存的页面）、SettingsPageDrag（开：页面顶部窄条拖动窗口；关：没有窄条，同样拖动窗口不动）、SettingsQuotes（开：Copy URL 带 #:~:text= 指向选中文字；关：纯地址）、PB6（开：用户激活过期后离开视频标签自动画中画、回来恢复；关：不进入画中画）、SpaceTools-1（开完整网址后工具栏显示完整地址）、SitePolicy-appearance（主题 CSS 变量开时出现、关时移除）通过。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-rerun1 --only MediaSounds,EaselNew,R36-HoverCards --run-timeout 600",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-rerun1/REPORT.md",
+          "scope": "单独重跑上一轮失败的 MediaSounds、EaselNew、R36-HoverCards：3 通过，18.9 秒。MediaSounds 单独重跑通过：开着时归档、截图、下载完成各提交一次声音且系统声音接受，关掉后归档不再出声，重启后仍是关（第一轮整批跑时断言已过、退出时 CEF 关停超时，单独重跑通过）。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
         }
       ],
       "remaining": [
         "Implement restore policy, sound, reorder haptics, toolbar URL, page dragging, auto PiP, theme CSS, Boosts and quote behavior through their owning layers.",
-        "R3-2（2026-11-04，合并 05c81d7b）：页面顶部拖动窗口（开着且工具栏隐藏时网页顶上 10 点高的透明窄条，高度是估的；原生场景 SettingsPageDrag）、Shared Quotes（选中文字再复制网址得到指向这段文字的链接；SettingsQuotes）、重排触感（侧栏拖动标签排序每换一个位置振一下）新做；恢复窗口、音效、工具栏完整网址、自动画中画、主题 CSS、Boosts 原来就有行为和开关测试。"
+        "R3-2（2026-11-04，合并 05c81d7b）：页面顶部拖动窗口（开着且工具栏隐藏时网页顶上 10 点高的透明窄条，高度是估的；原生场景 SettingsPageDrag）、Shared Quotes（选中文字再复制网址得到指向这段文字的链接；SettingsQuotes）、重排触感（侧栏拖动标签排序每换一个位置振一下）新做；恢复窗口、音效、工具栏完整网址、自动画中画、主题 CSS、Boosts 原来就有行为和开关测试。",
+        "R4-8 独立复核（2026-11-04）：通过。九个开关都有开和关两种行为的证据。重排触感和 Boosts 两个开关只有单元测试：触感无法在原生场景里观测，测试用替身确认只在开着时调用系统触感；Boosts 关掉后页面的 Boost 注入清单为空，注入本身在 Boost-CSS 原生场景里有证据（本次未重跑）。工具栏完整网址的“关”只有单元测试。更新通道按台账推迟。画面一致性（P38-g 4.03%）属于 A113 / R4-3。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -10095,7 +10166,7 @@
       "arc_evidence": "anatomy-m 4.2; `ARCClients_BaseAssets` (10 icons)",
       "description": "Pick one of the app icons",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Pick an available Brk app icon, apply it to the application and retain the choice without account or referral gates.",
       "owner": "native-grounding",
       "required_checks": [
@@ -10117,12 +10188,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P38",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P38: P38-a 2.5% 已修（一致）; P38-b 10.4% 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行）; P38-d 4.1% 已修（一致）; P38-e 5.2% 已修（一致）; P38-f 6.3% 已修（剩余为数据或他组）; P38-g 4.0% 已修（一致）; P38-h 5.3% 已修（一致）; P38-i 站台未拍 有意不同; P38-c 15.1% 已修；剩余为有意不同（Brk 多出的三项功能卡）. References in verify/visual-pairs/run-20261103/P38/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test --filter 'SettingsSpecTests|SharedQuoteTests|SettingsBehaviourTests|SettingsHostTests|QuitModalRunLoopTests|PageDragStripTests|ReorderHapticsTests|ProfilesSpecTests|MediaSoundTests|BoostTests|SpaceToolsTests|SitePolicyTests|CaptureTests|BrowserBasicTests'",
+          "artifact": "verify/completion/review-r4/ai-settings-library/unit-settings.log",
+          "scope": "本次在 R4-8 工作树重跑，137 个测试 0 失败。SettingsSpecTests.test_theAppIconChoicePersists、SettingsHostTests.testEveryFieldDispatchesItsSettingsCommand（点 appIcon-neon 发出 appIcon(.neon)，点当前图标不发命令）通过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r4-8-settings-library --only W2-1,W2-1-edit,W2-10,W2-11,SettingsQuit,SettingsPageDrag,SettingsQuotes,SettingsIcon,BB3,MediaSounds,PB6,SpaceTools-1,SitePolicy-appearance,R36-HoverCards,7,TabTools2,TabTools6,EaselNew,EaselDraw,EaselReopen,EaselLibrary,EaselDelete --run-timeout 1200",
+          "artifact": "verify/completion/review-r4/ai-settings-library/native/r4-8-settings-library/REPORT.md",
+          "scope": "22 个场景 19 通过、3 失败（MediaSounds、EaselNew 退出时 CEF 关停超时被看门狗结束，断言本身已过；R36-HoverCards 等文件夹悬停卡 4 秒超时），三个失败项已单独重跑通过（见 r4-8-rerun1）。SettingsIcon 通过：启动时 Dock 是原图标；在 Icon 页点 Neon 后 Dock 图标变成 Neon 且设置保存；重启后仍是 Neon；点 The Original 恢复原图标。（run-native.py 把结果写在 verify/completion/browser-basic-parent/ 下，跑完原样移到本目录 native/；manifest 里 sourceUnchanged、binariesUnchanged 都是 true，起点 cb5ffb7d，代码与站台 sheet 的 cfa87d56 相同）"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-r3 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-cfa87d56-sheet.tsv",
+          "scope": "站台 main cfa87d56 与真实 Arc 1.170 并排（Brk 图在 /tmp/station-parent/final-r3/，参照在 verify/visual-pairs/run-20261103/<编号>/）：P38-h 5.26%（父任务第三轮核为一致）。剩余差异：图标图案是 Brk 自己的六个（Original、Candy、Neon、Graphite、Schoolbook、Colorful），Arc 是 Arc 标志的变体并在 Candy 后写作者名；Icon 分页的小图标不同。"
         }
       ],
       "remaining": [
         "Implement original Brk icon choices, application integration and persistence; referral exclusion does not exclude the picker.",
         "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
-        "R3-2（2026-11-04，合并 05c81d7b）：App Icon 页能选 Brk 自己的几个图标，选了 Dock 和 About 马上换，重启记住（原生场景 SettingsIcon）。未做：Brk 没运行时访达和 Dock 里仍是原图标（要往签名包里写文件或做 Dock 插件）。"
+        "R3-2（2026-11-04，合并 05c81d7b）：App Icon 页能选 Brk 自己的几个图标，选了 Dock 和 About 马上换，重启记住（原生场景 SettingsIcon）。未做：Brk 没运行时访达和 Dock 里仍是原图标（要往签名包里写文件或做 Dock 插件）。",
+        "R4-8 独立复核（2026-11-04）：通过。选图标、马上应用到 Dock、重启记住、没有账号或推荐门槛，都通过。Brk 没运行时访达和 Dock 里仍显示原图标，这一条归 A131（Dock 插件，R4-4 在做），不在本项验收内。"
       ],
       "implementation": [
         "Sources/BrkDomain/SettingsModel.swift",
@@ -10970,7 +11063,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。功能本身按验收标准通过。缺陷在入口：Arc 1.170 桌面版没有任何页面提问的入口——P44-a 在页面 Cmd+F 输入问句只出现普通查找条（NOT FOUND）；Arc 的 Tabs 菜单（docs/arc-anatomy/model-and-shortcuts.md 第 131–153 行）没有 Ask on Page…；Arc 的 Max 页（P38-max-list）只有六项，没有 Ask on Page。Brk 在 Tabs 菜单多一行 Ask on Page…，Max 页多一张卡（后者父任务已定为有意不同，前者没有决定）。回答显示在右侧 Max · Local CLI 面板，和命令栏 Ask Max（A134）同一个面板，符合 P44 的处理意见“按命令栏 Ask Max 的样式”。画面检查做不了：Arc 没有这个界面，P44 不在站台 sheet 上。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -11059,7 +11153,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷：触发方式和样子都和 Arc 不同。Arc（P45-a，Max 页文案“Instant summaries appear when you hover over links on certain websites. Or hold Shift while hovering to preview any link.”）：按住 Shift 悬停链接约 2 秒，在链接正下方弹出约 235×195 点的白色圆角卡片（粗体标题、四行带小图标的要点、右下角分享圆钮），被悬停的链接加浅灰底，左下角显示地址。Brk：不按 Shift、普通悬停任何链接 600 毫秒就触发，结果出现在内容区右侧的 Max · Local CLI 面板（标题 Link Preview、一段文字、[1] 来源链接、Max Settings… 按钮），链接下方没有卡片。P45 的 Brk 侧不在站台 sheet 上，画面检查未做。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -11144,7 +11239,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷在入口：Arc（P46-b，Max 页文案“Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.”）在 Today 超过六个标签时，鼠标移到 Today 分隔线上，分隔线右端 Clear 左边出现 🧹 Tidy，悬停提示 Organize Today Tabs；Arc 的 Tabs 菜单没有 Organize Today Tabs。Brk 侧栏分隔线上没有 Tidy，入口是 Tabs 菜单里多出的 Organize Today Tabs / Undo Organize Today 两行，结果和撤销按钮在右侧 Max 面板里。Arc 整理后的样子（P46-c/d）没拍到，整理结果的画面无法对照。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -11235,7 +11331,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：证据不足。入口和 Arc 一致（置顶时改标题、下载完成时改名）。证据不足在画面：P47-a 有 Arc 参照（拖进置顶区约 5 秒后标题变成 Sidebar Ellipsis），但 Brk 侧不在站台 sheet 上（R4-5 在补拍法）；P47-b（下载改名）Arc 没拍到。Arc Max 页 Tidy Downloads 的缩略图画的是一个“Download renamed to: 新名 / 原名加删除线”带撤销和 × 的提示，Brk 只在 Downloads 列表里显示新名、没有这种提示，需要拍到 Arc 真实画面才能判断是不是缺陷。"
       ],
       "implementation": [
         "Sources/BrkApp/AIProvider.swift",
@@ -11319,7 +11416,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷在入口和呈现：Arc（Max 页文案“Press Shift + Enter for any web search to instantly open the top result. You can also search multiple queries!”，P48-a/b）在普通命令栏输入后按 Shift+Enter，命令栏关闭，Today 区顶部先插入一行带 Max 图标的 Searching the web for …，然后直接打开结果页，可以一次开多个。Brk：普通命令栏的 Shift+Return 和 Return 一样，只选中高亮的那一行，不会触发 Instant Links；要先从 Tabs 菜单选 Instant Links…（Arc 的 Tabs 菜单没有这一行），输入后只打开一个地址，没有 Today 里的加载行，失败时在右侧面板给 Search Instead。P48 的 Brk 侧不在站台 sheet 上。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -11409,7 +11507,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。功能按验收标准通过。Arc 1.170 桌面版没有 Browse for Me（P49：命令栏输入问句 how do browsers render fonts，列表是搜索建议加一行带 ChatGPT 图标的 Ask ChatGPT →；Tabs 菜单也没有），父任务定的是“Browse for Me 保留 Brk 的做法，命令栏加一行 Ask 入口参照 P49”。缺陷：Brk 的普通命令栏输入问句时没有这行 Ask 入口（只有先进入 AI 模式才出现一行 Ask the local AI tool）；另外 Tabs 菜单多一行 Arc 没有的 Browse for Me…，来源要手打地址。画面检查做不了：Arc 没有这个界面。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -11493,7 +11592,8 @@
         }
       ],
       "remaining": [
-        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md."
+        "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷在入口和界面：Arc（P50-b 到 P50-f）的入口是页面右键菜单里的 Translate to English；选后页面直接换成英文，没有横条也没有弹层，胶囊第二行从 Translation Available 变成 Translated（悬停加下划线）；点 Translated 弹出锚在胶囊下方的 262×126 点小浮层（Aa 图标、Translated from French.、Options 和 Use Original 两个按钮）；Use Original 恢复原文并在内容区右上角出浅绿色提示 Translated back to French! Use ⌘Z to undo.；Options 菜单是 Choose Another Language ›、Never Translate This Site｜Language Settings（按站点，不按语言）。Brk：Tabs 菜单 Translate Page…（Arc 菜单没有）打开顶部输入条 Translate to language (e.g. English)…（P50-a-brk），结果在右侧 Max 面板（Page translated… Reload to restore the original text.），按钮是 Never translate this site、Never translate fr；没有右键菜单项、胶囊第二行、浮层、Use Original 和 ⌘Z 撤销。"
       ],
       "implementation": [
         "Sources/BrkApp/AIProvider.swift",
@@ -11584,7 +11684,8 @@
       ],
       "remaining": [
         "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
-        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）"
+        "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
+        "R4-8 独立复核（2026-11-04）：缺陷。开关本身能用、不要 API key。缺陷：Arc 也有的三张卡，Brk 的说明文字改成了 Brk 自己的入口，和 Arc 不一致——Tidy Tabs：Arc“Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.”，Brk“Choose Organize Today Tabs in the Tabs menu…”；Instant Links：Arc“Press Shift + Enter for any web search to instantly open the top result. You can also search multiple queries!”，Brk“Choose Instant Links… in the Tabs menu or the Command Bar and describe a page…”；5-Second Previews：Arc“…hover over links on certain websites. Or hold Shift while hovering to preview any link.”，Brk“A short summary appears when you hover over a link deliberately. Never in private windows.”（MaxPane.swift:190-192）。这三处要等 A136、A137、A139 的入口改成 Arc 的样子后一起改。ChatGPT in the Command Bar 一卡改名为 Ask Max in the Command Bar，算不算有意不同需要父任务定。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
