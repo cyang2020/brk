@@ -351,6 +351,7 @@ struct ToastMetrics: MetricGroup {
     let actionSymbol = Metric(15.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the share icon is about 12 x 16 pt"))
     let subtitleFont = Metric(11.0, .guess("Arc's toast sublabel (\"With Quote\"); no reference shows one"))
     let actionPadding = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: Save sits 24 px in from its button's edges"))
+    let actionFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/P33-d: Save is 28.5 pt wide, semibold"))
     let actionInset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the Save button ends 14 px before the toast's right edge"))
     let capHeight = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
     let capMinWidth = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
