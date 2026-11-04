@@ -25,7 +25,8 @@ final class AIPreviewCardView: NSView {
         highlight.layer?.cornerRadius = PreviewCardMetrics.highlightRadius.value
         addSubview(highlight)
         addSubview(card)
-        card.onHover = { inside in dispatch(.assist(.previewHover(inside))) }
+        // Only while a card shows: a command from this window closes its open overlay (an empty Little window's bar).
+        card.onHover = { [weak self] inside in if self?.preview != nil { dispatch(.assist(.previewHover(inside))) } }
         card.onShare = { dispatch(.assist(.sharePreview)) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -183,9 +184,8 @@ private final class PreviewCard: NSView {
         addTrackingArea(area)
         tracking = area
     }
-    override func mouseEntered(with event: NSEvent) { onHover(true) }
-    override func mouseExited(with event: NSEvent) { onHover(false) }
-    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { onHover(false) } }
+    override func mouseEntered(with event: NSEvent) { if !isHiddenOrHasHiddenAncestor { onHover(true) } }
+    override func mouseExited(with event: NSEvent) { if !isHiddenOrHasHiddenAncestor { onHover(false) } }
 }
 
 /// The card's round share button: a grey edge around Arc's share glyph.
@@ -227,7 +227,7 @@ enum PreviewCardMetrics {
     static let top = Metric(15.0, .anatomy("\(capture): the title's capitals span y 246 to 270 px in the card at 212 px"))
     static let titleInset = Metric(15.5, .anatomy("\(capture): the title starts at x 777 px"))
     static let titleFont = Metric(13.0, .anatomy("\(capture): bold capitals 19 px tall"))
-    static let titleGap = Metric(7.0, .anatomy("\(capture): the first detail's line is centred at y 307 px, the title at 259 px"))
+    static let titleGap = Metric(4.5, .anatomy("\(capture): the first detail's line is centred at y 307 px, the title at 259 px (station run 1 drew it 5 px lower with 7)"))
     static let textFont = Metric(13.0, .anatomy("\(capture): the details' capitals are 19 px tall"))
     static let lineHeight = Metric(19.0, .anatomy("\(capture): a detail's two lines are centred 38 px apart"))
     static let detailGap = Metric(5.0, .anatomy("\(capture): details start 86 px apart with two 38 px lines each"))
