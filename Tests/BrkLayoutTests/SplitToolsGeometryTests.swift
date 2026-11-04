@@ -5,7 +5,7 @@ import XCTest
 @testable import BrkLayout
 
 final class SplitToolsGeometryTests: XCTestCase {
-    /// Arc draws a header strip at the top of every split pane; the page fills the card under it and its hairline.
+    /// Arc draws a header strip at the top of every split pane; the page fills the card under it, the hairline over its top.
     func testSplitCardsHaveHeadersAndPagesUnderThem() throws {
         let d = LayoutDriver()
         XCTAssertTrue(d.frames().cards.allSatisfy { $0.header == nil && $0.page == $0.rect }, "a single card has a pane header")
@@ -15,7 +15,7 @@ final class SplitToolsGeometryTests: XCTestCase {
         for card in frames.cards {
             let header = try XCTUnwrap(card.header)
             XCTAssertEqual(header, CGRect(x: card.rect.minX, y: card.rect.minY, width: card.rect.width, height: Metrics.content.paneHeaderHeight.value))
-            XCTAssertEqual(card.page.minY, header.maxY + Metrics.content.paneHeaderSeparator.value)
+            XCTAssertEqual(card.page.minY, header.maxY)
             XCTAssertEqual(card.page.maxY, card.rect.maxY)
             XCTAssertEqual(card.page.width, card.rect.width)
         }
@@ -45,7 +45,8 @@ final class SplitToolsGeometryTests: XCTestCase {
         XCTAssertEqual(bottom.panes.count, 2)
         XCTAssertEqual(bottom.slot.maxY, area.maxY)
         XCTAssertEqual(bottom.slot.width, area.width)
-        XCTAssertEqual(bottom.slot.height, bottom.panes[0].height, accuracy: 1)
+        // Stacked panes give their gap from the pane above, so the bottom slot is a gap taller (Arc's P23-c).
+        XCTAssertEqual(bottom.slot.height, bottom.panes[0].height + Metrics.content.splitGap.value, accuracy: 1)
     }
 
     func testDividerAtItsRenderedCenterDoesNotChangeAnyFraction() {

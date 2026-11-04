@@ -164,6 +164,20 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(grey("#757575"), .dark)
     }
 
+    /// writes a light sidebar's titles in the primary's hue as dark as #1A1A1A (Arc 1.170, run-20261103: #F2EAE4 rows
+    /// read #221910, a white theme's #1A1A1A, a pale teal's #001E1D)
+    func test_writesLightSidebarTitlesInThePrimarysHueAtArcsDarkness() throws {
+        func hex(_ c: RGBA) -> String { String(format: "#%02X%02X%02X", Int((c.red * 255).rounded()), Int((c.green * 255).rounded()), Int((c.blue * 255).rounded())) }
+        XCTAssertEqual(hex(sidebarInk(RGBA(hex: "#F2EAE4"))), "#221810")
+        XCTAssertEqual(hex(sidebarInk(RGBA(hex: "#FFFFFF"))), "#1A1A1A")
+        let teal = sidebarInk(RGBA(0.96, 1, 1))
+        XCTAssertEqual(teal.red, 0, accuracy: 0.5 / 255)
+        XCTAssertGreaterThan(teal.green, 0.1)
+        for primary in [RGBA(hex: "#F2EAE4"), RGBA(0.96, 1, 1), RGBA(hex: "#C7C9F0")] {
+            XCTAssertEqual(relativeLuminance(sidebarInk(primary)), relativeLuminance(RGBA(hex: "#1A1A1A")), accuracy: 0.0005)
+        }
+    }
+
     /// lets a forced appearance override the luminance
     func test_letsAForcedAppearanceOverrideTheLuminance() throws {
         let white = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0, appearance: .dark))

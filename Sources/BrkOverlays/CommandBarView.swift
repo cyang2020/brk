@@ -453,7 +453,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
         let scale = window?.backingScaleFactor ?? 2
         hairline.isHidden = attached || results.isEmpty
-        hairline.frame = CGRect(x: o.rowInset.value, y: inputHeight - 1 / scale, width: max(0, width - 2 * o.rowInset.value), height: 1 / scale)
+        // Q01-a/b: the hairline's top is the input row's bottom (64 under the card's top)
+        hairline.frame = CGRect(x: o.rowInset.value, y: inputHeight, width: max(0, width - 2 * o.rowInset.value), height: 1 / scale)
         for (i, row) in rows.enumerated() where i < results.count {
             row.frame = CGRect(x: o.rowInset.value, y: listTop + CGFloat(i) * rowHeight + o.rowVerticalInset.value,
                                width: max(0, width - 2 * o.rowInset.value), height: rowHeight - 2 * o.rowVerticalInset.value)
@@ -473,7 +474,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(scheme == .light ? o.cardShadowAlpha.value : 0.6)
             shadow.shadowBlurRadius = o.cardShadowRadius.value
-            shadow.shadowOffset = NSSize(width: 0, height: -o.cardShadowOffset.value)
+            // the card sits in a flipped view: a positive height drops the shadow below it
+            shadow.shadowOffset = NSSize(width: 0, height: o.cardShadowOffset.value)
             return shadow
         }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor

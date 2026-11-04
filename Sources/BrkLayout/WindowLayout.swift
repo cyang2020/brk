@@ -222,14 +222,27 @@ public enum PeekLayout {
 
 /// Cards and dividers inside the content area.
 public enum ContentLayout {
-    /// Panes side by side (or stacked for `.vertical`): sizes proportional to `fractions` after removing (n-1) x
-    /// splitGap, each rounded to whole points except the last, which takes what is left, so the cards exactly fill
-    /// the area. Dividers are the gaps.
+    /// Panes side by side: sizes proportional to `fractions` after removing (n-1) x splitGap, each rounded to whole
+    /// points except the last, which takes what is left, so the cards exactly fill the area. Dividers are the gaps.
+    /// Stacked (`.vertical`) as Arc stacks them: a pane starts where its share of the whole height begins and the gap
+    /// comes out of the pane above (verify/visual-pairs/run-20261103 P23-c and P23-vsplitmenu, two equal panes in a
+    /// 756 pt area: the top card spans 10...378, the bottom 388...766).
     public static func cards(in area: CGRect, fractions: [Double], orientation: SplitOrientation = .horizontal) -> (cards: [CGRect], dividers: [CGRect]) {
         guard !fractions.isEmpty else { return ([], []) }
         let gap = Metrics.content.splitGap.value
         let total = fractions.reduce(0, +)
         let shares = fractions.map { total > 0 ? $0 / total : 1.0 / Double(fractions.count) }
+        if orientation == .vertical {
+            var starts = [area.minY], running = 0.0
+            for share in shares.dropLast() { running += share; starts.append((area.minY + area.height * running).rounded()) }
+            var cards: [CGRect] = [], dividers: [CGRect] = []
+            for (i, start) in starts.enumerated() {
+                let end = i + 1 < starts.count ? starts[i + 1] - gap : area.maxY
+                cards.append(CGRect(x: area.minX, y: start, width: area.width, height: max(0, end - start)))
+                if i + 1 < starts.count { dividers.append(CGRect(x: area.minX, y: end, width: area.width, height: gap)) }
+            }
+            return (cards, dividers)
+        }
         let span = (orientation == .horizontal ? area.width : area.height) - gap * Double(fractions.count - 1)
         var sizes = shares.map { (span * $0).rounded() }
         sizes[sizes.count - 1] = span - sizes.dropLast().reduce(0, +)
@@ -256,11 +269,12 @@ public enum ContentLayout {
         let total = current.reduce(0, +)
         var shares = current.map { total > 0 ? $0 / total : 1.0 / Double(current.count) }
         let gap = Metrics.content.splitGap.value
-        let span = max(0, (orientation == .horizontal ? area.width : area.height) - gap * Double(current.count - 1))
-        let origin = orientation == .horizontal ? area.minX : area.minY
         let before = shares[0..<divider].reduce(0, +)
         let pair = shares[divider] + shares[divider + 1]
-        let wanted = (position - origin - gap * (Double(divider) + 0.5)) / max(span, 1) - before
+        // Stacked panes: the divider's gap ends where the lower pane's share begins (`cards`).
+        let wanted = orientation == .vertical
+            ? (position + gap / 2 - area.minY) / max(area.height, 1) - before
+            : (position - area.minX - gap * (Double(divider) + 0.5)) / max(area.width - gap * Double(current.count - 1), 1) - before
         let first = min(max(wanted, minimum), pair - minimum)
         shares[divider] = first
         shares[divider + 1] = pair - first
@@ -273,7 +287,7 @@ public enum CommandBarLayout {
     /// Centered: width min(766, area - 160), or area - 20 when the area is narrower than 766; box 338 tall, at least
     /// 24 from top and bottom, centered both ways in the window (Arc's Cmd+T card spans 257...1023 in a 1280 window
     /// whose content area starts at 238: the window's centre, not the content area's), on whole points. Over the pill
-    /// (Cmd+L with the sidebar shown): from the pill's left edge, 1.5 above its top, reaching right over the content,
+    /// (Cmd+L with the sidebar shown): from the pill's left edge, 2 above its top, reaching right over the content,
     /// as wide as the window allows while staying 80 from its right edge, within 100...720; as tall as the box but at
     /// least 24 above the bottom (layout-constants.md "Command bar attached to the toolbar", low confidence). The
     /// visible card inside that box is 350 wide until its input row needs more (`Metrics.commandBar.attachedCardWidth`).

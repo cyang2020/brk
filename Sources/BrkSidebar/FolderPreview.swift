@@ -200,7 +200,8 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = PreviewDraw.radius.value
-        layer?.borderColor = NSColor(white: 0, alpha: 0.08).cgColor
+        // P13-a: the card's 0.5 pt edge reads #AEAEAE on its #F9F9FA, as the command bar's does
+        layer?.borderColor = NSColor(white: 0, alpha: 0.3).cgColor
         layer?.borderWidth = Draw.hairline.value / 2
         shadow = {
             let s = NSShadow()
@@ -289,7 +290,9 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         let glyph = p.glyph.value + 2
         glass.frame = CGRect(x: p.iconCentre.value - glyph / 2, y: (p.searchHeight.value - glyph) / 2, width: glyph, height: glyph)
         let height = search.intrinsicContentSize.height
-        search.frame = CGRect(x: p.textLeading.value, y: (p.searchHeight.value - height) / 2, width: bounds.width - p.textLeading.value - p.listInset.value * 3, height: height)
+        // A field draws its text 1.5 in from its frame (the placeholder starts 37.5 in, P13-a)
+        let searchX = p.textLeading.value - 1.5
+        search.frame = CGRect(x: searchX, y: (p.searchHeight.value - height) / 2, width: bounds.width - searchX - p.listInset.value * 3, height: height)
         let h = heading.intrinsicContentSize.height
         heading.frame = CGRect(x: p.iconCentre.value - Metrics.tablist.favicon.value / 2, y: (p.searchHeight.value - h) / 2, width: bounds.width - 2 * p.iconCentre.value, height: h)
         hairline.frame = CGRect(x: 0, y: p.searchHeight.value, width: bounds.width, height: Draw.hairline.value)
@@ -383,10 +386,13 @@ final class PreviewRowView: HoverView {
         join.frame = CGRect(x: bounds.width - inset - joinWidth, y: (bounds.height - p.joinHeight.value) / 2, width: joinWidth, height: p.joinHeight.value)
         let x = p.textLeading.value - inset - 2
         let t = title.intrinsicContentSize.height, s = time.isHidden ? 0 : time.intrinsicContentSize.height
-        let top = (bounds.height - t - s) / 2
+        // With a caption the title sits titleGap higher; the icon centres on the two lines (P13-a).
+        let gap = time.isHidden ? 0 : p.titleGap.value
+        let top = (bounds.height - t - s) / 2 - gap
         let right = join.isHidden ? bounds.width - inset : join.frame.minX - inset
         title.frame = CGRect(x: x, y: top, width: right - x, height: t)
-        time.frame = CGRect(x: x, y: top + t, width: right - x, height: s)
+        time.frame = CGRect(x: x, y: top + t + gap, width: right - x, height: s)
+        icon.frame.origin.y = (bounds.height - gap - side) / 2
     }
 
     override func stateChanged() {
@@ -420,7 +426,8 @@ struct FolderPreviewMetrics: MetricGroup {
     let shadowAlpha = Metric(0.18, .guess("the folder preview's shadow is light in P13-a"))
     let rowRadius = Metric(8.0, .guess("corner radius of the highlighted page row"))
     let glyph = Metric(13.0, .guess("magnifier size in the search row"))
-    let searchFont = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P13-a: Search 资料… is the size of a row title"))
+    let searchFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 P13-a: Search 资料… is 80 wide, the 13 pt title size"))
+    let titleGap = Metric(2.5, .anatomy("verify/visual-pairs/run-20261103 P13-a: a page's title starts 8.5 below its row's top, its caption ends 31 below"))
     let titleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P13-a: page titles a size under the sidebar's"))
     let timeFont = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P13-a: the grey relative time is the caption size"))
     let joinWidth = Metric(44.0, .guess("calendar card Join capsule width; Arc's calendar preview was not captured (P13 pending)"))

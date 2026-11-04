@@ -125,12 +125,12 @@ final class CommandBarViewTests: XCTestCase {
         let url = "http://127.0.0.1:8764/visual.html"
         var bar = commandBar([candidate("v", "Visual fixture", url, focused: true)], [], initialQuery: url)
         bar.placement = .overURLPill
-        let attached = CGRect(x: 8, y: 44.5, width: 720, height: 338)
+        let attached = CGRect(x: 8, y: 44, width: 720, height: 338)
         view.show(bar, in: attached, scheme: .light, primary: RGBA(hex: "#F2EAE4"))
         XCTAssertEqual(view.style, .attached)
         let card = view.subviews[0].frame
         XCTAssertEqual(card.width, 350)
-        XCTAssertEqual(card.height, 50 + 5 * 50 + 9, "input 50, five rows of 50, 9 under them (P02-b: 309)")
+        XCTAssertEqual(card.height, 50 + 5 * 50 + 10, "input 50, five rows of 50, 10 under them (P02-b: 310)")
         XCTAssertEqual(rows(view.results).first, "current:\(url)")
         bar.placement = .centered
         bar.initialQuery = ""

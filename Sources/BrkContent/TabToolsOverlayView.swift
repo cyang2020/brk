@@ -245,10 +245,10 @@ final class ToastView: NSView {
 
     override var fittingSize: NSSize {
         let m = ToastDraw
-        var width = m.padding.value * 2 + ceil(label.intrinsicContentSize.width)
+        var width = m.padding.value + ceil(label.intrinsicContentSize.width)
         if !cap.isHidden { width += m.gap.value + capWidth }
-        if !trailing.isHidden { width += m.gap.value + ceil(trailing.intrinsicContentSize.width) }
-        if !actionBox.isHidden { width += m.gap.value + actionWidth - m.padding.value + m.actionInset.value }
+        if !trailing.isHidden { width += (cap.isHidden ? m.gap.value : m.capTrailingGap.value) + ceil(trailing.intrinsicContentSize.width) }
+        width += actionBox.isHidden ? m.trailingPadding.value : m.actionGap.value + actionWidth + m.actionInset.value
         return NSSize(width: width, height: m.height.value)
     }
 
@@ -263,17 +263,19 @@ final class ToastView: NSView {
         func place(_ field: NSTextField) {
             let size = field.intrinsicContentSize
             field.frame = CGRect(x: x, y: mid - size.height / 2, width: ceil(size.width), height: size.height)
-            x = field.frame.maxX + m.gap.value
+            x = field.frame.maxX
         }
         place(label)
         if !cap.isHidden {
+            x += m.gap.value
             capBackground.frame = CGRect(x: x, y: mid - m.capHeight.value / 2, width: capWidth, height: m.capHeight.value)
             let size = cap.intrinsicContentSize
             cap.frame = CGRect(x: capBackground.frame.minX, y: mid - size.height / 2, width: capWidth, height: size.height)
-            x = capBackground.frame.maxX + m.gap.value
+            x = capBackground.frame.maxX
         }
-        if !trailing.isHidden { place(trailing) }
+        if !trailing.isHidden { x += cap.isHidden ? m.gap.value : m.capTrailingGap.value; place(trailing) }
         if !actionBox.isHidden {
+            x += m.actionGap.value
             actionBox.frame = CGRect(x: x, y: mid - m.actionHeight.value / 2, width: actionWidth, height: m.actionHeight.value)
             let size = actionLabel.intrinsicContentSize
             actionLabel.frame = CGRect(x: actionBox.frame.minX, y: mid - size.height / 2, width: actionWidth, height: size.height)
@@ -286,8 +288,13 @@ let ToastDraw = ToastMetrics()
 struct ToastMetrics: MetricGroup {
     let top = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: Arc's toast spans y 4 to 50.5 at the content area's top-right"))
     let height = Metric(46.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the toast is 46.5 tall"))
-    let padding = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the text starts 13 in from the toast's left edge"))
-    let gap = Metric(8.0, .guess("space between the toast's text, key cap and trailing text"))
+    /// The labels draw their glyphs about 2.5 in from their frames, so the paddings and gaps below are the measured
+    /// distances less that.
+    let padding = Metric(10.5, .anatomy("verify/visual-pairs/run-20261103 P15-a, P15-c, P33-d: the text starts 13 in from the toast's left edge"))
+    let trailingPadding = Metric(13.5, .guess("P15-a: \"to undo\" ends about 14 before the toast's right edge, which Arc's Boost panel covers in the references"))
+    let gap = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103 P15-a: \"Use\" ends 10 before the ⌘Z key cap"))
+    let capTrailingGap = Metric(3.5, .anatomy("verify/visual-pairs/run-20261103 P15-a: \"to undo\" starts 6 after the key cap"))
+    let actionGap = Metric(8.0, .guess("space between the toast's text and its button (P33-d)"))
     let font = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: Space deleted! Use is about 121 wide"))
     let radius = Metric(12.0, .guess("toast corner radius; P15 shows rounded corners like the URL pill's"))
     let border = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: a 1 px #AFB9B9 edge"))
@@ -298,6 +305,6 @@ struct ToastMetrics: MetricGroup {
     let actionInset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the Save button ends 14 px before the toast's right edge"))
     let capHeight = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
     let capMinWidth = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))
-    let capPadding = Metric(7.0, .guess("side padding inside the key cap for longer shortcuts"))
+    let capPadding = Metric(4.75, .anatomy("verify/visual-pairs/run-20261103 P15-a and P15-c: the ⌘Z key cap is 73 px (36.5 pt) wide"))
     let capRadius = Metric(7.0, .guess("key cap corner radius"))
 }

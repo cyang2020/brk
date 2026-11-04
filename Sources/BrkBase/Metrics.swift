@@ -190,8 +190,11 @@ public struct ContentMetrics: MetricGroup {
     public let cornerRadius = Metric(6.0, .arc("Content card corner radius"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
-    public let shadowRadius = Metric(10.0, .guess("shadow radius and opacity were not recovered; the spike's value"))
-    public let shadowOpacity = Metric(0.2, .guess("visual-and-copy.md Shadow token #000000 @ 0.2 (light); the draw value was not recovered"))
+    /// Measured round Arc's card (verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
+    /// within 9 pt, 7% just above it within 5. A split's focused pane casts a wider one (BrkContent's SplitDropDraw).
+    public let shadowRadius = Metric(2.9, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the edges fade like a 2.9 pt Gaussian"))
+    public let shadowOpacity = Metric(0.22, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: 12% under the card plus 7% over it"))
+    public let shadowOffset = Metric(1.4, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the shadow sits 1.4 pt below the card"))
     public let highlightBorder = Metric(2.0, .arc("Content highlight border width", .medium))
     public let splitGap = Metric(10.0, .arc("Split view gap between panes", .low))
     /// Each split pane's header (back, forward, reload, host, close) and the hairline under it.
@@ -227,10 +230,10 @@ public struct CommandBarMetrics: MetricGroup {
     /// Over the URL pill the card starts at the pill's left edge, 1.5 above its top, and is 350 wide until its input
     /// row needs more (P02-b: x 8 to 358 over a pill at 8...220, y 46; P02-c grows to 359 for "Search Google Docs").
     public let attachedCardWidth = Metric(350.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: edit card 350 pt wide"))
-    public let attachedTopOffset = Metric(-1.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: card top 44.5, pill top 46"))
+    public let attachedTopOffset = Metric(-2.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b/c: the card's top edge 44 (88 px), the pill's top 46"))
     /// Rows start right under the input row over the pill and 5 under the hairline when centered; 9 under the last row.
-    public let centeredListTop = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Q01-a Arc capture: first row 5 under the hairline"))
-    public let listBottom = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b and Q01-a Arc captures: 9 under the last row"))
+    public let centeredListTop = Metric(4.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures Q01-a/b: the hairline 64 under the card's top, the first highlight 70.5 (a row's highlight is 2 in)"))
+    public let listBottom = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b, Q01-a/b: the card's bottom edge 10 under the last row's frame (Q01: 547.5 for a top at 219)"))
     public let stackSpacing = Metric(10.0, .arc("Command bar inner spacing", .medium, note: "stack spacing 10"))
     public let contentInset = Metric(12.0, .arc("Command bar inner spacing", .medium, note: "inset 12"))
     public let openBounceFrom = Metric(0.95, .arc("Command bar opening bounce", .medium))
