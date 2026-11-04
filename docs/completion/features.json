@@ -4940,7 +4940,7 @@
       "arc_evidence": "rows 10 to 12, 14, 168, 169, 175",
       "description": "Standard window and app commands",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Hide, Hide Others, Show All, Minimize, Zoom and Bring All to Front affect the intended native app/window and preserve page/native responder focus.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -4961,12 +4961,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 /tmp/brk-manual/session.py verify/completion/review-r4/manual/parent-session-3  # 脚本副本在同目录 session.py",
+          "artifact": "verify/completion/review-r4/manual/parent-session-3/session.log",
+          "scope": "父任务手工会话（自己的实例，真菜单点击和窗口服务器按键）：Window > Zoom 放大再还原；真 Cmd+M 最小化（miniaturized=True），从 Dock 回来后 isKey=True 且页面焦点保留；真 Cmd+N 第二个窗口；Finder 在前时点 Bring All to Front 后本应用成为前台、两个窗口都在屏幕上；真 Cmd+H 隐藏（appHidden=True），再激活后恢复。Hide Others 没跑（共用机器）。"
         }
       ],
       "remaining": [
         "Verify actual native window ordering, minimize/restore and responder recovery from menus and keys on multiple windows; selector existence alone is insufficient.",
         "R4-6 独立复核（2026-11-04）：证据不足。Hide Others、Show All、Zoom、Bring All to Front 没有任何原生效果证据，单元测试只核了菜单项的 selector；六项都没有通过真实菜单项驱动；多窗口时作用到哪个窗口没有检查。required_checks 里的 manual 也没有：这台机器是共用的，Hide Others / Show All 会隐藏或显示别的程序（包括其他任务的 Brk 和用户的 Arc），复核没有做。",
-        "2026-11-04：R49-WindowMenu 在父任务工作树独立通过（main d07a0162）。父任务查出并修了一个回退：R4-1 把红黄绿按钮静止时的透明度设成 0，AppKit 因此不再最小化窗口（Cmd+M、Window > Minimize、Dock 都失效，8fbb7648 起），改成 0.01 后恢复。Hide Others 在共用机器上不跑。"
+        "2026-11-04：R49-WindowMenu 在父任务工作树独立通过（main d07a0162）。父任务查出并修了一个回退：R4-1 把红黄绿按钮静止时的透明度设成 0，AppKit 因此不再最小化窗口（Cmd+M、Window > Minimize、Dock 都失效，8fbb7648 起），改成 0.01 后恢复。Hide Others 在共用机器上不跑。",
+        "2026-11-04 父任务手工会话通过（verify/completion/review-r4/manual/parent-session-3/session.log）。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -5035,7 +5043,7 @@
       "arc_evidence": "anatomy-m 1.8 `WindowState.stayOnTop`",
       "description": "Keeps a window above others",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "A per-window stay-on-top control changes native stacking level, can be reversed, and has tested restore/fullscreen/multiwindow behavior.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -5093,13 +5101,21 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 /tmp/brk-manual/session.py verify/completion/review-r4/manual/parent-session-3  # 脚本副本在同目录 session.py",
+          "artifact": "verify/completion/review-r4/manual/parent-session-3/session.log",
+          "scope": "父任务手工会话：Window > Stay on Top 后 windowLevel=3（浮动）；真 Ctrl+Cmd+F 进全屏（窗口 0,0 1920×1080，层级降回 0）；再按一次退出，层级回到 3；再点菜单关掉后 0。"
         }
       ],
       "remaining": [
         "Complete native fullscreen, restart and multiple-window stacking/focus coverage.",
         "R4-6 独立复核（2026-11-04）：证据不足。全屏下的行为没有任何测试；重启只有单元测试里的存档标志；多窗口只是拿空白窗口当参照。required_checks 的 manual 没做。",
         "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-StayOnTop 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-StayOnTop 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "2026-11-04 父任务手工会话通过（verify/completion/review-r4/manual/parent-session-3/session.log）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -7852,7 +7868,7 @@
       "arc_evidence": "Links pane; anatomy-m 1.10 `LittleBrowserEntryPoint`",
       "description": "Links from other apps, global hotkey, Opt+Cmd+click, menu bar item",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "External links, global hotkey, Option+Cmd link click and menu-bar entry can open Little Brk, with correct destination profile and private-link protections.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -7894,6 +7910,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 /tmp/brk-manual/session.py verify/completion/review-r4/manual/parent-session-3  # 脚本副本在同目录 session.py",
+          "artifact": "verify/completion/review-r4/manual/parent-session-3/session.log",
+          "scope": "父任务手工会话：从 shell 用 open -a <本实例的 app 包> 发一条 http 链接，本实例新开一个 Little 窗口显示该页（截图 A085-external-link.png，窗口顶部 Open in 对照 ⌘O）。默认浏览器未改。"
         }
       ],
       "remaining": [
@@ -7902,7 +7925,8 @@
         "R3-6（2026-11-04，合并 2c2f3306）：全局快捷键改成独占注册，别的程序占着时注册失败并报给程序状态，设置 Links 页多一行说明；状态栏菜单入口可用。原生场景 R36-LittleEntry（用自己的数据目录和 ⌃⌥⇧⌘L：Finder 在前台时按下能开 Little Arc；被占用报 -9878；关掉开关无反应；辅助功能点状态栏菜单能开）。注意：每个 Brk 启动时仍先按默认 ⌥⌘N 注册一次（原有行为），要不要给测试实例加一个关掉全局快捷键的环境变量待定。",
         "R4-6 独立复核（2026-11-04）：证据不足。真实外部程序发来的链接没有验证；标准窗口里 Option+Cmd 点链接开 Little Arc 没有原生证据；目标 Profile 没有原生断言。required_checks 的 manual 没做（外部链接要不改默认浏览器才安全，R4-4 第 3 条在做 brk-test:// 的真实链接）。",
         "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-LittleEntry 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-LittleEntry 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "2026-11-04 父任务手工会话通过（verify/completion/review-r4/manual/parent-session-3/session.log）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -8108,7 +8132,7 @@
       "arc_evidence": "row 135",
       "description": "Shift+Cmd+E peeks Gmail",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Shift+Cmd+E opens the intended Gmail Peek in the correct profile with normal Peek controls and no account-system integration.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -8151,13 +8175,21 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 /tmp/brk-manual/session.py verify/completion/review-r4/manual/parent-session-3  # 脚本副本在同目录 session.py",
+          "artifact": "verify/completion/review-r4/manual/parent-session-3/session.log",
+          "scope": "父任务手工会话：真 Shift+Cmd+E 打开 Gmail 的 Peek（内容区内卡片，右侧 ×、展开、分屏三个圆钮，页面停在 Google 登录页，未登录；截图 A088-peek.png），真 Escape 关掉（窗口数 5→4）。"
         }
       ],
       "remaining": [
         "Loaded Gmail destination/dismissal and authenticated multi-account reference are not proved; only fixtures were used.",
         "R4-6 独立复核（2026-11-04）：证据不足。没有原生场景看过 Shift+Cmd+E 打开的 Peek（PB1 只查按键路由到了 peekEmail）；非默认 Profile 没有测试；required_checks 的 manual 需要登录的 Gmail，这次没做。",
         "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['manual']（没有对应的 Arc 参照对）。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-PeekEmail 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-PeekEmail 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "2026-11-04 父任务手工会话通过（verify/completion/review-r4/manual/parent-session-3/session.log）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Peek.swift",
