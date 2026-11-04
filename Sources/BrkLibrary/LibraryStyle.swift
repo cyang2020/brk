@@ -170,7 +170,7 @@ struct HistoryPageMetrics: MetricGroup {
     let rowTitleFont = Metric(12.0, .anatomy("Q05-a: \"Visual fixture\" is 75 pt wide, medium (12.5 pt measured 78)"))
     let rowDetailFont = Metric(12.0, .anatomy("Q05-a: \"127.0.0.1:8764\" is 79.5 pt wide (12.5 pt measured 82)"))
     let timeFont = Metric(11.5, .anatomy("Q05-a: \"1:06 PM\" is 44 pt wide"))
-    let gapHeight = Metric(16.0, .anatomy("Q05-a: a session break adds a 16 pt line under the time column"))
+    let gapHeight = Metric(15.0, .anatomy("Q05-a: a session break adds 15 pt (12:53 to 12:18 PM is 51 pt), its line the whole height under the time column"))
     let gapMinutes = Metric(15.0, .guess("visits further apart than this show a break, Chromium's history page threshold"))
     let menuTrailing = Metric(32.0, .anatomy("Q05-a: the ⋮ button is centred 32 from the card's right"))
 }

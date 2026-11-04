@@ -54,7 +54,7 @@ final class HistoryPageViewTests: XCTestCase {
         XCTAssertEqual(shownRows[0].texts, ["3:05 PM", "Fixture Page 2", "127.0.0.1:9"])
         XCTAssertEqual(shownRows[2].texts, ["2:25 PM", "swift.org/blog", "swift.org"], "an untitled visit shows its address")
         let today = try XCTUnwrap(shown(view).compactMap { $0 as? HistoryDayCard }.first)
-        XCTAssertEqual(today.height, 69 + 3 * 36 + 16 + 8, "a break between 3:00 PM and 2:25 PM")
+        XCTAssertEqual(today.height, 69 + 3 * 36 + 15 + 8, "a break between 3:00 PM and 2:25 PM")
         view.render(nil, page: nil, in: nil, scheme: .light, now: now)
         XCTAssertTrue(view.isHidden)
     }

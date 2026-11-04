@@ -543,7 +543,7 @@ private final class HistoryGapView: NSView {
         wantsLayer = true
         let line = CALayer()
         line.backgroundColor = colors.secondary.cgColor
-        line.frame = CGRect(x: 78, y: 1, width: 1, height: 14)
+        line.frame = CGRect(x: 78, y: 0, width: 1, height: LibraryDraw.history.gapHeight.value)
         layer?.addSublayer(line)
     }
 
