@@ -247,12 +247,11 @@ private final class SpaceCardView: NSView {
         gradient.colors = (tint.count == 1 ? [tint[0], tint[0]] : Array(tint.prefix(2))).map {
             (wash.blended(withFraction: strength, of: NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: 1)) ?? wash).cgColor
         }
-        open.attributedTitle = NSAttributedString(string: row.title, attributes: [
-            .font: NSFont.systemFont(ofSize: LibraryDraw.spaces.titleFont.value), .foregroundColor: colors.foregroundSecondary,
-        ])
-        if case .custom(.emoji(let emoji)) = row.icon { open.attributedTitle = NSAttributedString(string: emoji + "  " + row.title, attributes: [
-            .font: NSFont.systemFont(ofSize: LibraryDraw.spaces.titleFont.value), .foregroundColor: colors.foregroundSecondary,
-        ]) }
+        let titleFont = NSFont.systemFont(ofSize: LibraryDraw.spaces.titleFont.value, weight: .medium)
+        open.attributedTitle = NSAttributedString(string: row.title, attributes: [.font: titleFont, .foregroundColor: colors.foregroundSecondary])
+        if case .custom(.emoji(let emoji)) = row.icon {
+            open.attributedTitle = NSAttributedString(string: emoji + "  " + row.title, attributes: [.font: titleFont, .foregroundColor: colors.foregroundSecondary])
+        }
         open.toolTip = "\(row.tabCount) tabs · \(row.profileName)"
         for (button, name) in [(open, "open"), (edit, "edit"), (more, "more"), (handle, "move")] as [(NSView, String)] {
             button.identify(.spaceToolsControl("manager-\(name)-\(row.id)"))
@@ -291,7 +290,8 @@ private final class SpaceCardView: NSView {
         let edgeButton = 22.0
         edit.frame = CGRect(x: bounds.width - pad - edgeButton, y: s.headerCenter.value - edgeButton / 2, width: edgeButton, height: edgeButton)
         let titleHeight = 24.0
-        open.frame = CGRect(x: pad - 2, y: s.headerCenter.value - titleHeight / 2, width: max(0, edit.frame.minX - pad), height: titleHeight)
+        // The name starts 16 into the card (P30-a: 对照 at x 420.5 in the card at 404).
+        open.frame = CGRect(x: pad, y: s.headerCenter.value - titleHeight / 2, width: max(0, edit.frame.minX - pad), height: titleHeight)
         let footer = bounds.height - s.footerCenter.value, b = s.footerButton.value
         handle.frame = CGRect(x: s.footerInset.value - b / 2, y: footer - b / 2, width: b, height: b)
         more.frame = CGRect(x: bounds.width - s.footerInset.value - b / 2, y: footer - b / 2, width: b, height: b)
@@ -420,9 +420,9 @@ private final class SpaceCardView: NSView {
             folder.contentTintColor = colors.foregroundPrimary
             icon.isHidden = true
         }
-        icon.show(favicon: favicon, colors: colors)
-        // A page without a favicon: a darker grey square than the Library list's tiles (the ink of `rowHighlight`).
-        if favicon == nil { icon.layer?.backgroundColor = colors.rowHighlight.withAlphaComponent(s.faviconPlaceholderAlpha.value).cgColor }
+        // A page without a favicon, or whose favicon does not load (P30-a: the fixture's pages): a darker grey square
+        // than the Library list's tiles (the ink of `rowHighlight`).
+        icon.show(favicon: favicon, colors: colors, missing: colors.rowHighlight.withAlphaComponent(s.faviconPlaceholderAlpha.value))
         for view in [icon, folder, title] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }

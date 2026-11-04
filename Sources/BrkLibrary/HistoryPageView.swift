@@ -306,6 +306,8 @@ struct HistoryColors {
     let card: NSColor
     let line: NSColor
     let field: NSColor
+    /// A visit's host (Q05-a: #444746, darker than the time's grey).
+    let detail: NSColor
 
     static func of(_ scheme: Scheme) -> HistoryColors {
         let light = scheme == .light
@@ -313,11 +315,13 @@ struct HistoryColors {
             page: light ? .white : LibraryColors.srgb(0x202124),
             ink: light ? LibraryColors.srgb(0x1F1F1F) : LibraryColors.srgb(0xE3E3E3),
             secondary: light ? LibraryColors.srgb(0x5F6368) : LibraryColors.srgb(0x9AA0A6),
-            accent: light ? LibraryColors.srgb(0x1F55C5) : LibraryColors.srgb(0x8AB4F8),
-            selection: light ? LibraryColors.srgb(0xE6ECFA) : LibraryColors.srgb(0x394457),
+            // Q05-a: "Arc history" in #1867D2 on #E8EFFE; the focused search field filled #ECEFF7.
+            accent: light ? LibraryColors.srgb(0x1867D2) : LibraryColors.srgb(0x8AB4F8),
+            selection: light ? LibraryColors.srgb(0xE8EFFE) : LibraryColors.srgb(0x394457),
             card: light ? .white : LibraryColors.srgb(0x292A2D),
             line: light ? LibraryColors.srgb(0xC4C7C5) : LibraryColors.srgb(0x5F6368),
-            field: light ? .white : LibraryColors.srgb(0x303134)
+            field: light ? LibraryColors.srgb(0xECEFF7) : LibraryColors.srgb(0x303134),
+            detail: light ? LibraryColors.srgb(0x444746) : LibraryColors.srgb(0xC4C7C5)
         )
     }
 }
@@ -420,7 +424,7 @@ final class HistoryNavItem: NSButton {
         isBordered = false
         wantsLayer = true
         layer?.addSublayer(fill)
-        glyph.image = LibraryIcon.symbol(symbol, size: 17)
+        glyph.image = LibraryIcon.symbol(symbol, size: symbol == "trash" ? 15 : 17)
         label.font = .systemFont(ofSize: LibraryDraw.history.navFont.value, weight: .medium)
         external.image = showsExternal ? LibraryIcon.symbol("arrow.up.forward.square", size: 17) : nil
         external.isHidden = !showsExternal
@@ -463,7 +467,8 @@ final class HistoryNavItem: NSButton {
         glyph.frame = CGRect(x: h.navIconLeading.value - 1, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
         let size = label.fittingSize
         label.frame = CGRect(x: h.navTextLeading.value, y: ((bounds.height - size.height) / 2).rounded(), width: size.width, height: size.height)
-        external.frame = CGRect(x: label.frame.maxX + 16, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
+        // Q05-a: the external mark is centred 20 after the label's text (which ends 2 inside its frame).
+        external.frame = CGRect(x: label.frame.maxX + 7, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
     }
 }
 
@@ -520,7 +525,8 @@ final class HistoryDayCard: NSView {
         super.layout()
         let h = LibraryDraw.history
         for (view, y, height) in placed {
-            let x = view is NSTextField ? h.padding.value + 13 : 0
+            // The day title starts with the checkboxes, 25 into the card (its label draws 2 pt inside its frame).
+            let x = view is NSTextField ? h.padding.value - 2 : 0
             view.frame = CGRect(x: x, y: y, width: bounds.width - x, height: height)
         }
     }
@@ -589,10 +595,10 @@ final class HistoryVisitRow: NSView {
         title.textColor = colors.ink
         title.lineBreakMode = .byTruncatingTail
         host.font = .systemFont(ofSize: h.rowDetailFont.value)
-        host.textColor = colors.secondary
+        host.textColor = colors.detail
         host.lineBreakMode = .byTruncatingTail
-        // The globe Chromium shows for a site without a saved icon (visits keep no favicon; nothing is fetched here).
-        favicon.image = LibraryIcon.symbol("globe", size: 14, weight: .medium)
+        // The globe Chromium shows for a site without a saved icon, filled (visits keep no favicon; nothing is fetched here).
+        favicon.image = LibraryIcon.symbol("globe.americas.fill", size: 14, weight: .medium)
         favicon.contentTintColor = colors.secondary
         favicon.imageScaling = .scaleProportionallyUpOrDown
         more.ink = colors.ink
@@ -638,15 +644,17 @@ final class HistoryVisitRow: NSView {
         let box = h.checkbox.value
         checkbox.frame = CGRect(x: h.padding.value, y: (mid - box / 2).rounded(), width: box, height: box)
         let t = time.fittingSize
-        time.frame = CGRect(x: h.timeLeading.value, y: (mid - t.height / 2).rounded(), width: t.width, height: t.height)
+        // Labels draw 2 pt inside their frames: the frames start 2 early so the text is where Arc's is.
+        time.frame = CGRect(x: h.timeLeading.value - 2, y: (mid - t.height / 2).rounded(), width: t.width, height: t.height)
         let f = 16.0
         favicon.frame = CGRect(x: h.faviconLeading.value, y: (mid - f / 2).rounded(), width: f, height: f)
         more.frame = CGRect(x: bounds.width - h.menuTrailing.value - 12, y: (mid - 12).rounded(), width: 24, height: 24)
-        let x = h.titleLeadingInRow.value, limit = more.frame.minX - 12
+        let x = h.titleLeadingInRow.value - 2, limit = more.frame.minX - 12
         let titleSize = title.fittingSize, hostSize = host.fittingSize
         let titleWidth = min(titleSize.width, max(0, limit - x - min(hostSize.width, 120) - 8))
         title.frame = CGRect(x: x, y: (mid - titleSize.height / 2).rounded(), width: titleWidth, height: titleSize.height)
-        let hostX = title.frame.maxX + 8
+        // The host's text is 6 after the title's (Q05-a), both 2 inside their frames.
+        let hostX = title.frame.maxX + 2
         host.frame = CGRect(x: hostX, y: (mid - hostSize.height / 2).rounded(), width: max(0, min(hostSize.width, limit - hostX)), height: hostSize.height)
     }
 }

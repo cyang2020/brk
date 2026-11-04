@@ -9,7 +9,7 @@ import BrkUIKit
 /// The page column's top row: the search field's frame, and the Filter button's when the page has one.
 enum LibraryColumnLayout {
     static func top(in bounds: CGRect, filter: Bool) -> (search: CGRect, filter: CGRect?) {
-        let c = LibraryDraw.column, pad = Metrics.library.columnPadding.value
+        let c = LibraryDraw.column, pad = c.searchInset.value
         let width = max(0, bounds.width - 2 * pad)
         guard filter else { return (CGRect(x: pad, y: c.searchTop.value, width: width, height: c.searchHeight.value), nil) }
         let button = CGRect(x: bounds.width - pad - c.filterWidth.value, y: c.searchTop.value, width: c.filterWidth.value, height: c.searchHeight.value)
@@ -220,7 +220,8 @@ final class DayHeaderView: NSView {
         super.layout()
         guard let label = subviews.first else { return }
         let h = label.fittingSize.height, m = LibraryDraw.list
-        label.frame = CGRect(x: m.dayHeaderLeading.value - m.rowLeading.value, y: bounds.height - h - m.dayHeaderBottom.value,
+        // The label draws 2 pt inside its frame: the text starts at dayHeaderLeading.
+        label.frame = CGRect(x: m.dayHeaderLeading.value - m.rowLeading.value - 2, y: bounds.height - h - m.dayHeaderBottom.value,
                              width: bounds.width, height: h)
     }
 }
@@ -251,16 +252,21 @@ final class LibraryTileView: NSView {
 
     override var isFlipped: Bool { true }
 
-    /// `symbol` is a glyph image drawn tinted (a file kind); `favicon` a page's icon, loaded once.
-    func show(favicon: URL?, symbol: NSImage? = nil, colors: LibraryColors) {
+    /// `symbol` is a glyph image drawn tinted (a file kind); `favicon` a page's icon, loaded once. `missing`, when
+    /// given, fills the tile while there is no icon to show (a page without one, or whose icon does not load).
+    func show(favicon: URL?, symbol: NSImage? = nil, colors: LibraryColors, missing: NSColor? = nil) {
         picture.contents = nil
         image.isHidden = false
         layer?.backgroundColor = colors.placeholder.cgColor
         image.contentTintColor = colors.foregroundSecondary
         image.image = symbol
         if let favicon {
-            image.image = FaviconCache.shared.image(for: favicon) { [weak self] loaded in self?.image.image = loaded } ?? symbol
+            image.image = FaviconCache.shared.image(for: favicon) { [weak self] loaded in
+                self?.image.image = loaded
+                self?.layer?.backgroundColor = colors.placeholder.cgColor
+            } ?? symbol
         }
+        if image.image == nil, let missing { layer?.backgroundColor = missing.cgColor }
         needsLayout = true
     }
 

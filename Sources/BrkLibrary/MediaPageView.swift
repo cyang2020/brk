@@ -104,11 +104,16 @@ import BrkUIKit
         placeholders = records.isEmpty && !Self.introDismissed
         intro.isHidden = !placeholders
         glow.isHidden = !placeholders
+        // Under the introduction card Arc's column is faded: the search field at half strength (P32-a: #F3F3F2, its
+        // placeholder #D7D6D6) and the day headers lighter (#A0A09F against the Archived Tabs page's #757575).
+        searchField.alphaValue = placeholders ? 0.5 : 1
         if placeholders {
             // Arc's media list before it is shown: grey cards under day headers.
-            list.addSubview(DayHeaderView(LibraryCopy.today, colors: colors))
+            let today = DayHeaderView(LibraryCopy.today, colors: colors), yesterday = DayHeaderView(LibraryCopy.yesterday, colors: colors)
+            for header in [today, yesterday] { header.alphaValue = 0.7 }
+            list.addSubview(today)
             for _ in 0..<5 { list.addSubview(MediaPlaceholderCard(colors: colors)) }
-            list.addSubview(DayHeaderView(LibraryCopy.yesterday, colors: colors))
+            list.addSubview(yesterday)
             for _ in 0..<6 { list.addSubview(MediaPlaceholderCard(colors: colors)) }
         } else {
             let shown = query.isEmpty ? records : records.filter {
