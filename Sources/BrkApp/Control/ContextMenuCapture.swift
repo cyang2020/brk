@@ -1,4 +1,5 @@
 import AppKit
+import BrkControl
 import BrkEngine
 
 /// Only instantiated for the explicit control-socket probe. No observer runs in ordinary browsing.
@@ -9,6 +10,8 @@ import BrkEngine
     private var menu: NSMenu? { tracking.menu }
     private var items: [String] = []
     private var choice: String?
+    /// `TextLayoutAudit.menu` of the menu that opened, measured while it is on screen.
+    private(set) var measured: TextLayoutReport?
 
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil) async throws -> [String] {
         choice = choose
@@ -35,6 +38,7 @@ import BrkEngine
         let fromDelegate = note.name == PageSurfaceView.contextMenuWillOpen || note.name == Self.willPresent
         guard tracking.begin(current, fromDelegate: fromDelegate) else { return }
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
+        measured = TextLayoutAudit.menu(current)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)
         RunLoop.main.add(timer, forMode: .common)
     }
