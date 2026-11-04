@@ -217,7 +217,7 @@ public struct TextLayoutFinding: Codable, Sendable, Equatable {
     /// Class, parent's class and the nearest accessibility identifier.
     public var view: String
     public var text: String
-    /// In the window's top-level view, top-left origin.
+    /// In the window's frame view (`NSThemeFrame`), whose origin is its bottom-left corner.
     public var frame: CGRect
     public var needed: CGSize
     /// The ancestor that cuts the text, for `clippedByAncestor`.
