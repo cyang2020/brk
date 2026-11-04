@@ -267,7 +267,7 @@ struct MaxThumbnail: View {
     @ViewBuilder private var content: some View {
         switch feature {
         case .tidyTabs:
-            ArtColor.rgb(0xD0CCF0)
+            ArtColor.rgb(0xD6D2F2)
             HStack(spacing: 8) {
                 WaveLine().stroke(ArtColor.rgb(0x8A84B8), lineWidth: 1.2).frame(width: 44, height: 6)
                 Image(systemName: "paintbrush.fill").font(.system(size: 9)).foregroundStyle(ArtColor.rgb(0x5E5A86))
@@ -275,25 +275,26 @@ struct MaxThumbnail: View {
             }
             .offset(x: -2)
         case .instantLinks:
-            ArtColor.rgb(0xD6E6F0)
+            // P38-c: a 15.5 pt teal band, the line 11 pt below it, two 7.5 pt bars 5.5 pt apart
+            ArtColor.rgb(0xD3E9F3)
             VStack(spacing: 0) {
-                ArtColor.rgb(0x7FB0D8).frame(height: 13)
+                ArtColor.rgb(0x6CBAD8).frame(height: 15.5)
                 HStack(spacing: 4) {
-                    Image(systemName: "rays").font(.system(size: 7)).foregroundStyle(.secondary)
-                    Text("Searching the web…").font(.system(size: 6, weight: .semibold)).foregroundStyle(ArtColor.rgb(0x2B3A55))
+                    Image(systemName: "rays").font(.system(size: 8)).foregroundStyle(.secondary)
+                    Text("Searching the web…").font(.system(size: 7, weight: .semibold)).foregroundStyle(ArtColor.rgb(0x2B3A55))
                         .lineLimit(1).fixedSize()
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 5).frame(height: 18)
-                VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(ArtColor.rgb(0xB9CBD9)).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 1.5).fill(ArtColor.rgb(0xB9CBD9)).frame(height: 6)
+                .padding(.horizontal, 5).frame(height: 22)
+                VStack(spacing: 5.5) {
+                    RoundedRectangle(cornerRadius: 2).fill(ArtColor.rgb(0xBCD0D9)).frame(height: 7.5)
+                    RoundedRectangle(cornerRadius: 2).fill(ArtColor.rgb(0xBCD0D9)).frame(height: 7.5)
                 }
                 .padding(.horizontal, 7)
                 Spacer(minLength: 0)
             }
         case .linkPreviews:
-            ArtColor.rgb(0xC9C3F2)
+            ArtColor.rgb(0xC9CBFD)
             VStack(spacing: 0) {
                 LinearGradient(colors: [ArtColor.rgb(0x3A2E25), ArtColor.rgb(0x9B7A4E), ArtColor.rgb(0x5B4632)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay(GrainOverlay())
@@ -309,7 +310,7 @@ struct MaxThumbnail: View {
             }
             .padding(.horizontal, 10).padding(.top, 8)
         case .tidyTitles:
-            ArtColor.rgb(0x8E6A9A)
+            ArtColor.rgb(0xA7729D)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 3) {
                     RoundedRectangle(cornerRadius: 1).fill(ArtColor.rgb(0x4A2B5C)).frame(width: 7, height: 5)
@@ -320,25 +321,25 @@ struct MaxThumbnail: View {
             .padding(.horizontal, 5).padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 4).fill(Color.white))
         case .tidyDownloads:
-            ArtColor.rgb(0x2B2BE8)
+            ArtColor.rgb(0x303AFB)
             VStack(alignment: .leading, spacing: 1.5) {
                 HStack {
                     Text("Download renamed to:").font(.system(size: 4.5)).foregroundStyle(ArtColor.rgb(0x5960C8))
                     Spacer(minLength: 0)
                     Image(systemName: "xmark").font(.system(size: 4)).foregroundStyle(.secondary)
                 }
-                Text("Travel Itinerary.pdf").font(.system(size: 6, weight: .medium)).foregroundStyle(.black)
+                Text("Navan Itinerary.pdf").font(.system(size: 6, weight: .medium)).foregroundStyle(.black)
                 Text("287494875.pdf").font(.system(size: 4.5)).strikethrough().foregroundStyle(ArtColor.rgb(0x5960C8))
             }
             .padding(5)
             .frame(width: 74)
             .background(RoundedRectangle(cornerRadius: 4).fill(Color.white))
         case .askInCommandBar:
-            ArtColor.rgb(0x63B86F)
+            ArtColor.rgb(0x19C27B)
             HStack(spacing: 3) {
                 Image(systemName: "magnifyingglass").font(.system(size: 5, weight: .semibold))
                 Text("Ask Max").font(.system(size: 5, weight: .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 4).padding(.vertical, 1.5).background(Capsule().fill(ArtColor.rgb(0x4CAF5C)))
+                    .padding(.horizontal, 4).padding(.vertical, 1.5).background(Capsule().fill(ArtColor.rgb(0x19C27B)))
                 Text("Send a message").font(.system(size: 5.5)).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 6)

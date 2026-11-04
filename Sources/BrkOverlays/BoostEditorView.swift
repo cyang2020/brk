@@ -48,8 +48,10 @@ public final class BoostPanel {
 
     /// Centred on the window's right edge, its top a third of the way down the window (P37-a), kept on screen.
     static func initialFrame(size: CGSize, parent: CGRect, screen: CGRect?) -> CGRect {
+        // Whole points, as Arc lands (P37-a: the panel's edge at x 2377 px, its top at 516 px of a 776-point window,
+        // so the window is at 91 points in from the window's right and 258 down).
         let base = Metrics.boostPanel.size.value.width
-        var frame = CGRect(x: parent.maxX - base / 2 - (size.width - base), y: parent.maxY - parent.height / 3 - size.height,
+        var frame = CGRect(x: (parent.maxX - base / 2).rounded(.up) - (size.width - base), y: parent.maxY - (parent.height / 3).rounded(.down) - size.height,
                            width: size.width, height: size.height)
         if let screen {
             frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - frame.width)

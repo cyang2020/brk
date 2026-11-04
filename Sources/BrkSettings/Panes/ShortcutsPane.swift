@@ -50,7 +50,8 @@ struct ShortcutsPane: View {
         HStack(spacing: K.basicsGap.value) {
             Text(ShortcutsCopy.basics).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
             ProminentButton(title: essentials ? ShortcutsCopy.showAll : ShortcutsCopy.learnEssentials, field: "shortcut-essentials",
-                            prominent: true, symbol: "command.circle.fill", accent: .controlAccentColor, weight: .regular) { essentials.toggle() }
+                            prominent: true, symbol: "command.circle.fill", accent: .controlAccentColor, weight: .regular,
+                            width: K.essentialsWidth.value) { essentials.toggle() }
         }
         .padding(.horizontal, K.basicsPadding.value)
         .frame(height: K.basicsHeight.value)
@@ -74,7 +75,7 @@ struct ShortcutsPane: View {
                 // Not lazy: every row's key cap exists, so the control socket and tests can find any of them.
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
-                        Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(SettingsStyle.secondaryText)
+                        Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
                             .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value)
                         CardDivider(inset: 0)
                         ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
@@ -100,7 +101,7 @@ struct ShortcutsPane: View {
             }
             Text(ShortcutsCopy.title).font(.system(size: K.titleSize.value, weight: .semibold)).foregroundStyle(.primary)
                 .padding(.top, K.titleTop.value)
-            Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(SettingsStyle.secondaryText)
+            Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
                 .lineSpacing(K.subtitleLeading.value)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, K.subtitleTop.value)
@@ -489,17 +490,19 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let searchGlyph = Metric(13.0, .anatomy("\(capture): the magnifier is about 26 px tall, a medium weight"))
     let headerHeight = Metric(27.0, .anatomy("\(capture): the Default Shortcuts row spans y 430 to 484 px, its hairline 484 to 486 px"))
     let headerSize = Metric(11.0, .anatomy("\(capture): 'Default Shortcuts' spans x 162 to 345 px, an 11 pt semibold line (13 pt is 223 px)"))
-    let firstRowTop = Metric(10.0, .anatomy("\(capture): the first row spans y 486 to 600 px, the others 94 px between hairlines"))
+    let firstRowTop = Metric(9.5, .anatomy("\(capture): the first row spans y 486 to 600 px, the others 94 px between hairlines"))
     let headerInset = Metric(16.0, .anatomy("\(capture): 'Default Shortcuts' starts at x 160 px"))
     let rowHeight = Metric(47.0, .anatomy("\(capture): hairlines at y 600, 696, 792 px, 2 px each"))
     let rowInset = Metric(24.0, .anatomy("\(capture): titles start at x 176 px, hairlines span 176 to 776 px, key caps end at 760 px"))
     let dividerTrailing = Metric(16.0, .anatomy("\(capture): the row hairlines end at x 776 px in a box that ends at 808 px"))
     let listPadding = Metric(8.0, .guess("space under the last row"))
-    let keyGap = Metric(2.0, .anatomy("\(capture): the first key cap ends at x 970 px, the second starts at 974 px"))
+    let keyGap = Metric(1.5, .anatomy("\(capture): the first key cap ends at x 970 px, the second starts at 974 px"))
     let titleSize = Metric(14.0, .anatomy("\(capture): 'Custom Shortcuts' spans x 841 to 1083 px, a 14 pt semibold line"))
     let titleTop = Metric(23.5, .anatomy("\(capture): the key caps end at y 477 px, the heading is centred at 542 px"))
     let subtitleSize = Metric(12.0, .anatomy("\(capture): 'Change shortcuts for your favorite' spans x 841 to 1226 px, a 12 pt line"))
     let subtitleTop = Metric(7.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
     let subtitleLeading = Metric(1.0, .anatomy("\(capture): paragraph lines 30 px apart"))
-    let moreGap = Metric(4.5, .anatomy("\(capture): Reset All Shortcuts ends at x 1118 px, the … circle starts at 1127 px"))
+    let inkOpacity = Metric(0.6, .anatomy("\(capture): 'Default Shortcuts' and the side paragraph are darker than the pane's grey descriptions"))
+    let essentialsWidth = Metric(215.0, .anatomy("\(capture): Learn the Essential Shortcuts spans x 602 to 1032 px"))
+    let moreGap = Metric(1.0, .anatomy("\(capture): Reset All Shortcuts ends at x 1118 px, the … circle starts at 1127 px"))
 }

@@ -53,6 +53,7 @@ struct MaxPane: View {
                 }
             } trailing: {
                 EnableMaxButton(title: on ? MaxCopy.turnOff : MaxCopy.turnOn, prominent: !on) { send(.enable(!on)) }
+                    .padding(.top, M.enableButtonDrop.value)
             }
             CardDivider()
             SwitchRow(title: MaxCopy.autoEnable, field: "autoEnableFutureFeatures", isOn: max.settings.autoEnableFutureFeatures == true,
@@ -64,8 +65,10 @@ struct MaxPane: View {
     @ViewBuilder private func rows(_ features: [MaxFeature]) -> some View {
         ForEach(Array(features.enumerated()), id: \.element) { index, feature in
             if index > 0 { CardDivider() }
-            HStack(alignment: .top, spacing: M.thumbGap.value) {
-                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value)
+            // Only the picture keeps the gap from the text: the text runs to within 8.5 points of the switch (P38-c:
+            // "…shorter titles when you" ends at x 1131 px, the switch starts at 1148 px).
+            HStack(alignment: .top, spacing: 0) {
+                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value).padding(.trailing, M.thumbGap.value)
                 VStack(alignment: .leading, spacing: M.titleGap.value) {
                     Text(feature.title).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
                     Text(feature.description).font(.system(size: M.descriptionSize.value)).foregroundStyle(SettingsStyle.secondaryText)
@@ -73,7 +76,7 @@ struct MaxPane: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, M.titleTop.value)
-                Spacer(minLength: CardMetrics.controlGap.value)
+                Spacer(minLength: M.textToSwitch.value)
                 SettingsSwitch(field: feature.field, isOn: feature.isOn(max.settings)) { send(feature.setting($0)) }
                     .frame(height: M.featureRowHeight.value)
             }
@@ -85,8 +88,8 @@ struct MaxPane: View {
 
     private var footer: some View {
         VStack(spacing: M.footerGap.value) {
-            Text(MaxCopy.footer).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
-            LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], color: SettingsStyle.link, underline: true) { _ in explaining = true }
+            Text(MaxCopy.footer).font(.system(size: M.footerSize.value)).foregroundStyle(SettingsStyle.secondaryText)
+            LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], font: .system(size: M.footerSize.value), color: SettingsStyle.link, underline: true) { _ in explaining = true }
                 .popover(isPresented: $explaining) {
                     VStack(alignment: .leading, spacing: CardMetrics.controlGap.value) {
                         Text(SettingsCopy.maxPrivacy).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
@@ -226,10 +229,13 @@ struct ProminentButton: NSViewRepresentable {
     var prominent = true
     var symbol: String? = nil
     static let arcBlue = NSColor(srgbRed: 0x31 / 255.0, green: 0x37 / 255.0, blue: 0xF8 / 255.0, alpha: 1)
+    static let arcBlueColor = Color(nsColor: arcBlue)
     var accent: NSColor = ProminentButton.arcBlue
     var minimumWidth: CGFloat = 0
     /// The prominent title's weight (Arc's "Learn the Essential Shortcuts" is regular).
     var weight: NSFont.Weight = .semibold
+    /// A fixed width instead of the title's.
+    var width: CGFloat? = nil
     let action: @MainActor () -> Void
 
     func makeCoordinator() -> SettingsButton.Coordinator { SettingsButton.Coordinator() }
@@ -258,7 +264,7 @@ struct ProminentButton: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSButton, context: NSViewRepresentableContext<Self>) -> CGSize? {
-        CGSize(width: max(button.intrinsicContentSize.width, minimumWidth), height: button.intrinsicContentSize.height)
+        CGSize(width: width ?? max(button.intrinsicContentSize.width, minimumWidth), height: button.intrinsicContentSize.height)
     }
 }
 
@@ -273,21 +279,24 @@ struct MaxPaneMetricsTable: MetricGroup {
     let cardGap = Metric(24.0, .anatomy("\(capture): the Enable card ends at y 760 px, the features card starts at 808 px"))
     let enableRowHeight = Metric(45.0, .anatomy("\(capture): the Enable Max row spans y 592 to 682 px"))
     let autoRowHeight = Metric(32.0, .anatomy("\(capture): the Automatically enable row spans y 684 to 758 px, its switch centred at 716 px"))
-    let autoRowBottom = Metric(5.0, .anatomy("\(capture): the row's switch is centred 32 px below its top and 42 px above the card's edge"))
+    let autoRowBottom = Metric(6.0, .anatomy("\(capture): the row's switch is centred 32 px below its top and 42 px above the card's edge"))
     let enableIcon = Metric(24.0, .anatomy("\(capture): the white icon square spans x 148 to 196 px"))
     let enableGlyph = Metric(17.0, .anatomy("\(capture): the flower inside spans x 156 to 188 px"))
     let enableIconRadius = Metric(6.0, .guess("the icon square's corner"))
     let enableButtonSize = Metric(CGSize(width: 117.5, height: 28), .anatomy("\(capture): Turn On Max spans x 986 to 1221 px, y 611 to 667 px with its grey edge"))
     let enableButtonRadius = Metric(6.0, .anatomy("\(capture): 4 px in from the button's left edge its corner starts 3 px down"))
+    let enableButtonDrop = Metric(2.0, .anatomy("\(capture): the button is centred at y 639 px in a row centred at 638 px"))
     let enableButtonFont = Metric(12.0, .anatomy("\(capture): the Turn On Max lettering spans x 1035 to 1174 px, a 12 pt semibold line (13 pt is 159 px wide)"))
     let featureRowHeight = Metric(80.0, .anatomy("\(capture): feature rows 808 to 968 to 1130 px"))
     let thumbInset = Metric(11.5, .anatomy("\(capture): a thumbnail's rim starts at x 151 px"))
     let thumbTop = Metric(10.5, .anatomy("\(capture): the thumbnail starts at y 832 px in a row that starts at 808 px"))
+    let textToSwitch = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
     let thumbGap = Metric(17.0, .anatomy("\(capture): the thumbnail ends at x 330 px, the title starts at 368 px"))
     let titleTop = Metric(10.0, .anatomy("\(capture): the title is centred at y 845 px in a row that starts at 808 px"))
     let titleGap = Metric(4.5, .anatomy("\(capture): title centred at y 845 px, the description's first line at 884 px"))
     let descriptionSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
     let descriptionLeading = Metric(2.0, .anatomy("\(capture): description lines 32 px apart"))
+    let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
     let footerTop = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
     let footerGap = Metric(-1.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
     let footerBottom = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))

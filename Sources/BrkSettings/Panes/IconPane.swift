@@ -42,7 +42,7 @@ struct IconPane: View {
                 Text(AppIconArt.name(choice)).font(.system(size: I.nameSize.value, weight: .semibold)).foregroundStyle(.primary)
                 if choice == current {
                     Text(IconCopy.current).font(.system(size: I.badgeSize.value, weight: .semibold)).kerning(I.badgeKerning.value)
-                        .foregroundStyle(SettingsStyle.link)
+                        .foregroundStyle(Color(nsColor: .systemBlue))
                 }
             }
             .padding(.leading, I.nameLeading.value)
@@ -63,8 +63,9 @@ struct RadioDot: View {
 
     var body: some View {
         ZStack {
-            Circle().strokeBorder(on ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.25), lineWidth: I.radioRing.value)
-            if on { Circle().fill(Color(nsColor: .controlAccentColor)).padding(I.radioDotInset.value) }
+            // Arc's brand blue (#3139FB, P38-h), as on Turn On Max, not the system accent.
+            Circle().strokeBorder(on ? ProminentButton.arcBlueColor : Color.primary.opacity(0.25), lineWidth: I.radioRing.value)
+            if on { Circle().fill(ProminentButton.arcBlueColor).padding(I.radioDotInset.value) }
         }
     }
 }
@@ -93,7 +94,7 @@ struct IconPaneMetricsTable: MetricGroup {
     let nameLeading = Metric(8.0, .anatomy("\(capture): the tile ends at x 360 px, the name starts at 388 px"))
     let nameSize = Metric(14.0, .guess("the icon names are a bolder, slightly larger line than the rows"))
     let badgeSize = Metric(11.0, .guess("'CURRENT ICON' under the name"))
-    let badgeKerning = Metric(0.4, .guess("the small capitals are spaced a little"))
+    let badgeKerning = Metric(0.0, .anatomy("\(capture): CURRENT ICON spans x 389 to 556 px, an unspaced 11 pt semibold line"))
     let badgeGap = Metric(4.0, .anatomy("\(capture): the name centred at y 299 px, CURRENT ICON at 337 px"))
     let dividerLeading = Metric(40.0, .anatomy("\(capture): hairlines start at x 208 px"))
     let dividerTrailing = Metric(40.0, .anatomy("\(capture): hairlines end at x 1160 px of a card ending at 1240 px"))

@@ -151,7 +151,7 @@ struct AboutMetricsTable: MetricGroup {
     let iconTop = Metric(16.5, .anatomy("\(capture): the title bar ends at y 64 px, the tile starts near 122 px"))
     let nameTop = Metric(7.5, .anatomy("\(capture): the tile ends near y 212 px, the name is centred at 257 px"))
     let nameSize = Metric(13.0, .anatomy("\(capture): the name's capitals are 18 px tall (y 247 to 265 px), a 13 pt bold line"))
-    let versionTop = Metric(7.5, .anatomy("\(capture): the name centred at y 257 px, the version line at 300 px"))
+    let versionTop = Metric(8.0, .anatomy("\(capture): the name centred at y 257 px, the version line at 300 px"))
     let textSize = Metric(11.0, .anatomy("\(capture): the version lines are 29 px apart"))
     let copyrightTop = Metric(8.0, .anatomy("\(capture): the engine line centred at y 329 px, the copyright at 374 px"))
     let creditsTop = Metric(8.0, .anatomy("\(capture): the copyright centred at y 374 px, the credits' first line at 418 px"))
