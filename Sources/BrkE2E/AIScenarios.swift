@@ -119,7 +119,7 @@ enum AIScenarios {
         guard let box = preview.link else { throw Check(description: "the page did not report the hovered link's box") }
         try expect(abs(shown.minX - (card.minX + box.minX - 6)) <= 1.5 && abs(shown.minY - (card.minY + box.maxY + 6.5)) <= 1.5,
                    "card at \(shown), link box \(box) in the page at \(card.origin)")
-        try expect(abs(shown.width - 299) <= 0.5, "card width \(shown.width)")
+        try expect(abs(shown.width - 300) <= 0.5, "card width \(shown.width)")   // R5-1 remeasured P45-a: x 746 to 1346 px
         try expect(try currentTab(app.view())?.id == source.item, "preview took tab focus")
         try app.waitUntil("AI readers closed", timeout: 10) { try readersClosed(app) }
         _ = try app.screenshot("AIHover-card")
