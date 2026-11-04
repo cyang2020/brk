@@ -37,7 +37,7 @@ final class TabToolsOverlayView: NSView {
         recent.identify(.tabTool("switcher"))
         toast.identify(.tabTool("toast"))
         banner.identify(.tabTool("notice"))
-        education.identify(.tabTool("education"))
+        education.identify(.tabTool("education-overlay"))
         toast.onClick = { [weak self] in self?.dispatch(.tabTools(.dismissToast)) }
         toast.onAction = { [weak self] in if let command = self?.toastCommand { self?.dispatch(command) } }
         education.target = self
@@ -100,7 +100,7 @@ final class TabToolsOverlayView: NSView {
         banner.isHidden = notice == nil
         if let notice, let link = notice.link { banner.show(notice.text, link: link, right: right, top: ToastDraw.top.value) }
         education.isHidden = true
-        education.title = tools.archiveEducation.map { $0 + "  ×" } ?? ""
+        education.title = tools.archiveEducation.map(Copy.archiveEducation) ?? ""
         education.cell?.wraps = true
         education.frame = NSRect(x: 8, y: bounds.height - 130, width: max(0, sidebarWidth - 16), height: 68)
     }

@@ -176,6 +176,13 @@ extension Work {
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
         case .linkHovered(let url): aiHover(url, in: window)
+        case .languageDetected(let document, let language):
+            guard live.document == .ready(document) else { return }
+            live.language = String(language.prefix(40))
+        case .translateRequested(let language):
+            state.session.live[page] = live
+            translatePage(page, to: language, in: window)
+            return
         case .browserCreated: break
         case .documentChanged(let document):
             switch document {
@@ -183,6 +190,7 @@ extension Work {
                 guard doc.browser == token, doc.sequence > live.documentSequence else { return }
                 live.documentSequence = doc.sequence
                 live.loadProgress = 0
+                live.language = nil
             case .ready(let doc):
                 guard doc.browser == token, doc.sequence == live.documentSequence,
                       live.document == .loading(doc) || live.document == .ready(doc) else { return }

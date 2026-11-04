@@ -96,6 +96,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var tabTools = TabToolsSnapshot()
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// Arc's 5-Second Preview card under a link Shift was held over (P45-a).
+    public var aiPreview: AIPreviewSnapshot? = nil
     /// What View > Appearance applies to this window's site (the check mark of Automatic, Light or Dark).
     public var websiteAppearance: WebsiteAppearance = .automatic
 }
@@ -130,6 +132,8 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var developerMode = false
     /// The focused card shows an Easel: the pill reads "Share" after a lock (Q09 a) and a click shares the board.
     public var share: EaselID? = nil
+    /// The second line under the host: Translation Available, Translating…, Translated (P01-a, P50-b).
+    public var translation: PillTranslation? = nil
 }
 
 public struct ProfileBadge: Sendable, Equatable, Codable {
@@ -160,6 +164,10 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
     public var collapsed: Bool
     public var rows: [Row]
     public var peeked: Bool = false
+    /// Today only: Max's Tidy Tabs is on and Today holds more than six tabs, so the divider shows 🧹 Tidy under the
+    /// pointer (P46-b); `tidying` while its plan is being made.
+    public var canTidy: Bool = false
+    public var tidying: Bool = false
 }
 
 public enum Row: Sendable, Equatable, Codable {
@@ -225,7 +233,12 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// page's icon at its trailing end (Arc's Peek marker). `peekFavicon` is that page's favicon.
     public var peeking: Bool = false
     public var peekFavicon: URL? = nil
+    /// An Instant Links row, not a tab (Arc's `instantLinks` sidebar item, P48-a): Max's flower and "Searching the
+    /// web for you…", or "Oops, something went wrong." when nothing opened.
+    public var instant: InstantRowState? = nil
 }
+
+public enum InstantRowState: String, Sendable, Equatable, Codable { case searching, failed }
 
 public struct FolderRow: Sendable, Equatable, Codable {
     public var group: Bool = false
@@ -443,6 +456,11 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var newDocument: DocumentApp? = nil
     /// Type travel results that are not menu rows, panes, spaces or folder moves (`TypeTravel.swift`).
     public var travel: [TravelCandidate] = []
+    /// Max's Ask in the Command Bar is on: the name of the local tool for the Ask row (Arc's "Ask ChatGPT →", P49)
+    /// and for typing its name then Tab.
+    public var askProvider: String? = nil
+    /// Max's Instant Links is on: Shift+Return opens the top results of a web search (P48-a).
+    public var instantLinks: Bool = false
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
@@ -584,6 +602,8 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var detected: [AIProviderKind]
     /// What `.auto` or the explicit choice resolves to right now, nil when nothing can answer.
     public var active: AIProviderKind?
+    /// The tool's name where Arc says ChatGPT (the Max pane's "… in the Command Bar", the command bar's Ask row).
+    public var askProvider: String? = nil
 }
 
 public struct ProfileDeletionRow: Sendable, Equatable, Codable {

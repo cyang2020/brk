@@ -12,6 +12,8 @@ final class ChromePage: CefBrowserDelegate {
     let id: PageID
     /// The request context it was created in; fixed for the page's life (a changed spec replaces the page).
     let isAIReader: Bool
+    /// The ready document's `<html lang>` (CEFEngine.reportLanguage), for the page menu's Translate to English.
+    var detectedLanguage: String?
     let context: BrowsingContext
     let incarnation: PageLedger.Incarnation
     let surface: EmbeddedSurface
@@ -376,7 +378,16 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool {
         let plainLink = params.linkURL != nil && params.mediaType == .none && !params.isEditable
-        contextMenu.show(menu, at: CGPoint(x: params.x, y: params.y), in: surface, link: plainLink, callback: callback) { [weak self] in
+        // Arc's page menu offers "Translate to English" (the system language) on a page in another language (Q07-a).
+        let system = Locale.preferredLanguages.first ?? "en"
+        let base = { (code: String) in String(code.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first ?? "") }
+        let translate: String? = if !plainLink, !params.isEditable, params.mediaType == .none, !isAIReader, let language = detectedLanguage,
+            !base(language).isEmpty, base(language) != base(system) { Locale(identifier: "en_US").localizedString(forLanguageCode: base(system)) } else { nil }
+        contextMenu.show(menu, at: CGPoint(x: params.x, y: params.y), in: surface, link: plainLink, translateTo: translate, callback: callback,
+                         onTranslate: { [weak self] in
+                             guard let self, let translate, self.engine.isLive(self) else { return }
+                             self.engine.pageDidEmit(self, .translateRequested(translate))
+                         }) { [weak self] in
             guard let self else { return false }; return self.engine.isLive(self) && !self.surface.isHiddenOrHasHiddenAncestor
         }
         return true
@@ -389,6 +400,7 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     func browser(_ b: CefBrowser, didStartMainDocument url: URL?) {
+        detectedLanguage = nil
         closeDocumentPiP()
         settlePermissionGrants(keeping: nil)
         subframeMediaIntent = false
@@ -403,6 +415,7 @@ final class ChromePage: CefBrowserDelegate {
         reportZoom()
         reportSecurity()
         refreshWebsitePolicy()
+        engine.reportLanguage(self)
         if case .ready(let document) = mainDocument.availability,
            let request = reloadSequence.finished(documentSequence: document.sequence) {
             Task { @MainActor [weak self] in self?.issueReload(request) }

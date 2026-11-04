@@ -169,6 +169,9 @@ public enum ViewID: Hashable, Sendable, Codable {
     /// An Easel's board in its card, one of its controls by name (the tools, the title box, the font-size buttons,
     /// the person button), one element by id, and a card of the Library's Easels page.
     case easelBoard, easelControl(String), easelElement(String), easelCard(EaselID)
+    /// The Today divider's 🧹 Tidy (P46-b), and the AI features' in-place controls by name: the preview card and its
+    /// share button, the pill's translation line, the translation popover and its buttons.
+    case todayTidy, aiControl(String)
 
     public var identifier: String {
         switch self {
@@ -191,6 +194,8 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .rowClose(let id): "row-\(id)-close"
         case .todayNewTab: "today-new-tab"
         case .todayClear: "today-clear"
+        case .todayTidy: "today-tidy"
+        case .aiControl(let name): "ai-\(name)"
         case .renameField: "rename-field"
         case .dock: "dock"
         case .dockSpace(let id): "dock-space-\(id)"
@@ -290,7 +295,8 @@ extension WindowFrames {
         case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
-             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool, .easelControl, .easelElement, .easelCard, .pageDragStrip:
+             .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool, .easelControl, .easelElement, .easelCard, .pageDragStrip,
+             .todayTidy, .aiControl:
             return nil   // view-owned: reported by `actual` only
         }
     }

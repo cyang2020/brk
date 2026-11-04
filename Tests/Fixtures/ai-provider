@@ -43,12 +43,18 @@ elif prompt.startswith('BRK_PAGE_QUESTION'):
     print('Fixture page answer: ' + data['text'][:400] + ' [1]')
 elif prompt.startswith('BRK_PREVIEW'):
     data = json.loads(prompt.splitlines()[-1])
-    print('Fixture preview: ' + data['text'][:100])
+    if 'unavailable' in data['url']:
+        print(json.dumps({'blocked': True}))
+    else:
+        print(json.dumps({'blocked': False, 'quickSummary': 'Fixture preview: ' + data['title'][:60],
+                          'details': [{'label': 'Text:', 'icon': 'text.alignleft', 'info': data['text'][:60]},
+                                      {'label': 'Source:', 'icon': 'link', 'info': data['url'][:60]}]}))
 elif prompt.startswith('BRK_DOWNLOAD_NAME'):
     print('Reading.' + prompt.splitlines()[-1].split('.')[-1])
 elif prompt.startswith('BRK_INSTANT_LINK'):
     query = prompt.splitlines()[-1]
-    print(query if query.startswith('http') else 'javascript:alert(1)')
+    urls = [word for word in query.replace(',', ' ').split() if word.startswith('http')]
+    print('\n'.join(urls) if urls else 'javascript:alert(1)')
 elif prompt.startswith('BRK_BROWSE'):
     pages = [json.loads(line) for line in prompt.splitlines() if line.startswith('{')]
     print('Fixture comparison: ' + ' '.join(p['text'][:100] + ' [' + str(i+1) + ']' for i,p in enumerate(pages)))

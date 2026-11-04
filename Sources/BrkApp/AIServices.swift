@@ -1,3 +1,4 @@
+import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
@@ -55,13 +56,36 @@ final class AIServices {
             self?.send(.aiDeadline(id))
         }
     }
-    func hover(_ window: WindowID, url: URL?) {
+    /// Arc's 5-Second Previews (P45-a): Shift held over the same link for about two seconds opens the card under it.
+    /// The keyboard state is polled (Shift may go down before or after the pointer reaches the link); letting go
+    /// starts the wait again.
+    func hover(_ window: WindowID, url: URL?, document: DocumentToken?) {
         hovers.removeValue(forKey: window)?.cancel()
         guard let url, !stopping else { return }
         hovers[window] = Task { [weak self] in
-            do { try await Task.sleep(for: .milliseconds(600)) } catch { return }
-            self?.send(.aiHoverReady(window, url))
+            var held = 0, waited = 0, siteChecked = false
+            while held < Self.previewHold {
+                do { try await Task.sleep(for: .milliseconds(Self.previewPoll)) } catch { return }
+                held = NSEvent.modifierFlags.contains(.shift) ? held + Self.previewPoll : 0
+                waited += Self.previewPoll
+                // "Instant summaries appear when you hover over links on certain websites": the same wait without Shift.
+                if !siteChecked, waited >= Self.previewHold, held < Self.previewHold, let document, let self {
+                    siteChecked = true
+                    if let link = await self.engine.hoveredLink(document, url: url), link.previewSite, !Task.isCancelled {
+                        self.send(.aiHoverReady(window, url, link.frame)); return
+                    }
+                }
+            }
+            guard let self, !Task.isCancelled else { return }
+            var link: HoveredLink?
+            if let document { link = await self.engine.hoveredLink(document, url: url) }
+            guard !Task.isCancelled else { return }
+            self.send(.aiHoverReady(window, url, link?.frame))
         }
+    }
+    private static let previewHold = 2000, previewPoll = 100
+    func showTranslation(_ document: DocumentToken, translated: Bool) {
+        Task { [engine] in _ = await engine.showAITranslation(document, translated: translated) }
     }
     func cancel(_ id: AIRequestID) {
         for task in tasks[id]?.values ?? [:].values { task.cancel() }

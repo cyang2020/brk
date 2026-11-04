@@ -74,6 +74,8 @@ extension Work {
         state.session.windows[window]?.toastUndo = nil
         state.session.windows[window]?.toast = nil
         switch undo {
+        case .translation(let page): showTranslation(page, true)
+        case .tidy: undoAIOrganize(in: window)
         case .restore(let entries):
             for id in entries { _ = restoreEntry(id, in: window) }
         case .space(let space, let index, let entries):
@@ -276,6 +278,7 @@ extension Work {
     }
 
     private mutating func bulkTabs(_ target: TabTargets, _ action: BulkTabAction, in window: WindowID) {
+        if case .items(let ids) = target, action == .close, closeInstantRows(ids, in: window) { return }
         guard let w = state.doc.windows[window], let tree = state.tree(of: window) else { return }
         let requested = state.requestedItems(target, in: window)
         guard !requested.isEmpty, Set(requested).count == requested.count,

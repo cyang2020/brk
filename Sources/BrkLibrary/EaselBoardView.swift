@@ -36,6 +36,9 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
 
     private enum Gesture {
         case move(start: CGPoint, offset: CGSize)
+        /// A corner handle of the selection dragged: `anchor` is the opposite corner, `from` the selection's box and
+        /// `to` the box now (board points).
+        case resize(anchor: CGPoint, from: CGRect, to: CGRect)
         case draw(EaselElement)
         case ink(id: String, points: [CGPoint])
         case marquee(start: CGPoint, end: CGPoint)
@@ -218,7 +221,28 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
         if case .move(_, let offset)? = gesture, offset != .zero {
             return easel.elements.map { selection.contains($0.id) ? $0.moved(by: offset) : $0 }
         }
+        if case .resize(_, let from, let to)? = gesture, from != to {
+            return easel.elements.map { selection.contains($0.id) ? $0.resized(from: from, to: to) : $0 }
+        }
         return easel.elements
+    }
+
+    /// The selected elements' box in board points (the selection frame without its outset).
+    private var selectedBoardBox: CGRect? {
+        let frames = (easel?.elements ?? []).filter { selection.contains($0.id) }.map(\.frame)
+        guard let first = frames.first else { return nil }
+        return frames.dropFirst().reduce(first) { $0.union($1) }
+    }
+
+    /// A corner handle of the selection under `local` (view points): the opposite corner of the selected box.
+    private func resizeAnchor(at local: CGPoint) -> CGPoint? {
+        guard !titleSelected, let view = selectionBox, let box = selectedBoardBox else { return nil }
+        let slop = EaselDraw.board.handleRadius.value + EaselDraw.board.hitSlop.value / 2
+        let corners: [(CGPoint, CGPoint)] = [
+            (CGPoint(x: view.minX, y: view.minY), CGPoint(x: box.maxX, y: box.maxY)), (CGPoint(x: view.maxX, y: view.minY), CGPoint(x: box.minX, y: box.maxY)),
+            (CGPoint(x: view.minX, y: view.maxY), CGPoint(x: box.maxX, y: box.minY)), (CGPoint(x: view.maxX, y: view.maxY), CGPoint(x: box.minX, y: box.minY)),
+        ]
+        return corners.first { hypot($0.0.x - local.x, $0.0.y - local.y) <= slop }?.1
     }
 
     public override func draw(_ dirtyRect: NSRect) {
@@ -236,7 +260,7 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
             r.fill()
             EaselPalette.selection.setStroke()
             NSBezierPath(rect: r).stroke()
-        case .move?, nil: break
+        case .move?, .resize?, nil: break
         }
         if let box = selectionBox { EaselDrawing.selection(box) }
     }
@@ -272,6 +296,12 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
         window?.makeFirstResponder(self)
         switch tool {
         case .select, .image:
+            // A corner handle of the selection resizes it (Shift keeps the proportions).
+            if let anchor = resizeAnchor(at: local), let box = selectedBoardBox {
+                gesture = .resize(anchor: anchor, from: box, to: box)
+                changed()
+                return
+            }
             if titleBox.contains(local), hitElement(p) == nil {
                 selection = []
                 titleSelected = true
@@ -323,6 +353,15 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
         switch gesture {
         case .move(let start, _)?:
             gesture = .move(start: start, offset: CGSize(width: p.x - start.x, height: p.y - start.y))
+        case .resize(let anchor, let from, _)?:
+            let minimum = EaselDraw.board.minimumResize.value
+            var width = max(minimum, abs(p.x - anchor.x)), height = max(minimum, abs(p.y - anchor.y))
+            if square, from.width > 0, from.height > 0 {
+                let scale = max(width / from.width, height / from.height)
+                width = from.width * scale; height = from.height * scale
+            }
+            let x = p.x < anchor.x ? anchor.x - width : anchor.x, y = p.y < anchor.y ? anchor.y - height : anchor.y
+            gesture = .resize(anchor: anchor, from: from, to: CGRect(x: x, y: y, width: width, height: height))
         case .draw(var draft)?:
             if draft.shape == .arrow {
                 draft.points = [draft.points[0], p]
@@ -353,6 +392,10 @@ public final class EaselBoardView: NSView, NSTextFieldDelegate {
             if abs(offset.width) >= 1 || abs(offset.height) >= 1 {
                 let moved = easel.elements.filter { selection.contains($0.id) }.map { $0.moved(by: offset) }
                 dispatch(.easel(.update(easel.id, moved)))
+            }
+        case .resize(_, let from, let to)?:
+            if from != to {
+                dispatch(.easel(.update(easel.id, easel.elements.filter { selection.contains($0.id) }.map { $0.resized(from: from, to: to) })))
             }
         case .draw(var draft)?:
             if draft.shape == .arrow {

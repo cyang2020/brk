@@ -30,6 +30,7 @@ public final class WindowRootView: NSView {
     private let zapOverlay: BoostZapOverlayView
     private let boostPanel: BoostPanel
     private let aiAnswer: AIAnswerDocumentView
+    private let aiPreview: AIPreviewCardView
     private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
@@ -52,6 +53,7 @@ public final class WindowRootView: NSView {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
         boostPanel = BoostPanel(dispatch: dispatch)
         aiAnswer = AIAnswerDocumentView(dispatch: dispatch)
+        aiPreview = AIPreviewCardView(dispatch: dispatch)
         captureOverlay = CaptureOverlayView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
@@ -67,7 +69,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
@@ -157,6 +159,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
+        aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
         spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, easelDeletion: snapshot.pendingEaselDeletion, frames: frames, palette: palette)

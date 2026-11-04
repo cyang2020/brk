@@ -569,7 +569,8 @@ public enum SystemEvent: Sendable, Equatable {
     case aiPartial(AIRequestID, String)
     case aiPageRead(AIRequestID, PageID, AIPageContent?)
     case aiDeadline(AIRequestID)
-    case aiHoverReady(WindowID, URL)
+    /// Shift was held over the hovered link long enough; `link` is its box in the page (points, top-left), if known.
+    case aiHoverReady(WindowID, URL, CGRect?)
     case aiTranslated(AIRequestID, Bool)
     case aiDownloadRenamed(DownloadID, originalPath: String, newPath: String?, error: String?)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.

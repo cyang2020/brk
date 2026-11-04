@@ -15,7 +15,7 @@ final class PaneHeaderView: NSView {
     private let back = PaneHeaderButton(symbol: "arrow.left", tip: "Go Back")
     private let forward = PaneHeaderButton(symbol: "arrow.right", tip: "Go Forward")
     private let reload = PaneHeaderButton(symbol: "arrow.clockwise", tip: "Reload This Page")
-    private let translate = PaneHeaderButton(symbol: "character.bubble", tip: "Translate Page…")
+    private let translate = PaneHeaderButton(symbol: "character.bubble", tip: "Translate to \(AILanguages.systemTarget)")
     private let siteControls = PaneHeaderButton(symbol: "slider.horizontal.2.square", tip: "Website controls and privacy")
     private let splitMenu = PaneHeaderButton(symbol: "square.split.2x1", tip: "Split View")
     private let close = PaneHeaderButton(symbol: "xmark", tip: "Close this Split Pane")
@@ -43,7 +43,8 @@ final class PaneHeaderView: NSView {
             guard let self, let pane = self.pane else { return }
             self.dispatch(pane.loading ? .page(.stop(.item(pane.tab))) : .page(.reload(.item(pane.tab), ignoringCache: false)))
         }
-        translate.action = { [weak self] in self?.dispatch(ActionID.aiTranslate.spec.command) }
+        // Arc's pane translation button: the page into the system language, like the page menu's Translate to English.
+        translate.action = { [weak self] in self?.dispatch(.assist(.translate(AILanguages.systemTarget))) }
         translate.identify(.tabTool("pane-translate"))
         siteControls.action = { [weak self] in self?.dispatch(.site(.controls)) }
         siteControls.identify(.paneSiteInfo)

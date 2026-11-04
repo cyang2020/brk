@@ -203,17 +203,25 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard !textView.hasMarkedText() else { return false }   // an input method is composing
         switch selector {
-        case #selector(NSResponder.insertNewline(_:)):
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
             // A held Return auto-repeats; only the first press chooses (`isARepeat` exists on key events only).
             let event = NSApp?.currentEvent
-            if !(event?.type == .keyDown && event?.isARepeat == true) { choose(highlighted) }
+            if event?.type == .keyDown && event?.isARepeat == true { return true }
+            // Max's Instant Links: Shift+Return on a web search opens its top results instead (P48-a).
+            if event?.modifierFlags.contains(.shift) == true, siteSearch == nil, let bar, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
+                dispatch(.assist(.instant(query)))
+                return true
+            }
+            choose(highlighted)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
             if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
-            // Tab never leaves the bar; with a site-search offer beside the input it enters site search.
+            // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
+            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab).
             if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
+            else if siteSearch == nil, let bar, Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
             leaveSiteSearch()
@@ -641,8 +649,10 @@ final class ResultRowView: NSView {
     func update(_ suggestion: Suggestion, highlighted: Bool, colors: CommandBarColors, captions: Bool) {
         self.suggestion = suggestion
         self.captions = captions
-        isSwitch = suggestion.kind == .switchToTab
-        let symbol = NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
+        // The Ask row lays out like Switch to Tab: the caption and the arrow square (P49).
+        isSwitch = suggestion.kind == .switchToTab || suggestion.kind == .ask
+        let symbol = suggestion.kind == .ask ? ArcGlyphs.flower(size: OverlayMetrics.commandBar.iconSize.value, lineWidth: 1.2)
+            : NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
         icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)
         favicon = suggestion.favicon
         hasFavicon = false

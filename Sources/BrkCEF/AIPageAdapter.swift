@@ -1,4 +1,6 @@
+import AppKit
 import BrkBase
+import BrkEngine
 import CefKit
 import Foundation
 
@@ -40,6 +42,48 @@ extension CEFEngine {
         return remote["value"] as? Bool == true
     }
 
+    public func showAITranslation(_ document: DocumentToken, translated: Bool) async -> Bool {
+        guard let value = try? await aiEvaluate(document, AIPageScripts.swap(translated: translated)) else { return false }
+        return value as? Bool == true
+    }
+
+    public func hoveredLink(_ document: DocumentToken, url: URL) async -> HoveredLink? {
+        guard let page = live[document.browser.page],
+              let data = try? JSONSerialization.data(withJSONObject: [url.absoluteString]),
+              let object = try? await aiEvaluate(document, AIPageScripts.hoveredLink(String(decoding: data, as: UTF8.self))) as? [String: Any],
+              let x = object["x"] as? Double, let y = object["y"] as? Double, let w = object["w"] as? Double, let h = object["h"] as? Double,
+              let ratio = object["ratio"] as? Double, ratio > 0 else { return nil }
+        // CSS pixels to points: devicePixelRatio is the backing scale times the page zoom.
+        let factor = ratio / (page.surface.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+        return HoveredLink(frame: CGRect(x: x * factor, y: y * factor, width: w * factor, height: h * factor), previewSite: object["site"] as? Bool == true)
+    }
+
+    /// The ready document's declared language, read once it finished loading (the URL pill's Translation Available,
+    /// the page menu's Translate to English). AI readers and non-web pages are skipped.
+    func reportLanguage(_ page: ChromePage) {
+        guard !page.isAIReader, let document = page.readyDocument,
+              let scheme = page.browser.url?.scheme?.lowercased(), ["http", "https", "file"].contains(scheme) else { return }
+        Task { @MainActor [weak self, weak page] in
+            guard let self, let page, let value = try? await self.aiEvaluate(document, AIPageScripts.language) as? String,
+                  self.isLive(page), page.readyDocument == document else { return }
+            page.detectedLanguage = value
+            self.pageDidEmit(page, .languageDetected(document, value))
+        }
+    }
+
+    /// One expression in the main frame's isolated world of `document`, its value returned by value.
+    private func aiEvaluate(_ document: DocumentToken, _ expression: String) async throws -> Any? {
+        guard let page = live[document.browser.page], page.incarnation == document.browser,
+              page.readyDocument == document, isLive(page), let transport = CefDevTools(browser: page.browser) else { throw AIPageFailure.unavailable }
+        defer { transport.invalidate() }
+        let world = try await aiWorld(transport)
+        try aiFence(page, document)
+        let result = try await transport.call("Runtime.evaluate", parameters: ["expression": expression, "contextId": world, "returnByValue": true])
+        try aiFence(page, document)
+        guard let response = try JSONSerialization.jsonObject(with: result) as? [String: Any], let remote = response["result"] as? [String: Any] else { return nil }
+        return remote["value"]
+    }
+
     private func aiFence(_ page: ChromePage, _ document: DocumentToken) throws {
         try Task.checkCancellation()
         guard isLive(page), page.readyDocument == document else { throw AIPageFailure.changed }
@@ -76,14 +120,35 @@ enum AIPageScripts {
       return {url:location.href,title:document.title,language:document.documentElement.lang||'',text:nodes.map(x=>x.text).join('\n'),nodes};
     })()
     """#
+    /// Writes the translation and keeps, per text node, its own text and the translation (`brkAITranslation`), so
+    /// Use Original and ⌘Z can swap them; a node translated again keeps its first own text.
     static func replace(_ json: String) -> String {
         """
         (()=>{const replacements=\(json),saved=globalThis.brkAIText;
         if(!saved||saved.length!==replacements.length)return false;
         const seen=new Set();
         for(const r of replacements){const old=saved[r.id];if(seen.has(r.id)||!old||!old.node.isConnected||old.node.nodeValue!==old.text||old.node.parentElement?.isContentEditable||typeof r.text!=='string')return false;seen.add(r.id);}
-        for(const r of replacements)saved[r.id].node.nodeValue=r.text;
+        const kept=globalThis.brkAITranslation||(globalThis.brkAITranslation=new Map());
+        for(const r of replacements){const old=saved[r.id],entry=kept.get(old.node);kept.set(old.node,{original:entry?entry.original:old.text,translated:r.text});old.node.nodeValue=r.text;}
         globalThis.brkAIText=null;return true;})()
+        """
+    }
+    /// Use Original (`translated` false) and its ⌘Z: every kept node still showing the other text gets this one.
+    static func swap(translated: Bool) -> String {
+        """
+        (()=>{const kept=globalThis.brkAITranslation;if(!kept)return false;let n=0;
+        for(const [node,e] of kept){if(!node.isConnected)continue;const from=\(translated)?e.original:e.translated,to=\(translated)?e.translated:e.original;
+        if(node.nodeValue!==from)continue;node.nodeValue=to;n++;}return n>0;})()
+        """
+    }
+    static let language = "(document.documentElement.lang||'').trim().slice(0,40)"
+    /// The innermost hovered link to the address (`[url]`, JSON), its first line box in CSS pixels and the ratio.
+    static func hoveredLink(_ json: String) -> String {
+        """
+        (()=>{const [want]=\(json);const links=[...document.querySelectorAll('a:hover,area:hover')].filter(a=>a.href===want);
+        const a=links.pop();if(!a)return null;const r=a.getClientRects()[0]||a.getBoundingClientRect();
+        const site=a.matches(".title .titleline > a,[data-testid=tweetText] a[role=link][target=_blank],[data-testid='card.wrapper'] a[role=link],a[role=link][rel='nofollow noreferrer'][target=_blank]")||!!(a.closest('g-section-with-header')&&a.querySelector('[role=heading]'));
+        return {x:r.left,y:r.top,w:r.width,h:r.height,ratio:window.devicePixelRatio||1,site};})()
         """
     }
 }

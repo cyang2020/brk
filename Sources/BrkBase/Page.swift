@@ -155,6 +155,10 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case committed(URL)
     case titleChanged(String)
     case linkHovered(URL?)
+    /// The ready document's declared language (`<html lang>`, "" when it has none), read once it finished loading.
+    case languageDetected(DocumentToken, String)
+    /// The page menu's "Translate to English" (Arc's item, Q07-a), naming the system language the page goes into.
+    case translateRequested(String)
     case faviconChanged(URL?)
     case documentPictureInPictureChanged(DocumentToken, Bool, error: String?)
     case mediaChanged(DocumentToken, [MediaPlayer], error: String?)

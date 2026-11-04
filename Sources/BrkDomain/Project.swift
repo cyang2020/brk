@@ -7,8 +7,11 @@ public struct ProjectionContext: Sendable {
     public let now: Instant
     public let calendar: Calendar
     public let systemScheme: Scheme
-    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light) {
+    /// The system's first preferred language ("en-US"): pages in another language offer translation into it.
+    public let systemLanguage: String
+    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light, systemLanguage: String = "en") {
         self.systemScheme = systemScheme
+        self.systemLanguage = systemLanguage
         self.now = now
         self.calendar = calendar
     }
@@ -31,7 +34,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.ai = state.session.ai.answers[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.ai = state.session.ai.answers[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -129,7 +132,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         },
         engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
         shortcuts: shortcuts,
-        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active),
+        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName),
         advanced: doc.settings.advanced,
         tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
         littleArcShortcut: state.session.globalShortcut
@@ -239,11 +242,23 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         return tabRow(tab, t, .favorites)
     })
     favorites.hintDismissed = state.doc.tabPreferences.favoritesHintDismissed
+    // Instant Links rows head Today while their search runs (P48-a).
+    let instantRows = (state.session.ai.instantRows[id] ?? []).map { row -> Row in
+        var tab = TabRow(id: row.id, section: .today, title: row.failed ? AICopy.instantFailed : AICopy.instantSearching, url: nil, favicon: nil, icon: nil,
+                         status: .idle, loading: !row.failed, loaded: true, canReset: false)
+        tab.instant = row.failed ? .failed : .searching
+        return .tab(tab)
+    }
     var spaceSnapshot = SpaceSnapshot(
         id: space.id, title: state.displayTitle(of: space.id), icon: space.icon,
         pinned: SectionSnapshot(root: space.pinnedRoot, kind: .pinned, collapsed: space.pinnedCollapsed, rows: rows(under: space.pinnedRoot, .pinned)),
-        today: SectionSnapshot(root: space.todayRoot, kind: .today, collapsed: false, rows: rows(under: space.todayRoot, .today))
+        today: SectionSnapshot(root: space.todayRoot, kind: .today, collapsed: false, rows: instantRows + rows(under: space.todayRoot, .today))
     )
+    if doc.kind == .standard, state.doc.settings.max.tidyTabs {
+        let todayTabs = (tree[space.todayRoot]?.children ?? []).filter { tree[$0]?.kind == .tab }.count
+        spaceSnapshot.today.canTidy = todayTabs > 6
+        spaceSnapshot.today.tidying = state.session.ai.tidying.contains(id)
+    }
     if space.pinnedCollapsed, let shown, tree.role(of: shown.id)?.kind == .pinned,
        let row = rows(under: space.pinnedRoot, .pinned).flatMap({ flattenRows($0) }).first(where: { $0.id == shown.id }) {
         spaceSnapshot.pinned.rows = [row]
@@ -297,6 +312,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             pill.loadProgress = live.loadProgress
             pill.loading = live.loading; pill.canGoBack = live.canGoBack; pill.canGoForward = live.canGoForward; pill.zoomPercent = live.zoomPercent
         }
+        pill.translation = state.pillTranslation(PageID(window: id, item: focusedPane), in: id, systemLanguage: ctx.systemLanguage)
         // An Easel's pill is its Share button (Q09 a: a lock and "Share").
         if let easel = EaselPage.id(of: t.url), state.doc.easels[easel] != nil {
             pill.share = easel
@@ -364,7 +380,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             createsTab: target == .newTab,
             fillsPane: { if case .fillPane = target { true } else { false } }(),
             newDocument: doc.kind == .little ? nil : state.profileSettings(in: id).documentApp,
-            travel: state.travelCandidates(window: id, space: space, focused: state.resolveTab(.focused, in: id))
+            travel: state.travelCandidates(window: id, space: space, focused: state.resolveTab(.focused, in: id)),
+            askProvider: doc.kind != .incognito && state.doc.settings.max.enabled(.commandBar) ? state.askProviderName : nil,
+            instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks)
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
@@ -652,7 +670,9 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
        let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }),
        state.doc.spaceOrder.first(where: { state.doc.spaces[$0]?.profile == space.profile }) == space.id {
         let threshold = state.profileSettings(space.profile).autoArchive
-        result.archiveEducation = threshold == .never ? "Auto-archive is off. Change it in Archive." : "Idle Today tabs archive after " + threshold.tabToolsLabel + ". Tabs on screen stay open."
+        // Arc's banner names the threshold ("… haven’t used in the past 12 hours."); with auto-archive off it has
+        // nothing to explain.
+        if threshold != .never { result.archiveEducation = threshold.tabToolsLabel }
     }
     return result
 }

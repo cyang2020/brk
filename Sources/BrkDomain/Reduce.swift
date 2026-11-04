@@ -222,7 +222,7 @@ struct Work {
         case .aiPartial(let id, let text): aiPartial(id, text)
         case .aiPageRead(let id, let page, let content): aiReadResult(id, page: page, content: content)
         case .aiDeadline(let id): aiDeadline(id)
-        case .aiHoverReady(let window, let url): aiHoverReady(window, url: url)
+        case .aiHoverReady(let window, let url, let link): aiHoverReady(window, url: url, link: link)
         case .aiTranslated(let id, let success): aiTranslated(id, success: success)
         case .aiDownloadRenamed(let id, let original, let new, let error): aiDownloadRenamed(id, original: original, new: new, error: error)
         }

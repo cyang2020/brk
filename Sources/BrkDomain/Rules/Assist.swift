@@ -7,25 +7,52 @@ extension Work {
     mutating func assist(_ intent: AIIntent, in window: WindowID) {
         switch intent {
         case .cancel, .dismiss:
-            cancelAI(in: window)
+            cancelAI(in: window, slot: .panel)
             if intent == .dismiss { state.session.ai.answers[window] = nil }
             return
         case .searchFallback:
             guard let query = state.session.ai.answers[window]?.searchQuery else { return }
-            cancelAI(in: window)
+            cancelAI(in: window, slot: .panel)
             commandBar(.submit(query), in: window)
             return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:
-            guard case .profile(let profile) = state.libraryContext(in: window),
-                  let answer = state.session.ai.answers[window] else { return }
+            guard case .profile(let profile) = state.libraryContext(in: window) else { return }
+            let page = state.findPage(in: window)
+            let translation = page.flatMap { state.session.ai.translations[$0] }
+            let answer = state.session.ai.answers[window]
+            let host = page.flatMap { state.address(of: $0.item, in: window, for: .visible)?.host?.lowercased() } ?? answer?.site
+            let language = translation?.source ?? page.flatMap { state.session.live[$0]?.language }.map(AILanguages.base) ?? answer?.language
+            guard host != nil || language != nil else { return }
             var exclusions = state.doc.settings.max.translationExclusions?[profile] ?? AITranslationExclusions()
-            if intent == .neverTranslateSite, let host = answer.site { exclusions.sites.insert(host) }
-            if intent == .neverTranslateLanguage, let lang = answer.language, !lang.isEmpty { exclusions.languages.insert(lang) }
+            if intent == .neverTranslateSite, let host { exclusions.sites.insert(host) }
+            if intent == .neverTranslateLanguage, let language, !language.isEmpty { exclusions.languages.insert(language) }
             if state.doc.settings.max.translationExclusions == nil { state.doc.settings.max.translationExclusions = [:] }
             state.doc.settings.max.translationExclusions?[profile] = exclusions
-            cancelAI(in: window)
-            state.session.ai.answers[window]?.text = "Never-translate preference saved for this profile. Reset it in Settings → Max."
+            cancelAI(in: window, slot: .translate)
+            // Arc's Never Translate This Site: the page goes back to its own language and is not offered again.
+            if let page, translation?.showingTranslation == true { showTranslation(page, false) }
+            if answer != nil { state.session.ai.answers[window]?.text = "Never-translate preference saved for this profile. Reset it in Settings → Max." }
+            return
+        case .useOriginal:
+            guard let page = state.findPage(in: window), let translation = state.session.ai.translations[page], translation.showingTranslation else { return }
+            showTranslation(page, false)
+            undoToast("Translated back to \(AILanguages.name(translation.source))! Use", undo: .translation(page), in: window)
+            return
+        case .languageSettings:
+            guard let url = URL(string: "chrome://settings/languages"), let doc = state.doc.windows[window] else { return }
+            if doc.kind == .standard { _ = openTab(url, inSpace: doc.space, window: window, focus: true) } else { openScratchTab(url, in: window, focus: true) }
+            return
+        case .previewHover(let inside):
+            if inside { state.session.ai.previewHeld.insert(window) } else {
+                state.session.ai.previewHeld.remove(window)
+                if state.session.ai.hover[window] == nil { closePreview(in: window) }
+            }
+            return
+        case .sharePreview:
+            guard let url = state.session.ai.previews[window]?.url else { return }
+            effects.append(.copyToPasteboard(url.absoluteString))
+            toast("Copied Link to Clipboard", in: window)
             return
         default: break
         }
@@ -50,21 +77,27 @@ extension Work {
             guard aiEnabled(.askPage, window), let q = aiQuestion(question) else { return }
             readActiveAI(.askPage(q), title: q, in: window)
         case .translate(let language):
-            guard aiEnabled(.translation, window), let language = aiQuestion(language), language.count <= 60 else { return }
-            readActiveAI(.translate(language), title: "Translate to " + language, in: window)
+            guard aiEnabled(.translation, window), let language = aiQuestion(language), language.count <= 60,
+                  let page = state.findPage(in: window) else { return }
+            translatePage(page, to: language, in: window)
         case .organizeToday:
+            // Arc's 🧹 Tidy on the Today divider (P46-b): the result is tab groups in Today and an undo toast.
             guard state.doc.settings.max.tidyTabs, let space = state.doc.windows[window]?.space else {
-                aiMessage("Enable Organize Today Tabs in Settings → Max.", in: window); return
+                toast("Enable Tidy Tabs in Settings → Max.", link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window); return
             }
             let tabs = eligibleAITabs(space, in: window)
-            guard tabs.count >= 2, tabs.count <= 50 else { aiMessage("Organize needs 2–50 ungrouped Today tabs.", in: window); return }
+            guard tabs.count >= 2, tabs.count <= 50 else { toast("Tidy needs 2–50 ungrouped Today tabs.", in: window); return }
             _ = startAI(.tidyToday(space, tabs: tabs), purpose: .organize, title: "Organize Today Tabs", window: window)
+            state.session.ai.tidying.insert(window)
         case .instant(let query):
             guard aiEnabled(.instantLinks, window), let q = aiQuestion(query) else { return }
+            // Arc (P48-a): the command bar closes and "Searching the web for you…" heads Today while Max looks; the
+            // proposed pages are verified by request-owned pages in this browsing context before they open.
             let id = startAI(.instant(q), purpose: .instant(q), title: "Instant Link: " + q, window: window)
-            state.session.ai.answers[window]?.searchQuery = q
-            // The proposed URL is verified by a request-owned page in this browsing context before opening.
             state.session.ai.requests[id]?.hidden = []
+            if state.doc.windows[window]?.kind == .standard {
+                state.session.ai.instantRows[window, default: []].insert(AIInstantRow(id: ItemID(Self.instantRowPrefix + id.rawValue), request: id), at: 0)
+            }
         case .browse(let question, let sources):
             guard aiEnabled(.browse, window), let q = aiQuestion(question), (1...4).contains(sources.count),
                   Set(sources).count == sources.count, sources.allSatisfy({ AIValidation.destination($0.absoluteString) != nil }) else {
@@ -91,22 +124,34 @@ extension Work {
         if state.doc.settings.max.provider == .off { return "No local AI tool selected for Max" }
         return nil
     }
+    /// Off, the feature says how to turn it on: in the answer panel for the panel's features, as a notice for the
+    /// ones that work in place (preview card, Today row, the page itself).
     private mutating func aiEnabled(_ feature: AIFeature, _ window: WindowID) -> Bool {
-        guard state.doc.settings.max.enabled(feature) else { aiMessage("Enable \(feature.title) in Settings → Max.", in: window); return false }
+        guard state.doc.settings.max.enabled(feature) else {
+            let text = "Enable \(feature.title) in Settings → Max."
+            if [.instantLinks, .translation, .linkPreviews].contains(feature) {
+                toast(text, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window)
+            } else { aiMessage(text, in: window) }
+            return false
+        }
         return true
     }
     private mutating func aiMessage(_ text: String, in window: WindowID) {
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: "Max", text: text, busy: false, sources: [], searchQuery: nil)
     }
+    /// A new request replaces the window's earlier one of the same slot (one answer, one preview, one translation,
+    /// one tidy); Instant Links searches run side by side, one Today row each. Only the panel's purposes write the
+    /// answer panel.
     private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true) -> AIRequestID {
-        cancelAI(in: window)
+        if purpose.slot != .instant { cancelAI(in: window, slot: purpose.slot) }
         let id = AIRequestID(ctx.newID())
         state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose)
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
-        state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [], searchQuery: nil)
+        if !purpose.inPlace {
+            state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [], searchQuery: nil)
+        }
         state.session.windows[window]?.overlay = nil
-        state.session.ai.answers[window]?.isPreview = purpose.isPreview
         effects.append(.aiWatch(id, seconds: 120))
         if run { sendAI(id, task: task) }
         return id
@@ -125,6 +170,36 @@ extension Work {
         state.session.ai.requests[id]?.document = document
         effects.append(.aiRead(id, document))
     }
+
+    /// Arc's Translate to English (the page menu, P50-b) and the popover's Choose Another Language: the page's text is
+    /// replaced in place; nothing else opens. A page that shows its own text again after Use Original gets the same
+    /// translation back without asking the tool again.
+    mutating func translatePage(_ page: PageID, to language: String, in window: WindowID) {
+        guard state.doc.windows[window]?.kind != .incognito else { toast("AI page features are unavailable in private windows.", in: window); return }
+        guard state.doc.settings.max.enabled(.translation) else { _ = aiEnabled(.translation, window); return }
+        guard let live = state.session.live[page], case .ready(let document) = live.document,
+              live.requestContext == state.libraryContext(in: window) else {
+            toast("Wait for this page to finish loading, then retry.", in: window); return
+        }
+        if let translation = state.session.ai.translations[page], translation.document == document, translation.target == language {
+            if !translation.showingTranslation { showTranslation(page, true) }
+            return
+        }
+        let id = startAI(.ask("Translate to " + language), purpose: .translate(language), title: "Translate to " + language, window: window, run: false)
+        state.session.ai.requests[id]?.document = document
+        state.session.ai.requests[id]?.page = page
+        effects.append(.aiRead(id, document))
+    }
+
+    /// Swaps the page between its translation and its own text (the isolated world keeps both); ⌘Z after Use
+    /// Original comes back here with `translated` true.
+    mutating func showTranslation(_ page: PageID, _ translated: Bool) {
+        guard var translation = state.session.ai.translations[page], state.session.live[page]?.document == .ready(translation.document) else { return }
+        translation.showingTranslation = translated
+        state.session.ai.translations[page] = translation
+        effects.append(.aiShowTranslation(translation.document, translated: translated))
+    }
+
     private mutating func makeAIHidden(_ id: AIRequestID, urls: [URL]) {
         guard let request = state.session.ai.requests[id] else { return }
         let hidden = urls.enumerated().map { index, url in
@@ -148,6 +223,15 @@ extension Work {
             guard doc.browser == token else { return true }
             aiHiddenReady(id, document: doc)
         case .loadFailed, .rendererGone, .closedByPage:
+            // Instant Links drops a result that does not load and keeps the others.
+            if case .instant = request.purpose {
+                state.session.ai.requests[id]?.hidden.removeAll { $0.id == token.page }
+                if state.session.ai.requests[id]?.hidden.isEmpty == true {
+                    let opened = state.session.ai.instantRows[request.window]?.first { $0.request == id }?.opened.isEmpty == false
+                    completeAI(id, text: "Oops, something went wrong.", success: opened)
+                }
+                return true
+            }
             completeAI(id, text: "This source is unavailable. Check its address or sign in in a normal tab, then retry.")
         default: break
         }
@@ -179,22 +263,22 @@ extension Work {
         case .translate(let target):
             guard case .profile(let profile) = request.context else { return }
             let exclusions = state.doc.settings.max.translationExclusions?[profile] ?? AITranslationExclusions()
-            state.session.ai.answers[request.window]?.language = content.language.lowercased()
-            state.session.ai.answers[request.window]?.site = content.url.host?.lowercased()
-            if exclusions.languages.contains(content.language.lowercased()) || exclusions.sites.contains(content.url.host?.lowercased() ?? "") {
+            let language = AILanguages.base(content.language)
+            if exclusions.languages.contains(language) || exclusions.sites.contains(content.url.host?.lowercased() ?? "") {
                 completeAI(id, text: "This profile never translates this language or site. Change the choice in Settings → Max."); return
             }
             guard !content.nodes.isEmpty else { completeAI(id, text: "No visible text is available to translate."); return }
-            state.session.ai.answers[request.window]?.sources = [AISource(title: content.title, url: content.url)]
             sendAI(id, task: .translate(target: target, content: content))
         case .preview:
             state.session.ai.requests[id]?.hidden = []
-            state.session.ai.answers[request.window]?.sources = [AISource(title: content.title, url: content.url)]
             sendAI(id, task: .summarize(content))
         case .instant:
-            // A real main-frame ready document establishes reachability using the original context.
-            commandBar(.submit(content.url.absoluteString), in: request.window)
-            completeAI(id, text: "Opened " + content.url.absoluteString)
+            // A real main-frame ready document establishes reachability using the original context: the page opens
+            // as a Today tab under the row (several results open in the tool's order, the first one shown), and the
+            // row goes once every result has answered.
+            state.session.ai.requests[id]?.hidden.removeAll { $0.id == page }
+            openInstantResult(content.url, request: id, in: request.window)
+            if state.session.ai.requests[id]?.hidden.isEmpty == true { completeAI(id, text: "Opened " + content.url.absoluteString, success: true) }
         case .browse(let question):
             guard request.contents.count == request.hidden.count else { return }
             let pages = request.hidden.compactMap { request.contents[$0.id] }
@@ -231,9 +315,9 @@ extension Work {
                   let name = AIValidation.filename(text, original: original) else { completeAI(id, text: "The tool returned an unsafe filename, or the download changed. No file was renamed."); return }
             effects.append(.aiRenameDownload(download, originalPath: path, filename: name))
         case .instant:
-            guard let url = AIValidation.destination(text) else { completeAI(id, text: "The tool did not propose a safe web address. Choose Search Instead."); return }
-            makeAIHidden(id, urls: [url])
-            state.session.ai.answers[state.session.ai.requests[id]!.window]?.text = "Checking the destination in this profile…"
+            let urls = AIValidation.destinations(text)
+            guard !urls.isEmpty else { completeAI(id, text: "The tool did not propose a safe web address."); return }
+            makeAIHidden(id, urls: urls)
         case .tidyToday(let space, let tabs):
             guard let request = state.session.ai.requests[id], eligibleAITabs(space, in: request.window) == tabs,
                   let plan = AIValidation.plan(text, eligible: tabs) else { completeAI(id, text: "The plan was invalid or Today changed. No tabs were moved. Retry Organize Today Tabs."); return }
@@ -243,6 +327,7 @@ extension Work {
                   nodes.count == content.nodes.count, Set(nodes.map(\.id)).count == nodes.count,
                   Set(nodes.map(\.id)) == Set(content.nodes.map(\.id)), nodes.allSatisfy({ $0.text.count <= 4000 }),
                   state.session.ai.requests[id] != nil else { completeAI(id, text: "The tool returned an invalid translation. The page was left unchanged."); return }
+            state.session.ai.requests[id]?.translated = nodes
             effects.append(.aiTranslate(id, content, nodes))
         case .browse(_, let pages):
             let answer = String(text.prefix(60_000))
@@ -252,14 +337,20 @@ extension Work {
             completeAI(id, text: answer)
         case .ask, .pageQuestion:
             completeAI(id, text: String(text.prefix(60_000)))
-        case .summarize: completeAI(id, text: String(text.prefix(700)))
+        case .summarize:
+            guard let request = state.session.ai.requests[id], state.session.ai.previews[request.window]?.request == id else { completeAI(id, text: ""); return }
+            guard let reply = AIValidation.preview(text) else { completeAI(id, text: "No preview available"); return }
+            if reply.blocked == true { completeAI(id, text: "No preview available"); return }
+            state.session.ai.previews[request.window]?.title = reply.quickSummary ?? ""
+            state.session.ai.previews[request.window]?.details = reply.details ?? []
+            completeAI(id, text: "", success: true)
         }
     }
     mutating func aiPartial(_ id: AIRequestID, _ text: String) {
         guard let request = state.session.ai.requests[id], state.session.pendingAI[id] != nil else { return }
         switch request.task {
-        case .ask, .pageQuestion, .browse, .summarize:
-            state.session.ai.answers[request.window]?.text = String(text.prefix(request.purpose.isPreview ? 700 : 60_000))
+        case .ask, .pageQuestion, .browse:
+            state.session.ai.answers[request.window]?.text = String(text.prefix(60_000))
         default: break
         }
     }
@@ -268,20 +359,82 @@ extension Work {
         completeAI(id, text: "The source or AI tool did not answer in time. The request was stopped; retry or use ordinary search.")
     }
     mutating func aiTranslated(_ id: AIRequestID, success: Bool) {
-        completeAI(id, text: success ? "Page translated. Controls and page structure were preserved. Reload to restore the original text." : "The document or text changed. Translation was not applied; reload and retry.")
+        if success, let request = state.session.ai.requests[id], let page = request.page, let document = request.document,
+           case .translate(let target) = request.purpose, state.session.live[page]?.document == .ready(document) {
+            // The page's own language stays the first translation's (Choose Another Language translates the
+            // translation; Use Original still brings the page's own text back).
+            let earlier = state.session.ai.translations[page].flatMap { $0.document == document ? $0.source : nil }
+            let source = earlier ?? AILanguages.base(request.contents[page]?.language ?? "")
+            state.session.ai.translations[page] = AIPageTranslation(document: document, source: source, target: target, showingTranslation: true)
+        }
+        completeAI(id, text: success ? "Page translated. Controls and page structure were preserved. Reload to restore the original text." : "The document or text changed. Translation was not applied; reload and retry.", success: success)
     }
-    private mutating func completeAI(_ id: AIRequestID, text: String) {
+    private static let cancelled = "Request cancelled."
+    static let instantRowPrefix = "instant-"
+    /// `success`: the in-place purposes' good ending (their result is already applied); otherwise `text` says what
+    /// went wrong, in the panel, on the preview card, as the Today row's "Oops, something went wrong." or a notice.
+    private mutating func completeAI(_ id: AIRequestID, text: String, success: Bool = false) {
         guard let request = state.session.ai.requests.removeValue(forKey: id) else { return }
         state.session.pendingAI[id] = nil
         effects.append(.aiCancel(id))
+        if request.purpose.inPlace { finishInPlace(id, request, text: text, success: success); return }
         guard state.session.ai.answers[request.window]?.request == id else { return }
         state.session.ai.answers[request.window]?.text = text
         state.session.ai.answers[request.window]?.busy = false
         state.session.ai.answers[request.window]?.request = nil
     }
-    private mutating func cancelAI(in window: WindowID) {
-        let ids = state.session.ai.requests.filter { $0.value.window == window }.map(\.key)
-        for id in ids { completeAI(id, text: "Request cancelled.") }
+    private mutating func finishInPlace(_ id: AIRequestID, _ request: AIRequest, text: String, success: Bool) {
+        let window = request.window
+        switch request.purpose {
+        case .preview:
+            guard state.session.ai.previews[window]?.request == id else { return }
+            state.session.ai.previews[window]?.busy = false
+            state.session.ai.previews[window]?.request = nil
+            if !success { state.session.ai.previews[window]?.failure = text }
+        case .instant:
+            guard let index = state.session.ai.instantRows[window]?.firstIndex(where: { $0.request == id }) else { return }
+            if success || text == Self.cancelled || state.session.ai.instantRows[window]![index].opened.count > 0 {
+                state.session.ai.instantRows[window]!.remove(at: index)
+                if state.session.ai.instantRows[window]!.isEmpty { state.session.ai.instantRows[window] = nil }
+            } else { state.session.ai.instantRows[window]![index].failed = true }
+        case .translate:
+            if !success, text != Self.cancelled { toast(text, in: window) }
+        case .organize:
+            state.session.ai.tidying.remove(window)
+            if !success, text != Self.cancelled { toast(text, in: window) }
+        case .answer, .askPage, .browse: break
+        }
+    }
+    private mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
+        let ids = state.session.ai.requests.filter { $0.value.window == window && $0.value.purpose.slot == slot }.map(\.key)
+        for id in ids { completeAI(id, text: Self.cancelled) }
+    }
+    /// Opens a verified Instant Links result as a Today tab under the window's rows (an ephemeral window: in its own
+    /// container); the first result is shown.
+    private mutating func openInstantResult(_ url: URL, request id: AIRequestID, in window: WindowID) {
+        guard let doc = state.doc.windows[window] else { return }
+        let index = state.session.ai.instantRows[window]?.firstIndex { $0.request == id }
+        let count = index.map { state.session.ai.instantRows[window]![$0].opened.count } ?? 0
+        let tab: ItemID?
+        if doc.kind == .standard { tab = openTab(url, inSpace: doc.space, window: window, focus: count == 0, at: count) }
+        else { openScratchTab(url, in: window, focus: count == 0); tab = nil }
+        if let index, let tab { state.session.ai.instantRows[window]![index].opened.append(tab) }
+    }
+    /// The × on an Instant Links row ("Oops, something went wrong." or still searching): the row goes and its search
+    /// stops. True when every target was such a row.
+    mutating func closeInstantRows(_ ids: [ItemID], in window: WindowID) -> Bool {
+        guard !ids.isEmpty, let rows = state.session.ai.instantRows[window], ids.allSatisfy({ id in rows.contains { $0.id == id } }) else { return false }
+        for row in rows where ids.contains(row.id) {
+            if state.session.ai.requests[row.request] != nil { completeAI(row.request, text: Self.cancelled) }
+            state.session.ai.instantRows[window]?.removeAll { $0.id == row.id }
+        }
+        if state.session.ai.instantRows[window]?.isEmpty == true { state.session.ai.instantRows[window] = nil }
+        return true
+    }
+    private mutating func closePreview(in window: WindowID) {
+        for (id, request) in state.session.ai.requests where request.window == window && request.purpose.slot == .preview { completeAI(id, text: Self.cancelled) }
+        state.session.ai.previews[window] = nil
+        state.session.ai.previewHeld.remove(window)
     }
     mutating func reconcileAI(from previous: AppState) {
         let providerChanged = previous.doc.settings.max.provider != state.doc.settings.max.provider
@@ -297,7 +450,9 @@ extension Work {
         for (id, request) in state.session.ai.requests {
             let ownerExists = state.doc.windows[request.window] != nil
             let sameContext = state.libraryContext(in: request.window) == request.context
-            let sameDocument = request.document.map { state.session.live[$0.browser.page]?.document == .ready($0) && state.findPage(in: request.window) == $0.browser.page } ?? true
+            let sameDocument = request.document.map { document in
+                state.session.live[document.browser.page]?.document == .ready(document) && (request.page != nil || state.findPage(in: request.window) == document.browser.page)
+            } ?? true
             let featureEnabled: Bool = switch request.purpose {
             case .answer:
                 if case .renameDownload = request.task { state.doc.settings.max.enabled(.downloadRename) }
@@ -311,9 +466,22 @@ extension Work {
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
         }
-        for window in Set(state.session.ai.answers.keys).union(state.session.ai.undo.keys).union(state.session.ai.hover.keys).union(state.session.ai.answerContexts.keys) where state.doc.windows[window] == nil || (state.session.ai.answerContexts[window] != nil && state.session.ai.answerContexts[window] != state.libraryContext(in: window)) {
+        for window in Set(state.session.ai.answers.keys).union(state.session.ai.undo.keys).union(state.session.ai.hover.keys).union(state.session.ai.answerContexts.keys)
+            .union(state.session.ai.previews.keys).union(state.session.ai.instantRows.keys)
+            where state.doc.windows[window] == nil || (state.session.ai.answerContexts[window] != nil && state.session.ai.answerContexts[window] != state.libraryContext(in: window)) {
             state.session.ai.answerContexts[window] = nil
             state.session.ai.answers[window] = nil; state.session.ai.undo[window] = nil; state.session.ai.hover[window] = nil; state.session.ai.hoverDocuments[window] = nil
+            state.session.ai.previews[window] = nil; state.session.ai.previewHeld.remove(window); state.session.ai.instantRows[window] = nil
+            state.session.ai.tidying.remove(window)
+        }
+        // A translation belongs to one document: a reload or a new page shows the page's own text.
+        for (page, translation) in state.session.ai.translations where state.session.live[page]?.document != .ready(translation.document) {
+            state.session.ai.translations[page] = nil
+        }
+        // Rows whose search is gone (a cancelled request) go with it; failed rows stay until their × is clicked.
+        for (window, rows) in state.session.ai.instantRows {
+            let kept = rows.filter { $0.failed || state.session.ai.requests[$0.request] != nil }
+            if kept != rows { state.session.ai.instantRows[window] = kept.isEmpty ? nil : kept }
         }
     }
 
@@ -334,27 +502,30 @@ extension Work {
         }
     }
 
+    /// A link under the pointer (CEF's status text) or none. BrkApp starts the card once Shift has been held over the
+    /// same link for Arc's two seconds (`Effect.aiHover`); a new link or none closes the card, unless the pointer
+    /// moved onto the card itself.
     mutating func aiHover(_ url: URL?, in window: WindowID) {
         guard state.doc.settings.max.enabled(.linkPreviews), state.doc.windows[window]?.kind != .incognito else { return }
         let url = url.flatMap { AIValidation.destination($0.absoluteString) }
         guard state.session.ai.hover[window] != url else { return }
         state.session.ai.hover[window] = url
-        state.session.ai.hoverDocuments[window] = state.findPage(in: window).flatMap { page in
+        let document = state.findPage(in: window).flatMap { page -> DocumentToken? in
             if case .ready(let document) = state.session.live[page]?.document { document } else { nil }
         }
-        for (id, request) in state.session.ai.requests where request.window == window && request.purpose.isPreview { completeAI(id, text: "Preview cancelled.") }
-        if state.session.ai.answers[window]?.isPreview == true { state.session.ai.answers[window] = nil }
-        effects.append(.aiHover(window, url))
+        state.session.ai.hoverDocuments[window] = document
+        if url != nil || !state.session.ai.previewHeld.contains(window) { closePreview(in: window) }
+        effects.append(.aiHover(window, url, document))
     }
-    mutating func aiHoverReady(_ window: WindowID, url: URL) {
+    mutating func aiHoverReady(_ window: WindowID, url: URL, link: CGRect?) {
         guard state.session.ai.hover[window] == url, state.doc.settings.max.enabled(.linkPreviews), state.doc.windows[window]?.kind != .incognito,
               let document = state.session.ai.hoverDocuments[window],
               state.findPage(in: window) == document.browser.page,
               state.session.live[document.browser.page]?.document == .ready(document),
-              state.session.live[document.browser.page]?.requestContext == state.libraryContext(in: window),
-              !state.session.ai.requests.values.contains(where: { $0.window == window && !$0.purpose.isPreview }),
-              state.session.ai.answers[window] == nil || state.session.ai.answers[window]?.isPreview == true else { return }
+              state.session.live[document.browser.page]?.requestContext == state.libraryContext(in: window) else { return }
         let id = startAI(.ask("Summarize link"), purpose: .preview(url), title: "Link Preview", window: window, run: false)
+        state.session.ai.previews[window] = AIPreviewSnapshot(url: url, page: document.browser.page, link: link, busy: true,
+                                                              title: url.host ?? url.absoluteString, request: id)
         makeAIHidden(id, urls: [url])
     }
 
@@ -383,14 +554,15 @@ extension Work {
         } catch { completeAI(id, text: "The plan could not be applied. No tabs were moved."); return }
         state.doc.tree = tree
         state.session.ai.undo[request.window] = AIOrganizeUndo(space: space, original: original, folders: folders)
-        completeAI(id, text: "Organized \(tabs.count) Today tabs into \(plan.count) \(plan.count == 1 ? "group" : "groups").")
-        state.session.ai.answers[request.window]?.canUndo = true
+        completeAI(id, text: "Organized \(tabs.count) Today tabs into \(plan.count) \(plan.count == 1 ? "group" : "groups").", success: true)
+        // Arc names the undo "tidying"; the toast is Arc's undo toast (Cleared Tabs! Use ⌘Z to undo), its words ours.
+        undoToast("Tidied Tabs! Use", undo: .tidy, in: request.window)
     }
-    private mutating func undoAIOrganize(in window: WindowID) {
+    mutating func undoAIOrganize(in window: WindowID) {
         guard let undo = state.session.ai.undo[window], state.doc.windows[window]?.space == undo.space,
               let root = state.doc.spaces[undo.space]?.todayRoot,
               undo.folders.allSatisfy({ state.doc.tree[$0.key]?.parent == root && state.doc.tree[$0.key]?.children == $0.value }) else {
-            aiMessage("The groups changed. Undo was refused to protect your edits.", in: window); return
+            toast("The groups changed. Undo was refused to protect your edits.", in: window); return
         }
         var tree = state.doc.tree
         do {
@@ -403,7 +575,6 @@ extension Work {
         } catch { return }
         state.doc.tree = tree
         state.session.ai.undo[window] = nil
-        aiMessage("Restored Today tab order.", in: window)
     }
 
     mutating func aiDownloadRenamed(_ id: DownloadID, original: String, new: String?, error: String?) {
@@ -422,6 +593,57 @@ extension Work {
         state.session.windows[window]!.suggestions = Suggestions(query: query, results: Array(results.prefix(Metrics.commandBar.maxSearchSuggestions.value)))
     }
 }
-private extension AIPurpose {
-    var isPreview: Bool { if case .preview = self { true } else { false } }
+extension AIPurpose {
+    enum Slot: Equatable { case panel, preview, instant, translate, organize }
+    var slot: Slot {
+        switch self {
+        case .answer, .askPage, .browse: .panel
+        case .preview: .preview
+        case .instant: .instant
+        case .translate: .translate
+        case .organize: .organize
+        }
+    }
+    var isPreview: Bool { slot == .preview }
+}
+
+extension AppState {
+    /// The pill's second line for `page` (nil: none): Translated while the translation shows, Translating… while one
+    /// runs, Translation Available on a page whose language is not the system's (`ProjectionContext.systemLanguage`)
+    /// and that this profile translates.
+    func pillTranslation(_ page: PageID, in window: WindowID, systemLanguage: String) -> PillTranslation? {
+        guard doc.windows[window]?.kind != .incognito, let live = session.live[page], case .ready(let document) = live.document else { return nil }
+        if let translation = session.ai.translations[page], translation.document == document, translation.showingTranslation {
+            return .translated(from: AILanguages.name(translation.source))
+        }
+        if session.ai.requests.values.contains(where: { $0.page == page && $0.purpose.slot == .translate }) { return .translating }
+        guard let language = live.language.map(AILanguages.base), !language.isEmpty, language != AILanguages.base(systemLanguage) else { return nil }
+        if case .profile(let profile) = browsingContext(of: page.item), let exclusions = doc.settings.max.translationExclusions?[profile] {
+            let host = address(of: page.item, in: window, for: .visible)?.host?.lowercased() ?? ""
+            if exclusions.languages.contains(language) || exclusions.sites.contains(host) { return nil }
+        }
+        return .available
+    }
+
+    /// The local tool's name as the command bar's Ask row and the Max pane say it (Arc: ChatGPT): the chosen one,
+    /// else under Automatic the first one found, else Claude. Nil while Max's tool is off.
+    public var askProviderName: String? {
+        let kind: AIProviderKind
+        switch doc.settings.max.provider {
+        case .off: return nil
+        case .claude: kind = .claude
+        case .codex: kind = .codex
+        case .auto: kind = session.detectedAI.first ?? .claude
+        }
+        return kind.displayName
+    }
+}
+
+extension AIProviderKind {
+    public var displayName: String {
+        switch self {
+        case .claude: "Claude"
+        case .codex: "Codex"
+        }
+    }
 }

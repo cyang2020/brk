@@ -349,7 +349,8 @@ public final class AppStore {
 
     private func projected() -> AppSnapshot {
         project(state, ProjectionContext(now: clock.now(), calendar: calendar,
-                                         systemScheme: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light))
+                                         systemScheme: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light,
+                                         systemLanguage: Locale.preferredLanguages.first ?? "en"))
     }
 
     private func renderWindows() {
@@ -541,7 +542,8 @@ public final class AppStore {
             case .aiRead(let id, let document): aiServices.read(id, document: document)
             case .aiTranslate(let id, let content, let nodes): aiServices.translate(id, content: content, nodes: nodes)
             case .aiWatch(let id, let seconds): aiServices.watch(id, seconds: seconds)
-            case .aiHover(let window, let url): aiServices.hover(window, url: url)
+            case .aiHover(let window, let url, let document): aiServices.hover(window, url: url, document: document)
+            case .aiShowTranslation(let document, let translated): aiServices.showTranslation(document, translated: translated)
             case .aiRenameDownload(let id, let path, let name): aiServices.rename(id, path: path, filename: name)
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)

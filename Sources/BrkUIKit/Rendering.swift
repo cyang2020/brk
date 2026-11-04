@@ -52,4 +52,10 @@ public enum Copy {
     public static let archiveEmpty = "Hover your mouse over a tab and press the × to archive it."
     public static let clearArchiveConfirm = "Are you sure you'd like to Clear Archive?"
     public static let deleteFolderWarning = "Deleting this folder will archive the tabs inside it."
+    /// Arc's auto-archive banner (`bin:0x103a0cc20`: "Arc archives tabs that you haven’t used in the past 12 hours. You
+    /// can adjust this in %@Settings%@."), the product's own name for Arc's; `archiveEducationLink` is the linked word.
+    public static func archiveEducation(_ threshold: String) -> String {
+        "\(Product.name) archives tabs that you haven’t used in the past \(threshold). You can adjust this in \(archiveEducationLink)."
+    }
+    public static let archiveEducationLink = "Settings"
 }

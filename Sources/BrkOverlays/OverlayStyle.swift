@@ -215,6 +215,8 @@ struct DialogOverlayMetrics: MetricGroup {
 enum OverlayCopy {
     /// Observed caption.
     static let switchToTab = "Switch to Tab"
+    /// Arc's "Ask ChatGPT" caption on the Ask row (P49), with the local tool's name.
+    static func ask(_ provider: String) -> String { "Ask \(provider)" }
     /// GUESS: the verb on the "search or navigate what you typed" row.
     static let searchVerb = "Search"
     static let openVerb = "Open"
