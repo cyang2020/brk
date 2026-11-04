@@ -155,14 +155,15 @@ struct HistoryPageMetrics: MetricGroup {
     let navTextLeading = Metric(62.5, .anatomy("Q05-a: the item labels' text starts at x 64.5"))
     let navFont = Metric(14.0, .anatomy("Q05-a: \"Delete browsing data\" is 138 pt wide, medium (14.5 pt measured 143.5)"))
     let listLeading = Metric(279.0, .anatomy("Q05-a: the visits card spans x 279...1018"))
-    let listTop = Metric(80.0, .anatomy("Q05-a: the visits card starts at y 80"))
+    let listTop = Metric(79.0, .anatomy("Q05-a: the visits card starts at y 79"))
     let listMaxWidth = Metric(739.0, .anatomy("Q05-a: the visits card is 739 pt wide"))
     let listRadius = Metric(8.0, .guess("the visits card's corner radius, Chromium's cr-card"))
-    let dayHeaderHeight = Metric(70.0, .anatomy("Q05-a: the day title is centred at 35; the first row 86 below the card's top"))
+    let dayHeaderHeight = Metric(69.0, .anatomy("Q05-a: the first row is centred 87 below the visits card's top"))
+    let dayTitleCenter = Metric(37.5, .anatomy("Q05-a: the day title is centred 37.5 below the visits card's top"))
     let dayFont = Metric(16.0, .anatomy("Q05-a: \"Today - Tuesday, November 3, 2026\" is 16 pt medium"))
     let padding = Metric(25.0, .anatomy("Q05-a: the day title and the checkboxes start 25 into the card"))
     let rowHeight = Metric(36.0, .anatomy("Q05-a: visits are 36 pt apart"))
-    let checkbox = Metric(15.0, .anatomy("Q05-a: the checkbox is 15 pt"))
+    let checkbox = Metric(18.0, .anatomy("Q05-a: the checkbox's outline is 16 pt (drawn 1 pt inside its frame)"))
     let timeLeading = Metric(57.0, .anatomy("Q05-a: the time starts 57 into the card"))
     let faviconLeading = Metric(162.0, .anatomy("Q05-a: the favicon starts 162 into the card"))
     let titleLeadingInRow = Metric(190.0, .anatomy("Q05-a: the title starts 190 into the card"))
@@ -405,8 +406,9 @@ enum LibraryIcon {
         switch page {
         case .media: "photo.on.rectangle.angled"
         case .downloads: "arrow.down.circle"
-        case .easelsAndNotes: "macwindow.badge.plus"
-        case .spaces: "rectangle.on.rectangle.angled"
+        // P32: Arc's Easels glyph is a window frame with a scribble (no badge), Spaces two portrait cards.
+        case .easelsAndNotes: "macwindow"
+        case .spaces: "rectangle.portrait.on.rectangle.portrait.angled"
         case .boosts: "paintbrush.pointed"
         case .archive: "archivebox"
         }

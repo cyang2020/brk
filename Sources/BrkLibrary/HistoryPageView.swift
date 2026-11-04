@@ -486,7 +486,7 @@ final class HistoryDayCard: NSView {
         let heading = NSTextField(labelWithString: title)
         heading.font = .systemFont(ofSize: h.dayFont.value, weight: .medium)
         heading.textColor = colors.ink
-        placed.append((heading, 35 - heading.fittingSize.height / 2, heading.fittingSize.height))
+        placed.append((heading, h.dayTitleCenter.value - heading.fittingSize.height / 2, heading.fittingSize.height))
         var previous: Instant?
         let gap = Int64(h.gapMinutes.value * 60_000)
         for visit in visits {
@@ -642,7 +642,8 @@ final class HistoryVisitRow: NSView {
         super.layout()
         let h = LibraryDraw.history, mid = bounds.height / 2
         let box = h.checkbox.value
-        checkbox.frame = CGRect(x: h.padding.value, y: (mid - box / 2).rounded(), width: box, height: box)
+        // The box draws 1 pt inside its frame: its outline starts at the padding (Q05-a: 16 pt at x 25).
+        checkbox.frame = CGRect(x: h.padding.value - 1, y: (mid - box / 2).rounded(), width: box, height: box)
         let t = time.fittingSize
         // Labels draw 2 pt inside their frames: the frames start 2 early so the text is where Arc's is.
         time.frame = CGRect(x: h.timeLeading.value - 2, y: (mid - t.height / 2).rounded(), width: t.width, height: t.height)
