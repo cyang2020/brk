@@ -32,7 +32,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let clearGap = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: the hairline stops 10 before Clear"))
     /// Tidy on the Today divider (P46-b, 2x): the hairline stops at x 241 px, the broom spans 259 to 273 px (y 790 to
     /// 813), "Tidy" 290 to 327 px, a separator at 344 px, Clear from 366 px.
-    let tidyGaps = Metric([9.0, 8.5, 8.5, 10.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
+    let tidyGaps = Metric([9.0, 6.5, 6.5, 9.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
     /// The auto-archive banner's padding and its × (the banner itself keeps the sidebar's 8 pt inset and 68 pt height).
     let educationInset = Metric(8.0, .guess("Arc's banner was not captured (P16-a needs a new Arc profile); the rows' 8 pt inset"))
     let educationClose = Metric(18.0, .guess("a small × in the banner's top right corner"))
@@ -86,7 +86,9 @@ struct SidebarDrawMetrics: MetricGroup {
     /// The translation popover (P50-d-popover, 2x): body 237 x 101 pt; the Aa disc, the sentence, two buttons.
     let translationPopover = Metric([237.0, 101.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the body spans x 25 to 499 px and y 25 to 226 px"))
     let translationDisc = Metric([10.5, 10.5, 32.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: the Aa disc spans x and y 46 to 110 px"))
-    let translationTextLeading = Metric(54.5, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
+    let translationTextFont = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/P50/P50-f-arc.png: 'Translated from French.' is 152.5 points wide"))
+    let translationMenuOffset = Metric([2.75, 15.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-f-arc.png: the menu's left edge at x 117 pt and its top at y 161 pt"))
+    let translationTextLeading = Metric(51.0, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
     let translationButtons = Metric([10.5, 58.5, 104.0, 32.0, 8.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Options x 46 to 254 px, Use Original x 270 to 478 px, both y 142 to 206 px"))
     let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))

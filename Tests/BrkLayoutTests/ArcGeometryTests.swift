@@ -83,6 +83,28 @@ final class ArcGeometryTests: XCTestCase {
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .divider, .newTab, .item(e), .item(c)])
     }
+    /// P46-a: with Max's Tidy Tabs on Arc keeps the divider 8 points taller, however many tabs Today holds.
+    func testTidyTabsMakesTheDividerRowTaller() throws {
+        let d = LayoutDriver()
+        let a = d.view.space.today.rows[0].id
+        d.user(.tab(.togglePin(.item(a))))
+        _ = d.open("c.example.com")
+        func dividerHeight() -> Double? {
+            for row in TablistLayout.rows(d.view.space, width: 228) { if case .divider = row.kind { return Double(row.rect.height) } }
+            return nil
+        }
+        XCTAssertEqual(dividerHeight(), 16)
+        d.user(.settings(.max(.tidyTabs(true))))
+        XCTAssertEqual(dividerHeight(), 24)
+    }
+    /// P01-b: with the toolbar shown the page starts a point above the toolbar's bottom, under its hairline.
+    func testPageStartsUnderTheToolbarsHairline() throws {
+        let d = LayoutDriver()
+        d.user(.sidebar(.toggleToolbar))
+        let frames = d.frames()
+        let toolbar = try XCTUnwrap(frames.toolbar)
+        XCTAssertEqual(try XCTUnwrap(frames.cards.first).rect.minY, toolbar.maxY - 1)
+    }
     /// Q02 b: with Today empty Arc draws no Pinned/Today divider; New Tab sits right under Pinned.
     func testNoDividerWhileTodayIsEmpty() throws {
         let d = LayoutDriver()

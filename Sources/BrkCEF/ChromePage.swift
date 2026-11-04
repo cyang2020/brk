@@ -403,6 +403,8 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool {
         let plainLink = params.linkURL != nil && params.mediaType == .none && !params.isEditable
+        // The capsule naming the hovered link goes while a menu is open (Q07-b); Chromium sends no status of its own then.
+        engine.pageDidEmit(self, .linkHovered(nil))
         // Arc's page menu offers "Translate to English" (the system language) on a page in another language (Q07-a).
         let system = Locale.preferredLanguages.first ?? "en"
         let base = { (code: String) in String(code.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first ?? "") }
@@ -412,6 +414,9 @@ final class ChromePage: CefBrowserDelegate {
                          onTranslate: { [weak self] in
                              guard let self, let translate, self.engine.isLive(self) else { return }
                              self.engine.pageDidEmit(self, .translateRequested(translate))
+                         }, onLink: { [weak self, url = params.linkURL] target in
+                             guard let self, let url, self.engine.isLive(self) else { return }
+                             self.engine.pageDidEmit(self, .linkMenuRequested(url, target))
                          }) { [weak self] in
             guard let self else { return false }; return self.engine.isLive(self) && !self.surface.isHiddenOrHasHiddenAncestor
         }
@@ -697,6 +702,7 @@ final class ChromePage: CefBrowserDelegate {
 extension ChromePage {
     func browser(_ b: CefBrowser, didChangeStatusMessage message: String) {
         guard !isAIReader else { return }
+        if let host = chrome.nsWindow { HostWindows.hideStatusBubble(of: host) }
         engine.pageDidEmit(self, .linkHovered(URL(string: message)))
     }
 }

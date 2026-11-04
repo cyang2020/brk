@@ -11,7 +11,7 @@ struct SwitcherMetricsTable: MetricGroup {
     private static let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc captures P09-a/b"
     let maxCards = Metric(5, .anatomy("\(measured): five cards for a longer recent list"))
     let padding = Metric(16.0, .anatomy("\(measured): 16 between the strip's edge and the cards"))
-    let slotWidth = Metric(181.5, .anatomy("\(measured): cards on a 181.5 pitch, the selection as wide"))
+    let slotWidth = Metric(182.0, .anatomy("\(measured): the selection spans x 733 to 1097 px, cards on the same 182 pitch"))
     let slotHeight = Metric(158.0, .anatomy("\(measured): the selection is 158 tall"))
     let stripRadius = Metric(22.0, .anatomy("\(measured): the strip's corners, continuous"))
     let slotRadius = Metric(12.0, .anatomy("\(measured): the selection's corners"))
@@ -23,7 +23,7 @@ struct SwitcherMetricsTable: MetricGroup {
     let iconSize = Metric(14.0, .anatomy("\(measured): 14 pt icons before the titles"))
     let textInset = Metric(23.0, .anatomy("\(measured): titles start 27 in from the page image's left edge (a label draws 2 in)"))
     let titleFontSize = Metric(14.0, .anatomy("\(measured): titles have a 10 pt cap height"))
-    let titleRightInset = Metric(10.0, .anatomy("\(measured): \"Long title for tru…\" ends about 10 before the page image's right edge"))
+    let titleRightInset = Metric(7.0, .anatomy("\(measured): \"Long title for tru…\" ends about 10 before the page image's right edge"))
     let windowMargin = Metric(24.0, .guess("the strip keeps 24 from the window's sides, dropping cards in a narrow window"))
     let placeholderRadius = Metric(3.0, .guess("the grey square for a tab without a favicon, a sidebar row's placeholder at 14 pt"))
     /// A page not drawn yet in this session: a grey card with the site's icon in the middle, never a blank card.

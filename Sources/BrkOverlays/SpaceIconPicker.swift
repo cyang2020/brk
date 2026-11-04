@@ -13,8 +13,9 @@ import SwiftUI
 struct IconPickerMetrics: MetricGroup {
     let size = Metric(CGSize(width: 270, height: 272), .guess("popover content, measured on P10-c-arc.png and P24-b-arc.png (542 x 543 px at 2x)"))
     let columns = Metric(8, .guess("emoji per row, counted on P10 c"))
-    let cell = Metric(CGSize(width: 30.5, height: 33), .guess("emoji cell pitch, measured on P10 c"))
-    let emojiSize = Metric(22.0, .guess("emoji glyph size, measured on P10 c"))
+    let cell = Metric(CGSize(width: 30.85, height: 33), .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: the emoji's centres are 61.7 px apart, the rows 66 px"))
+    let emojiSize = Metric(20.0, .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: an emoji is 40 px wide"))
+    let searchRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: the search field's ends are round"))
     let tabsHeight = Metric(24.0, .guess("Emoji / Icon switch height, measured on P10 c"))
     let searchHeight = Metric(28.0, .guess("search field height, measured on P10 c"))
     let categoriesHeight = Metric(34.0, .guess("category bar height, measured on P10 c"))
@@ -126,7 +127,7 @@ struct SpaceIconPickerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            tabs.padding(.top, 10)
+            tabs.padding(.top, 14)
             if page == 0 { emojiPage } else { iconPage }
         }
         .frame(width: m.size.value.width, height: m.size.value.height)
@@ -140,8 +141,8 @@ struct SpaceIconPickerView: View {
                 Button { page = index } label: {
                     Text(title).font(.system(size: 13, weight: .medium))
                         .foregroundStyle(page == index ? Color.white : ink.opacity(0.75))
-                        .frame(width: 52, height: m.tabsHeight.value - 4)
-                        .background(RoundedRectangle(cornerRadius: m.radius.value - 1.5, style: .continuous)
+                        .frame(width: 53, height: m.tabsHeight.value)
+                        .background(RoundedRectangle(cornerRadius: m.radius.value, style: .continuous)
                             .fill(page == index ? Color(nsColor: OverlayColors.of(.light).focusRing) : .clear))
                         .contentShape(Rectangle())
                 }
@@ -149,23 +150,22 @@ struct SpaceIconPickerView: View {
                 .spaceToolsID("icon-picker-\(title.lowercased())")
             }
         }
-        .padding(2)
         .background(RoundedRectangle(cornerRadius: m.radius.value, style: .continuous).fill(ink.opacity(0.07)))
     }
 
     private var emojiPage: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(ink.opacity(0.5))
                 TextField("Search", text: $query).textFieldStyle(.plain).font(.system(size: 14)).focused($searchFocused)
                     .spaceToolsID("icon-picker-search")
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 6)
             .frame(height: m.searchHeight.value)
-            .background(RoundedRectangle(cornerRadius: m.radius.value + 2, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: m.radius.value + 2, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: m.searchRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
+            .overlay(RoundedRectangle(cornerRadius: m.searchRadius.value, style: .continuous)
                 .stroke(Color(nsColor: OverlayColors.of(.light).focusRing).opacity(searchFocused ? 0.75 : 0), lineWidth: 3))
-            .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+            .padding(.horizontal, 9.5).padding(.top, 8).padding(.bottom, 1)
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     if query.isEmpty {

@@ -57,11 +57,12 @@ public enum WindowLayout {
         // its edge (Metrics.content.sidebarGap). The toolbar is the top of the card: the cards start under it.
         let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
         let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
+        let pageOverlap = toolbarHeight > 0 ? Metrics.spaceTools.toolbarPageOverlap.value : 0
         let toolbar = toolbarHeight > 0 ? CGRect(x: left, y: inset, width: max(0, contentSize.width - left - inset), height: toolbarHeight) : nil
         let contentArea = libraryOpen
             ? LibraryLayout.contentArea(panelWidth: anchoredWidth, snapshot: snapshot, contentSize: contentSize)
-            : CGRect(x: left, y: inset + toolbarHeight, width: max(0, contentSize.width - left - inset),
-                     height: max(0, contentSize.height - 2 * inset - toolbarHeight))
+            : CGRect(x: left, y: inset + toolbarHeight - pageOverlap, width: max(0, contentSize.width - left - inset),
+                     height: max(0, contentSize.height - 2 * inset - toolbarHeight + pageOverlap))
         let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
         let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
                                                     orientation: snapshot.content.orientation)

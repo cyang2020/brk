@@ -167,6 +167,9 @@ public enum ProfileCopy {
     // The Profiles pane.
     public static let paneIntro = "Profiles help keep your data separate across Spaces — like history, logins, cookies, and extensions. You can use any Profile across one or more Spaces."
 
+    /// What "Learn more." under the paragraph says (Arc opens a help article, Brk has none).
+    public static let paneDetail = "Each Profile keeps its own history, logins, cookies and extensions. Assign a Profile to a Space to use that data whenever the Space is open."
+
     public static let cancel = "Cancel"
 
     /// "Deleting “Work” will permanently remove …" (Arc keeps the name in front of the observed tail).

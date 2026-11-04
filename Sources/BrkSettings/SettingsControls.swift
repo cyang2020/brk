@@ -241,6 +241,7 @@ struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
 
     func makeNSView(context: NSViewRepresentableContext<Self>) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.cell = TitledPopUpCell(textCell: "", pullsDown: false)
         button.target = context.coordinator
         button.action = #selector(Coordinator.picked(_:))
         return button
@@ -305,6 +306,15 @@ struct SettingsPopUp<Value: Hashable>: NSViewRepresentable {
     }
 }
 
+/// The closed pop-up's title in `SettingsStyle.controlTitle`; the open menu keeps the system's colours.
+final class TitledPopUpCell: NSPopUpButtonCell {
+    override func drawTitle(_ title: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
+        let tinted = NSMutableAttributedString(attributedString: title)
+        if isEnabled { tinted.addAttribute(.foregroundColor, value: SettingsStyle.controlTitle, range: NSRange(location: 0, length: tinted.length)) }
+        return super.drawTitle(tinted, withFrame: frame, in: controlView)
+    }
+}
+
 /// A push button, or a borderless icon button when `symbol` is set.
 struct SettingsButton: NSViewRepresentable {
     let title: String
@@ -330,6 +340,14 @@ struct SettingsButton: NSViewRepresentable {
         button.isEnabled = context.environment.isEnabled
         button.identify(.settingsField(field))
         if button.title != title { button.title = title }
+        if symbol == nil {
+            let style = NSMutableParagraphStyle()
+            style.alignment = .center
+            button.attributedTitle = NSAttributedString(string: title, attributes: [
+                .font: button.font ?? .systemFont(ofSize: NSFont.systemFontSize), .paragraphStyle: style,
+                .foregroundColor: button.isEnabled ? SettingsStyle.controlTitle : NSColor.disabledControlTextColor,
+            ])
+        }
         button.toolTip = symbol == nil ? nil : title
     }
 

@@ -401,7 +401,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             favicon = first.favicon
             symbol = first.symbol ?? "globe"
         }
-        leadingIcon.contentTintColor = colors.text
+        leadingIcon.contentTintColor = colors.inputGlyph
         leadingIcon.symbolConfiguration = .init(pointSize: o.symbolPointSize.value, weight: .medium)
         let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         leadingFavicon = favicon
@@ -476,12 +476,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width), height: labelSize.height)
             fieldX = sitePill.frame.maxX + m.stackSpacing.value
         }
-        input.frame = CGRect(x: fieldX, y: (mid - fieldHeight / 2).rounded(), width: max(40, accessoryLeft - o.offerGap.value - fieldX + 2), height: fieldHeight)
+        // P21-a, Q01-a: the centered bar's text sits half a point above the row's middle.
+        input.frame = CGRect(x: fieldX, y: (mid - fieldHeight / 2).rounded() - (attached ? 0 : o.inputRaise.value), width: max(40, accessoryLeft - o.offerGap.value - fieldX + 2), height: fieldHeight)
 
         let scale = window?.backingScaleFactor ?? 2
         hairline.isHidden = attached || results.isEmpty
         // Q01-a/b: the hairline's top is the input row's bottom (64 under the card's top)
-        hairline.frame = CGRect(x: o.rowInset.value, y: inputHeight, width: max(0, width - 2 * o.rowInset.value), height: 1 / scale)
+        hairline.frame = CGRect(x: o.rowInset.value + o.hairlineInset.value, y: inputHeight, width: max(0, width - 2 * (o.rowInset.value + o.hairlineInset.value)), height: 1 / scale)
         for (i, row) in rows.enumerated() where i < results.count {
             row.frame = CGRect(x: o.rowInset.value, y: listTop + CGFloat(i) * rowHeight + o.rowVerticalInset.value,
                                width: max(0, width - 2 * o.rowInset.value), height: rowHeight - 2 * o.rowVerticalInset.value)
@@ -494,7 +495,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         colors = CommandBarColors.of(scheme, attached: style == .attached, primary: primary, spaceless: spaceless)
         appearance = .of(scheme)
         let o = OverlayMetrics.commandBar
-        input.font = style == .attached ? .systemFont(ofSize: o.attachedInputFontSize.value, weight: .medium) : .systemFont(ofSize: o.centeredInputFontSize.value)
+        input.font = .systemFont(ofSize: style == .attached ? o.attachedInputFontSize.value : o.centeredInputFontSize.value, weight: .medium)
         let translucent = colors.card.alphaComponent < 1
         card.layer?.backgroundColor = translucent ? nil : colors.card.cgColor
         backdropTint.layer?.backgroundColor = translucent ? colors.card.cgColor : nil
@@ -730,7 +731,11 @@ final class ResultRowView: NSView {
         // Over the URL pill (captions off) rows are titles only, P02-b.
         let subtitle = captions ? suggestion.subtitle ?? "" : ""
         detail.isHidden = subtitle.isEmpty
+        // A style of its own: without one an attributed string wraps at the last word that fits instead of cutting the middle.
+        let cut = NSMutableParagraphStyle()
+        cut.lineBreakMode = .byTruncatingMiddle
         detail.attributedStringValue = NSAttributedString(string: " — " + subtitle, attributes: [
+            .paragraphStyle: cut,
             .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
             .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
         ])
@@ -739,7 +744,7 @@ final class ResultRowView: NSView {
         tile.isHidden = !(suggestion.tile || (highlighted && hasFavicon))
         let onTile = !tile.isHidden && highlighted
         icon.contentTintColor = suggestion.accent.map { NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) }
-            ?? (onTile ? colors.highlight : ink)
+            ?? (onTile ? colors.highlight : highlighted || hasFavicon ? ink : colors.rowGlyph)
         tile.layer?.backgroundColor = (highlighted ? colors.tileOnHighlight : colors.accessory).cgColor
         if isSwitch {
             hint.textColor = highlighted ? colors.onHighlight : colors.secondary
@@ -785,7 +790,7 @@ final class ResultRowView: NSView {
         label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: titleWidth, height: height)
         // The label pads 2 on each side, so the detail starts 4 back to sit right after the title's text.
         let detailX = label.frame.maxX - 4
-        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX)), height: height)
+        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX, (bounds.width * o.detailMaxShare.value).rounded())), height: height)
     }
 
     // Hover follows pointer motion (not entry), so rows sliding under a still pointer keep the keyboard highlight.

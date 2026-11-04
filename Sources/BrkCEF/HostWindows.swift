@@ -50,6 +50,22 @@ enum HostWindows {
 
     static func isHost(_ window: NSWindow) -> Bool { hosts.contains(window) }
 
+    /// Chromium's status bubble is a small child widget of the host window that it fades in by itself after each status
+    /// message; Brk draws its own capsule (`LinkStatusCapsule`). Its content stays hidden whatever opacity Chromium sets.
+    /// The widget can come up some time after the first message of a page, so this looks again a few times.
+    static func hideStatusBubble(of host: NSWindow) {
+        func hide() {
+            for child in host.childWindows ?? [] where NSStringFromClass(type(of: child)) == "NativeWidgetMacNSWindow" && child.frame.height <= Metrics.content.statusBubbleMaxHeight.value
+                && abs(child.frame.minY - host.frame.minY) < 40 {
+                child.contentView?.isHidden = true
+            }
+        }
+        hide()
+        for delay in [0.1, 0.25, 0.5, 1.0, 2.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak host] in if host != nil { hide() } }
+        }
+    }
+
     private static var terminationRetryPending = false
     private static var terminationChoiceDeadline: TimeInterval?
 

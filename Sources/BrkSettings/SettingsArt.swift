@@ -21,8 +21,9 @@ enum ArtColor {
     static let cream = rgb(0xFFFCEA)
     static let littlePink = rgb(0xFFA0A4)
     static let littleBody = rgb(0xF5CCC9)
-    static let mockChrome = rgb(0xE1E2F3)
-    static let mockField = rgb(0xD5D5E8)
+    static let mockChrome = rgb(0xDFE0F4)
+    static let mockChromeEnd = rgb(0xF1E9EE)
+    static let mockField = rgb(0xDADBE6)
     static let keyBlue = rgb(0x007AFF)
     static let keyFace = rgb(0xE1EBFF)
 }
@@ -80,8 +81,34 @@ struct GrainOverlay: View {
     }
 }
 
-/// Max's flower (P38-b): four round petals, each split by a slit from the middle, around a small tilted square. The
-/// Enable Max icon's flower is also outlined in the slits' blue.
+/// The Links drawing's page: light specks of a point or so, as dense as Arc's (P38-f: green runs 157 to 222 around 204).
+enum Speckle {
+    @MainActor static let tile: NSImage = {
+        let side = 96
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.lockFocus()
+        var seed: UInt64 = 0x2545F4914F6CDD1D
+        func next() -> Double {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 33) / Double(1 << 31)
+        }
+        for _ in 0..<2600 {
+            NSColor.white.withAlphaComponent(0.12 + next() * 0.22).setFill()
+            NSRect(x: next() * Double(side), y: next() * Double(side), width: 0.5 + next(), height: 0.5 + next()).fill()
+        }
+        image.unlockFocus()
+        return image
+    }()
+}
+
+struct SpeckleOverlay: View {
+    var body: some View {
+        Image(nsImage: Speckle.tile).resizable(resizingMode: .tile).allowsHitTesting(false)
+    }
+}
+
+/// Max's flower (P38-b): four round petals standing apart, each split by a slit from the middle, around a small tilted
+/// square in a ring of the slits' blue. The Enable Max icon's flower is also outlined in that blue.
 struct MaxFlower: View {
     var size: CGFloat
     var color: Color = ArtColor.flower
@@ -93,64 +120,52 @@ struct MaxFlower: View {
             if outline > 0 { petals(hole, grow: outline * 2) }
             petals(color, grow: 0)
             ForEach(0..<4, id: \.self) { index in
-                Capsule().fill(hole).frame(width: size * 0.36, height: size * 0.085)
+                Capsule().fill(hole).frame(width: size * 0.36, height: size * 0.08)
                     .offset(x: size * 0.17).rotationEffect(.degrees(45 + Double(index) * 90))
             }
-            RoundedRectangle(cornerRadius: size * 0.04).fill(hole).frame(width: size * 0.31, height: size * 0.31).rotationEffect(.degrees(10))
-            RoundedRectangle(cornerRadius: size * 0.02).fill(color).frame(width: size * 0.2, height: size * 0.2).rotationEffect(.degrees(10))
+            RoundedRectangle(cornerRadius: size * 0.02).fill(hole).frame(width: size * 0.28, height: size * 0.28)
+            RoundedRectangle(cornerRadius: size * 0.01).fill(color).frame(width: size * 0.18, height: size * 0.18)
         }
         .frame(width: size, height: size)
-        .rotationEffect(.degrees(-12))
+        .rotationEffect(.degrees(-16))
     }
 
     private func petals(_ fill: Color, grow: CGFloat) -> some View {
         ForEach(0..<4, id: \.self) { index in
-            Circle().fill(fill).frame(width: size * 0.47 + grow, height: size * 0.47 + grow)
-                .offset(x: size * 0.265).rotationEffect(.degrees(45 + Double(index) * 90))
+            Circle().fill(fill).frame(width: size * 0.42 + grow, height: size * 0.42 + grow)
+                .offset(x: size * 0.33).rotationEffect(.degrees(45 + Double(index) * 90))
         }
     }
 }
 
-/// Text as a path, so it can be outlined (the banner's lettering).
-enum GlyphPath {
-    static func path(_ text: String, font: NSFont) -> CGPath {
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
-        let result = CGMutablePath()
-        for run in (CTLineGetGlyphRuns(line) as? [CTRun]) ?? [] {
-            let count = CTRunGetGlyphCount(run)
-            var glyphs = [CGGlyph](repeating: 0, count: count), positions = [CGPoint](repeating: .zero, count: count)
-            CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
-            CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
-            let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName as String] as! CTFont
-            for (glyph, position) in zip(glyphs, positions) {
-                guard let outline = CTFontCreatePathForGlyph(runFont, glyph, nil) else { continue }
-                // Flip to SwiftUI's top-left origin, baseline at the font's ascent.
-                let transform = CGAffineTransform(translationX: position.x, y: CTFontGetAscent(runFont)).scaledBy(x: 1, y: -1)
-                result.addPath(outline, transform: transform)
-            }
-        }
-        return result
+/// The banner's lettering (P38-b): M, A and X as thick round strokes in the band's blue inside a cream edge, each letter
+/// drawn over the one before it, A last. The strokes run along the middle of Arc's letters (points, from the 140 x 74 pt
+/// box the lettering fills).
+struct MaxLettering: View {
+    private static func stroke(_ points: [(CGFloat, CGFloat)]) -> Path {
+        var path = Path()
+        path.addLines(points.map { CGPoint(x: $0.0 / 8, y: $0.1 / 8) })
+        return path
     }
-
-    static func roundedBlack(_ size: CGFloat) -> NSFont {
-        let base = NSFont.systemFont(ofSize: size, weight: .black)
-        return base.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: size) } ?? base
-    }
-}
-
-/// One outlined letter of the banner's lettering.
-struct OutlinedLetter: View {
-    let letter: String
-    let size: CGFloat
+    private static let m = stroke([(315, 440), (285, 245), (385, 318), (480, 205), (475, 380)])
+    private static let x1 = stroke([(850, 210), (960, 440)])
+    private static let x2 = stroke([(1000, 245), (905, 345), (868, 415)])
+    private static let a = stroke([(565, 398), (660, 200), (758, 398)])
 
     var body: some View {
-        let path = Path(GlyphPath.path(letter, font: GlyphPath.roundedBlack(size)))
-        let bounds = path.boundingRect
         ZStack(alignment: .topLeading) {
-            path.stroke(ArtColor.cream, style: StrokeStyle(lineWidth: A.letterStroke.value, lineCap: .round, lineJoin: .round))
-            path.fill(ArtColor.maxInk)
+            letter(Self.m)
+            letter({ var both = Self.x1; both.addPath(Self.x2); return both }())
+            letter(Self.a)
         }
-        .frame(width: bounds.maxX, height: bounds.maxY, alignment: .topLeading)
+        .frame(width: A.logoBox.value.width, height: A.logoBox.value.height, alignment: .topLeading)
+    }
+
+    private func letter(_ path: Path) -> some View {
+        ZStack {
+            path.stroke(ArtColor.cream, style: StrokeStyle(lineWidth: A.letterOuter.value, lineCap: .round, lineJoin: .round))
+            path.stroke(ArtColor.maxBlue, style: StrokeStyle(lineWidth: A.letterInner.value, lineCap: .round, lineJoin: .round))
+        }
     }
 }
 
@@ -160,7 +175,7 @@ struct OutlinedLetter: View {
 struct MaxBanner: View {
     /// Flower centres and sizes in points from the banner's top-left (P38-b's pixels halved).
     private static let flowers: [(CGFloat, CGFloat, CGFloat)] = [
-        (7, 9, 24), (205, 19, 16), (102, 76, 38), (444, 13, 24), (479, 57, 24), (676, 87, 30),
+        (4, 9, 24), (205, 19, 16), (102, 76, 38), (444, 13, 24), (479, 57, 24), (680, 87.5, 30),
     ]
 
     var body: some View {
@@ -170,13 +185,8 @@ struct MaxBanner: View {
             ForEach(Array(Self.flowers.enumerated()), id: \.offset) { _, flower in
                 MaxFlower(size: flower.2).position(x: flower.0, y: flower.1)
             }
-            HStack(alignment: .center, spacing: A.letterSpacing.value) {
-                OutlinedLetter(letter: "M", size: A.letterSize.value).rotationEffect(.degrees(-6))
-                OutlinedLetter(letter: "A", size: A.letterSize.value).rotationEffect(.degrees(4)).offset(y: 3)
-                OutlinedLetter(letter: "X", size: A.letterSize.value).rotationEffect(.degrees(-5))
-            }
-            .position(x: A.logoCenter.value.x, y: A.logoCenter.value.y)
-            MaxFlower(size: 19).position(x: 289, y: 64)
+            MaxLettering().offset(x: A.logoOrigin.value.x, y: A.logoOrigin.value.y)
+            MaxFlower(size: 19).position(x: 287.5, y: 64)
         }
         .frame(width: Metrics.settings.windowSize.value.width, height: A.maxBannerHeight.value)
         .clipShape(WavyBottom(phase: A.maxWavePhase.value))
@@ -193,7 +203,7 @@ struct LittleBrkBanner: View {
                 .offset(x: A.mockOrigin.value.x, y: A.mockOrigin.value.y)
         }
         .frame(width: Metrics.settings.windowSize.value.width, height: A.littleBannerHeight.value)
-        .clipShape(WavyBottom(amplitude: A.littleWaveAmplitude.value))
+        .clipShape(WavyBottom(period: A.littleWavePeriod.value, amplitude: A.littleWaveAmplitude.value, phase: A.littleWavePhase.value))
     }
 }
 
@@ -203,48 +213,53 @@ struct LittleWindowMock: View {
         VStack(spacing: 0) {
             HStack(spacing: A.mockGap.value) {
                 HStack(spacing: A.mockDotGap.value) {
-                    ForEach(0..<3, id: \.self) { _ in Circle().fill(Color.black.opacity(0.12)).frame(width: A.mockDot.value, height: A.mockDot.value) }
+                    ForEach(0..<3, id: \.self) { _ in Circle().fill(Color.black.opacity(0.1)).frame(width: A.mockDot.value, height: A.mockDot.value) }
                 }
+                .padding(.trailing, A.mockDotsTrailing.value)
                 ZStack {
                     RoundedRectangle(cornerRadius: A.mockRadius.value, style: .continuous).fill(ArtColor.mockField)
                     HStack {
-                        HStack(spacing: 3) {
-                            Image(systemName: "face.smiling").font(.system(size: 7, weight: .semibold))
-                            Text("Work").font(.system(size: 7, weight: .semibold))
+                        HStack(spacing: 2) {
+                            ZStack {
+                                Circle().fill(Color.black.opacity(0.08)).frame(width: 7.5, height: 7.5)
+                                HStack(spacing: 1.5) { ForEach(0..<2, id: \.self) { _ in Capsule().fill(ArtColor.rgb(0x4B4B4B)).frame(width: 0.7, height: 2) } }.offset(y: -1)
+                                SmileCurve().stroke(ArtColor.rgb(0x4B4B4B), style: StrokeStyle(lineWidth: 0.7, lineCap: .round)).frame(width: 4, height: 1).offset(y: 1.2)
+                            }
+                            Text("Work").font(.system(size: A.mockPillFont.value, weight: .medium)).foregroundStyle(ArtColor.rgb(0x4B4B4B))
                         }
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.55)))
-                        .padding(.leading, 5)
+                        .padding(.horizontal, 3.5).frame(height: 13)
+                        .background(Capsule().fill(Color.white.opacity(0.35)))
+                        .padding(.leading, 3.5)
                         Spacer()
                     }
                     HStack(spacing: 3) {
-                        Image(systemName: "lock.fill").font(.system(size: 6)).foregroundStyle(.secondary)
-                        Text("example.com").font(.system(size: 7.5, weight: .semibold))
+                        Image(systemName: "lock.fill").font(.system(size: 6)).foregroundStyle(ArtColor.rgb(0xA0A0A8))
+                        Text("example.com").font(.system(size: 7.5, weight: .medium)).foregroundStyle(ArtColor.rgb(0x4A4A4A))
                     }
                 }
                 .frame(height: A.mockField.value)
-                HStack(spacing: 4) {
-                    Text("Open in").font(.system(size: 7.5)).foregroundStyle(.secondary)
-                    + Text(" Work").font(.system(size: 7.5, weight: .semibold)).foregroundColor(ArtColor.rgb(0x3E5A7A))
-                    Text("⌘O").font(.system(size: 6.5, weight: .medium)).foregroundStyle(.secondary)
-                        .padding(.horizontal, 2).background(RoundedRectangle(cornerRadius: 2).fill(Color.black.opacity(0.07)))
-                    Rectangle().fill(Color.black.opacity(0.1)).frame(width: 0.5, height: 10)
-                    Image(systemName: "chevron.down").font(.system(size: 6, weight: .semibold)).foregroundStyle(.secondary)
+                HStack(spacing: 3) {
+                    (Text("Open in").font(.system(size: 7.5)).foregroundColor(ArtColor.rgb(0x858585))
+                    + Text(" Work").font(.system(size: 7.5, weight: .medium)).foregroundColor(ArtColor.rgb(0x4A7A90)))
+                        .lineLimit(1).fixedSize()
+                    Text("⌘O").font(.system(size: 7.5)).foregroundStyle(ArtColor.rgb(0x858585))
+                        .frame(width: 16.5, height: 9.5).background(RoundedRectangle(cornerRadius: 2).fill(Color.black.opacity(0.06)))
+                    Rectangle().fill(Color.black.opacity(0.08)).frame(width: 0.5, height: 10).padding(.leading, 1)
+                    Image(systemName: "chevron.down").font(.system(size: 6, weight: .medium)).foregroundStyle(ArtColor.rgb(0xB8B8B8)).padding(.leading, 3)
                 }
-                .padding(.horizontal, 5)
-                .frame(height: A.mockField.value)
-                .background(RoundedRectangle(cornerRadius: A.mockRadius.value, style: .continuous).fill(Color.white))
+                .frame(width: A.mockButtonWidth.value, height: A.mockButtonHeight.value)
+                .background(RoundedRectangle(cornerRadius: A.mockRadius.value, style: .continuous).fill(Color.white.opacity(0.97)).shadow(color: .black.opacity(0.08), radius: 1, y: 0.5))
             }
-            .padding(.horizontal, A.mockPadding.value)
+            .padding(.leading, A.mockPadding.value).padding(.trailing, A.mockTrailing.value)
             .frame(height: A.mockChromeHeight.value)
             ZStack {
                 ArtColor.littleBody
-                GrainOverlay()
+                SpeckleOverlay()
             }
             .clipShape(RoundedRectangle(cornerRadius: A.mockRadius.value, style: .continuous))
             .padding(.horizontal, A.mockBodyInset.value)
         }
-        .background(RoundedRectangle(cornerRadius: A.mockCorner.value, style: .continuous).fill(ArtColor.mockChrome))
+        .background(RoundedRectangle(cornerRadius: A.mockCorner.value, style: .continuous).fill(LinearGradient(colors: [ArtColor.mockChrome, ArtColor.mockChromeEnd], startPoint: .leading, endPoint: .trailing)))
         .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
     }
 }
@@ -446,22 +461,29 @@ struct SettingsArtMetricsTable: MetricGroup {
     let wavePeriod = Metric(20.0, .anatomy("\(capture)/P38-b-arc.png: wave crests at x 10, 50, 90 px"))
     let waveAmplitude = Metric(2.5, .anatomy("\(capture)/P38-b-arc.png: the edge runs between y 417 and 427 px"))
     let maxWavePhase = Metric(5.0, .anatomy("\(capture)/P38-b-arc.png: the edge is highest (417 px) at x 10, 50, 90 px and lowest (427 px) at 30, 70 px"))
-    let littleWaveAmplitude = Metric(2.0, .anatomy("\(capture)/P38-f-arc.png: the edge runs between y 438 px (x 0, 40 px) and 446 px (x 20 px)"))
+    let littleWaveAmplitude = Metric(2.0, .anatomy("\(capture)/P38-f-arc.png: the edge runs between y 438 and 446 px"))
+    let littleWavePeriod = Metric(17.0, .anatomy("\(capture)/P38-f-arc.png: along y 442 px the band's teeth centre at x 20, 54, 88 px"))
+    let littleWavePhase = Metric(1.5, .anatomy("\(capture)/P38-f-arc.png: the edge is lowest at x 20 px"))
     let maxBannerHeight = Metric(125.5, .anatomy("\(capture)/P38-b-arc.png: blue from the toolbar hairline at 176 px to the wave's lowest at 427 px"))
     let littleBannerHeight = Metric(135.0, .anatomy("\(capture)/P38-f-arc.png: pink from 176 px to the wave's lowest at 446 px"))
-    let letterSize = Metric(50.0, .guess("the MAX lettering spans x 556 to 792 px in P38-b"))
-    let letterStroke = Metric(8.0, .anatomy("\(capture)/P38-b-arc.png: the cream outline is 8 px of 2x, half of it outside the letter"))
-    let letterSpacing = Metric(-4.0, .guess("the letters of the lettering overlap a little"))
-    let logoCenter = Metric(CGPoint(x: 340, y: 64), .anatomy("\(capture)/P38-b-arc.png: lettering centred near x 680, y 304 px"))
+    let letterOuter = Metric(17.5, .anatomy("\(capture)/P38-b-arc.png: a stem with its cream edge is 35 px wide"))
+    let letterInner = Metric(10.5, .anatomy("\(capture)/P38-b-arc.png: the cream edge is 7 px wide"))
+    let logoBox = Metric(CGSize(width: 140, height: 74), .anatomy("\(capture)/P38-b-arc.png: the lettering's box starts at x 524, y 224 px"))
+    let logoOrigin = Metric(CGPoint(x: 262, y: 24), .anatomy("\(capture)/P38-b-arc.png: the box's corner from the banner's top-left"))
     let mockOrigin = Metric(CGPoint(x: 60, y: 47), .anatomy("\(capture)/P38-f-arc.png: the window drawing starts at x 120, y 270 px"))
     let mockSize = Metric(CGSize(width: 563, height: 120), .anatomy("\(capture)/P38-f-arc.png: the window drawing spans x 120 to 1246 px and runs under the wave"))
-    let mockChromeHeight = Metric(27.0, .anatomy("\(capture)/P38-f-arc.png: its title bar spans y 270 to 325 px"))
+    let mockChromeHeight = Metric(28.0, .anatomy("\(capture)/P38-f-arc.png: the page starts 28 points under the drawing's top"))
     let mockField = Metric(18.0, .anatomy("\(capture)/P38-f-arc.png: the address field spans y 280 to 316 px"))
-    let mockPadding = Metric(5.0, .guess("the drawing's title bar inset"))
-    let mockGap = Metric(6.0, .guess("space between the drawing's dots, field and button"))
-    let mockDot = Metric(7.0, .anatomy("\(capture)/P38-f-arc.png: the three dots are 14 px wide, 23 px apart"))
-    let mockDotGap = Metric(4.5, .anatomy("\(capture)/P38-f-arc.png: the three dots are 23 px apart"))
-    let mockRadius = Metric(4.0, .guess("the drawing's field and body corners"))
+    let mockPadding = Metric(6.4, .anatomy("\(capture)/P38-f-arc.png: the first dot's centre is 10 points in from the drawing's left"))
+    let mockTrailing = Metric(4.0, .anatomy("\(capture)/P38-f-arc.png: Open in ends 4 points before the drawing's right"))
+    let mockGap = Metric(4.7, .anatomy("\(capture)/P38-f-arc.png: 4.7 points between the field and the button"))
+    let mockDot = Metric(7.25, .anatomy("\(capture)/P38-f-arc.png: the three dots are 14.5 px wide, 23.5 px apart"))
+    let mockDotGap = Metric(4.5, .anatomy("\(capture)/P38-f-arc.png: the three dots are 23.5 px apart"))
+    let mockDotsTrailing = Metric(0.5, .anatomy("\(capture)/P38-f-arc.png: the field starts at 42.5 points"))
+    let mockPillFont = Metric(6.25, .anatomy("\(capture)/P38-f-arc.png: 'Work' in the pill is 15.8 points wide"))
+    let mockButtonWidth = Metric(93.75, .anatomy("\(capture)/P38-f-arc.png: Open in spans 93.75 points"))
+    let mockButtonHeight = Metric(17.5, .anatomy("\(capture)/P38-f-arc.png: Open in is 17.5 points tall"))
+    let mockRadius = Metric(3.0, .anatomy("\(capture)/P38-f-arc.png: the field's and the page's corners are about 3 points"))
     let mockCorner = Metric(7.0, .guess("the drawing's window corner"))
     let mockBodyInset = Metric(3.0, .anatomy("\(capture)/P38-f-arc.png: the page body is inset 6 px from the drawing's sides"))
     let thumbSize = Metric(CGSize(width: 88, height: 56), .anatomy("\(capture)/P38-b-arc.png: thumbnails span x 154 to 330 px, y 832 to 944 px"))

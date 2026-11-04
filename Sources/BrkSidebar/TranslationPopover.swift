@@ -134,7 +134,7 @@ private final class TranslationPopoverView: NSView {
         disc.font = .systemFont(ofSize: Draw.rowTitleFont.value, weight: .semibold)
         disc.textColor = NSColor(srgbRed: 0x40 / 255.0, green: 0x4F / 255.0, blue: 0x5B / 255.0, alpha: 1)
         disc.alignment = .center
-        sentence.font = .systemFont(ofSize: NSFont.systemFontSize)
+        sentence.font = .systemFont(ofSize: Draw.translationTextFont.value)
         sentence.textColor = NSColor(srgbRed: 0x5C / 255.0, green: 0x5F / 255.0, blue: 0x61 / 255.0, alpha: 1)
         sentence.lineBreakMode = .byTruncatingTail
         for (button, name, filled) in [(options, "translation-options", true), (original, "translation-use-original", false)] {
@@ -189,8 +189,9 @@ private final class TranslationPopoverView: NSView {
         let settings = NSMenuItem(title: AICopy.languageSettings, action: #selector(languageSettings), keyEquivalent: "")
         settings.target = self
         menu.addItem(settings)
-        // Arc pops it with its first row over the button, from the button's middle (P50-f).
-        menu.popUp(positioning: another, at: CGPoint(x: options.frame.midX, y: options.frame.midY - Draw.translationButtons.value[3] / 2), in: self)
+        // P50-f: the first row is centred 14 points under the button's middle, its left edge near the button's middle.
+        let drop = Draw.translationMenuOffset.value
+        menu.popUp(positioning: another, at: CGPoint(x: options.frame.midX + drop[0], y: options.frame.midY - Draw.translationButtons.value[3] / 2 + drop[1]), in: self)
     }
     @objc private func chooseLanguage(_ item: NSMenuItem) { dispatch(.assist(.translate(item.title))) }
     @objc private func neverTranslate() { dispatch(.assist(.neverTranslateSite)) }

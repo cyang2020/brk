@@ -28,6 +28,8 @@ public final class LittleWindowController: WindowController {
     let header: LittleHeaderView
     let picker: LittleSpacePicker
     let closeButton = LittleCloseButton()
+    /// The first Little window's tip over the page's top right (P21-b); the × dismisses it for good.
+    let tip = LittleFirstRunTip()
     private let container = FlippedContainer(frame: .zero)
     private var titledFor: String?
     /// Whether the last render had a page (nil before the first): the panel resizes when this changes.
@@ -65,6 +67,10 @@ public final class LittleWindowController: WindowController {
         picker.isHidden = true
         picker.autoresizingMask = [.minXMargin]
         container.addSubview(picker)
+        tip.isHidden = true
+        tip.autoresizingMask = [.minXMargin]
+        tip.onDismiss = { dispatch(.tabTools(.dismissLittleTip)) }
+        container.addSubview(tip)
         header.onChooseSpace = { [weak self] in self?.togglePicker() }
         picker.onDismiss = { [weak self] in self?.picker.isHidden = true }
         panel.contentView = container
@@ -117,7 +123,11 @@ public final class LittleWindowController: WindowController {
         header.isHidden = !hasPage
         header.frame = CGRect(x: 0, y: 0, width: width, height: Metrics.littleArc.headerHeight.value)
         header.render(host: page?.url.flatMap { $0.host ?? displayURL($0) } ?? snapshot.urlPill.text, space: snapshot.space,
-                      canOpenIn: snapshot.enabledActions.contains(.openTabIn), palette: palette)
+                      canOpenIn: snapshot.enabledActions.contains(.openTabIn),
+                      accent: snapshot.dock.first { $0.id == snapshot.space.id }.map { ThemeAccent.ring(of: $0.color) } ?? ThemeAccent.splitFocusRing(snapshot.theme), palette: palette)
+        let tipFrame = Metrics.littleArc.tipFrame.value
+        tip.isHidden = !(hasPage && snapshot.tabTools.littleTip)
+        tip.frame = CGRect(x: width - tipFrame.minX - 8, y: tipFrame.minY, width: tipFrame.width, height: tipFrame.height)
         (window as? BrowserPanel)?.lightsOrigin = hasPage ? LittleLayout.header(width: width, buttonWidth: 0).lights : nil
         window.placeTrafficLights(origin: nil)
         let barOpen: Bool = if case .commandBar? = snapshot.overlay { true } else { false }
@@ -147,6 +157,63 @@ public enum LittleArcCopy {
     public static let hint = PeekCopy.hint
     /// The picker's field (the 2026-11-03 capture P21c).
     public static let searchSpaces = "Search Spaces…"
+}
+
+/// Arc's blue first-run tip under the Little header (P21-b): "Links Open in *Little Arc*", the two-line hint and a ×.
+@MainActor
+final class LittleFirstRunTip: NSView {
+    var onDismiss: (() -> Void)?
+    private let title = NSTextField(labelWithString: "")
+    private let body = NSTextField(wrappingLabelWithString: PeekCopy.hint)
+    private let close = NSButton()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        let m = Metrics.littleArc
+        wantsLayer = true
+        layer?.cornerRadius = m.tipRadius.value
+        layer?.cornerCurve = .continuous
+        layer?.backgroundColor = NSColor(srgbRed: 0x30 / 255.0, green: 0x39 / 255.0, blue: 1, alpha: 1).cgColor
+        layer?.masksToBounds = false
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.2
+        layer?.shadowRadius = 7
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        let bold = NSFont.systemFont(ofSize: 13, weight: .bold)
+        let words = NSMutableAttributedString(string: "Links Open in ", attributes: [.font: bold, .foregroundColor: NSColor.white])
+        let italic = NSFontManager.shared.convert(bold, toHaveTrait: .italicFontMask)
+        words.append(NSAttributedString(string: "Little \(Product.name)", attributes: [.font: italic, .foregroundColor: NSColor.white]))
+        title.attributedStringValue = words
+        body.font = .systemFont(ofSize: 13)
+        body.textColor = NSColor(srgbRed: 0xB7 / 255.0, green: 0xBB / 255.0, blue: 1, alpha: 1)
+        body.isSelectable = false
+        let spacing = NSMutableParagraphStyle(); spacing.minimumLineHeight = m.tipBodyLine.value; spacing.maximumLineHeight = m.tipBodyLine.value
+        body.attributedStringValue = NSAttributedString(string: PeekCopy.hint, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: body.textColor!, .paragraphStyle: spacing])
+        close.isBordered = false
+        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")?.withSymbolConfiguration(.init(pointSize: 9, weight: .heavy))
+        close.contentTintColor = NSColor(srgbRed: 0xB7 / 255.0, green: 0xBB / 255.0, blue: 1, alpha: 1)
+        close.target = self
+        close.action = #selector(dismissTip)
+        close.identify(.tabTool("little-tip-close"))
+        for view in [title, body, close] as [NSView] { addSubview(view) }
+        identify(.tabTool("little-tip"))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        let m = Metrics.littleArc, inset = m.tipInset.value - 2
+        let titleHeight = title.intrinsicContentSize.height
+        title.frame = CGRect(x: inset, y: m.tipTitleTop.value, width: bounds.width - inset - 24, height: titleHeight)
+        body.frame = CGRect(x: inset, y: m.tipTitleTop.value + titleHeight + 3, width: bounds.width - 2 * inset - 18, height: 2 * m.tipBodyLine.value)
+        close.frame = CGRect(x: bounds.width - 21, y: 4, width: 16, height: 16)
+    }
+
+    @objc private func dismissTip() { onDismiss?() }
 }
 
 /// A flipped container, so the header and picker frames read top-down like every BrkUI frame.
@@ -181,9 +248,9 @@ final class LittleHeaderView: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { true }
 
-    func render(host: String?, space: SpaceSnapshot, canOpenIn: Bool, palette: Palette) {
+    func render(host: String?, space: SpaceSnapshot, canOpenIn: Bool, accent: NSColor, palette: Palette) {
         pill.render(host: host, palette: palette)
-        openIn.render(title: OpenInMenu.buttonTitle(space: space.title), enabled: canOpenIn, palette: palette)
+        openIn.render(title: OpenInMenu.buttonTitle(space: space.title), space: space.title, accent: accent, enabled: canOpenIn, palette: palette)
         openIn.onOpen = { [dispatch] in dispatch(.window(.openIn(.space(space.id)))) }
         openIn.onChoose = { [weak self] in self?.onChooseSpace?() }
         let parts = LittleLayout.header(width: bounds.width, buttonWidth: openIn.fittingWidth)
@@ -308,24 +375,29 @@ final class LittleOpenInButton: NSView {
 
     /// Text, badge and chevron at their natural widths.
     var fittingWidth: Double {
-        ceil(label.intrinsicContentSize.width) + 10 + 6 + ceil(shortcut.intrinsicContentSize.width) + 12 + 8 + 1 + 26
+        let m = Metrics.littleArc
+        return m.openInLeading.value + ceil(label.intrinsicContentSize.width) + m.openInKeyGap.value + ceil(shortcut.intrinsicContentSize.width) + 7
+            + m.openInRuleGap.value + m.openInChevronZone.value
     }
 
-    func render(title: String, enabled: Bool, palette: Palette) {
+    func render(title: String, space: String, accent: NSColor, enabled: Bool, palette: Palette) {
         self.enabled = enabled
-        label.stringValue = title
         setAccessibilityLabel(title)
         let dark = palette.scheme == .dark
         layer?.backgroundColor = (dark ? NSColor(white: 0.22, alpha: 1) : NSColor(srgbRed: 0.988, green: 0.992, blue: 1, alpha: 1)).cgColor
-        label.textColor = enabled ? NSColor(white: dark ? 0.85 : 0.3, alpha: 1) : .tertiaryLabelColor
-        shortcut.textColor = label.textColor
+        // P21-b: "Open in" and the shortcut in grey, the space's name in the theme's accent (the split ring's colour).
+        let grey = enabled ? NSColor(white: dark ? 0.7 : 0x89 / 255.0, alpha: 1) : NSColor.tertiaryLabelColor
+        let words = NSMutableAttributedString(string: title, attributes: [.font: label.font ?? .systemFont(ofSize: 13), .foregroundColor: grey])
+        if enabled, let range = title.range(of: space, options: .backwards) { words.addAttribute(.foregroundColor, value: accent, range: NSRange(range, in: title)) }
+        label.attributedStringValue = words
+        shortcut.textColor = grey
         badge.layer?.backgroundColor = NSColor(white: dark ? 1 : 0, alpha: 0.07).cgColor
         rule.layer?.backgroundColor = NSColor(white: dark ? 1 : 0, alpha: 0.1).cgColor
         chevron.contentTintColor = NSColor(white: dark ? 0.8 : 0.45, alpha: 1)
         needsLayout = true
     }
 
-    private var chevronZone: CGRect { CGRect(x: bounds.width - 26, y: 0, width: 26, height: bounds.height) }
+    private var chevronZone: CGRect { CGRect(x: bounds.width - Metrics.littleArc.openInChevronZone.value, y: 0, width: Metrics.littleArc.openInChevronZone.value, height: bounds.height) }
 
     override func layout() {
         super.layout()
@@ -333,12 +405,13 @@ final class LittleOpenInButton: NSView {
         // The labels' frames take their cells' whole width (the text would lose its last letter otherwise) and overlap
         // what follows; the positions stay on the bare text's width.
         let text = label.intrinsicContentSize
-        label.frame = CGRect(x: 10, y: (bounds.height - text.height) / 2, width: label.cellWidth, height: text.height)
+        let m = Metrics.littleArc
+        label.frame = CGRect(x: m.openInLeading.value, y: (bounds.height - text.height) / 2, width: label.cellWidth, height: text.height)
         let key = shortcut.intrinsicContentSize
-        badge.frame = CGRect(x: label.frame.minX + ceil(text.width) + 6, y: (bounds.height - 20) / 2, width: ceil(key.width) + 8, height: 20)
+        badge.frame = CGRect(x: label.frame.minX + ceil(text.width) + m.openInKeyGap.value, y: (bounds.height - 20) / 2, width: ceil(key.width) + 7, height: 20)
         badge.layer?.cornerRadius = Metrics.littleArc.badgeRadius.value
-        shortcut.frame = CGRect(x: badge.frame.minX + 4, y: (bounds.height - key.height) / 2, width: shortcut.cellWidth, height: key.height)
-        rule.frame = CGRect(x: chevronZone.minX, y: 7, width: 1, height: max(0, bounds.height - 14))
+        shortcut.frame = CGRect(x: badge.frame.minX + 3.5, y: (bounds.height - key.height) / 2, width: shortcut.cellWidth, height: key.height)
+        rule.frame = CGRect(x: chevronZone.minX, y: m.openInRuleInset.value, width: 1, height: max(0, bounds.height - 2 * m.openInRuleInset.value))
         chevron.frame = CGRect(x: chevronZone.midX - 6, y: (bounds.height - 12) / 2, width: 12, height: 12)
     }
 

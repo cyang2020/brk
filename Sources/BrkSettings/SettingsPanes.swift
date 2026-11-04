@@ -139,12 +139,13 @@ struct LinksPane: View {
                     SwitchRow(title: SettingsCopy.externalLinksInLittleArc, field: "externalLinksInLittleArc",
                               isOn: links.externalLinksInLittleArc) { send(.externalLinksInLittleArc($0)) }
                     CardDivider()
-                    CardRow(height: C.popUpRowHeight.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
+                    CardRow(height: C.popUpRowHeight.value - C.popUpRowBottom.value) { CardLabel(SettingsCopy.littleArcAutoArchive) } trailing: {
                         SettingsPopUp(field: "littleArcAutoArchive",
                                       entries: AutoArchiveThreshold.allCases.map { .option(SettingsCopy.threshold($0, default: LinkSettings.default.littleArcAutoArchive), $0) },
                                       selected: links.littleArcAutoArchive, width: .selected(minimum: 0)) { send(.littleArcAutoArchive($0)) }
                             .padding(.trailing, C.popUpTrailing.value)
                     }
+                    .padding(.bottom, C.popUpRowBottom.value)
                 }
                 .padding(.top, C.introToCard.value)
                 Rectangle().fill(SettingsStyle.cardBorder).frame(height: C.borderWidth.value)
@@ -154,10 +155,11 @@ struct LinksPane: View {
                     SwitchRow(title: SettingsCopy.shiftClickPeek, field: "shiftClickPeek", isOn: links.shiftClickPeek) { send(.shiftClickPeek($0)) }
                     CardDivider()
                     CardRow(height: C.peekNoteRowHeight.value) {
-                        VStack(alignment: .leading, spacing: C.subtitleGap.value) {
+                        VStack(alignment: .leading, spacing: C.peekNoteGap.value) {
                             CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
-                            Text(SettingsCopy.peekNote).font(SettingsStyle.font.italic()).foregroundStyle(SettingsStyle.note)
+                            Text(SettingsCopy.peekNote).font(.system(size: C.peekNoteFontSize.value).italic()).foregroundStyle(SettingsStyle.italicNote)
                         }
+                        .offset(y: -C.peekNoteRaise.value)
                     } trailing: {
                         SettingsSwitch(field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) { send(.peekFromPinnedAndFavorites($0)) }
                     }

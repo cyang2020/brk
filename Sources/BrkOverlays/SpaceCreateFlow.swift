@@ -124,10 +124,10 @@ struct SpaceCreateFlowView: View {
                 .frame(width: m.illustration.value.width, height: m.illustration.value.height)
                 .position(x: m.illustration.value.midX, y: m.illustration.value.midY - top)
             VStack(spacing: 0) {
-                Text(CreateFlowCopy.title).font(.system(size: 20, weight: .bold)).foregroundStyle(ink.opacity(0.92))
+                Text(CreateFlowCopy.title).font(.system(size: 17, weight: .bold)).foregroundStyle(ink.opacity(0.96))
                     .frame(height: 24)
-                Text(CreateFlowCopy.subtitle).font(.system(size: 14.5)).foregroundStyle(ink.opacity(0.85))
-                    .multilineTextAlignment(.center).lineSpacing(0.5).frame(width: width - 20)
+                Text(CreateFlowCopy.subtitle).font(.system(size: 14)).foregroundStyle(ink.opacity(0.9))
+                    .multilineTextAlignment(.center).lineSpacing(0).frame(width: width - 20)
                     .padding(.top, m.subtitleTop.value - m.titleTop.value - 24)
             }
             .frame(width: width).offset(y: m.titleTop.value - top)
@@ -140,7 +140,7 @@ struct SpaceCreateFlowView: View {
             createButton.frame(width: m.createButton.value.width, height: m.createButton.value.height)
                 .offset(x: m.field.value.minX, y: height - m.createBottom.value - m.createButton.value.height)
             Button(CreateFlowCopy.cancel) { model.cancel() }
-                .buttonStyle(.plain).font(.system(size: 14)).foregroundStyle(ink.opacity(0.62))
+                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(ink.opacity(0.62))
                 .frame(width: width, height: 20)
                 .offset(y: height - m.cancelCentre.value - 10)
                 .spaceToolsID("cancel")
@@ -182,9 +182,14 @@ struct SpaceCreateFlowView: View {
     private var profileRow: some View {
         let current = model.profiles.first { $0.id == model.draft.profile }?.name ?? "Default"
         return HStack(spacing: 0) {
-            Image(systemName: "face.smiling").font(.system(size: 13, weight: .medium)).foregroundStyle(ink.opacity(0.6))
+            // Arc's Profile glyph: two strokes and a smile, no circle (P24-a).
+            ZStack {
+                HStack(spacing: 4) { ForEach(0..<2, id: \.self) { _ in Capsule().fill(ink.opacity(0.5)).frame(width: 1.5, height: 5) } }.offset(y: -2)
+                SmilePath().stroke(ink.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round)).frame(width: 9, height: 2.5).offset(y: 3.5)
+            }
+            .frame(width: 14, height: 14)
                 .frame(width: 2 * (m.leading.value[0] - m.profileRow.value.minX))
-            Text(CreateFlowCopy.profile).font(.system(size: 15, weight: .medium)).foregroundStyle(ink.opacity(0.85))
+            Text(CreateFlowCopy.profile).font(.system(size: 13.5, weight: .medium)).foregroundStyle(ink.opacity(0.9))
                 .padding(.leading, m.leading.value[1] - 2 * m.leading.value[0] + m.profileRow.value.minX)
             ProfileMenuButton(title: current, profiles: model.profiles, selected: model.draft.profile, ink: ink == .white ? .white : .black) { choice in
                 if let choice { model.draft.profile = choice } else { model.dispatch(.profile(.openDialog(.create))) }
@@ -204,7 +209,7 @@ struct SpaceCreateFlowView: View {
             HStack(spacing: 0) {
                 Image(systemName: "paintbrush.pointed.fill").font(.system(size: 12, weight: .medium)).foregroundStyle(ink.opacity(0.6))
                     .frame(width: 2 * (m.leading.value[0] - m.themeRow.value.minX))
-                Text(CreateFlowCopy.chooseTheme).font(.system(size: 15, weight: .medium)).foregroundStyle(ink.opacity(0.85))
+                Text(CreateFlowCopy.chooseTheme).font(.system(size: 13.5, weight: .medium)).foregroundStyle(ink.opacity(0.9))
                     .padding(.leading, m.leading.value[1] - 2 * m.leading.value[0] + m.themeRow.value.minX)
                 Spacer(minLength: 0)
             }
@@ -221,9 +226,10 @@ struct SpaceCreateFlowView: View {
         let enabled = model.draft.canCreate
         return Button { model.create() } label: {
             Text(CreateFlowCopy.createSpace).font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(enabled ? 1 : 0.7))
+                // SwiftUI dims a disabled plain button by about half on top of these (P24-a: #9BA0FA with #C4C8FB words).
+                .foregroundStyle(Color.white.opacity(enabled ? 1 : 0.88))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(accent.swiftUI.opacity(enabled ? 1 : 0.4)))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(accent.swiftUI.opacity(enabled ? 1 : 0.8)))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -343,4 +349,14 @@ final class ThemePopover: NSObject, NSPopoverDelegate {
     }
 
     func dismiss() { popover.close() }
+}
+
+/// The smile under the Profile row's two strokes.
+private struct SmilePath: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY), control: CGPoint(x: rect.midX, y: rect.maxY + rect.height))
+        return path
+    }
 }

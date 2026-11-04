@@ -29,6 +29,7 @@ struct ProfilesPane: View {
     @State private var typedName = ""
     @State private var deletingUnused = false
     @State private var subpage: ProfileSubpage?
+    @State private var explainingProfiles = false
 
     private var names: [String] { settings.profiles.map(\.profile.name) }
     private var selected: ProfileSettingsRow? {
@@ -37,9 +38,15 @@ struct ProfilesPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: P.introToColumns.value) {
-            Text(ProfileCopy.paneIntro).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text).fixedSize(horizontal: false, vertical: true)
+            LinkedText(parts: [.text(ProfileCopy.paneIntro + " "), .link(SettingsCopy.learnMore + ".", id: "profiles")], underline: true) { _ in explainingProfiles = true }
+                .popover(isPresented: $explainingProfiles) {
+                    Text(ProfileCopy.paneDetail).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
+                        .frame(width: CardMetrics.popoverWidth.value).padding()
+                }
             HStack(alignment: .top, spacing: P.columnGap.value) {
-                profileList.frame(width: P.listWidth.value, height: listHeight)
+                // Half a point wider than its place in the row, to the left (the cards keep their column).
+                profileList.frame(width: P.listWidth.value + P.listOverhang.value, height: listHeight)
+                    .frame(width: P.listWidth.value).offset(x: -P.listOverhang.value / 2)
                 if let row = selected {
                     VStack(alignment: .leading, spacing: CardMetrics.cardSpacing.value) {
                         switch subpage {
@@ -98,9 +105,9 @@ struct ProfilesPane: View {
 
     private var profileList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(ProfilesCopy.yourProfiles).font(.system(size: P.listCaptionFont.value, weight: .semibold)).foregroundStyle(SettingsStyle.header)
-                .padding(.leading, P.listInset.value).frame(height: P.listHeader.value)
-            CardDivider(inset: 0)
+            Text(ProfilesCopy.yourProfiles).font(.system(size: P.listCaptionFont.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(P.listCaptionOpacity.value))
+                .padding(.leading, P.listInset.value).frame(height: P.listHeader.value).offset(y: P.listCaptionDrop.value)
+            ListRule()
             ScrollView {
                 VStack(alignment: .leading, spacing: P.listRowGap.value) {
                     ForEach(settings.profiles, id: \.profile.id) { row in listRow(row) }
@@ -125,7 +132,7 @@ struct ProfilesPane: View {
             bottomBar
         }
         .background(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).strokeBorder(SettingsStyle.cardBorder))
+        .overlay(RoundedRectangle(cornerRadius: CardMetrics.cornerRadius.value, style: .continuous).strokeBorder(Color(nsColor: P.listEdge)))
         .contextMenu {
             Button(ProfileCopy.deleteUnusedTitle + "…") { deletingUnused = true }.disabled(Self.unused(settings.profiles).isEmpty)
         }
@@ -267,11 +274,11 @@ struct ProfileSettingsForm: View {
         CardHeader(text: ProfilesCopy.yourData).padding(.top, P.dataHeaderTop.value).padding(.bottom, P.dataHeaderBottom.value)
         SettingsCard {
             VStack(spacing: 0) {
-                dataRow("lock.fill", .systemBlue, ProfilesCopy.privacy, "privacy") { context.dispatch(.settings(.openBrowserPage(.privacy, profile: id))) }
-                dataRow("key.fill", .systemGreen, ProfilesCopy.passwords, "passwords") { context.dispatch(.settings(.openBrowserPage(.passwords, profile: id))) }
-                dataRow("creditcard.fill", .systemYellow, ProfilesCopy.creditCards, "creditCards") { context.dispatch(.settings(.openBrowserPage(.paymentMethods, profile: id))) }
-                dataRow("bell.fill", .systemOrange, ProfilesCopy.notifications, "notifications") { context.dispatch(.settings(.openBrowserPage(.notifications, profile: id))) }
-                dataRow("trash.fill", .systemRed, ProfilesCopy.clearBrowsingData, "clearBrowsingData") { open(.clearData) }
+                dataRow("lock.fill", P.dataBlue, ProfilesCopy.privacy, "privacy") { context.dispatch(.settings(.openBrowserPage(.privacy, profile: id))) }
+                dataRow("key.fill", P.dataGreen, ProfilesCopy.passwords, "passwords") { context.dispatch(.settings(.openBrowserPage(.passwords, profile: id))) }
+                dataRow("creditcard.fill", P.dataYellow, ProfilesCopy.creditCards, "creditCards") { context.dispatch(.settings(.openBrowserPage(.paymentMethods, profile: id))) }
+                dataRow("bell.fill", P.dataOrange, ProfilesCopy.notifications, "notifications") { context.dispatch(.settings(.openBrowserPage(.notifications, profile: id))) }
+                dataRow("trash.fill", P.dataRed, ProfilesCopy.clearBrowsingData, "clearBrowsingData") { open(.clearData) }
             }
             .padding(.vertical, P.dataPadding.value)
         }
@@ -280,9 +287,9 @@ struct ProfileSettingsForm: View {
     private func dataRow(_ symbol: String, _ color: NSColor, _ title: String, _ name: String, action: @escaping @MainActor () -> Void) -> some View {
         HStack(spacing: CardMetrics.controlGap.value) {
             RowIcon(symbol: symbol, color: Color(nsColor: color), size: P.dataIcon.value)
-            CardLabel(title)
+            Text(title).font(SettingsStyle.font).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: CardMetrics.controlGap.value)
-            Image(systemName: "arrow.right").font(.system(size: P.arrowSize.value, weight: .regular)).foregroundStyle(SettingsStyle.link)
+            Image(systemName: "arrow.right").font(.system(size: P.arrowSize.value, weight: .regular)).foregroundStyle(Color(nsColor: P.dataArrow))
         }
         .padding(.horizontal, CardMetrics.rowPadding.value)
         .frame(height: P.dataRow.value)
@@ -417,8 +424,21 @@ struct ProfilesPaneMetricsTable: MetricGroup {
     var selectedFill: Color { ArtColor.rgb(0xEEF2FD) }
     let introHeight = Metric(32.0, .anatomy("\(capture): two 16-point lines"))
     let introToColumns = Metric(20.0, .anatomy("\(capture): the paragraph ends near y 280 px, the columns start at 320 px"))
-    let listWidth = Metric(205.0, .anatomy("\(capture): the list spans x 128 to 538 px"))
-    let columnGap = Metric(10.5, .anatomy("\(capture): the list ends at x 538 px, the cards start at 559 px"))
+    let listWidth = Metric(205.5, .anatomy("\(capture): the list spans x 128 to 539 px"))
+    let columnGap = Metric(9.5, .anatomy("\(capture): the list ends at x 539 px, the cards start at 558 px"))
+    let listOverhang = Metric(0.5, .anatomy("\(capture): the list's left edge is at x 127 px, the cards' column is 128 px"))
+    let listCaptionDrop = Metric(0.5, .anatomy("\(capture): 'Your Profiles' spans y 339 to 355 px"))
+    let listEdge = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.12) : NSColor(white: 0xE0 / 255.0, alpha: 1)
+    }
+    let listCaptionOpacity = Metric(0.47, .anatomy("\(capture): 'Your Profiles' is #9E9E9E at its darkest"))
+    // The data rows' squares and arrows are lighter than the system colours the Advanced pane's squares use.
+    let dataBlue = NSColor(srgbRed: 0x48 / 255.0, green: 0x9A / 255.0, blue: 0xFE / 255.0, alpha: 1)
+    let dataGreen = NSColor(srgbRed: 0x63 / 255.0, green: 0xCF / 255.0, blue: 0x74 / 255.0, alpha: 1)
+    let dataYellow = NSColor(srgbRed: 1, green: 0xD4 / 255.0, blue: 0x43 / 255.0, alpha: 1)
+    let dataOrange = NSColor(srgbRed: 1, green: 0x9F / 255.0, blue: 0x50 / 255.0, alpha: 1)
+    let dataRed = NSColor(srgbRed: 1, green: 0x5F / 255.0, blue: 0x5D / 255.0, alpha: 1)
+    let dataArrow = NSColor(srgbRed: 0x43 / 255.0, green: 0x8F / 255.0, blue: 0xFE / 255.0, alpha: 1)
     let listBottom = Metric(12.0, .anatomy("\(capture): the list ends at y 1276 px of 1300"))
     let listMinHeight = Metric(200.0, .guess("the list's height on a short screen"))
     let listHeader = Metric(27.0, .anatomy("\(capture): 'Your Profiles' row spans y 320 to 376 px with its 2 px hairline"))
@@ -435,10 +455,10 @@ struct ProfilesPaneMetricsTable: MetricGroup {
     let popUpRow = Metric(44.0, .anatomy("\(capture): Search engine row 320 to 408 px, Manage search 408 to 498 px"))
     let popUpColumn = Metric(180.0, .anatomy("\(capture): every pop-up is centred at x 1040 px"))
     let documentsWidth = Metric(150.0, .anatomy("\(capture): the New documents pop-up spans x 890 to 1190 px"))
-    let dataHeaderTop = Metric(4.5, .anatomy("\(capture): the second card ends at y 855 px, the header is centred at 894 px; the column's 8 pt spacing comes first"))
+    let dataHeaderTop = Metric(4.0, .anatomy("\(capture): the second card ends at y 855 px, the header is centred at 894 px; the column's 8 pt spacing comes first"))
     let dataHeaderBottom = Metric(-4.0, .anatomy("\(capture): the header is centred at y 894 px, the data card starts at 916 px, less than the column's 8 pt spacing leaves"))
     let dataPadding = Metric(5.0, .anatomy("\(capture): the data card starts at y 916 px, its first row is centred at 960 px"))
     let dataRow = Metric(34.0, .anatomy("\(capture): data rows centred at y 960, 1028, 1096, 1164, 1232 px"))
     let dataIcon = Metric(24.0, .anatomy("\(capture): the lock square spans x 578 to 626 px"))
-    let arrowSize = Metric(14.0, .guess("the → at the end of a data row"))
+    let arrowSize = Metric(13.0, .anatomy("\(capture): the → spans x 1193 to 1216 px, y 951 to 969 px"))
 }

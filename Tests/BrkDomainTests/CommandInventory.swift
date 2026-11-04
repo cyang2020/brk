@@ -42,7 +42,7 @@ enum CommandInventory {
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
-        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
+        .tabTools(.dismissLittleTip), .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
         .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
         .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
         .tabTools(.spaceIntoFolder(space, into: space)),
@@ -310,6 +310,7 @@ enum CommandInventory {
             case .mute: "mute"
             case .dismissToast: "dismissToast"
             case .dismissArchiveEducation: "dismissArchiveEducation"
+            case .dismissLittleTip: "dismissLittleTip"
             case .dismissFavoritesHint: "dismissFavoritesHint"
             case .undoToast: "undoToast"
             case .quoteLinkCopied: "quoteLinkCopied"
@@ -517,6 +518,7 @@ enum CommandInventory {
             case .closedByPage: "page.closedByPage"
             case .languageDetected: "page.languageDetected"
             case .translateRequested: "page.translateRequested"
+            case .linkMenuRequested: "page.linkMenuRequested"
             case .selectionChanged: "page.selectionChanged"
             case .gainedFocus: "page.gainedFocus"
             case .openRequested: "page.openRequested"

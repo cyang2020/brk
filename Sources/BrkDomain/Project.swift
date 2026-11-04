@@ -34,7 +34,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.ai = state.session.ai.answers[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -256,6 +256,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     )
     if doc.kind == .standard, state.doc.settings.max.tidyTabs {
         let todayTabs = (tree[space.todayRoot]?.children ?? []).filter { tree[$0]?.kind == .tab }.count
+        spaceSnapshot.today.tidyEnabled = true
         spaceSnapshot.today.canTidy = todayTabs > 6
         spaceSnapshot.today.tidying = state.session.ai.tidying.contains(id)
     }
@@ -668,6 +669,7 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
         }
         result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
     }
+    result.littleTip = !state.doc.tabPreferences.littleTipDismissed && state.doc.windows[window]?.kind == .little
     // Only a fresh profile's first space explains auto-archive; a space made later does not (Arc 1.170).
     if !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
        let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }),

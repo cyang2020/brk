@@ -15,8 +15,11 @@ struct ArcDialogMetrics: MetricGroup {
     let width = Metric(450.0, .guess("every dialog's width, measured on P26 a, P27 a, Q04 a and P42 a (900 px at 2x)"))
     let cornerRadius = Metric(24.0, .guess("card corner radius, measured on P26 a (continuous corners)"))
     let inset = Metric(38.0, .guess("text, field and icon left inset, measured on P26 a and P42 a"))
-    let titleTop = Metric([56.0, 118.0], .guess("title label top without and with the icon, measured on P26 a and P27 a / P42 a"))
-    let titleSize = Metric(17.0, .guess("title font size (cap height 11.5 pt), measured on P26 a"))
+    let titleTop = Metric([55.0, 116.0], .anatomy("verify/visual-pairs/run-20261103/P26/P26-a-arc.png, P27/P27-a-arc.png: the title's ink starts at y 668 and 740 px"))
+    let titleSize = Metric(17.5, .anatomy("verify/visual-pairs/run-20261103/P26/P26-a-arc.png: 'Rename “对照”' is 120.5 points wide (17 pt is 116.5)"))
+    /// Labels draw 2 points inside their frames; a paragraph's frame stands out by that much, the title's a little less.
+    let titleShift = Metric(1.5, .anatomy("verify/visual-pairs/run-20261103/P27/P27-a-arc.png: the title's ink starts at x 909 px"))
+    let bodyShift = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/P27/P27-a-arc.png: the text's ink starts at x 907 px"))
     let bodySize = Metric(14.0, .guess("body text size: P42 a wraps \"…separate — with their own\" on its first line"))
     let icon = Metric(CGRect(x: 39, y: 39, width: 60, height: 60), .guess("icon box at the top left, measured on P27 a, Q04 a and P42 a"))
     let buttonHeight = Metric(38.0, .guess("button height, measured on P26 a"))
@@ -167,13 +170,14 @@ final class ArcDialogView: NSView {
         let titleHeight = title.intrinsicContentSize.height
         if apply {
             icon.frame = m.icon.value
-            title.frame = CGRect(x: inset, y: titleTop, width: text, height: titleHeight)
+            title.frame = CGRect(x: inset - m.titleShift.value, y: titleTop, width: text, height: titleHeight)
         }
         var y = titleTop + titleHeight
         for row in rows {
             y += row.gap
             let height = row.height ?? Self.fittingHeight(row.view, width: text)
-            if apply { row.view.frame = CGRect(x: inset, y: y, width: text, height: height) }
+            let paragraph = (row.view as? NSTextField).map { !$0.isEditable } ?? false
+            if apply { row.view.frame = CGRect(x: inset - (paragraph ? m.bodyShift.value : 0), y: y, width: text, height: height) }
             y += height
         }
         let top = y + buttonGap, buttonHeight = m.buttonHeight.value
@@ -199,7 +203,8 @@ final class ArcDialogView: NSView {
     static func body(_ text: String, scheme: Scheme, size: Double = ArcDialog.bodySize.value) -> NSTextField {
         let label = NSTextField(wrappingLabelWithString: text)
         label.font = .systemFont(ofSize: size)
-        label.textColor = OverlayColors.of(scheme).foregroundPrimary
+        // P27-a: the paragraph is a slate grey (#4D5568 at its darkest), not the title's near-black.
+        label.textColor = scheme == .light ? NSColor(srgbRed: 0x4D / 255.0, green: 0x55 / 255.0, blue: 0x68 / 255.0, alpha: 1) : OverlayColors.of(scheme).foregroundPrimary
         label.isSelectable = false
         return label
     }
@@ -288,7 +293,7 @@ final class AlertButton: NSView {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = ArcDialog.buttonRadius.value
-        label.font = .systemFont(ofSize: 14, weight: style == .plain ? .regular : .medium)
+        label.font = .systemFont(ofSize: 13.5, weight: style == .plain ? .regular : .medium)
         cap.font = key == "ESC" ? .systemFont(ofSize: 10, weight: .bold) : .systemFont(ofSize: 13, weight: .semibold)
         cap.alignment = .center
         capBox.wantsLayer = true

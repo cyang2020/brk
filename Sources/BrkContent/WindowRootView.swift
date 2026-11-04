@@ -33,6 +33,7 @@ public final class WindowRootView: NSView {
     private let boostPanel: BoostPanel
     private let aiAnswer: AIAnswerDocumentView
     private let aiPreview: AIPreviewCardView
+    private let linkStatus = LinkStatusCapsule()
     private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
@@ -71,7 +72,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak veil = inactiveVeil] _ in
                 guard let veil else { return }
@@ -170,6 +171,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         aiAnswer.render(snapshot.ai, in: frames.contentArea)
+        linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
@@ -372,11 +374,14 @@ final class PeekRoundButton: NSView {
 
 /// Shades of the space's primary color, same hue, for chrome Arc tints with the theme: the split view's focus ring
 /// and the Peek buttons' glyphs (#C39C7F). A grey theme gives grey shades.
-enum ThemeAccent {
+public enum ThemeAccent {
     /// Light: the primary's hue and saturation (HSL) at the lightness whose relative luminance is Arc's 0.097. That is
     /// the ring in both Arc captures, which is also Arc's folder outline there: #725137 under the #F2EAE4 theme
     /// (P23-a) and #006362 under the cyan one (P23-c, the round-2 Arc space). Dark keeps a light shade.
-    static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
+    /// The ring's colour for a space's primary colour (a Little window names its space in this colour, P21-b).
+    public static func ring(of primary: RGBA) -> NSColor { luminanceMatched(primary, luminance: ThemeAccentDraw.ringLuminance.value) }
+
+    public static func splitFocusRing(_ theme: ResolvedTheme) -> NSColor {
         guard theme.scheme == .light else { return shade(theme, saturationScale: 9, saturationCap: 0.53, brightness: 0.8) }
         return luminanceMatched(theme.gradient.first ?? RGBA(0.5, 0.5, 0.5, 1), luminance: ThemeAccentDraw.ringLuminance.value)
     }

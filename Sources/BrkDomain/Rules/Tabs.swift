@@ -184,7 +184,9 @@ extension Work {
         }
         guard live.browser == token, live.requestContext == state.browsingContext(of: tab) else { return }
         switch event {
-        case .linkHovered(let url): aiHover(url, in: window)
+        case .linkHovered(let url):
+            state.session.windows[window]?.linkStatus = url.map { LinkStatusSnapshot(page: page, text: LinkStatusSnapshot.display($0)) }
+            aiHover(url, in: window)
         case .languageDetected(let document, let language):
             guard live.document == .ready(document) else { return }
             live.language = String(language.prefix(40))
@@ -194,6 +196,18 @@ extension Work {
         case .translateRequested(let language):
             state.session.live[page] = live
             translatePage(page, to: language, in: window)
+            return
+        case .linkMenuRequested(let url, let target):
+            state.session.live[page] = live
+            switch target {
+            case .littleWindow:
+                run(.window(.newLittle(url)), in: window)
+            case .splitView:
+                // A new pane, filled with the link through the command bar that adding a pane opens. A window that
+                // cannot add one (a Little window, a Favorite shown) opens no bar and nothing happens.
+                run(.split(.addPane), in: window)
+                if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(url.absoluteString)), in: window) }
+            }
             return
         case .browserCreated: break
         case .documentChanged(let document):

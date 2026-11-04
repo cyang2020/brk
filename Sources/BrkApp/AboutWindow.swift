@@ -114,7 +114,7 @@ final class AboutWindow: NSObject, NSTextViewDelegate {
         }
         add("\(Product.name) is made possible by the ")
         add("Chromium", link: BrowserPage.chromium.rawValue)
-        add(" open source project, Chromium’s ")
+        add(" open source project, Chromium's ")
         add("open source software", link: BrowserPage.credits.rawValue)
         add(", as well as other ")
         add("open source software", link: Self.otherCredits)

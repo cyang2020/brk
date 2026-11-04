@@ -407,13 +407,13 @@ final class BoostTile: BoostPressable {
         fill.setFill(); NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
         let ink = !isEnabled ? BoostInk.rgb(0xC6C8CA) : active ? BoostInk.glyphActive : BoostInk.glyph
         if let title {
-            let font = NSFont.systemFont(ofSize: 14.5, weight: .semibold)
+            let font = NSFont.systemFont(ofSize: 14, weight: .medium)
             let text = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: ink])
             let size = text.size()
             let x = symbolName == nil && trailingText == nil ? (bounds.width - size.width) / 2 : 12
-            text.draw(at: CGPoint(x: x, y: (bounds.height - size.height) / 2))
+            text.draw(at: CGPoint(x: x, y: (bounds.height - size.height) / 2 + 0.5))
             if let trailingText {
-                let glyph = NSAttributedString(string: trailingText, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .bold), .foregroundColor: ink])
+                let glyph = NSAttributedString(string: trailingText, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .regular), .foregroundColor: ink])
                 let g = glyph.size(); glyph.draw(at: CGPoint(x: bounds.width - 19 - g.width / 2, y: (bounds.height - g.height) / 2 - 1))
             } else if let symbolName { drawSymbol(symbolName, size: 15, ink: ink, center: CGPoint(x: bounds.width - 19, y: bounds.midY)) }
         } else if let symbolName {
@@ -453,12 +453,13 @@ final class BoostIconButton: BoostPressable {
 final class BoostTitleButton: BoostPressable {
     var title = "" { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13.5, weight: .semibold), .foregroundColor: BoostInk.title])
-        let size = text.size(), chevron: CGFloat = 16
-        let width = min(size.width, bounds.width - chevron - 4)
-        let x = (bounds.width - width - chevron - 4) / 2
-        text.draw(with: CGRect(x: x, y: (bounds.height - size.height) / 2, width: width, height: size.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-        drawSymbol("chevron.down", size: 11, weight: .medium, ink: BoostInk.glyph, center: CGPoint(x: x + width + 4 + chevron / 2, y: bounds.midY + 0.5))
+        // P37-b: 'My Boost' spans x 103 to 217 px of the 2x panel, a 13 pt medium line; the chevron is centred at 249 px.
+        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: BoostInk.title])
+        let size = text.size(), chevron: CGFloat = 16, gap: CGFloat = 8
+        let width = min(size.width, bounds.width - chevron - gap)
+        let x = (bounds.width - width - chevron - gap) / 2
+        text.draw(with: CGRect(x: x, y: (bounds.height - size.height) / 2 - 0.5, width: width, height: size.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        drawSymbol("chevron.down", size: 11, weight: .medium, ink: BoostInk.glyph, center: CGPoint(x: x + width + gap + chevron / 2, y: bounds.midY + 0.5))
     }
 }
 
@@ -520,9 +521,7 @@ final class BoostColorSquare: NSView {
     }
     override func draw(_ dirtyRect: NSRect) {
         let outer = NSBezierPath(roundedRect: bounds, xRadius: 20, yRadius: 20)
-        // Dark at the top-left, light at the bottom-left, mid grey down the right (P37-b). The view is flipped, so
-        // pointing down and to the right is a positive angle.
-        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: 62)
+        drawRing(in: outer)
         let field = NSBezierPath(roundedRect: inner, xRadius: 13, yRadius: 13)
         NSGraphicsContext.saveGraphicsState()
         field.addClip()
@@ -540,6 +539,32 @@ final class BoostColorSquare: NSView {
         NSGraphicsContext.restoreGraphicsState()
         dot(center(of: tint ?? BoostStyle.restingTint), radius: 15, fill: tint.map { BoostInk.color(BoostStyle.tintColor(at: $0)) } ?? BoostInk.rgb(0x666666))
         dot(center(of: text ?? BoostStyle.restingText), radius: 9.5, fill: text.map { BoostInk.color(BoostStyle.textColor(at: $0)) } ?? BoostInk.rgb(0x2E2E2E))
+    }
+    /// The ring's greys going clockwise from the top (P37-b-arc-editor.png, sampled every 15 degrees on the ring).
+    private static let ring: [(degrees: CGFloat, grey: CGFloat)] = [
+        (0, 0x5B), (15, 0x68), (30, 0x6E), (60, 0x67), (75, 0x6A), (90, 0x6F), (105, 0x7D), (120, 0x8B), (150, 0xBF), (165, 0xE4), (180, 0xE9),
+        (195, 0xE3), (210, 0xE1), (240, 0xE3), (255, 0xE5), (270, 0xE3), (285, 0xA8), (300, 0x71), (330, 0x47), (345, 0x51), (360, 0x5B),
+    ]
+    private func drawRing(in shape: NSBezierPath) {
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        let c = CGPoint(x: bounds.midX, y: bounds.midY), reach = bounds.width
+        let stops = Self.ring
+        var degrees: CGFloat = 0
+        while degrees < 360 {
+            let upper = stops.firstIndex { $0.degrees > degrees } ?? stops.count - 1, lower = max(0, upper - 1)
+            let span = stops[upper].degrees - stops[lower].degrees
+            let t = span > 0 ? (degrees - stops[lower].degrees) / span : 0
+            let grey = (stops[lower].grey + (stops[upper].grey - stops[lower].grey) * t) / 255
+            NSColor(srgbRed: grey, green: grey, blue: grey, alpha: 1).setFill()
+            // Clockwise from the top in a flipped view; each wedge overlaps the next a little, so no seam shows.
+            func tip(_ a: CGFloat) -> CGPoint { CGPoint(x: c.x + sin(a * .pi / 180) * reach, y: c.y - cos(a * .pi / 180) * reach) }
+            let wedge = NSBezierPath()
+            wedge.move(to: c); wedge.line(to: tip(degrees)); wedge.line(to: tip(degrees + 3)); wedge.close()
+            wedge.fill()
+            degrees += 2
+        }
+        NSGraphicsContext.restoreGraphicsState()
     }
     private func dot(_ c: CGPoint, radius: CGFloat, fill: NSColor) {
         let ring = NSBezierPath(ovalIn: CGRect(x: c.x - radius - 3, y: c.y - radius - 3, width: (radius + 3) * 2, height: (radius + 3) * 2))
@@ -657,13 +682,15 @@ final class BoostIntroView: NSView {
         wave.line(to: CGPoint(x: bounds.width, y: bounds.height)); wave.close()
         BoostInk.introBottom.setFill(); wave.fill()
         drawBadge(center: CGPoint(x: bounds.midX, y: 293))
-        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineHeightMultiple = 0.92
-        let title = NSAttributedString(string: "Edit the Internet with Boosts", attributes: [.font: NSFont.systemFont(ofSize: 22, weight: .bold), .foregroundColor: BoostInk.blue, .paragraphStyle: paragraph])
-        title.draw(with: CGRect(x: 10, y: 341, width: bounds.width - 20, height: 84), options: [.usesLineFragmentOrigin])
-        let line = NSMutableAttributedString(string: "Make ", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: BoostInk.introText, .paragraphStyle: paragraph])
-        line.append(NSAttributedString(string: host, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .bold), .foregroundColor: BoostInk.rgb(0x7D7A85)]))
-        line.append(NSAttributedString(string: " your own!", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: BoostInk.introText]))
-        line.draw(with: CGRect(x: 6, y: 427, width: bounds.width - 12, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        // P37-a: the title's three lines start at y 348, 371 and 394 pt, 23 pt apart; the line under it at y 430.
+        let titleStyle = NSMutableParagraphStyle(); titleStyle.alignment = .center; titleStyle.minimumLineHeight = 23; titleStyle.maximumLineHeight = 23
+        let title = NSAttributedString(string: "Edit the Internet with Boosts", attributes: [.font: NSFont.systemFont(ofSize: 23, weight: .semibold), .foregroundColor: BoostInk.blue, .paragraphStyle: titleStyle])
+        title.draw(with: CGRect(x: 9.5, y: 346.5, width: bounds.width - 20, height: 72), options: [.usesLineFragmentOrigin])
+        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
+        let line = NSMutableAttributedString(string: "Make ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: BoostInk.introText, .paragraphStyle: paragraph])
+        line.append(NSAttributedString(string: host, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: BoostInk.introText]))
+        line.append(NSAttributedString(string: " your own!", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: BoostInk.introText]))
+        line.draw(with: CGRect(x: 4, y: 427.5, width: bounds.width - 8, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
     private func drawBadge(center: CGPoint) {
         NSGraphicsContext.saveGraphicsState()
@@ -688,8 +715,8 @@ final class BoostPrimaryButton: BoostPressable {
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10)
         NSGradient(starting: BoostInk.rgb(pressed ? 0x2F3BE0 : 0x4450FF), ending: BoostInk.rgb(pressed ? 0x2832D8 : 0x323DF6))?.draw(in: path, angle: -90)
-        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 14.5, weight: .semibold), .foregroundColor: NSColor.white])
-        let size = text.size(); text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13.5, weight: .semibold), .foregroundColor: NSColor.white])
+        let size = text.size(); text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2 + 0.5))
     }
 }
 
@@ -698,8 +725,8 @@ final class BoostLinkButton: BoostPressable {
     init(title: String) { self.title = title; super.init(frame: .zero) }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override func draw(_ dirtyRect: NSRect) {
-        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: pressed ? BoostInk.glyph : BoostInk.introMuted])
-        let size = text.size(); text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        let text = NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: pressed ? BoostInk.glyph : BoostInk.introMuted])
+        let size = text.size(); text.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2 + 0.5))
     }
 }
 
