@@ -210,9 +210,17 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let event = NSApp?.currentEvent
             if event?.type == .keyDown && event?.isARepeat == true { return true }
             // Max's Instant Links: Shift+Return on a web search opens its top results instead (P48-a).
-            if event?.modifierFlags.contains(.shift) == true, siteSearch == nil, let bar, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
-                dispatch(.assist(.instant(query)))
-                return true
+            if event?.modifierFlags.contains(.shift) == true, let bar {
+                // A site search is a web search too: its engine's name and the query go to Instant Links whole (Arc's P48
+                // "wikipedia arc browser").
+                if let siteSearch, bar.instantLinks, !typed.trimmingCharacters(in: .whitespaces).isEmpty {
+                    dispatch(.assist(.instant((namedBy.isEmpty ? siteSearch.name : namedBy) + " " + typed.trimmingCharacters(in: .whitespaces))))
+                    return true
+                }
+                if siteSearch == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
+                    dispatch(.assist(.instant(query)))
+                    return true
+                }
             }
             choose(highlighted)
             return true

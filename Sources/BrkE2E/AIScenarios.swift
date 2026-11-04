@@ -319,6 +319,7 @@ enum AIScenarios {
         capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         capture.arguments = ["-x", "-l", String(popover!.number), app.shotsDirectory.appendingPathComponent("AITranslate-popover.png").path]
         try capture.run(); capture.waitUntilExit()
+        _ = try app.send(.focusAppWindow(number: popover!.number))
         try app.click(.aiControl("translation-use-original"))
         try app.waitUntil("Use Original's toast") { try app.view().tabTools.toast?.text == "Translated back to French! Use" && app.view().tabTools.toast?.keycap == "⌘Z" }
         try greeting(app, page, "Bonjour Monde", "ai-original")

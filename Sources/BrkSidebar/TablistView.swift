@@ -901,16 +901,16 @@ final class DividerRowView: HoverView {
         let size = clear.fittingSize
         clear.frame = CGRect(x: bounds.width - Draw.clearTrailing.value - size.width, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
         var end = clear.alphaValue > 0 && !clear.isHidden ? clear.frame.minX - Draw.clearGap.value : bounds.width - inset
-        if tidy.alphaValue > 0, !tidy.isHidden {
-            let gaps = Draw.tidyGaps.value, hairline = Draw.hairline.value, barHeight = Draw.tidySeparatorHeight.value
-            let right = clear.isHidden ? bounds.width - Draw.clearTrailing.value : clear.frame.minX - gaps[3]
-            tidyBar.isHidden = clear.isHidden
-            tidyBar.frame = CGRect(x: right - hairline, y: (bounds.height - barHeight) / 2, width: hairline, height: barHeight)
-            let width = tidy.fittingSize.width, height = tidy.fittingSize.height
-            tidy.frame = CGRect(x: (clear.isHidden ? right : tidyBar.frame.minX - gaps[2]) - width, y: (bounds.height - height) / 2, width: width, height: height)
-            end = tidy.frame.minX - gaps[0]
-        } else { tidyBar.isHidden = true }
-        let hairline = Draw.hairline.value
+        // Tidy keeps its place while it is invisible too, so the pointer finds it where it appears.
+        let gaps = Draw.tidyGaps.value, hairline = Draw.hairline.value, barHeight = Draw.tidySeparatorHeight.value
+        let right = clear.isHidden ? bounds.width - Draw.clearTrailing.value : clear.frame.minX - gaps[3]
+        tidyBar.frame = CGRect(x: right - hairline, y: (bounds.height - barHeight) / 2, width: hairline, height: barHeight)
+        let tidySize = tidy.fittingSize
+        tidy.frame = CGRect(x: (clear.isHidden ? right : tidyBar.frame.minX - gaps[2]) - tidySize.width, y: (bounds.height - tidySize.height) / 2,
+                            width: tidySize.width, height: tidySize.height)
+        let tidyShown = tidy.alphaValue > 0 && !tidy.isHidden
+        tidyBar.isHidden = !tidyShown || clear.isHidden
+        if tidyShown { end = tidy.frame.minX - gaps[0] }
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
     }
 

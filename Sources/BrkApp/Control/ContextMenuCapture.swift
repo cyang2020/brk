@@ -9,9 +9,12 @@ import BrkEngine
     private var menu: NSMenu? { tracking.menu }
     private var items: [String] = []
     private var choice: String?
+    /// A left click's own menu (a pop-up button, the Library's Filter): the first menu that tracks is it.
+    private var clicked = false
 
     func run(at point: CGPoint, in window: NSWindow, events: EventInjector, choose: String? = nil, left: Bool = false) async throws -> [String] {
         choice = choose
+        clicked = left
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(100))
@@ -35,7 +38,7 @@ import BrkEngine
         precondition(Thread.isMainThread)
         guard let current = note.object as? NSMenu else { return }
         // Actual popup delegates identify the menu; AppKit may report a distinct menu-bar object first.
-        let fromDelegate = note.name == PageSurfaceView.contextMenuWillOpen || note.name == Self.willPresent
+        let fromDelegate = clicked || note.name == PageSurfaceView.contextMenuWillOpen || note.name == Self.willPresent
         guard tracking.begin(current, fromDelegate: fromDelegate) else { return }
         items = current.items.filter { !$0.isSeparatorItem }.map(\.title)
         let timer = Timer(timeInterval: 0.1, target: self, selector: #selector(cancelMenu), userInfo: nil, repeats: false)

@@ -189,7 +189,8 @@ private final class TranslationPopoverView: NSView {
         let settings = NSMenuItem(title: AICopy.languageSettings, action: #selector(languageSettings), keyEquivalent: "")
         settings.target = self
         menu.addItem(settings)
-        menu.popUp(positioning: nil, at: CGPoint(x: options.frame.minX, y: options.frame.maxY), in: self)
+        // Arc pops it with its first row over the button, from the button's middle (P50-f).
+        menu.popUp(positioning: another, at: CGPoint(x: options.frame.midX, y: options.frame.midY - Draw.translationButtons.value[3] / 2), in: self)
     }
     @objc private func chooseLanguage(_ item: NSMenuItem) { dispatch(.assist(.translate(item.title))) }
     @objc private func neverTranslate() { dispatch(.assist(.neverTranslateSite)) }
