@@ -731,7 +731,11 @@ final class ResultRowView: NSView {
         // Over the URL pill (captions off) rows are titles only, P02-b.
         let subtitle = captions ? suggestion.subtitle ?? "" : ""
         detail.isHidden = subtitle.isEmpty
+        // A style of its own: without one an attributed string wraps at the last word that fits instead of cutting the middle.
+        let cut = NSMutableParagraphStyle()
+        cut.lineBreakMode = .byTruncatingMiddle
         detail.attributedStringValue = NSAttributedString(string: " — " + subtitle, attributes: [
+            .paragraphStyle: cut,
             .font: NSFont.systemFont(ofSize: o.titleFontSize.value, weight: .medium),
             .foregroundColor: highlighted ? colors.onHighlight.withAlphaComponent(0.7) : colors.secondary,
         ])
@@ -786,7 +790,7 @@ final class ResultRowView: NSView {
         label.frame = CGRect(x: x, y: ((bounds.height - height) / 2).rounded(), width: titleWidth, height: height)
         // The label pads 2 on each side, so the detail starts 4 back to sit right after the title's text.
         let detailX = label.frame.maxX - 4
-        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX, o.detailMaxWidth.value)), height: height)
+        detail.frame = CGRect(x: detailX, y: label.frame.minY, width: max(0, min(ceil(detail.attributedStringValue.size().width) + 4, right - detailX, (bounds.width * o.detailMaxShare.value).rounded())), height: height)
     }
 
     // Hover follows pointer motion (not entry), so rows sliding under a still pointer keep the keyboard highlight.

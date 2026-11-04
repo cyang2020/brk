@@ -469,7 +469,7 @@ final class HistoryNavItem: NSButton {
         CATransaction.commit()
         glyph.frame = CGRect(x: h.navIconLeading.value - 1, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
         let size = label.fittingSize
-        label.frame = CGRect(x: h.navTextLeading.value, y: ((bounds.height - size.height) / 2).rounded(), width: size.width, height: size.height)
+        label.frame = CGRect(x: h.navTextLeading.value, y: ((bounds.height - size.height) / 2).rounded() - h.navTextRaise.value, width: size.width, height: size.height)
         // Q05-a: the external mark is centred 20 after the label's text (which ends 2 inside its frame).
         external.frame = CGRect(x: label.frame.maxX + 7, y: ((bounds.height - g) / 2).rounded(), width: g, height: g)
     }

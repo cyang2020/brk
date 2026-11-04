@@ -182,7 +182,7 @@ struct CommandBarOverlayMetrics: MetricGroup {
     let symbolPointSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P49/P49-cmd-arc.png: the magnifier spans x 566 to 589 px, 12 points of ink"))
     let inputRaise = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/Q01/Q01-a-arc.png: the placeholder's ink starts at y 481 px, half a point above the row's middle"))
     let hairlineInset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q01/Q01-b-arc.png: the hairline spans x 538 to 2022 px, the highlight 534 to 2026 px"))
-    let detailMaxWidth = Metric(178.0, .anatomy("verify/visual-pairs/run-20261103/P21/P21-a-arc.png: '— youtube.c...wsercompany' ends about 175 points after it starts"))
+    let detailMaxShare = Metric(0.37, .anatomy("verify/visual-pairs/run-20261103/P21/P21-a-arc.png and Q03/Q03-a-arc.png: an address and its dash stop at about 175 points in a 470 pt row, 275 in a 746 pt row"))
     let hintPadding = Metric(6.0, .guess("horizontal padding inside a hint pill"))
     let hintHeight = Metric(20.0, .guess("hint pill height"))
     let hintRadius = Metric(6.0, .anatomy("\(measured): the Tab key and the arrow square have about 6 pt corners"))

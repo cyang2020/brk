@@ -89,7 +89,10 @@ final class ArcGeometryTests: XCTestCase {
         let a = d.view.space.today.rows[0].id
         d.user(.tab(.togglePin(.item(a))))
         _ = d.open("c.example.com")
-        func dividerHeight() -> Double? { TablistLayout.rows(d.view.space, width: 228).first { $0.kind == .divider }?.rect.height }
+        func dividerHeight() -> Double? {
+            for row in TablistLayout.rows(d.view.space, width: 228) { if case .divider = row.kind { return Double(row.rect.height) } }
+            return nil
+        }
         XCTAssertEqual(dividerHeight(), 16)
         d.user(.settings(.max(.tidyTabs(true))))
         XCTAssertEqual(dividerHeight(), 24)

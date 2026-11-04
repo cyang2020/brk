@@ -8,7 +8,7 @@ public struct SpaceToolsMetrics: MetricGroup {
     public let folderExportTitle = Metric(18.0, .guess("native export sheet heading size"))
     /// The toolbar is the top of the content card: 32 pt of controls over a 1 pt hairline, then the page.
     public let toolbarHeight = Metric(33.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: Arc's card top at 10, hairline at 42"))
-    public let toolbarPageOverlap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/P01/P01-b-arc.png: the page's text sits 1 pt higher than a page starting under the hairline, so the page starts at 42 and the hairline lies on it"))
+    public let toolbarPageOverlap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b Arc capture: the page's text sits 1 pt higher than a page starting under the hairline, so the page starts at 42 and the hairline lies on it"))
     public let controlSize = Metric(32.0, .guess("toolbar navigation controls reuse the existing title-row scale"))
     /// Back, forward and reload centred 21, 58 and 95 from the card's left edge; the three right buttons centred
     /// 22, 58 and 94 from its right edge.

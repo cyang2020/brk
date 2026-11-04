@@ -15,7 +15,7 @@ final class LinkMenuAndLittleTipTests: XCTestCase {
         d.page(try shownTab(d), .linkMenuRequested(link, .littleWindow))
         let little = try XCTUnwrap(d.snapshot.windows.first { $0.value.kind == .little })
         XCTAssertEqual(little.value.content.panes.count, 1)
-        XCTAssertTrue(d.snapshot.pages.contains { $0.id.window == little.key && $0.url == link })
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id.window == little.key && $0.initialURL == link })
     }
 
     func testOpenLinkInSplitAddsAPaneOnTheLink() throws {
