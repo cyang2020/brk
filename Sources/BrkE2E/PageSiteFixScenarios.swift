@@ -202,8 +202,16 @@ enum PageSiteFixScenarios {
         try app.screenshot("news-blocked")
         app.passed("ads, trackers and the ad frame blocked before the network; slots and banner hidden; the article and its own script work")
 
+        // A rule names the document it was read from; read the target again after the reload.
+        func currentTarget() throws -> SiteTarget {
+            try app.dispatch(.tab(.focus(news)))
+            try app.dispatch(.site(.controls))
+            defer { _ = try? app.dispatch(.site(.closeControls)) }
+            guard let value = try SitePolicyScenarios.controls(app).target else { throw Check(description: "news target missing") }
+            return value
+        }
         rule.blocking = false; rule.hideCookieBanners = false
-        try app.dispatch(.site(.rule(target, rule)))
+        try app.dispatch(.site(.rule(try currentTarget(), rule)))
         let excepted = try app.load(app.site.url("news-site.html?excepted"))
         try app.waitForPageInput(PageID(window: app.window!, item: excepted), at: app.site.url("news-site.html?excepted"))
         try app.waitUntil("the excepted site's ad requests reach the server", timeout: 10) { adPaths.allSatisfy { app.site.requestCount($0) > blocked[$0]! } }
@@ -216,7 +224,7 @@ enum PageSiteFixScenarios {
         app.passed("a site exception lets the same requests through and shows the slots")
 
         rule.blocking = true; rule.hideCookieBanners = true
-        try app.dispatch(.site(.rule(target, rule)))
+        try app.dispatch(.site(.rule(try currentTarget(), rule)))
         let afterException = counts()
         let again = try app.load(app.site.url("news-site.html?again"))
         try app.waitForPageInput(PageID(window: app.window!, item: again), at: app.site.url("news-site.html?again"))
@@ -298,7 +306,7 @@ enum PageSiteFixScenarios {
                 if case .menuItems = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) { true } else { false }
             }
         }
-        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 5,
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 6,
               let x = Double(values[0]), let y = Double(values[1]), let w = Double(values[2]), let h = Double(values[3]) else {
             throw Check(description: "\(field) has no screen rectangle")
         }
@@ -312,14 +320,19 @@ enum PageSiteFixScenarios {
             event.post(tap: .cghidEventTap)
             usleep(type == .mouseMoved ? 150_000 : 60_000)
         }
+        app.note("click on \(field) at \(point): \(values[5])")
         return values[4] == "focused:true"
     }
     static func focused(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> Bool {
         if case .failed = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) {
             try app.perform(.siteControlInput(window: owner, field: "siteSettingsDetails", action: .press))
         }
-        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) else { return false }
-        return values.last == "focused:true"
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)), values.count == 6 else { return false }
+        return values[4] == "focused:true"
+    }
+    static func locateState(_ app: AppUnderTest, _ owner: WindowID, _ field: String) throws -> String {
+        guard case .menuItems(let values) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)) else { return "unavailable" }
+        return values.joined(separator: " ")
     }
 
     /// The Ext-shortcut-physical scenario focused the field through AppKit (R4-7: "the focus is set by the program");
@@ -335,7 +348,8 @@ enum PageSiteFixScenarios {
         try expect(try !focused(app, owner, field), "the shortcut field had focus before the click")
         try expect(try ExtScenarios.catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } != true, "the command already has ⇧⌘U")
         _ = try panelClick(app, owner, field)
-        try app.waitUntil("the mouse click put the caret in the shortcut field") { try focused(app, owner, field) }
+        do { try app.waitUntil("the mouse click put the caret in the shortcut field") { try focused(app, owner, field) } }
+        catch { _ = try? app.screenshotSiteControls("field-not-focused"); throw Check(description: "after the click: " + (try locateState(app, owner, field))) }
         _ = try app.screenshotSiteControls("field-clicked")
         app.passed("a window-server click focused the shortcut field")
         PhysicalKeys.press(KeyChord([.command], .a), pid: pid)

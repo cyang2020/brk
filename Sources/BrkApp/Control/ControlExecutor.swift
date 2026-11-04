@@ -90,7 +90,8 @@ final class ControlExecutor {
                 let top = NSScreen.screens.first?.frame.maxY ?? screen.maxY
                 let editor = (control as? NSTextField)?.currentEditor()
                 let focused = editor != nil && panel.firstResponder === editor
-                return .menuItems([screen.minX, top - screen.maxY, screen.width, screen.height].map { String(Double($0)) } + ["focused:\(focused)"])
+                return .menuItems([screen.minX, top - screen.maxY, screen.width, screen.height].map { String(Double($0)) } + ["focused:\(focused)",
+                                  "key:\(panel.isKeyWindow) level:\(panel.level.rawValue) number:\(panel.windowNumber) responder:" + ViewTree.describe(panel.firstResponder)])
             }
             print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
             return .ok
