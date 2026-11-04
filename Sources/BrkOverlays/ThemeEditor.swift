@@ -22,7 +22,8 @@ struct ThemePanelMetrics: MetricGroup {
     let padInset = Metric(8.0, .guess("color pad inset from the panel edge, measured on P28-a"))
     let padSide = Metric(340.0, .guess("the square color pad, measured on P28-a"))
     let padRadius = Metric(12.0, .guess("color pad corner radius, measured on P28-a"))
-    let padDotPitch = Metric(4.0, .guess("dot grid pitch inside the pad, measured on P28-a"))
+    let padDotPitch = Metric(4.25, .anatomy("verify/visual-pairs/run-20261103/P28/P28-a-arc.png: dots at x 501.5, 510, 518.5 … 586.5 px, y 690, 698.5, 707 px"))
+    let padDotOrigin = Metric(CGPoint(x: 1.75, y: 1.0), .anatomy("verify/visual-pairs/run-20261103/P28/P28-a-arc.png: the pad starts at x 498, y 688 px, its first dot at 501.5, 690 px"))
     let appearanceY = Metric(40.0, .guess("appearance buttons' centre below the pad top, measured on P28-a"))
     let appearancePitch = Metric(40.0, .guess("distance between the three appearance buttons, measured on P28-a"))
     let appearanceSide = Metric(32.0, .guess("appearance button square, measured on P28-a"))
@@ -34,12 +35,13 @@ struct ThemePanelMetrics: MetricGroup {
     let presetDot = Metric(24.0, .guess("preset dot diameter, measured on P28-a"))
     let presetPitch = Metric(29.5, .guess("preset dot pitch, measured on P28-a"))
     let presetFirstX = Metric(60.0, .guess("first preset dot centre from the panel's left edge, measured on P28-a"))
-    let arrowInset = Metric(23.0, .guess("page arrows' centres from the panel edges, measured on P28-a"))
+    let arrowInset = Metric(25.0, .guess("page arrows' centres from the panel edges, measured on P28-a"))
     let controlsY = Metric(452.0, .guess("slider and knob centres below the panel top, measured on P28-a"))
     let sliderX = Metric([18.0, 242.0], .guess("intensity slider track from and to, measured on P28-a"))
     let sliderTrack = Metric(16.0, .guess("intensity track height, measured on P28-a"))
     let wavelength = Metric(40.0, .guess("crest to crest on the wave, measured on P28-a"))
-    let waveAmplitude = Metric([1.0, 17.0], .guess("wave half height at intensity 0 and 1, measured on P28-e1 and P28-e2"))
+    let waveAmplitude = Metric([1.0, 15.5], .anatomy("verify/visual-pairs/run-20261103/P28: the wave (a 4 pt stroke) is 12 px tall in P28-e1, 70 px in P28-e2"))
+    let handleTravel = Metric([21.0, 12.0], .anatomy("verify/visual-pairs/run-20261103/P28: the handle's centre is 21 pt into the track at the left end (P28-e1), 12 pt short of its end at the right (P28-e2)"))
     let handle = Metric(CGSize(width: 24, height: 55), .guess("white slider handle, measured on P28-a"))
     let knobX = Metric(298.0, .guess("noise knob centre from the panel's left edge, measured on P28-a"))
     let knobRadius = Metric([20.0, 33.0], .guess("noise knob's inner circle and tick ring radii, measured on P28-a"))
@@ -126,9 +128,14 @@ struct ThemeDraft: Equatable {
 /// right on screen, is the hue; distance from the centre is the lightness (cream, lightness 0.92, sits at 0.82 of
 /// the inscribed radius, so lightness = 0.1 + distance). Saturation is not on the pad: it stays the dot's own.
 enum ThemePad {
-    /// The dot's place for `color`, both axes 0...1 from the pad's top-left.
+    /// The dot's place for `color`, both axes 0...1 from the pad's top-left. A grey has no hue: Arc puts it on the
+    /// left-hand axis, white at the pad's edge (P28-a, the Greyscale page's white: its dot centred 7 pt in from the
+    /// left edge, halfway down).
     static func point(of color: RGBA) -> CGPoint {
         let hsl = HSL(color)
+        if hsl.saturation < 0.01 {
+            return CGPoint(x: 0.5 - min(hsl.lightness, 0.96) * 0.5, y: 0.5)
+        }
         let radius = min(max(hsl.lightness - 0.1, 0), 0.9) * 0.5
         let angle = hsl.hue * .pi / 180
         return CGPoint(x: 0.5 + radius * cos(angle), y: 0.5 + radius * sin(angle))
@@ -255,7 +262,7 @@ struct ThemeEditorView: View {
         let side = m.padSide.value
         return ZStack {
             RoundedRectangle(cornerRadius: m.padRadius.value, style: .continuous).fill(ink.opacity(colorScheme == .dark ? 0.06 : 0.0))
-            DotGrid(pitch: m.padDotPitch.value, color: ink.opacity(0.22))
+            DotGrid(pitch: m.padDotPitch.value, origin: m.padDotOrigin.value, color: ink.opacity(0.22))
                 .clipShape(RoundedRectangle(cornerRadius: m.padRadius.value, style: .continuous))
             Color.clear.contentShape(Rectangle())
                 .gesture(DragGesture(minimumDistance: 0).onEnded { event in
@@ -340,7 +347,7 @@ struct ThemeEditorView: View {
             ForEach(Array(set.colors.enumerated()), id: \.offset) { index, color in
                 Button { model.update { $0.setColor(color, at: model.chosen ? current : 0) } } label: {
                     Circle().fill(color.swiftUI)
-                        .overlay(Circle().strokeBorder(color == picked ? Color.white : ink.opacity(0.1), lineWidth: color == picked ? 3 : 1))
+                        .overlay(Circle().strokeBorder(color == picked ? Color.white : ink.opacity(0.1), lineWidth: color == picked ? 3 : 2))
                         .frame(width: m.presetDot.value, height: m.presetDot.value)
                         .contentShape(Circle())
                 }
@@ -358,7 +365,7 @@ struct ThemeEditorView: View {
 
     private func arrow(_ symbol: String, id: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(ink.opacity(enabled ? 0.6 : 0.2))
+            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(ink.opacity(enabled ? 0.5 : 0.2))
                 .frame(width: 24, height: 28).contentShape(Rectangle())
         }
         .buttonStyle(.plain).disabled(!enabled)
@@ -382,13 +389,15 @@ private struct ColorDot: View {
 
 private struct DotGrid: View {
     let pitch: Double
+    /// The first dot's centre from the top-left.
+    var origin = CGPoint(x: 2, y: 2)
     let color: Color
     var body: some View {
         Canvas { context, size in
             var path = Path()
-            var y = pitch / 2
+            var y = origin.y
             while y < size.height {
-                var x = pitch / 2
+                var x = origin.x
                 while x < size.width {
                     path.addEllipse(in: CGRect(x: x - 0.5, y: y - 0.5, width: 1, height: 1))
                     x += pitch
@@ -413,12 +422,13 @@ private struct WaveSlider: View {
             let m = ThemePanel
             let width = geometry.size.width, mid = geometry.size.height / 2
             let handle = m.handle.value
-            let x = handle.width / 2 + value * (width - handle.width)
+            let travel = m.handleTravel.value
+            let x = travel[0] + value * (width - travel[1] - travel[0])
             let amplitude = m.waveAmplitude.value[0] + (m.waveAmplitude.value[1] - m.waveAmplitude.value[0]) * value
             ZStack(alignment: .topLeading) {
                 Capsule().fill(ink.opacity(0.07))
                     .frame(width: width, height: m.sliderTrack.value).position(x: width / 2, y: mid)
-                wave(from: 6, to: x, mid: mid, amplitude: amplitude).stroke(ink.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                wave(from: 6, to: x, mid: mid, amplitude: amplitude).stroke(ink.opacity(0.42), style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 wave(from: x, to: width - 6, mid: mid, amplitude: amplitude).stroke(ink.opacity(0.22), style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 RoundedRectangle(cornerRadius: handle.width / 2, style: .continuous).fill(Color.white)
                     .frame(width: handle.width, height: handle.height)
@@ -428,7 +438,7 @@ private struct WaveSlider: View {
             .opacity(enabled ? 1 : 0.45)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { event in
-                change(min(max((event.location.x - handle.width / 2) / max(width - handle.width, 1), 0), 1))
+                change(min(max((event.location.x - travel[0]) / max(width - travel[1] - travel[0], 1), 0), 1))
             })
         }
     }

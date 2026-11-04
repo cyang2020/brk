@@ -504,7 +504,9 @@ final class BoostColorSquare: NSView {
     }
     override func draw(_ dirtyRect: NSRect) {
         let outer = NSBezierPath(roundedRect: bounds, xRadius: 20, yRadius: 20)
-        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: -62)
+        // Dark at the top-left, light at the bottom-left, mid grey down the right (P37-b). The view is flipped, so
+        // pointing down and to the right is a positive angle.
+        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: 62)
         let field = NSBezierPath(roundedRect: inner, xRadius: 13, yRadius: 13)
         NSGraphicsContext.saveGraphicsState()
         field.addClip()

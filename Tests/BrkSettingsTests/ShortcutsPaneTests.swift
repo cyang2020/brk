@@ -97,22 +97,28 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertEqual(ShortcutsCopy.priority(.pageThenApp), "Press this shortcut once to use the website's shortcut. Press it twice to use \(Product.name)'s shortcut.")
     }
 
-    /// changed shortcuts first, then the defaults by name as Arc sorts them; the filter matches titles and shortcuts
+    /// changed shortcuts first, then Arc's list by name as Arc sorts it, then Brk's other actions; the filter matches
+    /// titles and shortcuts
     func test_sectionsPutTheUsersShortcutsFirstAndFilter() {
         let list = rows([.reloadPage: KeyOverride(chord: KeyChord([.option, .command], .r), priority: nil)])
         let sections = ShortcutsPane.sections(list, filter: "")
-        XCTAssertEqual(sections.map(\.title), [ShortcutsCopy.customized, ShortcutsCopy.defaults])
+        XCTAssertEqual(sections.map(\.title), [ShortcutsCopy.customized, ShortcutsCopy.defaults, ShortcutsCopy.more])
         XCTAssertEqual(sections.first?.rows.map(\.action), [.reloadPage])
-        XCTAssertEqual(sections.flatMap(\.rows).count, ActionID.allCases.count)
+        XCTAssertEqual(sections.flatMap(\.rows).count, ActionID.allCases.count, "every remappable action is still listed")
         let titles = sections[1].rows.map(ShortcutsCopy.title(of:))
         XCTAssertEqual(titles, titles.sorted { $0.compare($1, options: .caseInsensitive) == .orderedAscending }, "Default Shortcuts by name")
+        // P38-e: Arc's list starts Add Split View, Archive Tab, Blank Window; About, Add Extension… and Brk's AI
+        // actions are not in Arc's table.
+        XCTAssertEqual(Array(titles.prefix(3)), ["Add Split View", "Archive Tab", "Blank Window"])
+        XCTAssertTrue(sections[1].rows.allSatisfy { ShortcutsPane.arcRows.contains($0.action.spec.row) })
+        XCTAssertTrue(sections[2].rows.contains { $0.action == .askOnPage }, "Brk's own actions stay remappable, after Arc's list")
         XCTAssertEqual(["Capture Full Page", "Capture in Portrait Mode", "Capture…"].sorted { $0.compare($1, options: .caseInsensitive) == .orderedAscending },
                        ["Capture Full Page", "Capture in Portrait Mode", "Capture…"], "Arc's order in P38-e")
         XCTAssertEqual(Set(ShortcutsPane.sections(list, filter: "⌘T").flatMap(\.rows).map(\.action)), [.newTab, .reopenLastClosedTab], "⌘T and ⇧⌘T")
         let refresh = ShortcutsPane.sections(list, filter: "refresh").flatMap(\.rows).map(\.action)
         XCTAssertEqual(refresh.first, .reloadPage, "the customized one first")
         XCTAssertEqual(Set(refresh), [.reloadPage, .forceReloadPage, .clearCookies, .clearCache])
-        XCTAssertEqual(ShortcutsPane.sections(rows(), filter: "").map(\.title), [ShortcutsCopy.defaults], "nothing customized")
+        XCTAssertEqual(ShortcutsPane.sections(rows(), filter: "").map(\.title), [ShortcutsCopy.defaults, ShortcutsCopy.more], "nothing customized")
     }
 
     /// rendered for real (SwiftUI in an NSHostingView): one shortcut field per action, each showing its shortcut
