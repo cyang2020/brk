@@ -1,4 +1,5 @@
 import AppKit
+import BrkBase
 import BrkDomain
 import Foundation
 
@@ -39,6 +40,23 @@ final class DockTile {
         // The first snapshot lists downloads finished before launch; only the ones that finish while running bounce.
         guard let previous else { return }
         for (id, path) in snapshot.finished where previous.finished[id] == nil { post(path) }
+    }
+
+    /// The Icon pane's choice for the Dock tile plug-in (scripts/dock-tile/BrkDockTilePlugIn.swift), which draws it
+    /// while Brk is not running: `<data directory>/dock-tile.json`, and the same JSON as the object of the
+    /// distributed notification "<bundle id>.dockTileIcon" for a plug-in the Dock has loaded. Both name the data
+    /// directory, so a test instance's choice never reaches the tile of the Brk in Application Support.
+    static func publishIcon(_ icon: String, dataDirectory: URL = Product.dataDirectory(), bundleID: String? = Bundle.main.bundleIdentifier,
+                            post: (String, String) -> Void = DockTile.postIcon) {
+        let object: [String: String] = ["icon": icon, "dataDirectory": dataDirectory.standardizedFileURL.path]
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return }
+        try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        try? data.write(to: dataDirectory.appendingPathComponent("dock-tile.json"), options: .atomic)
+        if let bundleID { post(bundleID + ".dockTileIcon", String(decoding: data, as: UTF8.self)) }
+    }
+
+    nonisolated static func postIcon(_ name: String, _ object: String) {
+        DistributedNotificationCenter.default().postNotificationName(NSNotification.Name(name), object: object, userInfo: nil, deliverImmediately: true)
     }
 
     nonisolated static func announceFinished(_ path: String) {

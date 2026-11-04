@@ -122,6 +122,8 @@ public enum AppEffect: Hashable, Sendable {
     /// A Help menu row BrkApp runs (`HelpAction`; never `.open`, which the reducer handles): `owner` is the window it
     /// came from, where a resolved page opens and an alert attaches.
     case help(HelpAction, owner: WindowID)
+    /// An Edit menu item reached through a remapped chord while a page had the key (`AppCommand.standardEdit`).
+    case standardEdit(StandardEdit)
 }
 
 public struct MenuModel: Hashable, Sendable {

@@ -20,8 +20,9 @@
 #    are declared for the main app and all helpers before the bundle is signed again.
 #    The app icon (A131): scripts/app-icon/main.swift draws Sources/BrkSettings/AppIconArt.swift's "The Original" into an
 #    iconset, iconutil makes Resources/<Product>.icns and CFBundleIconFile names it, before the bundle is signed again.
-#    scripts/declare-scripting.sh adds the AppleScript dictionary, the build's commit and repository, and the release
-#    notes page (A133, A125).
+#    scripts/declare-scripting.sh adds the AppleScript dictionary, the build's commit and repository, the release
+#    notes and credits pages (A133, A125, A129); scripts/dock-tile/build-plugin.sh adds the Dock tile plug-in that
+#    shows the Icon pane's choice while Brk is not running (A131).
 # 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -59,6 +60,7 @@ rm -rf "$(dirname "$ICONSET")"
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string $PRODUCT" "$APP/Contents/Info.plist"
 python3 scripts/declare-site-permissions.py "$APP"
 scripts/declare-scripting.sh "$APP"
+scripts/dock-tile/build-plugin.sh "$APP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "[build] $APP signed ad hoc and verified"

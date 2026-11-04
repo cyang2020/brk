@@ -25,11 +25,14 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case newTab, newWindow, newBlankWindow, newIncognitoWindow, showLittleArc, reopenLastClosedTab, addressBar
     case newBoost, editBoost, newLegacyBoost, boostGallery, newProfile, newNote, newNoteInSplitView, newEasel
     case closeWindow, archiveTab, share, capturePage, captureFullPage, capturePrettyScreenshot, savePageAs, savePageAsPDF, printPage, cancelPageOutput
-    // Edit (45 to 58). Undo through Select All and the Spelling, Substitutions, Transformations, Speech and Font
-    // submenus are AppKit first-responder items (MainMenu.standardEditItems); Chromium handles them in pages.
+    // Edit (41 to 58). Undo through Select All are AppKit first-responder items whose chords the Shortcuts pane can
+    // change (Arc gives only Paste and Match Style a binding id; R4 makes the rest remappable too); the Spelling,
+    // Substitutions, Transformations, Speech and Font submenus stay fixed AppKit items (MainMenu.standards).
+    case undo, redo, cut, copy, paste, pasteAndMatchStyle, delete, selectAll
     case copyCurrentURL, copyCurrentURLMarkdown, copyCurrentURLAsQuote
     case find, findAndReplace, findNext, findPrevious, useSelectionForFind, jumpToSelection
-    // View (88 to 122). Rows 107, 108, 110 and 115 are alternate keys of zoomIn, zoomOut and developerTools.
+    // View (88 to 122). Rows 107 and 108 repeat zoomIn's Cmd+=; rows 110 and 115 are the remappable second keys of
+    // Zoom Out and Developer Tools (Arc's `developerTools_Alternate`).
     case appearanceAutomatic, appearanceLight, appearanceDark
     case showSidebar, toggleToolbar, expandPinnedSection, collapsePinnedSection, focusSidebar
     case stopLoading, reloadPage, forceReloadPage, clearCookies, clearCache
@@ -37,8 +40,8 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case splitHorizontal, splitVertical, restoreSplit, separateAllSplit, nextSplitPane, previousSplitPane
     case splitPane1, splitPane2, splitPane3, splitPane4
     case videoPictureInPicture, documentPictureInPicture, closePictureInPicture
-    case resetZoom, zoomIn, zoomOut, cast
-    case viewSource, developerTools, inspectElements, javaScriptConsole, networkInspector, allowJavaScriptFromAppleEvents, toggleDeveloperMode
+    case resetZoom, zoomIn, zoomOut, zoomOutAlternate = "zoomOut_Alternate", cast
+    case viewSource, developerTools, developerToolsAlternate = "developerTools_Alternate", inspectElements, javaScriptConsole, networkInspector, allowJavaScriptFromAppleEvents, toggleDeveloperMode
     case fullscreen, exit
     // Spaces (124 to 130)
     case newSpace, editSpaceTheme, renameSpace, changeProfile, focusNextSpace, focusPreviousSpace, openSpaceManager
@@ -49,8 +52,9 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     case clearExplore, resetSpace, resetTab
     case jumpItem1, jumpItem2, jumpItem3, jumpItem4, jumpItem5, jumpItem6, jumpItem7, jumpItem8, jumpItem9
     case jumpSpace1, jumpSpace2, jumpSpace3, jumpSpace4, jumpSpace5, jumpSpace6, jumpSpace7, jumpSpace8, jumpSpace9
-    // Archive (157 to 163). Rows 158 and 160 are the arrow-key alternates of goBack and goForward.
-    case goBack, goForward, viewHistory, viewArchive, clearArchive
+    // Archive (157 to 163). Rows 158 and 160 are Arc's `goBack_Alternate` and `goForward_Alternate`: the arrow keys,
+    // remappable on their own.
+    case goBack, goBackAlternate = "goBack_Alternate", goForward, goForwardAlternate = "goForward_Alternate", viewHistory, viewArchive, clearArchive
     // Extensions (165, 166)
     case addExtension, manageExtensions
     // Window (168 to 174). Zoom and Bring All to Front are AppKit items.
@@ -225,6 +229,16 @@ extension ActionID {
         case .cancelPageOutput: entry(201, "Cancel Save or Print", .file, 4, [], .page(.cancelOutput), bar: listing("xmark", "Cancel Save Print"))
 
         // MARK: Edit (groups: Undo, Redo | Cut to Select All | the submenus, Find first)
+        case .undo: entry(41, "Undo", .edit, 0, [key(cmd, .z, .page)], .app(.standardEdit(.undo)))
+        case .redo: entry(42, "Redo", .edit, 0, [key([shift, cmd], .z, .page)], .app(.standardEdit(.redo)), bar: listing("arrow.uturn.forward"))
+        case .cut: entry(43, "Cut", .edit, 1, [key(cmd, .x, .page)], .app(.standardEdit(.cut)), bar: listing("scissors"))
+        case .copy: entry(44, "Copy", .edit, 1, [key(cmd, .c, .page)], .app(.standardEdit(.copy)), bar: listing("doc.on.doc"))
+        case .paste: entry(48, "Paste", .edit, 1, [key(cmd, .v, .page)], .app(.standardEdit(.paste)), bar: listing("list.clipboard"))
+        case .pasteAndMatchStyle:
+            entry(49, "Paste and Match Style", .edit, 1, [key([shift, cmd], .v, .page)], .app(.standardEdit(.pasteAndMatchStyle)),
+                  bar: listing("list.clipboard", "Paste Without Formatting"))
+        case .delete: entry(50, "Delete", .edit, 1, [], .app(.standardEdit(.delete)))
+        case .selectAll: entry(51, "Select All", .edit, 1, [key(cmd, .a, .page)], .app(.standardEdit(.selectAll)), bar: listing("square.grid.2x2.fill"))
         case .copyCurrentURL:
             entry(45, "Copy URL", .edit, 1, [key([shift, cmd], .c, .app)], .page(.copyURL(.plain)), bar: listing("doc.on.doc", "Copy URL", "Copy Link"))
         case .copyCurrentURLMarkdown:
@@ -293,14 +307,18 @@ extension ActionID {
             entry(106, "Zoom In", .view, 4, [key([shift, cmd], .equals, .page), key(cmd, .equals, .page)], .page(.zoom(.zoomIn)),
                   bar: listing("plus.magnifyingglass"), repeats: true)
         case .zoomOut:
-            entry(109, "Zoom Out", .view, 4, [key(cmd, .minus, .page), key([shift, cmd], .minus, .page)], .page(.zoom(.zoomOut)),
+            entry(109, "Zoom Out", .view, 4, [key(cmd, .minus, .page)], .page(.zoom(.zoomOut)),
                   bar: listing("minus.magnifyingglass"), repeats: true)
+        case .zoomOutAlternate:
+            entry(110, "Zoom Out", .view, 4, [key([shift, cmd], .minus, .page)], .page(.zoom(.zoomOut)), repeats: true, hidden: true)
         case .cast: entry(111, "Cast", .view, 5, [], .page(.cast), bar: listing("rectangle.portrait.and.arrow.right.fill"))
         case .viewSource:
             entry(113, "View Source", .view, 0, [key([opt, cmd], .u, .pageThenApp)], .page(.developer(.source)), in: .developer, bar: listing("curlybraces", "View Source"))
         case .developerTools:
-            entry(114, "Developer Tools", .view, 0, [key([opt, cmd], .i, .pageThenApp), key([], .f12, .pageThenApp)],
+            entry(114, "Developer Tools", .view, 0, [key([opt, cmd], .i, .pageThenApp)],
                   .page(.toggleDevTools), in: .developer, bar: listing("hammer.fill", "Developer Tools", "Debug Tools", "Devtools"))
+        case .developerToolsAlternate:
+            entry(115, "Developer Tools", .view, 0, [key([], .f12, .pageThenApp)], .page(.toggleDevTools), in: .developer, hidden: true)
         case .inspectElements:
             entry(116, "Inspect Elements", .view, 0, [key([opt, cmd], .c, .pageThenApp)], .page(.developer(.inspect)), in: .developer,
                   bar: listing("scope", "Inspect Element"))
@@ -419,11 +437,14 @@ extension ActionID {
 
         // MARK: Archive (groups: Back, Forward | History, Archive, Clear)
         case .goBack:
-            entry(157, "Go Back", .archive, 0, [key(cmd, .leftBracket, .app), key(cmd, .leftArrow, .page)], .page(.back(.focused)),
+            entry(157, "Go Back", .archive, 0, [key(cmd, .leftBracket, .app)], .page(.back(.focused)),
                   bar: listing("arrow.backward", "Go Back", "Back", "Navigate Back"), repeats: true)
+        case .goBackAlternate: entry(158, "Go Back", .archive, 0, [key(cmd, .leftArrow, .page)], .page(.back(.focused)), repeats: true, hidden: true)
         case .goForward:
-            entry(159, "Go Forward", .archive, 0, [key(cmd, .rightBracket, .app), key(cmd, .rightArrow, .page)], .page(.forward(.focused)),
+            entry(159, "Go Forward", .archive, 0, [key(cmd, .rightBracket, .app)], .page(.forward(.focused)),
                   bar: listing("arrow.right", "Go Forward", "Forward", "Navigate Forward"), repeats: true)
+        case .goForwardAlternate:
+            entry(160, "Go Forward", .archive, 0, [key(cmd, .rightArrow, .page)], .page(.forward(.focused)), repeats: true, hidden: true)
         case .viewHistory: entry(161, "View History", .archive, 1, [key(cmd, .y, .page)], .library(.openHistory), bar: listing("book", "Show History", "History"))
         case .viewArchive: entry(162, "View Archive", .archive, 1, [], .library(.open(.archive)), bar: listing("archivebox", "Archive"))
         case .clearArchive: entry(163, "Clear Archive", .archive, 1, [], .archive(.requestClear), bar: listing("archivebox", "Clear Archive", "Delete Archive"))
@@ -477,6 +498,12 @@ extension ActionID {
         }
     }
 
+    /// The Edit menu item this action is (Undo to Select All), nil for every other action.
+    public var standardEdit: StandardEdit? {
+        if case .app(.standardEdit(let edit)) = spec.command { return edit }
+        return nil
+    }
+
     /// The menu title with `{app}` filled in.
     public func title(appName: String) -> String { spec.title.replacingOccurrences(of: "{app}", with: appName) }
 
@@ -495,9 +522,9 @@ extension ActionID {
     /// app standards), alternate keys of an action above, nib placeholders and the label row, and rows the user
     /// dropped (Share Arc, Privacy Policy, Sign Out, Send to Dia).
     public static let menuTitleRows: Set<Int> = [1, 15, 40, 52, 59, 65, 73, 77, 80, 81, 85, 86, 112, 123, 131, 156, 164, 167, 176, 184]
-    public static let standardItemRows: Set<Int> = [8, 12, 41, 42, 43, 44, 48, 49, 50, 51, 60, 61, 62, 63, 64, 66, 67, 68, 69, 70, 71, 72,
+    public static let standardItemRows: Set<Int> = [8, 12, 60, 61, 62, 63, 64, 66, 67, 68, 69, 70, 71, 72,
                                                    74, 75, 76, 78, 79, 82, 83, 84, 169, 175]
-    public static let alternateKeyRows: Set<Int> = [107, 108, 110, 115, 132, 158, 160]
+    public static let alternateKeyRows: Set<Int> = [107, 108, 132]
     public static let placeholderRows: Set<Int> = [87, 150, 151, 152]
     public static let droppedRows: Set<Int> = [4, 9, 13, 34]
 }
@@ -516,8 +543,9 @@ public enum KeyBindingState: Hashable, Sendable, Codable {
 /// Arc: `KeyBinding.Source`.
 public enum KeyBindingSource: String, Hashable, Sendable, Codable { case `default`, userDefined }
 
-/// One action's primary shortcut after overrides. The table's alternates (Cmd+Left for Go Back) are not remappable
-/// and ride along in `KeyMap` unchanged.
+/// One action's primary shortcut after overrides. The table's remaining fixed alternates (Zoom In's Cmd+=) are not
+/// remappable and ride along in `KeyMap` unchanged; Go Back's Cmd+Left and the other second keys Arc names
+/// (`goBack_Alternate`) are actions of their own.
 public struct ResolvedBinding: Hashable, Sendable {
     public let action: ActionID
     public let state: KeyBindingState

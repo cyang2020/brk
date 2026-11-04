@@ -132,6 +132,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             default: return nil
             }
         }
+        menuTarget.focusSpace = { [weak self] space in
+            guard let self, let window = self.store?.windowController(nil)?.id else { return }
+            self.store?.dispatch(.user(window, .space(.focus(space))))
+        }
         menuTarget.current = { [weak self] in
             let controller = self?.store?.windowController(nil)
             return (controller.flatMap { self?.store?.snapshot.windows[$0.id] }, controller?.window.styleMask.contains(.fullScreen) ?? false)
@@ -142,9 +146,15 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         littleEntryPoints = entryPoints
         let dockTile = DockTile()
         self.dockTile = dockTile
+        var menuShortcuts: [ShortcutRow]?
         store.didPublish = { [weak entryPoints, weak dockTile] in
             entryPoints?.update($0)
             dockTile?.update($0.dockTile)
+            // AppKit matches the Edit items' keys without opening the menu, so a remap is written into the menu now.
+            if menuShortcuts != $0.settings.shortcuts, let menu = NSApp.mainMenu {
+                menuShortcuts = $0.settings.shortcuts
+                MenuTarget.applyAll(Dictionary($0.settings.shortcuts.map { ($0.action, $0.state) }, uniquingKeysWith: { a, _ in a }), to: menu)
+            }
         }
         store.help.restoreConfirmed = { [weak self] backup in
             self?.pendingRestore = backup

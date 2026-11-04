@@ -312,6 +312,24 @@ public enum AppCommand: Hashable, Sendable, Codable {
     case revealDataDirectory
     /// The Help menu's other rows and Check for Updates (`HelpAction`).
     case help(HelpAction)
+    /// Edit > Undo through Select All on a chord the Shortcuts pane gave them (`AppEffect.standardEdit`): the
+    /// item's AppKit selector, sent to the first responder of the window that has the key.
+    case standardEdit(StandardEdit)
+}
+
+/// Edit > Undo, Redo, Cut, Copy, Paste, Paste and Match Style, Delete and Select All (Arc rows 41 to 51): AppKit
+/// first-responder items. Native fields get them from the menu; a page gets the same selector through its surface's
+/// responder (BrkCEF's `EmbeddedSurface` runs the focused frame's edit command).
+public enum StandardEdit: String, Hashable, Sendable, Codable, CaseIterable {
+    case undo, redo, cut, copy, paste, pasteAndMatchStyle, delete, selectAll
+
+    /// The menu item's selector, as AppKit's own Edit menu names it.
+    public var selector: String {
+        switch self {
+        case .pasteAndMatchStyle: "pasteAsPlainText:"
+        default: rawValue + ":"
+        }
+    }
 }
 
 /// Check for Updates… and the Help menu (Arc rows 7, 179 to 189). Most run in BrkApp (`AppEffect.help`); `open` is

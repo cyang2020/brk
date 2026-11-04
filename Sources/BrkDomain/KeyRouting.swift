@@ -60,7 +60,8 @@ enum KeyRouting {
     /// 2. no binding -> `.passToPage` in `beforePage`, else `.ignore`.
     /// 3. a repeat of an action with `repeats == false` -> `.passToPage` in `beforePage`, else `.ignore`.
     /// 4. `pressID == memory.lastDispatchedPress` -> `.ignore`.
-    /// 5. `menu` -> `.dispatch` (a native view has focus).
+    /// 5. `menu` -> `.dispatch` (a native view has focus), except an Edit menu item (`ActionID.standardEdit`), which
+    ///    AppKit's menu takes (`.ignore`).
     /// 6. `beforePage`: `.app` -> `.dispatch`; `.pageThenApp` with `pendingPageFirst` for this chord younger than
     ///    Metrics.keys.pressTwiceWindow -> `.dispatch` and clear; otherwise record pending and `.passToPage`;
     ///    `.page` -> `.passToPage`.
@@ -71,6 +72,9 @@ enum KeyRouting {
         guard press.phase == .down else { return .ignore }                                   // 1
         let passOrIgnore: KeyDecision = input.stage == .beforePage ? .passToPage : .ignore
         guard let (action, priority) = map.lookup(press.chord) else { return passOrIgnore }   // 2
+        // An Edit menu item (Undo to Select All) with a native view focused is AppKit's own: its menu item carries the
+        // chord the Shortcuts pane gave it and sends the selector to the field editor, validated by AppKit.
+        if input.stage == .menu, action.standardEdit != nil { return .ignore }
         if press.isRepeat, !action.spec.repeats { return passOrIgnore }                       // 3
         if memory.lastDispatchedPress == input.pressID { return .ignore }                     // 4
 

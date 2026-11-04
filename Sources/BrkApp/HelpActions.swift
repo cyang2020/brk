@@ -101,6 +101,12 @@ enum HelpLinks {
         bundle.url(forResource: "release-notes", withExtension: "html", subdirectory: "Help")
     }
 
+    /// About's "other open source software": the licences of what Brk ships besides Chromium (CEF, CefSwift),
+    /// written into the bundle by scripts/declare-scripting.sh.
+    static func credits(bundle: Bundle = .main) -> URL? {
+        bundle.url(forResource: "credits", withExtension: "html", subdirectory: "Help")
+    }
+
     /// `<repository>/issues/new` with the build's info as the body; nil without a repository.
     static func newIssue(_ info: BuildInfo) -> URL? {
         guard let repository = info.repository, var parts = URLComponents(url: repository.appendingPathComponent("issues/new"), resolvingAgainstBaseURL: false) else { return nil }

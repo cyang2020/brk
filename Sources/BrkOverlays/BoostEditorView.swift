@@ -20,8 +20,9 @@ public final class BoostPanel {
 
     public init(dispatch: @escaping Dispatch) { editor = BoostEditorView(dispatch: dispatch) }
 
-    /// Shows the panel beside `parent` while there is an editor; hides it otherwise.
-    public func render(_ value: BoostEditor?, parent: NSWindow?) {
+    /// Shows the panel beside `parent` while there is an editor; hides it otherwise. `yielding`: the parent's command
+    /// bar is open, so the panel drops to the window level behind it instead of floating over the bar (review #19).
+    public func render(_ value: BoostEditor?, parent: NSWindow?, yielding: Bool = false) {
         guard let value, let parent, parent.isVisible, !parent.isMiniaturized else { close(); return }
         let panel = window ?? makeWindow()
         if self.parent !== parent { follow(parent) }
@@ -43,7 +44,12 @@ public final class BoostPanel {
         editor.render(value)
         // Settle the page's geometry now: the next click can come in the same run-loop turn as a page change.
         panel.contentView?.layoutSubtreeIfNeeded()
-        if !panel.isVisible { panel.orderFront(nil) }
+        if yielding {
+            if panel.level != .normal || !panel.isVisible { panel.level = .normal; panel.order(.below, relativeTo: parent.windowNumber) }
+        } else {
+            if panel.level != .floating { panel.level = .floating; panel.orderFront(nil) }
+            if !panel.isVisible { panel.orderFront(nil) }
+        }
     }
 
     /// Centred on the window's right edge, its top a third of the way down the window (P37-a), kept on screen.
@@ -210,7 +216,11 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         }
         inspect.identify(.boostControl("inspect")); inspect.onPress = { [weak self] in self?.dispatch(.boost(.inspect)) }
         inspect.toolTip = "Pick an element on the page to insert its selector"
-        apply.identify(.boostControl("save")); apply.onPress = { [weak self] in self?.dispatch(.boost(.save)) }
+        apply.identify(.boostControl("save")); apply.onPress = { [weak self] in
+            guard let self else { return }
+            if self.settings.unreadable { self.message.stringValue = Self.scopeRefusal; return }
+            self.dispatch(.boost(.save))
+        }
         codeStatus.font = .systemFont(ofSize: 11); codeStatus.textColor = BoostInk.introMuted; codeStatus.identify(.boostControl("code-status"))
         for view in [inspect, apply, codeStatus] as [NSView] { codeFooter.addSubview(view) }
         for view in [header, square, invert, intensity, clearColor, fonts, size, textCase, zap, code, message, intro, codeHeader, cssScroll, jsScroll, codeFooter, settings] as [NSView] { addSubview(view) }
@@ -254,7 +264,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
         textCase.toolTip = switch style.textCase { case .none: "Page case"; case .upper: "UPPERCASE"; case .lower: "lowercase" }
         zap.active = value.picking && value.pickPurpose == .zap
         inspect.active = value.picking && value.pickPurpose == .selector
-        message.stringValue = value.message ?? ""
+        message.stringValue = value.message ?? (settings.unreadable ? Self.scopeRefusal : "")
         segments.page = value.page
         if css.string != value.draft.css { css.string = value.draft.css }
         if javascript.string != value.draft.javascript { javascript.string = value.draft.javascript }
@@ -323,9 +333,10 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     }
     /// × keeps the edits (`.close`), but never past an origin the settings card could not read.
     private func closePanel() {
-        if menuOpen, var draft = editor?.draft, !settings.apply(to: &draft) { message.stringValue = "Enter an HTTP(S) origin."; return }
+        if menuOpen || settings.unreadable, var draft = editor?.draft, !settings.apply(to: &draft) { message.stringValue = Self.scopeRefusal; return }
         dispatch(.boost(.close))
     }
+    static let scopeRefusal = "Enter an HTTP(S) origin or a host name."
     /// Escape anywhere in the panel is the window's Exit: leave Zap, else close and save.
     func exit() { dispatch(.app(.exit)) }
     private func toggleMenu() {
@@ -335,7 +346,7 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     }
     private func settingsChanged() {
         guard !syncing, var draft = editor?.draft else { return }
-        guard settings.apply(to: &draft) else { message.stringValue = "Enter an HTTP(S) origin."; return }
+        guard settings.apply(to: &draft) else { message.stringValue = Self.scopeRefusal; return }
         dispatch(.boost(.update(draft)))
     }
 }
@@ -693,6 +704,9 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
     private let enabled = NSButton(checkboxWithTitle: "Enable Boost", target: nil, action: nil)
     private let privateAllowed = NSButton(checkboxWithTitle: "Use in private windows", target: nil, action: nil)
     private var origin: SiteOrigin?
+    /// The address field holds text the draft could not take (review #15): it stays as typed, and Save and × refuse
+    /// until it names a site again.
+    private(set) var unreadable = false
     var changed: (() -> Void)?
     let preferredHeight: CGFloat = 156
     override init(frame: CGRect) {
@@ -726,7 +740,7 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
         if window?.firstResponder !== name.currentEditor(), name.stringValue != draft.name { name.stringValue = draft.name }
         let index: Int = switch draft.scope { case .origin: 0; case .host: 1; case .allSites: 2 }
         scope.selectItem(at: index)
-        if window?.firstResponder !== address.currentEditor(), address.stringValue != draft.scope.label { address.stringValue = draft.scope.label }
+        if !unreadable, window?.firstResponder !== address.currentEditor(), address.stringValue != draft.scope.label { address.stringValue = draft.scope.label }
         address.isEnabled = index != 2
         enabled.state = draft.enabled ? .on : .off
         privateAllowed.state = draft.allowPrivate ? .on : .off
@@ -737,11 +751,14 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
         draft.enabled = enabled.state == .on; draft.allowPrivate = privateAllowed.state == .on
         switch scope.indexOfSelectedItem {
         case 0:
-            guard let url = URL(string: address.stringValue), let origin = SiteOrigin(url) else { return false }
+            guard let url = URL(string: address.stringValue.trimmingCharacters(in: .whitespaces)), let origin = SiteOrigin(url) else { unreadable = true; return false }
             draft.scope = .origin(origin)
-        case 1: draft.scope = .host(address.stringValue.lowercased())
+        case 1:
+            guard let host = BoostScope.host(typed: address.stringValue) else { unreadable = true; return false }
+            draft.scope = .host(host)
         default: draft.scope = .allSites
         }
+        unreadable = false
         return true
     }
     func controlTextDidChange(_ obj: Notification) { changed?() }
@@ -752,6 +769,7 @@ final class BoostSettingsView: NSView, NSTextFieldDelegate {
     @objc private func toggled() { changed?() }
     @objc private func scopeChanged() {
         if let origin { address.stringValue = scope.indexOfSelectedItem == 1 ? origin.url.host ?? "" : origin.value }
+        unreadable = false
         changed?()
     }
 }

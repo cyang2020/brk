@@ -16,11 +16,25 @@ import os
 @MainActor
 public final class GetURLHandler: NSObject {
     private let send: @MainActor (Input) -> Void
+    private let testScheme: String?
     private let log = Logger(subsystem: "brk", category: "links")
+    /// Every URL string a GetURL event carried since launch, for the control socket (`NativeFacts.receivedGetURLs`).
+    public private(set) static var received: [String] = []
 
-    public init(send: @escaping @MainActor (Input) -> Void) {
+    /// `testScheme` (`BRK_TEST_URL_SCHEME`, set only for a test copy of the bundle that declares that scheme): a
+    /// Brk-only scheme Launch Services can route to this app without it becoming the http handler. Such a link is
+    /// the http address after the scheme (`brk-test://127.0.0.1:8764/a.html` opens `http://127.0.0.1:8764/a.html`).
+    public init(testScheme: String? = ProcessInfo.processInfo.environment["BRK_TEST_URL_SCHEME"], send: @escaping @MainActor (Input) -> Void) {
         self.send = send
+        self.testScheme = testScheme.flatMap { $0.isEmpty ? nil : $0.lowercased() }
         super.init()
+    }
+
+    /// The URL a GetURL string opens: itself, or for the test scheme the http address it carries.
+    public static func url(from text: String, testScheme: String?) -> URL? {
+        guard let url = URL(string: text) else { return nil }
+        guard let testScheme, url.scheme?.lowercased() == testScheme, let colon = text.firstIndex(of: ":") else { return url }
+        return URL(string: "http" + text[colon...])
     }
 
     public func install() {
@@ -29,10 +43,13 @@ public final class GetURLHandler: NSObject {
     }
 
     @objc private func handle(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
-        guard let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue, let url = URL(string: text) else {
+        guard let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = Self.url(from: text, testScheme: testScheme) else {
             log.notice("GetURL without a usable URL")
             return
         }
+        Self.received.append(text)
+        log.notice("GetURL \(text, privacy: .public)")
         send(.system(.externalURL(url)))
     }
 }

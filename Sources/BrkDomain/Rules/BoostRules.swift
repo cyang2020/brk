@@ -11,6 +11,17 @@ extension AppState {
         guard let target = siteTarget(in: window), visiblePages().contains(target.page) else { return nil }
         return target
     }
+    /// The open editor's site now: its own target while that document is current, else, after the page reloaded or
+    /// navigated within the same origin and context, the page's new committed document (review #18: a reload no
+    /// longer ends the preview and Zap). nil once the page shows another site or is gone.
+    func boostEditorTarget(_ editor: BoostEditor) -> SiteTarget? {
+        guard let target = editor.target else { return nil }
+        if validSiteTarget(target) { return target }
+        guard let now = siteTarget(in: target.page.window), now.page == target.page, now.origin == target.origin,
+              now.context == target.context, validSiteTarget(now) else { return nil }
+        return now
+    }
+
     func boostPolicy(for page: PageID) -> BoostPolicy {
         guard doc.settings.advanced.boostsEnabled else { return BoostPolicy() }
         guard let window = doc.windows[page.window], let profile = doc.spaces[window.space]?.profile else { return BoostPolicy() }
@@ -19,7 +30,7 @@ extension AppState {
         let isPrivate = if case .incognito = context { true } else { false }
         var boosts = session.boosts[owner]?.boosts ?? []
         if !isPrivate, let editor = session.windows[page.window]?.boostEditor, editor.profile == owner,
-           let target = editor.target, target.page == page, validSiteTarget(target) {
+           let target = boostEditorTarget(editor), target.page == page {
             // Typing never runs code: the preview carries JavaScript only once that exact program, scope and
             // private permission were confirmed and written (the Code page's hammer, or an earlier save).
             let saved = boosts.first { $0.id == editor.draft.id }
@@ -109,10 +120,11 @@ extension Work {
                 if editor.pickPurpose == purpose { return }
             }
             guard let editor = state.session.windows[window]?.boostEditor, editor.profile == profile,
-                  let target = editor.target, state.validSiteTarget(target), state.boostPickingTarget(in: window) == target else {
+                  let target = state.boostEditorTarget(editor), state.boostPickingTarget(in: window) == target else {
                 state.session.windows[window]?.boostEditor?.message = "Open the Boost on a committed website to pick an element."
                 return
             }
+            state.session.windows[window]?.boostEditor?.target = target
             state.session.windows[window]?.boostEditor?.pickPurpose = purpose
             state.session.windows[window]?.boostEditor?.message = nil
             startBoostPick(target, in: window)
@@ -188,7 +200,15 @@ extension Work {
             state.session.windows[window]?.boostEditor?.draft.javascriptApproved = true
             writeBoost(boost, profile: editor.profile, window: window, editor: nil)
         case .picked(let window, let id, let target, let selector):
-            guard let editor = state.session.windows[window]?.boostEditor, editor.picking, editor.pickID == id, editor.target == target else { return }
+            guard let editor = state.session.windows[window]?.boostEditor, editor.picking, editor.pickID == id else { return }
+            if let current = editor.target, current != target, current.page == target.page, current.origin == target.origin {
+                // The pick was armed on the document before a reload (Normalize rebound the editor): Zap goes on, on the
+                // new document (review #18).
+                stopBoostPick(in: window)
+                if editor.pickPurpose == .zap, state.boostPickingTarget(in: window) == current { startBoostPick(current, in: window) }
+                return
+            }
+            guard editor.target == target else { return }
             stopBoostPick(in: window)
             guard state.boostProfile(in: window) == editor.profile, state.validSiteTarget(target), state.boostPickingTarget(in: window) == target else {
                 state.session.windows[window]?.boostEditor?.message = "The page changed. Reopen the Boost before using Zap."; return

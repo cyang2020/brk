@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>Edit fixture</title>
+<style>body{font:18px system-ui;padding:24px} input{font:18px system-ui;width:420px}</style>
+<h1>Remapped Edit shortcuts</h1><input id="field" value="select every word here"><p id="far">Back and forward history: <a href="page2.html">page 2</a></p>
+<script>
+window.focusField=()=>{const f=document.getElementById('field');f.focus();f.setSelectionRange(0,0);document.title='edit:focused'};
+window.reportField=()=>{const f=document.getElementById('field');document.title='edit:'+JSON.stringify({start:f.selectionStart,end:f.selectionEnd,length:f.value.length,value:f.value,focused:document.activeElement===f})};
+</script>
