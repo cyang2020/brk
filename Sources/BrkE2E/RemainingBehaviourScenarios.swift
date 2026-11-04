@@ -70,7 +70,9 @@ enum RemainingBehaviourScenarios {
         // Browse for Me stays in Advanced → More Settings… (the user's decision): no bar row and no menu item.
         try expect(!rows.flatMap { $0 }.contains { $0.contains("Browse") }, "a Browse row in the list")
         guard case .menuItems(let tabs) = try app.send(.menuBarItems(menu: "Tabs")) else { throw Check(description: "no Tabs menu") }
-        try expect(!tabs.contains { $0.hasPrefix("Browse for Me") || $0.hasPrefix("Ask on Page") }, "Tabs lists \(tabs.filter { $0.hasPrefix("Browse") || $0.hasPrefix("Ask") })")
+        // Both keep hidden menu items for their shortcuts and for the command bar's actions.
+        let shown = tabs.filter { ($0.hasPrefix("Browse for Me") || $0.hasPrefix("Ask on Page")) && !$0.hasSuffix("hidden") }
+        try expect(shown.isEmpty, "Tabs shows \(shown)")
         try app.press("escape")
     }
 

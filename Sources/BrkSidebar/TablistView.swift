@@ -561,7 +561,7 @@ final class RowView: HoverView {
             setSegments(split.panes, palette: palette)
             peekMarker.isHidden = true
         }
-        if case .folder(let folder) = row, folder.group { title.textColor = palette.ink.secondary } else { title.textColor = palette.ink.text }
+        if case .folder(let folder) = row, folder.group { title.textColor = palette.color(palette.tokens.foreground) } else { title.textColor = palette.ink.text }
         for view in [icon, title] as [NSView] { view.alphaValue = dimmed ? Draw.unloadedAlpha.value : 1 }
         if renaming, row.kind != .split { showRenameField(palette: palette) } else { retire() }
         stateChanged()
@@ -626,6 +626,11 @@ final class RowView: HoverView {
             : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
             : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
+        // Arc's group header starts its title where a tab's favicon starts (no icon column).
+        if case .folder(let folder)? = row, folder.group {
+            let start = g.selection.minX + Draw.groupTitleLeading.value
+            title.frame = CGRect(x: start, y: title.frame.minY, width: max(0, trailing - start), height: height)
+        }
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
     }
