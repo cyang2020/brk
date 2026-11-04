@@ -94,10 +94,14 @@ enum AIScenarios {
         try app.evaluate(source, "document.querySelector('#preview').addEventListener('mouseover',e=>document.title=e.isTrusted?'ai-trusted-hover':'ai-untrusted-hover')")
         let card = try visible(app.native(), .card(0)).frame
         let link = CGPoint(x: card.minX + 90, y: card.minY + 48)
+        // The plain hover needs Shift up for the whole session (another process may hold it on the shared machine).
+        try app.waitUntil("Shift up system-wide", timeout: 15) { !NativeSystemInput.shiftHeld }
         try app.hover(link)
         try waitForTitle(app, source.item, "ai-trusted-hover")
-        app.sleep(3)
-        try expect(try app.view().aiPreview == nil, "a plain hover over an ordinary link opened the preview card")
+        var shiftSeen = false
+        for _ in 0..<15 { if NativeSystemInput.shiftHeld { shiftSeen = true }; app.sleep(0.2) }
+        if shiftSeen { app.note("Shift was held system-wide during the plain hover; the no-Shift check was not counted") }
+        else { try expect(try app.view().aiPreview == nil, "a plain hover over an ordinary link opened the preview card") }
         try app.hover(CGPoint(x: card.minX + 90, y: card.minY + 200))
         app.sleep(0.4)
         try NativeSystemInput.setShift(true)

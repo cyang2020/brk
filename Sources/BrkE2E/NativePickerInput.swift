@@ -316,6 +316,8 @@ enum NativeSystemInput {
         event.post(tap: .cghidEventTap)
         usleep(60_000)
     }
+    /// Whether Shift is down for the session (any keyboard or process), as `NSEvent.modifierFlags` reads it.
+    static var shiftHeld: Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskShift) }
     static func activateFinder() {
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
         try? p.run(); p.waitUntilExit()

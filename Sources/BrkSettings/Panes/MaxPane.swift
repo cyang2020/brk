@@ -79,7 +79,7 @@ struct MaxPane: View {
         ForEach(Array(features.enumerated()), id: \.element) { index, feature in
             if index > 0 { CardDivider() }
             HStack(alignment: .top, spacing: M.thumbGap.value) {
-                MaxThumbnail(feature: feature).padding(.top, M.thumbTop.value)
+                MaxThumbnail(feature: feature, provider: max.askProvider).padding(.top, M.thumbTop.value)
                 VStack(alignment: .leading, spacing: M.titleGap.value) {
                     Text(MaxCopy.title(feature, provider: max.askProvider)).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text)
                     description(feature)
