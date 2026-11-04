@@ -310,7 +310,7 @@ enum PageSiteFixScenarios {
               let x = Double(values[0]), let y = Double(values[1]), let w = Double(values[2]), let h = Double(values[3]) else {
             throw Check(description: "\(field) has no screen rectangle")
         }
-        let point = CGPoint(x: x + min(20, w / 2), y: y + h / 2)
+        let point = CGPoint(x: x + min(20, w / 2), y: y + min(11, h / 2))
         try PageBrowsingScenarios.record(app, "click-" + String(field.prefix(24)), ["point": "\(point)", "control": values.joined(separator: " ")])
         guard case .hello(let hello) = try app.send(.hello), let front = PhysicalPointer.frontmost(at: point), front.pid == hello.pid else {
             throw Check(description: "another window is in front of Brk's panel at \(point); no click posted")
