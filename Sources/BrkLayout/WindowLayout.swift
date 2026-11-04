@@ -287,7 +287,7 @@ public enum CommandBarLayout {
     /// Centered: width min(766, area - 160), or area - 20 when the area is narrower than 766; box 338 tall, at least
     /// 24 from top and bottom, centered both ways in the window (Arc's Cmd+T card spans 257...1023 in a 1280 window
     /// whose content area starts at 238: the window's centre, not the content area's), on whole points. Over the pill
-    /// (Cmd+L with the sidebar shown): from the pill's left edge, 1.5 above its top, reaching right over the content,
+    /// (Cmd+L with the sidebar shown): from the pill's left edge, 2 above its top, reaching right over the content,
     /// as wide as the window allows while staying 80 from its right edge, within 100...720; as tall as the box but at
     /// least 24 above the bottom (layout-constants.md "Command bar attached to the toolbar", low confidence). The
     /// visible card inside that box is 350 wide until its input row needs more (`Metrics.commandBar.attachedCardWidth`).

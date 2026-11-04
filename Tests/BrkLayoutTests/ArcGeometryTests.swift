@@ -118,11 +118,11 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(800, 600), urlPill: nil).width, 640, "min(766, 800 - 160)")
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(700, 600), urlPill: nil).width, 680, "narrower than 766: area - 20")
         XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(1000, 300), urlPill: nil).height, 252, "24 from top and bottom")
-        // Cmd+L with the sidebar shown: from the pill's left edge, 1.5 above it (P02-b), reaching right, 80 from the
+        // Cmd+L with the sidebar shown: from the pill's left edge, 2 above it (P02-b), reaching right, 80 from the
         // window's right edge at most 720 wide.
         d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 44.5, width: 720, height: 338))
-        XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 44.5, width: 512, height: 331.5))
+        XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 44, width: 720, height: 338))
+        XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 44, width: 512, height: 332))
     }
     /// Card inset 10 on every side with the sidebar hidden; beside the sidebar the card starts at its edge; radius 6.
     func testContentCardInsetAndRadius() throws {
