@@ -191,6 +191,68 @@ final class SplitToolsTests: XCTestCase {
         XCTAssertEqual(d.state.address(of: source, in: d.window, for: .savedDocument), url("https://fixture.example/pinned"))
     }
 
+    /// Arc's P23-e/f: a Today tab dropped on the middle of another Today tab's row makes one split where the target
+    /// was, the dragged tab on the left and focused, shown in the window whatever was shown before.
+    func testJoinRowSplitsInTheTargetsPlaceWithTheDraggedTabLeading() throws {
+        let d = Driver()
+        let start = d.paneIDs[0]
+        let a = d.open("https://fixture.example/a"), b = d.open("https://fixture.example/b"), c = d.open("https://fixture.example/c")
+        XCTAssertEqual(d.todayIDs, [c, b, a, start])
+        d.user(.tab(.focus(start)))
+        d.user(.split(.joinRow(c, onto: a)))
+        let split = try XCTUnwrap(d.view.content.split)
+        XCTAssertEqual(d.todayIDs, [b, split, start], "the split takes the target's place")
+        XCTAssertEqual(d.paneIDs, [c, a])
+        XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, c)
+        XCTAssertEqual(d.view.content.orientation, .horizontal)
+        XCTAssertEqual(d.state.address(of: a, in: d.window, for: .savedDocument), url("https://fixture.example/a"))
+    }
+
+    /// The same drop from a pinned folder's tab onto a Today tab: the split sits in Today where the target was and the
+    /// folder is left empty; onto a pinned tab, the split stays in Pinned.
+    func testJoinRowTakesAPinnedFolderTabBesideATodayTab() throws {
+        let d = Driver()
+        let target = d.paneIDs[0], source = d.open("https://fixture.example/pinned"), other = d.open("https://fixture.example/other")
+        d.user(.item(.newFolder))
+        let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
+        d.user(.item(.move(source, to: .into(parent: folder, index: 0))))
+        d.user(.split(.joinRow(source, onto: target)))
+        let split = try XCTUnwrap(d.view.content.split)
+        XCTAssertEqual(d.todayIDs, [other, split])
+        XCTAssertEqual(d.paneIDs, [source, target])
+        guard case .folder(let pinnedFolder)? = d.view.space.pinned.rows.first(where: { $0.id == folder }) else { return XCTFail("folder lost") }
+        XCTAssertTrue(pinnedFolder.children.isEmpty)
+        d.user(.split(.separateAll))
+        d.user(.item(.move(target, to: .into(parent: d.view.space.pinned.root, index: 1))))
+        d.user(.split(.joinRow(other, onto: target)))
+        let pinnedSplit = try XCTUnwrap(d.view.content.split)
+        XCTAssertEqual(d.pinnedIDs, [folder, pinnedSplit], "onto a pinned tab the split stays pinned")
+        XCTAssertEqual(d.paneIDs, [other, target])
+    }
+
+    /// Refused, changing nothing: the tab onto itself, a Favorites tab either way, a folder or a split as the target, a
+    /// pane as the source, and a tab of another space.
+    func testJoinRowRefusesWhatGroupTabRefuses() throws {
+        let d = Driver()
+        let start = d.paneIDs[0], a = d.open("https://fixture.example/a"), fav = d.open("https://fixture.example/fav")
+        let b = d.open("https://fixture.example/b")
+        d.user(.item(.move(fav, to: .into(parent: d.view.favorites.root, index: 0))))
+        d.user(.item(.newFolder))
+        let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
+        assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: a))))
+        assertUnchanged(d.state, d.user(.split(.joinRow(fav, onto: a))))
+        assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: fav))))
+        assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: folder))))
+        d.user(.split(.joinRow(a, onto: start)))
+        let split = try XCTUnwrap(d.view.content.split)
+        assertUnchanged(d.state, d.user(.split(.joinRow(b, onto: split))))
+        assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: b))))
+        let other = d.open("https://fixture.example/other")
+        d.newSpace("Work")
+        let away = d.open("https://fixture.example/away")
+        assertUnchanged(d.state, d.user(.split(.joinRow(away, onto: other))))
+    }
+
     /// Arc's split menu: Move Left / Right trade the focused pane with its neighbour (no-op at the ends), Add Left
     /// Split puts an empty pane before the focused one and opens the command bar for it.
     func testSplitMenuMovesThePaneAndAddsBeforeIt() throws {

@@ -240,6 +240,10 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     case toggleExpanded
     case restore
     case dropTab(SplitDropOffer, edge: SplitEdge)
+    /// A sidebar tab dropped on the middle of another standalone tab's row (Arc 1.170, P23-e/f): the two become one
+    /// split at the target's place, the dragged tab on the left and focused, shown in this window. Refused where
+    /// `SidebarTree.groupTab` refuses (Favorites, a pane, the tab itself, a folder or split target).
+    case joinRow(ItemID, onto: ItemID)
 }
 
 public enum SidebarCommand: Hashable, Sendable, Codable {

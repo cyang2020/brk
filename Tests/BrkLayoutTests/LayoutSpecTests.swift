@@ -211,6 +211,39 @@ final class DropTargetTests: XCTestCase {
         XCTAssertEqual(d.view.space.today.rows.map(\.id), [t1, t2])
     }
 
+    /// Arc's P23-e: the middle half of another standalone tab's row joins it in a split; its quarters still reorder
+    /// (`dropTarget`), and folders, the dragged row itself, non-tabs and Favorites never join.
+    func testTheMiddleHalfOfATabRowJoinsItInASplit() throws {
+        let (d, p, folder, f1, t1, t2, v) = makeSidebar()
+        let space = d.view.space
+        let rows = TablistLayout.rows(space, width: 228)
+        // p 3...43, folder 44...84, f1 85...125, t2 184...224, t1 225...265.
+        func join(_ y: Double, _ kind: ItemKind = .tab, from section: SectionKind = .today, item: ItemID) -> ItemID? {
+            TablistLayout.splitTarget(at: CGPoint(x: 50, y: y), rows: rows, space: space, dragging: kind, from: section, item: item)
+        }
+        XCTAssertNil(join(190, item: t1), "top quarter of t2: reorder")
+        XCTAssertEqual(join(194, item: t1), t2, "a quarter down t2")
+        XCTAssertEqual(join(204, item: t1), t2, "middle of t2")
+        XCTAssertEqual(join(214, item: t1), t2, "three quarters down t2")
+        XCTAssertNil(join(220, item: t1), "bottom quarter of t2: reorder")
+        XCTAssertNil(join(245, item: t1), "its own row")
+        XCTAssertEqual(join(23, item: t1), p, "a Today tab onto a pinned tab")
+        XCTAssertEqual(join(105, from: .pinned, item: p), f1, "a pinned tab onto a pinned folder's tab")
+        XCTAssertEqual(join(245, from: .pinned, item: f1), t1, "a pinned folder's tab onto a Today tab")
+        XCTAssertNil(join(64, item: t1), "the folder's middle stays a drop into it")
+        XCTAssertNil(join(204, .folder, item: folder), "a folder never joins")
+        XCTAssertNil(join(204, from: .favorites, item: v[0]), "a Favorites tile never joins")
+        XCTAssertNil(join(150, item: t1), "the New Tab row")
+        // Where the feedback says join, the reducer makes the split there.
+        d.user(.split(.joinRow(t1, onto: try XCTUnwrap(join(204, item: t1)))))
+        let split = try XCTUnwrap(d.view.content.split)
+        XCTAssertEqual(d.view.space.today.rows.map(\.id), [split])
+        XCTAssertEqual(d.view.content.panes.map(\.tab), [t1, t2])
+        // A split row keeps its halves.
+        XCTAssertNil(TablistLayout.splitTarget(at: CGPoint(x: 50, y: 204), rows: TablistLayout.rows(d.view.space, width: 228), space: d.view.space,
+                                               dragging: .tab, from: .pinned, item: p))
+    }
+
     func testFavoriteTilesReorderInsideTheGrid() throws {
         let (d, _, _, _, t1, _, v) = makeSidebar()
         let frames = try XCTUnwrap(d.frames().sidebar)

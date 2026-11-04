@@ -37,12 +37,21 @@ final class FavoritesView: NSView {
         emptyBox.fillColor = nil
         emptyBox.lineDashPattern = Draw.emptyDash.value.map { NSNumber(value: $0) }
         layer?.addSublayer(emptyBox)
-        for (label, size, weight) in [(emptyTitle, Draw.emptyTitleFont.value, NSFont.Weight.semibold), (emptySubtitle, Draw.smallFont.value, .regular)] {
+        for label in [emptyTitle, emptySubtitle] {
             label.alignment = .center
-            label.font = .systemFont(ofSize: size, weight: weight)
             label.isSelectable = false
+            label.clipsToBounds = true
             addSubview(label)
         }
+        // Whatever the width, the copy stays in the box: the title on one line, the explanation on at most two, each
+        // ending in an ellipsis when it does not fit.
+        emptyTitle.lineBreakMode = .byTruncatingTail
+        emptySubtitle.maximumNumberOfLines = 2
+        emptySubtitle.cell?.truncatesLastVisibleLine = true
+        emptyTitle.identify(.tabTool("favorites-empty-title"))
+        emptySubtitle.identify(.tabTool("favorites-empty-subtitle"))
+        emptyBadge.identify(.tabTool("favorites-empty-badge"))
+        emptyClose.identify(.tabTool("favorites-empty-close"))
         emptyBadge.imageScaling = .scaleProportionallyUpOrDown
         addSubview(emptyBadge)
         emptyClose.action = { _ in dispatch(.tabTools(.dismissFavoritesHint)) }
@@ -96,21 +105,18 @@ final class FavoritesView: NSView {
         emptyBox.isHidden = !empty
         emptyTitle.textColor = palette.ink.text
         emptySubtitle.textColor = palette.ink.secondary
-        emptyBadge.image = StarBadge.image(side: Draw.emptyBadge.value, ink: HueInk(palette))
-        emptyClose.render(.close, size: Draw.captionFont.value, palette: palette, tint: palette.ink.secondary,
-                          radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
         dropBar.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).cgColor
         drawEmptyState()
     }
 
     /// The empty tray (`FavoritesGrid`, Metrics.favorites.emptyTrayHeight) holds the dashed box: the badge, the
-    /// bold title and two lines of copy centred in it, the × in its top-right corner.
+    /// bold title and two lines of copy centred in it, the × in its top-right corner. Below Arc's 228 the box and
+    /// everything in it shrink together (`FavoritesGrid.emptyBox`), so the copy wraps where Arc's does.
     private func drawEmptyState() {
         guard let palette else { return }
         let f = Metrics.favorites
-        let box = CGRect(x: f.emptyBoxInset.value.width, y: f.emptyBoxInset.value.height,
-                         width: max(0, bounds.width - 2 * f.emptyBoxInset.value.width), height: f.emptyBoxHeight.value)
-        let radius = f.tileRadius.value
+        let (box, scale) = FavoritesGrid.emptyBox(width: bounds.width)
+        let radius = f.tileRadius.value * scale
         let ink = HueInk(palette)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -120,16 +126,22 @@ final class FavoritesView: NSView {
         emptyBox.lineWidth = dropHighlight ? Draw.dropLineWidth.value : Draw.hairline.value
         emptyBox.fillColor = palette.color(dropHighlight ? palette.tokens.itemBackground : palette.tokens.border).withAlphaComponent(dropHighlight ? 1 : Draw.emptyBoxFillAlpha.value).cgColor
         CATransaction.commit()
-        let badge = Draw.emptyBadge.value
-        emptyBadge.frame = CGRect(x: box.midX - badge / 2, y: box.minY + Draw.emptyBadgeTop.value, width: badge, height: badge)
-        let side = Draw.emptyTextInset.value
-        let title = emptyTitle.intrinsicContentSize.height
-        emptyTitle.frame = CGRect(x: box.minX + side, y: emptyBadge.frame.maxY + Draw.emptyTitleGap.value, width: max(0, box.width - 2 * side), height: title)
-        emptySubtitle.preferredMaxLayoutWidth = max(0, box.width - 2 * side)
+        let badge = Draw.emptyBadge.value * scale
+        emptyBadge.image = StarBadge.image(side: badge, ink: ink)
+        emptyBadge.frame = CGRect(x: box.midX - badge / 2, y: box.minY + Draw.emptyBadgeTop.value * scale, width: badge, height: badge)
+        emptyTitle.font = .systemFont(ofSize: Draw.emptyTitleFont.value * scale, weight: .semibold)
+        emptySubtitle.font = .systemFont(ofSize: Draw.smallFont.value * scale)
+        let side = Draw.emptyTextInset.value * scale, width = max(0, box.width - 2 * side)
+        let titleTop = min(box.maxY, emptyBadge.frame.maxY + Draw.emptyTitleGap.value * scale)
+        emptyTitle.frame = CGRect(x: box.minX + side, y: titleTop, width: width, height: min(emptyTitle.intrinsicContentSize.height, box.maxY - titleTop))
+        emptySubtitle.preferredMaxLayoutWidth = width
+        let subtitleTop = min(box.maxY, emptyTitle.frame.maxY + Draw.emptySubtitleGap.value * scale)
         let subtitle = emptySubtitle.intrinsicContentSize.height
-        emptySubtitle.frame = CGRect(x: box.minX + side, y: emptyTitle.frame.maxY + Draw.emptySubtitleGap.value, width: max(0, box.width - 2 * side), height: subtitle)
-        let close = Draw.emptyCloseSize.value
-        emptyClose.frame = CGRect(x: box.maxX - Draw.emptyCloseInset.value - close / 2, y: box.minY + Draw.emptyCloseInset.value - close / 2, width: close, height: close)
+        emptySubtitle.frame = CGRect(x: box.minX + side, y: subtitleTop, width: width, height: min(subtitle, box.maxY - subtitleTop))
+        let close = Draw.emptyCloseSize.value * scale, inset = Draw.emptyCloseInset.value * scale
+        emptyClose.render(.close, size: Draw.captionFont.value * scale, palette: palette, tint: palette.ink.secondary,
+                          radius: Metrics.tablist.hoverButtonRadius.value * scale, hoverFill: palette.tokens.itemHover)
+        emptyClose.frame = CGRect(x: box.maxX - inset - close / 2, y: box.minY + inset - close / 2, width: close, height: close)
     }
 
     // MARK: Drop feedback (DragController)

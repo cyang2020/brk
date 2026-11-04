@@ -116,6 +116,12 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragCardShadow = Metric(10.0, .guess("blur of the drag card's shadow: it fades over about 16 pt at the sides, 20 below (P23-d-arc.png)"))
     let dragCardShadowOpacity = Metric(0.16, .guess("the drag card's shadow darkens #FCFCFC to #E4E5E5 at its side (P23-d-arc.png)"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
+    // The split preview over a tab row's middle (P23-e-arc.png: capsule x 15...233.5, slot from 15, chip 22...114,
+    // "Seconda…" from 150, × centred at 216 in the window).
+    let splitJoinChipWidth = Metric(0.42, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the dragged tab's chip is 92 pt of the 218.5 pt capsule"))
+    let splitJoinChipOffset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the darker slot shows 7 pt left of the chip (x 15...22)"))
+    let splitJoinTargetLeading = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title starts 26 pt right of the capsule's middle"))
+    let splitJoinTargetInk = Metric(0.15, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title is #D8D8D8 on the #F5F5F5 capsule"))
     let selectedShadowRadius = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's current tab card has a 1.5 pt shadow line under its lower edge, darkest at the edge"))
     let selectedShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the shadow line sits under the card, not around it"))
     let floatingShadowRadius = Metric(16.0, .guess("floating sidebar shadow blur; not recovered (layout-constants.md, Not recovered)"))

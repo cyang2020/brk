@@ -32,6 +32,9 @@ final class TablistView: NSScrollView {
     private var tools: TabToolsSnapshot?
     private var lastReveal: UInt64?
     private var dropFolder: ItemID?
+    /// The split preview over a row (DragController) and the row it covers.
+    private var splitJoin: SplitJoinPreview?
+    private var splitJoinTarget: ItemID?
     private var contentBottom = 0.0
     /// The pointer is over the sidebar: Today's Clear shows (Arc).
     var sidebarHovered = false { didSet { divider.sidebarHovered = sidebarHovered } }
@@ -328,6 +331,30 @@ final class TablistView: NSScrollView {
         dropLine.frame = CGRect(x: indent, y: y - line / 2, width: max(0, document.bounds.width - indent - t.selectionInset.value), height: line)
         dropLine.layer?.cornerRadius = line / 2
         dropLine.isHidden = false
+    }
+
+    /// Arc's split preview in place of `target`'s row while `dragged` is held on its middle (P23-e); the row under it
+    /// is hidden meanwhile. Nil clears it.
+    func showSplitJoin(_ target: ItemID?, dragged: TabRow?, frames f: SidebarFrames, space: SpaceSnapshot, palette: Palette?) {
+        if splitJoinTarget != target, let old = splitJoinTarget { rowViews[old]?.alphaValue = 1 }
+        splitJoinTarget = nil
+        guard let target, let dragged, let palette, let frame = f.rows.first(where: { $0.kind == .item(target) }),
+              case .tab(let row)? = Self.find(target, in: space.pinned.rows + space.today.rows) else {
+            splitJoin?.isHidden = true
+            return
+        }
+        let preview = splitJoin ?? {
+            let made = SplitJoinPreview(frame: .zero)
+            document.addSubview(made)
+            splitJoin = made
+            return made
+        }()
+        preview.frame = frame.rect
+        preview.render(dragged: dragged, onto: row, depth: frame.depth, palette: palette)
+        preview.layoutSubtreeIfNeeded()
+        preview.isHidden = false
+        splitJoinTarget = target
+        rowViews[target]?.alphaValue = 0
     }
 
     private func setDropFolder(_ id: ItemID?) {
@@ -962,6 +989,7 @@ final class NewTabRowView: HoverView {
         background.layer?.cornerCurve = .continuous
         background.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         label.font = .systemFont(ofSize: Draw.rowTitleFont.value)
+        label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         for view in [background, icon, label] as [NSView] { addSubview(view) }
         identify(.todayNewTab)

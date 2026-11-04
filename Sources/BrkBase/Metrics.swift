@@ -166,6 +166,9 @@ public struct TablistMetrics: MetricGroup {
     public let hoverButtonRadius = Metric(12.0, .arc("Tab row hover-button background corner radius", .low))
     public let folderIndent = Metric(16.0, .guess("folder indent was not recovered (layout-constants.md, Not recovered); cra measures 18 at L142"))
     public let favicon = Metric(16.0, .guess("favicon size was not recovered; cra L142 measures rows only"))
+    /// The part of a tab row, as fractions of its height from the top, where a dragged tab joins it in a split; the
+    /// quarters above and below still reorder.
+    public let splitJoinZone = Metric(0.25...0.75, .guess("Arc 1.170 (2026-11-03 captures P23-e/f, verify/visual-pairs/run-20261103/results.tsv): about the middle half of the row joins, its edges reorder"))
 }
 
 public struct DockMetrics: MetricGroup {

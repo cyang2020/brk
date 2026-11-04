@@ -78,7 +78,10 @@ public enum FavoritesGrid {
     /// tray holds Arc's "Drag to add Favorites" box (Metrics.favorites.emptyTrayHeight), or nothing once dismissed.
     public static func tiles(count: Int, width: Double, hintDismissed: Bool = false) -> (tray: CGSize, tiles: [CGRect]) {
         let f = Metrics.favorites
-        if count == 0 { return (CGSize(width: width, height: hintDismissed ? 0 : f.emptyTrayHeight.value), []) }
+        if count == 0 {
+            let box = emptyBox(width: width).box
+            return (CGSize(width: width, height: hintDismissed ? 0 : f.emptyTrayHeight.value - f.emptyBoxHeight.value + box.height), [])
+        }
         let columns = columns(forWidth: width)
         let inner = width - 2 * f.inset.value
         let tileWidth = max(0, floor((inner - Double(columns - 1) * f.gap.value) / Double(columns)))
@@ -90,6 +93,18 @@ public enum FavoritesGrid {
         }
         let height = 2 * f.inset.value + Double(rows) * tileHeight + Double(rows - 1) * f.gap.value
         return (CGSize(width: width, height: height), rects)
+    }
+
+    /// Arc's "Drag to add Favorites" box in a tray of `width` (tray coordinates), and the factor its contents are
+    /// drawn at. At Arc's default 228 the box is 7.5 in from the sides, 7 below the pill and 94.5 tall (P07-b); a
+    /// narrower sidebar shrinks the whole box in proportion (0.7 at the 164 minimum), so the badge, the bold title, the
+    /// two grey lines and the × keep that composition inside it. Wider sidebars stretch the box and keep the height.
+    public static func emptyBox(width: Double) -> (box: CGRect, scale: Double) {
+        let f = Metrics.favorites
+        let inset = f.emptyBoxInset.value
+        let boxWidth = max(0, width - 2 * inset.width)
+        let scale = min(1, boxWidth / (Metrics.sidebar.defaultWidth.value - 2 * inset.width))
+        return (CGRect(x: inset.width, y: inset.height, width: boxWidth, height: f.emptyBoxHeight.value * scale), scale)
     }
 
     /// Where a drag at `point` (window coordinates, like `SidebarFrames.favoriteTiles`) would drop into Favorites,
@@ -209,6 +224,27 @@ public enum TablistLayout {
             if let from = places[item], from.parent == t.parent, from.index < t.index { t.index -= 1 }
         }
         return .into(parent: t.parent, index: t.index)
+    }
+
+    /// The tab a drag at `point` (tab list document coordinates) would join in a split (Arc 1.170, P23-e): the middle
+    /// half of a standalone tab row other than `item`, when the dragged item is a tab of a `section` that may join the
+    /// row's (`Placement.canJoinSplit`). Nil elsewhere, where `dropTarget` decides: the row's upper and lower quarters
+    /// still reorder, a folder's middle still drops into it, a split row keeps its halves.
+    public static func splitTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind, from section: SectionKind,
+                                   item: ItemID) -> ItemID? {
+        guard kind == .tab, let hit = rows.first(where: { point.y >= $0.rect.minY && point.y < $0.rect.maxY }),
+              case .item(let id) = hit.kind, id != item else { return nil }
+        let f = (point.y - hit.rect.minY) / max(hit.rect.height, 1)
+        guard f >= Metrics.tablist.splitJoinZone.value.lowerBound, f <= Metrics.tablist.splitJoinZone.value.upperBound else { return nil }
+        func standaloneTab(in rows: [Row]) -> Bool {
+            rows.contains { row in
+                if case .folder(let folder) = row { return standaloneTab(in: folder.children) }
+                return row.id == id && row.kind == .tab
+            }
+        }
+        let target: SectionKind? = standaloneTab(in: space.pinned.rows) ? .pinned : standaloneTab(in: space.today.rows) ? space.today.kind : nil
+        guard let target, Placement.canJoinSplit(section, with: target) else { return nil }
+        return id
     }
 }
 

@@ -109,26 +109,37 @@ extension Work {
             let source = offer.source, target = offer.target
             guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[source] == offer,
                   let scope = state.locate(target) else { return }
-            let before = state.doc.windows.mapValues { doc in
-                doc.activeBySpace.filter { $0.value == target || $0.value == source }.mapValues { shown in
-                    shown == source ? source : (state.focusedPane(of: target, in: doc.id) ?? target)
-                }
-            }
-            var grouped: ItemID?
-            state.withTree(scope) { tree in
-                grouped = try? tree.groupTab(source, with: target, splitID: ItemID(ctx.newID()), edge: edge, createdAt: ctx.now)
-            }
-            guard let split = grouped else { return }
-            for (owner, spaces) in before {
-                for (space, pane) in spaces {
-                    select(split, in: owner, space: space)
-                    state.doc.windows[owner]?.splitFocus[split] = pane
-                }
-            }
-            focus(source, in: window)
-            // `focus` resolves both original standalone tab selections to their new shared split.
-            assert(state.shownItem(in: window) == split)
+            group(source, with: target, edge: edge, in: scope, window: window)
+        case .joinRow(let source, let target):
+            let units = state.units(in: window)
+            guard state.doc.windows[window]?.kind != .little, units.contains(source), units.contains(target),
+                  let scope = state.locate(target), state.locate(source) == scope, state.tree(scope)?[target]?.kind == .tab else { return }
+            group(source, with: target, edge: .left, in: scope, window: window)
         }
+    }
+
+    /// `source` joins `target` in a split (`SidebarTree.groupTab`) and the window shows it with `source` focused. Any
+    /// window that showed either tab shows the split instead, with the pane it showed focused.
+    private mutating func group(_ source: ItemID, with target: ItemID, edge: SplitEdge, in scope: ContainerScope, window: WindowID) {
+        let before = state.doc.windows.mapValues { doc in
+            doc.activeBySpace.filter { $0.value == target || $0.value == source }.mapValues { shown in
+                shown == source ? source : (state.focusedPane(of: target, in: doc.id) ?? target)
+            }
+        }
+        var grouped: ItemID?
+        state.withTree(scope) { tree in
+            grouped = try? tree.groupTab(source, with: target, splitID: ItemID(ctx.newID()), edge: edge, createdAt: ctx.now)
+        }
+        guard let split = grouped else { return }
+        for (owner, spaces) in before {
+            for (space, pane) in spaces {
+                select(split, in: owner, space: space)
+                state.doc.windows[owner]?.splitFocus[split] = pane
+            }
+        }
+        focus(source, in: window)
+        // `focus` resolves both original standalone tab selections to their new shared split.
+        assert(state.shownItem(in: window) == split)
     }
     private mutating func closeSplitPane(_ tab: ItemID, in window: WindowID) {
         guard let scope = state.locate(tab), let tree = state.tree(scope), let split = tree.splitContaining(tab),
