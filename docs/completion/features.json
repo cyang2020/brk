@@ -665,7 +665,8 @@
         "Add a native New Tab row click check and verify overflow and empty states against the reference.",
         "Arc 对照（run-20261103 Q02）仍有差异或无参照：Q02-b: 要修（外壳组：Today 为空时去掉分隔线；无当前标签时内容卡片用白色）",
         "Arc 对照 R3-1（2026-11-04，合并 087ee736）：Today 清空后不画置顶区与 Today 之间的分隔线和 Clear；无当前标签时内容区是不透明 #FCFCFC 白卡片带阴影（新建 Space 后的空白页同样）。站台 Q02-b 1.1%，一致。",
-        "R4-6 独立复核（2026-11-04）：通过。验收标准两条（Today 新的在上、New Tab 行打开新标签命令栏）都有真输入的原生证据。台账 remaining 里的\"溢出\"不在验收标准里。Q02-b（Today 清空）这次在 cb5ffb7d 上重拍仍是 15.22%（第三轮收尾 sheet 15.21%）：拍摄脚本先选中 Today 里的 Visual fixture 再逐个关掉 Today 标签，Brk 关掉当前标签后改选最近用过的置顶标签 Home（前面 P21、P22 场景碰过它），所以画面是 Home 的页面而不是 Arc 那样的空白卡片；04a507f3 的修正只在全量连拍的顺序下得到 1.1%。这条画面对照不算通过，没写进 verification（A008 的 required_checks 不含 visual）；关掉最后一个 Today 标签后 Arc 选不选置顶标签，见 REVIEW.md 留给父任务的问题。"
+        "R4-6 独立复核（2026-11-04）：通过。验收标准两条（Today 新的在上、New Tab 行打开新标签命令栏）都有真输入的原生证据。台账 remaining 里的\"溢出\"不在验收标准里。Q02-b（Today 清空）这次在 cb5ffb7d 上重拍仍是 15.22%（第三轮收尾 sheet 15.21%）：拍摄脚本先选中 Today 里的 Visual fixture 再逐个关掉 Today 标签，Brk 关掉当前标签后改选最近用过的置顶标签 Home（前面 P21、P22 场景碰过它），所以画面是 Home 的页面而不是 Arc 那样的空白卡片；04a507f3 的修正只在全量连拍的顺序下得到 1.1%。这条画面对照不算通过，没写进 verification（A008 的 required_checks 不含 visual）；关掉最后一个 Today 标签后 Arc 选不选置顶标签，见 REVIEW.md 留给父任务的问题。",
+        "2026-11-04 真 Arc 核对：关掉最后一个 Today 标签后，Arc 选中最近用过的置顶标签（没有就留空白卡片），Brk 一样；不是差异（results.tsv Q02-c）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
@@ -739,7 +740,8 @@
       ],
       "remaining": [
         "Native scenario 8 proves Cmd+W closure; add row-button and shared-tab window behavior checks.",
-        "R4-6 独立复核（2026-11-04）：通过。验收标准三条（Cmd+W 和行尾 × 归档并关页面、私密标签不留归档）都有原生证据。两个窗口共用一个标签时的关闭不在验收标准里，没查。"
+        "R4-6 独立复核（2026-11-04）：通过。验收标准三条（Cmd+W 和行尾 × 归档并关页面、私密标签不留归档）都有原生证据。两个窗口共用一个标签时的关闭不在验收标准里，没查。",
+        "2026-11-04 真 Arc 核对：关掉最后一个 Today 标签后，Arc 选中最近用过的置顶标签（没有就留空白卡片），Brk 一样；不是差异（results.tsv Q02-c）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Shared.swift",
