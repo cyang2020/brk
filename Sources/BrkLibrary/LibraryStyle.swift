@@ -137,12 +137,12 @@ struct LibrarySpacesMetrics: MetricGroup {
 
 /// The History page in the content area (Q05-a, positions from the card's top left).
 struct HistoryPageMetrics: MetricGroup {
-    let headerCenter = Metric(27.5, .anatomy("Q05-a: \"History\" and the search field are centred 27.5 below the card's top"))
+    let headerCenter = Metric(28.0, .anatomy("Q05-a: \"History\" and the search field are centred 28 below the card's top"))
     let logoLeading = Metric(23.0, .anatomy("Q05-a: the logo spans x 23...43"))
     let logoSize = Metric(22.0, .anatomy("Q05-a: the logo is 22 pt"))
     let titleLeading = Metric(65.5, .anatomy("Q05-a: \"History\"'s text starts at x 67.5 (its label 2 pt inside the frame)"))
     let titleFont = Metric(23.5, .anatomy("Q05-a: \"History\" is 72 pt wide"))
-    let searchLeading = Metric(264.5, .anatomy("Q05-a: the search field's ring starts half a point left of 265"))
+    let searchLeading = Metric(265.0, .anatomy("Q05-a: the search field spans x 265...962"))
     let searchMaxWidth = Metric(697.0, .anatomy("Q05-a: the search field is 697 pt wide"))
     let searchHeight = Metric(42.0, .anatomy("Q05-a: the search field is 42 pt tall"))
     let searchFont = Metric(12.5, .anatomy("Q05-a: the magnifier and \"Search history\" span 93 pt (13 pt measured 96.5)"))
@@ -155,9 +155,9 @@ struct HistoryPageMetrics: MetricGroup {
     let navTextLeading = Metric(62.0, .anatomy("Q05-a: the item labels' ink starts 1 point right of a label at 61 (x 291 pt from the window)"))
     let navTextRaise = Metric(1.0, .anatomy("Q05-a: the item labels sit a point above the rows' middle"))
     let navFont = Metric(14.0, .anatomy("Q05-a: \"Delete browsing data\" is 138 pt wide, medium (14.5 pt measured 143.5)"))
-    let listLeading = Metric(279.5, .anatomy("Q05-a: the visits card's edge is at x 1015 to 1016 px of the window"))
-    let listTop = Metric(79.5, .anatomy("Q05-a: the visits card's edge is at y 179 px of the window"))
-    let listMaxWidth = Metric(740.0, .anatomy("Q05-a: the visits card ends at x 2492 px of the window"))
+    let listLeading = Metric(279.0, .anatomy("Q05-a: the visits card spans x 279...1018"))
+    let listTop = Metric(79.0, .anatomy("Q05-a: the visits card starts at y 79"))
+    let listMaxWidth = Metric(739.0, .anatomy("Q05-a: the visits card is 739 pt wide"))
     let listRadius = Metric(8.0, .guess("the visits card's corner radius, Chromium's cr-card"))
     let dayHeaderHeight = Metric(69.0, .anatomy("Q05-a: the first row is centred 87 below the visits card's top"))
     let dayTitleCenter = Metric(36.5, .anatomy("Q05-a: the day title's ink spans y 119...134, 30...45 below the visits card's top"))

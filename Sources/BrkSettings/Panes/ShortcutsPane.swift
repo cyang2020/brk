@@ -76,7 +76,7 @@ struct ShortcutsPane: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(ShortcutsPane.sections(shown, filter: filter), id: \.title) { section in
                         Text(section.title).font(.system(size: K.headerSize.value, weight: .semibold)).foregroundStyle(Color.primary.opacity(K.inkOpacity.value))
-                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value).offset(y: -0.5)
+                            .padding(.leading, K.headerInset.value).frame(height: K.headerHeight.value).offset(y: 0.5)
                         ListRule()
                         ForEach(Array(section.rows.enumerated()), id: \.element.action) { index, row in
                             if index > 0 { RowDivider() }

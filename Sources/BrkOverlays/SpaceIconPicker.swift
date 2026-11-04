@@ -165,7 +165,7 @@ struct SpaceIconPickerView: View {
             .background(RoundedRectangle(cornerRadius: m.searchRadius.value, style: .continuous).fill(Color(nsColor: .textBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: m.searchRadius.value, style: .continuous)
                 .stroke(Color(nsColor: OverlayColors.of(.light).focusRing).opacity(searchFocused ? 0.75 : 0), lineWidth: 3))
-            .padding(.horizontal, 9.5).padding(.top, 8).padding(.bottom, 3)
+            .padding(.horizontal, 9.5).padding(.top, 8).padding(.bottom, 1)
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     if query.isEmpty {

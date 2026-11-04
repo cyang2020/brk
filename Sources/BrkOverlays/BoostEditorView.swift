@@ -522,9 +522,6 @@ final class BoostColorSquare: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let outer = NSBezierPath(roundedRect: bounds, xRadius: 20, yRadius: 20)
         drawRing(in: outer)
-        // Dark at the top-left, light at the bottom-left, mid grey down the right (P37-b). The view is flipped, so
-        // pointing down and to the right is a positive angle.
-        NSGradient(colorsAndLocations: (BoostInk.rgb(0x3E3E3E), 0), (BoostInk.rgb(0x6A6A6A), 0.32), (BoostInk.rgb(0xE6E6E6), 0.62), (BoostInk.rgb(0x9A9A9A), 1))?.draw(in: outer, angle: 62)
         let field = NSBezierPath(roundedRect: inner, xRadius: 13, yRadius: 13)
         NSGraphicsContext.saveGraphicsState()
         field.addClip()
@@ -688,7 +685,7 @@ final class BoostIntroView: NSView {
         // P37-a: the title's three lines start at y 348, 371 and 394 pt, 23 pt apart; the line under it at y 430.
         let titleStyle = NSMutableParagraphStyle(); titleStyle.alignment = .center; titleStyle.minimumLineHeight = 23; titleStyle.maximumLineHeight = 23
         let title = NSAttributedString(string: "Edit the Internet with Boosts", attributes: [.font: NSFont.systemFont(ofSize: 23, weight: .semibold), .foregroundColor: BoostInk.blue, .paragraphStyle: titleStyle])
-        title.draw(with: CGRect(x: 10, y: 345, width: bounds.width - 20, height: 72), options: [.usesLineFragmentOrigin])
+        title.draw(with: CGRect(x: 9.5, y: 346.5, width: bounds.width - 20, height: 72), options: [.usesLineFragmentOrigin])
         let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
         let line = NSMutableAttributedString(string: "Make ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: BoostInk.introText, .paragraphStyle: paragraph])
         line.append(NSAttributedString(string: host, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: BoostInk.introText]))

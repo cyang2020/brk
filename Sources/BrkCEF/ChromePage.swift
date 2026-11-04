@@ -403,6 +403,8 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool {
         let plainLink = params.linkURL != nil && params.mediaType == .none && !params.isEditable
+        // The capsule naming the hovered link goes while a menu is open (Q07-b); Chromium sends no status of its own then.
+        engine.pageDidEmit(self, .linkHovered(nil))
         // Arc's page menu offers "Translate to English" (the system language) on a page in another language (Q07-a).
         let system = Locale.preferredLanguages.first ?? "en"
         let base = { (code: String) in String(code.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first ?? "") }

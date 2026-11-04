@@ -43,6 +43,8 @@ import CefKit
             guard let surface, let owner, surface.window === owner, owner.isVisible,
                   !surface.isHiddenOrHasHiddenAncestor, valid() else { self.cancel(); return }
             let menu = self.makeMenu(items, target: request)
+            // Q07-b: Arc's link menu has no column for a check mark, its titles start 6 points further left.
+            if link { menu.showsStateColumn = false }
             request.menu = menu
             _ = menu.popUp(positioning: nil, at: point, in: surface)
             guard self.pending === request else { return }
