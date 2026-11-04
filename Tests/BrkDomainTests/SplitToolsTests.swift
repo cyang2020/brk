@@ -169,7 +169,7 @@ final class SplitToolsTests: XCTestCase {
         assertUnchanged(before, d.user(.split(.dropTab(offer(d, extra, split), edge: .top))))
         assertUnchanged(d.state, d.user(.split(.dropTab(offer(d, extra, original), edge: .right))))
         XCTAssertEqual(d.paneIDs.count, 4)
-        XCTAssertFalse(d.view.enabledActions.contains(.addSplitView))
+        XCTAssertTrue(d.view.enabledActions.contains(.addSplitView), "a full split answers the shortcut with Cannot Add New Pane")
     }
 
     /// Arc's P23-d: a tab in a pinned folder dragged beside the current Today tab is offered the drop, and the

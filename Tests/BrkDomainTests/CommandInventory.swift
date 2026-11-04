@@ -41,7 +41,7 @@ enum CommandInventory {
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
         .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
-        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
+        .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
         .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
         .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
         .tabTools(.spaceIntoFolder(space, into: space)),
@@ -59,7 +59,6 @@ enum CommandInventory {
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
         .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)), .split(.joinRow(item, onto: ItemID("target"))),
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
-        .sidebar(.popupMenu(.plusButton, at: .zero)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
         .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory),
         .app(.help(.copyInfo)), .page(.navigate(.focused, example)), .site(.toggleDeveloperMode),
@@ -309,6 +308,7 @@ enum CommandInventory {
             case .dismissArchiveEducation: "dismissArchiveEducation"
             case .dismissFavoritesHint: "dismissFavoritesHint"
             case .undoToast: "undoToast"
+            case .quoteLinkCopied: "quoteLinkCopied"
             case .preferences: "preferences"
             case .copyLinks: "copyLinks"
             case .openInSplit: "openInSplit"

@@ -70,7 +70,7 @@ public class WindowController: NSObject, NSWindowDelegate {
             if event.keyCode == Key.escape.code, TabIconPicker.isOpen { TabIconPicker.close(); return true }
             if event.keyCode == Key.escape.code, self?.cancelSplitDrag() == true { return true }
             // ⌘Z while an undo toast shows ("Cleared Tabs! Use ⌘Z to undo") undoes that, before the Edit menu's Undo.
-            if let self, self.lastSnapshot?.tabTools.toast?.keycap != nil, event.charactersIgnoringModifiers?.lowercased() == "z",
+            if let self, self.lastSnapshot?.tabTools.toast?.keycap == "⌘Z", event.charactersIgnoringModifiers?.lowercased() == "z",
                event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
                 self.send(.user(self.id, .tabTools(.undoToast)))
                 return true

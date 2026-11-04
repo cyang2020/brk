@@ -8,7 +8,16 @@ extension Work {
         guard state.doc.windows[window]?.kind == .standard else { return }
         switch command {
         case .restore(let id):
-            if let tab = restoreEntry(id, in: window) { focus(tab, in: window) }
+            var folder = false
+            if case .folder? = state.doc.archive.first(where: { $0.id == id })?.structure { folder = true }
+            if let tab = restoreEntry(id, in: window) {
+                focus(tab, in: window)
+                // Arc's tabUnarchived and listUnarchived: from the Library, where the tab is out of sight, a click shows it.
+                let space = state.doc.tree.role(of: tab)?.space.map { state.displayTitle(of: $0) } ?? ""
+                if case .library? = state.session.windows[window]?.overlay {
+                    toast(ToastCopy.restoredClickToView(folder: folder, to: space), in: window, click: .library(.close))
+                } else { toast(ToastCopy.restored(folder: folder, to: space), in: window) }
+            }
         case .restoreLast:
             // Cmd+Shift+T brings back what the user closed or cleared, not what the sweep archived after it.
             let entry = state.doc.archive.first { $0.reason == .manual || $0.reason == .clearToday } ?? state.doc.archive.first
@@ -18,7 +27,7 @@ extension Work {
             library(.open(.archive), in: window)
             effects.append(.window(window, .requestArchiveClear))
         case .clear:
-            if !state.doc.archive.isEmpty { state.doc.archive = [] }
+            if !state.doc.archive.isEmpty { state.doc.archive = []; toast(ToastCopy.archiveCleared, in: window) }
         }
     }
 
@@ -30,15 +39,25 @@ extension Work {
     mutating func sweepAutoArchive() {
         let onScreen = state.onScreenTabs()
         var victims: [ItemID] = []
+        var swept: [SpaceID: Int] = [:]
         for space in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
             // The threshold is the space's profile's ("Archive tabs after", per profile: anatomy-m 4.3).
             guard let threshold = state.profileSettings(space.profile).autoArchive.interval else { continue }
             for unit in state.doc.tree[space.todayRoot]?.children ?? [] {
                 guard !state.doc.tree.tabs(under: unit).contains(where: onScreen.contains) else { continue }
-                if ctx.now.since(state.lastActiveOf(unit)) >= threshold { victims.append(unit) }
+                if ctx.now.since(state.lastActiveOf(unit)) >= threshold {
+                    victims.append(unit)
+                    swept[space.id, default: 0] += state.doc.tree.tabs(under: unit).count
+                }
             }
         }
         archiveTabs(victims, reason: .auto)
+        // Arc's "Auto archived %d tabs", in the windows showing a space that lost tabs, over no other toast.
+        for id in state.doc.windows.keys.sorted() {
+            guard let window = state.doc.windows[id], window.kind == .standard, let count = swept[window.space], count > 0,
+                  state.session.windows[id]?.toast == nil else { continue }
+            toast(ToastCopy.autoArchived(count), in: id)
+        }
         // Little Arc windows (Arc: `AutoArchiveType.littleArc`, one global threshold in the Links pane; F3; A086): a
         // Little Arc nobody has used for the threshold closes with its tabs archived. Use is real input: a key, click
         // or scroll in the panel (`WindowEvent.activity`, page included) or the panel becoming or leaving key; being

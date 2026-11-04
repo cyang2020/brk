@@ -460,10 +460,11 @@ public final class AppStore {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(SharedQuote.plain(url: url, title: title, format: format), forType: .string)
                 let copied = NSPasteboard.general.changeCount
-                Task { @MainActor [engine] in
+                Task { @MainActor [engine, self] in
                     guard let selection = await engine.selectedText(page), NSPasteboard.general.changeCount == copied else { return }
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(SharedQuote.text(url: url, title: title, selection: selection, format: format), forType: .string)
+                    self.dispatch(.user(page.window, .tabTools(.quoteLinkCopied)))
                 }
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }

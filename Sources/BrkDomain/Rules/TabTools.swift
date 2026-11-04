@@ -50,9 +50,20 @@ extension AppState {
 }
 
 extension Work {
-    mutating func toast(_ text: String, link: ToastLink? = nil, in window: WindowID, action: ToastAction? = nil) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(action == nil ? 4 : 6)), link: link, action: action)
+    mutating func toast(_ text: String, link: ToastLink? = nil, in window: WindowID, action: ToastAction? = nil, subtitle: String? = nil, keycap: String? = nil, click: Command? = nil) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(action == nil ? 4 : 6)), link: link, keycap: keycap, action: action, subtitle: subtitle, click: click)
         state.session.windows[window]?.toastUndo = nil
+    }
+    /// Arc's Copied Current URL (Q11-b), with its Share button: the file export that replaced Share-by-link, so a
+    /// private tab has none.
+    mutating func copiedURLToast(_ tab: ItemID, in window: WindowID) {
+        let share = state.locate(tab) == .global ? ToastAction(title: ToastCopy.share, symbol: "square.and.arrow.up", command: .app(.export(.items([tab])))) : nil
+        toast(ToastCopy.copiedCurrentURL, in: window, action: share)
+    }
+    /// Arc's sidebar move toast, when an item leaves for a Space the window is not showing: a click goes there.
+    mutating func movedToast(_ id: ItemID, to space: SpaceID, in window: WindowID) {
+        guard state.doc.windows[window]?.space != space else { return }
+        toast(ToastCopy.tabMoved, in: window, click: state.doc.tree[id]?.kind == .tab ? .tab(.focus(id)) : .space(.focus(space)))
     }
     /// Arc's undo toast ("Cleared Tabs! Use ⌘Z to undo"), about 5 s; ⌘Z meanwhile runs `undo`.
     mutating func undoToast(_ text: String, undo: ToastUndo, in window: WindowID) {
@@ -189,6 +200,7 @@ extension Work {
             if state.session.windows[window]?.copiedCapture?.action == nil { state.session.windows[window]?.copiedCapture = nil }
             state.session.windows[window]?.toastUndo = nil
         case .undoToast: undoFromToast(in: window)
+        case .quoteLinkCopied: toast(ToastCopy.copiedLink, in: window, subtitle: ToastCopy.withQuote)
         case .dismissArchiveEducation:
             if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
         case .dismissFavoritesHint:
@@ -209,6 +221,9 @@ extension Work {
             let urls = state.requestedItems(targets, in: window).flatMap { tree.tabs(under: $0) }
                 .compactMap { state.displayedTab($0, in: window)?.url?.absoluteString }
             if !urls.isEmpty { effects.append(.copyToPasteboard(urls.joined(separator: "\n"))) }
+            if urls.count == 1, let tab = state.requestedItems(targets, in: window).flatMap({ tree.tabs(under: $0) }).first {
+                copiedURLToast(tab, in: window)
+            } else if urls.count > 1 { toast(ToastCopy.copiedItemLinks, in: window) }
         case .openInSplit(let targets):
             let ids = state.requestedItems(targets, in: window).filter { tree[$0]?.kind == .tab }
             guard let first = ids.first, w.kind != .little else { return }
@@ -246,7 +261,7 @@ extension Work {
                 setPinnedAddresses(under: child, in: window, excluding: wasPinned)
             }
             if state.doc.tree[folder]?.children.isEmpty == true { _ = removeItem(folder) }
-            toast("Folder turned into Space", in: window)
+            toast(ToastCopy.newSpaceCreated, in: window)
         case .customize(let id):
             focus(id, in: window)
             guard state.focusedPane(in: window) == id else { return }
@@ -297,13 +312,14 @@ extension Work {
         let descendants = Set(ids.flatMap { tree.tabs(under: $0) })
         let alreadyPinned = Set(descendants.filter { state.role(of: $0)?.kind == .pinned || state.role(of: $0)?.kind == .favorites })
         var draft = self
+        var archivedEntries: [ArchiveID]?
         switch action {
         case .archive:
             guard ids.allSatisfy({ state.detached($0, in: window)?.isValid() == true }) else {
                 toast("The selection exceeds the saved archive limits. No items were archived.", in: window)
                 return
             }
-            draft.archiveTabs(ids, reason: .manual, in: window)
+            archivedEntries = draft.archiving { $0.archiveTabs(ids, reason: .manual, in: window) }
         case .close:
             for id in ids {
                 if tree[id]?.kind == .tab { draft.closeTab(id, in: window) }
@@ -360,7 +376,14 @@ extension Work {
         default: break
         }
         draft.state.session.windows[window]?.tabSelection = TabSelection()
-        draft.toast("Updated \(ids.count) item\(ids.count == 1 ? "" : "s")", in: window)
+        switch action {
+        case .archive:
+            // Arc's WindowsCloseContentAction: closing several rows is the same undoable "Cleared Tabs!" as Clear.
+            if let archived = archivedEntries, !archived.isEmpty { draft.undoToast("Cleared Tabs! Use", undo: .restore(archived), in: window) }
+        case .move(.space(let space)):
+            if let first = ids.first { draft.movedToast(first, to: space, in: window) }
+        default: break
+        }
         self = draft
     }
 

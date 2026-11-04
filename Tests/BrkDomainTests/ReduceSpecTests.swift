@@ -549,7 +549,8 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(effects(.page(.stop(.focused))), [.page(page, .stop)])
         XCTAssertEqual(effects(.page(.zoom(.zoomIn))), [.page(page, .zoom(.zoomIn))])
         XCTAssertEqual(effects(.page(.toggleDevTools)), [.page(page, .toggleDevTools)])
-        XCTAssertEqual(effects(.page(.copyURL(.plain))), [.copyToPasteboard("http://127.0.0.1:9/a")])
+        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copyToPasteboard("http://127.0.0.1:9/a")])
+        d.user(.tabTools(.dismissToast))
         XCTAssertEqual(effects(.app(.toggleFullScreen)), [.window(d.window, .toggleFullScreen)])
         XCTAssertEqual(effects(.app(.minimize)), [.window(d.window, .miniaturize)])
         XCTAssertEqual(effects(.app(.quit)), [.app(.quit)])
@@ -875,8 +876,11 @@ final class ReduceSpecTests: XCTestCase {
         }
         XCTAssertEqual(d.view.content.panes.count, 4)
         XCTAssertEqual(d.view.content.panes.map(\.fraction), [0.25, 0.25, 0.25, 0.25])
-        XCTAssertFalse(d.view.enabledActions.contains(.addSplitView))
-        assertUnchanged(d.state, d.user(.split(.addPane)))
+        XCTAssertTrue(d.view.enabledActions.contains(.addSplitView), "the shortcut still answers")
+        let panes = d.view.content.panes
+        d.user(.split(.addPane))
+        XCTAssertEqual(d.view.content.panes, panes)
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Cannot Add New Pane")
     }
 
     /// .split(.addPane) inserts the new pane after the focused pane with an equal share
@@ -1214,6 +1218,7 @@ final class ReduceSpecTests: XCTestCase {
         let a = d.todayIDs[0]
         let pinned = d.open("pinned.example.com")
         d.user(.tab(.togglePin(.item(pinned))))
+        d.user(.tabTools(.dismissToast))
         let fav = d.open("fav.example.com")
         d.user(.item(.move(fav, to: .into(parent: d.view.favorites.root, index: 0))))
         let idle = d.open("idle.example.com")
@@ -1473,12 +1478,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(submenu(space, "Set Profile")).entries.first, .choice(title: "Default", command: .profile(.assign(.space(work), to: .default)), on: true))
         XCTAssertEqual(titles(try XCTUnwrap(submenu(space, "Export “Work” into Folder"))), ["Space 1", "Bookmarks Folder on Disk…"])
         XCTAssertEqual(command(space, "Space 1"), .tabTools(.spaceIntoFolder(work, into: space1)))
-        let plus = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.plusButton, at: .zero)))))
-        XCTAssertEqual(plus.entries.compactMap { (entry: MenuEntry) -> Command? in
-            if case .action(_, let c, _) = entry { return c }
-            return nil
-        },
-                       [.commandBar(.open(.newTab)), .item(.newFolder), .sidebar(.openDialog(.newSpace)), .tabTools(.site(.connectGitHub(favorite: nil))), .tabTools(.site(.connectCalendar))])
         d.user(.item(.newFolder))
         let folder = d.pinnedIDs[0]
         let folderMenu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(folder), at: .zero)))))

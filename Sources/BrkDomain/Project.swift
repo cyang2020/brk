@@ -480,6 +480,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic
     )
     snapshot.history = history
+    snapshot.plusMenu = PlusMenu.rows(kind: doc.kind, overrides: state.doc.keyOverrides)
     return snapshot
 }
 
@@ -531,7 +532,8 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     }
     switch shown?.body {
     case .tab?: if tree.role(of: shown!.id)?.kind == .favorites { enabled.remove(.addSplitView) }
-    case .split(let s)?: if s.panes.count >= Metrics.content.maxPanes.value { enabled.remove(.addSplitView) }
+    // A full split stays enabled: Arc answers the shortcut with "Cannot Add New Pane".
+    case .split?: break
     case .folder?, .section?, nil: enabled.remove(.addSplitView)
     }
     if case .split(let split)? = shown?.body {

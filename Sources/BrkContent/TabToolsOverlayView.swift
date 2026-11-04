@@ -11,6 +11,8 @@ final class TabToolsOverlayView: NSView {
     private let recent = TabSwitcherView()
     private let toast = ToastView(frame: .zero)
     private var toastCommand: Command?
+    private var toastClick: Command?
+    private var toastActionCloses = false
     private let banner = NoticeBanner()
     private let education = NSButton(title: "", target: nil, action: nil)
     private let outputStatus = NSTextField(labelWithString: "")
@@ -38,8 +40,14 @@ final class TabToolsOverlayView: NSView {
         toast.identify(.tabTool("toast"))
         banner.identify(.tabTool("notice"))
         education.identify(.tabTool("education"))
-        toast.onClick = { [weak self] in self?.dispatch(.tabTools(.dismissToast)) }
-        toast.onAction = { [weak self] in if let command = self?.toastCommand { self?.dispatch(command) } }
+        toast.onClick = { [weak self] in
+            if let command = self?.toastClick { self?.dispatch(command) }
+            self?.dispatch(.tabTools(.dismissToast))
+        }
+        toast.onAction = { [weak self] in
+            if let command = self?.toastCommand { self?.dispatch(command) }
+            if self?.toastActionCloses == true { self?.dispatch(.tabTools(.dismissToast)) }
+        }
         education.target = self
         education.action = #selector(dismissEducation)
         education.font = .systemFont(ofSize: 11)
@@ -78,7 +86,8 @@ final class TabToolsOverlayView: NSView {
             toastTask?.cancel()
             toastExpiry = tools.toast?.expiresAt
             if let expiry = toastExpiry {
-                let seconds = tools.toast?.keycap == nil ? 4.0 : 5.0
+                // As `Work.toast` and `undoToast` set the expiry: the clock tick is only every so often.
+                let seconds = tools.toast?.action != nil ? 6.0 : tools.toast?.keycap == "⌘Z" ? 5.0 : 4.0
                 toastTask = Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(seconds))
                     guard !Task.isCancelled, let self, self.toastExpiry == expiry else { return }
@@ -87,6 +96,8 @@ final class TabToolsOverlayView: NSView {
             }
         }
         toastCommand = tools.toast?.action?.command
+        toastClick = tools.toast?.click
+        toastActionCloses = tools.toast?.action?.symbol != nil
         // A notice with a way out is Arc's notice banner (P43-a); any other toast is Arc's toast (P15). Both sit at the
         // top-right corner of the content area, overlapping the window margin above the card.
         let notice = tools.toast?.link != nil ? tools.toast : nil
@@ -183,6 +194,10 @@ final class ToastView: NSView {
     /// Arc's "Screenshot Copied to Clipboard" · Save (P33-d): a white bordered button at the end of the toast.
     private let actionBox = NSView()
     private let actionLabel = NSTextField(labelWithString: "")
+    /// Arc's Share on "Copied Current URL" (Q11-b): the same button with an icon in place of a word.
+    private let actionIcon = NSImageView()
+    /// Arc's sublabel, a smaller line under the text ("Copied Link" / "With Quote").
+    private let subtitle = NSTextField(labelWithString: "")
     var onClick: (() -> Void)?
     var onAction: (() -> Void)?
 
@@ -213,14 +228,18 @@ final class ToastView: NSView {
         actionBox.wantsLayer = true
         actionBox.layer?.cornerCurve = .continuous
         actionBox.layer?.cornerRadius = m.capRadius.value
-        actionBox.layer?.backgroundColor = NSColor.white.cgColor
-        actionBox.layer?.borderColor = NSColor(srgbRed: 0xC9 / 255, green: 0xD2 / 255, blue: 0xD3 / 255, alpha: 1).cgColor
+        actionBox.layer?.backgroundColor = NSColor(srgbRed: 0xF4 / 255, green: 0xF9 / 255, blue: 0xF9 / 255, alpha: 1).cgColor
+        actionBox.layer?.borderColor = NSColor(srgbRed: 0xC9 / 255, green: 0xCD / 255, blue: 0xCD / 255, alpha: 1).cgColor
         actionBox.layer?.borderWidth = 1
         actionBox.identify(.tabTool("toast-action"))
         actionLabel.font = .systemFont(ofSize: m.font.value, weight: .semibold)
         actionLabel.textColor = .black
         actionLabel.alignment = .center
-        for view in [label, capBackground, cap, trailing, actionBox, actionLabel] as [NSView] { addSubview(view) }
+        actionIcon.imageScaling = .scaleNone
+        actionIcon.contentTintColor = .black
+        subtitle.font = .systemFont(ofSize: m.subtitleFont.value)
+        subtitle.textColor = NSColor.black.withAlphaComponent(0.6)
+        for view in [label, subtitle, capBackground, cap, trailing, actionBox, actionLabel, actionIcon] as [NSView] { addSubview(view) }
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
@@ -237,18 +256,27 @@ final class ToastView: NSView {
         cap.isHidden = toast.keycap == nil
         capBackground.isHidden = toast.keycap == nil
         trailing.isHidden = toast.trailing == nil
-        actionLabel.stringValue = toast.action?.title ?? ""
+        let symbol = toast.action?.symbol
+        actionLabel.stringValue = symbol == nil ? toast.action?.title ?? "" : ""
         actionBox.isHidden = toast.action == nil
-        actionLabel.isHidden = toast.action == nil
+        actionLabel.isHidden = toast.action == nil || symbol != nil
+        actionIcon.isHidden = symbol == nil
+        actionIcon.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: toast.action?.title) }?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: ToastDraw.actionSymbol.value, weight: .regular))
+        subtitle.stringValue = toast.subtitle ?? ""
+        subtitle.isHidden = toast.subtitle == nil
+        setAccessibilityLabel(([toast.text, toast.subtitle, toast.keycap, toast.trailing] as [String?]).compactMap { $0 }.joined(separator: " "))
         needsLayout = true
     }
 
     override var fittingSize: NSSize {
         let m = ToastDraw
-        var width = m.padding.value + ceil(label.intrinsicContentSize.width)
+        var width = m.padding.value + ceil(max(label.intrinsicContentSize.width, subtitle.isHidden ? 0 : subtitle.intrinsicContentSize.width))
         if !cap.isHidden { width += m.gap.value + capWidth }
         if !trailing.isHidden { width += (cap.isHidden ? m.gap.value : m.capTrailingGap.value) + ceil(trailing.intrinsicContentSize.width) }
-        width += actionBox.isHidden ? m.trailingPadding.value : m.actionGap.value + actionWidth + m.actionInset.value
+        width += actionBox.isHidden ? m.trailingPadding.value
+            : actionIcon.isHidden ? m.actionGap.value + actionWidth + m.actionInset.value
+            : m.shareGap.value + m.shareWidth.value + m.shareInset.value
         return NSSize(width: width, height: m.height.value)
     }
 
@@ -266,6 +294,13 @@ final class ToastView: NSView {
             x = field.frame.maxX
         }
         place(label)
+        if !subtitle.isHidden {
+            let top = label.intrinsicContentSize.height, below = subtitle.intrinsicContentSize.height
+            label.frame.origin.y = mid - (top + below) / 2
+            let size = subtitle.intrinsicContentSize
+            subtitle.frame = CGRect(x: m.padding.value, y: label.frame.maxY, width: ceil(size.width), height: size.height)
+            x = max(x, subtitle.frame.maxX)
+        }
         if !cap.isHidden {
             x += m.gap.value
             capBackground.frame = CGRect(x: x, y: mid - m.capHeight.value / 2, width: capWidth, height: m.capHeight.value)
@@ -274,7 +309,11 @@ final class ToastView: NSView {
             x = capBackground.frame.maxX
         }
         if !trailing.isHidden { x += cap.isHidden ? m.gap.value : m.capTrailingGap.value; place(trailing) }
-        if !actionBox.isHidden {
+        if !actionIcon.isHidden {
+            x += m.shareGap.value
+            actionBox.frame = CGRect(x: x, y: mid - m.shareHeight.value / 2, width: m.shareWidth.value, height: m.shareHeight.value)
+            actionIcon.frame = actionBox.frame
+        } else if !actionBox.isHidden {
             x += m.actionGap.value
             actionBox.frame = CGRect(x: x, y: mid - m.actionHeight.value / 2, width: actionWidth, height: m.actionHeight.value)
             let size = actionLabel.intrinsicContentSize
@@ -300,7 +339,13 @@ struct ToastMetrics: MetricGroup {
     let border = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: a 1 px #AFB9B9 edge"))
     let shadowBlur = Metric(12.0, .guess("soft popover shadow under the toast"))
     let shadowAlpha = Metric(0.12, .guess("the toast's shadow is faint in P15"))
-    let actionHeight = Metric(32.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the toast's Save button, 64 px tall"))
+    let actionHeight = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103 P33-d-arc: the toast's Save button spans y 27 to 83 px"))
+    let shareWidth = Metric(30.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the Share button spans x 2439 to 2498 px"))
+    let shareHeight = Metric(27.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the Share button spans y 56 to 110 px"))
+    let shareGap = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: 19 px between URL and the Share button; a label draws about 2.5 pt in from its frame"))
+    let shareInset = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc, P50-e-arc: the Share button ends 24 px before the toast's right edge"))
+    let actionSymbol = Metric(15.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the share icon is about 12 x 16 pt"))
+    let subtitleFont = Metric(11.0, .guess("Arc's toast sublabel (\"With Quote\"); no reference shows one"))
     let actionPadding = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: Save sits 24 px in from its button's edges"))
     let actionInset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-d: the Save button ends 14 px before the toast's right edge"))
     let capHeight = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the ⌘Z key cap is 36 x 26"))

@@ -98,6 +98,7 @@ final class CaptureTests: XCTestCase {
         d.user(.capture(.begin(mode)))
         if mode != .fullPage { d.user(.capture(.select(CaptureRegion(x:0.2,y:0.2,width:0.3,height:0.3)))) }
         let request = try XCTUnwrap(d.view.capture?.request)
+        if mode == .fullPage { XCTAssertEqual(d.view.tabTools.toast?.text,"Capture in Progress…") }
         let image = CaptureImage(png:Data([7]),width:300,height:200,scale:2)
         d.system(.capture(.rendered(request,image)))
         return (request,image)

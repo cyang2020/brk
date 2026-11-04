@@ -23,12 +23,16 @@ final class DockView: NSView {
     /// capsule the size of a cell; the other cells stay put and nothing is drawn on them.
     private let capsule = DockCapsuleView()
     private var grab: (cell: CGRect, x: CGFloat)?
+    private let plusMenu: PlusMenu
+    private var plusRows: [[PlusMenuRow]] = []
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
+        plusMenu = PlusMenu(dispatch: dispatch)
         super.init(frame: .zero)
         library.action = { _ in dispatch(.library(.open(nil))) }
-        plus.action = { [weak self] _ in self?.plusMenu() }
+        plus.action = { [weak self] _ in self?.togglePlusMenu() }
+        plusMenu.onClose = { [weak self] in self?.renderPlus() }
         library.toolTip = SidebarCopy.library
         library.identify(.dockLibrary)
         plus.identify(.dockPlus)
@@ -46,19 +50,20 @@ final class DockView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 
     /// `creating`: the Create a Space flow is open; Arc's dock then shows only the spaces (P24 a).
-    func render(_ items: [DockItem], frames: SidebarFrames, palette: Palette, creating: Bool = false) {
+    func render(_ items: [DockItem], frames: SidebarFrames, palette: Palette, creating: Bool = false, plusMenu rows: [[PlusMenuRow]] = []) {
+        plusRows = rows
         if let last, last.0 == items, last.1 == frames, last.2 == palette, last.3 == creating { return }
         last = (items, frames, palette, creating)
+        plusMenu.close()
         library.isHidden = creating
         plus.isHidden = creating
         let local = { (r: CGRect) in r.offsetBy(dx: -frames.dock.minX, dy: -frames.dock.minY) }
         library.frame = local(frames.libraryButton)
         plus.frame = local(frames.plusButton)
         let tint = palette.color(palette.tokens.foreground)
-        for button in [library, plus] {
-            button.render(button === library ? .library : .plus, size: Draw.dockButtonGlyph.value, palette: palette, tint: tint,
-                          radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
-        }
+        library.render(.library, size: Draw.dockButtonGlyph.value, palette: palette, tint: tint,
+                       radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
+        renderPlus()
         library.image = LibraryGlyph.image(tint: (palette.scheme == .light ? NSColor.black : .white).withAlphaComponent(Draw.dockActiveInk.value))
         let shown = Set(items.map(\.id))
         for (id, cell) in cells where !shown.contains(id) { cell.removeFromSuperview(); cells[id] = nil }
@@ -121,17 +126,27 @@ final class DockView: NSView {
         if let cancelMonitor { NSEvent.removeMonitor(cancelMonitor); self.cancelMonitor = nil }
         return active
     }
-    override func viewDidHide() { super.viewDidHide(); cancelReorder() }
-    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { cancelReorder() } }
+    override func viewDidHide() { super.viewDidHide(); cancelReorder(); plusMenu.close() }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { cancelReorder(); plusMenu.close() } }
 
     /// Highlights the cell a drag would drop on; nil clears it.
     func showDrop(space: SpaceID?) {
         for (id, cell) in cells { cell.dropTarget = id == space }
     }
 
-    private func plusMenu() {
-        let point = rootPoint(of: CGPoint(x: plus.frame.minX, y: plus.frame.maxY))
-        dispatch(.sidebar(.popupMenu(.plusButton, at: point)))
+    private func togglePlusMenu() {
+        if plusMenu.isOpen { plusMenu.close(); return }
+        guard let palette = last?.2 else { return }
+        plusMenu.open(plusRows, palette: palette, anchor: plus)
+        renderPlus()
+    }
+
+    /// The + button; while its menu is open, × on the hover fill (Q11-a).
+    private func renderPlus() {
+        guard let palette = last?.2 else { return }
+        plus.latchedFill = plusMenu.isOpen ? palette.tokens.itemBackground : nil
+        plus.render(plusMenu.isOpen ? .close : .plus, size: Draw.dockButtonGlyph.value, palette: palette, tint: palette.color(palette.tokens.foreground),
+                    radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
     }
 }
 

@@ -37,7 +37,10 @@ extension Work {
             case .folder?, .section?, nil:
                 return
             }
-            guard added else { return }
+            guard added else {
+                if case .split(let s)? = tree[shown]?.body, s.panes.ids.count >= Metrics.content.maxPanes.value { toast(ToastCopy.cannotAddPane, in: window) }
+                return
+            }
             state.session.windows[window]?.expandedSplit = nil
             focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)

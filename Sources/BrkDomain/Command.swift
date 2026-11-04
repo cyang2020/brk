@@ -278,7 +278,6 @@ public enum PopupMenuRequest: Hashable, Sendable, Codable {
     case space(SpaceID)
     /// Product controls include confirmation and view preferences; `.space` retains the existing model-query contract.
     case spaceControls(SpaceID)
-    case plusButton
     /// The … of a card on the Library's Spaces page (and the card's right-click; P30-c): the space's menu as Arc shows
     /// it there, its New Folder and Live Folders acting on the card's space and Delete Space asking first.
     case spaceCard(SpaceID)
@@ -597,7 +596,7 @@ extension Command {
     /// Whether this command leaves an open command bar open.
     var keepsCommandBar: Bool {
         switch self {
-        case .page(.media), .tabTools(.dismissToast), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
+        case .page(.media), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab): true
         default: false
         }
     }
@@ -607,7 +606,7 @@ extension Command {
     var keepsLibrary: Bool {
         switch self {
         case .capture(.begin), .library(.openHistory): false
-        case .boost, .capture, .tabTools(.dismissToast), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
+        case .boost, .capture, .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create),
              .easel(.requestDelete), .easel(.confirmDelete), .easel(.rename): true
         // A Spaces card's … menu and what its rows do (P30-c): the Library stays, so the card shows the result.
@@ -623,7 +622,7 @@ extension Command {
     /// the window shows closes it (Arc closes the Peek when the user picks a sidebar tab).
     var keepsPeek: Bool {
         switch self {
-        case .capture, .tabTools(.dismissToast), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
+        case .capture, .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab): true
         default: false
         }
     }
