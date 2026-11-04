@@ -305,6 +305,7 @@ enum NativeSystemInput {
         if chord.modifiers.contains(.shift) { flags.insert(.maskShift) }
         down.flags = flags; up.flags = flags
         down.post(tap: .cghidEventTap); usleep(40_000); up.post(tap: .cghidEventTap)
+        PhysicalKeys.clearSystemModifiers(chord)
     }
     static func activateFinder() {
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
