@@ -128,7 +128,7 @@ struct CardHeader: View {
     let text: String
 
     var body: some View {
-        Text(text).font(SettingsStyle.font).foregroundStyle(SettingsStyle.header).padding(.leading, C.rowPadding.value)
+        Text(text).font(.system(size: C.headerFontSize.value)).foregroundStyle(SettingsStyle.header).padding(.leading, C.rowPadding.value)
     }
 }
 
@@ -260,6 +260,7 @@ let CardMetrics = SettingsCardMetricsTable()
 
 struct SettingsCardMetricsTable: MetricGroup {
     private static let capture = "verify/visual-pairs/run-20261103/P38"
+    let headerFontSize = Metric(11.0, .anatomy("\(capture)/P38-d-arc.png: 'Your Data and Settings' is 119.5 pt wide (13 pt measured 137.5)"))
     let toolbarHeight = Metric(88.0, .anatomy("\(capture)/P38-a-arc.png: the title bar and pane toolbar end at the hairline at y 174 to 176 px"))
     let fontSize = Metric(13.0, .anatomy("\(capture)/P38-a-arc.png: the P stem of 'Previews' is 19 px, the same as a 13 pt label"))
     let paneTop = Metric(20.0, .anatomy("\(capture)/P38-a-arc.png: toolbar hairline at y 174 px, first card at 216 px"))

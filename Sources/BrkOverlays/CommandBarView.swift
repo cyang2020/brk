@@ -403,7 +403,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
         }
         let offerWidth = width(offerLabel) + 4
-        let keyWidth = width(keyLabel) + 2 * o.keyPadding.value
+        // Half points, as Arc's 30.5 pt Tab key.
+        let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
         let accessoryWidth = offer != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").

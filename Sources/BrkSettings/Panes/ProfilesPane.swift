@@ -98,7 +98,7 @@ struct ProfilesPane: View {
 
     private var profileList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(ProfilesCopy.yourProfiles).font(SettingsStyle.font.weight(.medium)).foregroundStyle(SettingsStyle.header)
+            Text(ProfilesCopy.yourProfiles).font(.system(size: P.listCaptionFont.value, weight: .semibold)).foregroundStyle(SettingsStyle.header)
                 .padding(.leading, P.listInset.value).frame(height: P.listHeader.value)
             CardDivider(inset: 0)
             ScrollView {
@@ -150,7 +150,7 @@ struct ProfilesPane: View {
                 Text(row.profile.name).font(SettingsStyle.font).foregroundStyle(SettingsStyle.text).lineLimit(1)
                 Spacer(minLength: CardMetrics.controlGap.value)
                 Text(SettingsCopy.spaceCount(row.profile.spaceTitles.count))
-                    .font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText).lineLimit(1)
+                    .font(.system(size: P.listCaptionFont.value)).foregroundStyle(SettingsStyle.secondaryText).lineLimit(1)
                     .help(ProfileCopy.spaceCount(row.profile.spaceTitles))
             }
         }
@@ -264,7 +264,7 @@ struct ProfileSettingsForm: View {
                 .frame(width: P.popUpColumn.value)
             }
         }
-        CardHeader(text: ProfilesCopy.yourData).padding(.top, P.dataHeaderTop.value)
+        CardHeader(text: ProfilesCopy.yourData).padding(.top, P.dataHeaderTop.value).padding(.bottom, P.dataHeaderBottom.value)
         SettingsCard {
             VStack(spacing: 0) {
                 dataRow("lock.fill", .systemBlue, ProfilesCopy.privacy, "privacy") { context.dispatch(.settings(.openBrowserPage(.privacy, profile: id))) }
@@ -421,7 +421,8 @@ struct ProfilesPaneMetricsTable: MetricGroup {
     let columnGap = Metric(10.5, .anatomy("\(capture): the list ends at x 538 px, the cards start at 559 px"))
     let listBottom = Metric(12.0, .anatomy("\(capture): the list ends at y 1276 px of 1300"))
     let listMinHeight = Metric(200.0, .guess("the list's height on a short screen"))
-    let listHeader = Metric(28.0, .anatomy("\(capture): 'Your Profiles' row spans y 320 to 376 px"))
+    let listHeader = Metric(27.0, .anatomy("\(capture): 'Your Profiles' row spans y 320 to 376 px with its 2 px hairline"))
+    let listCaptionFont = Metric(11.0, .anatomy("\(capture): 'Your Profiles' is 68.5 pt wide, semibold, and '2 Spaces' 47, regular (13 pt measured 77.5 and 54.5)"))
     let listInset = Metric(16.0, .anatomy("\(capture): 'Your Profiles' starts at x 160 px"))
     let listPadding = Metric(16.0, .anatomy("\(capture): the selected row spans x 160 to 506 px"))
     let listTop = Metric(14.0, .anatomy("\(capture): the header's hairline at y 376 px, the first row at 404 px"))
@@ -434,8 +435,9 @@ struct ProfilesPaneMetricsTable: MetricGroup {
     let popUpRow = Metric(44.0, .anatomy("\(capture): Search engine row 320 to 408 px, Manage search 408 to 498 px"))
     let popUpColumn = Metric(180.0, .anatomy("\(capture): every pop-up is centred at x 1040 px"))
     let documentsWidth = Metric(150.0, .anatomy("\(capture): the New documents pop-up spans x 890 to 1190 px"))
-    let dataHeaderTop = Metric(9.0, .anatomy("\(capture): the second card ends at y 855 px, the header is centred at 894 px"))
-    let dataPadding = Metric(2.0, .anatomy("\(capture): the data card starts at y 917 px, its first row is centred at 960 px"))
+    let dataHeaderTop = Metric(4.5, .anatomy("\(capture): the second card ends at y 855 px, the header is centred at 894 px; the column's 8 pt spacing comes first"))
+    let dataHeaderBottom = Metric(-4.0, .anatomy("\(capture): the header is centred at y 894 px, the data card starts at 916 px, less than the column's 8 pt spacing leaves"))
+    let dataPadding = Metric(5.0, .anatomy("\(capture): the data card starts at y 916 px, its first row is centred at 960 px"))
     let dataRow = Metric(34.0, .anatomy("\(capture): data rows centred at y 960, 1028, 1096, 1164, 1232 px"))
     let dataIcon = Metric(24.0, .anatomy("\(capture): the lock square spans x 578 to 626 px"))
     let arrowSize = Metric(14.0, .guess("the → at the end of a data row"))
