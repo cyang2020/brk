@@ -296,13 +296,15 @@ import BrkUIKit
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = m.introRadius.value
         layer?.borderWidth = 1
-        glyph.image = LibraryIcon.symbol("photo.on.rectangle.angled", size: m.introGlyph.value, weight: .medium)
+        // Drawn at its own size (a 42 pt frame scaled it down to 35 wide; Arc's is 42.5).
+        glyph.image = LibraryIcon.symbol("photo.on.rectangle.angled", size: m.introGlyph.value * 0.98, weight: .medium)
+        glyph.imageScaling = .scaleNone
         glyph.contentTintColor = NSColor(srgbRed: 0.53, green: 0.47, blue: 0.86, alpha: 1)
         title.font = .systemFont(ofSize: m.introTitleFont.value, weight: .bold)
         title.alignment = .center
         body.font = .systemFont(ofSize: m.introBodyFont.value)
         footnote.font = .systemFont(ofSize: m.introFootnoteFont.value)
-        shield.image = LibraryIcon.symbol("lock.shield", size: 11)
+        shield.image = LibraryIcon.symbol("lock.shield.fill", size: 12)
         close.image = LibraryIcon.symbol("xmark", size: 13, weight: .semibold, label: LibraryCopy.close)
         close.isBordered = false
         close.toolTip = LibraryCopy.close
@@ -355,7 +357,7 @@ import BrkUIKit
         // × is centred 27 in from the right and 27.5 below the top (P32-a).
         close.frame = CGRect(x: width - 27 - 11, y: 16.5, width: 22, height: 22)
         let g = m.introGlyph.value
-        glyph.frame = CGRect(x: ((width - g) / 2).rounded(), y: (m.introGlyphCenter.value - g / 2).rounded(), width: g, height: g)
+        glyph.frame = CGRect(x: ((width - 2 * g) / 2).rounded(), y: (m.introGlyphCenter.value - g).rounded(), width: 2 * g, height: 2 * g)
         let th = title.fittingSize.height
         title.frame = CGRect(x: pad, y: (m.introTitleCenter.value - th / 2).rounded(), width: inner, height: th)
         // The labels draw 2 pt inside their frames: the frames stand 2 pt out so the text starts at the padding, as
@@ -365,7 +367,7 @@ import BrkUIKit
         let bh = body.sizeThatFits(NSSize(width: inner + 2 * inset, height: .greatestFiniteMagnitude)).height
         body.frame = CGRect(x: pad - inset, y: m.introBodyTop.value, width: inner + 2 * inset, height: bh)
         button.frame = CGRect(x: pad, y: body.frame.maxY + 10, width: inner, height: m.introButtonHeight.value)
-        let s = 11.0
+        let s = 12.0
         shield.frame = CGRect(x: pad + 1.5, y: button.frame.maxY + 18.5 - s / 2, width: s, height: s)
         let noteWidth = max(0, inner - s - 6 + 2 * inset)
         footnote.preferredMaxLayoutWidth = noteWidth

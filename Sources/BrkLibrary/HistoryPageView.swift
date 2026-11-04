@@ -424,7 +424,7 @@ final class HistoryNavItem: NSButton {
         isBordered = false
         wantsLayer = true
         layer?.addSublayer(fill)
-        glyph.image = LibraryIcon.symbol(symbol, size: symbol == "trash" ? 15 : 17)
+        glyph.image = LibraryIcon.symbol(symbol, size: symbol == "trash" ? 14 : 15.5)
         label.font = .systemFont(ofSize: LibraryDraw.history.navFont.value, weight: .medium)
         external.image = showsExternal ? LibraryIcon.symbol("arrow.up.forward.square", size: 17) : nil
         external.isHidden = !showsExternal
@@ -645,18 +645,20 @@ final class HistoryVisitRow: NSView {
         // The box draws 1 pt inside its frame: its outline starts at the padding (Q05-a: 16 pt at x 25).
         checkbox.frame = CGRect(x: h.padding.value - 1, y: (mid - box / 2).rounded(), width: box, height: box)
         let t = time.fittingSize
-        // Labels draw 2 pt inside their frames: the frames start 2 early so the text is where Arc's is.
-        time.frame = CGRect(x: h.timeLeading.value - 2, y: (mid - t.height / 2).rounded(), width: t.width, height: t.height)
+        // Labels draw 2 pt inside their frames: the frames start 2 early so the text is where Arc's is. Text rows are
+        // placed to the half point, as Arc's are (Q05-a: the time 0.5 below the title).
+        let half = { (y: Double) in (y * 2).rounded() / 2 }
+        time.frame = CGRect(x: h.timeLeading.value - 2, y: half(mid - t.height / 2 + 0.5), width: t.width, height: t.height)
         let f = 16.0
         favicon.frame = CGRect(x: h.faviconLeading.value, y: (mid - f / 2).rounded(), width: f, height: f)
         more.frame = CGRect(x: bounds.width - h.menuTrailing.value - 12, y: (mid - 12).rounded(), width: 24, height: 24)
         let x = h.titleLeadingInRow.value - 2, limit = more.frame.minX - 12
         let titleSize = title.fittingSize, hostSize = host.fittingSize
         let titleWidth = min(titleSize.width, max(0, limit - x - min(hostSize.width, 120) - 8))
-        title.frame = CGRect(x: x, y: (mid - titleSize.height / 2).rounded(), width: titleWidth, height: titleSize.height)
-        // The host's text is 6 after the title's (Q05-a), both 2 inside their frames.
-        let hostX = title.frame.maxX + 2
-        host.frame = CGRect(x: hostX, y: (mid - hostSize.height / 2).rounded(), width: max(0, min(hostSize.width, limit - hostX)), height: hostSize.height)
+        title.frame = CGRect(x: x, y: half(mid - titleSize.height / 2), width: titleWidth, height: titleSize.height)
+        // The host's text is 7 after the title's (Q05-a), both 2 inside their frames.
+        let hostX = title.frame.maxX + 3
+        host.frame = CGRect(x: hostX, y: half(mid - hostSize.height / 2), width: max(0, min(hostSize.width, limit - hostX)), height: hostSize.height)
     }
 }
 
