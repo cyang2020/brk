@@ -3907,7 +3907,8 @@
       ],
       "remaining": [
         "Easels/Notes appearance consumers await their own batch.",
-        "Native automatic-mode evidence changes only the owned application effective appearance; no global OS preference was changed."
+        "Native automatic-mode evidence changes only the owned application effective appearance; no global OS preference was changed.",
+        "R4-4（2026-11-04，合并 79c2212f）：用 AppKit 的进程内测试入口模拟系统外观变化，网页跟着深、浅、深来回变，网站单独设成 Light 时不跟（R44-SystemAppearance）；没改系统设置。未做：Easel 跟随外观（没有 Arc 深色 Easel 的参照）。"
       ],
       "implementation": [
         "Sources/BrkCEF/WebsitePolicy.swift",
@@ -4294,7 +4295,8 @@
       ],
       "remaining": [
         "Finish native History search/open/remove UI coverage and large-ledger performance/pagination behavior.",
-        "R4-7 独立复核（2026-11-04）：通过。Acceptance met for search, open, remove, the retained visit model and private visits. Not covered: very large history performance; the Q05-a pair is still 9.11% different from Arc (R4-2). Observation: the History tab itself is not restored after relaunch."
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met for search, open, remove, the retained visit model and private visits. Not covered: very large history performance; the Q05-a pair is still 9.11% different from Arc (R4-2). Observation: the History tab itself is not restored after relaunch.",
+        "R4-2（2026-11-04，合并 f7287fa8）：历史页同一网址一天只列一次取最近那次（Chromium 的历史页规则），删一行会删当天同网址的其他访问；导航、日期标题、复选框（原来只画了 1 点粗）、时间、标题、主机名的位置按 Arc 量过。Q05-a 9.1%→3.0%，剩余为 Arc 标志和品牌字样、日期、网站图标（Brk 的历史不存图标）。待定：Arc 每次 Cmd+Y 新开一个 History 标签，Brk 一个 Space 只留一个；brk://history 标签重启后不恢复（R4-10 在处理）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -5956,7 +5958,8 @@
         "Native creation, color count, presets, undo, independent values, save and cancel pass. A complete pointer-driven pad/color-well/slider matrix remains a manual native gate; pure paint and Metal pixel tests cover the generated outputs.",
         "Arc 对照（run-20261103 P28）仍有差异或有意不同：P28-a: 已修（剩余为数据或他组） | P28-b: 已修（第 5 组；站台未拍） | P28-c: 已修（预设页序 Brand→Pastel→Drab→Greyscale） | P28-d: 有意不同 | P28-e: 已修（波浪滑杆；见 p28-full）",
         "R4-6 独立复核（2026-11-04）：缺陷。缺陷：验收标准和实现者的 current_behavior 都写了\"撤销\"，但主题编辑器没有撤销：ThemeDraft（Sources/BrkOverlays/ThemeEditor.swift:54）只有 theme 和 systemScheme 两个字段，编辑器代码里没有任何 undo；Arc 的 SpaceStyleEditor.State 里有 undoStack（docs/arc-anatomy/model-and-shortcuts.md:281、731）。色盘位置、饱和度、噪点、强度、暗色偏置没有原生驱动，实时预览只断言了草稿模型、没有读像素。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-ThemeUndo 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-ThemeUndo 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "R4-3（2026-11-04，合并 2c8ca7cb）：主题编辑器色盘里灰色和白色放左侧、白色在最左；强度滑杆的拖动范围和波浪高度按 Arc 三张图重量；P28-a 6.2%→1.5%。待定：只剩一个颜色时 Arc 的 − 可点、Brk 灰掉，Arc 点了之后的结果不知道。"
       ],
       "implementation": [
         "Sources/BrkOverlays/SpaceDialogHost.swift",
@@ -7515,7 +7518,8 @@
         "Complete Media, Easels and Notes, Boosts and Spaces with their owning features; real download cancellation is a platform dependency.",
         "Arc 对照（run-20261103 P32）仍有差异或有意不同：P32-a: 已修；剩余为数据（无归档/Boost）与系统图标 | P32-b: 已修（剩余为数据或他组） | P32-c: 已修（剩余为数据或他组） | P32-d: 已修；剩余为数据 | P32-e: 已修（剩余为数据或他组） | P32-f: 已修（剩余为数据或他组） | P32-i: 已修；剩余为数据",
         "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。",
-        "R3-3（2026-11-04，合并 662007f2）：Library 的 Easels 页改成真实的 Easel 卡片列表（旧的占位页删掉）。Easels 图标若要更贴近 Arc（带波浪线的小窗口）归 Library 图标工作。"
+        "R3-3（2026-11-04，合并 662007f2）：Library 的 Easels 页改成真实的 Easel 卡片列表（旧的占位页删掉）。Easels 图标若要更贴近 Arc（带波浪线的小窗口）归 Library 图标工作。",
+        "R4-2（2026-11-04，合并 f7287fa8）：Library 打开时网页卡片保持关着时的宽度、左贴面板、右边伸出窗口，网页不再重排（Arc 的做法）；Library 各页的字号、间距、颜色按 Arc 量过。站台 P30-a 10.5%→1.1%、P30-c 8.7%→0.9%、P32 各页 6.5–10.4%→0.8–1.8%。剩余为 Arc 参照里的测试数据（Space 1 内容、用户自己的 Boost）、Arc 自画的 Easels/Boosts 导航图标、屏幕区域截图里的系统通知。"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -9019,7 +9023,8 @@
         }
       ],
       "remaining": [
-        "Physical local-extension folder selection belongs to file-panels. Evidence uses only the explicitly selected harmless spanning fixture."
+        "Physical local-extension folder selection belongs to file-panels. Evidence uses only the explicitly selected harmless spanning fixture.",
+        "R4-4（2026-11-04，合并 79c2212f）：站点控制里 Add Extension 走真实打开面板，选文件夹确认后扩展装上并在页面里运行（R44-ExtensionPanel）；顺带修了选完文件夹后确认框从不出现的旧 bug。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -9313,7 +9318,8 @@
         "No owned implementation gate remains. Parent wires the exported site-control command and runs unified integration regression. Physical file-picker acceptance and Arc pixel comparison are not claimed.",
         "Reviews (verify/completion/batch2-parent/boosts/REVIEW.md): CSP-restricted pages get no Boost and no error; page scripts can read and remove the injected style; cross-origin iframe Zap; IDN and IPv6 hosts; scope text reverts after a refusal; editor covers the command bar; reload ends preview. Edit and Export buttons have no native click receipt; file install only by command.",
         "Arc 对照（run-20261103 P37）仍有差异或有意不同：P37-a: 已修；引导卡徽章不是 Arc 原插图 | P37-c: 已修（剩余为数据或他组） | P37-d: 已修；Arc 参照的代码区被系统禁用显示提示文字，不可比",
-        "R3-4（2026-11-04，合并 0adfa4b1）：Install from File… 走真实打开面板，原生场景 LibraryBoost-Install 选文件并装上。"
+        "R3-4（2026-11-04，合并 0adfa4b1）：Install from File… 走真实打开面板，原生场景 LibraryBoost-Install 选文件并装上。",
+        "R4-4（2026-11-04，合并 79c2212f）：复核遗留八条处理完（禁止内联样式的页面、跨源 iframe 的 Zap、国际化域名和 IPv6、范围文字输错、编辑面板不挡命令栏、刷新后预览不断、Library 里 Edit/Export 的原生点击）；R44-Boosts 通过。剩余：页面脚本仍能读到并删掉 Boost 的样式。R4-3 把 Boost 面板按 Arc 重量过（P37-a/b/c/c2 1.1–1.3%；P37-d 的 Arc 参照拍错了窗口，要重拍）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Boosts.swift",
@@ -9692,7 +9698,8 @@
         }
       ],
       "remaining": [
-        "R4-7 独立复核（2026-11-04）：通过。Acceptance met."
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met.",
+        "R4-2（2026-11-04，合并 f7287fa8）：截图模式的灰色遮罩按实测校准（#C6C6C6），提示卡阴影、字号、Save 按钮尺寸按 Arc；P33-d 4.5%→0.8%，P33-a/b/c 1.2–1.4%。Arc 的 Save 右边还有一个被通知挡住的按钮，Arc 的字符串表里只有 Save，待重拍 P33-d 核实。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromeAudibility.swift",
@@ -9880,7 +9887,8 @@
         "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点",
         "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Secure/Insecure 按证书状态判定（https 且证书干净、无混合内容才是 Secure；http 一律 Insecure），引擎在加载完成和加载停止时上报。只有单元测试和状态注入入口，没有用真实证书验证：本地测试站只有 http，要做需给测试站加 https 端口和自签证书。",
         "R3-8（2026-11-04，合并 c792cfc9）：Secure/Insecure 用真实证书验过：verify/visual-pairs/https-fixture/ 有 https 测试站和两张自签证书（信任用 Brk 自己的测试开关 BRK_TEST_TRUSTED_SPKI，不动钥匙串），原生场景 SiteSecurity-secure / -invalid（先出 Chromium 拦截页，继续后 Insecure）/ -mixed 通过；浮层第二页的原因文案核过。实测 Chromium 会把 https 页里的 http 图片自动升级，真正算 Insecure 的是表单提交到 http，Brk 现在也认。站台启动不带那个开关，拍不了证书正常那页。",
-        "R4-7 独立复核（2026-11-04）：证据不足。Native and manual behavior pass; the visual check does not: P36-a is 5.50% different from Arc and is being worked on by R4-3."
+        "R4-7 独立复核（2026-11-04）：证据不足。Native and manual behavior pass; the visual check does not: P36-a is 5.50% different from Arc and is being worked on by R4-3.",
+        "R4-3（2026-11-04，合并 2c8ca7cb）：站点控制浮层的尺寸常量按 Arc 重量；P36-a 5.4%→1.1%，剩余在侧栏（胶囊第二行、更新横幅、未加载的收藏图标）。"
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -10343,7 +10351,8 @@
       "remaining": [
         "Verify Launch Services/user confirmation and real external application delivery on this app bundle.",
         "Wire accurate current default status and error reporting; test cold-launch URL ordering.",
-        "W2-7 injects the control protocol input and does not prove the OS boundary."
+        "W2-7 injects the control protocol input and does not prove the OS boundary.",
+        "R4-4（2026-11-04，合并 79c2212f）：每次测试复制一份只声明 brk-test scheme 的 app 向 Launch Services 注册，用 open 真发链接：冷启动、热启动、Air Traffic Control 路由、默认去向四种情况通过（R44-LaunchServices）；结束后注销并删掉副本，用户的默认浏览器没变。Set as Default Browser 的当前状态显示和失败报错仍是打开设置时读一次，没有新证据。"
       ],
       "implementation": [
         "Sources/BrkApp/ExternalLinks.swift",
@@ -10429,7 +10438,8 @@
         "Add App Icon and finish runtime consumers; the six mounted panes and persistence alone do not complete their features.",
         "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
         "R3-2（2026-11-04，合并 05c81d7b）：Icon 页补上，各页开关接到了行为（见 A114–A117）。",
-        "R4-8 独立复核（2026-11-04）：通过。设置窗口有 General、Profiles、Max、Links、Shortcuts、Icon、Advanced 七页，没有账号页（排除项）。各页开关的实际效果分别在 A114、A115、A117、A118、A142 里判断。P38 各对图降到 2% 以内是 R4-3 的任务。"
+        "R4-8 独立复核（2026-11-04）：通过。设置窗口有 General、Profiles、Max、Links、Shortcuts、Icon、Advanced 七页，没有账号页（排除项）。各页开关的实际效果分别在 A114、A115、A117、A118、A142 里判断。P38 各对图降到 2% 以内是 R4-3 的任务。",
+        "R4-3（2026-11-04，合并 2c8ca7cb）：设置窗口内容高度按整像素取整；P38 各页 5–15%→2–6%，剩余的 0.9% 是 Arc 顶部多一个账号分页（Brk 有意不做）使整排分页错位，以及产品名、开关颜色（NSSwitch 用系统强调色 #0076F7，Arc 是 #438CF8）。"
       ],
       "implementation": [
         "Sources/BrkApp/SettingsWindowController.swift",
@@ -10613,7 +10623,8 @@
       ],
       "remaining": [
         "Cover the remaining intended shortcuts and alternates; verify conflicts and recording through actual controls, not only dispatching settings.",
-        "R3-2（2026-11-04）：录制、冲突提示、Remove Conflicting Shortcut 原来就有（单元测试）。未做：用真实按键操作录制框的原生测试；Go Back / Go Forward / Zoom Out 的第二个快捷键仍固定、编辑器不显示；Edit 菜单系统自带项不能改快捷键。"
+        "R3-2（2026-11-04）：录制、冲突提示、Remove Conflicting Shortcut 原来就有（单元测试）。未做：用真实按键操作录制框的原生测试；Go Back / Go Forward / Zoom Out 的第二个快捷键仍固定、编辑器不显示；Edit 菜单系统自带项不能改快捷键。",
+        "R4-4（2026-11-04，合并 79c2212f）：Go Back、Go Forward、Zoom Out、Developer Tools 的第二个快捷键和 Edit 菜单的 Undo 到 Select All 都能在编辑器里改，原生场景 R44-ShortcutKeys 用真实按键录制并在网页里验证、重启后保留。R4-3 把 Shortcuts 页分成 Arc 的 89 个动作和 More Shortcuts。待定：Arc 只让 Go Back/Go Forward/Developer Tools 的第二键和 Paste and Match Style 可改，Brk 多开放了几项，要不要收回。"
       ],
       "implementation": [
         "Sources/BrkSettings/Panes/ShortcutsPane.swift",
@@ -11271,7 +11282,8 @@
         }
       ],
       "remaining": [
-        "Add or verify Brk credits and packaged version or icon metadata, then capture the actual About panel."
+        "Add or verify Brk credits and packaged version or icon metadata, then capture the actual About panel.",
+        "R4-4（2026-11-04，合并 79c2212f）：About 的版本行带提交号，Chromium 版本正确，三个致谢链接可开（第三个是 CEF 和 CefSwift 许可证页），版权行保持现状；R44-About 通过。P39-a 5.3%，剩余是 Brk 自己的图标和名字、版本号、Chromium 154 对 156。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -11324,7 +11336,8 @@
       ],
       "remaining": [
         "Implement remaining in-scope later actions, validate actual effects and dynamic entries; accounting and setting writes do not prove feature behavior.",
-        "R3-5（2026-11-04，合并 e9f5e87d）：菜单栏可用行数 107→118、147→158，Help 和 Developer 子菜单补齐；Note 三项隐藏，New Easel 归 R3-3。"
+        "R3-5（2026-11-04，合并 e9f5e87d）：菜单栏可用行数 107→118、147→158，Help 和 Developer 子菜单补齐；Note 三项隐藏，New Easel 归 R3-3。",
+        "R4-4（2026-11-04，合并 79c2212f）：Arc 菜单表 189 行逐行核对（verify/completion/browser-basic-parent/r4-4-remaining/menus/menu-audit.tsv），每项有真实效果和测试；新做 Spaces 菜单末尾的 Space 列表和 Window 菜单末尾的窗口列表（R44-Menus）。未做：Extensions 菜单列出已装扩展（扩展数据只在打开站点控制时加载）。"
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -11366,7 +11379,8 @@
       ],
       "remaining": [
         "Establish exact interactions from an authenticated reference, then implement Brk-owned icon or badge behavior; do not add referral features.",
-        "R3-5（2026-11-04，合并 e9f5e87d）：下载时 Dock 图标底部有进度条（截图验证），下载完成时 Dock 下载文件夹弹一下（只有单元测试），Dock 右键菜单有 New Window / New Incognito Window。未做：下载数角标代码里设了但这台机器不显示（要给 Brk 开通知权限，属系统权限，待用户定）；Arc 那个不运行时也显示自选图标的 Dock 插件（验证要把 Brk 固定到 Dock）。"
+        "R3-5（2026-11-04，合并 e9f5e87d）：下载时 Dock 图标底部有进度条（截图验证），下载完成时 Dock 下载文件夹弹一下（只有单元测试），Dock 右键菜单有 New Window / New Incognito Window。未做：下载数角标代码里设了但这台机器不显示（要给 Brk 开通知权限，属系统权限，待用户定）；Arc 那个不运行时也显示自选图标的 Dock 插件（验证要把 Brk 固定到 Dock）。",
+        "R4-4（2026-11-04，合并 79c2212f）：照 Arc 加了 Dock 插件（scripts/dock-tile/），Brk 没运行时画 Icon 页选的图标；用不出现在 Dock 里的小程序加载它，7 项检查全过、图标逐像素一致。真实 Dock 里的最后一步要用户把 Brk 固定到 Dock（dock-tile/README.md）。带插件的 Brk 一运行 macOS 会弹 Dock Tile Extension Added 并列进登录项与扩展，这是系统行为，Arc 也一样。"
       ],
       "implementation": [
         "Sources/BrkApp/Lifecycle.swift",
@@ -11386,7 +11400,7 @@
       "arc_evidence": "anatomy-m 1.10 entry point `statusItem`",
       "description": "Menu bar icon that opens Little Arc",
       "historical_status": "not started",
-      "status": "missing",
+      "status": "excluded",
       "acceptance": "Expose a menu-bar status item that opens Little Arc and behaves predictably across app or window states.",
       "owner": "native-grounding",
       "required_checks": [
@@ -11405,7 +11419,8 @@
         }
       ],
       "remaining": [
-        "Add status-item lifecycle, menu and activation behavior, then verify using native system UI."
+        "Add status-item lifecycle, menu and activation behavior, then verify using native system UI.",
+        "R4-4（2026-11-04）：核对结论 Arc 1.170 没有菜单栏状态图标（设置页无开关、P41 实拍无图标、Arc 程序里没有创建状态图标的代码）。按完全复刻的目标记为排除；Brk 现有的状态图标去留和另外两样 Arc 没有的东西一起等用户定。"
       ],
       "implementation": [
         "Sources/BrkApp/Lifecycle.swift",
@@ -11416,7 +11431,8 @@
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
         "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d"
-      }
+      },
+      "decision": "Excluded on 2026-11-04: R4-4 checked three ways (Arc 1.170's General and Advanced panes have no related switch; the P41 capture of the real menu bar shows no Arc item; Arc's own binary has no status-item creation code, only Chromium's tray) — Arc 1.170 has no menu bar status item. Brk's existing status item is kept untouched pending the user's call on the three Brk-only extras (hide Space header, theme texture, status item)."
     },
     {
       "id": "A133",
@@ -11444,7 +11460,8 @@
       ],
       "remaining": [
         "Implement the agreed scripting subset and actual osascript checks, preserving private ownership and explicit JavaScript permissions.",
-        "R3-5（2026-11-04，合并 e9f5e87d）：脚本字典照 Arc（窗口、标签、Space；make/count/close/select/go back/go forward/reload/stop/execute/focus），所有修改走普通命令，execute 只在 Developer 子菜单的开关打开时运行。验证是在 Brk 自己的进程里用 NSAppleScript 跑同一份字典（外部 osascript 会弹系统授权框，没动系统设置）；记录在 verify/completion/r3-5-menus/applescript/。要补外部 osascript 证据需用户在系统设置里允许一次。"
+        "R3-5（2026-11-04，合并 e9f5e87d）：脚本字典照 Arc（窗口、标签、Space；make/count/close/select/go back/go forward/reload/stop/execute/focus），所有修改走普通命令，execute 只在 Developer 子菜单的开关打开时运行。验证是在 Brk 自己的进程里用 NSAppleScript 跑同一份字典（外部 osascript 会弹系统授权框，没动系统设置）；记录在 verify/completion/r3-5-menus/applescript/。要补外部 osascript 证据需用户在系统设置里允许一次。",
+        "R4-4（2026-11-04，合并 79c2212f）：补了说明和一键脚本 applescript/run-external-osascript.sh，试跑到查权限这一步按设计停下。最后一步要用户在自己的终端跑一次并点系统提示里的好，再提交结果文件。"
       ],
       "implementation": [
         "Sources/BrkApp/ExternalLinks.swift",
@@ -12238,7 +12255,8 @@
       "remaining": [
         "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
         "Arc 对照（run-20261103 P38）仍有差异或有意不同：P38-b: 已修；剩余为有意不同（Max 横幅插画自绘、本机工具选择行） | P38-f: 已修（剩余为数据或他组） | P38-i: 有意不同 | P38-c: 已修；剩余为有意不同（Brk 多出的三项功能卡）",
-        "R4-8 独立复核（2026-11-04）：缺陷。开关本身能用、不要 API key。缺陷：Arc 也有的三张卡，Brk 的说明文字改成了 Brk 自己的入口，和 Arc 不一致——Tidy Tabs：Arc“Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.”，Brk“Choose Organize Today Tabs in the Tabs menu…”；Instant Links：Arc“Press Shift + Enter for any web search to instantly open the top result. You can also search multiple queries!”，Brk“Choose Instant Links… in the Tabs menu or the Command Bar and describe a page…”；5-Second Previews：Arc“…hover over links on certain websites. Or hold Shift while hovering to preview any link.”，Brk“A short summary appears when you hover over a link deliberately. Never in private windows.”（MaxPane.swift:190-192）。这三处要等 A136、A137、A139 的入口改成 Arc 的样子后一起改。ChatGPT in the Command Bar 一卡改名为 Ask Max in the Command Bar，算不算有意不同需要父任务定。"
+        "R4-8 独立复核（2026-11-04）：缺陷。开关本身能用、不要 API key。缺陷：Arc 也有的三张卡，Brk 的说明文字改成了 Brk 自己的入口，和 Arc 不一致——Tidy Tabs：Arc“Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.”，Brk“Choose Organize Today Tabs in the Tabs menu…”；Instant Links：Arc“Press Shift + Enter for any web search to instantly open the top result. You can also search multiple queries!”，Brk“Choose Instant Links… in the Tabs menu or the Command Bar and describe a page…”；5-Second Previews：Arc“…hover over links on certain websites. Or hold Shift while hovering to preview any link.”，Brk“A short summary appears when you hover over a link deliberately. Never in private windows.”（MaxPane.swift:190-192）。这三处要等 A136、A137、A139 的入口改成 Arc 的样子后一起改。ChatGPT in the Command Bar 一卡改名为 Ask Max in the Command Bar，算不算有意不同需要父任务定。",
+        "R4-3（2026-11-04，合并 2c8ca7cb）：Max 页改成和 Arc 一样只有 Enable 卡片和六项功能（P38-max-on 5.2%、P38-max-list 6.6%）；本机 AI 工具下拉和 Ask on Page / Browse for Me / Translate 三个开关挪到 Advanced → More Settings…。说明文字等 R4-11 把入口改成 Arc 的之后换成 Arc 原文；ChatGPT in the Command Bar 这张保留 Brk 的提供者名。"
       ],
       "implementation": [
         "Sources/BrkSettings/SettingsPanes.swift",
