@@ -151,6 +151,7 @@ struct OverlayMetricsTable: MetricGroup {
 private let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b/c and Q01-a/b"
 
 struct CommandBarOverlayMetrics: MetricGroup {
+    let backdropBlur = Metric(22.0, .guess("verify/visual-pairs/run-20261103/P29/P29-c-arc.png: no text of the sidebar is readable through Arc's dark card"))
     let cornerRadius = Metric(Metrics.urlPill.cornerRadius.value, .derived(
         rule: "the URL pill's radius, so the bar opened over the pill covers it edge to edge",
         from: ["URL pill corner radius"]))
