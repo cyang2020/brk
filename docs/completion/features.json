@@ -2924,7 +2924,7 @@
       "arc_evidence": "rows 96 to 98, 157 to 160",
       "description": "Page navigation with Arc's key priorities",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Back, forward, normal/forced reload and stop target the focused loaded page, including split and Peek, honor shortcut priorities, and preserve focus after navigation.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -2941,10 +2941,39 @@
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
           "log": "verify/swift/focus-parent/native/logs/N1.log",
           "scenario": "N1"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): ReloadSequenceTests 2, KeyRoutingSpecTests 17, PageBrowsingTests 5, BrowserBasicTests 21. Reload sequencing, key routing and the browser-basic page commands."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only N1,BB2,I2,W2-6,PB1H --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: N1 PASS, BB2 PASS, I2 PASS, W2-6 PASS, PB1H PASS. N1: repeated Cmd+R reaches the real page and keeps focus. BB2: same-tab Cmd+L then back and forward land on the right documents; Peek is the target of Copy URL and zoom. I2: split panes keep their own focus. PB1/PB1H: every routed chord, including back, forward, reload, forced reload and stop, follows its priority exactly once (routing receipts, not navigation effects). Stop, forced cache bypass and split/Peek reload targets are not asserted by any scenario; the manual entry covers them."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only PB1 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: PB1 PASS. Reruns: PB1: FAIL in r47-page-a (timed out after 4.0 s waiting for alt+cmd+left reached the page's key handler) then PASS in r47-rerun-1. N1: repeated Cmd+R reaches the real page and keeps focus. BB2: same-tab Cmd+L then back and forward land on the right documents; Peek is the target of Copy URL and zoom. I2: split panes keep their own focus. PB1/PB1H: every routed chord, including back, forward, reload, forced reload and stop, follows its priority exactly once (routing receipts, not navigation effects). Stop, forced cache bypass and split/Peek reload targets are not asserted by any scenario; the manual entry covers them."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "Reviewer probe site counting requests per path (a script with Cache-Control max-age=3600). Menu Reload: page +1, script +0 (served from cache); menu Force Reload: page +1, script +1; window-server Cmd+R: script +0; window-server Cmd+Shift+R: script +1. Menu Back/Forward after Cmd+L in the same tab returned to a.html then b.html (canGoForward true after Back). Stop on a page whose image takes 30 s: loading true before, false 1 s after menu Stop (a036-after-stop.png). Split: Reload with the right pane focused hit only b.html; after menu Split Pane 1, Force Reload hit only a.html and its script, focus stayed on the left page. Peek over the split: Reload hit only the Peek page (md.html), focus stayed in Peek (a036-peek-reload.png). Private windows were not probed."
         }
       ],
       "remaining": [
-        "Verify real back/forward/stop and forced cache-bypass behavior, split/Peek targets and private contexts; existing native evidence covers only part of the row."
+        "Verify real back/forward/stop and forced cache-bypass behavior, split/Peek targets and private contexts; existing native evidence covers only part of the row.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met: back, forward, normal and forced reload and stop act on the focused page in a tab, a split pane and Peek, with key priority and focus kept. Stop, forced cache bypass and split/Peek targets rest on the reviewer manual probe, not on a scenario."
       ],
       "implementation": [
         "Sources/BrkBase/Page.swift",
@@ -2967,7 +2996,7 @@
       "arc_evidence": "anatomy-m 1.14, 2.2",
       "description": "App wins, page wins, or page first then app on a second press",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "App priority, page priority and page-first/second-press behavior work for every implemented chord and user override, with preventDefault, repeat, native editors, distinct windows and exactly-once dispatch.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3038,11 +3067,33 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on N1, BO1, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): KeyRoutingSpecTests 17, PressCorrelatorTests 8, PageBrowsingTests 5, ActionsTests 13, Wave2AppTests 11. Routing table, press-twice correlation and every-chord priority table."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only PB1 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: PB1 PASS. Reruns: PB1: FAIL in r47-page-a (timed out after 4.0 s waiting for alt+cmd+left reached the page's key handler) then PASS in r47-rerun-1. PB1 presses every routable chord on a page that swallows keys and on one that does not, checks which side acts, exactly once, and that unbound Chrome accelerators open no Chrome UI. PB1R: held keys repeat only repeating actions; window-server presses take the same routes. PB1H: after Hide and return, Cmd chords reach the page again. BO1: Downloads app priority, explicit page override, remap, native editor and a second window. W2-9: a remapped shortcut routes and the old chord reaches the page."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only PB1R,PB1H,BO1,N1,N2,W2-9 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: PB1R PASS, PB1H PASS, BO1 PASS, N1 PASS, N2 PASS, W2-9 PASS. PB1 presses every routable chord on a page that swallows keys and on one that does not, checks which side acts, exactly once, and that unbound Chrome accelerators open no Chrome UI. PB1R: held keys repeat only repeating actions; window-server presses take the same routes. PB1H: after Hide and return, Cmd chords reach the page again. BO1: Downloads app priority, explicit page override, remap, native editor and a second window. W2-9: a remapped shortcut routes and the old chord reaches the page."
         }
       ],
       "remaining": [
         "Broader affected Chrome accelerator and physical repeat coverage remains; BO1/N1/N2 do not prove every implemented chord.",
-        "R3-7（2026-11-04，合并 00800f02）：清单里能路由的 94 个组合在吞键页和不处理页上各按一遍（PB1，173 次，逐次核对执行的动作、只执行一次、页面收到几次）；按住不放的自动重复（PB1R）和真实键盘事件都过；Cmd+H 隐藏再回来后 Chromium 把页面输入视图一直藏着、Cmd 快捷键跳过页面的真实 bug 已修（PB1H）。未证明：Chrome 自己的加速键拦截代码没有被真实触发过（这台机器上 15 个候选组合都没到 Chrome）。"
+        "R3-7（2026-11-04，合并 00800f02）：清单里能路由的 94 个组合在吞键页和不处理页上各按一遍（PB1，173 次，逐次核对执行的动作、只执行一次、页面收到几次）；按住不放的自动重复（PB1R）和真实键盘事件都过；Cmd+H 隐藏再回来后 Chromium 把页面输入视图一直藏着、Cmd 快捷键跳过页面的真实 bug 已修（PB1H）。未证明：Chrome 自己的加速键拦截代码没有被真实触发过（这台机器上 15 个候选组合都没到 Chrome）。",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met by PB1/PB1R/PB1H/BO1/W2-9 in this review. PB1 failed once in the first batch and passed when rerun alone (REVIEW.md, section on scenarios that passed only on rerun: a timing gap in the scenario's own cleanup after Option+Cmd+I opens DevTools, not a reproduced product fault); Chrome's own accelerator interception was still not triggered on this machine (no candidate chord reached Chrome), as the ledger already says."
       ],
       "implementation": [
         "Sources/BrkDomain/KeyRouting.swift",
@@ -3079,7 +3130,7 @@
       "arc_evidence": "rows 105 to 110",
       "description": "Zoom in, out, reset with Chrome's zoom steps",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Zoom in/out/reset follows Chrome preset percentages and limits, displays the effective value, and affects the focused page with correct key priority.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -3122,10 +3173,32 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB2, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): BrowserBasicTests 21, KeyRoutingSpecTests 17. testZoomUsesChromePresetsAndClampsAtBothLimits covers the Chrome preset ladder and both limits."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only BB2 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: BB2 PASS. BB2: two Zoom In steps read back 110 then 125 in the URL pill and the real DOM width shrank by the 125% ratio (1042/833); Zoom In inside Peek kept Peek focused. PB1: zoom chords follow their priority. The 25%/500% limits are unit-only; per-origin and split rendered scale are not covered (not in acceptance)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only PB1 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: PB1 PASS. Reruns: PB1: FAIL in r47-page-a (timed out after 4.0 s waiting for alt+cmd+left reached the page's key handler) then PASS in r47-rerun-1. BB2: two Zoom In steps read back 110 then 125 in the URL pill and the real DOM width shrank by the 125% ratio (1042/833); Zoom In inside Peek kept Peek focused. PB1: zoom chords follow their priority. The 25%/500% limits are unit-only; per-origin and split rendered scale are not covered (not in acceptance)."
         }
       ],
       "remaining": [
-        "Finish native limit/origin/profile and split/Peek rendered-scale coverage."
+        "Finish native limit/origin/profile and split/Peek rendered-scale coverage.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met: presets and limits (unit), effective value shown and real page scale (native), focused-page and Peek target, key priority."
       ],
       "implementation": [
         "Sources/BrkBase/BrowserOperations.swift",
@@ -3234,7 +3307,7 @@
       "arc_evidence": "rows 45 to 47",
       "description": "Copy the URL, as Markdown, or as a quote",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Copy URL, URL as Markdown and URL as Quote write the expected clipboard text for the focused tab or Peek without navigation or profile leakage.",
       "owner": "platform-grounding",
       "required_checks": [
@@ -3242,10 +3315,33 @@
         "native",
         "manual"
       ],
-      "verification": [],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): BrowserBasicTests 21, SettingsSpecTests 14. Copy formats and the Shared Quotes switch (test_theSwitchDecidesWhetherCopyURLReadsTheHighlight)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only BB2,SettingsQuotes --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: BB2 PASS, SettingsQuotes PASS. BB2: plain, Markdown (title with brackets escaped) and quote formats on the pasteboard, Peek Copy URL copies the Peek page. SettingsQuotes: Shared Quotes on links the highlighted text, off copies the plain address."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "On a Peek page titled \"A [b] *c* _d_\": the three Edit menu items through the real menu items and the three window-server chords (Cmd+Shift+C, Opt+Shift+Cmd+C, Ctrl+Shift+Cmd+C) each wrote: http://127.0.0.1:8797/md.html; [A \\[b\\] *c* _d_](http://127.0.0.1:8797/md.html); \"> A [b] *c* _d_\" + newline + URL. The page was not reloaded (request count unchanged). Clipboard saved before and restored after the session."
+        }
+      ],
       "remaining": [
         "Verify native pasteboard contents from menu and keyboard for all three formats, including Peek and titles requiring Markdown escaping.",
-        "Confirm quote semantics against authenticated reference; current quote is title plus URL, not selected page text."
+        "Confirm quote semantics against authenticated reference; current quote is title plus URL, not selected page text.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. Notes: Markdown escaping covers [ and ] only, * and _ stay as typed (they render as emphasis in some Markdown viewers); whether Arc formats Copy URL as Quote the same way was not compared with Arc."
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3266,7 +3362,7 @@
       "arc_evidence": "rows 113 to 120",
       "description": "View source, DevTools, inspect, console, network, developer mode",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "View Source, DevTools toggle, element inspection, console, network, JavaScript from Apple Events setting and developer mode execute their named behavior on the correct page and close safely.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3302,13 +3398,35 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on BO2, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): MenuHelpScriptingTests 9, MenuHelpScriptingAppTests 11, ActionsTests 13. Developer submenu rows, Developer Mode needs a site, Apple Events switch persisted."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only BO3,PB7 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: BO3 PASS, PB7 PASS. BO3: real View Source and DevTools windows, inspect request, Console and Network panels selected, auxiliary windows close with the owning page. PB7: Inspect Elements picks the clicked node without firing the page click; typing in the DevTools console reaches the page."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "Menu Developer Tools opened one new window (a041-devtools-window-134368.png) showing the opener-probe page's own DOM; the same item again closed it (visible window list back to the previous set). Menu Turn on Developer Mode for this site: URL pill text went from 127.0.0.1 to http://127.0.0.1:8797/open.html, developerMode true; again: back. Allow JavaScript from Apple Events: off, in-process AppleScript `execute active tab of window 1 javascript ...` failed with -10004 and the menu hint; on, returned \"opener-probe / 42\"; off again, -10004."
         }
       ],
       "remaining": [
         "JavaScript from Apple Events scripting and Arc Developer Mode remain explicitly unsupported. Inspect-point node selection, auxiliary input and reparenting need broader native verification; BO3 proves the request, actual windows, panel selection and source-close cleanup.",
         "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：站点的 Developer Mode 打开时地址胶囊和工具栏地址显示完整网址，按站点记住。菜单栏 View > Developer > Toggle Developer Mode（⌃D）仍是灰的，没接到按站点的开关，待核实 Arc 里它是否就是当前站点的开关。",
         "R3-5（2026-11-04，合并 e9f5e87d）：View > Developer 子菜单按真实 Arc 的七项做齐，最后一项 Turn on/off Developer Mode for this site（⌃D）接到按站点的开关，Allow JavaScript from Apple Events 是会保存的打勾开关（默认关）。剩余归 R3-7：检查元素的节点选择、辅助输入。",
-        "R3-7（2026-11-04，合并 00800f02）：Inspect Elements 进入 DevTools 的点选元素模式，点 #target-b 只选中那个节点且不触发页面自己的点击（PB7）；DevTools 控制台输入能到页面。未做：DevTools 的停靠和分离。"
+        "R3-7（2026-11-04，合并 00800f02）：Inspect Elements 进入 DevTools 的点选元素模式，点 #target-b 只选中那个节点且不触发页面自己的点击（PB7）；DevTools 控制台输入能到页面。未做：DevTools 的停靠和分离。",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. DevTools docking/undocking is not covered (not in acceptance)."
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3343,7 +3461,7 @@
       "arc_evidence": "rows 99, 100",
       "description": "Reload after clearing site data",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Clear Cookies and Refresh and Clear Cache and Refresh delete the explicitly scoped data in the originating profile, wait for completion, and reload only the still-valid target page.",
       "owner": "batch2-privacy-data",
       "required_checks": [
@@ -3420,10 +3538,25 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on DataCookiesRefreshRestart, DataCacheRefreshRestart, DataSiteStorageRestart, SitePolicy-clear, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): ProfileDataStoreTests 2, SitePolicyTests 19, DataLifecycleTests 2. Scoped clearing requests and completion."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-sites --only DataCookiesRefreshRestart,DataCacheRefreshRestart,DataSiteStorageRestart,SitePolicy-clear,SitePolicy-cache,SitePolicy-domain-cookies --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-sites/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-sites; the runner writes to verify/completion/browser-basic-parent/r47-sites/, moved here unchanged; the actual --only list of the run is in r47-sites-manifest.json). Scenarios: DataCookiesRefreshRestart PASS, DataCacheRefreshRestart PASS, DataSiteStorageRestart PASS, SitePolicy-clear PASS, SitePolicy-cache PASS, SitePolicy-domain-cookies PASS. Clear Cookies and Refresh removes host, domain, all-path and HttpOnly cookies while origin storage and HTTP cache stay; Clear Cache and Refresh evicts the originating profile's HTTP cache while cookies and the other profile stay; both wait for completion and reload the still-valid page; values read after restart."
         }
       ],
       "remaining": [
-        "None within the accepted slice scope. Parent unified merged verification remains separate; the exact supported scope and audit limits are stated in REPORT.md."
+        "None within the accepted slice scope. Parent unified merged verification remains separate; the exact supported scope and audit limits are stated in REPORT.md.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. HTTP cache clearing is profile-wide by design (Chromium has no per-origin cache deletion), as the ledger states."
       ],
       "implementation": [
         "Sources/BrkCEF/SiteData.swift",
@@ -3581,7 +3714,8 @@
       ],
       "remaining": [
         "Default-profile Cast is explicitly unavailable before get_media_router after repeated pinned-CEF quit traps; custom-profile enumeration and clean quit passed BO5C. No receiver exists on this Mac; real successful route creation/control/termination is unverified. Raw ownership fixtures do not complete this gate. HTTP/HTTPS tab mirroring is rejected by the pinned API. Save-panel gesture belongs to file-panels; printer submission and physical Share chooser execution remain gaps.",
-        "R3-7（2026-11-04，合并 00800f02）：默认 Profile 下 Cast 可用：接收器发现改用 Brk 自己建的专用 Profile 目录 Profile-brk-cast-receivers（父任务接受这个隐藏目录），不再碰退出时会崩的全局服务；BO5 看到真实的接收器通知并干净退出。未验证：这台 Mac 附近没有 Cast 接收器，真正建立和结束一条投屏没试过（硬件条件）。"
+        "R3-7（2026-11-04，合并 00800f02）：默认 Profile 下 Cast 可用：接收器发现改用 Brk 自己建的专用 Profile 目录 Profile-brk-cast-receivers（父任务接受这个隐藏目录），不再碰退出时会崩的全局服务；BO5 看到真实的接收器通知并干净退出。未验证：这台 Mac 附近没有 Cast 接收器，真正建立和结束一条投屏没试过（硬件条件）。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: Cast with a real receiver (no receiver near this Mac, so selecting and controlling one was never done); printer submission; the Share chooser and the Save Page As panel confirmed by real input. The required manual check was not done by the reviewer."
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3616,7 +3750,7 @@
       "arc_evidence": "rows 121, 122",
       "description": "Ctrl+Cmd+F; Esc leaves the current context",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Ctrl+Cmd+F enters/leaves native fullscreen; Escape closes the current overlay first and exits page/video or window fullscreen when appropriate, without activating a hidden CEF host.",
       "owner": "batch2-browser-ops",
       "required_checks": [
@@ -3652,11 +3786,33 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on BO4, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): PageFullscreenTransitionTests 5, ChromeFullscreenTransitionTests 4. Transition ordering and retired documents."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-a --only BO4,BO4N,PB3,N2 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-a/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-a; the runner writes to verify/completion/browser-basic-parent/r47-page-a/, moved here unchanged; the actual --only list of the run is in r47-page-a-manifest.json). Scenarios: BO4 PASS, BO4N PASS, PB3 PASS, N2 PASS. BO4: document and playing-video fullscreen reach the window, first Escape closes the overlay, second leaves fullscreen, focus returns. BO4N: native shortcut and Escape. PB3: window-server Ctrl+Cmd+F, the real green button and Escape (physical gestures ran, no \"not permitted\" skip in the log), a toggle during the animation, a fullscreen page switched away or closed, nested window+document fullscreen. N2: no CEF host window becomes key."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "Front app confirmed as the reviewer's Brk, then window-server Ctrl+Cmd+F: fullscreen true, not transitioning, same focused page (a045-fullscreen-entered.png); window-server Escape: fullscreen false, same focused page."
         }
       ],
       "remaining": [
         "Physical key/traffic-light gestures and broader interrupted/hidden-source fullscreen transitions remain unverified.",
-        "R3-7（2026-11-04，合并 00800f02）：真实 Ctrl+Cmd+F、真实绿色按钮、真实 Esc 进出全屏；动画中再按一次不再丢失，动画结束后补做；文档全屏的标签被切走或关掉时窗口退出全屏（PB3）。"
+        "R3-7（2026-11-04，合并 00800f02）：真实 Ctrl+Cmd+F、真实绿色按钮、真实 Esc 进出全屏；动画中再按一次不再丢失，动画结束后补做；文档全屏的标签被切走或关掉时窗口退出全屏（PB3）。",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met."
       ],
       "implementation": [
         "Sources/BrkDomain/Actions.swift",
@@ -3730,7 +3886,8 @@
       ],
       "remaining": [
         "Broader web spelling/grammar, substitutions, speech and font execution remains incomplete or unverified; AppKit owns native font-manager validation. Cross-origin transformation selection validation and broader native extended-action execution remain incomplete.",
-        "R3-7（2026-11-04，合并 00800f02）：网页编辑区里 Check Document Now 和拼写面板（Change、Ignore）、语法检查、边打字检查（红色波浪线出现和消失）、Substitutions 面板的替换按钮、Start/Stop Speaking、Bold/Italic/Underline 都能用（PB4）。未做：边打字自动替换和自动纠错（会和网页自己的编辑逻辑打架）；Smart Copy/Paste 和 Data Detectors 保持灰（网页没有对应物）；这些项在真实 Arc 里是灰是亮没核对。"
+        "R3-7（2026-11-04，合并 00800f02）：网页编辑区里 Check Document Now 和拼写面板（Change、Ignore）、语法检查、边打字检查（红色波浪线出现和消失）、Substitutions 面板的替换按钮、Start/Stop Speaking、Bold/Italic/Underline 都能用（PB4）。未做：边打字自动替换和自动纠错（会和网页自己的编辑逻辑打架）；Smart Copy/Paste 和 Data Detectors 保持灰（网页没有对应物）；这些项在真实 Arc 里是灰是亮没核对。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: automatic substitutions and autocorrect while typing are not implemented in web editors (ledger remaining); which Edit items Arc enables or greys was never compared; the reviewer did not do the required manual check of enabled/disabled states."
       ],
       "implementation": [
         "Sources/BrkApp/MainMenu.swift",
@@ -3762,7 +3919,7 @@
       "arc_evidence": "row 161",
       "description": "Cmd+Y shows the full history",
       "historical_status": "partial",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Cmd+Y presents the profile history with search/open/remove behavior and an explicit complete retention/visit model; private visits never appear or persist.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -3833,10 +3990,39 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB5, W2-12, C-HISTORY, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): BrowserBasicTests 21, BrowserBasicIntegrationTests 4, HistoryPageViewTests 3. History ledger, distinct visits across restart; History page search, visit actions and checks."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-b --only W2-12,BB5,W2-3,W2-11P --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-b/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-b; the runner writes to verify/completion/browser-basic-parent/r47-page-b/, moved here unchanged; the actual --only list of the run is in r47-page-b-manifest.json). Scenarios: W2-12 PASS, BB5 PASS, W2-3 PASS, W2-11P PASS. W2-12: Cmd+Y opens the History page as a Today tab listing real visits. BB5: repeated visits are all kept and survive restart. W2-3 and W2-11P: incognito visits are absent after restart. C-HISTORY: clearing a custom profile's history keeps its site storage."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only C-HISTORY --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: C-HISTORY PASS. Reruns: C-HISTORY: FAIL in r47-page-b (after the scenario: exit did not exit within 10 s of quit (killed)) then PASS in r47-rerun-1. W2-12: Cmd+Y opens the History page as a Today tab listing real visits. BB5: repeated visits are all kept and survive restart. W2-3 and W2-11P: incognito visits are absent after restart. C-HISTORY: clearing a custom profile's history keeps its site storage."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "After visiting a, b, md and cache pages: window-server Cmd+Y opened History with four rows; key-code typing \"page\" in the focused search field left the two matching visits (a047-history-search-keycodes.png); a window-server click on \"A page js\" opened it as a new current tab; a window-server right-click on that newest visit showed \"More from this site / Remove from history\" (a047-history-row-menu.png) and clicking Remove took out exactly that visit while the older visit to the same page stayed (before 5 rows, after 4)."
         }
       ],
       "remaining": [
-        "Finish native History search/open/remove UI coverage and large-ledger performance/pagination behavior."
+        "Finish native History search/open/remove UI coverage and large-ledger performance/pagination behavior.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met for search, open, remove, the retained visit model and private visits. Not covered: very large history performance; the Q05-a pair is still 9.11% different from Arc (R4-2). Observation: the History tab itself is not restored after relaunch."
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -4148,7 +4334,8 @@
       ],
       "remaining": [
         "Anonymous nonempty URL popup opens retain domain tabs and therefore lose native opener/geometry. Native-child download/dialog forwarding and native named/empty creation from an already hidden private source remain incomplete or unverified; BO2 proves retention after hiding.",
-        "R3-7（2026-11-04，合并 00800f02）：前台页面发起的带尺寸参数的弹窗是真正的弹出窗口，保留 window.opener 和请求的尺寸位置（520×380 在 240,180；原来是 800×600 放角落）；弹窗里的 alert/confirm 挂在弹窗自己窗口上；弹窗里的下载进打开者的下载目录和 Library（PB5）。未做：已隐藏的私密页面发起的具名或空白弹窗。"
+        "R3-7（2026-11-04，合并 00800f02）：前台页面发起的带尺寸参数的弹窗是真正的弹出窗口，保留 window.opener 和请求的尺寸位置（520×380 在 240,180；原来是 800×600 放角落）；弹窗里的 alert/confirm 挂在弹窗自己窗口上；弹窗里的下载进打开者的下载目录和 Library（PB5）。未做：已隐藏的私密页面发起的具名或空白弹窗。",
+        "R4-7 独立复核（2026-11-04）：缺陷。Defect: a plain window.open(url) from a page opens a tab without window.opener; Chrome (and so Arc) keeps the opener for this case unless the page asks for noopener, and sign-in or payment pages that post back to their opener break. The ledger already lists \"anonymous nonempty URL popups ... lose native opener\". Also still open per the ledger: named/empty popups from an already hidden private page."
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -4181,7 +4368,7 @@
       "arc_evidence": "Advanced \"When opening Arc, restore windows from previous session\"",
       "description": "Reopens windows, spaces, tabs; loads lazily",
       "historical_status": "done",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Restart restores standard windows/spaces/tabs/geometry lazily when enabled, honors the restore-windows setting when disabled, and never restores private or Little Brk session data.",
       "owner": "batch-browser-basic",
       "required_checks": [
@@ -4258,10 +4445,39 @@
           "command": "python3 verify/completion/browser-basic-parent/run-native.py native-sites-combined --run-timeout 900",
           "artifact": "verify/completion/browser-basic-parent/native-sites-combined/REPORT.md",
           "scope": "Combined native regression on main a485d69 (129 scenarios: 123 PASS, 5 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/native-sites-combined-manifest.json). This row relies on BB3, 9, all PASS. Coverage is their assertions, not their titles."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): WindowsSpecTests 20, BrowserBasicTests 21, IdentityIntegrationTests 15. test_littleArcHoldsOneScratchTabAndIsNotSaved; restore-off; v3 restore."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-b --only 9,R8,BB3,W2-3,I3 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-b/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-b; the runner writes to verify/completion/browser-basic-parent/r47-page-b/, moved here unchanged; the actual --only list of the run is in r47-page-b-manifest.json). Scenarios: 9 PASS, R8 PASS, BB3 PASS, W2-3 PASS, I3 PASS. 9: restart restores spaces, Pinned, Today, current tab and sidebar width, and only the current tab loads. R8: a window saved off screen reopens on screen. BB3: restore-off reopens one window and loads no saved page. W2-3: the incognito window and tabs are gone after restart. I1: two windows restore their own URLs. I3: restart replays no attachment request."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only I1 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: I1 PASS. Reruns: I1: FAIL in r47-page-b (quit before restart: did not exit within 10 s of quit (killed); after the scenario: exit d) then PASS in r47-rerun-1. 9: restart restores spaces, Pinned, Today, current tab and sidebar width, and only the current tab loads. R8: a window saved off screen reopens on screen. BB3: restore-off reopens one window and loads no saved page. W2-3: the incognito window and tabs are gone after restart. I1: two windows restore their own URLs. I3: restart replays no attachment request."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "With a Little Arc window holding b.html?little and a standard window with seven tabs and a split: flush, quit, relaunch without a start URL. Back came one standard window only (no Little Arc), its Today tabs in order, one loaded page (the current one: one new request for open.html, none for a.html, b.html or the Little Arc page)."
         }
       ],
       "remaining": [
-        "Require the complete final native identity/session suite before promotion."
+        "Require the complete final native identity/session suite before promotion.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. Little Arc not restored was checked by the reviewer by hand; no scenario asserts it."
       ],
       "implementation": [
         "Sources/BrkDomain/Codec.swift",
@@ -7850,7 +8066,8 @@
       ],
       "remaining": [
         "None within the accepted slice scope. Parent unified merged verification remains separate; the exact supported scope and audit limits are stated in REPORT.md.",
-        "DataExtensionProfiles (extension catalog, pins and enable state per profile across restart) passes on the slice branch and in the ninth integration run but failed twice on the integrated tree with the restored window holding no focused page; intermittent, cause not attributed."
+        "DataExtensionProfiles (extension catalog, pins and enable state per profile across restart) passes on the slice branch and in the ninth integration run but failed twice on the integrated tree with the restored window holding no focused page; intermittent, cause not attributed.",
+        "R4-7 独立复核（2026-11-04）：缺陷。Defect (D3 in REVIEW.md): DataExtensionProfiles failed in the batch and again when rerun alone. After the restart with the current tab in a custom-profile Space, the window is key and the document is ready, but keyboard focus stays in the sidebar list (focusedPage nil, first responder BrkSidebar.ListDocumentView), so the per-profile extension state after restart is never checked. The ledger already records two earlier failures of this kind. Whether a user sees it without the harness was not checked by hand. Also missing: no scenario shows that each profile's own Favorites, default search engine and archive time are actually used (W2-1-edit only shows the edited values persist)."
       ],
       "implementation": [
         "Sources/BrkCEF/CEFEngine.swift",
@@ -7884,7 +8101,7 @@
       "arc_evidence": "row 19",
       "description": "A window with no saved data",
       "historical_status": "planned",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Incognito uses off-the-record contexts; no private tabs/history/archive/download metadata persist, private links/popups retain context, last-window disposal resets the private session, and explicitly downloaded files may remain.",
       "owner": "batch2-privacy-data",
       "required_checks": [
@@ -7987,10 +8204,46 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on DataPrivateExpiry, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): PrivateNavigationTests 3, DataLifecycleTests 2, TransfersTests 11. Private opener ownership, private epoch revocation."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-page-b --only W2-3,W2-11P,W2-P1,W2-P1C,W2-P2,W2-P2C --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-page-b/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-page-b; the runner writes to verify/completion/browser-basic-parent/r47-page-b/, moved here unchanged; the actual --only list of the run is in r47-page-b-manifest.json). Scenarios: W2-3 PASS, W2-11P PASS, W2-P1 PASS, W2-P1C PASS, W2-P2 PASS, W2-P2C PASS. Off-the-record browsing, tabs and window gone after restart, history and archive without the private visit; private downloads keep the file but no record; Option+Cmd links and hidden-page popups stay private (Default and custom profile); closing the last private window resets every storage class without quitting and the disk and unified-log audit finds no marker."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-profiles-files --only DataPrivateExpiry,SitePolicy-private-reset --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-profiles-files/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-profiles-files; the runner writes to verify/completion/browser-basic-parent/r47-profiles-files/, moved here unchanged; the actual --only list of the run is in r47-profiles-files-manifest.json). Scenarios: DataPrivateExpiry PASS, SitePolicy-private-reset PASS. Off-the-record browsing, tabs and window gone after restart, history and archive without the private visit; private downloads keep the file but no record; Option+Cmd links and hidden-page popups stay private (Default and custom profile); closing the last private window resets every storage class without quitting and the disk and unified-log audit finds no marker."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-media-ext --only Audio2 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-media-ext/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-media-ext; the runner writes to verify/completion/browser-basic-parent/r47-media-ext/, moved here unchanged; the actual --only list of the run is in r47-media-ext-manifest.json). Scenarios: Audio2 PASS. Off-the-record browsing, tabs and window gone after restart, history and archive without the private visit; private downloads keep the file but no record; Option+Cmd links and hidden-page popups stay private (Default and custom profile); closing the last private window resets every storage class without quitting and the disk and unified-log audit finds no marker."
+        },
+        {
+          "kind": "static",
+          "result": "pass",
+          "command": "python3 verify/completion/review-r4/page-sites/static/a094-private-receipts.py",
+          "artifact": "verify/completion/review-r4/page-sites/static/a094-private-receipts.json",
+          "scope": "Re-reads the reviewer's runs: source and binary hashes still match this checkout, every private scenario's latest result is PASS, and the DataPrivateExpiry audit lists the owned files with zero marker hits and a successful unified-log query. Evidence integrity only."
         }
       ],
       "remaining": [
-        "None within the accepted slice scope. Parent unified merged verification remains separate; the exact supported scope and audit limits are stated in REPORT.md."
+        "None within the accepted slice scope. Parent unified merged verification remains separate; the exact supported scope and audit limits are stated in REPORT.md.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met."
       ],
       "implementation": [
         "Sources/BrkCEF/CEFEngine.swift",
@@ -8024,7 +8277,7 @@
       "arc_evidence": "Profiles pane \"Privacy and Security\", \"Clear Browsing Data\"",
       "description": "Per-profile privacy settings",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Per-profile privacy controls and confirmed Clear Browsing Data remove only the requested data classes/scope, report completion/errors, work for default/custom profiles, and do not delete a live profile as a side effect.",
       "owner": "batch2-privacy-data",
       "required_checks": [
@@ -8082,10 +8335,32 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on DataProfileClearRestart, DataCustomProfileClearRestart, DataProtectedOperations, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): ProfilesSpecTests 10, ProfileDataStoreTests 2, DataLifecycleTests 2. testProfileClearIsIndependentOfLoadedPagesAndDeletionAndOnlyAcknowledgesRequestedHistory; testClearHistoryCompletionIsScopedAndCannotRecreateDeletedProfile."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-profiles-files --only DataProfileClearRestart,DataCustomProfileClearRestart,DataProtectedOperations --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-profiles-files/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-profiles-files; the runner writes to verify/completion/browser-basic-parent/r47-profiles-files/, moved here unchanged; the actual --only list of the run is in r47-profiles-files-manifest.json). Scenarios: DataProfileClearRestart PASS, DataCustomProfileClearRestart PASS, DataProtectedOperations PASS. Profile clearing keeps the profile record, settings, Favorites and extensions and leaves the other profile alone; custom-profile cookies, cache and history clear across origins while Default survives restart; downloads and pending output block clearing; clearing history keeps site storage."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-rerun-1 --only C-HISTORY --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-rerun-1/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-rerun-1; the runner writes to verify/completion/browser-basic-parent/r47-rerun-1/, moved here unchanged; the actual --only list of the run is in r47-rerun-1-manifest.json). Scenarios: C-HISTORY PASS. Reruns: C-HISTORY: FAIL in r47-page-b (after the scenario: exit did not exit within 10 s of quit (killed)) then PASS in r47-rerun-1. Profile clearing keeps the profile record, settings, Favorites and extensions and leaves the other profile alone; custom-profile cookies, cache and history clear across origins while Default survives restart; downloads and pending output block clearing; clearing history keeps site storage."
         }
       ],
       "remaining": [
-        "None within the accepted slice scope. Profile-wide localStorage, IndexedDB, Cache Storage and service-worker deletion is unavailable and exactly disclosed in the UI; per-origin clearing remains supported. Parent merged verification is separate."
+        "None within the accepted slice scope. Profile-wide localStorage, IndexedDB, Cache Storage and service-worker deletion is unavailable and exactly disclosed in the UI; per-origin clearing remains supported. Parent merged verification is separate.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. Profile-wide localStorage, IndexedDB, Cache Storage and service-worker deletion is not offered and the settings say so (per-origin clearing exists), as the ledger states."
       ],
       "implementation": [
         "Sources/BrkBase/Sites.swift",
@@ -8390,7 +8665,8 @@
       ],
       "remaining": [
         "Synthetic physical utility-panel mouse input remains unverified. Native proof uses owner-scoped AppKit focus/press and ordinary key events. Broad keyboard-layout/global-shortcut coverage is not claimed.",
-        "R3-8（2026-11-04，合并 c792cfc9）：扩展快捷键的物理按键经窗口服务器只发给 Brk 进程（Ext-shortcut-physical 通过）；输入框的焦点仍由程序设置，不是物理鼠标点击。"
+        "R3-8（2026-11-04，合并 c792cfc9）：扩展快捷键的物理按键经窗口服务器只发给 Brk 进程（Ext-shortcut-physical 通过）；输入框的焦点仍由程序设置，不是物理鼠标点击。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: the required manual check (focusing the shortcut field with a real mouse click and setting a shortcut by hand); the field focus in the scenarios is set by the program."
       ],
       "implementation": [
         "Sources/BrkBase/Keys.swift",
@@ -8690,7 +8966,8 @@
       ],
       "remaining": [
         "Arc 对照（run-20261103 P34）仍有差异或无参照：P34-b: 未比较（无参照；Brk 的媒体列表样式按 P32-e 归档列表的两行样式对齐即可） | P34-c: 未比较（无参照）",
-        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：媒体页只列 Brk 自己的截图，两行样式按归档列表；不读系统相册。Arc 有内容的媒体页仍无参照（要授权读电脑截图）。"
+        "Arc 对照 R3-4（2026-11-04，合并 0adfa4b1）：媒体页只列 Brk 自己的截图，两行样式按归档列表；不读系统相册。Arc 有内容的媒体页仍无参照（要授权读电脑截图）。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: the visual check. No Arc reference of a Media page with content exists (Arc lists the computer's screenshot folder only after a permission prompt), and the final station sheet has no P34 pair."
       ],
       "implementation": [
         "Sources/BrkApp/CaptureFiles.swift",
@@ -8760,7 +9037,8 @@
       ],
       "remaining": [
         "Authenticated Meet behavior, automatic first entry after transient activation expires, and combined PiP/profile-retarget/active-download lifecycle receipts remain unverified.",
-        "R3-7（2026-11-04，合并 00800f02）：页面报告没有最近用户操作后切走标签仍自动进入画中画（PB6，浏览器以自己的手势执行，调用瞬间页面里能看到手势，和手动画中画一样）；切回来退出；设置关掉不进入。"
+        "R3-7（2026-11-04，合并 00800f02）：页面报告没有最近用户操作后切走标签仍自动进入画中画（PB6，浏览器以自己的手势执行，调用瞬间页面里能看到手势，和手动画中画一样）；切回来退出；设置关掉不进入。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: Google Meet picture in picture needs a signed-in Meet call; the required manual check was not done. Seen in passing: automatic PiP started when the reviewer left a playing-video tab (session 2)."
       ],
       "implementation": [
         "Sources/BrkCEF/DocumentPiP.swift",
@@ -8793,7 +9071,7 @@
       "arc_evidence": "`ARC_MediaControlsFeature` (`MiniPlayerFeature`)",
       "description": "Play and pause controls for a playing tab",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Playing tabs expose truthful play/pause controls and media state, with correct frame/player targeting, background behavior and lifecycle.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -8833,10 +9111,31 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on MediaControls, Audio1, Audio5, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): MediaControlTests 1, AudioObservationTests 5. Background control freezes the specific player without changing selection; audibility observation."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-media-ext --only MediaControls,Audio1,Audio2,Audio3,Audio4,Audio5 --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-media-ext/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-media-ext; the runner writes to verify/completion/browser-basic-parent/r47-media-ext/, moved here unchanged; the actual --only list of the run is in r47-media-ext-manifest.json). Scenarios: MediaControls PASS, Audio1 PASS, Audio2 PASS, Audio3 PASS, Audio4 PASS, Audio5 PASS. Per-player background pause and play confirmed in the DOM, foreign-frame player identity, navigation removes stale controls; audibility across windows, profiles, private epochs, foreign frames, loading and history navigation."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "capture-media.html (playing muted video) left in the background behind b.html: window-server click on its sidebar media button paused it (paused true, B page stayed current, a105-after-click.png shows the play glyph); a second click resumed it (paused false, B page still current)."
         }
       ],
       "remaining": [
-        ""
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met."
       ],
       "implementation": [
         "Sources/BrkCEF/ChromeAudibility.swift",
@@ -8913,7 +9212,8 @@
       ],
       "remaining": [
         "Physical speaker or loopback output has not been recorded; API acceptance and disabled behavior are proven.",
-        "R3-7（2026-11-04，合并 00800f02）：用只录 Brk 音频输出的录音工具实测：归档音效开着 RMS 0.0467，关着 0（PB6S，WAV 在证据目录）。"
+        "R3-7（2026-11-04，合并 00800f02）：用只录 Brk 音频输出的录音工具实测：归档音效开着 RMS 0.0467，关着 0（PB6S，WAV 在证据目录）。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: the required manual (listening) check. Recorded output covers the archive cue only; capture and download cues are checked at the API level, and \"without blocking UI\" is not measured."
       ],
       "implementation": [
         "Sources/BrkApp/SoundEffects.swift",
@@ -9022,7 +9322,8 @@
         "Physical remote save-chooser confirmation remains with file-panels. NSSavePanel.ok was unimplemented on this OS and that experimental call was removed. Boost/capture actions await their slices.",
         "Arc 对照（run-20261103 P36）仍有差异或有意不同：P36-a: 已修；安全状态行比 Arc 低 1 点、Insecure 宽 7 点",
         "Arc 对照行为（2026-11-03 第二轮，合并 8ad5b1c8）：Secure/Insecure 按证书状态判定（https 且证书干净、无混合内容才是 Secure；http 一律 Insecure），引擎在加载完成和加载停止时上报。只有单元测试和状态注入入口，没有用真实证书验证：本地测试站只有 http，要做需给测试站加 https 端口和自签证书。",
-        "R3-8（2026-11-04，合并 c792cfc9）：Secure/Insecure 用真实证书验过：verify/visual-pairs/https-fixture/ 有 https 测试站和两张自签证书（信任用 Brk 自己的测试开关 BRK_TEST_TRUSTED_SPKI，不动钥匙串），原生场景 SiteSecurity-secure / -invalid（先出 Chromium 拦截页，继续后 Insecure）/ -mixed 通过；浮层第二页的原因文案核过。实测 Chromium 会把 https 页里的 http 图片自动升级，真正算 Insecure 的是表单提交到 http，Brk 现在也认。站台启动不带那个开关，拍不了证书正常那页。"
+        "R3-8（2026-11-04，合并 c792cfc9）：Secure/Insecure 用真实证书验过：verify/visual-pairs/https-fixture/ 有 https 测试站和两张自签证书（信任用 Brk 自己的测试开关 BRK_TEST_TRUSTED_SPKI，不动钥匙串），原生场景 SiteSecurity-secure / -invalid（先出 Chromium 拦截页，继续后 Insecure）/ -mixed 通过；浮层第二页的原因文案核过。实测 Chromium 会把 https 页里的 http 图片自动升级，真正算 Insecure 的是表单提交到 http，Brk 现在也认。站台启动不带那个开关，拍不了证书正常那页。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Native and manual behavior pass; the visual check does not: P36-a is 5.50% different from Arc and is being worked on by R4-3."
       ],
       "implementation": [
         "Sources/BrkApp/AppStore.swift",
@@ -9132,7 +9433,8 @@
       ],
       "remaining": [
         "A real OS prompt cannot be driven here. Camera/microphone/location allow paths and real OS authorization allow/deny matrix remain external. Desktop capture needs a source picker. No OS permission changes were made.",
-        "R3-8（2026-11-04，合并 c792cfc9）：macOS 不弹系统提示的权限（剪贴板、MIDI、窗口管理等）由 Brk 自己的浮层询问，三个按钮照 Chromium（一直允许、只允许这次、永不允许），前后两个记住并写回 Chromium 的存储（原生场景 SitePermission-prompt）。摄像头、麦克风、位置、通知的系统授权仍是外部依赖。已知：MIDI 的记住选择不写回（Chromium 154 一写就崩）。"
+        "R3-8（2026-11-04，合并 c792cfc9）：macOS 不弹系统提示的权限（剪贴板、MIDI、窗口管理等）由 Brk 自己的浮层询问，三个按钮照 Chromium（一直允许、只允许这次、永不允许），前后两个记住并写回 Chromium 的存储（原生场景 SitePermission-prompt）。摄像头、麦克风、位置、通知的系统授权仍是外部依赖。已知：MIDI 的记住选择不写回（Chromium 154 一写就崩）。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: camera, microphone, location and notification allow paths through macOS's own authorization; these need system permission changes, which this review must not make. The required manual check was not done."
       ],
       "implementation": [
         "Sources/BrkApp/SitePanels.swift",
@@ -9235,7 +9537,8 @@
       ],
       "remaining": [
         "Full EasyList/EasyPrivacy syntax, subscription downloads and broad real-world coverage are unsupported or unproved. Physical rule-file selection is not claimed. RULES.md defines the exact supported subset.",
-        "R3-8（2026-11-04，合并 c792cfc9）：EasyList/EasyPrivacy 常用规则语法都支持，做不到的（csp、重定向等）整条跳过并计数；两个订阅各自开关，下载总开关可关，离线用旧副本；规则文件走真实文件面板（原生场景 SiteFilters-panel / -subscriptions / -offline）。实测当天的 EasyList 解析 0.49 秒、跳过 3,442 条，每个请求判断约 40 微秒。已知：状态行 1 rules 应为 1 rule；每次刷新页面策略都重新注入 1.3 万多条隐藏规则。"
+        "R3-8（2026-11-04，合并 c792cfc9）：EasyList/EasyPrivacy 常用规则语法都支持，做不到的（csp、重定向等）整条跳过并计数；两个订阅各自开关，下载总开关可关，离线用旧副本；规则文件走真实文件面板（原生场景 SiteFilters-panel / -subscriptions / -offline）。实测当天的 EasyList 解析 0.49 秒、跳过 3,442 条，每个请求判断约 40 微秒。已知：状态行 1 rules 应为 1 rule；每次刷新页面策略都重新注入 1.3 万多条隐藏规则。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: the required manual check on real-world pages was not done. Minor copy defect (D4): the site controls status reads \"1 rules\" for one rule (Sources/BrkSettings/SiteControlsHost.swift line 85)."
       ],
       "implementation": [
         "Sources/BrkBase/Resources/website-rules.json",
@@ -9337,7 +9640,8 @@
       "remaining": [
         "PiP consumer, complete protected-operation matrix and cross-origin muted media remain gates. Hidden script pause is conservatively protected until visible reconciliation; hidden end/removal needs a later policy refresh. Hidden muted decoding is not claimed.",
         "Ext-media fails on the integrated tree (audible WebAudio readback not observed after the start click) although it passed on the slice branch; cause not attributed.",
-        "R3-8（2026-11-04，合并 c792cfc9）：隐藏时暂停的站点在画中画开着、跨源 iframe 里有静音媒体在播、正在用摄像头或麦克风时继续运行；前两种有原生场景（SitePolicy-pip、SitePolicy-frame-media），摄像头/麦克风那条要 macOS 授权，没法原生验证。顺带修了冻结标签让整个 profile 媒体读取超时的旧问题，main 上一直失败的 Ext-media 通过了。"
+        "R3-8（2026-11-04，合并 c792cfc9）：隐藏时暂停的站点在画中画开着、跨源 iframe 里有静音媒体在播、正在用摄像头或麦克风时继续运行；前两种有原生场景（SitePolicy-pip、SitePolicy-frame-media），摄像头/麦克风那条要 macOS 授权，没法原生验证。顺带修了冻结标签让整个 profile 媒体读取超时的旧问题，main 上一直失败的 Ext-media 通过了。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: the protected operation \"page is using the camera or microphone\" needs macOS authorization and was not checked; the required manual check was not done."
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -9428,7 +9732,8 @@
       "remaining": [
         "Complete actual external events with edited/reordered rules, invalid destinations and multiple physically activated windows.",
         "Arc 对照（run-20261103 Q06）仍有差异或无参照：Q06-a: 要修（设置组：改成盖在 Links 窗口上的表单，按 Arc 的标题、New Route、×、路由行两段式和底部 Default 下拉）",
-        "R3-2（2026-11-04，合并 05c81d7b）：Air Traffic Control 改成盖在 Links 窗口上的表单（Q06-a 3.1%），路由多了 Contains / Matches 两种匹配，Default 下拉和 Links from other apps open in Little Arc 是同一个设置（原来选 Most Recent Space 不生效的 bug 已修；两者互改是对 Arc 行为的推断）；表单按钮的点击区域原来压在文字下面，已放到最上层。原生场景 SettingsRoutes 通过。"
+        "R3-2（2026-11-04，合并 05c81d7b）：Air Traffic Control 改成盖在 Links 窗口上的表单（Q06-a 3.1%），路由多了 Contains / Matches 两种匹配，Default 下拉和 Links from other apps open in Little Arc 是同一个设置（原来选 Most Recent Space 不生效的 bug 已修；两者互改是对 Arc 行为的推断）；表单按钮的点击区域原来压在文字下面，已放到最上层。原生场景 SettingsRoutes 通过。",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: reordering and deleting routes, invalid destinations, most-recent window with several real windows; links arrive by the injected externalURL command, not from another app through the system (R4-4 item 3 is adding that)."
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Windows.swift",
@@ -9871,7 +10176,8 @@
         }
       ],
       "remaining": [
-        "The optional default-browser OS request was not exercised because the task prohibits changing the default browser. The import choice opens the selected-file workflow whose native picker gate remains under A122."
+        "The optional default-browser OS request was not exercised because the task prohibits changing the default browser. The import choice opens the selected-file workflow whose native picker gate remains under A122.",
+        "R4-7 独立复核（2026-11-04）：证据不足。Everything except the optional default-browser selection passes; that checkbox stayed off because this review must not change the default browser. The parent or user decides whether that part may stay untested."
       ],
       "implementation": [
         "Sources/BrkApp/SidebarDataPanels.swift",
@@ -10110,7 +10416,8 @@
         }
       ],
       "remaining": [
-        "MANUAL: real LocalAuthentication and protected app-specific Keychain writes need an interactive owned OS identity. Website autofill remains out of scope. Real bookmark/history selection, preview, cancel, acceptance and source preservation pass."
+        "MANUAL: real LocalAuthentication and protected app-specific Keychain writes need an interactive owned OS identity. Website autofill remains out of scope. Real bookmark/history selection, preview, cancel, acceptance and source preservation pass.",
+        "R4-7 独立复核（2026-11-04）：证据不足。Missing: password import needs LocalAuthentication and the protected Keychain with a real user identity (manual check not possible here)."
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarImport.swift",
@@ -10175,14 +10482,30 @@
       "arc_evidence": "rows 176 to 189",
       "description": "Shortcuts guide, release notes, help, restore data, export notes, task manager, troubleshooting",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Help entries open useful local documentation and working restore, diagnostics and troubleshooting tools instead of disabled placeholders.",
       "owner": "parent-integrations-audit",
       "required_checks": [],
-      "verification": [],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): MenuHelpScriptingTests 9, MenuHelpScriptingAppTests 11. testNoVisibleMenuRowIsAPlaceholder, help rows, trace recorder, task manager list/end, backups and restore window."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "Every visible Help item through its real menu item on the reviewer's instance: Release Notes (bundled page), Visit Help Center (resources.arc.net), Getting Started (Welcome to Brk sheet with Open Brk 101), Essential Keyboard Shortcuts (Shortcuts pane), Contact the Team (GitHub new-issue page with the build info; 404 when not signed in, kept as the user decided), Copy Brk Info (six lines on the pasteboard plus a toast), Check for Updates (alert naming the build), Record Trace then Record Trace again (24.7 MB Chromium trace JSON in Traces/), Open Task Manager (live memory and CPU per process), Restore Data (session 1: window and a startup backup after relaunch; session 2: Restore and Relaunch clicked with the real mouse, the old process exited, a new one started on the same data, the tab added after the backup was gone and the pre-restore state was kept as a backup). Not exercised: Reveal Brk Data (opens Finder), End Process (unit only), Cancel Trace."
+        }
+      ],
       "remaining": [
         "The menu and shortcut settings entry exist. Restore, tracing, task manager and most help actions remain disabled.",
-        "R3-5（2026-11-04，合并 e9f5e87d）：Help 菜单各项有了真实行为：Release Notes（构建时从 git 历史生成的页面）、Visit Help Center、Contact the Team（指向仓库的新建 issue 页，仓库私有，未登录 GitHub 时 404，目标待用户定）、Restore Data（启动时自动备份，可选备份恢复并重启）、Record/Stop/Cancel Trace（Chromium trace 存到数据目录 Traces/）、Open Task Manager（每秒刷新，可结束进程）、Copy Brk Info、Check for Updates…（说明没有更新渠道）。Note 相关三项隐藏（Arc 1.170 也没有）。只有单元测试的：End Process 按钮。"
+        "R3-5（2026-11-04，合并 e9f5e87d）：Help 菜单各项有了真实行为：Release Notes（构建时从 git 历史生成的页面）、Visit Help Center、Contact the Team（指向仓库的新建 issue 页，仓库私有，未登录 GitHub 时 404，目标待用户定）、Restore Data（启动时自动备份，可选备份恢复并重启）、Record/Stop/Cancel Trace（Chromium trace 存到数据目录 Traces/）、Open Task Manager（每秒刷新，可结束进程）、Copy Brk Info、Check for Updates…（说明没有更新渠道）。Note 相关三项隐藏（Arc 1.170 也没有）。只有单元测试的：End Process 按钮。",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met (required_checks is empty; unit and manual evidence recorded)."
       ]
     },
     {
@@ -11380,7 +11703,7 @@
       "arc_evidence": "`ARC_SharableObjectsFeature`; \"Share Split View…\"; Easel sharing",
       "description": "Share a space, folder, tab set or Easel by link",
       "historical_status": "not started",
-      "status": "implemented",
+      "status": "verified",
       "acceptance": "Export spaces, folders, selected tabs and supported creative documents to user-chosen local files; verify the native save flow.",
       "owner": "batch2-file-panels",
       "required_checks": [
@@ -11424,13 +11747,6 @@
           "scope": "AX sets and verifies real save destinations, then presses Save and system Cancel. ImportSync-Export, FP-SaveGesture, FP-SelectedLifetime and ImportSync-ExportLifetime prove parsed JSON/HTML bytes, no cancel write, captured documents and owner lifetime. Real completion routes through exportSelected; Review-ExportSelectedFailureAlert proves the shared failure alert."
         },
         {
-          "kind": "manual",
-          "result": "skipped",
-          "command": "Not executed in this slice",
-          "artifact": "verify/completion/batch2-file-panels/REPORT.md",
-          "scope": "INTEGRATION: creative-document export awaits the easels-notes slice. Real JSON/HTML save completion, system Cancel, lifetime and shared failure-alert handling pass. No A044 or A096 claim."
-        },
-        {
           "kind": "unit",
           "result": "pass",
           "artifact": "verify/completion/batch2-parent/integration-final-2/build.log",
@@ -11443,11 +11759,34 @@
           "command": "--site /Users/administrator/.t3/projects/brk/Tests/E2ESite --out /Users/administrator/.t3/projects/brk/verify/completion/browser-basic-parent/integration-final-2 --engine cef",
           "artifact": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md",
           "scope": "Parent native run on main 1c6bc97 (183 PASS, 3 FAIL, 1 SKIPPED; source and binaries unchanged per verify/completion/browser-basic-parent/integration-final-2-manifest.json). This row relies on ImportSync-Export, FP-SelectedLifetime, all PASS."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/page-sites/unit/swift-test.log",
+          "scope": "Full suite in the review worktree on cb5ffb7d: 1034 tests, 1 skipped, 0 failures. Classes read for this row (tests passed): FilePanelTests 2, FilePanelIOTests 2, ImportSyncTests 18, EaselTests 12. Export writers, selected-destination writes, Easel share effect."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py r47-profiles-files --only ImportSync-Export,ImportSync-ExportLifetime,FP-SaveGesture,FP-SelectedLifetime,LibraryCard-Export --run-timeout 3600",
+          "artifact": "verify/completion/review-r4/page-sites/native/r47-profiles-files/REPORT.md",
+          "scope": "Run by the reviewer on cb5ffb7d (r47-profiles-files; the runner writes to verify/completion/browser-basic-parent/r47-profiles-files/, moved here unchanged; the actual --only list of the run is in r47-profiles-files-manifest.json). Scenarios: ImportSync-Export PASS, ImportSync-ExportLifetime PASS, FP-SaveGesture PASS, FP-SelectedLifetime PASS, LibraryCard-Export PASS. Space, folder and selected-tab exports through the real save panel (destination entered by accessibility, Save and system Cancel pressed), parsed JSON/HTML bytes, no file on cancel, owner lifetime; Library Share Space… and Export into Folder write real files. Review-ExportSelectedFailureAlert and Review-CrossWindowExport, which the ledger cites, are not registered in brk-e2e on cb5ffb7d (ReviewFilePanelProbes.all is not in the scenario list), so they cannot run and are not claimed."
+        },
+        {
+          "kind": "manual",
+          "result": "pass",
+          "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
+          "artifact": "verify/completion/review-r4/page-sites/manual/session.log",
+          "scope": "Easel (the supported creative document): New Easel, Share in the URL pill opened a real NSSavePanel (a144-save-panel.png, it defaults to ~/Documents, nothing was saved there). Attempt 1 with typed text went to a wrong folder and was cancelled with nothing written. Attempt 2: the harness op configureSavePanel pointed the next panel at the owned /tmp/r47/m/data/exports/review-easel.png, Share opened the panel there (a144-save-panel-owned-destination.png) and a window-server Return confirmed it: a 462x218 PNG of the board was written (a144-exported-review-easel.png)."
         }
       ],
       "remaining": [
         "INTEGRATION: creative-document export awaits the easels-notes slice. Real JSON/HTML save completion, system Cancel, lifetime and shared failure-alert handling pass. No A044 or A096 claim.",
-        "Reviews: the explicit-selection fallback is not the production save-panel completion path; the real completion (failure alert, system Cancel) is covered only by the real-panel scenario."
+        "Reviews: the explicit-selection fallback is not the production save-panel completion path; the real completion (failure alert, system Cancel) is covered only by the real-panel scenario.",
+        "R4-7 独立复核（2026-11-04）：通过。Acceptance met. The Easel destination was set by the harness, the confirmation was real input.",
+        "2026-11-04：旧的验证条目去掉（kind=manual, result=skipped, artifact=verify/completion/batch2-file-panels/REPORT.md），不满足台账校验。"
       ],
       "delivery_mode": "local-file-substitute",
       "implementation": [
