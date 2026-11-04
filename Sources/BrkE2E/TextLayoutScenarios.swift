@@ -179,6 +179,15 @@ enum TextLayoutScenarios {
             app.window = blank
             _ = try app.send(.activateApp(window: blank))
         }
+        try sweep.surface("window-incognito", close: {
+            try app.dispatch(.window(.close))
+            app.window = standard
+            _ = try app.send(.activateApp(window: standard))
+        }) {
+            let incognito = try S.newWindow(app, "a private window", kind: .incognito) { try app.dispatch(.window(.newIncognito)) }
+            app.window = incognito
+            _ = try app.send(.activateApp(window: incognito))
+        }
         try sweep.surface("window-little-bar", close: {
             try app.dispatch(.commandBar(.submit(app.site.url("page2.html?little=1").absoluteString)))
             try sweep.measure("window-little-page")
@@ -310,6 +319,12 @@ enum TextLayoutScenarios {
         try sweep.surface("space-new", close: { try app.dispatch(.sidebar(.openDialog(nil))) }) {
             try app.dispatch(.sidebar(.openDialog(.newSpace)))
         }
+        try sweep.surface("dialog-new-profile", close: { try app.dispatch(.profile(.openDialog(nil))) }) {
+            try app.dispatch(.profile(.openDialog(.create)))
+        }
+        try sweep.surface("dialog-change-profile", close: { try app.dispatch(.profile(.openDialog(nil))) }) {
+            try app.dispatch(.profile(.openDialog(.change(.space(otherSpace)))))
+        }
         try sweep.surface("dialog-delete-space", close: { try app.press("escape") }) {
             try app.dispatch(.space(.requestDelete(otherSpace)))
             try app.waitUntil("the delete dialog") { try isShown(app.native(), .spaceDialog) }
@@ -388,6 +403,11 @@ enum TextLayoutScenarios {
             try app.press("cmd+a")
             try app.type("Page")
             app.sleep(0.4)
+        }
+
+        // MARK: Capture
+        try sweep.surface("capture-area", close: { try app.dispatch(.capture(.cancel)) }) {
+            try app.dispatch(.capture(.begin(.area)))
         }
 
         // MARK: Toasts

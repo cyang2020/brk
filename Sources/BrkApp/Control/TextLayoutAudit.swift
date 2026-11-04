@@ -115,6 +115,13 @@ enum TextLayoutAudit {
             let scrolls = (field.isEditable || cell.isScrollable) && !placeholder
             let needed = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: 100_000, height: 100_000))
             report.note(text, frame: bounds, needed: needed)
+            // An attributed string with no paragraph style wraps whatever the label's own line break says, and the frame
+            // of one line hides what wrapped, with no ellipsis.
+            let atWidth = cell.cellSize(forBounds: CGRect(x: 0, y: 0, width: bounds.width, height: 100_000))
+            if !scrolls, atWidth.height > max(bounds.height, needed.height) + TextLayoutAudit.slack {
+                add(.wrapOverflow, field, text, needed: atWidth)
+                return
+            }
             // Measured on rendered labels: a clipping label's ink is whole from its advance plus the leading inset (half
             // of the cell's padding: 2 points, 4 when centred), one that truncates turns to an ellipsis below the whole
             // cell width.

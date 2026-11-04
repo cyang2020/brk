@@ -77,6 +77,27 @@ import XCTest
         XCTAssertEqual(report { $0.attributedStringValue.size().width }.findings.map(\.problem), [.overflowsFrame])
     }
 
+    /// The Delete Space title: a truncating label given an attributed string with no paragraph style wraps, and a frame
+    /// of one line hides the second line with no ellipsis.
+    func testAnAttributedTitleThatWrapsPastItsLineIsCut() {
+        let text = "Delete your “Research and Development Notes” Space?"
+        let font = NSFont.systemFont(ofSize: 17, weight: .semibold)
+        func title(_ attributes: [NSAttributedString.Key: Any]) -> TextLayoutReport {
+            audit { root in
+                let title = NSTextField(labelWithString: "")
+                title.lineBreakMode = .byTruncatingMiddle
+                title.attributedStringValue = NSAttributedString(string: text, attributes: attributes.merging([.font: font]) { $1 })
+                title.frame = CGRect(x: 10, y: 10, width: 374, height: 20)
+                root.addSubview(title)
+            }
+        }
+        XCTAssertEqual(title([:]).findings.map(\.problem), [.wrapOverflow])
+        let tail = NSMutableParagraphStyle()
+        tail.lineBreakMode = .byTruncatingTail
+        XCTAssertEqual(title([.paragraphStyle: tail]).findings, [])
+        XCTAssertEqual(title([.paragraphStyle: tail]).truncated.map(\.problem), [.ellipsis])
+    }
+
     func testATruncatingLabelTooNarrowIsListedNotCut() {
         let report = audit { root in
             let long = label("A long title that cannot fit its row")
