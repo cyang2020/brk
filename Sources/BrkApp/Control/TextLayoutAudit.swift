@@ -12,7 +12,9 @@ import BrkEngine
 ///   truncating line break, ends a text that would fit with an ellipsis.
 /// - Text a view draws itself: `draw(_:)` runs once into a throwaway bitmap while `DrawnTextRecorder` notes each string.
 /// - SwiftUI `Text`: not a view. Its accessibility node gives the string and the laid-out frame; the font is worked out
-///   from the frame's height, because a Text's frame is exactly its lines (`SwiftUIText`).
+///   from the frame's height, because a Text's frame is exactly its lines (`SwiftUIText`). SwiftUI builds those nodes
+///   only once an accessibility client has asked the app something, which the runner does first
+///   (`NativeSystemInput.wakeAccessibilityTree`).
 /// - Every text's rectangle against the ancestors that clip it: scrolling away along a scroll view's axis is not a
 ///   finding, being cut across the other axis is.
 ///
@@ -23,9 +25,12 @@ enum TextLayoutAudit {
     static func run() -> TextLayoutReport {
         DrawnTextRecorder.install()
         var walk = Walk()
-        for window in NSApp.windows where window.isVisible && NSStringFromClass(type(of: window)) != "NativeWidgetMacNSWindow" { walk.visit(window) }
+        for window in NSApp.windows where window.isVisible && !chromiumWindows.contains(NSStringFromClass(type(of: window))) { walk.visit(window) }
         return walk.report
     }
+
+    /// The engine's own windows: their content is a page's, not ours.
+    private static let chromiumWindows: Set<String> = ["NativeWidgetMacNSWindow", "CefNSWindow"]
 
     /// One open or built native menu, its submenus included.
     static func menu(_ menu: NSMenu) -> TextLayoutReport {
@@ -132,7 +137,8 @@ enum TextLayoutAudit {
         }
 
         private mutating func measure(_ button: NSButton) {
-            guard button.bounds.width > 0, button.bounds.height > 0, let cell = button.cell else { return }
+            // A window's traffic lights (`_NSThemeWidget`) keep AppKit's unused "Button" title.
+            guard button.bounds.width > 0, button.bounds.height > 0, let cell = button.cell, !NSStringFromClass(type(of: button)).hasPrefix("_") else { return }
             let popUp = button as? NSPopUpButton
             let text = popUp?.titleOfSelectedItem ?? button.title
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, button.imagePosition != .imageOnly else { return }
@@ -196,16 +202,17 @@ enum TextLayoutAudit {
             guard let window = host.window else { return }
             var seen = Set<ObjectIdentifier>()
             var nodes: [(text: String, frame: CGRect, isButton: Bool)] = []
+            // SwiftUI's `AccessibilityNode` answers these selectors without declaring NSAccessibilityProtocol.
             func collect(_ element: Any, depth: Int) {
-                guard depth < 60, let object = element as? NSObject, seen.insert(ObjectIdentifier(object)).inserted else { return }
-                if let view = object as? NSView, view !== host { return }
-                guard let node = object as? NSAccessibilityProtocol else { return }
-                let role = node.accessibilityRole()
-                let children = node.accessibilityChildren() ?? []
+                let node = element as AnyObject
+                guard depth < 60, seen.insert(ObjectIdentifier(node)).inserted else { return }
+                // AppKit controls in a SwiftUI region have their own rules; a nested host is visited as a view.
+                if let view = node as? NSView, view !== host, view is NSControl || NSStringFromClass(type(of: view)).contains("NSHostingView") { return }
+                let role = node.accessibilityRole?()
+                let children = node.accessibilityChildren?() ?? []
                 if role == .staticText || (role == .button && children.isEmpty) {
-                    let label = (node.accessibilityValue() as? String) ?? node.accessibilityLabel() ?? node.accessibilityTitle() ?? ""
-                    let text = label.isEmpty ? (node.accessibilityLabel() ?? node.accessibilityTitle() ?? "") : label
-                    let frame = node.accessibilityFrame()
+                    let text = accessibilityValue(of: node) ?? node.accessibilityLabel?() ?? node.accessibilityTitle?() ?? ""
+                    let frame = node.accessibilityFrame?() ?? .zero
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, frame.width > 0, frame.height > 0 {
                         nodes.append((text, window.convertFromScreen(frame), role == .button))
                     }
@@ -220,9 +227,13 @@ enum TextLayoutAudit {
                 if needed.width > node.frame.width + 1 || needed.height > node.frame.height + 1 {
                     report.truncated.append(finding(.ellipsis, describe(host) + " SwiftUI", node.text, rect, needed))
                 }
-                let local = host.convert(node.frame, from: nil)
-                checkClip(host, node.text, rect: local, needed: needed, includingSelf: true)
+                checkClip(host, node.text, rect: host.convert(node.frame, from: nil), needed: needed, includingSelf: true)
             }
+        }
+
+        /// `accessibilityValue` is `Any?` and overloaded, so dynamic lookup cannot name it.
+        private func accessibilityValue(of node: AnyObject) -> String? {
+            (node as? NSObject)?.value(forKey: "accessibilityValue") as? String
         }
 
         // MARK: Clipping ancestors

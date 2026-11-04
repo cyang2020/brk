@@ -47,10 +47,22 @@ enum TextLayoutScenarios {
 
         func measure(_ name: String, shot: Bool = true) throws {
             try? app.settle(timeout: 4)
+            // Without this SwiftUI has no accessibility nodes and its Text is not measured.
+            if let pid = app.hello?.pid, !NativeSystemInput.wakeAccessibilityTree(pid: pid) { app.note("no accessibility client on this host: SwiftUI Text not measured") }
             app.sleep(0.3)
             guard case .textLayout(let report) = try app.send(.textLayout) else { throw Check(description: "textLayout did not answer") }
             record(name, report)
-            if shot { _ = try? app.screenshot(name) }
+            guard shot else { return }
+            _ = try? app.screenshot(name)
+            // The surface's own windows too (settings, sheets, panels), for the eye next to the numbers.
+            let skipped = ["BrowserWindow", "CefNSWindow", "NSStatusBarWindow", "NativeWidgetMacNSWindow"]
+            let others = (try? app.native().appWindows.filter { window in
+                window.isVisible && window.number > 0 && window.isPageHost != true && !skipped.contains { window.className.hasSuffix($0) }
+            }) ?? []
+            for window in others {
+                let url = app.shotsDirectory.appendingPathComponent("TextLayout-\(name)-\(window.className.components(separatedBy: ".").last ?? "window")-\(window.number).png")
+                _ = try? app.send(.mediaWindowScreenshot(number: window.number, path: url.path))
+            }
         }
 
         func measureMenu(_ name: String, at point: CGPoint) {
@@ -336,6 +348,9 @@ enum TextLayoutScenarios {
             try app.click(.boostControl("menu"))
         }
         try sweep.surface("boost-code", close: {
+            try app.click(.boostControl("back"))
+            try app.waitUntil("Boost editor page again") { try app.view().boostEditor?.page == .style }
+            app.sleep(0.4)
             try app.click(.boostControl("close"))
             try app.waitUntil("the Boost closed") { try app.view().boostEditor == nil }
         }) {
