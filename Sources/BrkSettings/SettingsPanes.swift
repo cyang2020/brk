@@ -159,6 +159,7 @@ struct LinksPane: View {
                             CardLabel(SettingsCopy.peekFromPinnedAndFavorites)
                             Text(SettingsCopy.peekNote).font(.system(size: C.peekNoteFontSize.value).italic()).foregroundStyle(SettingsStyle.italicNote)
                         }
+                        .offset(y: -C.peekNoteRaise.value)
                     } trailing: {
                         SettingsSwitch(field: "peekFromPinnedAndFavorites", isOn: links.peekFromPinnedAndFavorites) { send(.peekFromPinnedAndFavorites($0)) }
                     }

@@ -95,7 +95,8 @@ struct MaxPane: View {
         let body = parts.reduce(Text("")) { result, part in
             switch part {
             case .text(let words): result + Text(words)
-            case .broom: result + Text(Image(nsImage: ArcGlyphs.broom(size: M.descriptionSize.value + 2))).foregroundColor(SettingsStyle.secondaryText)
+            // P38-max-list: its ink is 23 px tall and drops under the line, which pushes the next line 3 points down.
+            case .broom: result + Text(Image(nsImage: ArcGlyphs.broom(size: M.broomSize.value))).baselineOffset(M.broomDrop.value).foregroundColor(SettingsStyle.secondaryText)
             case .link(let words, _): result + Text(words).foregroundColor(SettingsStyle.descriptionLink)
             }
         }
@@ -295,7 +296,10 @@ struct ProminentButton: NSViewRepresentable {
         button.bezelColor = prominent ? accent : nil
         let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: prominent ? weight : .regular)
         let color: NSColor = prominent ? .white : .labelColor
-        button.attributedTitle = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: color])
+        let words = NSMutableAttributedString(string: title, attributes: [.font: font, .foregroundColor: color])
+        // P38-e: the ⌘ and the words sit left of the button's middle; room after the last letter moves them over.
+        if symbol != nil, !title.isEmpty { words.addAttribute(.kern, value: 3.2, range: NSRange(location: (title as NSString).length - 1, length: 1)) }
+        button.attributedTitle = words
         if let symbol {
             // A filled symbol keeps its glyph in the button's colour (Arc's ⌘ in a white disc).
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
@@ -335,9 +339,11 @@ struct MaxPaneMetricsTable: MetricGroup {
     let thumbInset = Metric(11.5, .anatomy("\(capture): a thumbnail's rim starts at x 151 px"))
     let thumbTop = Metric(10.5, .anatomy("\(capture): the thumbnail starts at y 832 px in a row that starts at 808 px"))
     let textToSwitch = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
-    let thumbGap = Metric(17.0, .anatomy("\(capture): the thumbnail ends at x 330 px, the title starts at 368 px"))
+    let thumbGap = Metric(17.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the thumbnail ends at x 329 px, the titles' ink starts at 369 px"))
     let titleTop = Metric(10.0, .anatomy("\(capture): the title is centred at y 845 px in a row that starts at 808 px"))
     let titleGap = Metric(4.0, .anatomy("\(capture): a title's top at y 996 px, the description's first line at 1035 px"))
+    let broomSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the broom's ink spans y 270 to 293 px"))
+    let broomDrop = Metric(-3.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the line after the broom is 6 px further down than in a row without it"))
     let descriptionSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
     let descriptionLeading = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: description lines 28 px apart, an 11 pt line's own height"))
     let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))

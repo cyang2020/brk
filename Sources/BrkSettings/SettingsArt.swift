@@ -239,14 +239,14 @@ struct LittleWindowMock: View {
                 }
                 .frame(height: A.mockField.value)
                 HStack(spacing: 3) {
-                    Text("Open in").font(.system(size: 7.5)).foregroundColor(ArtColor.rgb(0x858585))
-                    + Text(" Work").font(.system(size: 7.5, weight: .medium)).foregroundColor(ArtColor.rgb(0x4A7A90))
+                    (Text("Open in").font(.system(size: 7.5)).foregroundColor(ArtColor.rgb(0x858585))
+                    + Text(" Work").font(.system(size: 7.5, weight: .medium)).foregroundColor(ArtColor.rgb(0x4A7A90)))
+                        .lineLimit(1).fixedSize()
                     Text("⌘O").font(.system(size: 7.5)).foregroundStyle(ArtColor.rgb(0x858585))
                         .frame(width: 16.5, height: 9.5).background(RoundedRectangle(cornerRadius: 2).fill(Color.black.opacity(0.06)))
                     Rectangle().fill(Color.black.opacity(0.08)).frame(width: 0.5, height: 10).padding(.leading, 1)
                     Image(systemName: "chevron.down").font(.system(size: 6, weight: .medium)).foregroundStyle(ArtColor.rgb(0xB8B8B8)).padding(.leading, 3)
                 }
-                .padding(.horizontal, 3.5)
                 .frame(width: A.mockButtonWidth.value, height: A.mockButtonHeight.value)
                 .background(RoundedRectangle(cornerRadius: A.mockRadius.value, style: .continuous).fill(Color.white.opacity(0.97)).shadow(color: .black.opacity(0.08), radius: 1, y: 0.5))
             }

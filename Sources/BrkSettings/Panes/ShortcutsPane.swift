@@ -70,7 +70,6 @@ struct ShortcutsPane: View {
             }
             .padding(.horizontal, K.searchInset.value)
             .frame(height: K.searchHeight.value)
-            .offset(y: -0.5)
             CardDivider(inset: 0)
             ScrollView {
                 // Not lazy: every row's key cap exists, so the control socket and tests can find any of them.
@@ -100,6 +99,7 @@ struct ShortcutsPane: View {
                 KeyCapArt(glyph: .command)
                 KeyCapArt(glyph: .smile)
             }
+            .offset(x: K.keysOffset.value.x, y: K.keysOffset.value.y)
             Text(ShortcutsCopy.title).font(.system(size: K.titleSize.value, weight: .semibold)).foregroundStyle(.primary)
                 .padding(.top, K.titleTop.value)
             Text(ShortcutsCopy.subtitle).font(.system(size: K.subtitleSize.value)).foregroundStyle(Color.primary.opacity(K.subtitleOpacity.value))
@@ -507,11 +507,12 @@ struct ShortcutsPaneMetricsTable: MetricGroup {
     let rowInset = Metric(24.0, .anatomy("\(capture): titles start at x 176 px, hairlines span 176 to 776 px, key caps end at 760 px"))
     let dividerTrailing = Metric(16.0, .anatomy("\(capture): the row hairlines end at x 776 px in a box that ends at 808 px"))
     let listPadding = Metric(8.0, .guess("space under the last row"))
+    let keysOffset = Metric(CGPoint(x: -1, y: -0.5), .anatomy("\(capture): the first key cap starts at x 838 px, y 346 px, a point left of the side column's text"))
     let keyGap = Metric(1.5, .anatomy("\(capture): the first key cap ends at x 970 px, the second starts at 974 px"))
     let titleSize = Metric(14.0, .anatomy("\(capture): 'Custom Shortcuts' spans x 841 to 1083 px, a 14 pt semibold line"))
     let titleTop = Metric(23.0, .anatomy("\(capture): the key caps end at y 477 px, the heading is centred at 542 px"))
     let subtitleSize = Metric(12.0, .anatomy("\(capture): 'Change shortcuts for your favorite' spans x 841 to 1226 px, a 12 pt line"))
-    let subtitleTop = Metric(7.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
+    let subtitleTop = Metric(8.0, .anatomy("\(capture): the heading centred at y 542 px, the paragraph's first line at 590 px"))
     let subtitleLeading = Metric(0.0, .anatomy("\(capture): paragraph lines 30 px apart, a 12 pt line's own height"))
     let subtitleOpacity = Metric(0.55, .anatomy("\(capture): the side paragraph is #8F8F8F at its darkest"))
     let inkOpacity = Metric(0.6, .anatomy("\(capture): 'Default Shortcuts' and the side paragraph are darker than the pane's grey descriptions"))
