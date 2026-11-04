@@ -17,6 +17,8 @@ import BrkUIKit
 public final class WindowRootView: NSView {
     private let dispatch: Dispatch
     public let background = ThemeBackgroundView(frame: .zero)
+    /// Over the background while the app is not frontmost (Arc lightens the whole window then, P01-d).
+    private let inactiveVeil = InactiveVeilView(frame: .zero)
     public let toolbar: AddressToolbarView
     public let sidebar: SidebarView
     public let content: ContentAreaView
@@ -67,7 +69,12 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.inactiveVeil.update() }
+            }
+        }
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
@@ -124,7 +131,7 @@ public final class WindowRootView: NSView {
             sidebarFloats = frames.sidebarFloats
             sidebar.removeFromSuperview()
             if sidebarFloats { addSubview(sidebar, positioned: .above, relativeTo: peek) }
-            else { addSubview(sidebar, positioned: .above, relativeTo: background) }
+            else { addSubview(sidebar, positioned: .above, relativeTo: inactiveVeil) }
         }
         renderChrome(snapshot, frames: frames)
         let palette = Palette(snapshot.theme)
@@ -191,6 +198,8 @@ public final class WindowRootView: NSView {
         }
         background.frame = bounds
         background.show(shown.theme, animated: lastTheme != nil && lastTheme != shown.theme)
+        inactiveVeil.frame = bounds
+        inactiveVeil.scheme = shown.theme.scheme
         lastTheme = shown.theme
         sidebar.render(shown, frames: shownFrames, palette: Palette(shown.theme))   // hidden, it keeps its reveal strip and slide-in
     }
@@ -432,4 +441,28 @@ public enum PeekCopy {
 @MainActor
 public enum EaselExport {
     public static func png(_ card: EaselCard) -> Data? { EaselDrawing.png(card) }
+}
+
+/// Arc's window while the app is not frontmost: the background, and with it the sidebar's translucent rows, tiles
+/// and the margins round the cards, turns lighter; text and the cards do not change. Measured on Arc 1.170 with the
+/// #F2EAE4 theme (verify/visual-pairs/run-20261103 P01-a against P01-d): #F0EAE6 reads #F7F2EE, the favorites' tile
+/// #E6E1DF reads #EDE8E5. White at 40% over the background lands within 2 of each channel. Dark themes keep their
+/// look (no Arc capture of one inactive).
+@MainActor
+final class InactiveVeilView: NSView {
+    var scheme: Scheme = .light { didSet { if scheme != oldValue { update() } } }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor(white: 1, alpha: 0.4).cgColor
+        update()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func update() { isHidden = NSApplication.shared.isActive || scheme == .dark }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

@@ -206,10 +206,11 @@ final class CardView: NSView {
     /// While a drop preview narrows the card, the page keeps the size it had (Arc clips it, P23-d).
     private var holdsPage = false
 
-    /// The page area: under the split header and its hairline, else the whole card.
+    /// The page area: under the split header, else the whole card; the header's hairline draws over the page's
+    /// first point (CardFrame.page).
     private var pageBounds: CGRect {
         guard let paneHeader, !paneHeader.isHidden else { return bounds }
-        let top = Metrics.content.paneHeaderHeight.value + Metrics.content.paneHeaderSeparator.value
+        let top = Metrics.content.paneHeaderHeight.value
         return CGRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
     }
 

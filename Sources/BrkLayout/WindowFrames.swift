@@ -80,10 +80,11 @@ public struct CardFrame: Sendable, Equatable, Codable {
     /// host and close; Metrics.content.paneHeaderHeight), nil outside a split.
     public var header: CGRect? = nil
 
-    /// Where the page draws: the card under its header and the header's hairline, else the whole card.
+    /// Where the page draws: the card under its header, else the whole card. The header's hairline lies over the
+    /// page's first point (Arc, P23-a: the hairline at 32 pt and the page's text 1 pt higher than under a 33 pt top).
     public var page: CGRect {
         guard let header else { return rect }
-        let top = header.height + Metrics.content.paneHeaderSeparator.value
+        let top = header.height
         return CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(0, rect.height - top))
     }
 }
