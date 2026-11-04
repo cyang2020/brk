@@ -17,7 +17,7 @@ final class MaxCopyTests: XCTestCase {
     }
 
     func testArcsSixCardsInArcsOrderWithArcsWords() {
-        XCTAssertEqual(MaxFeature.arcs, [.tidyTabs, .instantLinks, .linkPreviews, .tidyTitles, .tidyDownloads, .askInCommandBar])
+        XCTAssertEqual(MaxFeature.allCases, [.tidyTabs, .instantLinks, .linkPreviews, .tidyTitles, .tidyDownloads, .askInCommandBar])
         XCTAssertEqual(words(.tidyTabs), "Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.")
         XCTAssertEqual(words(.instantLinks), "Press Shift + Enter for any web search to instantly open the top result. You can also search multiple queries!")
         XCTAssertEqual(words(.linkPreviews), "Instant summaries appear when you hover over links on certain websites. Or hold Shift while hovering to preview any link.")
