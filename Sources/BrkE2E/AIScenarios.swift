@@ -15,6 +15,7 @@ enum AIScenarios {
         Scenario("AIInstant", "Shift+Return in the command bar heads Today with the searching row, opens the verified result, fails in place", cefOnly: "CEF reachability", instant),
         Scenario("AIAskRow", "a question in the command bar lists the Ask row that asks the local tool; the tool's name then Tab asks it", cefOnly: "native command bar", askRow),
         Scenario("AITidyTitles", "a Today tab dragged into Pinned gets its tidy title, as Arc's P47-a", cefOnly: "native sidebar drag", tidyTitles),
+        Scenario("PillShareQuote", "a highlight on the page puts Share Quote on the pill's second line; its click copies the link to the highlight", cefOnly: "CEF selection", shareQuote),
         Scenario("AIBrowse", "selected sources use owning profile cookies, citations and close all readers", cefOnly: "CEF hidden pages", browse),
         Scenario("AITranslate", "page menu Translate to English, the pill's Translated and popover, Use Original's undo toast and ⌘Z, never-translate", cefOnly: "CEF isolated world", translate),
         Scenario("AIMax", "native Max pane persists delivered switches and provider choice without an API key", cefOnly: "native settings", maxPane),
@@ -244,6 +245,34 @@ enum AIScenarios {
         try app.press("tab")
         try app.waitUntil("question mode after \(provider) and Tab") { if case .commandBar(let bar)? = try app.view().overlay { return bar.aiMode == .question }; return false }
         try app.press("escape")
+    }
+    /// The URL pill's second line with text highlighted (Shared Quotes on): Share Quote in place of Translation
+    /// Available; a click copies the link to the highlight (`#:~:text=`) with "Copied Shared URL"; no highlight, the
+    /// translation line is back.
+    private static func shareQuote(_ app: AppUnderTest) throws {
+        try app.dispatch(.settings(.advanced(.sharedQuotes(true))))
+        let page = try load(app)
+        try app.waitUntil("Translation Available on the pill") { try app.view().urlPill.translation == .available }
+        let card = try visible(app.native(), .card(0)).frame
+        // A double click selects a word of the heading (Bonjour).
+        try app.click(at: CGPoint(x: card.minX + 60, y: card.minY + 133), count: 2)
+        try app.waitUntil("Share Quote on the pill") { try app.view().urlPill.shareQuote }
+        _ = try visible(app.native(), .aiControl("pill-translation"))
+        _ = try app.screenshot("PillShareQuote-line")
+        try app.click(.aiControl("pill-translation"))
+        try app.waitUntil("Copied Shared URL") { try app.view().tabTools.toast?.text == "Copied Shared URL" }
+        try app.waitUntil("the link to the highlight on the pasteboard") {
+            if case .text(let text) = try app.send(.readPasteboard) { return text.contains("#:~:text=") && text.contains("ai.html") }
+            return false
+        }
+        // A click away from the text clears the highlight.
+        try app.click(at: CGPoint(x: card.minX + 900, y: card.minY + 500))
+        try app.waitUntil("the translation line is back") { try !app.view().urlPill.shareQuote && app.view().urlPill.translation == .available }
+        try app.dispatch(.settings(.advanced(.sharedQuotes(false))))
+        try app.click(at: CGPoint(x: card.minX + 60, y: card.minY + 133), count: 2)
+        app.sleep(0.8)
+        try expect(try !app.view().urlPill.shareQuote, "Share Quote showed with Shared Quotes off")
+        _ = page
     }
     /// Max's Tidy Tab Titles (Arc P47-a): a Today tab dragged into Pinned gets the tool's shorter title.
     private static func tidyTitles(_ app: AppUnderTest) throws {
