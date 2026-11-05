@@ -14,8 +14,8 @@ public struct MediaPlayer: Hashable, Sendable, Codable {
     public let paused: Bool
     public let ended: Bool
     public let pictureInPicture: Bool
-    /// The page has muted this element, or it plays at volume 0 by the page's own choice: it makes no sound, so it gets
-    /// no mini player (`media.js` reports it).
+    /// The page has muted this element (a news site's autoplaying clip): it makes no sound, so it gets no mini player
+    /// (Arc, Q18-media-z1). The tab's own mute is another matter: that tab keeps its card.
     public let silent: Bool
     /// The player's frame has a Media Session handler for the next or previous track (Arc's `MediaSessionState`).
     public let hasNextTrack: Bool

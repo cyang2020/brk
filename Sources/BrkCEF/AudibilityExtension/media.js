@@ -14,7 +14,7 @@
         let id = ids.get(e);
         if (!id) { id = crypto.randomUUID(); ids.set(e, id); }
         players.set(id, new WeakRef(e)); current.add(id);
-        return {element:id, kind:e.localName, paused:e.paused, ended:e.ended, silent:e.muted || e.volume === 0, pictureInPicture:document.pictureInPictureElement === e};
+        return {element:id, kind:e.localName, paused:e.paused, ended:e.ended, silent:e.muted, pictureInPicture:document.pictureInPictureElement === e};
       });
       for (const id of players.keys()) if (!current.has(id)) players.delete(id);
       return result;
