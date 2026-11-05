@@ -140,6 +140,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let rowTitleOverButton = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-e-arc.png: with the × showing the title may reach 28 from the row's right end"))
     let dragRowOverHeaderScale = Metric(0.875, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image over the Space name strip is 186 x 31 for the 212 x 36 row"))
     let dropHintAlpha = Metric(0.475, .anatomy("verify/visual-pairs/run-20261103: a drop area is the theme's focus color at this strength: Q13-g's strip and Q15-e's band #A7ABAD over #F0F7FC with focus #575757, P23-e's slot #82A9A8 over #FCFCFC with focus #006362"))
+    let splitJoinTitleTrailing = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-a-arc.png and Q15-b-arc.png: the row's own title ends 3 pt before the end of its half"))
     let splitJoinSlotInset = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-a-arc.png and Q15-b-arc.png: the slots span x 14 to 114 and 120 to 220, each half of the 8 to 220 row less 6 at its left"))
     let dropRingSide = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring at the drop line's left end spans 7 pt"))
     let dropRingLeading = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring starts 16 from the sidebar's edge"))

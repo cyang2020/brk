@@ -670,7 +670,7 @@ final class RowView: HoverView {
             let half = g.selection.width / 2, inset = Draw.splitJoinSlotInset.value
             joinSlot.frame = CGRect(x: (leading ? g.selection.minX : g.selection.midX) + inset, y: g.selection.minY, width: half - inset, height: g.selection.height)
             if leading { icon.frame.origin.x += half }
-            let start = g.titleX + (leading ? half : 0), end = (leading ? g.selection.maxX : g.selection.midX) - Draw.titleTrailing.value
+            let start = g.titleX + (leading ? half : 0), end = (leading ? g.selection.maxX : g.selection.midX) - Draw.splitJoinTitleTrailing.value
             title.frame = CGRect(x: start, y: title.frame.minY, width: max(0, end - start), height: title.frame.height)
         }
         if !renameHint.isHidden {
