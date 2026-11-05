@@ -16,6 +16,8 @@ import BrkUIKit
 public final class SidebarView: NSView {
     /// Content owns its hit zones. Sidebar supplies only the dragged tab and a root-coordinate pointer.
     public var contentDrop: ((ItemID, CGPoint) -> Command?)?
+    /// The drag card's size for what the page shows now.
+    public var contentDropCardSize: (() -> CGSize)?
     public var beginContentDrop: ((ItemID) -> Void)?
     public var endContentDrop: (() -> Void)?
     @discardableResult

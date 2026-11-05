@@ -139,6 +139,7 @@ final class DragController {
         }
         guard let latest = self.context else { return true }
         if let card = session.card {
+            if session.overContent, let size = sidebar.contentDropCardSize?() { card.fit(size) }
             card.center(on: local)
             card.isHidden = !session.overContent
         }
@@ -480,7 +481,7 @@ final class ContentDragCard: NSView {
     private let title = NSTextField(labelWithString: "")
 
     init(tab: TabRow, palette: Palette) {
-        super.init(frame: CGRect(x: 0, y: 0, width: Draw.dragCardWidth.value, height: Draw.dragCardHeight.value))
+        super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = (palette.scheme == .dark ? NSColor(white: 0.17, alpha: 1) : .white).cgColor
         layer?.cornerCurve = .continuous
@@ -499,16 +500,23 @@ final class ContentDragCard: NSView {
         title.cell?.wraps = true
         title.cell?.truncatesLastVisibleLine = true
         title.lineBreakMode = .byWordWrapping
-        title.maximumNumberOfLines = 2
+        title.maximumNumberOfLines = Draw.dragCardTitleLines.value
         title.isSelectable = false
         addSubview(icon)
         addSubview(title)
         identify(.tabTool("content-drag-card"))
-        let side = Draw.dragCardIcon.value
-        icon.frame = CGRect(x: (bounds.width - side) / 2, y: Draw.dragCardIconCenter.value - side / 2, width: side, height: side)
-        let inset = Draw.dragCardInset.value
-        let fit = title.sizeThatFits(CGSize(width: bounds.width - 2 * inset, height: .greatestFiniteMagnitude))
-        title.frame = CGRect(x: inset, y: Draw.dragCardTitleTop.value, width: bounds.width - 2 * inset, height: ceil(fit.height))
+    }
+
+    /// The card's size follows the panes the page shows (`PageDropRule.cardSize`); the icon and the title stay centred in it.
+    func fit(_ size: CGSize) {
+        guard size != frame.size else { return }
+        setFrameSize(size)
+        let side = Draw.dragCardIcon.value, inset = Draw.dragCardInset.value, gap = Draw.dragCardTitleGap.value
+        let width = max(size.width - 2 * inset, 0)
+        let lines = ceil(title.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        let top = ((size.height - (side + gap + lines)) / 2).rounded()
+        icon.frame = CGRect(x: (size.width - side) / 2, y: top, width: side, height: side)
+        title.frame = CGRect(x: inset, y: top + side + gap, width: width, height: lines)
     }
 
     @available(*, unavailable)

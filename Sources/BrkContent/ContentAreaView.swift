@@ -30,6 +30,8 @@ public final class ContentAreaView: NSView {
     private var dropTimer: Timer?
     private var shownTabs: [ItemID] = []
     private var shownOrientation: SplitOrientation = .horizontal
+    /// The focused pane's ring, off while a drag shows a preview (Q17-split-hold-486-330: no ring on any pane).
+    private var ringedPanes: [Bool] = []
     /// The rule's clock. Tests set it.
     var dropClock: () -> Double = { ProcessInfo.processInfo.systemUptime }
     /// The shown panes' shares and where their cards and shadows rest, so a drop preview can make room and give it back.
@@ -77,6 +79,7 @@ public final class ContentAreaView: NSView {
         shownTabs = content.presentedPanes.map(\.tab)
         shownOrientation = content.orientation
         resting = []
+        ringedPanes = []
         accent = ThemeAccent.splitFocusRing(theme)
         while cards.count < frames.cards.count {
             let shadow = ShadowView(frame: .zero)
@@ -110,6 +113,7 @@ public final class ContentAreaView: NSView {
             // Arc rings the focused pane of a split in a dark shade of the theme (Metrics.content.highlightBorder).
             let ringed = content.split != nil && content.presentedPanes.count > 1 && pane?.focused == true
             shadow.lifted = ringed
+            ringedPanes.append(ringed)
             card.layer?.borderWidth = ringed ? Metrics.content.highlightBorder.value : 0
             card.layer?.borderColor = ThemeAccent.splitFocusRing(theme).cgColor
             // An empty card follows the appearance: dark under a dark theme (Arc's incognito window, Q03a: #2A2B2F).
@@ -251,6 +255,7 @@ public final class ContentAreaView: NSView {
             draw()
         }
         drawnPreview = preview
+        showRings(preview == .none)
         switch preview {
         case .none:
             dropPreview.isHidden = true
@@ -274,11 +279,19 @@ public final class ContentAreaView: NSView {
         dropPreview.isHidden = true
         dragPosition = nil
         drawnPreview = .none
+        showRings(true)
         for ((card, shadow), rest) in zip(zip(cards, shadows), resting) {
             card.release(to: rest.card)
             shadow.frame = rest.shadow
         }
     }
+    private func showRings(_ show: Bool) {
+        for (card, ringed) in zip(cards, ringedPanes) { card.layer?.borderWidth = show && ringed ? Metrics.content.highlightBorder.value : 0 }
+    }
+
+    /// The drag card's size for the panes shown.
+    var dropCardSize: CGSize { PageDropRule.cardSize(area: dropArea, paneCount: shownTabs.count) }
+
     func beginDrop(_ source: ItemID) { clearDrop(); pageDrop = nil; dragSource = source }
     func endDrop() { clearDrop(); pageDrop = nil; dragSource = nil }
 }

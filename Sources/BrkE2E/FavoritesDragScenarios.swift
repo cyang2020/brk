@@ -419,6 +419,8 @@ enum FavoritesDragScenarios {
             let cards = [try frame(app, .card(0)), try frame(app, .card(1))]
             try expect(abs(cards[0].minX - 579) < 1 && abs(cards[0].width - 340) < 1 && abs(cards[1].minX - 929) < 1, "the pages did not make room: \(cards)")
             try expect(try app.view().content.split == split, "the split is not shown")
+            let card = try frame(app, .tabTool("content-drag-card"))
+            try expect(card.width == 113 && card.height == 250, "the card over two panes is \(card)")
             _ = try app.screenshot("hold-left")
         }
         // Q17-split-hold-1012-330: a frame around the right pane, both pages back at their places.

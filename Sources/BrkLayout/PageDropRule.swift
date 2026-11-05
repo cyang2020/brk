@@ -310,6 +310,15 @@ public enum PageDropRule {
 
     // MARK: What to draw and what a release does
 
+    /// The drag card over the page: the share a new pane would get, scaled to fit 250 pt (Arc 0x10048ee6c; the share comes
+    /// from draggingEntered, 0x100a559c4: the width over the panes plus one, and the height). The width Arc divides is 20 pt
+    /// less than the content area: measured, not read (169 x 250 over one page, P23-d; 113 x 250 over two, Q17-split-hold).
+    public static func cardSize(area: CGRect, paneCount: Int) -> CGSize {
+        let share = max(Double(area.width) - 20, 1) / Double(max(paneCount, 1) + 1), height = max(Double(area.height), 1)
+        let longSide = 250.0
+        return share > height ? CGSize(width: longSide, height: (longSide * height / share).rounded()) : CGSize(width: (longSide * share / height).rounded(), height: longSide)
+    }
+
     public static func preview(_ state: State) -> PageDropPreview {
         guard let target = state.target else { return .none }
         switch target {

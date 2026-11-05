@@ -100,6 +100,32 @@ final class SplitDropPreviewTests: XCTestCase {
         XCTAssertTrue(slot.isHidden, "out of the page nothing is ringed")
     }
 
+    /// Q17-split-hold-486-330 and -1012-330: while a drag shows a preview no pane has the focus ring, only the frame; the
+    /// ring is back when the drag leaves the page. The card narrows with the panes.
+    func testAPreviewOverASplitTakesTheFocusRingAway() throws {
+        var m = model()
+        m.state = reduce(m.state, .user(m.window, .split(.joinRow(m.source, onto: m.target, at: 1))), m.ctx).state
+        let snapshot = project(m.state, ProjectionContext(now: m.ctx.now, calendar: .current)).windows[m.window]!
+        XCTAssertEqual(snapshot.content.panes.count, 2)
+        let frames = WindowLayout.compute(snapshot, contentSize: CGSize(width: 1280, height: 776))
+        let content = ContentAreaView(dispatch: { _ in })
+        content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: Palette(snapshot.theme), surface: { _ in nil })
+        let cards = content.subviews.compactMap { $0 as? CardView }
+        func rings() -> Int { cards.filter { ($0.layer?.borderWidth ?? 0) > 0 }.count }
+        XCTAssertEqual(rings(), 1)
+        var clock = 100.0
+        content.dropClock = { clock }
+        // Over its own pane the drag has slots and frames too: nothing below needs an offer.
+        content.beginDrop(m.source)
+        let area = frames.contentArea
+        _ = content.dropCommand(m.source, at: CGPoint(x: area.minX + 20, y: area.midY))
+        XCTAssertEqual(rings(), 0, "a ring under the slot")
+        clock += 1
+        _ = content.dropCommand(m.source, at: CGPoint(x: area.minX - 40, y: area.midY))
+        XCTAssertEqual(rings(), 1, "the ring did not come back")
+        XCTAssertEqual(content.dropCardSize, CGSize(width: 113, height: 250))
+    }
+
     /// Q02 b: with nothing shown the card is Arc's opaque #FCFCFC with its shadow, not the theme.
     func testEmptyCardIsOpaqueNearWhite() throws {
         var m = model()
