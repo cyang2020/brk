@@ -90,6 +90,34 @@ enum NativeScenarios {
         try expect(app.hostKeyViolations.isEmpty, "a CEF host window was key: \(app.hostKeyViolations)")
     }
 
+    /// N3R: AppKit lays the titlebar out again when the window is resized and puts the three buttons back at the
+    /// system's spots; Brk puts them back at Arc's (the user's report: the colored buttons came up beside the grey
+    /// circles after a resize, Q16). Checked after each of three resizes, with no change of Brk's own in between.
+    @Sendable static func lightsStayAfterResize(_ app: AppUnderTest) throws {
+        let w = Metrics.window, lights = ["window-close-button", "window-minimize-button", "window-zoom-button"]
+        func check(_ label: String) throws {
+            try app.waitUntil("the lights at Arc's spots \(label)", timeout: 4) {
+                let n = try app.native()
+                return lights.enumerated().allSatisfy { i, key in
+                    guard let light = n.actual[key], !light.hidden else { return false }
+                    let x = w.trafficLightLeft.value + Double(i) * (w.trafficLightSize.value + w.trafficLightSpacing.value)
+                    return light.frame.minX == x && light.frame.midY == w.trafficLightCenterY.value
+                }
+            }
+        }
+        try check("at launch")
+        let start = try app.native().windowFrame
+        for (i, size) in [CGSize(width: 900, height: 600), CGSize(width: 1100, height: 700), CGSize(width: 760, height: 520)].enumerated() {
+            try app.setWindowFrame(CGRect(origin: start.origin, size: size))
+            app.sleep(0.6)
+            try check("after resize \(i + 1) to \(Int(size.width))x\(Int(size.height))")
+        }
+        try app.setWindowFrame(start)
+        app.sleep(0.6)
+        try check("back at the first size")
+        app.passed("the window buttons stay at Arc's spots through four resizes")
+    }
+
     /// N3: every layout-owned frame on screen equals `WindowLayout.compute`'s, and the constants hold: traffic lights
     /// at x 13, 14 pt, centred 24 from the top; URL pill 36 tall, 8 from each side, radius 12; dock 50 tall; rows 40
     /// tall on a 41 pitch; favorite tiles at least 47 with gap 8.
