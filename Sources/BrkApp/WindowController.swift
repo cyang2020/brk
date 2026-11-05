@@ -397,20 +397,25 @@ extension HostWindow {
     /// Arc's title row: lights at x 13 with 14 pt buttons on a 23 pt pitch, centred 24 pt from the top. `origin` is in
     /// the window's top-left content space; nil hides them (sidebar hidden). At rest Arc draws them as grey circles,
     /// key window or not, and the colored buttons only while the pointer is over them (`RestingTrafficLights`).
+    ///
+    /// The buttons are not moved against AppKit: it lays its titlebar out again whenever it likes (the moment the
+    /// pointer goes over the buttons, for one) and puts them back at its own spots, a fixed inset from the titlebar's
+    /// left edge and centred in its height. So the titlebar itself is moved and sized until those spots are Arc's: the
+    /// user's report (verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
+    /// above the grey circles, with the circles' own spots taking no click.
     func placeArcTrafficLights(origin: CGPoint?) {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
-        guard let origin, let container = buttons.first?.superview else {
+        guard let origin, let titlebar = buttons.first?.superview, let container = titlebar.superview, let frame = container.superview else {
             buttons.forEach { $0.isHidden = true }
             let resting = RestingTrafficLights.find(in: buttons.first?.superview)
             resting?.isHidden = true
             resting?.origin = nil
             return
         }
-        let resting = RestingTrafficLights.find(in: container) ?? {
-            let made = RestingTrafficLights(buttons: buttons)
-            container.addSubview(made, positioned: .below, relativeTo: buttons.first)
-            // AppKit lays the titlebar out again on its own (a window resize, a change of key status) and puts the
-            // buttons back at the system's spots; nothing of Brk's is laid out then, so the buttons say so themselves.
+        let resting = RestingTrafficLights.find(in: titlebar) ?? {
+            // Made before Brk has moved anything: the buttons are where AppKit puts them.
+            let made = RestingTrafficLights(buttons: buttons, container: container)
+            titlebar.addSubview(made, positioned: .below, relativeTo: buttons.first)
             made.movedByAppKit = { [weak self, weak made] in
                 guard let self, let made, let origin = made.origin else { return }
                 self.placeArcTrafficLights(origin: origin)
@@ -420,14 +425,19 @@ extension HostWindow {
         resting.origin = origin
         resting.placing = true
         defer { resting.placing = false }
+        let size = buttons[0].frame.size
+        // AppKit centres the buttons in the titlebar's height and starts them `systemLeading` in from its left edge.
+        let height = 2 * origin.y + size.height
+        let shift = origin.x - resting.systemLeading
+        let target = CGRect(x: shift, y: frame.bounds.height - height, width: frame.bounds.width - shift, height: height)
+        if container.frame != target { container.frame = target }
+        if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
+        // The same spots AppKit's own layout gives in this titlebar; only the pitch is Brk's to keep.
         let pitch = Metrics.window.trafficLightSize.value + Metrics.window.trafficLightSpacing.value
         for (i, button) in buttons.enumerated() {
             button.isHidden = false
-            let size = button.frame.size
-            let x = origin.x + Double(i) * pitch
-            // The titlebar container is not flipped: convert the top-left origin to AppKit's bottom-left.
-            let y = container.bounds.height - origin.y - size.height
-            button.setFrameOrigin(CGPoint(x: x, y: y))
+            let spot = CGPoint(x: resting.systemLeading + Double(i) * pitch, y: (height - size.height) / 2)
+            if button.frame.origin != spot { button.setFrameOrigin(spot) }
         }
         resting.isHidden = false
         resting.frame = buttons.map(\.frame).reduce(buttons[0].frame) { $0.union($1) }
@@ -446,27 +456,30 @@ final class RestingTrafficLights: NSView {
 
     /// Where Brk last put the lights (the window's top-left content space), nil while they are hidden.
     var origin: CGPoint?
-    /// True while Brk itself moves the buttons, so its own moves are not taken for AppKit's.
+    /// True while Brk itself moves the titlebar, so its own moves are not taken for AppKit's.
     var placing = false
-    /// A button's frame changed and Brk did not change it: put the lights back.
+    /// AppKit put the titlebar back (a window resize, full screen and back): place the lights again.
     var movedByAppKit: (() -> Void)?
+    /// How far in from the titlebar's left edge AppKit starts the buttons (9 on macOS 26), read before Brk moved them.
+    let systemLeading: Double
 
-    init(buttons: [NSButton]) {
+    init(buttons: [NSButton], container: NSView) {
         self.buttons = buttons
+        systemLeading = buttons.first.map { Double($0.frame.minX) } ?? 9
         super.init(frame: .zero)
         identifier = Self.id
-        for button in buttons {
-            button.alphaValue = Self.restingAlpha
-            button.postsFrameChangedNotifications = true
-            NotificationCenter.default.addObserver(self, selector: #selector(buttonFrameChanged(_:)), name: NSView.frameDidChangeNotification, object: button)
-        }
+        buttons.forEach { $0.alphaValue = Self.restingAlpha }
+        container.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(titlebarFrameChanged(_:)), name: NSView.frameDidChangeNotification, object: container)
     }
 
-    /// The user's report (verify/visual-pairs/run-20261103/Q16): after a window resize the colored buttons came up at
-    /// the system's spots, 4 pt left of and 7.5 pt above the grey circles, and the circles' own spots took no click.
-    @objc private func buttonFrameChanged(_ note: Notification) {
-        guard !placing, origin != nil, !isHidden, (note.object as? NSView)?.superview === superview else { return }
-        movedByAppKit?()
+    /// After AppKit is done with its own layout, not inside it.
+    @objc private func titlebarFrameChanged(_ note: Notification) {
+        guard !placing, origin != nil, !isHidden else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.placing, self.origin != nil, !self.isHidden else { return }
+            self.movedByAppKit?()
+        }
     }
 
     /// The standard buttons at rest: effectively invisible under the grey circles. Not 0: AppKit treats a fully
