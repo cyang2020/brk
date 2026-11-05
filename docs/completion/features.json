@@ -54,7 +54,8 @@
         }
       ],
       "remaining": [
-        "Check real control clicks and hidden-sidebar traffic-light behavior against an authenticated reference; same-tab multiwindow ownership remains unresolved."
+        "Check real control clicks and hidden-sidebar traffic-light behavior against an authenticated reference; same-tab multiwindow ownership remains unresolved.",
+        "用户第二次报告红黄绿按钮悬停时闪跳（Q20，2026-11-05 晚）。原因：鼠标每次移上、移开按钮，系统都把标题栏摆回它自己的位置，Brk 过一轮事件循环才摆回来，中间有一帧按钮在系统位置（偏左 4 点、偏上 8 点）；60 帧录像里修前有 2 帧，N3R 场景是到位半秒后才读所以一直通过。已修（3706b8c8）：在同一轮显示里就摆回去；同样的录像修后两次都是 0 帧。中途试过在运行时替换标题栏容器的类型，结果进全屏崩溃、按钮停在系统位置，已撤掉，没有进任何给用户的构建。"
       ],
       "implementation": [
         "Sources/BrkApp/WindowController.swift",
@@ -1081,7 +1082,8 @@
         "Domain and geometry tests are not a native drag demonstration; verify same-grid and cross-space pointer drops and profile switching.",
         "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。",
         "R5-3（2026-11-05，合并 63290349）：排布、拖入、区内重排、拖出、按下即打开都按真 Arc 重做，父任务独立重跑通过。没在 Arc 上弄清、所以没做的：拖收藏时 Clear 前的 ↓、MDN 选中格的深色描边、收藏个数上限（不设上限）。",
-        "用户报告 Q18（2026-11-05）：没有收藏、又把 Drag to add Favorites 提示关掉之后，收藏区高度是 0，标签没有地方可拖。已修（41d61ed9）：把标签拖到地址条那一条上，收藏区打开一个占满一行的空格，松手成为第一个收藏；单元测试和真实鼠标场景 R53-EmptyClosed，父任务重跑 21 条原生全过、单元 1219/0（verify/completion/review-r4/merge-gates/q18-favorites/）。真 Arc 上这个状态没试（要删掉夹具的四个收藏）。还差：当前收藏格的描边和底色 Arc 跟站点图标的颜色走（Q18/NOTES.md 第 5 节），交 R5-6。"
+        "用户报告 Q18（2026-11-05）：没有收藏、又把 Drag to add Favorites 提示关掉之后，收藏区高度是 0，标签没有地方可拖。已修（41d61ed9）：把标签拖到地址条那一条上，收藏区打开一个占满一行的空格，松手成为第一个收藏；单元测试和真实鼠标场景 R53-EmptyClosed，父任务重跑 21 条原生全过、单元 1219/0（verify/completion/review-r4/merge-gates/q18-favorites/）。真 Arc 上这个状态没试（要删掉夹具的四个收藏）。还差：当前收藏格的描边和底色 Arc 跟站点图标的颜色走（Q18/NOTES.md 第 5 节），交 R5-6。",
+        "R5-6（2026-11-05 晚合并 3cea4004）：当前收藏格的描边和底色跟站点图标的颜色走（红色图标红描边、黑色图标灰描边）；R56-Rim 父任务重跑通过，站台 Q18-ring-github-current 1.14%。GitHub 的描边比 Arc 浅（#D1D2D4 对 #B8BABC），Arc 可能用了另一个图标来源。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -2291,7 +2293,7 @@
       "arc_evidence": "row 153; anatomy-v 3 \"Clear Today tabs\"",
       "description": "Archives every unpinned tab not on screen",
       "historical_status": "done",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Clear Today archives each current-space Today unit that has no pane on screen in any window.",
       "owner": "native-grounding",
       "required_checks": [
@@ -2332,7 +2334,8 @@
         "Verify the Clear button and shortcut with two real windows, including a shared tab and split.",
         "R4-6 独立复核（2026-11-04）：证据不足。验收标准是\"任何窗口里都不在屏幕上的 Today 项才归档\"。没有两个窗口的检查（原生和单元都没有，单元测试名字写 AnyWindow 但只有一个窗口）；Clear 按钮本身没有原生点击；单窗口的 Cmd+Shift+K 有原生证据。",
         "R4-9（2026-11-04，合并 9633b81b）：R49-ClearToday 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
-        "真 Arc 上核对（2026-11-05，Q18/NOTES.md 第 4 节）：当前标签是置顶标签或收藏时，分隔线右边写的是\"↓ Clear\"；当前标签在 Today 里时是 Clear。Brk 永远写 Clear。箭头会不会改变点击结果没试。交 R5-6。"
+        "真 Arc 上核对（2026-11-05，Q18/NOTES.md 第 4 节）：当前标签是置顶标签或收藏时，分隔线右边写的是\"↓ Clear\"；当前标签在 Today 里时是 Clear。Brk 永远写 Clear。箭头会不会改变点击结果没试。交 R5-6。",
+        "R5-6（2026-11-05 晚合并 3cea4004）：当前标签是置顶标签或收藏时写\"↓ Clear\"，在 Today 里时写 Clear。父任务独立重跑 R56-ClearLabel 通过；站台 Q18 clear 六对 1.2–1.4%。箭头会不会改变点击结果仍没在 Arc 上试。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Tabs.swift",
@@ -2351,6 +2354,12 @@
           "from": "verified",
           "to": "partial",
           "why": "real Arc probe Q18: the label reads \"↓ Clear\" when the current tab is not in Today; Brk never draws the arrow"
+        },
+        {
+          "date": "2026-11-05",
+          "from": "partial",
+          "to": "verified",
+          "why": "R5-6 merged; the parent reran R56-ClearLabel"
         }
       ]
     },
@@ -3185,7 +3194,8 @@
         "Window-owned replacement toasts, dismissal, four-second timer and clock expiry are implemented. Native timing is asserted in TabTools4b; the final native timing check passes; add a two-window feedback ownership case.",
         "Arc 对照（run-20261103 P15）仍有差异或有意不同：P15-c: 已修（第 1 组：删除 Space 后弹提示条；站台未拍） | P15-a: 已修；提示条比 Arc 偏左约 10 点（Arc 图被遮挡量不准）",
         "R4-6 独立复核（2026-11-04）：证据不足。没有点掉提示条的原生检查；没有两个窗口时提示条出现在发起操作的那个窗口的检查（实现者也写了）；画出来的提示条视图没有原生断言。另外台账验收写的是\"窗口底部\"，Arc 的提示条在内容区右上角（P15-a-arc、P15-c-arc），Brk 也在右上角，这条措辞应改成右上角。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-Toasts 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Toasts 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "用户报告 Q20（2026-11-05 晚）：提示条位置和 Arc 不一样。真 Arc 上量出两个位置（Q20/NOTES.md）：和当前网页有关的（Copied Current URL、Translated back）在网页卡片里面，离顶 18.5、离窗口右边 18.5；和窗口有关的（Cleared Tabs、Space deleted、Screenshot Copied、Max 没开的提示）在窗口角上，离顶 4.5。这也解释了 R4-14 留下的\"y=4 还是 y=18\"。Brk 以前全在窗口角上，已改（c0439e5e）；Copied Link（With Quote）和 Copied Shared URL 跟着网页类走，这两个没在 Arc 上看过。站台 Q11-b 0.91→0.76、P50-e 0.77→0.44。没做：Arc 提示条出现时有一个小的弹性缩放。"
       ],
       "implementation": [
         "Sources/BrkBase/Metrics.swift",
@@ -7839,7 +7849,7 @@
       "arc_evidence": "row 170; `ARC_HomeButton`; anatomy-m 1.9 `HomePageID`",
       "description": "One place for Downloads, Archive, Easels and Notes, Media, Boosts, Spaces",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library.",
       "owner": "native-grounding",
       "required_checks": [
@@ -7904,7 +7914,8 @@
         "R3-4（2026-11-04，合并 0adfa4b1）：Library 打开时网页被挤窄重排，Arc 是保持页面宽度向右平移；这是 P30/P32 剩余差异里最大的一块，归内容区，下一轮。",
         "R3-3（2026-11-04，合并 662007f2）：Library 的 Easels 页改成真实的 Easel 卡片列表（旧的占位页删掉）。Easels 图标若要更贴近 Arc（带波浪线的小窗口）归 Library 图标工作。",
         "R4-2（2026-11-04，合并 f7287fa8）：Library 打开时网页卡片保持关着时的宽度、左贴面板、右边伸出窗口，网页不再重排（Arc 的做法）；Library 各页的字号、间距、颜色按 Arc 量过。站台 P30-a 10.5%→1.1%、P30-c 8.7%→0.9%、P32 各页 6.5–10.4%→0.8–1.8%。剩余为 Arc 参照里的测试数据（Space 1 内容、用户自己的 Boost）、Arc 自画的 Easels/Boosts 导航图标、屏幕区域截图里的系统通知。",
-        "用户报告 Q18（2026-11-05）：Library 左边的颜色不跟主题。真 Arc 上核对（Q18/NOTES.md 第 3 节，深蓝预设）：图标列和列表列都用主题颜色、文字浅色、选中项是更浅的圆角方块；Brk 的 Library 不读主题，永远是白的。交 R5-6。"
+        "用户报告 Q18（2026-11-05）：Library 左边的颜色不跟主题。真 Arc 上核对（Q18/NOTES.md 第 3 节，深蓝预设）：图标列和列表列都用主题颜色、文字浅色、选中项是更浅的圆角方块；Brk 的 Library 不读主题，永远是白的。交 R5-6。",
+        "R5-6（2026-11-05 晚合并 3cea4004）：Library 的图标列和列表列不再画自己的底色，露出窗口的主题；深色主题下文字和块按 Arc 五张图量的白色半透明。父任务独立重跑 R56-LibraryNavy 通过；站台 P32、P30 没有变差（P32-a 1.40→0.93），Q18 深蓝 Library 五对 1.15–5.00%（Spaces 页和 Archive 页是夹具数据不同，Spaces 页的文件夹图标形状不同）。"
       ],
       "implementation": [
         "Sources/BrkLibrary/LibraryView.swift",
@@ -7923,6 +7934,12 @@
           "from": "verified",
           "to": "partial",
           "why": "real Arc probe Q18: the Library does not take the theme colours"
+        },
+        {
+          "date": "2026-11-05",
+          "from": "partial",
+          "to": "verified",
+          "why": "R5-6 merged; the parent reran R56-LibraryNavy and the station"
         }
       ]
     },
@@ -10184,7 +10201,7 @@
       "arc_evidence": "`ARC_MediaControlsFeature` (`MiniPlayerFeature`)",
       "description": "Play and pause controls for a playing tab",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Playing tabs expose truthful play/pause controls and media state, with correct frame/player targeting, background behavior and lifecycle.",
       "owner": "batch2-captures-media",
       "required_checks": [
@@ -10285,7 +10302,8 @@
       "remaining": [
         "R4-7 独立复核（2026-11-04）：通过。Acceptance met.",
         "R4-2（2026-11-04，合并 f7287fa8）：截图模式的灰色遮罩按实测校准（#C6C6C6），提示卡阴影、字号、Save 按钮尺寸按 Arc；P33-d 4.5%→0.8%，P33-a/b/c 1.2–1.4%。Arc 的 Save 右边还有一个被通知挡住的按钮，Arc 的字符串表里只有 Save，待重拍 P33-d 核实。",
-        "用户报告 Q18（2026-11-05）：标签上的播放图标和 Arc 不一样。真 Arc 上核对（Q18/NOTES.md 第 2 节）：Arc 的行里只有一个喇叭、在站点图标和标题之间，行右端没有按钮；出声的标签不是当前标签时侧栏底部有一张播放卡（站点图标、上一首、暂停、下一首、喇叭，悬停长高显示标题和 ×）。Brk 是行右端暂停加喇叭两个按钮、标题被截短，没有底部的卡。交 R5-5。"
+        "用户报告 Q18（2026-11-05）：标签上的播放图标和 Arc 不一样。真 Arc 上核对（Q18/NOTES.md 第 2 节）：Arc 的行里只有一个喇叭、在站点图标和标题之间，行右端没有按钮；出声的标签不是当前标签时侧栏底部有一张播放卡（站点图标、上一首、暂停、下一首、喇叭，悬停长高显示标题和 ×）。Brk 是行右端暂停加喇叭两个按钮、标题被截短，没有底部的卡。交 R5-5。",
+        "R5-5（2026-11-05 晚合并 6777d096）：行里只有一个喇叭、在站点图标和标题之间；出声的标签不在屏幕上时底栏上方有播放卡（暂停、上一首下一首、音量、关闭、回到标签都起作用，两张卡叠放）；当前行滚出列表时列表边缘有带箭头的圆钮。父任务独立重跑：MediaControls、MediaSounds 和七条 R55 场景全过，单元 1269/0（verify/completion/review-r4/merge-gates/q20-r5-5-r5-6/）；站台 Q18 媒体 11 对 1.7–8.0%，主要是 Arc 的卡下面压着它自己的更新提示条、高 32 点。没做的：画中画按钮、摄像头和麦克风的卡、长标题滚动、喇叭的切换动画、深色主题下卡的颜色（没有 Arc 参照，标着猜的）；暂停的卡只观察了两分多钟没有自动消失。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromeAudibility.swift",
@@ -10316,6 +10334,12 @@
           "from": "verified",
           "to": "partial",
           "why": "real Arc probe Q18: the row glyph is in the wrong place and the bottom player card is missing"
+        },
+        {
+          "date": "2026-11-05",
+          "from": "partial",
+          "to": "verified",
+          "why": "R5-5 merged; the parent reran the media scenarios; remaining items are kinds of card not seen on Arc"
         }
       ]
     },
