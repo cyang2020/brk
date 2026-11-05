@@ -286,9 +286,11 @@ final class FavoritesDragTests: XCTestCase {
     func testOverThePageTheWindowShowsTheEarlierTabAgainAndTheCardRidesThePointer() throws {
         let (w, live) = try rig()
         defer { w.close() }
+        advanceDropClock(live)
         let shown = try XCTUnwrap(live.view.content.panes.first?.tab)
         let tile = try tile(3, live)
         let id = tile.id
+        let today = live.view.space.today.rows.map(\.id)
         tile.mouseDown(with: mouse(.leftMouseDown, centre(tile), in: w))
         XCTAssertEqual(live.view.content.panes.first?.tab, id)
         // The right edge of the page: Arc's slot (P23-d), for a Favorite too (Q13-e).
@@ -307,14 +309,22 @@ final class FavoritesDragTests: XCTestCase {
         XCTAssertEqual(live.view.content.panes.first?.tab, id)
         tile.mouseDragged(with: mouse(.leftMouseDragged, edge, in: w))
         tile.mouseUp(with: mouse(.leftMouseUp, edge, in: w))
-        XCTAssertEqual(live.view.content.panes.map(\.tab), [shown, id], "the release made no split")
-        XCTAssertFalse(live.view.favorites.tiles.contains { $0.id == id })
+        // Arc (Q17-drop-favorite-right-half): the tile stays and a new tab at its address joins, on the right and focused.
+        XCTAssertEqual(live.view.content.panes.count, 2, "the release made no split")
+        XCTAssertEqual(live.view.content.panes.first?.tab, shown)
+        let new = try XCTUnwrap(live.view.content.panes.last)
+        XCTAssertNotEqual(new.tab, id, "the Favorite itself went into the split")
+        XCTAssertTrue(new.focused)
+        XCTAssertTrue(live.view.favorites.tiles.contains { $0.id == id }, "the Favorite left the grid")
+        XCTAssertFalse(today.contains(new.tab))
     }
 
-    func testTheMiddleOfThePageRingsItAndAReleaseThereMovesNothing() throws {
+    func testTheMiddleOfThePageRingsItAndAReleaseThereShowsTheTabAndMovesNothing() throws {
         let (w, live) = try rig()
         defer { w.close() }
+        advanceDropClock(live)
         let shown = try XCTUnwrap(live.view.content.panes.first?.tab)
+        let order = live.view.space.today.rows.map(\.id)
         let inbox = try row("Inbox", live)
         let id = try XCTUnwrap(inbox.row?.id)
         let middle = window(CGPoint(x: 780, y: 330))
@@ -326,8 +336,16 @@ final class FavoritesDragTests: XCTestCase {
         XCTAssertEqual(ring.frame, area, "the ring is not the whole page")
         XCTAssertEqual(ring.layer?.borderWidth, 3)
         inbox.mouseUp(with: mouse(.leftMouseUp, middle, in: w))
-        XCTAssertTrue(live.view.space.today.rows.contains { $0.id == id })
-        XCTAssertEqual(live.view.content.panes.map(\.tab), [shown])
+        // Arc (Q17-drop-tab-framed-middle): no split, nothing moves, the dragged tab is the current one.
+        XCTAssertEqual(live.view.space.today.rows.map(\.id), order)
+        XCTAssertEqual(live.view.content.panes.map(\.tab), [id])
+    }
+
+    /// The events here come within a millisecond: each read of the drop rule's clock counts as a real interval of the throttle.
+    private func advanceDropClock(_ live: Live) {
+        guard let content = ViewTreeSearch.find(ViewID.splitDropPreview.identifier, in: live.root)?.superview as? ContentAreaView else { return XCTFail("no content area") }
+        var now = 1000.0
+        content.dropClock = { now += 0.2; return now }
     }
 
     // MARK: Rule 7: the Space name strip

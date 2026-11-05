@@ -182,4 +182,21 @@ final class PageDropRuleTests: XCTestCase {
         four.move(to: p(240, 300), at: 10, full)
         XCTAssertEqual(PageDropRule.preview(four), .frame(pane: 0), "no room: the zone falls back to the pane")
     }
+
+    // MARK: What a release gives
+
+    func testAFrameShowsTheTabAndNothingShownDoesNothing() throws {
+        let tab = ItemID("tab")
+        var state = PageDropRule.State(paneCount: 1, orientation: .horizontal)
+        XCTAssertNil(PageDropRule.releaseCommand(state, source: tab, offer: nil, paneCount: 1), "nothing shown: nothing happens")
+        state.move(to: p(749, 388), at: 10, input(replaceable: true))
+        XCTAssertEqual(PageDropRule.releaseCommand(state, source: tab, offer: nil, paneCount: 1), .tab(.focus(tab)))
+    }
+
+    func testASlotOverItsOwnPageLeavesTheTabWhereItIs() {
+        var state = PageDropRule.State(paneCount: 1, orientation: .horizontal)
+        state.move(to: p(300, 330), at: 10, input(replaceable: false))
+        XCTAssertEqual(PageDropRule.preview(state), .slot(before: 0, orientation: .horizontal))
+        XCTAssertNil(PageDropRule.releaseCommand(state, source: ItemID("tab"), offer: nil, paneCount: 1))
+    }
 }
