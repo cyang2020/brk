@@ -215,6 +215,27 @@ public enum Row: Sendable, Equatable, Codable {
 /// (TabCellBackgroundContentVisible); `idle` = everything else.
 public enum RowStatus: String, Sendable, Equatable, Codable { case current, visible, idle }
 
+/// Which Today tabs the divider's Clear will archive (Arc: `UnpinnedSectionDividerState.ClearTabAction`, what its button
+/// tells the user beforehand). `clearAll` draws the ↓ and says "Clear Today tabs" (the current tab is elsewhere);
+/// `clearOthers` draws none and says "Clear unselected Today tabs". The click itself is one rule, `TabCommand.clearToday`.
+public enum TodayClearAction: Sendable, Equatable { case clearOthers, clearAll }
+
+extension Row {
+    /// This row, or a row inside it, is the current tab.
+    var holdsCurrent: Bool {
+        switch self {
+        case .tab(let tab): tab.status == .current
+        case .split(let split): split.status == .current
+        case .folder(let folder): folder.children.contains(where: \.holdsCurrent)
+        }
+    }
+}
+
+extension SectionSnapshot {
+    /// For the Today section: `clearOthers` while the current tab is one of its rows.
+    public var clearAction: TodayClearAction { rows.contains(where: \.holdsCurrent) ? .clearOthers : .clearAll }
+}
+
 public struct TabRow: Sendable, Equatable, Codable {
     public var id: ItemID
     public var section: SectionKind

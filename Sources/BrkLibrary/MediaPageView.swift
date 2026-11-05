@@ -323,7 +323,8 @@ import BrkUIKit
         let light = scheme == .light
         layer?.borderColor = NSColor(white: light ? 0 : 1, alpha: 0.06).cgColor
         // P32-a: the card #FAF7FC, the title, the description and × in one plum (#704067), the note a pale mauve (#B39FB5).
-        layer?.backgroundColor = (light ? NSColor(srgbRed: 0xFA / 255.0, green: 0xF7 / 255.0, blue: 0xFC / 255.0, alpha: 1) : NSColor(white: 0.18, alpha: 1)).cgColor
+        // Q18-navy-library-media: the card #161C2B, white inks.
+        layer?.backgroundColor = (light ? NSColor(srgbRed: 0xFA / 255.0, green: 0xF7 / 255.0, blue: 0xFC / 255.0, alpha: 1) : NSColor(srgbRed: 0x16 / 255.0, green: 0x1C / 255.0, blue: 0x2B / 255.0, alpha: 1)).cgColor
         let ink = light ? NSColor(srgbRed: 0x70 / 255.0, green: 0x40 / 255.0, blue: 0x67 / 255.0, alpha: 1) : .white
         let note = light ? NSColor(srgbRed: 0xB3 / 255.0, green: 0x9F / 255.0, blue: 0xB5 / 255.0, alpha: 1) : NSColor(white: 1, alpha: 0.55)
         title.textColor = ink

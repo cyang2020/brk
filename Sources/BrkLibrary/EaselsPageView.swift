@@ -76,7 +76,7 @@ final class EaselsPageView: NSView {
             $0.title.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
                 || $0.elements.contains { $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         }
-        for card in shown { list.addSubview(EaselCardView(card, dispatch: dispatch)) }
+        for card in shown { list.addSubview(EaselCardView(card, scheme: scheme ?? .light, dispatch: dispatch)) }
         empty.isHidden = !shown.isEmpty
         if shown.isEmpty {
             if shownCards.isEmpty { empty.show(glyph: .easelsAndNotes, title: LibraryCopy.nothingHereYet, subtitle: LibraryCopy.easelsEmpty, colors: colors) }
@@ -107,12 +107,14 @@ final class EaselsPageView: NSView {
 @MainActor
 final class EaselCardView: NSView {
     let card: EaselCard
+    private let scheme: Scheme
     private let dispatch: Dispatch
     private let more = NSButton()
     private var hovered = false { didSet { if hovered != oldValue { needsDisplay = true; more.alphaValue = hovered ? 1 : 0 } } }
 
-    init(_ card: EaselCard, dispatch: @escaping Dispatch) {
+    init(_ card: EaselCard, scheme: Scheme = .light, dispatch: @escaping Dispatch) {
         self.card = card
+        self.scheme = scheme
         self.dispatch = dispatch
         super.init(frame: .zero)
         identify(.easelCard(card.id))
@@ -168,24 +170,26 @@ final class EaselCardView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let c = EaselDraw.card
-        (hovered ? EaselPalette.cardHover : EaselPalette.card).setFill()
+        let c = EaselDraw.card, dark = scheme == .dark
+        (dark ? (hovered ? EaselPalette.darkCardHover : EaselPalette.darkCard) : (hovered ? EaselPalette.cardHover : EaselPalette.card)).setFill()
         NSBezierPath(roundedRect: bounds, xRadius: c.radius.value, yRadius: c.radius.value).fill()
         let board = bounds.insetBy(dx: c.inset.value, dy: c.inset.value)
         let outer = NSBezierPath(roundedRect: board.insetBy(dx: 0.5, dy: 0.5), xRadius: c.boardRadius.value, yRadius: c.boardRadius.value)
-        NSColor.white.setFill()
-        outer.fill()
-        EaselPalette.cardEdge.setStroke()
+        if !dark {
+            NSColor.white.setFill()
+            outer.fill()
+        }
+        (dark ? EaselPalette.darkCardEdge : EaselPalette.cardEdge).setStroke()
         outer.lineWidth = 1
         outer.stroke()
-        let inner = board.insetBy(dx: c.boardRim.value + 1, dy: c.boardRim.value + 1)
-        let innerRadius = max(0, c.boardRadius.value - c.boardRim.value)
+        let inner = dark ? board : board.insetBy(dx: c.boardRim.value + 1, dy: c.boardRim.value + 1)
+        let innerRadius = dark ? c.boardRadius.value : max(0, c.boardRadius.value - c.boardRim.value)
         let fill = NSBezierPath(roundedRect: inner, xRadius: innerRadius, yRadius: innerRadius)
-        EaselPalette.cardBoard.setFill()
+        (dark ? EaselPalette.darkCardBoard : EaselPalette.cardBoard).setFill()
         fill.fill()
         // The board's drawing, scaled to fit the area above the title.
         let title = NSAttributedString(string: card.title, attributes: [
-            .font: NSFont.systemFont(ofSize: c.titleFont.value, weight: .bold), .foregroundColor: EaselPalette.cardTitle,
+            .font: NSFont.systemFont(ofSize: c.titleFont.value, weight: .bold), .foregroundColor: dark ? EaselPalette.darkCardTitle : EaselPalette.cardTitle,
         ])
         let titleBox = title.boundingRect(with: CGSize(width: c.titleWidth.value, height: 80), options: [.usesLineFragmentOrigin])
         let titleY = board.maxY - c.titleBottom.value - ceil(titleBox.height)

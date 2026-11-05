@@ -59,6 +59,75 @@ final class LibraryViewTests: XCTestCase {
                         downloads: downloads)
     }
 
+    // MARK: The theme (Q18)
+
+    private func palette(_ hex: String) -> Palette { Palette(resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0.25, appearance: .auto))) }
+
+    private func component(_ color: NSColor) -> (white: CGFloat, alpha: CGFloat) {
+        let c = color.usingColorSpace(.sRGB) ?? color
+        return ((c.redComponent + c.greenComponent + c.blueComponent) / 3, c.alphaComponent)
+    }
+
+    /// the panel paints no background of its own under either scheme, so the window's theme shows through it, like the
+    /// sidebar it replaces (Q18-navy-library-*); under a white theme that is what P32's near-white was
+    func testThePanelLetsTheThemeThrough() throws {
+        for hex in ["#FFFFFF", "#2D4468"] {
+            let root = makeView()
+            let snapshot = library(.downloads)
+            root.render(snapshot, now: now, frames: frames(.downloads), palette: palette(hex))
+            let panel = try XCTUnwrap(view(.library, in: root))
+            XCTAssertNil(panel.layer?.backgroundColor, hex)
+        }
+    }
+
+    /// a light scheme keeps the values measured on P32; a dark one has white inks and fills, measured on Q18-navy-library
+    func testLibraryColorsByScheme() {
+        let light = LibraryColors.of(.light), dark = LibraryColors.of(.dark)
+        XCTAssertEqual(component(light.control).alpha, 0.072, accuracy: 0.001)
+        XCTAssertEqual(component(light.search).alpha, 0.072, accuracy: 0.001)
+        XCTAssertEqual(component(light.filter).alpha, 0.072, accuracy: 0.001)
+        XCTAssertEqual(component(light.placeholder).alpha, 0.045, accuracy: 0.001)
+        XCTAssertEqual(component(light.navLabel).white, CGFloat(0x73) / 255, accuracy: 0.01)
+        XCTAssertEqual(component(light.navGlyph).white, CGFloat(0x6A) / 255, accuracy: 0.01)
+        XCTAssertEqual(light.shadeWidth, 10)
+        for (name, color) in [("control", dark.control), ("search", dark.search), ("filter", dark.filter), ("placeholder", dark.placeholder), ("label", dark.navLabel),
+                              ("glyph", dark.navGlyph), ("title", dark.foregroundPrimary), ("detail", dark.foregroundSecondary), ("strong", dark.foregroundStrong)] {
+            XCTAssertEqual(component(color).white, 1, accuracy: 0.001, name)
+        }
+        XCTAssertEqual(component(dark.control).alpha, 0.09, accuracy: 0.001)
+        XCTAssertEqual(component(dark.search).alpha, 0.08, accuracy: 0.001)
+        XCTAssertEqual(component(dark.filter).alpha, 0.05, accuracy: 0.001)
+        XCTAssertEqual(component(dark.navLabel).alpha, 0.63, accuracy: 0.001)
+        XCTAssertEqual(component(dark.foregroundStrong).alpha, 0.87, accuracy: 0.001)
+        XCTAssertEqual(dark.shadeWidth, 37)
+    }
+
+    /// the views take those colors: a navy theme's search field, cell label and empty state are the dark ones
+    func testADarkThemeReachesThePages() throws {
+        let root = makeView()
+        root.render(library(.downloads), now: now, frames: frames(.downloads), palette: palette("#2D4468"))
+        let dark = LibraryColors.of(.dark)
+        let search = try XCTUnwrap(shown(root).compactMap { $0 as? LibrarySearchField }.first)
+        XCTAssertEqual(search.layer?.backgroundColor.map { NSColor(cgColor: $0)!.alphaComponent } ?? 0, dark.search.alphaComponent, accuracy: 0.001)
+        let cell = try XCTUnwrap(view(.libraryPage(.media), in: root))
+        let label = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSTextField }.first)
+        XCTAssertEqual(component(label.textColor!).white, 1, accuracy: 0.001)
+        XCTAssertEqual(component(label.textColor!).alpha, 0.63, accuracy: 0.001)
+    }
+
+    /// a Spaces card draws in its own space's scheme: a light space's card stays pale in a navy window, a navy one is
+    /// its window color a little darker (Q18-navy-library-spaces)
+    func testASpaceCardTakesItsOwnTheme() {
+        let light = SpacesPageView.cardFill(of: resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0.25, appearance: .auto)))
+        XCTAssertEqual(component(light[0]).white, 0.99, accuracy: 0.015)
+        let navy = SpacesPageView.cardFill(of: resolveTheme(SpaceTheme(colors: [RGBA(hex: "#2D4468")], texture: .grain, intensity: 0.25, appearance: .auto)))
+        XCTAssertEqual(navy[0], navy[1])
+        let c = navy[0].usingColorSpace(.sRGB)!
+        XCTAssertEqual(c.redComponent * 255, 106, accuracy: 4)
+        XCTAssertEqual(c.greenComponent * 255, 123, accuracy: 4)
+        XCTAssertEqual(c.blueComponent * 255, 145, accuracy: 4)
+    }
+
     // MARK: The panel
 
     /// the navigation column lists every page with Arc's name and a glyph in the cells the layout computed, in Arc's
@@ -251,7 +320,7 @@ final class LibraryViewTests: XCTestCase {
         snapshot.spaces = ids.map {
             SpaceManagerRow(id: $0, title: $0.rawValue, icon: .none, profileName: "Default", theme: resolveTheme(.default), tabCount: 0, active: $0 == ids[0])
         }
-        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light)
+        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light, accent: .white)
         view.layoutSubtreeIfNeeded()
         return view
     }

@@ -4,6 +4,7 @@ import BrkBase
 import BrkDomain
 import BrkLayout
 @testable import BrkSidebar
+import BrkUIKit
 import XCTest
 
 /// R5-3: the pointer gestures of Arc's Favorites and sidebar rows (Q13), driven through the views' own mouse methods on
@@ -372,4 +373,108 @@ final class FavoritesDragTests: XCTestCase {
         let hint = try XCTUnwrap(first(in: live.root) { ($0 as? NSTextField)?.stringValue == "Double-click to rename" && !$0.isHidden }, "no hint line under the title")
         XCTAssertFalse(hint.isHidden)
     }
+}
+
+/// R5-6: the current Favorite takes its site icon's colors, Today's Clear says where the current tab is (Q18).
+@MainActor
+final class FavoriteRimTests: XCTestCase {
+    private func solid(_ color: NSColor, side: CGFloat = 32) -> NSImage {
+        NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            color.setFill()
+            rect.fill()
+            return true
+        }
+    }
+
+    /// The picture's middle, unpremultiplied, and its alpha.
+    private func middle(_ image: CGImage) throws -> (red: Double, green: Double, blue: Double, alpha: Double) {
+        var bytes = [UInt8](repeating: 0, count: 4)
+        let context = try XCTUnwrap(CGContext(data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let side = CGFloat(image.width)
+        context.draw(image, in: CGRect(x: -side / 2, y: -CGFloat(image.height) / 2, width: side, height: CGFloat(image.height)))
+        let a = Double(bytes[3]) / 255
+        return (Double(bytes[0]) / a, Double(bytes[1]) / a, Double(bytes[2]) / a, a)
+    }
+
+    /// Arc's chain on a solid icon: red stays red with its other channels lifted, black becomes a mid grey, both near opaque
+    /// in the middle; the rims Arc shows are #FF7A7E for YouTube and #9E9E9E for MDN's mostly black square
+    func testThePictureFollowsTheIcon() throws {
+        let red = try middle(XCTUnwrap(FaviconWash.picture(of: solid(.red))))
+        XCTAssertEqual(red.red, 255, accuracy: 3)
+        XCTAssertGreaterThan(red.red, red.green + 100)
+        XCTAssertEqual(red.green, red.blue, accuracy: 3)
+        XCTAssertEqual(red.alpha, 1, accuracy: 0.04)
+        let black = try middle(XCTUnwrap(FaviconWash.picture(of: solid(.black))))
+        XCTAssertEqual(black.red, black.green, accuracy: 2)
+        XCTAssertEqual(black.green, black.blue, accuracy: 2)
+        XCTAssertEqual(black.red, 99, accuracy: 12)
+        XCTAssertEqual(black.alpha, 1, accuracy: 0.04)
+    }
+
+    /// one picture per icon image
+    func testThePictureIsKeptPerIcon() throws {
+        let icon = solid(.blue)
+        let first = try XCTUnwrap(FaviconWash.picture(of: icon)), second = try XCTUnwrap(FaviconWash.picture(of: icon))
+        XCTAssertTrue(first === second)
+    }
+
+    /// the picture is drawn tray width / 5 x 16 pt across around the tile's centre, so a 47 pt tile in a 212 pt tray sees
+    /// the middle 7% of it
+    func testTheTileSeesTheMiddleOfThePicture() {
+        let window = FaviconFractions.window
+        XCTAssertEqual(window.width, 47 / (212.0 / 5 * 16), accuracy: 0.0001)
+        XCTAssertEqual(window.midX, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(window.midY, 0.5, accuracy: 0.0001)
+    }
+
+    /// `AppTrayItemBackgroundView`: the picture over a resting tile only in a dark theme, a little more on hover
+    func testThePictureOverTheFill() {
+        XCTAssertEqual(FavoriteTileView.washOpacity(scheme: .dark, hovered: false), 0.2)
+        XCTAssertEqual(FavoriteTileView.washOpacity(scheme: .dark, hovered: true), 0.3)
+        XCTAssertEqual(FavoriteTileView.washOpacity(scheme: .light, hovered: false), 0)
+        XCTAssertEqual(FavoriteTileView.washOpacity(scheme: .light, hovered: true), 0.1)
+    }
+
+    /// the current tile's white: 0.8 in a light theme, 0.45 in a dark one
+    func testTheCurrentFill() {
+        let theme = { (hex: String) in Palette(resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0.25, appearance: .auto))) }
+        XCTAssertEqual(theme("#FFFFFF").ink.tileCurrent.alphaComponent, 0.8, accuracy: 0.001)
+        XCTAssertEqual(theme("#2D4468").ink.tileCurrent.alphaComponent, 0.45, accuracy: 0.001)
+    }
+
+    /// under a dark theme the folder and the empty favicon take Arc's colors: Q18-navy-row-hover-arc.png
+    func testADarkThemesFolderInks() {
+        let ink = HueInk(Palette(resolveTheme(SpaceTheme(colors: [RGBA(hex: "#2D4468")], texture: .grain, intensity: 0.25, appearance: .auto))))
+        func assert(_ color: NSColor, _ r: Double, _ g: Double, _ b: Double, line: UInt = #line) {
+            let c = color.usingColorSpace(.sRGB)!
+            XCTAssertEqual(c.redComponent * 255, r, accuracy: 8, line: line)
+            XCTAssertEqual(c.greenComponent * 255, g, accuracy: 8, line: line)
+            XCTAssertEqual(c.blueComponent * 255, b, accuracy: 8, line: line)
+        }
+        assert(ink.outline, 0xE7, 0xED, 0xF4)
+        assert(ink.back, 0x6B, 0x8F, 0xBC)
+        assert(ink.front, 0x26, 0x43, 0x68)
+        XCTAssertEqual(ink.emptyFavicon.alphaComponent, 0.3, accuracy: 0.001)
+    }
+
+    /// the button says ↓ Clear with the wider frame and Arc's other tooltip when asked to clear everything
+    func testClearSaysWhatItWillDo() {
+        let button = ClearButton(action: {})
+        let palette = Palette(resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0.25, appearance: .auto)))
+        button.render(.clearOthers, palette: palette)
+        XCTAssertEqual(button.accessibilityLabel(), "Clear")
+        XCTAssertEqual(button.toolTip, "Clear unselected Today tabs")
+        let plain = button.fittingSize.width
+        XCTAssertEqual(button.arrowRoom, 0)
+        button.render(.clearAll, palette: palette)
+        XCTAssertEqual(button.accessibilityLabel(), "↓ Clear")
+        XCTAssertEqual(button.toolTip, "Clear Today tabs")
+        XCTAssertEqual(button.fittingSize.width, plain + button.arrowRoom)
+        XCTAssertEqual(button.arrowRoom, 12.75)
+    }
+}
+
+private enum FaviconFractions {
+    static var window: CGRect { FaviconWash.window(tile: CGSize(width: 47, height: 46), trayWidth: 212) }
 }

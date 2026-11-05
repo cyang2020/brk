@@ -100,6 +100,13 @@ struct EaselColors {
     let cardBoard = LibraryColors.srgb(0xF5F5F5)
     let scribble = LibraryColors.srgb(0xF25E6B)
     let cardTitle = LibraryColors.srgb(0x2A2A2A)
+    /// The same card on a dark theme (Q18-navy-library-easels-arc.png): a band of white 0.05, a board of grey 0.3 inside a
+    /// white 0.08 line, the title in the Library's strong ink.
+    let darkCard = NSColor(white: 1, alpha: 0.05)
+    let darkCardHover = NSColor(white: 1, alpha: 0.09)
+    let darkCardEdge = NSColor(white: 1, alpha: 0.08)
+    let darkCardBoard = NSColor(white: 0x8C / 255.0, alpha: 0.3)
+    let darkCardTitle = NSColor(white: 1, alpha: 0.87)
 }
 
 let EaselPalette = EaselColors()

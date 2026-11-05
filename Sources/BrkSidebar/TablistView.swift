@@ -170,8 +170,8 @@ final class TablistView: NSScrollView {
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
-                divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, canTidy: space.today.canTidy,
-                               tidying: space.today.tidying, palette: palette)
+                divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, clearAction: space.today.clearAction,
+                               canTidy: space.today.canTidy, tidying: space.today.tidying, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette, current: newTabCurrent)
@@ -725,7 +725,8 @@ final class RowView: HoverView {
         else if dragLifted || status == .current { fill = tokens.tabCurrent }
         else if status == .visible { fill = tokens.tabVisible }
         else if isPressed { fill = tokens.tabPressed }
-        else if multiselected || isHovered { fill = tokens.itemHover }
+        // Q18-navy-row-hover-arc.png: a hovered row reads white 0.11 over a dark theme (the 0.15 of the other hovers is too much).
+        else if multiselected || isHovered { fill = !multiselected && palette.scheme == .dark ? tokens.tabPreviousHover : tokens.itemHover }
         else { fill = nil }
         let layer = background.layer
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
@@ -998,14 +999,14 @@ final class DividerRowView: HoverView {
         tidy.identify(.todayTidy)
     }
 
-    func render(canClear: Bool, canTidy: Bool = false, tidying: Bool = false, palette: Palette) {
+    func render(canClear: Bool, clearAction: TodayClearAction = .clearOthers, canTidy: Bool = false, tidying: Bool = false, palette: Palette) {
         self.palette = palette
         self.canClear = canClear
         self.canTidy = canTidy
         self.tidying = tidying
         line.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
         tidyBar.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
-        clear.render(palette: palette)
+        clear.render(clearAction, palette: palette)
         tidy.render(palette: palette, busy: tidying)
         clear.isHidden = !canClear
         tidy.isHidden = !canTidy
@@ -1017,9 +1018,13 @@ final class DividerRowView: HoverView {
         let inset = Draw.dividerInset.value
         let size = clear.fittingSize
         // The word ends `clearTrailing` before the sidebar's edge; the label's cell draws it 2 in from the frame.
-        let textStart = ((bounds.width - Draw.clearTrailing.value - clear.textWidth) * 2).rounded() / 2
+        let wordStart = ((bounds.width - Draw.clearTrailing.value - clear.textWidth) * 2).rounded() / 2
+        // The ↓ goes left of the word, which stays where it is; everything further left moves over by it.
+        let textStart = wordStart - clear.arrowRoom
         clear.frame = CGRect(x: textStart - ClearButton.cellInset, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
-        var end = clear.alphaValue > 0 && !clear.isHidden ? textStart - Draw.clearGap.value : bounds.width - inset
+        // With the ↓ the hairline ends 20 before the word (Q18-clear-pinned-current-resting-arc.png), without it 10.
+        let clearGap = clear.arrowRoom > 0 ? Draw.clearGap.value - Draw.clearArrowGap.value : Draw.clearGap.value
+        var end = clear.alphaValue > 0 && !clear.isHidden ? textStart - clearGap : bounds.width - inset
         // Tidy keeps its place while it is invisible too, so the pointer finds it where it appears.
         let gaps = Draw.tidyGaps.value, hairline = Draw.hairline.value, barHeight = Draw.tidySeparatorHeight.value
         let right = clear.isHidden ? bounds.width - Draw.clearTrailing.value : textStart - gaps[3]
@@ -1083,7 +1088,7 @@ final class TidyButton: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        let color = palette.color(isHovered && !busy ? palette.tokens.foregroundStrong : palette.tokens.foreground)
+        let color = isHovered && !busy ? palette.color(palette.tokens.foregroundStrong) : palette.clearInk
         label.textColor = color
         glyph.image = ArcGlyphs.broom(size: Draw.tidyGlyph.value[1])
         glyph.contentTintColor = color
@@ -1099,40 +1104,60 @@ final class TidyButton: HoverView {
     }
 }
 
-/// "Clear": the word in the sidebar foreground, stronger on hover.
+/// "Clear", with a ↓ before the word while the current tab is outside Today (Arc's `SidebarClearButton`: `clearAll`,
+/// Q18-clear-pinned-current-arc.png): both in the sidebar foreground, stronger on hover.
 @MainActor
 final class ClearButton: HoverView {
+    private let arrow = NSImageView()
     private let label = NSTextField(labelWithString: Copy.clearToday)
     private let action: () -> Void
     private var palette: Palette?
+    /// What the button says now: "↓ Clear" or "Clear" (accessibility, and how e2e reads it).
+    private(set) var clearAction = TodayClearAction.clearOthers
 
     init(action: @escaping () -> Void) {
         self.action = action
         super.init(frame: .zero)
         label.font = .systemFont(ofSize: Draw.clearFont.value, weight: .semibold)
         label.isSelectable = false
+        arrow.imageScaling = .scaleNone
+        arrow.isHidden = true
         addSubview(label)
+        addSubview(arrow)
     }
 
     /// The label's cell, not its intrinsic size, which cut the last letter (P02-clear-user-brk.png).
-    override var fittingSize: NSSize { NSSize(width: label.cellWidth, height: label.intrinsicContentSize.height) }
+    override var fittingSize: NSSize { NSSize(width: arrowRoom + label.cellWidth, height: label.intrinsicContentSize.height) }
 
     static let cellInset = 2.0
     var textWidth: Double { label.attributedStringValue.size().width }
+    /// How far the ↓ pushes the button's left edge out from the word.
+    var arrowRoom: Double { clearAction == .clearAll ? Draw.clearArrowWidth.value + Draw.clearArrowGap.value : 0 }
 
-    func render(palette: Palette) {
+    func render(_ action: TodayClearAction, palette: Palette) {
         self.palette = palette
+        clearAction = action
+        arrow.isHidden = action != .clearAll
+        toolTip = action == .clearAll ? Copy.clearTodayAll : Copy.clearTodayOthers
+        setAccessibilityLabel(action == .clearAll ? "↓ " + Copy.clearToday : Copy.clearToday)
         stateChanged()
+        needsLayout = true
     }
 
     override func layout() {
         super.layout()
-        label.frame = bounds
+        let width = Draw.clearArrowWidth.value
+        arrow.frame = CGRect(x: Self.cellInset, y: 0, width: width, height: bounds.height)
+        label.frame = CGRect(x: arrowRoom, y: 0, width: bounds.width - arrowRoom, height: bounds.height)
     }
 
     override func stateChanged() {
         guard let palette else { return }
-        label.textColor = palette.color(isHovered ? palette.tokens.foregroundStrong : palette.tokens.foreground)
+        // The pointer on the label writes it in the rows' ink (Q18-clear-pinned-current-on-label-arc.png: #2A2C2E).
+        let ink = isHovered ? palette.ink.text : palette.clearInk
+        label.textColor = ink
+        arrow.image = Glyph.clearDown.image(size: Draw.clearArrowGlyph.value, weight: .semibold)
+        arrow.contentTintColor = ink
         (superview as? HoverView)?.stateChanged()
     }
 

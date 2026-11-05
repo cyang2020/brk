@@ -103,6 +103,7 @@ final class FavoritesView: NSView {
             if let rect = frames.favoriteTiles[row.id] {
                 Slide.place(tile, at: rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding && existing != nil)
             }
+            tile.trayWidth = frames.favoritesTray.width
             tile.render(row, renaming: row.id == renaming, palette: palette)
         }
         // Hidden while the current tile is the one being dragged: its cell is empty.
@@ -176,8 +177,9 @@ final class FavoritesView: NSView {
 }
 
 /// One favorite: the favicon (or the tab's custom icon) centred in a 47 pt tall continuous-corner tile; a site with no
-/// favicon leaves the tile empty (Q13-n5). Current tile: lighter fill and a 2 pt rim (Arc: `AppTrayItemHighlightRingView`,
-/// inset 1, radius 11). Unloaded tabs draw dimmer. While renaming, the title editor spans the tile in place of the icon.
+/// favicon leaves the tile empty (Q13-n5). Current tile: white over its shadow and a 2 pt rim in the icon's colors
+/// (`FaviconWash`; Arc: `AppTrayItemSelectionOutlineView`, inset 1, radius 11), a custom icon's rim in the separator color.
+/// Unloaded tabs draw dimmer. While renaming, the title editor spans the tile in place of the icon.
 @MainActor
 final class FavoriteTileView: HoverView {
     let id: ItemID
@@ -189,7 +191,13 @@ final class FavoriteTileView: HoverView {
     private let drag: DragController
     private let icon = IconView()
     private let ring = CAShapeLayer()
+    /// `FaviconWash`'s picture over the tile's fill (dark themes, and a hovered tile in light ones) and through the rim.
+    private let wash = CALayer()
+    private let rim = CALayer()
+    private let rimMask = CAShapeLayer()
     private var row: TabRow?
+    /// The tray's width sizes the picture.
+    var trayWidth = 0.0
     private var palette: Palette?
     private var renameField: RenameField?
     var onHover: ((FavoriteTileView, Bool) -> Void)?
@@ -210,7 +218,16 @@ final class FavoriteTileView: HoverView {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.favorites.tileRadius.value
         ring.fillColor = nil
+        layer?.addSublayer(wash)
+        layer?.addSublayer(rim)
         layer?.addSublayer(ring)
+        wash.masksToBounds = true
+        wash.cornerCurve = .continuous
+        wash.cornerRadius = Metrics.favorites.tileRadius.value
+        rimMask.fillColor = nil
+        rimMask.strokeColor = NSColor.black.cgColor
+        rimMask.lineWidth = Draw.tileRingWidth.value
+        rim.mask = rimMask
         addSubview(icon)
         badge.wantsLayer = true
         badge.layer?.cornerRadius = Metrics.sidebarTools.unreadDot.value / 2
@@ -293,7 +310,15 @@ final class FavoriteTileView: HoverView {
         CATransaction.setDisableActions(true)
         ring.frame = bounds
         ring.path = CGPath(roundedRect: ringRect, cornerWidth: m.ringRadius.value, cornerHeight: m.ringRadius.value, transform: nil)
+        wash.frame = bounds
+        rim.frame = bounds
+        rimMask.frame = bounds
+        rimMask.path = ring.path
+        let window = FaviconWash.window(tile: bounds.size, trayWidth: trayWidth)
+        wash.contentsRect = window
+        rim.contentsRect = window
         CATransaction.commit()
+        stateChanged()
     }
 
     /// Hovering darkens the tile one step; a supported site's card opens beside the sidebar when Arc Previews is on.
@@ -306,15 +331,31 @@ final class FavoriteTileView: HoverView {
         let current = row.status == .current
         let fill: NSColor
         // A press opens the tab, so a pressed tile is the current one by the next render (Q13-press-favorite).
-        if current { fill = isPressed ? palette.ink.tileCurrent(palette).shadow(withLevel: Draw.pressedTileShade.value) ?? palette.ink.tileCurrent(palette) : palette.ink.tileCurrent(palette) }
+        if current { fill = isPressed ? palette.ink.tileCurrent.shadow(withLevel: Draw.pressedTileShade.value) ?? palette.ink.tileCurrent : palette.ink.tileCurrent }
         else if isPressed { fill = palette.color(palette.tokens.tabPressed) }
         else if isHovered { fill = palette.color(palette.tokens.itemHover) }
         else { fill = palette.color(palette.tokens.itemBackground) }
         layer?.backgroundColor = fill.cgColor
+        let picture = icon.shownFavicon.flatMap(FaviconWash.picture(of:))
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         // A tile with no site icon is white on its shadow with no ring (Q13-n5, Q13-n6, Q13-n10).
-        ring.isHidden = !current || icon.showsNothing
+        ring.isHidden = !current || icon.showsNothing || picture != nil
         ring.strokeColor = palette.color(palette.tokens.separator).cgColor
         ring.lineWidth = Draw.tileRingWidth.value
+        rim.isHidden = !current || picture == nil
+        rim.contents = picture
+        wash.contents = picture
+        // A resting tile that is not current shows no picture: Q18-navy-window-arc.png's black and white icons have the
+        // same tile (#7790AA, #7890AA), and so do those in Q18-user-arc-sidebar.png.
+        wash.opacity = Float(picture == nil || !(current || isHovered) ? 0 : FavoriteTileView.washOpacity(scheme: palette.scheme, hovered: isHovered))
+        CATransaction.commit()
+    }
+
+    /// How strongly the icon's picture lies over a current or hovered tile's fill (`AppTrayItemBackgroundView`).
+    static func washOpacity(scheme: Scheme, hovered: Bool) -> Double {
+        if scheme == .dark { return hovered ? Draw.tileWashDarkHover.value : Draw.tileWashDark.value }
+        return hovered ? Draw.tileWashLightHover.value : 0
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -404,19 +445,17 @@ enum FavoriteOverlayStyle {
     }
 }
 
-/// The shadow around a tile and nothing inside it: the tile's fill is translucent, so a plain shadow would darken it.
+/// The current tile's shadow. Its fill is translucent, so the shadow shows through it too, as in Arc: white 0.8 over
+/// black 0.11 over #F0FAFC is the #F8F9FA Q18-ring-github-current-arc.png reads (without it, #FCFEFE).
 @MainActor
 final class TileGlow: NSView {
     private let shadowLayer = CALayer()
-    private let cutout = CAShapeLayer()
     private var side = CGSize.zero
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.addSublayer(shadowLayer)
-        layer?.mask = cutout
-        cutout.fillRule = .evenOdd
         shadowLayer.shadowColor = NSColor.black.cgColor
         shadowLayer.shadowOpacity = Float(Draw.currentTileShadowOpacity.value)
         shadowLayer.shadowRadius = Draw.currentTileShadow.value
@@ -442,11 +481,6 @@ final class TileGlow: NSView {
         CATransaction.setDisableActions(true)
         shadowLayer.frame = CGRect(x: 0, y: 0, width: tile.width + 2 * margin, height: tile.height + 2 * margin)
         shadowLayer.shadowPath = path
-        let hole = CGMutablePath()
-        hole.addRect(CGRect(x: 0, y: 0, width: tile.width + 2 * margin, height: tile.height + 2 * margin))
-        hole.addPath(path)
-        cutout.frame = shadowLayer.frame
-        cutout.path = hole
         CATransaction.commit()
     }
 }

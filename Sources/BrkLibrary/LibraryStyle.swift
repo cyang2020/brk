@@ -27,8 +27,11 @@ struct LibraryNavMetrics: MetricGroup {
     let labelFont = Metric(11.0, .anatomy("P32-a/b: \"Downloads\" is 60 pt wide and 8.5 tall whether open or not: 11 pt bold for every page"))
     let selectionRadius = Metric(12.0, .guess("the selected cell's corner radius, from the capture's rounding"))
     let footerGlyph = Metric(15.0, .anatomy("P32-a: the exit arrow and the gift glyph are 15 pt"))
+    let footerRadius = Metric(6.0, .guess("the exit button's fill under the pointer, from Q18-navy-library-downloads-arc.png's rounding"))
     let edgeWidth = Metric(1.0, .anatomy("P32-a: a 1 pt line at x 112"))
     let shadowWidth = Metric(10.0, .anatomy("P32-b: the column darkens over its first 10 pt beside the navigation"))
+    let shadowWidthDark = Metric(37.0, .anatomy("Q18-navy-library-downloads: over a dark theme the darkening fades over 37 pt"))
+    let sheen = Metric(0.05, .anatomy("Q18-navy-library-downloads: white grows to this strength across the navigation column, #66869E to #6E8CA3"))
 }
 
 /// The top of every page column: the search field and the Filter button.
@@ -133,6 +136,7 @@ struct LibrarySpacesMetrics: MetricGroup {
     let shadowOpacity = Metric(0.15, .anatomy("P30-a: #FCFCFC to #EDEDED right at a card's edge"))
     let themeWash = Metric(0.15, .guess("P30-a: the 对照 card (a pale beige theme) is the panel's #FCFCFC and Space 1's runs #E4E4FB to #FDEFEE: its theme at about 15% over the panel"))
     let faviconPlaceholderAlpha = Metric(0.17, .anatomy("P32-d: a favicon-less row's square is #D1D1D1 on the #FCFCFC card"))
+    let darkCardShade = Metric(0.08, .anatomy("Q18-navy-library-spaces: the 对照 card reads #6A7B91 where the theme's window color is #74839B"))
 }
 
 /// The History page in the content area (Q05-a, positions from the card's top left).
@@ -177,14 +181,24 @@ struct HistoryPageMetrics: MetricGroup {
 }
 
 /// Colors for one scheme (visual-and-copy.md: "Base tokens", the ARC_CommandBar table, "Content area background and
-/// corners", the ARC_HomeButton and BaseHomeComponents colors; the panel's own colors are measured in P32).
+/// corners", the ARC_HomeButton and BaseHomeComponents colors). The Library panel draws no background of its own: the
+/// window's theme shows through it, as behind the sidebar it replaces (Q18-navy-library-*: the column reads the same
+/// as the sidebar at every height). So these are inks and translucent fills: white on a dark theme (the Q18-navy-library
+/// pictures), the values measured on the near-white P32 pictures on a light one.
 struct LibraryColors {
-    /// The Library panel: Arc draws it near-white (P32: #FCFCFC), not on the space's theme.
+    /// What the panel looks like under a light theme (P32: #FCFCFC): a card's shadow fill and the media preview's page.
     let panel: NSColor
-    /// The search field, the Filter button and the selected navigation cell (P32: #EAEAE9 on the panel).
+    /// The selected navigation cell (P32: #EAEAE9 on the panel; Q18-navy: white 0.09).
     let control: NSColor
-    /// The line between the navigation and the page column, and card outlines (P32: #EAE9E8).
+    /// The search field, the Filter button (the same as `control` on P32; Q18-navy: white 0.08 and 0.05).
+    let search: NSColor
+    let filter: NSColor
+    /// The line between the navigation and the page column (P32: #EAE9E8; Q18-navy: white 0.04), and card outlines.
     let edge: NSColor
+    /// The darkening at the page column's left edge, and how far it fades (P32-b: black 0.04 over 10 pt; Q18-navy:
+    /// black 0.05 over 37 pt).
+    let shade: NSColor
+    let shadeWidth: Double
     /// Grey controls on the panel (the Space cards' move handle and …: P30-a #888989).
     let navInk: NSColor
     /// The open page's navigation glyph (P32: #5A5A5A).
@@ -200,6 +214,12 @@ struct LibraryColors {
     let foregroundPrimary: NSColor
     let foregroundSecondary: NSColor
     let foregroundTertiary: NSColor
+    /// The open page's label and an empty state's title (Q18-navy: white 0.87; P32: `foregroundPrimary`).
+    let foregroundStrong: NSColor
+    /// The search field's placeholder and magnifier, the Filter button's word and glyph.
+    let searchPlaceholder: NSColor
+    let searchGlyph: NSColor
+    let filterInk: NSColor
     /// CommandBarRowHoverBackgroundColor black / white @ 0.05: a hovered row.
     let rowHighlight: NSColor
     /// LibraryItemOutline #000000 @ 0.03 / #FFFFFF @ 0.08: the edge of an icon tile.
@@ -212,27 +232,39 @@ struct LibraryColors {
     let accent: NSColor
 
     static func of(_ scheme: Scheme) -> LibraryColors {
-        let ink: NSColor = scheme == .light ? .black : .white
-        return LibraryColors(
-            panel: scheme == .light ? srgb(0xFCFCFC) : srgb(0x262626),
-            control: ink.withAlphaComponent(scheme == .light ? 0.072 : 0.1),
-            edge: ink.withAlphaComponent(scheme == .light ? 0.075 : 0.12),
-            navInk: scheme == .light ? srgb(0x8F8F8F) : NSColor(white: 1, alpha: 0.5),
-            navInkSelected: scheme == .light ? srgb(0x5B5B5B) : NSColor(white: 1, alpha: 0.85),
-            navGlyph: scheme == .light ? srgb(0x6A6A6A) : NSColor(white: 1, alpha: 0.6),
-            navLabel: scheme == .light ? srgb(0x737373) : NSColor(white: 1, alpha: 0.55),
-            navFooter: scheme == .light ? srgb(0x7A7878) : NSColor(white: 1, alpha: 0.55),
-            page: scheme == .light ? .white : srgb(0x212222),
-            foregroundPrimary: scheme == .light ? p3(0x0E0F10, alpha: 0.9) : ink.withAlphaComponent(0.8),
-            foregroundSecondary: ink.withAlphaComponent(0.5),
-            foregroundTertiary: ink.withAlphaComponent(0.3),
-            rowHighlight: ink.withAlphaComponent(0.05),
-            itemOutline: ink.withAlphaComponent(scheme == .light ? 0.03 : 0.08),
-            placeholder: ink.withAlphaComponent(scheme == .light ? 0.045 : 0.08),
-            progressTrack: scheme == .light ? srgb(0xCED7E7) : srgb(0x717782),
-            accent: p3(0x458AFF)
-        )
+        scheme == .light ? light : dark
     }
+
+    private static let light: LibraryColors = {
+        let ink = NSColor.black
+        let control = ink.withAlphaComponent(0.072)
+        let primary = p3(0x0E0F10, alpha: 0.9), secondary = ink.withAlphaComponent(0.5), tertiary = ink.withAlphaComponent(0.3)
+        return LibraryColors(
+            panel: srgb(0xFCFCFC), control: control, search: control, filter: control,
+            edge: ink.withAlphaComponent(0.075), shade: ink.withAlphaComponent(0.04), shadeWidth: LibraryDraw.nav.shadowWidth.value,
+            navInk: srgb(0x8F8F8F), navInkSelected: srgb(0x5B5B5B), navGlyph: srgb(0x6A6A6A), navLabel: srgb(0x737373), navFooter: srgb(0x7A7878),
+            page: .white,
+            foregroundPrimary: primary, foregroundSecondary: secondary, foregroundTertiary: tertiary, foregroundStrong: primary,
+            searchPlaceholder: tertiary.blended(withFraction: 0.35, of: secondary) ?? secondary, searchGlyph: secondary, filterInk: srgb(0x5B5B5B),
+            rowHighlight: ink.withAlphaComponent(0.05), itemOutline: ink.withAlphaComponent(0.03), placeholder: ink.withAlphaComponent(0.045),
+            progressTrack: srgb(0xCED7E7), accent: p3(0x458AFF)
+        )
+    }()
+
+    /// White inks and fills, read off the Q18-navy-library pictures against the same pixel without the item.
+    private static let dark: LibraryColors = {
+        func white(_ alpha: Double) -> NSColor { NSColor(white: 1, alpha: alpha) }
+        return LibraryColors(
+            panel: srgb(0x262626), control: white(0.09), search: white(0.08), filter: white(0.05),
+            edge: white(0.04), shade: NSColor(white: 0, alpha: 0.05), shadeWidth: LibraryDraw.nav.shadowWidthDark.value,
+            navInk: white(0.5), navInkSelected: white(0.87), navGlyph: white(0.63), navLabel: white(0.63), navFooter: white(0.63),
+            page: srgb(0x212222),
+            foregroundPrimary: white(0.8), foregroundSecondary: white(0.6), foregroundTertiary: white(0.3), foregroundStrong: white(0.87),
+            searchPlaceholder: white(0.58), searchGlyph: white(0.45), filterInk: white(0.63),
+            rowHighlight: white(0.05), itemOutline: white(0.08), placeholder: white(0.05),
+            progressTrack: srgb(0x717782), accent: p3(0x458AFF)
+        )
+    }()
 
     static func p3(_ hex: Int, alpha: Double = 1) -> NSColor {
         NSColor(displayP3Red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, alpha: alpha)
@@ -403,6 +435,12 @@ public enum LibraryCopy {
 /// SF Symbols standing in for Arc's Library icons (ARC_HomeButton's Lottie animations `screenshots`, `downloads`,
 /// `easels`, `spaces`, `boosts`, `archive`; Arc's files are not copied).
 enum LibraryIcon {
+    /// The same glyph filled in, for the open page's cell: Arc's two-color icons show the theme's color inside the
+    /// outline (P32-b white, Q18-navy-library-downloads navy). `macwindow` has no filled version.
+    static func filledSymbol(_ page: LibraryPage) -> String {
+        page == .easelsAndNotes ? "rectangle.fill" : symbol(page) + ".fill"
+    }
+
     static func symbol(_ page: LibraryPage) -> String {
         switch page {
         case .media: "photo.on.rectangle.angled"

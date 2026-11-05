@@ -44,27 +44,28 @@ final class SpacesPageView: NSView {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
 
-    func show(_ library: LibrarySnapshot, in rect: CGRect, scheme: Scheme) {
+    func show(_ library: LibrarySnapshot, in rect: CGRect, scheme: Scheme, accent: NSColor) {
         isHidden = false
         frame = rect
         let restyle = scheme != self.scheme
         self.scheme = scheme
         appearance = .library(scheme)
         let colors = LibraryColors.of(scheme)
-        create.apply(colors)
+        create.apply(colors, accent: accent, scheme: scheme)
         create.isEnabled = library.canManageSpaces
         feedback.textColor = colors.foregroundSecondary
         feedback.stringValue = !library.canManageSpaces ? "Open Spaces in a standard window to manage saved spaces."
             : (library.spaceExportMessage ?? (library.spaceExportInProgress ? "Choose an export folder…" : ""))
         feedback.isHidden = feedback.stringValue.isEmpty
-        let keep = Set(library.spaces.map(\.id))
-        for (id, card) in cards where !keep.contains(id) || restyle {
+        let schemes = Dictionary(library.spaces.map { ($0.id, $0.theme.scheme) }, uniquingKeysWith: { first, _ in first })
+        // A card draws in its own space's scheme, whatever the window's (Q18-navy-library-spaces).
+        for (id, card) in cards where schemes[id] != card.scheme || restyle {
             card.backdrop.removeFromSuperview()
             card.removeFromSuperview()
             cards[id] = nil
         }
         for row in library.spaces {
-            let card = cards[row.id] ?? SpaceCardView(dispatch: dispatch, colors: colors)
+            let card = cards[row.id] ?? SpaceCardView(dispatch: dispatch, scheme: row.theme.scheme)
             if cards[row.id] == nil {
                 cards[row.id] = card
                 strip.addSubview(card.backdrop)
@@ -84,6 +85,21 @@ final class SpacesPageView: NSView {
         guard !isHidden, let card = cards[space] else { return nil }
         layoutSubtreeIfNeeded()
         return convert(CGRect(x: 0, y: 0, width: card.bounds.width, height: 2 * LibraryDraw.spaces.headerCenter.value), from: card)
+    }
+
+    /// A light space: its theme at a low strength over the panel's near-white (P30-a). A dark one: its window color a
+    /// little darker, both ends alike (Q18-navy-library-spaces: 对照 reads #6A7B91 where its sidebar reads #71849B).
+    static func cardFill(of theme: ResolvedTheme) -> [NSColor] {
+        func color(_ c: RGBA) -> NSColor { NSColor(srgbRed: c.red, green: c.green, blue: c.blue, alpha: 1) }
+        if theme.scheme == .dark {
+            let shade = color(theme.windowColor).blended(withFraction: LibraryDraw.spaces.darkCardShade.value, of: .black) ?? color(theme.windowColor)
+            return [shade, shade]
+        }
+        let tint = theme.gradient.isEmpty ? [theme.windowColor] : theme.gradient
+        let wash = LibraryColors.of(.light).panel, strength = LibraryDraw.spaces.themeWash.value
+        return (tint.count == 1 ? [tint[0], tint[0]] : Array(tint.prefix(2))).map {
+            wash.blended(withFraction: strength, of: color($0)) ?? wash
+        }
     }
 
     // MARK: Reordering by the move handle
@@ -170,10 +186,11 @@ final class SpacesPageView: NSView {
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
 
-    func apply(_ colors: LibraryColors) {
-        layer?.backgroundColor = colors.panel.blended(withFraction: 0.02, of: .black)?.cgColor
+    /// A light theme: the panel's color with a dark +. A dark one: the theme's color with a white + (Q18-navy-library-spaces).
+    func apply(_ colors: LibraryColors, accent: NSColor, scheme: Scheme) {
+        layer?.backgroundColor = (scheme == .dark ? accent : colors.panel.blended(withFraction: 0.02, of: .black))?.cgColor
         layer?.borderColor = colors.edge.cgColor
-        contentTintColor = colors.navInkSelected
+        contentTintColor = scheme == .dark ? .white : colors.navInkSelected
     }
 
     override func layout() {
@@ -190,6 +207,8 @@ private final class SpaceCardView: NSView {
 
     private let dispatch: Dispatch
     private let colors: LibraryColors
+    /// The scheme of the space this card shows.
+    let scheme: Scheme
     /// The soft shadow: a sibling under the card in the strip, drawn (a layer shadow on the card is clipped away).
     let backdrop = SpaceCardShadow()
     private let gradient = CAGradientLayer()
@@ -202,10 +221,12 @@ private final class SpaceCardView: NSView {
     /// The move handle's drag, horizontal distance from where it started.
     var onMove: (Move) -> Void = { _ in }
 
-    init(dispatch: @escaping Dispatch, colors: LibraryColors) {
+    init(dispatch: @escaping Dispatch, scheme: Scheme) {
         self.dispatch = dispatch
-        self.colors = colors
+        self.scheme = scheme
+        colors = LibraryColors.of(scheme)
         super.init(frame: .zero)
+        appearance = .library(scheme)
         wantsLayer = true
         let s = LibraryDraw.spaces
         layer?.cornerCurve = .continuous
@@ -242,11 +263,7 @@ private final class SpaceCardView: NSView {
 
     func render(_ row: SpaceManagerRow) {
         self.row = row
-        let tint = row.theme.gradient.isEmpty ? [row.theme.windowColor] : row.theme.gradient
-        let wash = colors.panel, strength = LibraryDraw.spaces.themeWash.value
-        gradient.colors = (tint.count == 1 ? [tint[0], tint[0]] : Array(tint.prefix(2))).map {
-            (wash.blended(withFraction: strength, of: NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: 1)) ?? wash).cgColor
-        }
+        gradient.colors = SpacesPageView.cardFill(of: row.theme).map(\.cgColor)
         let titleFont = NSFont.systemFont(ofSize: LibraryDraw.spaces.titleFont.value, weight: .medium)
         open.attributedTitle = NSAttributedString(string: row.title, attributes: [.font: titleFont, .foregroundColor: colors.foregroundSecondary])
         if case .custom(.emoji(let emoji)) = row.icon {

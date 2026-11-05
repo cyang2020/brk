@@ -20,6 +20,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
     let captionFont = Metric(11.0, .guess("favorites empty subtitle; Arc's secondary row line is 11 pt (cra L115)"))
+    let clearInkDark = Metric(0.35, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-navy-row-hover-arc.png: Clear reads white at this strength over the theme, less than the row's 0.45 foreground"))
     let clearFont = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/P05/P05-d-arc.png: Clear's ink is 26 x 8 points, 10 pt semibold (11 pt is 28 x 8.5)"))
 
     // Row interior, measured from the sidebar edge: favicon centred at 26, title at 45 (cra L141, L180).
@@ -31,6 +32,9 @@ struct SidebarDrawMetrics: MetricGroup {
     let dividerInset = Metric(18.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the Pinned/Today hairline runs from x 18 to 18 before the sidebar edge"))
     let clearTrailing = Metric(19.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: Clear ends 19 before the sidebar edge"))
     let clearGap = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: the hairline stops 10 before Clear"))
+    let clearArrowWidth = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-clear-pinned-current-resting-arc.png: the ↓'s ink is 8 pt wide, 9 from the hairline's end, the 10 pt gap to its frame"))
+    let clearArrowGap = Metric(2.75, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-clear-pinned-current-resting-arc.png: the ↓'s ink ends 3.75 before the word"))
+    let clearArrowGlyph = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-clear-pinned-current-resting-arc.png: the ↓ spans 8 x 9.5 pt"))
     /// Tidy on the Today divider (P46-b, 2x): the hairline stops at x 241 px, the broom spans 259 to 273 px (y 790 to
     /// 813), "Tidy" 290 to 327 px, a separator at 344 px, Clear from 366 px.
     let tidyGaps = Metric([9.0, 6.5, 6.5, 9.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
@@ -107,6 +111,17 @@ struct SidebarDrawMetrics: MetricGroup {
     // Favorites.
     let tileFavicon = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's favicons are 16 pt in the 47 pt tiles"))
     let tileRingWidth = Metric(2.0, .anatomy("cra L475: the active favorite has a 2 pt rim inside the edge"))
+    let tileWashSource = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: with the icon at 24 px the chain computes #FE747C for YouTube (Arc #FF7A7E), #9D9C9E for MDN (Arc #9E9E9E), #CCCDCD for GitHub (Arc #B6B9BA to #D9DADA); at 32 px #FF777C, #A8A8A9, #E0E1E2"))
+    let tileWashBlur = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayVisualEffectImageProvider bin:0x101cfe4f4: CIGaussianBlur radius"))
+    let tileWashSaturation = Metric(1.5, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayVisualEffectImageProvider bin:0x101cfe5a8: CIColorControls saturation"))
+    let tileWashBrightness = Metric(0.05, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayVisualEffectImageProvider bin:0x101cfe5f4: CIColorControls brightness"))
+    let tileWashContrast = Metric(0.85, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayVisualEffectImageProvider bin:0x101cfe63c: CIColorControls contrast"))
+    let tileWashDivisor = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayVisualEffectImageProvider bin:0x101cfe894: the picture is drawn tray width / 5 x the icon's size across"))
+    let tileWashDark = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayItemBackgroundView bin:0x101cf26d4: the picture over a resting tile, dark theme"))
+    let tileWashDarkHover = Metric(0.3, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayItemBackgroundView bin:0x101cf26bc: the picture over a hovered tile, dark theme"))
+    let tileWashLightHover = Metric(0.1, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayItemBackgroundView bin:0x101cf26b0: the picture over a hovered tile, light theme (none at rest)"))
+    let tileCurrentLight = Metric(0.8, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayItemBackgroundView bin:0x101cf2a40: the current tile's white, light theme"))
+    let tileCurrentDark = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md, AppTrayItemBackgroundView bin:0x101cf2a50: the current tile's white, dark theme"))
     let tileRenameInset = Metric(4.0, .guess("side padding of the rename field across a favorites tile; Arc's favorite rename was not recovered"))
     let emptyDash = Metric([5.0, 5.0], .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the empty favorites box is dashed 5 on, 5 off"))
     let emptyBoxFillAlpha = Metric(0.35, .guess("the empty favorites box is a shade lighter than the sidebar (#F3EEEB over #F0EBE6 in P07-b)"))
@@ -127,6 +142,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let dockInactiveInk = Metric(0.22, .guess("the same for the other spaces, sampled on P25 a (#BAB6B2)"))
     let dockPlusGlyph = Metric(17.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the + spans x 394 to 422 px"))
     let dockPlusInk = Metric(0.53, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc, Q11-b-arc: + and × read #717878 and #6B6F70 on #EFFAFB"))
+    let dockGlyphInkDark = Metric(0.62, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-navy-row-hover-arc.png: the Library glyph and the + read white at this strength over the theme"))
     let dockButtonGlyph = Metric(15.0, .guess("Library and + glyph size in their 32 pt buttons"))
     let inactiveSpaceAlpha = Metric(0.45, .anatomy("cra L115: inactive space icons in the dock are dimmed; amount guessed"))
 
@@ -209,14 +225,14 @@ struct Ink {
     }
     /// PopoverShadow: #151C32 @ 0.3 light, @ 0.8 dark. The floating sidebar's shadow.
     var shadow: NSColor { NSColor(srgbRed: 21 / 255, green: 28 / 255, blue: 50 / 255, alpha: scheme == .light ? 0.3 : 0.8) }
-    /// Active and hovered favorite tile: cra L473 measures white ~38% over a light sidebar; dark uses TabCellBackgroundCurrent.
-    func tileCurrent(_ palette: Palette) -> NSColor {
-        scheme == .light ? NSColor(white: 1, alpha: 0.38) : palette.color(palette.tokens.tabCurrent)
-    }
+    /// The current favorite's fill, white over the sidebar and the tile's own shadow (`AppTrayItemBackgroundView`).
+    var tileCurrent: NSColor { NSColor(white: 1, alpha: scheme == .light ? Draw.tileCurrentLight.value : Draw.tileCurrentDark.value) }
 }
 
 extension Palette {
     var ink: Ink { Ink(scheme: scheme, accent: accent) }
+    /// Today's Clear and Tidy at rest: the sidebar foreground, lighter on a dark theme.
+    var clearInk: NSColor { scheme == .dark ? NSColor(white: 1, alpha: Draw.clearInkDark.value) : color(tokens.foreground) }
     /// Arc's `focus` palette color, seen as its split focus ring (P23-a, P23-c): light, the theme's hue and saturation at
     /// relative luminance 0.097; dark, a lighter shade of the hue (the same numbers as `ThemeAccent.splitFocusRing`).
     var focusColor: NSColor {

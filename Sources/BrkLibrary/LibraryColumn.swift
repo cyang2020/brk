@@ -64,15 +64,15 @@ final class LibrarySearchField: NSView, NSTextFieldDelegate {
 
     func apply(_ colors: LibraryColors) {
         self.colors = colors
-        layer?.backgroundColor = colors.control.cgColor
-        glyph.contentTintColor = colors.foregroundSecondary
+        layer?.backgroundColor = colors.search.cgColor
+        glyph.contentTintColor = colors.searchGlyph
         field.textColor = colors.foregroundPrimary
         paintPlaceholder()
     }
 
     private func paintPlaceholder() {
         field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
-            .foregroundColor: colors.foregroundTertiary.blended(withFraction: 0.35, of: colors.foregroundSecondary) ?? colors.foregroundSecondary,
+            .foregroundColor: colors.searchPlaceholder,
             .font: NSFont.systemFont(ofSize: LibraryDraw.column.searchFont.value),
         ])
     }
@@ -133,9 +133,9 @@ final class LibraryFilterButton: NSButton {
     override func hitTest(_ point: NSPoint) -> NSView? { !isHidden && frame.contains(point) ? self : nil }
 
     func apply(_ colors: LibraryColors) {
-        layer?.backgroundColor = colors.control.cgColor
-        glyph.contentTintColor = colors.navInkSelected
-        label.textColor = colors.navInkSelected
+        layer?.backgroundColor = colors.filter.cgColor
+        glyph.contentTintColor = colors.filterInk
+        label.textColor = colors.filterInk
     }
 
     override func layout() {
@@ -321,7 +321,7 @@ final class EmptyStateView: NSView {
         glyph.isHidden = glyph.image == nil
         glyph.contentTintColor = colors.foregroundTertiary
         self.title.stringValue = title
-        self.title.textColor = colors.foregroundPrimary
+        self.title.textColor = colors.foregroundStrong
         self.subtitle.stringValue = subtitle
         self.subtitle.textColor = colors.foregroundSecondary
         self.subtitle.isHidden = subtitle.isEmpty

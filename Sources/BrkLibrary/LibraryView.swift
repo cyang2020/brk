@@ -5,8 +5,8 @@ import BrkLayout
 import BrkUIKit
 
 /// Owner: F5. The Library (Arc: `HomeButton`, `BaseHomeComponents`), laid out like Arc's (P32): while it is open its
-/// panel replaces the sidebar at the window's left edge, on a near-white panel of its own; the content area beside it
-/// keeps showing the page. The panel is a navigation column (`frames.library.nav`: one cell per page with its glyph
+/// panel replaces the sidebar at the window's left edge, with no background of its own, so it takes the window's theme
+/// like the sidebar (Q18-navy-library-*); the content area beside it keeps showing the page. The panel is a navigation column (`frames.library.nav`: one cell per page with its glyph
 /// and name, the open page's on a grey fill; the exit button, where the dock's Library button is, and the gift
 /// button at its foot) and the open page's column (`frames.library.page`). Esc closes it too.
 ///
@@ -19,11 +19,12 @@ import BrkUIKit
 public final class LibraryView: NSView {
     private let dispatch: Dispatch
     private var cells: [LibraryPage: LibraryNavCell] = [:]
-    private let exit = NSButton()
-    private let gift = NSButton()
+    private let exit = LibraryFooterButton()
+    private let gift = LibraryFooterButton()
     private let panel = FlippedView()
     private let edge = CALayer()
     private let shade = CAGradientLayer()
+    private let sheen = CAGradientLayer()
     let preview = MediaPreviewView()
     let archive: ArchivePageView
     let downloads: DownloadsPageView
@@ -37,6 +38,8 @@ public final class LibraryView: NSView {
         let library: LibrarySnapshot
         let frames: LibraryFrames
         let scheme: Scheme
+        /// The theme's first color: the inside of the open page's glyph, the Spaces page's + button.
+        let accent: RGBA
         /// The day of `now`: the day headers ("Today") change with it, nothing else does.
         let day: Date
         /// Where Media's preview goes: the content card.
@@ -54,11 +57,14 @@ public final class LibraryView: NSView {
         super.init(frame: .zero)
         panel.identify(.library)
         panel.wantsLayer = true
+        panel.layer?.addSublayer(sheen)
         panel.layer?.addSublayer(shade)
         panel.layer?.addSublayer(edge)
         addSubview(panel)
-        shade.startPoint = CGPoint(x: 0, y: 0.5)
-        shade.endPoint = CGPoint(x: 1, y: 0.5)
+        for gradient in [shade, sheen] {
+            gradient.startPoint = CGPoint(x: 0, y: 0.5)
+            gradient.endPoint = CGPoint(x: 1, y: 0.5)
+        }
         for page in LibraryPage.allCases {
             let cell = LibraryNavCell(page: page)
             cell.target = self
@@ -118,7 +124,7 @@ public final class LibraryView: NSView {
         let card = frames.cards.first?.rect ?? frames.contentArea
         let shown = card.intersection(CGRect(x: 0, y: 0, width: frames.contentSize.width - Metrics.content.inset.value, height: frames.contentSize.height))
         let previewCard = shown.isNull ? card : shown
-        let slice = Slice(library: library, frames: f, scheme: scheme, day: Calendar.current.startOfDay(for: LibraryDays.date(now)), preview: previewCard)
+        let slice = Slice(library: library, frames: f, scheme: scheme, accent: palette.accent, day: Calendar.current.startOfDay(for: LibraryDays.date(now)), preview: previewCard)
         guard slice != last else { return }
         last = slice
         isHidden = false
@@ -130,24 +136,24 @@ public final class LibraryView: NSView {
         panel.frame = f.frame
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        panel.layer?.backgroundColor = colors.panel.cgColor
         edge.backgroundColor = colors.edge.cgColor
         edge.frame = CGRect(x: nav.maxX - f.frame.minX, y: 0, width: n.edgeWidth.value, height: f.frame.height)
-        shade.colors = [NSColor.black.withAlphaComponent(scheme == .light ? 0.04 : 0.12).cgColor, NSColor.black.withAlphaComponent(0).cgColor]
-        shade.frame = CGRect(x: nav.maxX - f.frame.minX + n.edgeWidth.value, y: 0, width: n.shadowWidth.value, height: f.frame.height)
+        shade.colors = [colors.shade.cgColor, colors.shade.withAlphaComponent(0).cgColor]
+        shade.frame = CGRect(x: nav.maxX - f.frame.minX + n.edgeWidth.value, y: 0, width: colors.shadeWidth, height: f.frame.height)
+        sheen.colors = [NSColor(white: 1, alpha: 0).cgColor, NSColor(white: 1, alpha: n.sheen.value).cgColor]
+        sheen.frame = CGRect(x: nav.minX - f.frame.minX, y: 0, width: nav.width, height: f.frame.height)
         CATransaction.commit()
         for (page, cell) in cells {
             cell.frame = f.pageCells[page].map(local) ?? .zero
-            cell.render(selected: page == library.page, colors: colors)
+            cell.render(selected: page == library.page, colors: colors, accent: palette.color(palette.accent))
         }
         exit.frame = local(LibraryLayout.closeButton(in: f.strip))
         gift.frame = local(LibraryLayout.giftButton(in: f.nav))
-        exit.contentTintColor = colors.navFooter
-        gift.contentTintColor = colors.navFooter
+        for button in [exit, gift] { button.render(ink: colors.navFooter, hover: colors.control) }
         let page = local(f.page)
         if library.page == .archive, let snapshot = library.archive { archive.show(snapshot, in: page, scheme: scheme) } else { archive.hide() }
         if library.page == .downloads { downloads.show(library.downloads, openID: library.openID, in: page, scheme: scheme, now: now) } else { downloads.hide() }
-        if library.page == .spaces { spaces.show(library, in: page, scheme: scheme) } else { spaces.hide() }
+        if library.page == .spaces { spaces.show(library, in: page, scheme: scheme, accent: palette.color(palette.accent)) } else { spaces.hide() }
         if library.page == .boosts { boosts.show(library, in: page, scheme: scheme) } else { boosts.hide() }
         if library.page == .media { media.show(library, in: page, scheme: scheme, now: now) } else { media.hide() }
         let previewed = library.page == .media ? library.captures.first { $0.id == library.capturePreview } : nil
@@ -169,12 +175,49 @@ public final class LibraryView: NSView {
     @objc private func exitClicked() { dispatch(.library(.close)) }
 }
 
+/// A button at the navigation column's foot: a glyph, on a soft rounded fill under the pointer
+/// (Q18-navy-library-downloads-arc.png, the exit button with the pointer on it).
+@MainActor
+final class LibraryFooterButton: NSButton {
+    private var hover: NSColor?
+    private var hovered = false
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = LibraryDraw.nav.footerRadius.value
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func render(ink: NSColor, hover: NSColor) {
+        contentTintColor = ink
+        self.hover = hover
+        paint()
+    }
+
+    private func paint() { layer?.backgroundColor = hovered ? hover?.cgColor : nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovered = true; paint() }
+    override func mouseExited(with event: NSEvent) { hovered = false; paint() }
+}
+
 /// One page in the navigation column (P32): its glyph over its name, grey; the open page's darker and bold on a grey
 /// rounded fill; a hovered one gets a lighter fill.
 @MainActor
 final class LibraryNavCell: NSButton {
     let page: LibraryPage
     private let glyph = NSImageView()
+    /// Under the glyph on the open page's cell: the inside of its outline, in the theme's color.
+    private let inside = NSImageView()
     private let label: NSTextField
     private let fill = CALayer()
     private var selected = false
@@ -196,8 +239,12 @@ final class LibraryNavCell: NSButton {
         layer?.addSublayer(fill)
         glyph.image = LibraryIcon.image(page, size: LibraryDraw.nav.glyphSize.value)
         glyph.imageScaling = .scaleNone
+        inside.image = LibraryIcon.symbol(LibraryIcon.filledSymbol(page), size: LibraryDraw.nav.glyphSize.value)
+        inside.imageScaling = .scaleNone
+        inside.isHidden = true
         label.alignment = .center
         label.lineBreakMode = .byClipping
+        addSubview(inside)
         addSubview(glyph)
         addSubview(label)
     }
@@ -216,13 +263,15 @@ final class LibraryNavCell: NSButton {
     var glyphImage: NSImage? { glyph.image }
     var isSelected: Bool { selected }
 
-    func render(selected: Bool, colors: LibraryColors) {
+    func render(selected: Bool, colors: LibraryColors, accent: NSColor) {
         self.selected = selected
         self.colors = colors
         let ink = selected ? colors.navInkSelected : colors.navGlyph
         label.font = .systemFont(ofSize: LibraryDraw.nav.labelFont.value, weight: .bold)
-        label.textColor = selected ? colors.foregroundPrimary : colors.navLabel
+        label.textColor = selected ? colors.foregroundStrong : colors.navLabel
         glyph.contentTintColor = ink
+        inside.contentTintColor = accent
+        inside.isHidden = !selected
         setAccessibilityValue(selected ? "selected" : nil)
         paintFill()
         needsLayout = true
@@ -244,6 +293,7 @@ final class LibraryNavCell: NSButton {
         fill.frame = bounds
         CATransaction.commit()
         glyph.frame = CGRect(x: ((bounds.width - g) / 2).rounded(), y: (l.navGlyphCenter.value - g / 2).rounded(), width: g, height: g)
+        inside.frame = glyph.frame
         let h = label.fittingSize.height
         label.frame = CGRect(x: 0, y: (l.navLabelCenter.value - h / 2).rounded(), width: bounds.width, height: h)
     }

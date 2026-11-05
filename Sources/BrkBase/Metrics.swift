@@ -273,6 +273,10 @@ public struct ThemeMetrics: MetricGroup {
     public let washBase = Metric(0.2, .arc("Theme background wash", .low, note: "0.2 +"))
     public let washSlope = Metric(0.55, .arc("Theme background wash", .low, note: "0.55 x factor"))
     public let washCap = Metric(0.5, .arc("Theme background wash", .low, note: "capped at 0.5"))
+    /// A dark color under Arc's dark button: from the navy preset at five slider positions (r5-6/REPORT.md).
+    public let darkColorDarkWash = Metric(207.0 / 255, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: navy under the dark button runs from #2D4468 towards #CFCFCF"))
+    public let darkColorDarkWashBase = Metric(0.19, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: 22% at the slider's right end"))
+    public let darkColorDarkWashSlope = Metric(0.62, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: 78% at the slider's left end"))
     public let gradientTexturePerFactor = Metric(100.0, .arc("Metal gradient texture size", .low))
     /// Tile sizes of Arc's own textures (px @1x). Ours are generated procedurally at these sizes.
     public let grainTile = Metric(155, .anatomy("visual-and-copy.md, Gradient and grain assets"))

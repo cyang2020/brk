@@ -2066,3 +2066,25 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.dock.map(\.title), ["Space 1", "Work"])
     }
 }
+
+/// R5-6: what Today's Clear says follows where the current tab is (Arc: `ClearTabAction`, Q18-clear-*-arc.png).
+final class TodayClearActionTests: XCTestCase {
+    private func tab(_ id: String, _ status: RowStatus) -> TabRow {
+        TabRow(id: ItemID(id), section: .today, title: id, url: nil, favicon: nil, icon: nil, status: status, loading: false, loaded: true, canReset: false)
+    }
+
+    private func section(_ rows: [Row]) -> SectionSnapshot {
+        SectionSnapshot(root: ItemID("root"), kind: .today, collapsed: false, rows: rows)
+    }
+
+    /// no ↓ while the current tab is a Today row, in a folder or a split too; a ↓ otherwise
+    func testTheArrowShowsOnlyWhileTheCurrentTabIsOutsideToday() {
+        XCTAssertEqual(section([.tab(tab("a", .idle)), .tab(tab("b", .current))]).clearAction, .clearOthers)
+        let folder = FolderRow(id: ItemID("f"), section: .today, title: "f", collapsed: true, icon: nil, children: [.tab(tab("c", .current))])
+        XCTAssertEqual(section([.tab(tab("a", .idle)), .folder(folder)]).clearAction, .clearOthers)
+        let split = SplitRow(id: ItemID("s"), section: .today, status: .current, icon: nil, orientation: .horizontal, panes: [tab("d", .current), tab("e", .visible)])
+        XCTAssertEqual(section([.split(split)]).clearAction, .clearOthers)
+        XCTAssertEqual(section([.tab(tab("a", .idle)), .tab(tab("b", .visible))]).clearAction, .clearAll)
+        XCTAssertEqual(section([]).clearAction, .clearAll)
+    }
+}

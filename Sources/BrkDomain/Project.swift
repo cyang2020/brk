@@ -481,7 +481,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
     } : nil
     var snapshot = WindowSnapshot(capture: session.capture,
-        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: resolveTheme(theme, systemScheme: ctx.systemScheme),
+        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: doc.kind == .incognito ? .incognito : resolveTheme(theme, systemScheme: ctx.systemScheme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
                                  toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
                                  hapticsEnabled: state.doc.settings.advanced.hapticsOnReorder),
