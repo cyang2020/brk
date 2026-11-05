@@ -117,8 +117,8 @@ final class GlyphButton: HoverView {
         set { icon.image = newValue }
     }
 
-    func render(_ glyph: Glyph, size: Double, palette: Palette, tint: NSColor? = nil, radius: Double, hoverFill: RGBA?) {
-        if self.glyph != glyph || glyphSize != size { icon.image = glyph.image(size: size) }
+    func render(_ glyph: Glyph, size: Double, weight: NSFont.Weight = .medium, palette: Palette, tint: NSColor? = nil, radius: Double, hoverFill: RGBA?) {
+        if self.glyph != glyph || glyphSize != size { icon.image = glyph.image(size: size, weight: weight) }
         self.glyph = glyph
         glyphSize = size
         self.palette = palette

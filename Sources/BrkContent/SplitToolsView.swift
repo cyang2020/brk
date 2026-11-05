@@ -101,7 +101,8 @@ final class PaneHeaderView: NSView {
             let span = shown == 0 ? 0 : closePitch + pitch * Double(shown - 1)
             return bounds.width - left - (edge + span + size / 2)
         }
-        if room() < hostRoom { extras.translate = false }
+        // Translate goes earlier: gone at Arc's three panes, 341 wide (Q15-f), there at two, 506 wide (Q15-d).
+        if room() < 120 { extras.translate = false }
         if room() < hostRoom { extras.site = false }
         if room() < hostRoom { extras.reload = false }
         if room() < hostRoom { extras.split = false }

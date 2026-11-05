@@ -632,7 +632,7 @@ final class RowView: HoverView {
         button.isHidden = !hasButton && !dragLifted
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
         // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
-        button.render(.archiveTab, size: Draw.rowCloseGlyph.value, palette: palette,
+        button.render(.archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
     }
 
@@ -663,7 +663,7 @@ final class RowView: HoverView {
         let buttonShown = !button.isHidden && button.alphaValue > 0
         let trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
             : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
-            : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
+            : buttonShown ? g.selection.maxX - Draw.rowTitleOverButton.value : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         if let leading = joinLeading {
             // The slot takes one half, the row's own icon and title the other, cut off at its end (Q15-a, Q15-b).

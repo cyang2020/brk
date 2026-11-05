@@ -349,6 +349,8 @@ final class DragImage: NSView {
     private let ring = CAShapeLayer()
     private let ringed: Bool
     private var shape: Shape?
+    /// A tile fills this view; a row fills `rowCard`, which also casts the row's shadow line.
+    private let fill: CGColor
 
     /// `listWidth`: the width of the list's rows, for a Favorite's row image.
     init(source: NSView, tab: TabRow?, listWidth: Double, palette: Palette) {
@@ -358,11 +360,11 @@ final class DragImage: NSView {
         rowSize = card.size
         rowImageFrame = bounds.offsetBy(dx: -card.minX, dy: -card.minY)
         ringed = source is FavoriteTileView && tab?.status == .current && (tab?.favicon != nil || tab?.icon != nil)
+        fill = palette.color(palette.tokens.tabCurrent).cgColor
         super.init(frame: CGRect(origin: .zero, size: rowSize))
         wantsLayer = true
         alphaValue = Draw.dragPreviewAlpha.value
         if let layer {
-            layer.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
             layer.cornerCurve = .continuous
             layer.cornerRadius = Metrics.tablist.selectionRadius.value
         }
@@ -392,6 +394,7 @@ final class DragImage: NSView {
         ring.fillColor = nil
         ring.strokeColor = palette.color(palette.tokens.separator).cgColor
         ring.lineWidth = Draw.tileRingWidth.value
+        ring.opacity = Float(Draw.dragTileRingOpacity.value)
         layer?.addSublayer(ring)
         identify(.tabTool("drag-image"))
     }
@@ -420,12 +423,14 @@ final class DragImage: NSView {
             rowImage.isHidden = false
             rowCard.isHidden = false
             rowCard.frame = bounds
+            layer?.backgroundColor = nil
             icon.isHidden = true
             ring.isHidden = true
             rowImage.frame = CGRect(x: rowImageFrame.minX * scale, y: rowImageFrame.minY * scale, width: rowImageFrame.width * scale, height: rowImageFrame.height * scale)
         case .tile:
             rowImage.isHidden = true
             rowCard.isHidden = true
+            layer?.backgroundColor = fill
             icon.isHidden = false
             let side = Draw.tileFavicon.value
             icon.frame = CGRect(x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side)
@@ -480,10 +485,11 @@ final class ContentDragCard: NSView {
         layer?.backgroundColor = (palette.scheme == .dark ? NSColor(white: 0.17, alpha: 1) : .white).cgColor
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Draw.dragCardRadius.value
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = Float(Draw.dragCardShadowOpacity.value)
-        layer?.shadowRadius = Draw.dragCardShadow.value
-        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        let soft = NSShadow()
+        soft.shadowColor = NSColor.black.withAlphaComponent(Draw.dragCardShadowOpacity.value)
+        soft.shadowBlurRadius = Draw.dragCardShadow.value
+        soft.shadowOffset = CGSize(width: 0, height: -3)
+        shadow = soft
         icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
         title.stringValue = tab.awaitingFirstDocument ? SidebarCopy.untitled : tab.title
         title.font = .systemFont(ofSize: Draw.dragCardTitleFont.value, weight: .bold)

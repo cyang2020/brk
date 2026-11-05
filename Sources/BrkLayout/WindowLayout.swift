@@ -262,8 +262,12 @@ public enum ContentLayout {
             return (cards, dividers)
         }
         let span = (orientation == .horizontal ? area.width : area.height) - gap * Double(fractions.count - 1)
-        var sizes = shares.map { (span * $0).rounded() }
-        sizes[sizes.count - 1] = span - sizes.dropLast().reduce(0, +)
+        // Each boundary rounds where it falls, not each pane's own size: Arc's three panes of 1022 are 341, 340, 341 (Q15-f).
+        var running = 0.0
+        var edges = [0.0]
+        for share in shares.dropLast() { running += share; edges.append((span * running).rounded()) }
+        edges.append(span)
+        let sizes = zip(edges.dropFirst(), edges).map { $0 - $1 }
         var cards: [CGRect] = [], dividers: [CGRect] = []
         var cursor = orientation == .horizontal ? area.minX : area.minY
         for (i, size) in sizes.enumerated() {

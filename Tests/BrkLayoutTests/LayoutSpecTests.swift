@@ -71,9 +71,10 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertEqual(dividers, [CGRect(x: 579, y: 10, width: 10, height: 756)])
         XCTAssertEqual(two[1].maxX, area.maxX)
         for rect in two { XCTAssertEqual(rect, rect.integral) }
-        // Four panes: three gaps, widths sum to the content width minus the gaps, the last ends at the edge.
+        // Four panes: three gaps, widths sum to the content width minus the gaps, the last ends at the edge. Each boundary
+        // rounds where it falls (Arc's three panes of 1022 are 341, 340, 341, Q15-f).
         let (four, gaps) = ContentLayout.cards(in: area, fractions: [0.25, 0.25, 0.25, 0.25])
-        XCTAssertEqual(four.map(\.width), [251, 251, 251, 249])
+        XCTAssertEqual(four.map(\.width), [251, 250, 251, 250])
         XCTAssertEqual(gaps.count, 3)
         XCTAssertEqual(four.last?.maxX, area.maxX)
         // Stacked (vertical orientation) splits the height instead, the gap out of the upper pane (Arc's P23-c:

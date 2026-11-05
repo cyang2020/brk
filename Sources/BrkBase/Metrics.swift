@@ -169,7 +169,7 @@ public struct TablistMetrics: MetricGroup {
     public let favicon = Metric(16.0, .guess("favicon size was not recovered; cra L142 measures rows only"))
     /// The part of a tab row, as fractions of its height from the top, where a dragged tab joins it in a split; the
     /// quarters above and below still reorder.
-    public let splitJoinZone = Metric(0.25...0.75, .anatomy("verify/visual-pairs/run-20261103/Q15: 9.5 pt from a row's top or bottom edge reorders, 11.5 pt joins"))
+    public let splitJoinZone = Metric(0.25...0.75, .anatomy("verify/visual-pairs/run-20261103/Q15/NOTES.md: 9.5 pt from a row's top or bottom edge reorders, 11.5 pt joins"))
 }
 
 public struct DockMetrics: MetricGroup {
