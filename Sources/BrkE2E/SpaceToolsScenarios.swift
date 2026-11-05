@@ -12,6 +12,7 @@ enum SpaceToolsScenarios {
         Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", cefOnly: "native editor and profile browsing", editor),
         Scenario("SpaceTools-3", "dock drag, sidebar swipe cancellation/page ownership and confirmed deletion", cefOnly: "native pointer/trackpad sequences", gestures),
         Scenario("SpaceTools-4", "Space manager local folder panel cancellation and public bookmark files", cefOnly: "native folder selection", export),
+        Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia), a slow short one does not, vertical ones scroll the list, and a swipe still works after the list scrolled", cefOnly: "real scroll events through the window server", realSwipes),
     ]
 
     private static func hover(_ app: AppUnderTest, at point: CGPoint) throws {
@@ -191,6 +192,71 @@ enum SpaceToolsScenarios {
         try app.click(.spaceToolsControl("cancel"))
         try expect(try app.view().dock.count == before + 1, "cancelled creation changed saved Spaces")
         try app.recordWindows("editor-final")
+    }
+
+    /// The user's report of 2026-11-05: the Space swipe was almost never recognised. With events injected in-process
+    /// it always passed; on the real path the list's scroll view took every gesture after its first event.
+    @Sendable static func realSwipes(_ app: AppUnderTest) throws {
+        let first = try app.view().space.id
+        var tabs: [ItemID] = []
+        for n in 1...6 {
+            let url = app.site.url("page2.html?swipe=\(n)")
+            let item = try app.load(url)
+            try app.waitForPageInput(PageID(window: app.window!, item: item), at: url)
+            tabs.append(item)
+        }
+        let second = try createSpace(app, title: "Second")
+        try app.dispatch(.settings(.advanced(.hapticsOnReorder(false))))
+        try app.click(.dockSpace(first))
+        try app.waitUntil("back on the first Space") { try app.view().space.id == first }
+        // A short window, so the six rows overflow the list.
+        let frame = try app.native().windowFrame
+        try app.setWindowFrame(CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: 420))
+        defer { try? app.setWindowFrame(frame) }
+        try finishAnimation(app)
+        let window = app.window!
+        func list() throws -> CGPoint { point(try app.native().computed.sidebar!.tablistViewport) }
+        func rowY() throws -> Double { Double(try app.native().actual[ViewID.row(tabs[0]).identifier]!.frame.minY) }
+        func swipe(_ steps: [(Double, Double)], inertia: [(Double, Double)] = []) throws {
+            try PhysicalPointer.swipe(app, at: try list(), steps: steps, inertia: inertia, window: window)
+        }
+        func expectSwitch(_ name: String, to space: SpaceID, _ steps: [(Double, Double)], inertia: [(Double, Double)] = []) throws {
+            try swipe(steps, inertia: inertia)
+            try app.waitUntil("\(name) switched Spaces") { try app.view().space.id == space }
+            try finishAnimation(app)
+        }
+        let left = Array(repeating: (-15.0, 0.0), count: 10), right = Array(repeating: (15.0, 0.0), count: 10)
+        // Fingers to the left: the next Space; to the right: back.
+        try expectSwitch("a clean swipe left", to: second, left)
+        try expectSwitch("a clean swipe right", to: first, right)
+        // The fingers land moving slightly down before going sideways.
+        try expectSwitch("a swipe with a slanted start", to: second, [(-1, 2), (-3, 1)] + Array(repeating: (-15.0, 0.0), count: 9))
+        try expectSwitch("a wobbly swipe right", to: first, [(8, 1), (10, -1), (12, 2), (14, -1), (14, 1), (14, 0), (14, 0), (14, 0)])
+        // 40 points with the fingers down, the rest is inertia.
+        try expectSwitch("a flick left", to: second, [(-10, 0), (-14, 0), (-16, 0)], inertia: [(-14, 0), (-10, 0), (-7, 0), (-4, 0), (-2, 0)])
+        try expectSwitch("a flick right", to: first, [(10, 0), (14, 0), (16, 0)], inertia: [(14, 0), (10, 0), (7, 0), (4, 0), (2, 0)])
+        // 60 points, slowly, and the fingers stop before lifting: not a swipe.
+        try swipe(Array(repeating: (-4.0, 0.0), count: 15))
+        app.sleep(0.6)
+        try expect(try app.view().space.id == first, "a slow 60 pt swipe switched Spaces")
+        // Vertical gestures belong to the list: it scrolls, the Space stays.
+        let rest = try rowY()
+        try swipe(Array(repeating: (0.0, -14.0), count: 6))
+        try app.waitUntil("the list scrolled under a vertical gesture") { try rowY() < rest - 20 }
+        try expect(try app.view().space.id == first, "a vertical gesture switched Spaces")
+        _ = try app.screenshot("list-scrolled")
+        try swipe([(1, -2), (-1, -5)] + Array(repeating: (0.0, 14.0), count: 12))
+        try app.waitUntil("the list scrolled back") { try abs(rowY() - rest) < 1 }
+        // And a swipe right after the list scrolled is still a swipe.
+        try swipe(Array(repeating: (0.0, -14.0), count: 3))
+        try expectSwitch("a swipe after the list scrolled", to: second, left)
+        _ = try app.screenshot("second-space")
+        try expectSwitch("the swipe back", to: first, right)
+        // On the page the same gesture is the page's.
+        let pageArea = try app.native().computed.contentArea
+        try PhysicalPointer.swipe(app, at: point(pageArea), steps: left, window: window)
+        app.sleep(0.6)
+        try expect(try app.view().space.id == first, "a swipe on the page switched Spaces")
     }
 
     @Sendable static func gestures(_ app: AppUnderTest) throws {

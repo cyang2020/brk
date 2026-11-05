@@ -494,6 +494,34 @@ enum PhysicalPointer {
 
     /// A real drag: press at the first point (window content coordinates), glide through the rest with the button down,
     /// run `held` at the last and release there.
+    /// A two-finger trackpad scroll posted to the window server at `point`: `began` with no travel, one `changed`
+    /// event per step (points, as `scrollingDeltaX/Y` read them), `ended`, then optional inertia events. These take
+    /// the real path into the app (window server, the window's `sendEvent`, the view under the pointer); events
+    /// injected in-process do not, and a scroll view that tracks a whole gesture by itself only shows up here.
+    static func swipe(_ app: AppUnderTest, at point: CGPoint, steps: [(Double, Double)], inertia: [(Double, Double)] = [], window: WindowID) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        try post(.mouseMoved, at: at); usleep(250_000)
+        let source = CGEventSource(stateID: .hidSystemState)
+        func scroll(_ dx: Double, _ dy: Double, phase: Int64, momentum: Int64) throws {
+            guard let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2, wheel1: Int32(dy), wheel2: Int32(dx), wheel3: 0) else {
+                throw Check(description: "scroll event")
+            }
+            event.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
+            event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
+            event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+            event.location = at
+            event.post(tap: .cghidEventTap)
+            usleep(16_000)
+        }
+        try scroll(0, 0, phase: 1, momentum: 0)
+        for step in steps { try scroll(step.0, step.1, phase: 2, momentum: 0) }
+        try scroll(0, 0, phase: 4, momentum: 0)
+        for (n, step) in inertia.enumerated() { try scroll(step.0, step.1, phase: 0, momentum: n == 0 ? 1 : 2) }
+        if !inertia.isEmpty { try scroll(0, 0, phase: 0, momentum: 3) }
+        usleep(400_000)
+    }
+
     static func drag(_ app: AppUnderTest, through path: [CGPoint], window: WindowID, held: () throws -> Void) throws {
         guard let first = path.first else { return }
         let start = try screen(app, first, window: window)

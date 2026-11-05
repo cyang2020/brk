@@ -47,6 +47,8 @@ public final class SidebarView: NSView {
     private(set) var favoritesDrag: FavoritesDrag?
     private var floatingWatch: FloatingSidebarTracking?
     private var swipe = SpaceSwipe()
+    /// The gesture's events so far, kept from the list until the direction is known (`SpaceSwipe`).
+    private var swipeHeld: [NSEvent] = []
     private var swallowMomentum = false
     private var canSwipe = false
     /// The pointer is over the column: Arc then shows the pill's accessories and Today's Clear.
@@ -234,38 +236,63 @@ public final class SidebarView: NSView {
             resetSwipe(); return false
         }
         if !event.momentumPhase.isEmpty {
+            let over = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled)
+            // A short quick swipe: the inertia after the fingers lift says it was a flick.
+            if let step = swipe.inertia(horizontal: event.scrollingDeltaX, ended: over) { switchSpace(by: step) }
             let consumed = swallowMomentum
-            if event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) { swallowMomentum = false }
+            if over { swallowMomentum = false }
             return consumed
         }
         let phase: SpaceSwipe.Phase
-        if event.phase.contains(.began) { phase = .began; swallowMomentum = false }
+        if event.phase.contains(.began) { phase = .began; swallowMomentum = false; swipeHeld = [] }
         else if event.phase.contains(.cancelled) { phase = .cancelled }
         else if event.phase.contains(.ended) { phase = .ended }
         else if event.phase.contains(.changed) { phase = .changed }
         else { return false }
         let point = convert(event.locationInWindow, from: nil)
-        let result = swipe.update(horizontal: event.scrollingDeltaX, vertical: event.scrollingDeltaY, phase: phase,
-                                  startsInSidebar: bounds.contains(point), precise: event.hasPreciseScrollingDeltas)
-        let offset = min(max(swipe.translation, -bounds.width * 0.65), bounds.width * 0.65)
-        tablist.layer?.transform = CATransform3DMakeTranslation(offset, 0, 0)
-        tablist.alphaValue = 1 - min(abs(offset) / max(bounds.width, 1), 0.65)
-        if phase == .ended || phase == .cancelled {
-            swallowMomentum = result.consumed
-            resetSwipe()
-            if let step = result.step {
-                let order = last?.dock ?? []
-                if let current = order.firstIndex(where: \.active), order.indices.contains(current + step) {
-                    if last?.sidebar.hapticsEnabled == true { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
-                    dispatch(.space(.step(step > 0 ? .next : .previous)))
-                }
+        let verdict = swipe.update(horizontal: event.scrollingDeltaX, vertical: event.scrollingDeltaY, phase: phase,
+                                   startsInSidebar: bounds.contains(point), precise: event.hasPreciseScrollingDeltas)
+        switch verdict {
+        case .pass:
+            return false
+        case .hold:
+            swipeHeld.append(event)
+            return true
+        case .handOver:
+            // The list gets the events held so far now, and this one and the rest by the normal path.
+            let held = swipeHeld
+            swipeHeld = []
+            if let first = held.first, tablist.frame.contains(convert(first.locationInWindow, from: nil)) {
+                for event in held { tablist.scrollWheel(with: event) }
             }
+            return false
+        case .swipe:
+            swipeHeld = []
+            let offset = min(max(swipe.translation, -bounds.width * 0.65), bounds.width * 0.65)
+            tablist.layer?.transform = CATransform3DMakeTranslation(offset, 0, 0)
+            tablist.alphaValue = 1 - min(abs(offset) / max(bounds.width, 1), 0.65)
+            return true
+        case .finish(let step):
+            swipeHeld = []
+            swallowMomentum = true
+            tablist.layer?.transform = CATransform3DIdentity
+            tablist.alphaValue = 1
+            if let step { switchSpace(by: step) }
+            return true
         }
-        return result.consumed
+    }
+
+    /// The next or previous Space of the dock, when there is one on that side.
+    private func switchSpace(by step: Int) {
+        let order = last?.dock ?? []
+        guard let current = order.firstIndex(where: \.active), order.indices.contains(current + step) else { return }
+        if last?.sidebar.hapticsEnabled == true { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+        dispatch(.space(.step(step > 0 ? .next : .previous)))
     }
 
     private func resetSwipe() {
         swipe = SpaceSwipe()
+        swipeHeld = []
         tablist.layer?.transform = CATransform3DIdentity
         tablist.alphaValue = 1
     }

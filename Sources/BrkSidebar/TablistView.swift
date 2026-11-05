@@ -14,6 +14,11 @@ import BrkUIKit
 /// Space switches push the old rows out and the new ones in over Metrics.motion.spaceSwitch.
 @MainActor
 final class TablistView: NSScrollView {
+    /// Every scroll event of the list goes through the window, one at a time. With AppKit's responsive scrolling the
+    /// scroll view tracks a whole gesture by itself and takes the next gestures before the window sees their first
+    /// event (measured 2026-11-05), so the sidebar could never tell a Space swipe from a list scroll.
+    override class var isCompatibleWithResponsiveScrolling: Bool { false }
+
     private let dispatch: Dispatch
     private let drag: DragController
     private let document = ListDocumentView()
