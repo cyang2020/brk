@@ -90,32 +90,57 @@ enum NativeScenarios {
         try expect(app.hostKeyViolations.isEmpty, "a CEF host window was key: \(app.hostKeyViolations)")
     }
 
-    /// N3R: AppKit lays the titlebar out again when the window is resized and puts the three buttons back at the
-    /// system's spots; Brk puts them back at Arc's (the user's report: the colored buttons came up beside the grey
-    /// circles after a resize, Q16). Checked after each of three resizes, with no change of Brk's own in between.
-    @Sendable static func lightsStayAfterResize(_ app: AppUnderTest) throws {
+    /// N3R: the window buttons stay at Arc's spots under the pointer and through resizes. AppKit lays the titlebar out
+    /// again the moment the pointer goes over the buttons and puts them back at the system's spots (x 9, centre y 16),
+    /// so the colored buttons came up beside the grey circles and the circles' own spots took no click (the user's
+    /// report, verify/visual-pairs/run-20261103/Q16). The pointer here is the real one, moved through the window server.
+    @Sendable static func lightsStayUnderThePointer(_ app: AppUnderTest) throws {
+        guard WindowServerKeys.allowed, let owner = app.window else { throw Check(description: "window-server input unavailable") }
         let w = Metrics.window, lights = ["window-close-button", "window-minimize-button", "window-zoom-button"]
+        let pitch = w.trafficLightSize.value + w.trafficLightSpacing.value
+        func spots() throws -> [String] {
+            let n = try app.native()
+            return lights.map { key in n.actual[key].map { $0.hidden ? "hidden" : "x \($0.frame.minX) centre y \($0.frame.midY)" } ?? "missing" }
+        }
+        let expected = lights.indices.map { "x \(w.trafficLightLeft.value + Double($0) * pitch) centre y \(w.trafficLightCenterY.value)" }
         func check(_ label: String) throws {
-            try app.waitUntil("the lights at Arc's spots \(label)", timeout: 4) {
-                let n = try app.native()
-                return lights.enumerated().allSatisfy { i, key in
-                    guard let light = n.actual[key], !light.hidden else { return false }
-                    let x = w.trafficLightLeft.value + Double(i) * (w.trafficLightSize.value + w.trafficLightSpacing.value)
-                    return light.frame.minX == x && light.frame.midY == w.trafficLightCenterY.value
-                }
+            app.sleep(0.5)
+            let now = try spots()
+            try expect(now == expected, "\(label): the window buttons are at \(now), Arc's spots are \(expected)")
+        }
+        /// The real pointer, moved in from outside so AppKit sees it enter the buttons.
+        func pointer(toWindowPoint point: CGPoint) throws {
+            try WindowServerKeys.ensureFrontmost(app, owner)
+            let frame = try app.native().windowFrame
+            let origin = CGPoint(x: frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - frame.maxY)
+            let target = CGPoint(x: origin.x + point.x, y: origin.y + point.y)
+            guard case .hello(let hello) = try app.send(.hello), PhysicalPointer.frontmost(at: target)?.pid == hello.pid else {
+                throw Check(description: "another window is in front of Brk at \(target); the pointer was not moved")
+            }
+            let source = CGEventSource(stateID: .hidSystemState)
+            for step in [CGPoint(x: target.x + 90, y: target.y + 60), CGPoint(x: target.x + 30, y: target.y + 20), CGPoint(x: target.x + 3, y: target.y + 2), target] {
+                CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: step, mouseButton: .left)?.post(tap: .cghidEventTap)
+                usleep(120_000)
             }
         }
         try check("at launch")
-        let start = try app.native().windowFrame
-        for (i, size) in [CGSize(width: 900, height: 600), CGSize(width: 1100, height: 700), CGSize(width: 760, height: 520)].enumerated() {
-            try app.setWindowFrame(CGRect(origin: start.origin, size: size))
-            app.sleep(0.6)
-            try check("after resize \(i + 1) to \(Int(size.width))x\(Int(size.height))")
+        let centreY = w.trafficLightCenterY.value, half = w.trafficLightSize.value / 2
+        for (i, name) in ["close", "minimize", "zoom"].enumerated() {
+            try pointer(toWindowPoint: CGPoint(x: w.trafficLightLeft.value + Double(i) * pitch + half, y: centreY))
+            try check("the pointer over \(name)")
         }
+        try app.screenshot("lights-under-the-pointer")
+        try pointer(toWindowPoint: CGPoint(x: 400, y: 300))
+        try check("the pointer away again")
+        let start = try app.native().windowFrame
+        try app.setWindowFrame(CGRect(origin: start.origin, size: CGSize(width: 900, height: 600)))
+        try check("after a resize to 900x600")
+        try pointer(toWindowPoint: CGPoint(x: w.trafficLightLeft.value + half, y: centreY))
+        try check("the pointer over close after the resize")
+        try pointer(toWindowPoint: CGPoint(x: 400, y: 300))
         try app.setWindowFrame(start)
-        app.sleep(0.6)
         try check("back at the first size")
-        app.passed("the window buttons stay at Arc's spots through four resizes")
+        app.passed("the window buttons stay at Arc's spots under the pointer and through two resizes")
     }
 
     /// N3: every layout-owned frame on screen equals `WindowLayout.compute`'s, and the constants hold: traffic lights
