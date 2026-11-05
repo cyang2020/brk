@@ -82,6 +82,7 @@ final class AIWorkflowTests: XCTestCase {
         // Arc's undo toast instead of an answer panel (P46: Tidy on the divider).
         XCTAssertNil(d.view.ai)
         XCTAssertEqual(d.view.tabTools.toast?.text, "Tidied Tabs! Use")
+        XCTAssertNil(d.view.tabTools.toast?.placement, "a toast about the window stays at its corner")
         XCTAssertEqual(d.view.tabTools.toast?.keycap, "⌘Z")
         XCTAssertFalse(d.view.space.today.tidying)
         let newTab = d.open("https://example.com/new")
@@ -240,6 +241,7 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertEqual(d.view.urlPill.translation, .available)
         XCTAssertEqual(d.view.tabTools.toast?.text, "Translated back to French! Use")
         XCTAssertEqual(d.view.tabTools.toast?.keycap, "⌘Z")
+        XCTAssertEqual(d.view.tabTools.toast?.placement, .page, "Arc shows this one inside the page card (P50-e)")
         let undo = d.user(.tabTools(.undoToast))
         XCTAssertTrue(undo.effects.contains(.aiShowTranslation(c.document, translated: true)))
         XCTAssertEqual(d.view.urlPill.translation, .translated(from: "French"))

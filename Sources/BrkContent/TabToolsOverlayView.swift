@@ -92,8 +92,9 @@ final class TabToolsOverlayView: NSView {
         toastCommand = tools.toast?.action?.command
         toastClick = tools.toast?.click
         toastActionCloses = tools.toast?.action?.symbol != nil
-        // A notice with a way out is Arc's notice banner (P43-a); any other toast is Arc's toast (P15). Both sit at the
-        // top-right corner of the content area, overlapping the window margin above the card.
+        // A notice with a way out is Arc's notice banner (P43-a); any other toast is Arc's toast (P15). Those sit at
+        // the top-right corner of the content area, overlapping the window margin above the card. A toast about the
+        // page sits inside the card (`ToastPlacement`).
         let notice = tools.toast?.link != nil ? tools.toast : nil
         // Beside the Library the card runs past the window's right edge: the toast stays at the window's.
         let right = min(contentArea?.maxX ?? .infinity, bounds.width - Metrics.content.inset.value)
@@ -101,7 +102,10 @@ final class TabToolsOverlayView: NSView {
         if let snapshot = tools.toast, notice == nil {
             toast.render(snapshot)
             let size = toast.fittingSize
-            toast.frame = CGRect(x: right - size.width, y: ToastDraw.top.value, width: size.width, height: size.height)
+            let onPage = snapshot.placement == .page
+            let inset = onPage ? ToastDraw.pageInset.value : 0
+            let top = onPage ? (contentArea.map { Double($0.minY) } ?? Metrics.content.inset.value) + inset : ToastDraw.top.value
+            toast.frame = CGRect(x: right - inset - size.width, y: top, width: size.width, height: size.height)
         }
         banner.isHidden = notice == nil
         if let notice, let link = notice.link { banner.show(notice.text, link: link, right: right, top: ToastDraw.top.value) }
@@ -318,6 +322,7 @@ let ToastDraw = ToastMetrics()
 
 struct ToastMetrics: MetricGroup {
     let top = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: Arc's toast spans y 4 to 50.5 at the content area's top-right"))
+    let pageInset = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/Q20: Copied Current URL spans y 18.5 to 64.5 and ends 18.5 before the window's right edge; the card is 10 in"))
     let textSlack = Metric(2.0, .guess("room past a label's measured width: the last letter of Use and undo was clipped by a pixel or two (station P50-e)"))
     let height = Metric(46.5, .anatomy("verify/visual-pairs/run-20261103/results.tsv P15-c: the toast is 46.5 tall"))
     /// The labels draw their glyphs about 2.5 in from their frames, so the paddings and gaps below are the measured

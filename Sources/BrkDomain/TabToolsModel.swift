@@ -145,7 +145,15 @@ public struct ToastSnapshot: Equatable, Sendable, Codable {
     public var subtitle: String? = nil
     /// What a click on the strip does before it closes (Arc: "Tab moved! Click to go there.").
     public var click: Command? = nil
+    /// Where Arc shows it (Q20). Absent in saved data: the window's corner.
+    public var placement: ToastPlacement? = nil
 }
+
+/// Arc has two toast spots (measured on Arc 1.170, 2026-11-05, Q20): a toast about the page being shown ("Copied
+/// Current URL", "Translated back to French!") sits inside the page card, 8.5 pt from its top and right edges; every
+/// other one ("Cleared Tabs!", "Space deleted!", "Screenshot Copied to Clipboard", the Max notice) sits at the
+/// window's corner, 4.5 pt from the top, above the card's edge.
+public enum ToastPlacement: String, Sendable, Equatable, Codable { case window, page }
 /// Arc's toast copy (the strings in its binary beside "Letting user know…", `ToastController`), for the toasts two rules
 /// or a rule and a test share.
 public enum ToastCopy {

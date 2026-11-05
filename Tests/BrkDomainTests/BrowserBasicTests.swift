@@ -266,6 +266,8 @@ final class BrowserBasicTests: XCTestCase {
         let d = Driver()
         d.page(d.todayIDs[0], .titleChanged("A [title] \\ path"))
         XCTAssertEqual(d.user(.page(.copyURL(.markdown))).effects, [.copyToPasteboard("[A \\[title\\] \\\\ path](http://127.0.0.1:9/a)")])
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Copied Current URL")
+        XCTAssertEqual(d.view.tabTools.toast?.placement, .page, "Arc shows Copied Current URL inside the page card (Q20)")
         d.user(.peek(.email))
         guard case .peek(let peek)? = d.view.overlay else { return XCTFail("Email Peek missing") }
         XCTAssertEqual(peek.tab.url?.absoluteString, "https://mail.google.com/mail/u/0/")

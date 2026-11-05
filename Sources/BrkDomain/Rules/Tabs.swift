@@ -151,7 +151,7 @@ extension Work {
         case .shareQuote:
             guard state.doc.settings.advanced.sharedQuotes, let tab = state.resolveTab(.focused, in: window) else { return }
             pages(.copyURL(.plain), in: window)
-            if state.session.live[PageID(window: window, item: tab)]?.hasSelection == true { toast("Copied Shared URL", in: window) }
+            if state.session.live[PageID(window: window, item: tab)]?.hasSelection == true { toast("Copied Shared URL", in: window, onPage: true) }
         case .navigate(let ref, let url):
             // AppleScript's `set URL`: an address the command bar could open, in place, like the bar's edit-current.
             guard isOpenableURL(url), let tab = state.resolveTab(ref, in: window) else { return }

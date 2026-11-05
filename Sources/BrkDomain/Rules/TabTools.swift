@@ -50,15 +50,17 @@ extension AppState {
 }
 
 extension Work {
-    mutating func toast(_ text: String, link: ToastLink? = nil, in window: WindowID, action: ToastAction? = nil, subtitle: String? = nil, keycap: String? = nil, click: Command? = nil) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(action == nil ? 4 : 6)), link: link, keycap: keycap, action: action, subtitle: subtitle, click: click)
+    mutating func toast(_ text: String, link: ToastLink? = nil, in window: WindowID, action: ToastAction? = nil, subtitle: String? = nil, keycap: String? = nil, click: Command? = nil,
+                        onPage: Bool = false) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(action == nil ? 4 : 6)), link: link, keycap: keycap, action: action, subtitle: subtitle, click: click,
+                                                             placement: onPage ? .page : nil)
         state.session.windows[window]?.toastUndo = nil
     }
     /// Arc's Copied Current URL (Q11-b), with its Share button: the file export that replaced Share-by-link, so a
     /// private tab has none.
     mutating func copiedURLToast(_ tab: ItemID, in window: WindowID) {
         let share = state.locate(tab) == .global ? ToastAction(title: ToastCopy.share, symbol: "square.and.arrow.up", command: .app(.export(.items([tab])))) : nil
-        toast(ToastCopy.copiedCurrentURL, in: window, action: share)
+        toast(ToastCopy.copiedCurrentURL, in: window, action: share, onPage: true)
     }
     /// Arc's sidebar move toast, when an item leaves for a Space the window is not showing: a click goes there.
     mutating func movedToast(_ id: ItemID, to space: SpaceID, in window: WindowID) {
@@ -66,8 +68,8 @@ extension Work {
         toast(ToastCopy.tabMoved, in: window, click: state.doc.tree[id]?.kind == .tab ? .tab(.focus(id)) : .space(.focus(space)))
     }
     /// Arc's undo toast ("Cleared Tabs! Use ⌘Z to undo"), about 5 s; ⌘Z meanwhile runs `undo`.
-    mutating func undoToast(_ text: String, trailing: String = "to undo", undo: ToastUndo, in window: WindowID) {
-        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(5)), keycap: "⌘Z", trailing: trailing)
+    mutating func undoToast(_ text: String, trailing: String = "to undo", undo: ToastUndo, in window: WindowID, onPage: Bool = false) {
+        state.session.windows[window]?.toast = ToastSnapshot(text: text, expiresAt: ctx.now.advanced(by: .seconds(5)), keycap: "⌘Z", trailing: trailing, placement: onPage ? .page : nil)
         state.session.windows[window]?.toastUndo = undo
     }
 
@@ -202,7 +204,8 @@ extension Work {
             if state.session.windows[window]?.copiedCapture?.action == nil { state.session.windows[window]?.copiedCapture = nil }
             state.session.windows[window]?.toastUndo = nil
         case .undoToast: undoFromToast(in: window)
-        case .quoteLinkCopied: toast(ToastCopy.copiedLink, in: window, subtitle: ToastCopy.withQuote)
+        // The page's own copy actions go where Copied Current URL goes (not seen on Arc: by the same action's kind).
+        case .quoteLinkCopied: toast(ToastCopy.copiedLink, in: window, subtitle: ToastCopy.withQuote, onPage: true)
         case .dismissArchiveEducation:
             if w.kind == .standard { state.doc.tabPreferences.archiveEducationDismissed = true }
         case .dismissLittleTip:

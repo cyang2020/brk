@@ -70,6 +70,22 @@ final class TabSwitcherViewTests: XCTestCase {
         XCTAssertEqual(banner.frame.minY, 4)
     }
 
+    /// Q20 (Arc, 2026-11-05): a toast about the page being shown sits inside the page card, 8.5 from its top and right
+    /// edges (Copied Current URL: y 18.5, 18.5 before the window's right edge); the others stay at the window's corner.
+    func testAPageToastSitsInsideTheCard() throws {
+        let view = TabToolsOverlayView(dispatch: { _ in })
+        view.frame = bounds
+        var snapshot = ToastSnapshot(text: "Copied Current URL", expiresAt: Instant(milliseconds: 1_000), placement: .page)
+        view.render(TabToolsSnapshot(toast: snapshot), sidebarWidth: 228, palette: palette)
+        let toast = try XCTUnwrap(view.subviews.first { $0.accessibilityIdentifier() == ViewID.tabTool("toast").identifier })
+        XCTAssertEqual(toast.frame.minY, 18.5)
+        XCTAssertEqual(toast.frame.maxX, 1261.5)
+        snapshot = ToastSnapshot(text: "New Space Created", expiresAt: Instant(milliseconds: 2_000))
+        view.render(TabToolsSnapshot(toast: snapshot), sidebarWidth: 228, palette: palette)
+        XCTAssertEqual(toast.frame.minY, 4)
+        XCTAssertEqual(toast.frame.maxX, 1270)
+    }
+
     /// P15-a: Arc's undo toast. The text starts 13 in, "Use" ends 10 before a 36.5 wide ⌘Z key cap, "to undo" starts 6
     /// after it; the labels draw their glyphs about 2.5 in from their frames.
     func testTheUndoToastSpacesItsKeyCapAsArcDoes() throws {

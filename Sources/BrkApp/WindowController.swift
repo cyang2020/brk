@@ -402,11 +402,14 @@ extension HostWindow {
     /// pointer goes over the buttons, for one) and puts them back at its own spots, a fixed inset from the titlebar's
     /// left edge and centred in its height. So the titlebar itself is moved and sized until those spots are Arc's: the
     /// user's report (verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
-    /// above the grey circles, with the circles' own spots taking no click.
+    /// above the grey circles, with the circles' own spots taking no click. And it is kept there (`TitlebarPin`):
+    /// AppKit sets the titlebar's frame back each time the pointer goes onto or off the buttons, and putting it right
+    /// a run-loop turn later showed the buttons at AppKit's spots for one screen refresh (the second report, Q20).
     func placeArcTrafficLights(origin: CGPoint?) {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
         guard let origin, let titlebar = buttons.first?.superview, let container = titlebar.superview, let frame = container.superview else {
             buttons.forEach { $0.isHidden = true }
+            if let container = buttons.first?.superview?.superview { TitlebarPin.clear(container) }
             let resting = RestingTrafficLights.find(in: buttons.first?.superview)
             resting?.isHidden = true
             resting?.origin = nil
@@ -429,7 +432,9 @@ extension HostWindow {
         // AppKit centres the buttons in the titlebar's height and starts them `systemLeading` in from its left edge.
         let height = 2 * origin.y + size.height
         let shift = origin.x - resting.systemLeading
-        let target = CGRect(x: shift, y: frame.bounds.height - height, width: frame.bounds.width - shift, height: height)
+        let target = TitlebarPin.frame(shift: shift, height: height, in: frame.bounds)
+        // From here on the titlebar stays put whatever AppKit sets (`TitlebarPin`).
+        TitlebarPin.set(container, shift: shift, height: height)
         if container.frame != target { container.frame = target }
         if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
         // The same spots AppKit's own layout gives in this titlebar; only the pitch is Brk's to keep.
@@ -442,6 +447,65 @@ extension HostWindow {
         resting.isHidden = false
         resting.frame = buttons.map(\.frame).reduce(buttons[0].frame) { $0.union($1) }
         resting.needsDisplay = true
+    }
+}
+
+/// Keeps AppKit's titlebar container where Brk put it. AppKit sets the container's frame back to its own (the top
+/// 32 pt of the window, from x 0) every time the pointer goes onto or off the window buttons, and on every resize
+/// (logged 2026-11-05: eight times for four passes of the pointer, the titlebar still there at the next screen
+/// refresh). The container's class is replaced, for this one view, by a subclass made at run time whose three frame
+/// setters answer with Brk's frame for the window's size at that moment; so AppKit's layout of the buttons inside it
+/// lands on Arc's spots and there is no frame with them anywhere else.
+@MainActor
+enum TitlebarPin {
+    nonisolated(unsafe) private static var key: UInt8 = 0
+    private static let prefix = "BrkPinned_"
+
+    static func frame(shift: Double, height: Double, in bounds: CGRect) -> CGRect {
+        CGRect(x: shift, y: bounds.height - height, width: bounds.width - shift, height: height)
+    }
+
+    /// The lights start `shift` right of AppKit's place, in a titlebar `height` tall.
+    static func set(_ container: NSView, shift: Double, height: Double) {
+        objc_setAssociatedObject(container, &key, NSValue(point: CGPoint(x: shift, y: height)), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        install(on: container)
+    }
+
+    /// AppKit's own frames apply again (the lights are hidden).
+    static func clear(_ container: NSView) {
+        objc_setAssociatedObject(container, &key, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    /// Brk's frame for a pinned container in its superview as it is now; nil when it is not pinned.
+    private static func pinned(_ object: AnyObject) -> CGRect? {
+        guard let view = object as? NSView, let value = objc_getAssociatedObject(view, &key) as? NSValue, let bounds = view.superview?.bounds else { return nil }
+        return frame(shift: value.pointValue.x, height: value.pointValue.y, in: bounds)
+    }
+
+    private static func install(on container: NSView) {
+        guard let base: AnyClass = object_getClass(container) else { return }
+        let baseName = NSStringFromClass(base)
+        // Already ours; or key-value observed, whose class is not one to build on.
+        guard !baseName.hasPrefix(prefix), !baseName.hasPrefix("NSKVONotifying_") else { return }
+        let name = prefix + baseName
+        if let made: AnyClass = NSClassFromString(name) { object_setClass(container, made); return }
+        typealias SetRect = @convention(c) (AnyObject, Selector, CGRect) -> Void
+        typealias SetPoint = @convention(c) (AnyObject, Selector, CGPoint) -> Void
+        typealias SetSize = @convention(c) (AnyObject, Selector, CGSize) -> Void
+        let setFrame = #selector(setter: NSView.frame), setOrigin = #selector(NSView.setFrameOrigin(_:)), setSize = #selector(NSView.setFrameSize(_:))
+        guard let frameMethod = class_getInstanceMethod(base, setFrame), let originMethod = class_getInstanceMethod(base, setOrigin),
+              let sizeMethod = class_getInstanceMethod(base, setSize), let made: AnyClass = objc_allocateClassPair(base, name, 0) else { return }
+        let superFrame = unsafeBitCast(method_getImplementation(frameMethod), to: SetRect.self)
+        let superOrigin = unsafeBitCast(method_getImplementation(originMethod), to: SetPoint.self)
+        let superSize = unsafeBitCast(method_getImplementation(sizeMethod), to: SetSize.self)
+        let frameBlock: @convention(block) (AnyObject, CGRect) -> Void = { object, rect in superFrame(object, setFrame, pinned(object) ?? rect) }
+        let originBlock: @convention(block) (AnyObject, CGPoint) -> Void = { object, point in superOrigin(object, setOrigin, pinned(object)?.origin ?? point) }
+        let sizeBlock: @convention(block) (AnyObject, CGSize) -> Void = { object, size in superSize(object, setSize, pinned(object)?.size ?? size) }
+        class_addMethod(made, setFrame, imp_implementationWithBlock(frameBlock), method_getTypeEncoding(frameMethod))
+        class_addMethod(made, setOrigin, imp_implementationWithBlock(originBlock), method_getTypeEncoding(originMethod))
+        class_addMethod(made, setSize, imp_implementationWithBlock(sizeBlock), method_getTypeEncoding(sizeMethod))
+        objc_registerClassPair(made)
+        object_setClass(container, made)
     }
 }
 
