@@ -77,14 +77,19 @@ final class DragController {
         let preview: DragImage
         /// Arc's drag card over the content (P23-d, Q13-e); nil for anything but a tab.
         let card: ContentDragCard?
+        /// The pointer's place in the card, as fractions: a drag keeps it when its image changes size. A row counts the
+        /// sidebar's whole width (Arc's row spans it: pressed at 86 of 228 the card's left is 64 of 169 and 43 of 113 back from
+        /// the pointer, Q17-zone-straight-x1100, Q17-split-hold), a tile its own.
+        let cardGrab: CGPoint
         var target: Target?
         var overContent = false
         var item: Item { press.item }
 
-        init(press: Press, preview: DragImage, card: ContentDragCard?) {
+        init(press: Press, preview: DragImage, card: ContentDragCard?, cardGrab: CGPoint) {
             self.press = press
             self.preview = preview
             self.card = card
+            self.cardGrab = cardGrab
         }
     }
 
@@ -140,7 +145,7 @@ final class DragController {
         guard let latest = self.context else { return true }
         if let card = session.card {
             if session.overContent, let size = sidebar.contentDropCardSize?() { card.fit(size) }
-            card.center(on: local)
+            card.place(at: local, grab: session.cardGrab)
             card.isHidden = !session.overContent
         }
         // Over the page the card stands for the drag.
@@ -213,7 +218,8 @@ final class DragController {
             host.addSubview(made)
             card = made
         }
-        session = Session(press: press, preview: preview, card: card)
+        let cardGrab = row == nil ? preview.grab : CGPoint(x: sidebar.convert(press.start, from: nil).x / max(sidebar.bounds.width, 1), y: preview.grab.y)
+        session = Session(press: press, preview: preview, card: card, cardGrab: cardGrab)
         if item.kind == .folder { row?.dragSource = true }
         // A favorite's own cell is empty for the whole drag (Q13-c, Q13-d).
         if row == nil { source.alphaValue = 0 }
@@ -525,8 +531,8 @@ final class ContentDragCard: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// `point` in the superview's coordinates.
-    func center(on point: CGPoint) {
-        setFrameOrigin(CGPoint(x: (point.x - bounds.width / 2).rounded(), y: (point.y - bounds.height / 2).rounded()))
+    /// `point` in the superview's coordinates; `grab` is the pointer's place in the card, as fractions.
+    func place(at point: CGPoint, grab: CGPoint) {
+        setFrameOrigin(CGPoint(x: (point.x - grab.x * bounds.width).rounded(), y: (point.y - grab.y * bounds.height).rounded()))
     }
 }
