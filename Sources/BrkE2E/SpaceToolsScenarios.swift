@@ -307,6 +307,7 @@ enum SpaceToolsScenarios {
         func rowX(_ item: ItemID) throws -> Double { Double(try app.native().actual[ViewID.row(item).identifier]?.frame.minX ?? -9999) }
         let restX = try rowX(inSecond)
         let pill = try app.native().actual[ViewID.urlPill.identifier]?.frame
+        let tray = try app.native().actual[ViewID.section(.favorites).identifier]?.frame
         let right = { (n: Int) in Array(repeating: (15.0, 0.0), count: n) }, left = { (n: Int) in Array(repeating: (-15.0, 0.0), count: n) }
 
         // Fingers 150 to the right, held: the column 75 to the right, the Space before beside it; the pill stays.
@@ -316,6 +317,7 @@ enum SpaceToolsScenarios {
             let beside = try rowX(inFirst)
             try expect(abs(beside - (restX + 75 - width)) < 1, "the neighbour's row is at \(beside), expected \(restX + 75 - width)")
             try expect(try app.native().actual[ViewID.urlPill.identifier]?.frame == pill, "the pill moved")
+            try expect(try app.native().actual[ViewID.section(.favorites).identifier]?.frame == tray, "the Favorites moved between two Spaces of one profile")
             try expect(try app.view().space.id == second, "the Space changed before the fingers lifted")
             // What reached the screen, not only where the views are: the neighbour's current row (a white card) in the 75 points it shows.
             let shot = try app.screenshot("mid-swipe-150")
@@ -342,6 +344,8 @@ enum SpaceToolsScenarios {
         try PhysicalPointer.swipe(app, at: try listPoint(), first: (-4, 0), steps: left(14), held: {
             let pressed = restX - (try rowX(inSecond))
             try expect(abs(pressed - 14.84) < 1, "fingers 210 past the last Space pressed the column \(pressed)")
+            let pressedTray = try app.native().actual[ViewID.section(.favorites).identifier]?.frame
+            try expect(abs((tray?.minX ?? 0) - (pressedTray?.minX ?? 0) - pressed) < 1, "past the last Space the Favorites go with the column")
             try expect(isShown(try app.native(), .tabTool("space-edge-feedback")), "no edge feedback past the last Space")
             _ = try app.screenshot("past-the-last")
         }, then: right(14), pause: 0.3, window: window)
