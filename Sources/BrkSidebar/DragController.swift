@@ -362,7 +362,7 @@ final class DragImage: NSView {
         let card = RowGeometry(bounds: bounds, depth: 0).selection
         rowSize = card.size
         rowImageFrame = bounds.offsetBy(dx: -card.minX, dy: -card.minY)
-        ringed = source is FavoriteTileView && tab?.status == .current
+        ringed = source is FavoriteTileView && tab?.status == .current && (tab?.favicon != nil || tab?.icon != nil)
         super.init(frame: CGRect(origin: .zero, size: rowSize))
         wantsLayer = true
         alphaValue = Draw.dragPreviewAlpha.value
@@ -370,8 +370,8 @@ final class DragImage: NSView {
             layer.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
             layer.cornerCurve = .continuous
             layer.cornerRadius = Metrics.tablist.selectionRadius.value
-            layer.shadowColor = palette.ink.shadow.cgColor
-            layer.shadowOpacity = 1
+            layer.shadowColor = NSColor.black.cgColor
+            layer.shadowOpacity = Float(Draw.dragPreviewShadowOpacity.value)
             layer.shadowRadius = Draw.dragPreviewShadow.value
             layer.shadowOffset = CGSize(width: 0, height: -Draw.dragPreviewShadowOffset.value)
         }
@@ -418,9 +418,9 @@ final class DragImage: NSView {
             icon.isHidden = false
             let side = Draw.tileFavicon.value
             icon.frame = CGRect(x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side)
-            let m = Metrics.favorites, inset = m.ringInset.value + Draw.tileRingWidth.value / 2
+            let m = Metrics.favorites
             ring.frame = bounds
-            ring.path = CGPath(roundedRect: bounds.insetBy(dx: inset, dy: inset), cornerWidth: m.ringRadius.value, cornerHeight: m.ringRadius.value, transform: nil)
+            ring.path = CGPath(roundedRect: bounds.insetBy(dx: m.ringInset.value, dy: m.ringInset.value), cornerWidth: m.ringRadius.value, cornerHeight: m.ringRadius.value, transform: nil)
             ring.isHidden = !ringed
         }
         CATransaction.commit()

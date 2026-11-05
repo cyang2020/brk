@@ -24,6 +24,8 @@ final class FavoritesView: NSView {
     private var last: (FavoritesSnapshot, ItemID?, SidebarFrames, Palette)?
     private var palette: Palette?
     private var dropHighlight = false
+    /// The soft shadow around the current tile (Q13-n5). A tile clips, and its fill lets through what is under it.
+    private let currentGlow = TileGlow()
     /// Arc Previews over a supported Favorite (a calendar's meetings, a site's recent pages).
     private lazy var cards = FolderPreview(dispatch: dispatch)
     private var now = Instant(milliseconds: 0)
@@ -35,6 +37,7 @@ final class FavoritesView: NSView {
         wantsLayer = true
         section.identify(.section(.favorites))
         addSubview(section)
+        section.addSubview(currentGlow)
         emptyBox.fillColor = nil
         emptyBox.lineDashPattern = Draw.emptyDash.value.map { NSNumber(value: $0) }
         layer?.addSublayer(emptyBox)
@@ -102,6 +105,10 @@ final class FavoritesView: NSView {
             }
             tile.render(row, renaming: row.id == renaming, palette: palette)
         }
+        // Hidden while the current tile is the one being dragged: its cell is empty.
+        let current = favorites.tiles.first { $0.status == .current }.flatMap { frames.favoriteTiles[$0.id] }
+        currentGlow.isHidden = current == nil
+        if let current { currentGlow.place(around: current.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding) }
         let empty = favorites.tiles.isEmpty && !favorites.hintDismissed
         for view in [emptyBadge, emptyTitle, emptySubtitle, emptyClose] as [NSView] { view.isHidden = !empty }
         emptyBox.isHidden = !empty
@@ -278,7 +285,8 @@ final class FavoriteTileView: HoverView {
             field.frame = CGRect(x: inset, y: (bounds.height - height) / 2, width: bounds.width - 2 * inset, height: height)
         }
         let m = Metrics.favorites
-        let ringRect = bounds.insetBy(dx: m.ringInset.value + Draw.tileRingWidth.value / 2, dy: m.ringInset.value + Draw.tileRingWidth.value / 2)
+        // The ring's centre line (Arc: inset 1, radius 11, so it fills the tile's outer 2 points).
+        let ringRect = bounds.insetBy(dx: m.ringInset.value, dy: m.ringInset.value)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         ring.frame = bounds
@@ -296,12 +304,13 @@ final class FavoriteTileView: HoverView {
         let current = row.status == .current
         let fill: NSColor
         // A press opens the tab, so a pressed tile is the current one by the next render (Q13-press-favorite).
-        if current { fill = palette.ink.tileCurrent(palette) }
+        if current { fill = isPressed ? palette.ink.tileCurrent(palette).shadow(withLevel: Draw.pressedTileShade.value) ?? palette.ink.tileCurrent(palette) : palette.ink.tileCurrent(palette) }
         else if isPressed { fill = palette.color(palette.tokens.tabPressed) }
         else if isHovered { fill = palette.color(palette.tokens.itemHover) }
         else { fill = palette.color(palette.tokens.itemBackground) }
         layer?.backgroundColor = fill.cgColor
-        ring.isHidden = !current
+        // A tile with no site icon is white on its shadow with no ring (Q13-n5, Q13-n6, Q13-n10).
+        ring.isHidden = !current || (row.favicon == nil && row.icon == nil)
         ring.strokeColor = palette.color(palette.tokens.separator).cgColor
         ring.lineWidth = Draw.tileRingWidth.value
     }
@@ -390,6 +399,53 @@ enum FavoriteOverlayStyle {
         return scheme == .dark
             ? (NSColor(white: 1, alpha: 0.07), NSColor(srgbRed: 0xDE / 255, green: 0xE3 / 255, blue: 0xEB / 255, alpha: 0.7))
             : (NSColor(white: 0, alpha: 0.07), NSColor(srgbRed: 0x21 / 255, green: 0x21 / 255, blue: 0x21 / 255, alpha: 1))
+    }
+}
+
+/// The shadow around a tile and nothing inside it: the tile's fill is translucent, so a plain shadow would darken it.
+@MainActor
+final class TileGlow: NSView {
+    private let shadowLayer = CALayer()
+    private let cutout = CAShapeLayer()
+    private var side = CGSize.zero
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.addSublayer(shadowLayer)
+        layer?.mask = cutout
+        cutout.fillRule = .evenOdd
+        shadowLayer.shadowColor = NSColor.black.cgColor
+        shadowLayer.shadowOpacity = Float(Draw.currentTileShadowOpacity.value)
+        shadowLayer.shadowRadius = Draw.currentTileShadow.value
+        shadowLayer.shadowOffset = CGSize(width: 0, height: -1)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// `tile` in the superview's coordinates.
+    func place(around tile: CGRect, sliding: Bool) {
+        let margin = 3 * Draw.currentTileShadow.value
+        Slide.place(self, at: tile.insetBy(dx: -margin, dy: -margin), sliding: sliding)
+        guard tile.size != side else { return }
+        side = tile.size
+        let radius = Metrics.favorites.tileRadius.value
+        let inner = CGRect(x: margin, y: margin, width: tile.width, height: tile.height)
+        let path = CGPath(roundedRect: inner, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        shadowLayer.frame = CGRect(x: 0, y: 0, width: tile.width + 2 * margin, height: tile.height + 2 * margin)
+        shadowLayer.shadowPath = path
+        let hole = CGMutablePath()
+        hole.addRect(CGRect(x: 0, y: 0, width: tile.width + 2 * margin, height: tile.height + 2 * margin))
+        hole.addPath(path)
+        cutout.frame = shadowLayer.frame
+        cutout.path = hole
+        CATransaction.commit()
     }
 }
 

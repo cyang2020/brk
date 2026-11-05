@@ -542,7 +542,7 @@ final class RowView: HoverView {
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
             renameHint.isHidden = !tab.renameHint || renaming
-            renameHint.textColor = palette.ink.secondary
+            renameHint.textColor = palette.ink.text.withAlphaComponent(Draw.renameHintInk.value)
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
@@ -619,7 +619,7 @@ final class RowView: HoverView {
         button.isHidden = !hasButton && !dragLifted
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
         // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
-        button.render(.archiveTab, size: Draw.smallFont.value, palette: palette,
+        button.render(.archiveTab, size: Draw.rowCloseGlyph.value, palette: palette,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
     }
 
