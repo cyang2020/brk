@@ -344,6 +344,8 @@ final class MiniPlayerSliderView: HoverView {
 
     override func mouseDown(with event: NSEvent) { apply(event) }
     override func mouseDragged(with event: NSEvent) { apply(event) }
+    /// Kept here: passed on, it would reach the card, whose release goes back to the tab.
+    override func mouseUp(with event: NSEvent) {}
     private func apply(_ event: NSEvent) { onVolume?(MiniPlayerLayout.sliderVolume(atX: local(event).x, width: bounds.width)) }
 }
 

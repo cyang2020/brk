@@ -162,14 +162,16 @@ enum MediaScenarios {
         } else { throw Check(description: "no title label in the row") }
         try press(app, .row(p.other))
         try app.waitUntil("the other tab is shown") { try E.shown(app.view()) == p.other }
+        // The window's facts list only pages on screen: the real browser's state is read once the tab is shown.
         try press(app, tool("audio-", p.tab))
-        try app.waitUntil("the real tab is muted") { try app.native().pages[p.page]?.audioMuted == true }
+        try app.waitUntil("the row reads muted") { try row(app, p.tab)?.speaker == .muted }
         try expect(try E.shown(app.view()) == p.other, "the speaker's click changed the tab")
-        try expect(try row(app, p.tab)?.speaker == .muted, "the row does not read muted")
         _ = try app.screenshot("row-muted")
+        try press(app, .row(p.tab))
+        try app.waitUntil("the real tab is muted") { try app.native().pages[p.page]?.audioMuted == true }
         try press(app, tool("audio-", p.tab))
         try app.waitUntil("the real tab is unmuted") { try app.native().pages[p.page]?.audioMuted == false }
-        try expect(try row(app, p.tab)?.speaker == .audible, "the row does not read audible")
+        try app.waitUntil("the row reads audible") { try row(app, p.tab)?.speaker == .audible }
     }
 
     @Sendable static func card(_ app: AppUnderTest) throws {
@@ -303,13 +305,13 @@ enum MediaScenarios {
         try app.waitUntil("the card rests", timeout: 3) { try cardHeight(app, p.tab) == Metrics.miniPlayer.rowHeight.value }
         // Muted, the speaker unmutes and opens nothing; the middle button is dead.
         try press(app, tool("audio-", p.tab))
-        try app.waitUntil("the real tab is muted") { try app.native().pages[p.page]?.audioMuted == true }
+        try app.waitUntil("the row reads muted") { try row(app, p.tab)?.speaker == .muted }
         try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
         try press(app, tool("mini-player-play-", p.tab))
         Thread.sleep(forTimeInterval: 0.5)
         try expect(try row(app, p.tab)?.title.hasPrefix("paused=false") == true, "the dimmed button paused a muted tab")
         try press(app, tool("mini-player-speaker-", p.tab))
-        try app.waitUntil("the speaker unmutes") { try app.native().pages[p.page]?.audioMuted == false }
+        try app.waitUntil("the speaker unmutes") { try row(app, p.tab)?.muted == false }
         try expect(try cardHeight(app, p.tab) == Metrics.miniPlayer.expandedHeight.value, "the muted speaker opened the slider")
     }
 
