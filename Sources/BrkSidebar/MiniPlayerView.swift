@@ -9,7 +9,7 @@ import BrkUIKit
 // exist and what they read is the snapshot's; only the pointer's effect (cards apart, a slider open) is view state.
 
 /// All the cards. It takes no clicks itself; a transparent area behind the cards tells when the pointer is on the stack,
-/// the 5 pt gaps included.
+/// the 5 pt gaps included. The area follows the stack, so a stack that has just collapsed under the pointer stays closed.
 @MainActor
 final class MiniPlayerStackView: NSView {
     private let dispatch: Dispatch
@@ -87,10 +87,13 @@ final class MiniPlayerStackView: NSView {
         if inside {
             guard hover?.expanded != true else { return }
             setHover(MiniPlayerHover(expanded: true))
-        } else {
+        } else if hover?.volumeOpen != nil {
+            // An open slider gives the pointer time to come back.
             let work = DispatchWorkItem { [weak self] in self?.setHover(nil) }
             collapse = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + Metrics.miniPlayer.hoverOffDelay.value, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Metrics.miniPlayer.sliderHoverOffDelay.value, execute: work)
+        } else {
+            setHover(nil)
         }
     }
 
@@ -423,6 +426,8 @@ final class ArcTooltip: NSView {
         fill.frame = bounds
         fill.layer?.cornerRadius = bounds.height / 2
         let size = label.intrinsicContentSize
-        label.frame = CGRect(x: Draw.tooltipPadding.value, y: (bounds.height - size.height) / 2, width: ceil(size.width), height: size.height)
+        // The label keeps a little of its own at each end; a frame of exactly its text width clips the last letter.
+        let side = Draw.tooltipLabelSlack.value
+        label.frame = CGRect(x: Draw.tooltipPadding.value - side, y: (bounds.height - size.height) / 2, width: ceil(size.width) + 2 * side, height: size.height)
     }
 }

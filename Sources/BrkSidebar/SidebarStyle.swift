@@ -13,13 +13,15 @@ let Draw = SidebarDrawMetrics()
 
 struct SidebarDrawMetrics: MetricGroup {
     // The tab row's speaker (Q18-media-a, -f, -g) and Arc's own tooltip (Q18-media-e, -f).
-    let rowSpeakerGlyph = Metric(10.7, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-a-arc.png: the speaker's ink is 17.5 x 12.5, speaker.wave.3 at this size"))
-    let rowSpeakerMutedGlyph = Metric(12.5, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-g-arc.png: the struck speaker's ink is 15 x 14.5, speaker.slash at this size"))
+    let rowSpeakerGlyph = Metric(12.5, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-a-arc.png: the speaker's ink is 17.5 x 12.5, speaker.wave.3 at this size"))
+    let rowSpeakerMutedGlyph = Metric(15.5, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-g-arc.png: the struck speaker's ink is 15 x 14.5, speaker.slash at this size"))
+    let rowSpeakerInk = Metric(0.55, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-a-arc.png: the speaker's strokes read #767676"))
     let rowSpeakerRadius = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the speaker's hover square"))
     let tooltipDelay = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249be50: Arc's tooltip modifier takes 0.45"))
     let tooltipOffsetX = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: pointer at 53, 467, the pill from 59, 474"))
     let tooltipOffsetY = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: pointer at 53, 467, the pill from 59, 474"))
     let tooltipHeight = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the pill spans y 474 to 502"))
+    let tooltipLabelSlack = Metric(3.0, .guess("what an NSTextField keeps at each end beyond its text"))
     let tooltipPadding = Metric(10.75, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the pill is 97 wide around 75.5 of text"))
     let tooltipFont = Metric(12.0, .anatomy("cra L790: Arc's tooltips are 12 pt medium"))
     let tooltipFillLight = Metric(0.937, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: #EFEFEF"))
@@ -31,7 +33,7 @@ struct SidebarDrawMetrics: MetricGroup {
 
     // The mini player's drawing (Q18-media-c, -e, -g, -j; verify/visual-pairs/run-20261103/r5-5/REPORT.md).
     let miniPlayerTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: Media fixture (playing) is 135 wide, 144 in a 14 pt row"))
-    let miniPlayerInkLight = Metric(0.47, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: the glyphs read #878787 on #FDFDFD, #7D7D7D on the hover fill #ECECEC (the asset PlaybackControlForeground says 0.5)"))
+    let miniPlayerInkLight = Metric(0.5, .anatomy("docs/arc-anatomy/visual-and-copy.md, ARC_MediaControlsFeature: PlaybackControlForeground #000000 @ 0.5; it reads #878787 on #FDFDFD in Q18-media-c-arc.png"))
     let miniPlayerInkDark = Metric(0.66, .anatomy("docs/arc-anatomy/visual-and-copy.md, ARC_MediaControlsFeature: PlaybackControlForeground dark #FFFFFF @ 0.66"))
     let miniPlayerDim = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: a disabled previous reads #D6D6D6 on #FDFDFD"))
     let miniPlayerFillLight = Metric(0.992, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: #FDFDFD, Arc's `backgroundExtra`, bin:0x10249a610"))

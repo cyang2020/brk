@@ -615,11 +615,12 @@ final class RowView: HoverView {
         switch row {
         case .tab(let tab):
             audio.isHidden = tab.speaker == nil
+            let speakerInk = NSColor(white: palette.scheme == .light ? 0 : 1, alpha: Draw.rowSpeakerInk.value)
             if tab.muted {
-                audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette,
+                audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette, tint: speakerInk,
                              radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
             } else {
-                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, palette: palette,
+                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, weight: .regular, palette: palette, tint: speakerInk,
                              radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
             }
             audio.tip = tab.muted ? SidebarCopy.unmuteThisTab : SidebarCopy.muteThisTab

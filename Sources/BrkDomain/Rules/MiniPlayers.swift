@@ -11,7 +11,7 @@ extension LivePage {
         mediaPlayers.contains { !$0.paused && !$0.ended && !$0.silent } && !showsPictureInPicture
     }
 
-    var showsPictureInPicture: Bool { documentPictureInPicture || mediaPlayers.contains(where: \.pictureInPicture) }
+    var showsPictureInPicture: Bool { documentPictureInPicture || automaticPiPPlayer != nil || mediaPlayers.contains(where: \.pictureInPicture) }
 }
 
 /// A window's cards follow its pages, whatever moved them:
