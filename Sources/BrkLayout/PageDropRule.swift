@@ -259,16 +259,11 @@ public enum PageDropRule {
     }
 
     private static func pageProposal(x: Double, y: Double, rect: CGRect, page: Int, listIndex: Int, state: State, _ input: Input) -> Proposal? {
+        /// The slot next to the page on that side, shown or still collapsing.
         func neighbour(_ step: Int) -> State.Pane? {
-            var i = listIndex + step
-            while state.panes.indices.contains(i) {
-                switch state.panes[i] {
-                case .slot: return state.panes[i]
-                case .page: return nil
-                }
-                i += step
-            }
-            return nil
+            let i = listIndex + step
+            guard state.panes.indices.contains(i), case .slot = state.panes[i] else { return nil }
+            return state.panes[i]
         }
         let before = neighbour(-1), after = neighbour(1)
         let replacing = input.canReplace(page) ? Proposal(target: .replace(pane: page), slotIndex: nil, existing: nil, orientation: state.orientation) : nil
