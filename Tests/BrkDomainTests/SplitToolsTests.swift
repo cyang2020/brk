@@ -165,7 +165,9 @@ final class SplitToolsTests: XCTestCase {
         let new = try XCTUnwrap(d.paneIDs.last)
         XCTAssertNotEqual(new, favorite)
         XCTAssertEqual(d.view.content.panes.last?.focused, true)
-        XCTAssertEqual(d.state.address(of: new, in: nil, for: .savedDocument)?.absoluteString, "https://fixture.example/apple")
+        d.commitRequested()
+        guard case .split(let row)? = d.view.space.today.rows.first(where: { $0.id == d.view.content.split }) else { return XCTFail("no split row") }
+        XCTAssertEqual(row.panes.last?.url?.absoluteString, "https://fixture.example/apple")
         XCTAssertEqual(d.view.space.today.rows.count, rows, "the split takes the place of the row it joined")
         d.user(.split(.separateAll))
         XCTAssertTrue(d.view.space.today.rows.contains { $0.id == new }, "the new tab is not in Today")
@@ -178,8 +180,8 @@ final class SplitToolsTests: XCTestCase {
         let first = d.paneIDs[0]
         d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/2"))); d.commitRequested()
         let second = d.paneIDs[1]
-        let extra = d.open("https://fixture.example/extra")
         let split = try XCTUnwrap(d.view.content.split)
+        let extra = d.open("https://fixture.example/extra")
         d.user(.tab(.focus(split)))
         d.user(.split(.dropTab(offer(d, extra, split), edge: .right, at: 1)))
         XCTAssertEqual(d.paneIDs, [first, extra, second])

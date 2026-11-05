@@ -354,7 +354,8 @@ enum FavoritesDragScenarios {
             return nil
         }
         try app.waitUntil("the new tab at the Favorite's address") { try paneURL() == address }
-        try expect(try tiles(app) == grid, "the grid changed: \(try tiles(app))")
+        let after = try tiles(app)
+        try expect(after == grid, "the grid changed: \(after)")
         try app.dispatch(.split(.separateAll))
         try app.waitUntil("apart") { try app.view().content.split == nil }
         try expect(try app.view().space.today.rows.contains { $0.id == panes[1].tab }, "the new tab left Today")
@@ -378,14 +379,14 @@ enum FavoritesDragScenarios {
         let row = centre(try frame(app, .row(f.a)))
         func point(_ x: Double, _ y: Double? = nil) -> CGPoint { CGPoint(x: area.minX + x, y: y ?? area.midY) }
         func slot() throws -> CGRect { try frame(app, .splitDropPreview) }
-        func leftSlot() throws -> Bool { let s = try slot(); return s.minX == area.minX && abs(s.width - 516) < 1 }
-        func rightSlot() throws -> Bool { let s = try slot(); return s.maxX == area.maxX && abs(s.width - 516) < 1 }
+        func isLeft(_ s: CGRect) -> Bool { s.minX == area.minX && abs(s.width - 516) < 1 }
+        func isRight(_ s: CGRect) -> Bool { s.maxX == area.maxX && abs(s.width - 516) < 1 }
         // A straight leg from the row, Q17 A: a slot from the left holds through the page's middle (x 520 of 1042), then the frame.
-        try held(app, [row, point(520)], back: f.c) { try expect(try leftSlot(), "slot \(try slot()) at 520") }
-        try held(app, [row, point(540)], back: f.c) { try expect(try slot() == area, "not the frame at 540: \(try slot())") }
-        try held(app, [row, point(650)], back: f.c) { try expect(try rightSlot(), "not the right slot at 650: \(try slot())") }
+        try held(app, [row, point(520)], back: f.c) { let s = try slot(); try expect(isLeft(s), "slot \(s) at 520") }
+        try held(app, [row, point(540)], back: f.c) { let s = try slot(); try expect(s == area, "not the frame at 540: \(s)") }
+        try held(app, [row, point(650)], back: f.c) { let s = try slot(); try expect(isRight(s), "not the right slot at 650: \(s)") }
         // From the right, Q17 C's first two: the right slot holds back past the middle, where a straight leg shows the frame.
-        try held(app, [row, point(950), point(552)], back: f.c) { try expect(try rightSlot(), "not the right slot from the right: \(try slot())") }
+        try held(app, [row, point(950), point(552)], back: f.c) { let s = try slot(); try expect(isRight(s), "not the right slot from the right: \(s)") }
         // From a left slot upwards past 100 pt and a tenth: it turns into the top slot, Q17 E.
         try held(app, [row, point(160), point(160, area.minY + 40)], back: f.c) {
             let s = try slot()
@@ -396,7 +397,8 @@ enum FavoritesDragScenarios {
         let own = centre(try frame(app, .row(f.c)))
         try PhysicalPointer.drag(app, through: [own, point(950)], window: app.window!) {
             app.sleep(0.3)
-            try expect(try rightSlot(), "no right slot over its own page: \(try slot())")
+            let s = try slot()
+            try expect(isRight(s), "no right slot over its own page: \(s)")
         }
         app.sleep(0.3)
         try expect(try app.view().content.panes.map(\.tab) == [f.c] && app.view().content.split == nil, "a release on its own page changed the panes")

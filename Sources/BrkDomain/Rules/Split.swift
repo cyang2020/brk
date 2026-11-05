@@ -115,7 +115,8 @@ extension Work {
             var source = offer.source
             if state.role(of: source)?.kind == .favorites {
                 // The Favorite stays in the grid: the split gets a new Today tab at its address (Arc, Q17-drop-favorite-right-half).
-                guard let url = state.address(of: source, in: nil, for: .savedDocument), let space = state.doc.windows[window]?.space,
+                guard let url = state.address(of: source, in: nil, for: .savedDocument) ?? state.address(of: source, in: window, for: .visible),
+                      let space = state.doc.windows[window]?.space,
                       let opened = openTab(url, inSpace: space, window: window, focus: false) else { return }
                 source = opened
             }
