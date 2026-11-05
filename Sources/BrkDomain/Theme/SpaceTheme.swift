@@ -146,7 +146,7 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var textureOpacity: Double
     /// The stored `noise`, 0...1: the renderer multiplies the tile's deviation from mid grey by it.
     public var textureContrast: Double
-    /// White (light) or black at 35% (dark), with opacity min(0.2 + 0.55 x intensity, 0.5).
+    /// What lies over the gradient (`themeWash`).
     public var wash: RGBA
     public var tokens: SidebarTokens
     /// Solid color for the NSWindow background, visible only before the first Metal frame.
@@ -155,14 +155,14 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 
 /// Pure: stored theme -> paint values.
 ///
-/// - Scheme: forced by `appearance`, else light when the primary's relative luminance is at least
-///   `lightSchemeMinLuminance` (the luminance at which black and white text have equal WCAG contrast).
-/// - Gradient: always three stops, primary first. The stored base colors come first (at most 3); the rest are the
-///   primary's companions by the wheel rule: analogous = hue + offset and lighter, hue - offset and darker;
+/// - Scheme: dark for the dark `appearance` or a primary whose relative luminance is under `lightSchemeMinLuminance`
+///   (the luminance at which black and white text have equal WCAG contrast), else light.
+/// - Gradient: always three stops, primary first (`gradientStops`). The stored base colors come first (at most 3); the
+///   rest are the primary's companions by the wheel rule: analogous = hue + offset and lighter, hue - offset and darker;
 ///   complementary = the opposite hue and lighter, then the primary's hue darker. Saturation is kept; lightness
 ///   moves by Metrics.theme.companionLightnessStep. Three base colors leave the wheel nothing to add (Arc's editor places them).
 /// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
-/// - Wash: white (light) or black at 35% (dark) with opacity min(0.2 + 0.55 x intensity, 0.5).
+/// - Wash: `themeWash`.
 /// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
 public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> ResolvedTheme {
     if let variants = theme.variants {
@@ -170,7 +170,7 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
         let style = (scheme == .dark ? variants.dark : variants.light).normalized
         var legacy = SpaceTheme(colors: style.colors.map(\.color), wheel: style.wheel, texture: style.texture,
                                 noise: style.noise, intensity: style.intensity, appearance: scheme == .dark ? .dark : .light)
-        legacy.colors = Array((legacy.colors + companions(of: legacy.colors[0], style.wheel)).prefix(3)).map { color in
+        legacy.colors = gradientStops(legacy.colors.map(opaque), style.wheel).map { color in
             let (h, s, l) = hsl(color)
             return rgb(hue: h, saturation: clamp01(s * style.saturation),
                        lightness: clamp01((l + style.lightness) * (scheme == .dark ? 1 - style.darkBias * 0.8 : 1)))
@@ -181,12 +181,14 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
     }
     let base = (theme.colors.isEmpty ? SpaceTheme.default.colors : Array(theme.colors.prefix(3))).map(opaque)
     let primary = base[0]
+    // A dark color keeps its light ink under Arc's automatic and light buttons alike; they draw the same sidebar
+    // (verify/visual-pairs/run-20261103/r5-6/REPORT.md, the navy preset under each button).
+    let darkPrimary = relativeLuminance(primary) < lightSchemeMinLuminance
     let scheme: Scheme = switch theme.appearance {
-    case .light: .light
+    case .light, .auto: darkPrimary ? .dark : .light
     case .dark: .dark
-    case .auto: relativeLuminance(primary) >= lightSchemeMinLuminance ? .light : .dark
     }
-    let gradient = Array((base + companions(of: primary, theme.wheel)).prefix(3))
+    let gradient = gradientStops(base, theme.wheel)
     let multiplier: Double = switch theme.texture {
     case .grain: Metrics.theme.grainOpacity.value
     case .sand: Metrics.theme.sandOpacity.value
@@ -194,16 +196,53 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
     case .tweed: Metrics.theme.tweedOpacity.value
     }
     let intensity = clamp01(theme.intensity)
-    let washAlpha = min(Metrics.theme.washBase.value + Metrics.theme.washSlope.value * intensity, Metrics.theme.washCap.value)
-    let wash = scheme == .light ? RGBA(1, 1, 1, washAlpha) : RGBA(0, 0, 0, Metrics.theme.darkWashAlpha.value * washAlpha)
+    let wash = themeWash(darkPrimary: darkPrimary, darkAppearance: theme.appearance == .dark, intensity: intensity)
     return ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: intensity * multiplier,
                          textureContrast: clamp01(theme.noise), wash: wash,
                          tokens: scheme == .light ? .light : .dark, windowColor: mix(primary, wash, wash.alpha))
 }
 
+extension ResolvedTheme {
+    /// An incognito window's chrome: a fixed color under the plain black wash, with its companions; it has no slider, and
+    /// the rules for a space's own dark color (`themeWash`, `gradientStops`) do not apply.
+    public static let incognito: ResolvedTheme = {
+        let primary = RGBA(hex: "#14171E")
+        var theme = resolveTheme(SpaceTheme(colors: [primary], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark))
+        let alpha = min(Metrics.theme.washBase.value + Metrics.theme.washSlope.value * SpaceTheme.default.intensity, Metrics.theme.washCap.value)
+        theme.wash = RGBA(0, 0, 0, Metrics.theme.darkWashAlpha.value * alpha)
+        theme.gradient = [primary] + companions(of: primary, .analogous)
+        theme.windowColor = mix(primary, theme.wash, theme.wash.alpha)
+        return theme
+    }()
+}
+
+/// What lies over the gradient. Arc's code gives white, or black at 35%, at min(0.2 + 0.55 x intensity, 0.5). A dark
+/// color measures differently on Arc 1.170 (the navy preset across its slider, r5-6/REPORT.md): under the automatic and
+/// light buttons a white wash without that cap, under the dark button a lighter grey one, so navy never goes darker than
+/// the preset itself.
+private func themeWash(darkPrimary: Bool, darkAppearance: Bool, intensity: Double) -> RGBA {
+    let m = Metrics.theme
+    if darkPrimary {
+        if darkAppearance {
+            let grey = m.darkColorDarkWash.value
+            return RGBA(grey, grey, grey, m.darkColorDarkWashBase.value + m.darkColorDarkWashSlope.value * intensity)
+        }
+        return RGBA(1, 1, 1, m.washBase.value + m.washSlope.value * intensity)
+    }
+    let alpha = min(m.washBase.value + m.washSlope.value * intensity, m.washCap.value)
+    return darkAppearance ? RGBA(0, 0, 0, m.darkWashAlpha.value * alpha) : RGBA(1, 1, 1, alpha)
+}
+
 /// sqrt(1.05 x 0.05) - 0.05 = 0.1791: above it black text has the higher WCAG contrast, so the scheme is light
 /// (electron-v1 theme.ts `LIGHT_SCHEME_MIN_LUMINANCE`). The default Brand 8 blue (0.43) is light; #757575 is dark.
 let lightSchemeMinLuminance = (1.05 * 0.05).squareRoot() - 0.05
+
+/// The three stops for the base colors. A dark color alone is one flat color in Arc: the sidebar reads the same at every
+/// corner of the window, for the dark presets #4B3B58, #854444, #34604B and #2D4468 (r5-6/REPORT.md).
+private func gradientStops(_ base: [RGBA], _ wheel: ColorWheel) -> [RGBA] {
+    if base.count == 1, relativeLuminance(base[0]) < lightSchemeMinLuminance { return [base[0], base[0], base[0]] }
+    return Array((base + companions(of: base[0], wheel)).prefix(3))
+}
 
 /// The two companions of `primary` under `wheel`, opaque sRGB.
 private func companions(of primary: RGBA, _ wheel: ColorWheel) -> [RGBA] {

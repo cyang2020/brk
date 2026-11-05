@@ -148,10 +148,10 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(resolved.tokens.foreground, RGBA(1, 1, 1, 0.45))
         XCTAssertEqual(resolved.tokens.tabCurrent, RGBA(250 / 255, 251 / 255, 1, 0.2))
         XCTAssertEqual(resolved.tokens.tabShadow, RGBA(0, 0, 0, 0))
-        // Black at 35% of the wash opacity 0.2: alpha 0.07, so the window color is the primary x 0.93.
-        XCTAssertEqual(resolved.wash.alpha, 0.07, accuracy: 1e-12)
-        XCTAssertEqual([resolved.wash.red, resolved.wash.green, resolved.wash.blue], [0, 0, 0])
-        assertColor(resolved.windowColor, 41.85, 63.24, 96.72)
+        // White at 0.2 (Arc's navy under the automatic button, r5-6/REPORT.md): the primary lightened, never darkened.
+        XCTAssertEqual(resolved.wash.alpha, 0.2, accuracy: 1e-12)
+        XCTAssertEqual([resolved.wash.red, resolved.wash.green, resolved.wash.blue], [1, 1, 1])
+        assertColor(resolved.windowColor, 87, 105.4, 134.2)
     }
 
     /// gives the default pink-beige (Arc's first Brand swatch) the light scheme (black text has the higher contrast)
@@ -178,15 +178,56 @@ final class PolicySpecTests: XCTestCase {
         }
     }
 
+    /// the navy preset as Arc 1.170 draws it (r5-6/REPORT.md): the automatic and light buttons give the same white wash
+    /// over the color, which grows towards the slider's left; the dark button a grey one
+    func test_aDarkPresetTakesArcsWash() throws {
+        let navy = ThemePresets.drab[8]
+        XCTAssertEqual(navy, RGBA(hex: "#2D4468"))
+        func theme(_ appearance: AppearanceChoice, _ intensity: Double) -> ResolvedTheme {
+            resolveTheme(SpaceTheme(colors: [navy], texture: .grain, intensity: intensity, appearance: appearance))
+        }
+        for appearance in [AppearanceChoice.auto, .light] {
+            let resolved = theme(appearance, 0.25)
+            XCTAssertEqual(resolved.scheme, .dark, "\(appearance)")
+            XCTAssertEqual(resolved.wash.red, 1)
+            // Arc's sidebar at this slider position: #71849B.
+            assertColor(resolved.windowColor, 113, 132, 155, within: 4)
+        }
+        let dark = theme(.dark, 0.25)
+        XCTAssertEqual(dark.scheme, .dark)
+        // Arc under the dark button: #617187.
+        assertColor(dark.windowColor, 97, 113, 135, within: 5)
+        // Slider far left and far right under the automatic button: #BBC1C9 and #5B718C.
+        assertColor(theme(.auto, 0.96).windowColor, 187, 193, 201, within: 18)
+        assertColor(theme(.auto, 0.045).windowColor, 91, 113, 140, within: 4)
+    }
+
+    /// an incognito window stays dark: its fixed color under the plain black wash, not a space's dark color rule
+    func test_anIncognitoWindowKeepsItsDarkChrome() throws {
+        let theme = ResolvedTheme.incognito
+        XCTAssertEqual(theme.scheme, .dark)
+        XCTAssertEqual(theme.wash.red, 0)
+        XCTAssertLessThan(relativeLuminance(theme.windowColor), 0.02)
+    }
+
+    /// a light color keeps the wash Arc's code gives it
+    func test_aLightColorKeepsItsWash() throws {
+        let beige = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#F2EAE4")], texture: .grain, intensity: 0.25, appearance: .auto))
+        XCTAssertEqual(beige.wash, RGBA(1, 1, 1, 0.3375))
+        let capped = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#F2EAE4")], texture: .grain, intensity: 1, appearance: .auto))
+        XCTAssertEqual(capped.wash, RGBA(1, 1, 1, 0.5))
+    }
+
     /// lets a forced appearance override the luminance
     func test_letsAForcedAppearanceOverrideTheLuminance() throws {
         let white = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0, appearance: .dark))
         XCTAssertEqual(white.scheme, .dark)
         XCTAssertEqual(white.tokens.foreground, RGBA(1, 1, 1, 0.45))
         XCTAssertEqual(white.wash.red, 0)
+        // Arc's light button on a dark color keeps the light ink over a white wash (r5-6/REPORT.md, the navy probe).
         let black = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#000000")], texture: .grain, intensity: 0, appearance: .light))
-        XCTAssertEqual(black.scheme, .light)
-        XCTAssertEqual(black.tokens.foreground, RGBA(0, 0, 0, 0.3))
+        XCTAssertEqual(black.scheme, .dark)
+        XCTAssertEqual(black.tokens.foreground, RGBA(1, 1, 1, 0.45))
         XCTAssertEqual(black.wash, RGBA(1, 1, 1, 0.2))
     }
 
@@ -284,10 +325,10 @@ final class PolicySpecTests: XCTestCase {
         "#" + [c.red, c.green, c.blue].map { String(format: "%02X", Int(($0 * 255).rounded())) }.joined()
     }
 
-    private func assertColor(_ c: RGBA, _ r: Double, _ g: Double, _ b: Double, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertEqual(c.red * 255, r, accuracy: 0.01, file: file, line: line)
-        XCTAssertEqual(c.green * 255, g, accuracy: 0.01, file: file, line: line)
-        XCTAssertEqual(c.blue * 255, b, accuracy: 0.01, file: file, line: line)
+    private func assertColor(_ c: RGBA, _ r: Double, _ g: Double, _ b: Double, within: Double = 0.01, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(c.red * 255, r, accuracy: within, file: file, line: line)
+        XCTAssertEqual(c.green * 255, g, accuracy: within, file: file, line: line)
+        XCTAssertEqual(c.blue * 255, b, accuracy: within, file: file, line: line)
         XCTAssertEqual(c.alpha, 1, file: file, line: line)
     }
 

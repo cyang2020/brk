@@ -53,6 +53,9 @@ public enum Copy {
     public static let urlPlaceholder = "Search or Enter URL…"
     public static let newTab = "New Tab"
     public static let clearToday = "Clear"
+    /// bin:0x10394f670: the tooltip when the ↓ shows; bin:0x10394f6c0: the tooltip without it.
+    public static let clearTodayAll = "Clear Today tabs"
+    public static let clearTodayOthers = "Clear unselected Today tabs"
     public static let favoritesEmptyTitle = "Drag to add Favorites"
     public static let favoritesEmptySubtitle = "Favorites keep your most used sites and apps close"
     public static let archiveTabTooltip = "Archive this tab"

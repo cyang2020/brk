@@ -98,6 +98,10 @@ final class IconView: NSView {
         didSet { if showsNothing != oldValue { showsNothingChanged?() } }
     }
     var showsNothingChanged: (() -> Void)?
+    /// The site's icon when that is what shows (a tile's rim and wash take its colors). It can arrive after a render.
+    private(set) var shownFavicon: NSImage? {
+        didSet { if shownFavicon !== oldValue { showsNothingChanged?() } }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -178,6 +182,7 @@ final class IconView: NSView {
             break
         }
         showsNothing = hidesEmptyFavicon && image.isHidden && emoji.isHidden && dot.isHidden
+        if case .favicon = content, !image.isHidden { shownFavicon = image.image } else { shownFavicon = nil }
     }
 
     /// Arc's empty favicon: a 14 pt rounded square in the space's hue at low opacity, centred in the slot. Without a
@@ -230,11 +235,13 @@ struct HueInk {
             frontShade = Self.color(h, sat * 0.5, 0.84)
             emptyFavicon = Self.color(h, sat, 0.33, alpha: 0.25)
         } else {
-            outline = Self.color(h, sat, 0.8)
-            back = Self.color(h, sat * 0.8, 0.45)
-            front = Self.color(h, sat * 0.5, 0.3)
-            frontShade = Self.color(h, sat * 0.5, 0.24)
-            emptyFavicon = Self.color(h, sat, 0.8, alpha: 0.25)
+            // Q18-navy-row-hover-arc.png: the outline #E7EDF4, the back #6B8FBC, the front #264368 to #203C5E, the empty
+            // favicon the outline's color at 0.3.
+            outline = Self.color(h, sat, 0.93)
+            back = Self.color(h, sat, 0.58)
+            front = Self.color(h, sat * 1.2, 0.28)
+            frontShade = Self.color(h, sat * 1.2, 0.245)
+            emptyFavicon = Self.color(h, sat, 0.93, alpha: 0.3)
         }
     }
 

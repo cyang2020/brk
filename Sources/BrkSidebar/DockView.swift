@@ -68,7 +68,7 @@ final class DockView: NSView {
         library.render(.library, size: Draw.dockButtonGlyph.value, palette: palette, tint: tint,
                        radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
         renderPlus()
-        library.image = LibraryGlyph.image(tint: (palette.scheme == .light ? NSColor.black : .white).withAlphaComponent(Draw.dockActiveInk.value))
+        library.image = LibraryGlyph.image(tint: palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockActiveInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value))
         let shown = Set(items.map(\.id))
         for (id, cell) in cells where !shown.contains(id) { cell.removeFromSuperview(); cells[id] = nil }
         for item in items {
@@ -151,7 +151,7 @@ final class DockView: NSView {
         guard let palette = last?.2 else { return }
         plus.latchedFill = plusMenu.isOpen ? palette.tokens.itemBackground : nil
         plus.render(plusMenu.isOpen ? .close : .plus, size: plusMenu.isOpen ? Draw.dockButtonGlyph.value : Draw.dockPlusGlyph.value, palette: palette,
-                    tint: (palette.scheme == .light ? NSColor.black : .white).withAlphaComponent(Draw.dockPlusInk.value),
+                    tint: palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockPlusInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value),
                     radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
     }
 }

@@ -198,6 +198,7 @@ public class WindowController: NSObject, NSWindowDelegate {
         // The floating sidebar keeps them too (Arc), and the Library's panel keeps them where the sidebar had them
         // (P32: Arc shows them over its navigation column).
         window.placeTrafficLights(origin: frames.sidebar?.trafficLightsOrigin ?? frames.library.map { LibraryLayout.trafficLightsOrigin(in: $0.strip) })
+        RestingTrafficLights.find(in: window.standardWindowButton(.closeButton)?.superview)?.scheme = snapshot.theme.scheme
         window.backgroundColor = NSColor(srgbRed: snapshot.theme.windowColor.red, green: snapshot.theme.windowColor.green,
                                          blue: snapshot.theme.windowColor.blue, alpha: 1)
         let repeatedFind = snapshot.focus == .findInput && snapshot.find?.focusRequest != lastSnapshot?.find?.focusRequest
@@ -497,12 +498,33 @@ final class RestingTrafficLights: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    /// The window's scheme: a dark theme's lights at rest are lighter than it, each with a rim in its own color
+    /// (Q18-navy-row-hover-arc.png), a light theme's are plain grey.
+    var scheme = Scheme.light { didSet { if scheme != oldValue { needsDisplay = true } } }
+
+    /// Q18-navy-row-hover-arc.png, at 2x: the rims read #9A647C, #94926E and #399179, the insides white 0.3 over the theme.
+    private static let darkRims = [(0x9A, 0x64, 0x7C), (0x94, 0x92, 0x6E), (0x39, 0x91, 0x79)].map {
+        NSColor(srgbRed: Double($0.0) / 255, green: Double($0.1) / 255, blue: Double($0.2) / 255, alpha: 1)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(white: 0, alpha: 0.085).setFill()
-        for button in buttons {
-            let side = Metrics.window.trafficLightSize.value - 1
+        let light = Metrics.window.trafficLightSize.value - 1, full = Metrics.window.trafficLightSize.value
+        for (index, button) in buttons.enumerated() {
             let frame = convert(button.frame, from: superview)
-            NSBezierPath(ovalIn: CGRect(x: frame.midX - side / 2, y: frame.midY - side / 2, width: side, height: side)).fill()
+            func circle(_ side: Double) -> NSBezierPath {
+                NSBezierPath(ovalIn: CGRect(x: frame.midX - side / 2, y: frame.midY - side / 2, width: side, height: side))
+            }
+            guard scheme == .dark else {
+                NSColor(white: 0, alpha: 0.085).setFill()
+                circle(light).fill()
+                continue
+            }
+            NSColor(white: 1, alpha: 0.3).setFill()
+            circle(full).fill()
+            Self.darkRims[min(index, Self.darkRims.count - 1)].setStroke()
+            let rim = circle(full - 1)
+            rim.lineWidth = 1
+            rim.stroke()
         }
     }
 
