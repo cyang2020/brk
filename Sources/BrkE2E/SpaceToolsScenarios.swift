@@ -315,6 +315,16 @@ enum SpaceToolsScenarios {
     /// Chooses `item` from a Space card's … menu (Arc's space menu, P30-c; "Submenu › Row" for a submenu's row),
     /// through the native menu.
     private static func managerMenu(_ app: AppUnderTest, _ space: SpaceID, choose item: String) throws {
+        // The Library slides in and its cards are built on the first renders: the button is read once it has stopped
+        // moving (read at once, the menu was asked for at a spot the button had already left and came back empty).
+        var last: CGRect?
+        try app.waitUntil("the card's … button at rest") {
+            let n = try app.native()
+            guard isShown(n, .spaceToolsControl("manager-more-\(space)")) else { last = nil; return false }
+            let now = try visible(n, .spaceToolsControl("manager-more-\(space)")).frame
+            defer { last = now }
+            return last == now
+        }
         let more = try visible(app.native(), .spaceToolsControl("manager-more-\(space)")).frame
         guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: more.midX, y: more.midY), choose: item)) else {
             throw Check(description: "the card's … menu did not open")
