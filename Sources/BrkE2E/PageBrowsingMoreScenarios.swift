@@ -517,11 +517,13 @@ enum PhysicalPointer {
 
     /// A real drag: press at the first point (window content coordinates), glide through the rest with the button down,
     /// run `held` at the last and release there.
-    /// A two-finger trackpad scroll posted to the window server at `point`: `began` with no travel, one `changed`
-    /// event per step (points, as `scrollingDeltaX/Y` read them), `ended`, then optional inertia events. These take
-    /// the real path into the app (window server, the window's `sendEvent`, the view under the pointer); events
+    /// A two-finger trackpad scroll posted to the window server at `point`: `began` (with no travel unless `first`
+    /// says, a real gesture's often has some), one `changed` event per step (points, as `scrollingDeltaX/Y` read them), `held`
+    /// with the fingers down, the `then` steps, a `pause` with the fingers still, `ended`, then optional inertia events. These
+    /// take the real path into the app (window server, the window's `sendEvent`, the view under the pointer); events
     /// injected in-process do not, and a scroll view that tracks a whole gesture by itself only shows up here.
-    static func swipe(_ app: AppUnderTest, at point: CGPoint, steps: [(Double, Double)], inertia: [(Double, Double)] = [], window: WindowID) throws {
+    static func swipe(_ app: AppUnderTest, at point: CGPoint, first: (Double, Double) = (0, 0), steps: [(Double, Double)], held: (() throws -> Void)? = nil,
+                      then: [(Double, Double)] = [], pause: Double = 0, inertia: [(Double, Double)] = [], window: WindowID) throws {
         let at = try screen(app, point, window: window)
         try checkFront(app, at: at, window: window)
         try post(.mouseMoved, at: at); usleep(250_000)
@@ -537,12 +539,20 @@ enum PhysicalPointer {
             event.post(tap: .cghidEventTap)
             usleep(16_000)
         }
-        try scroll(0, 0, phase: 1, momentum: 0)
+        try scroll(first.0, first.1, phase: 1, momentum: 0)
         for step in steps { try scroll(step.0, step.1, phase: 2, momentum: 0) }
+        var failure: (any Error)?
+        if let held {
+            usleep(100_000)
+            do { try held() } catch { failure = error }
+        }
+        for step in then { try scroll(step.0, step.1, phase: 2, momentum: 0) }
+        if pause > 0 { usleep(UInt32(pause * 1_000_000)) }
         try scroll(0, 0, phase: 4, momentum: 0)
         for (n, step) in inertia.enumerated() { try scroll(step.0, step.1, phase: 0, momentum: n == 0 ? 1 : 2) }
         if !inertia.isEmpty { try scroll(0, 0, phase: 0, momentum: 3) }
         usleep(400_000)
+        if let failure { throw failure }
     }
 
     static func drag(_ app: AppUnderTest, through path: [CGPoint], window: WindowID, held: () throws -> Void) throws {

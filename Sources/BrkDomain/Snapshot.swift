@@ -71,6 +71,9 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var urlPill: URLPillSnapshot
     public var favorites: FavoritesSnapshot
     public var space: SpaceSnapshot
+    /// The Spaces either side of `space` in dock order (a standard window only): their sidebar pages are drawn beside the
+    /// current one while a swipe or a Space switch moves the column (Arc: `SidebarPagingContainerViewController`).
+    public var neighbors = SpaceNeighbors()
     /// The window's own container (`SectionRole.scratch(window)`): an incognito window's tabs, a Little Arc's one
     /// tab. Nil for a standard window (its scratch tree holds only a Peek's tab, shown through `overlay`).
     public var scratch: SectionSnapshot?
@@ -155,6 +158,27 @@ public struct FavoritesSnapshot: Sendable, Equatable, Codable {
     public var tiles: [TabRow]
     /// No tiles and the "Drag to add Favorites" box was dismissed: the tray takes no room.
     public var hintDismissed = false
+}
+
+/// What a neighbouring Space's sidebar page shows: its own rows, Favorites (its profile's) and colors.
+public struct SpacePage: Sendable, Equatable, Codable {
+    public var space: SpaceSnapshot
+    public var favorites: FavoritesSnapshot
+    public var theme: ResolvedTheme
+    public init(space: SpaceSnapshot, favorites: FavoritesSnapshot, theme: ResolvedTheme) {
+        self.space = space
+        self.favorites = favorites
+        self.theme = theme
+    }
+}
+
+public struct SpaceNeighbors: Sendable, Equatable, Codable {
+    public var previous: SpacePage?
+    public var next: SpacePage?
+    public init(previous: SpacePage? = nil, next: SpacePage? = nil) {
+        self.previous = previous
+        self.next = next
+    }
 }
 
 public struct SpaceSnapshot: Sendable, Equatable, Codable {

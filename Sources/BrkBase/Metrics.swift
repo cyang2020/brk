@@ -58,6 +58,7 @@ public struct MetricsTable: MetricGroup {
     public let favorites = FavoritesMetrics()
     public let tablist = TablistMetrics()
     public let dock = DockMetrics()
+    public let pageSwipe = PageSwipeMetrics()
     public let miniPlayer = MiniPlayerMetrics()
     public let content = ContentMetrics()
     public let commandBar = CommandBarMetrics()
@@ -294,14 +295,59 @@ public struct CommandBarMetrics: MetricGroup {
     public let maxSearchSuggestions = Metric(5, .guess("search-engine suggestions shown; Arc shows a handful under the typed row"))
 }
 
+/// Arc's `ARCUI.PageSwipeController` and its owner `WindowLayoutController` (Arc 1.170, addresses in
+/// verify/visual-pairs/run-20261103/r5-7/REPORT.md): the sidebar's pages, how they follow two fingers, where they settle.
+public struct PageSwipeMetrics: MetricGroup {
+    fileprivate static let read = "r5-7/REPORT.md, PageSwipeController"
+    /// The position moves by this much of `scrollingDeltaX`, the other way (bin:0x100a1ac40, multiplier -0.5).
+    public let fingerScale = Metric(0.5, .anatomy(PageSwipeMetrics.read))
+    /// Past the reachable pages the position is pressed: (1 - 1 / (over x 0.15 / 255 + 1)) x 255 (bin:0x100a1911c).
+    public let rubberBandConstant = Metric(0.15, .anatomy(PageSwipeMetrics.read))
+    public let rubberBandDimension = Metric(255.0, .anatomy(PageSwipeMetrics.read))
+    /// At least this fast (points a second, over the last `velocityWindow`) the fingers decide the page; slower, the
+    /// nearest page does (bin:0x100a1ca4c).
+    public let commitVelocity = Metric(5.0, .anatomy(PageSwipeMetrics.read))
+    public let velocityWindow = Metric(0.1, .anatomy(PageSwipeMetrics.read))
+    /// The spring every page move settles with, critically damped. The binary configures response 0.25 (0.4 without a
+    /// settling handler, bin:0x100a19fc0); Arc's recordings (Q19/) fit 0.200 within a third of a pixel on five settles.
+    public let settleResponse = Metric(0.2, .anatomy("r5-7/REPORT.md, the spring fit"))
+    /// Settled when closer than this.
+    public let settleEpsilon = Metric(0.2, .guess("half a device pixel on a 2x display at most; Arc's animator rests on its own threshold, not read"))
+    /// A wheel without phases: this much within `wheelGap` steps one page, at most once per `wheelInterval` (bin:0x100a1b46c).
+    public let wheelTrigger = Metric(1.0, .anatomy(PageSwipeMetrics.read))
+    public let wheelGap = Metric(0.05, .anatomy(PageSwipeMetrics.read))
+    public let wheelInterval = Metric(0.25, .anatomy(PageSwipeMetrics.read))
+    /// The gesture is the sidebar's from its first event. In Arc AppKit decides on that event alone; Brk lets this much
+    /// travel pass first (Q19: a real gesture's first event can have none, and the first moving one may point wrongly).
+    public let decideDistance = Metric(6.0, .guess("Brk's own: Arc has no such number, AppKit forwards on the first event"))
+    /// The Library page's width bounds and how the sidebar leaves as it comes in, per unit of progress: Arc scales the
+    /// column by 1 - 0.1 x progress, moves it 25 right and fades it out by progress 0.47 (measured from Q19/ at 4 positions).
+    public let librarySidebarScale = Metric(0.1, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
+    public let librarySidebarSlide = Metric(25.0, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
+    public let librarySidebarFade = Metric(2.15, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
+    /// Past the last Space: Arc's `EdgeFeedbackView` fades in over 15 points of pressed travel, its ring fills over
+    /// 22.5, and lifting after it has been full for 0.1 s opens Create a Space (bin:0x100214f70, bin:0x10021ca38).
+    public let edgeFade = Metric(15.0, .anatomy(PageSwipeMetrics.read))
+    public let edgeArm = Metric(22.5, .anatomy(PageSwipeMetrics.read))
+    public let edgeHold = Metric(0.1, .anatomy(PageSwipeMetrics.read))
+    /// `CircularProgressView.Configuration`: plus at 16 pt medium, line 2.5 (bin:0x100312fbc). Size and place measured (Q19/).
+    public let edgeLine = Metric(2.5, .anatomy(PageSwipeMetrics.read))
+    public let edgeGlyph = Metric(16.0, .anatomy(PageSwipeMetrics.read))
+    public let edgeRing = Metric(30.0, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
+    public let edgeRingInset = Metric(27.5, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
+    /// The gradient at the trailing edge: from no ink to this share of the foreground, this wide (measured, Q19/).
+    public let edgeGradientWidth = Metric(80.0, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
+    public let edgeGradientAlpha = Metric(0.1, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
+}
+
 public struct MotionMetrics: MetricGroup {
     public let sidebarToggle = Metric(0.08, .arc("Sidebar show/hide animation duration"))
     /// cubic-bezier control points (x1, y1, x2, y2).
     public let sidebarCurve = Metric([0.25, 0.46, 0.45, 0.94], .arc("Sidebar show/hide timing curve"))
     public let contentRelayout = Metric(0.2, .arc("Content relayout animation (same curve)", .medium))
-    public let spaceSwitch = Metric(0.17, .arc("Space switch animation", .low))
-    /// Arc's shader has a `transitioning` state but no duration literal was found; we reuse the space switch.
-    public let themeCrossfade = Metric(0.17, .guess("crossfade duration was not recovered; equals the space switch"))
+    /// Arc's shader has a `transitioning` state but no duration literal was found. A Space switch does not use it:
+    /// the colors follow the page position (`PageSwipeMetrics`).
+    public let themeCrossfade = Metric(0.17, .guess("crossfade duration was not recovered; the 0.17 s the old Space switch used"))
     public let tooltipQuickReshowWindow = Metric(0.6, .arc("Tooltip quick re-show", note: "closed less than 0.6 s ago"))
     public let tooltipQuickReshowDelay = Metric(0.01, .arc("Tooltip quick re-show", note: "appears after 0.01 s"))
     public let tooltipFirstDelay = Metric(1.6, .arc("Tooltip first-show delay", .medium))

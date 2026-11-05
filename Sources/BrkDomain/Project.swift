@@ -237,12 +237,16 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }
     }
 
-    let favoritesRoot = state.favoritesRoot(for: space) ?? space.pinnedRoot
-    var favorites = FavoritesSnapshot(root: favoritesRoot, tiles: tree.tabs(under: favoritesRoot).compactMap { tab in
-        guard case .tab(let t)? = tree[tab]?.body else { return nil }
-        return tabRow(tab, t, .favorites)
-    })
-    favorites.hintDismissed = state.doc.tabPreferences.favoritesHintDismissed
+    func favoritesSnapshot(of space: Space) -> FavoritesSnapshot {
+        let root = state.favoritesRoot(for: space) ?? space.pinnedRoot
+        var favorites = FavoritesSnapshot(root: root, tiles: tree.tabs(under: root).compactMap { tab in
+            guard case .tab(let t)? = tree[tab]?.body else { return nil }
+            return tabRow(tab, t, .favorites)
+        })
+        favorites.hintDismissed = state.doc.tabPreferences.favoritesHintDismissed
+        return favorites
+    }
+    let favorites = favoritesSnapshot(of: space)
     // Instant Links rows head Today while their search runs (P48-a).
     let instantRows = (state.session.ai.instantRows[id] ?? []).map { row -> Row in
         var tab = TabRow(id: row.id, section: .today, title: row.failed ? AICopy.instantFailed : AICopy.instantSearching, url: nil, favicon: nil, icon: nil,
@@ -265,6 +269,30 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
        let row = rows(under: space.pinnedRoot, .pinned).flatMap({ flattenRows($0) }).first(where: { $0.id == shown.id }) {
         spaceSnapshot.pinned.rows = [row]
         spaceSnapshot.pinned.peeked = true
+    }
+    /// A neighbouring Space's page: its rows as this window would show them there.
+    func spacePage(_ sid: SpaceID) -> SpacePage? {
+        guard let page = state.doc.spaces[sid] else { return nil }
+        let saved = (panes, focusedPane, splitID)
+        defer { (panes, focusedPane, splitID) = saved }
+        panes = []; focusedPane = nil; splitID = nil
+        if let there = doc.activeBySpace[sid].flatMap({ tree[$0] }) {
+            switch there.body {
+            case .split(let s): panes = s.panes.ids; focusedPane = state.focusedPane(of: there.id, in: id); splitID = there.id
+            case .tab: panes = [there.id]; focusedPane = there.id
+            case .folder, .section: break
+            }
+        }
+        let space = SpaceSnapshot(id: page.id, title: state.displayTitle(of: page.id), icon: page.icon,
+            pinned: SectionSnapshot(root: page.pinnedRoot, kind: .pinned, collapsed: page.pinnedCollapsed, rows: rows(under: page.pinnedRoot, .pinned)),
+            today: SectionSnapshot(root: page.todayRoot, kind: .today, collapsed: false, rows: rows(under: page.todayRoot, .today)))
+        return SpacePage(space: space, favorites: favoritesSnapshot(of: page), theme: resolveTheme(page.theme, systemScheme: ctx.systemScheme))
+    }
+    var neighbors = SpaceNeighbors()
+    if doc.kind == .standard, let here = state.doc.spaceOrder.firstIndex(of: space.id) {
+        let order = state.doc.spaceOrder
+        if here > 0 { neighbors.previous = spacePage(order[here - 1]) }
+        if here + 1 < order.count { neighbors.next = spacePage(order[here + 1]) }
     }
     let dock = state.doc.spaceOrder.compactMap { sid -> DockItem? in
         guard let s = state.doc.spaces[sid] else { return nil }
@@ -485,7 +513,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
                                  toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
                                  hapticsEnabled: state.doc.settings.advanced.hapticsOnReorder),
-        urlPill: pill, favorites: favorites, space: spaceSnapshot, scratch: scratch, dock: dock, content: content,
+        urlPill: pill, favorites: favorites, space: spaceSnapshot, neighbors: neighbors, scratch: scratch, dock: dock, content: content,
         renaming: session.renaming, dialog: dialog, pendingSpaceDeletion: session.pendingSpaceDeletion,
         pendingEaselDeletion: session.pendingEaselDeletion,
         easels: contentPanes.compactMap { if case .easel(let page, let easel) = $0.content { state.easelSnapshot(page, easel) } else { nil } },

@@ -85,6 +85,12 @@ final class DockView: NSView {
         }
     }
 
+    /// While the column moves between two Spaces their dots trade darkness with the position (Arc: `SidebarDockItemView`'s
+    /// `selectionFactor`). Nil goes back to the current Space's.
+    func showSelection(_ factors: [SpaceID: Double]?) {
+        for (id, cell) in cells { cell.selectionFactor = factors.map { $0[id] ?? 0 } }
+    }
+
     private func updateReorder(_ id: SpaceID, at point: CGPoint) {
         if draggingSpace == nil {
             draggingSpace = id
@@ -180,6 +186,14 @@ final class DockCellView: HoverView {
         layer?.cornerRadius = Metrics.dock.cellRadius.value
         addSubview(icon)
         identify(.dockSpace(id))
+    }
+
+    /// How much this cell reads as the current Space while the column moves; nil at rest.
+    var selectionFactor: Double? {
+        didSet {
+            guard selectionFactor != oldValue, let item, let palette else { return }
+            render(item, palette: palette)
+        }
     }
 
     func render(_ item: DockItem, palette: Palette) {

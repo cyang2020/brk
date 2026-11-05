@@ -63,10 +63,19 @@ public final class ThemeBackgroundView: NSView {
             CATransaction.commit()
             return
         }
-        guard theme != renderer.target else { return }
+        let scrubbed = renderer.isScrubbing
+        guard theme != renderer.target || scrubbed else { return }
         let duration = animated ? Metrics.motion.themeCrossfade.value : 0
         renderer.transition(to: theme, duration: duration, at: CACurrentMediaTime())
-        if duration > 0 { animate() } else { needsDisplay = true }
+        if duration > 0 { animate() } else if scrubbed { _ = draw(at: CACurrentMediaTime()) } else { needsDisplay = true }
+    }
+
+    /// Mixes two themes at `progress` (0: `base`, 1: `theme`) while a Space's page follows the fingers or settles (Arc's
+    /// colors follow the page position, linearly). `show` afterwards ends it. Without Metal it shows the nearer one.
+    public func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
+        guard let renderer else { return show(progress < 0.5 ? base : theme, animated: false) }
+        renderer.scrub(from: base, to: theme, progress: progress)
+        _ = draw(at: CACurrentMediaTime())
     }
 
     /// The no-Metal path preserves the positioned gradient and wash. Procedural texture remains a GPU approximation.

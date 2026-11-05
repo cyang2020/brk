@@ -11,7 +11,6 @@ import BrkUIKit
 /// NSScrollView, placed at `SidebarFrames.rows` and reused by item id. Layout is data (BrkLayout/TablistLayout), so
 /// row geometry, drag hit-testing and pixel tests read one pure function instead of NSOutlineView's internal layout.
 /// Rows sit in two section containers (`section-pinned`, `section-today`) so e2e can scope rows to a section.
-/// Space switches push the old rows out and the new ones in over Metrics.motion.spaceSwitch.
 @MainActor
 final class TablistView: NSScrollView {
     /// Every scroll event of the list goes through the window, one at a time. With AppKit's responsive scrolling the
@@ -114,16 +113,14 @@ final class TablistView: NSScrollView {
     }
 
     /// `newTabCurrent`: the New Tab row draws as the current row (a blank window showing nothing, as Arc's does).
-    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, dockOrder: [SpaceID], palette: Palette, tools: TabToolsSnapshot,
+    func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, palette: Palette, tools: TabToolsSnapshot,
                 newTabCurrent: Bool = false, now: Instant = Instant(milliseconds: 0)) {
         // While New Tab is the current row the tab on screen draws like any other (Arc, Q01-a: one white card).
         let space = newTabCurrent ? space.idlingCurrent : space
         self.tools = tools
         self.now = now
         multiselection = tools.selected
-        let previousSpace = last?.space.id
         last = (space, renaming, f, palette)
-        if let previousSpace, previousSpace != space.id { pushTransition(from: previousSpace, to: space.id, order: dockOrder) }
 
         var rows: [ItemID: (row: Row, section: SectionKind)] = [:]
         currentRow = nil
@@ -256,18 +253,6 @@ final class TablistView: NSScrollView {
 
     private func toggleMultiselect(_ id: ItemID) { dispatch(.tabTools(.select(id, .toggle))) }
     private func clearMultiselect() {}
-
-    /// Arc slides the space pages sideways (`SidebarPagingContainerViewController`): forward in dock order pushes
-    /// from the right.
-    private func pushTransition(from old: SpaceID, to new: SpaceID, order: [SpaceID]) {
-        guard window != nil, let a = order.firstIndex(of: old), let b = order.firstIndex(of: new) else { return }
-        let push = CATransition()
-        push.type = .push
-        push.subtype = b > a ? .fromRight : .fromLeft
-        push.duration = Metrics.motion.spaceSwitch.value
-        push.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        contentView.layer?.add(push, forKey: "spaceSwitch")
-    }
 
     // MARK: Scroll edges: 1 pt hairlines while rows are hidden above or below (cra L748).
 

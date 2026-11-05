@@ -12,7 +12,8 @@ enum SpaceToolsScenarios {
         Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", cefOnly: "native editor and profile browsing", editor),
         Scenario("SpaceTools-3", "dock drag, sidebar swipe cancellation/page ownership and confirmed deletion", cefOnly: "native pointer/trackpad sequences", gestures),
         Scenario("SpaceTools-4", "Space manager local folder panel cancellation and public bookmark files", cefOnly: "native folder selection", export),
-        Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia), a slow short one does not, vertical ones scroll the list, and a swipe still works after the list scrolled", cefOnly: "real scroll events through the window server", realSwipes),
+        Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia, slow while moving), one whose fingers stop short of the middle does not, vertical ones scroll the list, and a swipe still works after the list scrolled", cefOnly: "real scroll events through the window server", realSwipes),
+        Scenario("R57-SwipeFollows", "mid-swipe the column follows the fingers at half their travel with the next Space's rows beside it, Favorites and the pill stay, the colors go between the two themes, it settles on Arc's spring; past the last Space it presses and a full ring opens Create a Space; before the first it brings the Library in", cefOnly: "real scroll events through the window server", swipeFollows),
     ]
 
     private static func hover(_ app: AppUnderTest, at point: CGPoint) throws {
@@ -239,18 +240,24 @@ enum SpaceToolsScenarios {
         // 40 points with the fingers down, the rest is inertia.
         try expectSwitch("a flick left", to: second, [(-10, 0), (-14, 0), (-16, 0)], inertia: [(-14, 0), (-10, 0), (-7, 0), (-4, 0), (-2, 0)])
         try expectSwitch("a flick right", to: first, [(10, 0), (14, 0), (16, 0)], inertia: [(14, 0), (10, 0), (7, 0), (4, 0), (2, 0)])
-        // 60 points, slowly, and the fingers stop before lifting: not a swipe.
-        try swipe(Array(repeating: (-4.0, 0.0), count: 15))
+        // 60 points, slowly, and the fingers stop before lifting: short of the middle it goes back (Arc, Q19).
+        try PhysicalPointer.swipe(app, at: try list(), steps: Array(repeating: (-4.0, 0.0), count: 15), pause: 0.25, window: window)
         app.sleep(0.6)
-        try expect(try app.view().space.id == first, "a slow 60 pt swipe switched Spaces")
+        try expect(try app.view().space.id == first, "a slow 60 pt swipe that stopped switched Spaces")
+        // The same lifted while still moving goes on, however short (Arc: 5 points a second is enough).
+        try expectSwitch("a slow swipe lifted while moving", to: second, Array(repeating: (-4.0, 0.0), count: 15))
+        try expectSwitch("and back", to: first, Array(repeating: (4.0, 0.0), count: 15))
         // Vertical gestures belong to the list: it scrolls, the Space stays.
         let rest = try rowY()
         try swipe(Array(repeating: (0.0, -14.0), count: 6))
         try app.waitUntil("the list scrolled under a vertical gesture") { try rowY() < rest - 20 }
         try expect(try app.view().space.id == first, "a vertical gesture switched Spaces")
         _ = try app.screenshot("list-scrolled")
-        try swipe([(1, -2), (-1, -5)] + Array(repeating: (0.0, 14.0), count: 12))
-        try app.waitUntil("the list scrolled back") { try abs(rowY() - rest) < 1 }
+        // Twenty steps: the scroll view adds its own travel at the end of the first gesture, more or less (58 pt short with twelve, r5-7).
+        try swipe([(1, -2), (-1, -5)] + Array(repeating: (0.0, 14.0), count: 20))
+        let top = rest
+        do { try app.waitUntil("the list scrolled back") { try abs(rowY() - top) < 1 } }
+        catch { throw Check(description: "the list did not scroll back: row at \(try rowY()), was \(top)") }
         // And a swipe right after the list scrolled is still a swipe.
         try swipe(Array(repeating: (0.0, -14.0), count: 3))
         try expectSwitch("a swipe after the list scrolled", to: second, left)
@@ -261,6 +268,124 @@ enum SpaceToolsScenarios {
         try PhysicalPointer.swipe(app, at: point(pageArea), steps: left, window: window)
         app.sleep(0.6)
         try expect(try app.view().space.id == first, "a swipe on the page switched Spaces")
+    }
+
+    /// How much of `rect` (window points) in a screenshot differs from its own first pixel (the sidebar), 0...1.
+    private static func inkShare(_ url: URL, in rect: CGRect, windowWidth: Double) throws -> Double {
+        guard let provider = CGDataProvider(url: url as CFURL), let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else {
+            throw Check(description: "cannot read \(url.path)")
+        }
+        let scale = Double(image.width) / windowWidth
+        guard let crop = image.cropping(to: CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale)) else { return 0 }
+        let bytesPerRow = crop.width * 4
+        var bytes = [UInt8](repeating: 0, count: bytesPerRow * crop.height)
+        bytes.withUnsafeMutableBytes { raw in
+            let context = CGContext(data: raw.baseAddress, width: crop.width, height: crop.height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+        }
+        guard !bytes.isEmpty else { return 0 }
+        let background = bytes.prefix(4).map(Int.init)
+        let differs = stride(from: 0, to: bytes.count, by: 4).filter { i in (0..<3).map { abs(Int(bytes[i + $0]) - background[$0]) }.reduce(0, +) > 9 }.count
+        return Double(differs) / Double(bytes.count / 4)
+    }
+
+    /// What R5-7 is for: the column moves with the fingers as Arc's does. Every number here was seen on real Arc (Q19/).
+    @Sendable static func swipeFollows(_ app: AppUnderTest) throws {
+        let first = try app.view().space.id
+        let url = app.site.url("page2.html?follow=first")
+        let inFirst = try app.load(url)
+        try app.waitForPageInput(PageID(window: app.window!, item: inFirst), at: url)
+        let second = try createSpace(app, title: "Second")
+        let inSecond = try app.load(app.site.url("page2.html?follow=second"))
+        try app.dispatch(.settings(.advanced(.hapticsOnReorder(false))))
+        try finishAnimation(app)
+        let window = app.window!
+        let width = try app.view().sidebar.width
+        func listPoint() throws -> CGPoint { point(try app.native().computed.sidebar!.tablistViewport) }
+        func rowX(_ item: ItemID) throws -> Double { Double(try app.native().actual[ViewID.row(item).identifier]?.frame.minX ?? -9999) }
+        let restX = try rowX(inSecond)
+        let pill = try app.native().actual[ViewID.urlPill.identifier]?.frame
+        let tray = try app.native().actual[ViewID.section(.favorites).identifier]?.frame
+        let right = { (n: Int) in Array(repeating: (15.0, 0.0), count: n) }, left = { (n: Int) in Array(repeating: (-15.0, 0.0), count: n) }
+
+        // Fingers 150 to the right, held: the column 75 to the right, the Space before beside it; the pill stays.
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (4, 0), steps: right(10), held: {
+            let moved = try rowX(inSecond)
+            try expect(abs(moved - (restX + 75)) < 1, "the column moved \(moved - restX), fingers 150")
+            let beside = try rowX(inFirst)
+            try expect(abs(beside - (restX + 75 - width)) < 1, "the neighbour's row is at \(beside), expected \(restX + 75 - width)")
+            try expect(try app.native().actual[ViewID.urlPill.identifier]?.frame == pill, "the pill moved")
+            try expect(try app.native().actual[ViewID.section(.favorites).identifier]?.frame == tray, "the Favorites moved between two Spaces of one profile")
+            try expect(try app.view().space.id == second, "the Space changed before the fingers lifted")
+            // What reached the screen, not only where the views are: the neighbour's current row (a white card) in the 75 points it shows.
+            let shot = try app.screenshot("mid-swipe-150")
+            let row = try visible(app.native(), .row(inFirst)).frame
+            let shown = CGRect(x: 0, y: row.minY - 4, width: max(row.maxX, 0) - 4, height: row.height + 4)
+            let ink = try inkShare(shot.url, in: shown, windowWidth: try app.native().windowFrame.width)
+            try expect(ink > 0.5, "the neighbouring row is not on screen: \(ink) of \(shown) differs from the sidebar")
+        }, then: left(10), pause: 0.25, window: window)
+        try app.waitUntil("the column back in place") { abs(try rowX(inSecond) - restX) < 0.5 }
+        try expect(try app.view().space.id == second, "back and stopped must stay")
+
+        // Past the middle, stopped: goes on, and the column ends in place.
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (4, 0), steps: right(20), pause: 0.3, window: window)
+        try app.waitUntil("past the middle goes on") { try app.view().space.id == first }
+        try finishAnimation(app)
+        let placed = try rowX(inFirst)
+        try expect(abs(placed - restX) < 0.5, "the new page is not in place: \(placed)")
+        // The next one back, a quick short one.
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (-3, 0), steps: [(-3, 0), (-3, 0), (-3, 0)], window: window)
+        try app.waitUntil("a quick short swipe goes on") { try app.view().space.id == second }
+        try finishAnimation(app)
+
+        // Past the last Space: pressed, the ring filling; back and stopped, nothing.
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (-4, 0), steps: left(14), held: {
+            let pressed = restX - (try rowX(inSecond))
+            try expect(abs(pressed - 14.84) < 1, "fingers 210 past the last Space pressed the column \(pressed)")
+            let pressedTray = try app.native().actual[ViewID.section(.favorites).identifier]?.frame
+            try expect(abs((tray?.minX ?? 0) - (pressedTray?.minX ?? 0) - pressed) < 1, "past the last Space the Favorites go with the column")
+            try expect(isShown(try app.native(), .tabTool("space-edge-feedback")), "no edge feedback past the last Space")
+            _ = try app.screenshot("past-the-last")
+        }, then: right(14), pause: 0.3, window: window)
+        try finishAnimation(app)
+        try expect(try app.view().dialog == nil, "a ring that was not full opened Create a Space")
+        // Full and held: Create a Space.
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (-4, 0), steps: left(27), held: { app.sleep(0.2) }, window: window)
+        try app.waitUntil("a full ring opens Create a Space") { try app.view().dialog == .newSpace }
+        try finishAnimation(app)
+        _ = try app.screenshot("create-a-space")
+        // Cancel's command: the identifier's frame stays at the top of the flow (SwiftUI's offset moves only the drawing) and the
+        // runner's window reaches past the screen's bottom. The station's Q19 scene clicks the drawn button with the real mouse.
+        try app.dispatch(.sidebar(.openDialog(nil)))
+        try app.waitUntil("Create a Space cancelled") { try app.view().dialog == nil }
+        try finishAnimation(app)
+        try app.dispatch(.space(.focus(first)))
+        try finishAnimation(app)
+
+        // Before the first Space the Library comes in with the position, one to one.
+        let closedCard = try app.native().computed.contentArea
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (4, 0), steps: right(20), held: {
+            guard case .library? = try app.view().overlay else { throw Check(description: "the Library is not there mid-swipe") }
+            _ = try app.screenshot("toward-the-library")
+        }, then: left(20), pause: 0.3, window: window)
+        try app.waitUntil("back and stopped closes the Library") {
+            if case .library? = try app.view().overlay { return false }
+            return true
+        }
+        try finishAnimation(app)
+        try expect(try app.native().computed.contentArea == closedCard, "the card did not come back")
+        try PhysicalPointer.swipe(app, at: try listPoint(), first: (4, 0), steps: right(6), window: window)
+        try app.waitUntil("a flick opens the Library") { if case .library? = try app.view().overlay { return true }; return false }
+        try finishAnimation(app)
+        // With the Library open the gesture is the column's anywhere: a flick back closes it.
+        try PhysicalPointer.swipe(app, at: point(try app.native().computed.contentArea), first: (-4, 0), steps: left(6), window: window)
+        try app.waitUntil("a flick back closes the Library") {
+            if case .library? = try app.view().overlay { return false }
+            return true
+        }
+        try expect(try app.view().space.id == first, "out of the Library: the first Space")
     }
 
     @Sendable static func gestures(_ app: AppUnderTest) throws {
