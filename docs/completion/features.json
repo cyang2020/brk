@@ -12928,7 +12928,7 @@
       "remaining": [
         "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
         "R4-8 独立复核（2026-11-04）：缺陷。功能按验收标准通过。Arc 1.170 桌面版没有 Browse for Me（P49：命令栏输入问句 how do browsers render fonts，列表是搜索建议加一行带 ChatGPT 图标的 Ask ChatGPT →；Tabs 菜单也没有），父任务定的是“Browse for Me 保留 Brk 的做法，命令栏加一行 Ask 入口参照 P49”。缺陷：Brk 的普通命令栏输入问句时没有这行 Ask 入口（只有先进入 AI 模式才出现一行 Ask the local AI tool）；另外 Tabs 菜单多一行 Arc 没有的 Browse for Me…，来源要手打地址。画面检查做不了：Arc 没有这个界面。",
-        "R5-2 合并后 P49-cmd 3.7%：差在选中行颜色，原因是拍摄脚本用浅蓝主题模仿 Arc 侧栏透出的浅蓝（见 results.tsv P49 行）；Ask 行和五行列表一致。"
+        "R5-2 合并后 P49-cmd 3.7%：差在选中行颜色，原因是拍摄脚本用浅蓝主题模仿 Arc 活动窗口的浅蓝（见 results.tsv P49 行和 Q14/NOTES.md）；Ask 行和五行列表一致。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
