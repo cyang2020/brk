@@ -359,7 +359,7 @@ final class DragImage: NSView {
         let card = RowGeometry(bounds: bounds, depth: 0).selection
         rowSize = card.size
         rowImageFrame = bounds.offsetBy(dx: -card.minX, dy: -card.minY)
-        ringed = source is FavoriteTileView && tab?.status == .current && (tab?.favicon != nil || tab?.icon != nil)
+        ringed = (source as? FavoriteTileView)?.hasIcon == true && tab?.status == .current
         fill = palette.color(palette.tokens.tabCurrent).cgColor
         super.init(frame: CGRect(origin: .zero, size: rowSize))
         wantsLayer = true

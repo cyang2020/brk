@@ -194,6 +194,8 @@ final class FavoriteTileView: HoverView {
     private var renameField: RenameField?
     var onHover: ((FavoriteTileView, Bool) -> Void)?
     var shownRow: TabRow? { row }
+    /// False for a site with no icon: the tile is empty (Q13-n5).
+    var hasIcon: Bool { !icon.showsNothing }
     private var reportedHover = false
     /// The press opened this tab, so the release has nothing left to do (a Command or Shift press opens on the release).
     private var openedOnPress = false
@@ -204,6 +206,7 @@ final class FavoriteTileView: HoverView {
         self.id = id
         super.init(frame: .zero)
         icon.hidesEmptyFavicon = true
+        icon.showsNothingChanged = { [weak self] in self?.stateChanged() }
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.favorites.tileRadius.value
         ring.fillColor = nil
@@ -310,7 +313,7 @@ final class FavoriteTileView: HoverView {
         else { fill = palette.color(palette.tokens.itemBackground) }
         layer?.backgroundColor = fill.cgColor
         // A tile with no site icon is white on its shadow with no ring (Q13-n5, Q13-n6, Q13-n10).
-        ring.isHidden = !current || (row.favicon == nil && row.icon == nil)
+        ring.isHidden = !current || icon.showsNothing
         ring.strokeColor = palette.color(palette.tokens.separator).cgColor
         ring.lineWidth = Draw.tileRingWidth.value
     }

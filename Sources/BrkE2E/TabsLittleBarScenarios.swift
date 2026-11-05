@@ -137,7 +137,6 @@ enum TabsLittleBarScenarios {
         guard try app.send(.sidebarPanel(window: app.window, action: .button("Connect"))) == .ok else { throw Check(description: "Connect button") }
         try app.waitUntil("GitHub unread") { try app.view().favorites.tiles.first { $0.id == github }?.badge == 3 }
         try expect(try app.view().favorites.tiles.first { $0.id == github }?.badgeTint == .black, "GitHub's dot is GithubBadgeBlack")
-        let dot = try visible(app.native(), .favorite(github)).frame
         let badge = try frame(app, "favorite-badge-" + github.rawValue)
         try expect(badge != nil && badge!.width <= 10, "the overlay is a dot, not a count: \(String(describing: badge))")
         let ink = try app.pixel(centre(badge!))
@@ -153,7 +152,8 @@ enum TabsLittleBarScenarios {
         _ = try app.screenshot("R36-favorite-overlays")
 
         // The switches through the real context menu.
-        let githubMenu = try app.send(.captureContextMenu(window: app.window, point: centre(dot), choose: "Show Unread Badge"))
+        // The second Favorite halved GitHub's tile, so its place is read again.
+        let githubMenu = try app.send(.captureContextMenu(window: app.window, point: centre(try visible(app.native(), .favorite(github)).frame), choose: "Show Unread Badge"))
         guard case .menuItems(let items) = githubMenu else { throw Check(description: "no GitHub menu: \(githubMenu)") }
         try expect(items.contains("Show Unread Badge"), "GitHub's menu: \(items)")
         try expect(!items.contains("Show Time to Next Meeting"), "GitHub has no meeting switch")

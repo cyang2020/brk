@@ -93,6 +93,11 @@ final class IconView: NSView {
     private var palette: Palette?
     /// A site with no favicon draws nothing here instead of the empty favicon (a Favorite's tile, Q13-n5).
     var hidesEmptyFavicon = false
+    /// That is what it is doing now. A favicon can arrive later, so it can change after a render.
+    private(set) var showsNothing = false {
+        didSet { if showsNothing != oldValue { showsNothingChanged?() } }
+    }
+    var showsNothingChanged: (() -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -172,6 +177,7 @@ final class IconView: NSView {
         case .none:
             break
         }
+        showsNothing = hidesEmptyFavicon && image.isHidden && emoji.isHidden && dot.isHidden
     }
 
     /// Arc's empty favicon: a 14 pt rounded square in the space's hue at low opacity, centred in the slot. Without a
