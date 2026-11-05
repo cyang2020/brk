@@ -69,15 +69,16 @@ final class MiniPlayerStackView: NSView {
                 card.layoutSubtreeIfNeeded()
             }
         }
-        // The newest in front.
-        for tab in order { cards[tab]?.bringToFront(in: self) }
+        // The newest in front. Assigned only when it differs: moving a view that is in place costs it its hover state.
+        let wanted = [hoverArea] + order.flatMap { cards[$0]?.layers ?? [] }
+        if subviews != wanted { subviews = wanted }
     }
 
     private func makeCard(_ tab: ItemID) -> MiniPlayerCardView {
         let card = MiniPlayerCardView(dispatch: dispatch, tab: tab)
         card.onSpeaker = { [weak self] tab in self?.toggleVolume(tab) }
         cards[tab] = card
-        card.bringToFront(in: self)
+        card.layers.forEach { addSubview($0) }
         return card
     }
 
@@ -168,10 +169,8 @@ final class MiniPlayerCardView: HoverView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func bringToFront(in stack: NSView) {
-        stack.addSubview(backdrop)
-        stack.addSubview(self)
-    }
+    /// What the stack holds for this card, back to front.
+    var layers: [NSView] { [backdrop, self] }
 
     func removeFromStack() {
         backdrop.removeFromSuperview()
@@ -351,11 +350,15 @@ final class MiniPlayerSliderView: HoverView {
 final class ArcTooltip: NSView {
     private static var pending: DispatchWorkItem?
     private static weak var shown: ArcTooltip?
+    private static weak var owner: NSView?
     private let label = NSTextField(labelWithString: "")
     private let fill = NSView()
 
     /// The pointer is on `view` and it wants `text` shown, or the tip should go.
     static func pointer(on view: NSView, text: String?) {
+        // The pointer leaving one control must not cancel the tip of the one it has just entered.
+        if text == nil, let owner, owner !== view { return }
+        owner = view
         pending?.cancel()
         pending = nil
         shown?.removeFromSuperview()
