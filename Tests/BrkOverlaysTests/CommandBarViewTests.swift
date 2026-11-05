@@ -103,19 +103,42 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertLessThan(fields[1].frame.width, ceil(fields[1].attributedStringValue.size().width), "the address gives way")
     }
 
-    /// P20-a, P21-a, Q03-a: a window without a space highlights in Arc's blue-violet (#8F95FF light, #424ADD dark);
-    /// a space's centered bar in grey (Q01-a)
+    /// P20-a, P21-a, Q03-a: a window without a space highlights in Arc's blue-violet (#8F95FF light, #424ADD dark)
     func testWindowsWithoutASpaceHighlightInBlueViolet() throws {
-        func highlight(_ scheme: Scheme, spaceless: Bool) throws -> NSColor {
+        func highlight(_ scheme: Scheme) throws -> [CGFloat] {
             let view = CommandBarView(dispatch: { _ in })
-            view.show(commandBar([], []), in: box, scheme: scheme, spaceless: spaceless)
-            let row = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == "command-bar-result-0" })
-            return try XCTUnwrap(row.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.sRGB))
+            view.show(commandBar([], []), in: box, scheme: scheme, spaceless: true)
+            return try rowColor(view)
         }
-        let light = try highlight(.light, spaceless: true), dark = try highlight(.dark, spaceless: true), space = try highlight(.light, spaceless: false)
-        XCTAssertEqual([light.redComponent, light.greenComponent, light.blueComponent].map { ($0 * 255).rounded() }, [0x8F, 0x95, 0xFF])
-        XCTAssertEqual([dark.redComponent, dark.greenComponent, dark.blueComponent].map { ($0 * 255).rounded() }, [0x42, 0x4A, 0xDD])
-        XCTAssertEqual(space.alphaComponent, 0.35, accuracy: 0.01, "grey: black at 35%, which reads #ABABAB on the card as Q01 and P49 measure")
+        XCTAssertEqual(try highlight(.light), [0x8F, 0x95, 0xFF])
+        XCTAssertEqual(try highlight(.dark), [0x42, 0x4A, 0xDD])
+    }
+
+    /// The highlight follows the space's theme in both bars (P49): grey under a white theme (Q01-a #ABABAB), beige
+    /// under #F2EAE4 (P02-b #B8A89B), a teal under a pale teal (P49's #68B1B1 has this green and blue).
+    func testTheHighlightIsAShadeOfTheTheme() throws {
+        func highlight(_ primary: RGBA, overPill: Bool) throws -> [CGFloat] {
+            let view = CommandBarView(dispatch: { _ in })
+            var bar = commandBar([], [])
+            if overPill { bar.placement = .overURLPill }
+            view.show(bar, in: box, scheme: .light, primary: primary)
+            return try rowColor(view)
+        }
+        func near(_ color: [CGFloat], _ expected: [CGFloat], tolerance: CGFloat = 2) -> Bool { zip(color, expected).allSatisfy { abs($0 - $1) <= tolerance } }
+        for overPill in [false, true] {
+            XCTAssertTrue(near(try highlight(RGBA(1, 1, 1), overPill: overPill), [0xAB, 0xAB, 0xAB]))
+            XCTAssertTrue(near(try highlight(RGBA(0xF2 / 255, 0xEA / 255, 0xE4 / 255), overPill: overPill), [0xB8, 0xA8, 0x9B]))
+            let teal = try highlight(RGBA(0.96, 1, 1), overPill: overPill)
+            XCTAssertTrue(near(Array(teal.suffix(2)), [0xB1, 0xB1], tolerance: 3), "\(teal)")
+            XCTAssertLessThan(teal[0], teal[1] - 40, "the hue is the theme's")
+        }
+    }
+
+    private func rowColor(_ view: CommandBarView) throws -> [CGFloat] {
+        let row = try XCTUnwrap(view.descendants.first { $0.accessibilityIdentifier() == "command-bar-result-0" })
+        let color = try XCTUnwrap(row.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.sRGB))
+        XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+        return [color.redComponent, color.greenComponent, color.blueComponent].map { ($0 * 255).rounded() }
     }
 
     /// P02-b: the bar over the URL pill is 350 wide (wider only for its input row), the centered one fills its box

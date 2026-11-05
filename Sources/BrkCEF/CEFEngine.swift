@@ -109,6 +109,11 @@ public final class CEFEngine: WebEngine {
         config.logFile = root.deletingLastPathComponent().appendingPathComponent("cef-debug.log")
         config.remoteDebuggingPort = configuration.remoteDebuggingPort
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            // Chromium's own log, for looking into what a slow quit waits for (r5-2/quit-probe.py).
+            if let log = ProcessInfo.processInfo.environment["BRK_TEST_CEF_LOG"], !log.isEmpty {
+                config.logFile = URL(fileURLWithPath: log)
+                config.logSeverity = .verbose
+            }
             config.safeStorage = .mockKeychain
             config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"
             // The https fixture's certificate (verify/visual-pairs/https-fixture): Chromium accepts this one public key
@@ -645,6 +650,8 @@ public final class CEFEngine: WebEngine {
         HostWindows.closeAuxiliaryWindows()
         phase = .shuttingDownRuntime
         releaseTaskManager()
+        // r5-2/quit-probe.py --no-raise measures a test instance without this.
+        if !traced || ProcessInfo.processInfo.environment["BRK_TEST_NO_QOS_RAISE"] == nil { ShutdownThreads.raiseBackgroundWorkers() }
         trace("runtime shutdown starting")
         CefRuntime.shared.shutdown()
         trace("runtime shut down")
@@ -798,5 +805,34 @@ public final class CEFEngine: WebEngine {
                                  browserID: Int(page.browser.id), uptime: ProcessInfo.processInfo.systemUptime)
         pageLog.append(entry)
         log.notice("pagelog \(kind.rawValue, privacy: .public) page=\(page.id.description, privacy: .public) generation=\(page.incarnation.generation, privacy: .public) browser=\(page.browser.id, privacy: .public)")
+    }
+}
+
+/// cef_shutdown waits for Chromium's thread pool to finish its last writes (fsync and ftruncate on the profile's
+/// files, r5-2/REPORT.md). The pool's "ThreadPoolBackgroundWorker" threads run at macOS's background QoS, which on a busy
+/// machine gets almost no CPU, so the wait reached Chromium's own 10 s teardown watchdog. The quit has already been
+/// asked for and nothing else competes with it in this process: those threads go at user-initiated QoS for the end.
+enum ShutdownThreads {
+    static func raiseBackgroundWorkers() {
+        var threads: thread_act_array_t?, count: mach_msg_type_number_t = 0
+        guard task_threads(mach_task_self_, &threads, &count) == KERN_SUCCESS, let threads else { return }
+        defer {
+            for index in 0..<Int(count) { mach_port_deallocate(mach_task_self_, threads[index]) }
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(Int(count) * MemoryLayout<thread_act_t>.stride))
+        }
+        for index in 0..<Int(count) where name(of: threads[index]).hasPrefix("ThreadPoolBackground") || name(of: threads[index]).hasPrefix("ThreadPoolSingleThreadSharedBackground") {
+            // The public way to lift another thread (<pthread/qos.h>); the process ends with the wait, so it is never ended.
+            guard let thread = pthread_from_mach_thread_np(threads[index]) else { continue }
+            _ = pthread_override_qos_class_start_np(thread, QOS_CLASS_USER_INITIATED, 0)
+        }
+    }
+
+    private static func name(of thread: thread_act_t) -> String {
+        var info = thread_extended_info_data_t(), size = mach_msg_type_number_t(MemoryLayout<thread_extended_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(size)) { thread_info(thread, thread_flavor_t(THREAD_EXTENDED_INFO), $0, &size) }
+        }
+        guard result == KERN_SUCCESS else { return "" }
+        return withUnsafeBytes(of: info.pth_name) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
     }
 }

@@ -102,7 +102,7 @@ final class SitePanels: NSObject, NSPopoverDelegate {
         guard let entry = entries[id], let parent = entry.parent else { return event }
         let popoverWindow = entry.popover.contentViewController?.view.window
         if event.type == .keyDown {
-            guard event.window === popoverWindow || event.window === parent else { return event }
+            guard event.window === popoverWindow || event.window === parent, !ShortcutRecording.isActive else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
             let escape = event.keyCode == 53 && modifiers.isEmpty
             let closeKey = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "w" && event.window === popoverWindow

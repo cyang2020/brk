@@ -267,7 +267,7 @@ final class FavoriteTileView: HoverView {
         let side = Draw.tileFavicon.value, tools = Metrics.sidebarTools
         let dot = tools.unreadDot.value
         // The dot sits on the favicon's top-right corner, the way Arc marks an unread top app.
-        let iconY = subtitle.isHidden ? (bounds.height - side) / 2 : tools.subtitleIconTop.value
+        let iconY = (bounds.height - side) / 2 - (subtitle.isHidden ? 0 : tools.subtitleIconLift.value)
         icon.frame = CGRect(x: (bounds.width - side) / 2, y: iconY, width: side, height: side)
         badge.frame = NSRect(x: icon.frame.maxX - dot / 2, y: icon.frame.minY - dot / 2, width: dot, height: dot)
         let capsule = subtitle.fittingSize

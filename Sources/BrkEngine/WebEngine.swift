@@ -126,6 +126,9 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow?
     /// AI adapter hook. The reply must be fenced to this document and must honor the user's AI settings.
     func engine(_ engine: any WebEngine, summarizeLink request: LinkPreviewRequest, reply: @escaping @MainActor (String?) -> Void)
+    /// The language of a document that declares none, from a sample of its visible text (a BCP 47 code; nil when
+    /// the sample does not say). The engine has no language recognizer of its own.
+    func engine(_ engine: any WebEngine, recognizeLanguageOf sample: String, reply: @escaping @MainActor (String?) -> Void)
     func engine(_ engine: any WebEngine, find update: FindUpdate)
     func engine(_ engine: any WebEngine, output update: OutputUpdate)
     func engine(_ engine: any WebEngine, outputDestination prompt: OutputDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void)
@@ -160,6 +163,7 @@ extension WebEngine {
 
 extension WebEngineDelegate {
     public func engine(_ engine: any WebEngine, summarizeLink request: LinkPreviewRequest, reply: @escaping @MainActor (String?) -> Void) { reply(nil) }
+    public func engine(_ engine: any WebEngine, recognizeLanguageOf sample: String, reply: @escaping @MainActor (String?) -> Void) { reply(nil) }
     public func engine(_ engine: any WebEngine, page: PageID, keyHandling key: KeyPress, stage: KeyStage, pressID: PressID) -> KeyHandling {
         KeyHandling(handled: self.engine(engine, page: page, key: key, stage: stage, pressID: pressID), shortcut: false)
     }

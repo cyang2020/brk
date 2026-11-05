@@ -229,7 +229,7 @@ extension Work {
             let error: String?
             if input.isEmpty { error = nil }
             else if let chord { error = ExtensionShortcuts.error(for: chord, extensionID: id, command: command, catalog: catalog, overrides: state.doc.keyOverrides) }
-            else { error = "Use a shortcut such as cmd+shift+u, or leave empty to clear." }
+            else { error = "This key cannot be a shortcut." }
             state.session.sites.extensionErrors[context] = error
             guard error == nil else { return }
             effects.append(.editExtension(id, .shortcut(command: command, chord: chord), context))

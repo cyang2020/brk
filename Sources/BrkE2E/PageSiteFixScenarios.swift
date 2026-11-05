@@ -12,7 +12,7 @@ enum PageSiteFixScenarios {
         Scenario("SiteFilters-realsite", "a news page's real ad-tech requests (AdSense, Publisher Tag, gtag, analytics pixel, ad iframe) are blocked and their slots hidden; the article works; a site exception lets them through", cefOnly: "CEF request filtering", realSite),
         Scenario("PageDOMClean", "the site policy leaves no attribute or element of Brk's in the page's DOM, also after hide and show with media playing", cefOnly: "CEF site policy", domClean),
         Scenario("HistoryRestore", "the History tab Cmd+Y opened comes back after quitting and relaunching, still the native History page", historyRestore),
-        Scenario("Ext-shortcut-mouse", "a window-server mouse click puts the caret in the extension shortcut field; window-server keys enter the shortcut, a click saves it, the chord fires the command", cefOnly: "CEF extension commands", shortcutByMouse),
+        Scenario("Ext-shortcut-mouse", "a window-server click starts recording on the extension command's key cap; the pressed chord is saved; Esc cancels, Delete clears, a plain key is refused; the chord fires the command", cefOnly: "CEF extension commands", shortcutByMouse),
         Scenario("ATC-routes", "links sent by macOS (open -a) follow Air Traffic Control: the first matching route wins, reordering and the sheet's remove change the result, Most Recent Space follows the last used of two windows", atcRoutes),
         Scenario("SoundCues-recorded", "each sound effect (archive, capture, download) recorded from Brk's own audio output into its own WAV when on; all three silent when off", cefOnly: "signed sound resources", soundCues),
         Scenario("WebSubstitutionsTyping", "while typing in a web editor Smart Quotes, Smart Dashes and Text Replacement follow their Edit menu toggles; Correct Spelling Automatically is greyed as Chromium has none", cefOnly: "web editing", substitutionsWhileTyping),
@@ -67,16 +67,43 @@ enum PageSiteFixScenarios {
         try app.evaluate(childPage, "document.title='typed:'+document.getElementById('f').value")
         try app.waitUntil("keys reach the tab's page") { try row(app, child.id)?.title == "typed:abc" }
 
-        // The opener closes the window it opened: the tab goes, as Chrome closes the tab.
+        // The opener closes the window it opened: the row goes (Arc, Q12), the opener stays in front.
         try app.dispatch(.tab(.focus(page.item)))
         try app.waitForPageInput(page, at: app.site.url("page-browsing.html"))
         try app.evaluate(page, "child.close();document.title='closed-child'")
-        // A page that closes leaves its row unloaded in Brk (R7a); the browser itself is gone, closed by the page.
-        try app.waitUntil("window.close from the opener closes the tab's page") {
+        try app.waitUntil("child.close() from the opener closes the tab's page and its row") {
             let entries = try app.pageLog().filter { $0.page == childPage }
-            return try entries.contains { $0.kind == .closed } && !entries.contains { $0.kind == .closeRequested } && row(app, child.id)?.loaded == false
+            return try entries.contains { $0.kind == .closed } && !entries.contains { $0.kind == .closeRequested } && row(app, child.id) == nil
         }
-        app.passed("child.close() from the opener closes the tab's page")
+        try expect(try currentTab(app.view())?.id == page.item, "the opener is not in front after child.close()")
+        try expect(try archived(app).contains { $0 == child.url }, "child.close() did not archive the row")
+        app.passed("child.close() from the opener removes the row and leaves it in the archive")
+
+        // A sign-in style tab reports to its opener and closes itself (Q12): Today is back to what it was, the opener in front.
+        let rows = try app.view().space.today.rows.count
+        try PageBrowsingScenarios.clicked(app, page, "window.selfCloser=window.open('popup-child.html?selfclose');document.title='opened-self-closer'")
+        var signIn: TabRow?
+        try app.waitUntil("the self-closing tab in front", timeout: 12) {
+            signIn = currentTab(try app.view())
+            return signIn?.url == app.site.url("popup-child.html?selfclose") && signIn?.title.hasPrefix("child:") == true
+        }
+        guard let signIn else { throw Check(description: "no self-closing tab") }
+        // A more recently used tab must not take over from the opener.
+        guard let other = tabRows(try app.view().space.today.rows).first(where: { $0.id != page.item && $0.id != signIn.id }) else { throw Check(description: "no other tab") }
+        try app.dispatch(.tab(.focus(other.id)))
+        try app.dispatch(.tab(.focus(signIn.id)))
+        let signInPage = PageID(window: page.window, item: signIn.id)
+        try app.waitForPageInput(signInPage, at: app.site.url("popup-child.html?selfclose"))
+        try app.screenshot("self-closing-tab")
+        try expect(try app.view().space.today.rows.count == rows + 1, "the tab did not add a row")
+        try app.evaluate(signInPage, "window.opener.postMessage({kind:'popup-report',value:{signedIn:'token-43'}},location.origin);window.close()")
+        try app.waitUntil("the tab's own window.close() removes its row") { try row(app, signIn.id) == nil }
+        try app.waitUntil("the opener in front") { try currentTab(app.view())?.id == page.item }
+        try expect(try app.view().space.today.rows.count == rows, "Today did not return to \(rows) rows")
+        try app.waitForPageInput(page, at: app.site.url("page-browsing.html"))
+        try app.waitUntil("the message reached the opener") { try PageBrowsingScenarios.title(app, page) == "popup:{\"signedIn\":\"token-43\"}" }
+        try app.screenshot("self-closed")
+        app.passed("the tab's window.close(): Today back to \(rows) rows, focus on the opener, not on the more recent \(other.title)")
 
         // noopener and target=_blank (implicit noopener): a tab with no opener, as in Chrome.
         try PageBrowsingScenarios.clicked(app, page, "document.title='noopener-returned:'+(window.open('popup-child.html?noopener','_blank','noopener')===null)")
@@ -101,9 +128,25 @@ enum PageSiteFixScenarios {
         try app.dispatch(.tab(.close(.item(page.item))))
         try app.waitUntil("opener archived") { try !allTabs(app.view()).contains { $0.id == page.item } }
         try expect(try allTabs(app.view()).contains { $0.id == blank.id }, "closing the opener closed the tab it opened")
+        // With its opener gone a tab that closes itself follows the close rule (the most recent other tab).
+        try app.dispatch(.tab(.focus(blank.id)))
+        try app.dispatch(.tab(.focus(noopener.id)))
+        let noopenerPage = PageID(window: page.window, item: noopener.id)
+        try app.waitForPageInput(noopenerPage, at: app.site.url("popup-child.html?noopener"))
+        try app.evaluate(noopenerPage, "window.close()")
+        try app.waitUntil("the orphan's window.close() removes its row") { try row(app, noopener.id) == nil }
+        try app.waitUntil("the most recent other tab in front") { try currentTab(app.view())?.id == blank.id }
         try app.flush(); try app.restart()
         try app.waitUntil("the opened tab restored") { try allTabs(app.view()).contains { $0.url == app.site.url("popup-child.html?blank") } }
         app.note("CEF creates the popup browser (on_before_popup allowed, OnPopupBrowserViewCreated places its view in a frameless host window) and Brk embeds it as the tab's page instead of creating a new browser; Chromium's own opener and noopener rules apply.")
+    }
+
+    /// The addresses in the Library's archive.
+    static func archived(_ app: AppUnderTest) throws -> [URL?] {
+        try app.dispatch(.library(.open(.archive)))
+        defer { try? app.dispatch(.library(.close)) }
+        guard case .library(let library)? = try app.view().overlay else { throw Check(description: "no Library") }
+        return library.archive?.groups.flatMap(\.entries).map(\.url) ?? []
     }
 
     // MARK: EaselShareTypedTitle (A101)
@@ -364,35 +407,86 @@ enum PageSiteFixScenarios {
         return values.joined(separator: " ")
     }
 
-    /// The Ext-shortcut-physical scenario focused the field through AppKit (R4-7: "the focus is set by the program");
-    /// here every step is input the window server delivers: the click into the field, ⌘A and the typed shortcut, the
-    /// click on Save shortcut, and the chord that runs the extension command.
+    /// Whether the extension command's key cap is recording (it then says Type Shortcut…).
+    static func isRecording(_ app: AppUnderTest, owner: WindowID, _ field: String) throws -> Bool {
+        try fieldValue(app, owner, field) == "Type Shortcut…"
+    }
+
+    /// A chord as the keyboard sends it through the window server (`cghidEventTap`), posted only while this Brk's
+    /// window is frontmost at `point`; the keys go to the active app's key window.
+    static func pressChord(_ app: AppUnderTest, _ chord: KeyChord, at point: CGPoint) throws {
+        try pressKey(app, code: CGKeyCode(chord.key.code), modifiers: chord.modifiers, at: point)
+    }
+    static func pressKey(_ app: AppUnderTest, code: CGKeyCode, modifiers: Modifiers = [], at point: CGPoint) throws {
+        guard case .hello(let hello) = try app.send(.hello), PhysicalPointer.frontmost(at: point)?.pid == hello.pid else { throw Check(description: "Brk is not frontmost; keys not posted") }
+        let source = CGEventSource(stateID: .hidSystemState)
+        func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
+            event.flags = flags; event.post(tap: .cghidEventTap); usleep(25_000)
+        }
+        var flags: CGEventFlags = []
+        if modifiers.contains(.command) { flags.insert(.maskCommand) }
+        if modifiers.contains(.shift) { flags.insert(.maskShift) }
+        if modifiers.contains(.shift) { post(56, true, flags) }
+        if modifiers.contains(.command) { post(55, true, flags) }
+        post(code, true, flags); post(code, false, flags)
+        if modifiers.contains(.command) { post(55, false, []) }
+        if modifiers.contains(.shift) { post(56, false, []) }
+    }
+
+    /// Chrome's and Arc's extension shortcuts are recorded: click the field, press the chord. Every step here is input
+    /// the window server delivers: the click on the key cap, the chord it records, Esc (cancels), the click and Delete
+    /// (clears), and the chord that runs the extension command once it is recorded again.
     @Sendable static func shortcutByMouse(_ app: AppUnderTest) throws {
         guard WindowServerKeys.allowed else { throw Check(description: "posting window-server events is not allowed for this runner") }
         let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
         guard let owner = app.window else { throw Check(description: "app identity missing") }
-        let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command
+        let command = "fixture-command", field = "extension-shortcut-" + fixture.id + "-" + command, chord = KeyChord([.command, .shift], .u)
+        func binding() throws -> KeyChord? { try ExtScenarios.catalogValue(app, fixture.id)?.commands?.first { $0.name == command }.flatMap { ExtensionShortcuts.chord($0.keybinding) } }
+        func capPoint() throws -> CGPoint {
+            guard case .menuItems(let rect) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)),
+                  let x = Double(rect[0]), let y = Double(rect[1]) else { throw Check(description: "key cap rectangle") }
+            return CGPoint(x: x + 20, y: y + 11)
+        }
         try app.dispatch(.site(.nativeExtensions))
         try app.waitUntil("installed shortcut editor") { try ExtScenarios.catalogValue(app, fixture.id) != nil }
-        try expect(try !focused(app, owner, field), "the shortcut field had focus before the click")
-        try expect(try ExtScenarios.catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } != true, "the command already has ⇧⌘U")
+        // The tab behind the panel finishes loading first: a page that becomes ready takes the key focus, and the
+        // transient panel closes with it.
+        try app.waitUntil("the page behind the panel loaded") { try !app.view().urlPill.loading }
+        app.sleep(1)
+        try expect(try binding() != chord, "the command already has ⇧⌘U")
         _ = try app.screenshotSiteControls("before-click")
         _ = try panelClick(app, owner, field)
-        do { try app.waitUntil("the mouse click put the caret in the shortcut field") { try focused(app, owner, field) } }
-        catch { _ = try? app.screenshotSiteControls("field-not-focused"); throw Check(description: "after the click: " + (try locateState(app, owner, field))) }
-        _ = try app.screenshotSiteControls("field-clicked")
-        app.passed("a window-server click focused the shortcut field")
-        guard case .menuItems(let rect) = try app.send(.siteControlInput(window: owner, field: field, action: .locate)),
-              let x = Double(rect[0]), let y = Double(rect[1]) else { throw Check(description: "field rectangle") }
-        try typeKeys(app, "cmd+shift+u", at: CGPoint(x: x + 20, y: y + 11))
-        try app.waitUntil("the typed shortcut is in the field") { try fieldValue(app, owner, field) == "cmd+shift+u" }
-        _ = try app.screenshotSiteControls("typed")
-        _ = try panelClick(app, owner, "extension-shortcut-save-" + fixture.id + "-" + command)
-        try app.waitUntil("Chromium reads back the shortcut entered by keyboard and saved by mouse") {
+        do { try app.waitUntil("the mouse click started recording") { try isRecording(app, owner: owner, field) && focused(app, owner, field) } }
+        catch { _ = try? app.screenshotSiteControls("not-recording"); throw Check(description: "after the click: " + (try locateState(app, owner, field))) }
+        _ = try app.screenshotSiteControls("recording")
+        app.passed("a window-server click on the key cap started recording")
+        try pressChord(app, chord, at: try capPoint())
+        try app.waitUntil("Chromium reads back the chord the key cap recorded") {
             if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
-            return try ExtScenarios.catalogValue(app, fixture.id)?.commands?.contains { $0.name == command && ExtensionShortcuts.chord($0.keybinding) == KeyChord([.command, .shift], .u) } == true
+            return try binding() == chord
         }
-        _ = try app.screenshotSiteControls("shortcut-saved")
+        try app.waitUntil("the key cap shows the chord") { try fieldValue(app, owner, field) == "⇧⌘U" }
+        _ = try app.screenshotSiteControls("recorded")
+        app.passed("the recorded chord is Chromium's binding; the key cap shows ⇧⌘U")
+        // Esc cancels: the binding stays. Delete clears it.
+        _ = try panelClick(app, owner, field)
+        try app.waitUntil("recording again") { try isRecording(app, owner: owner, field) }
+        try pressChord(app, KeyChord([], .escape), at: try capPoint())
+        try app.waitUntil("Esc cancels") { try fieldValue(app, owner, field) == "⇧⌘U" }
+        try expect(try binding() == chord, "Esc changed the binding")
+        _ = try panelClick(app, owner, field)
+        try app.waitUntil("recording again") { try isRecording(app, owner: owner, field) }
+        try pressKey(app, code: 51, at: try capPoint())   // Delete, which the shortcut table does not name
+        try app.waitUntil("Delete clears the binding") { try binding() == nil }
+        // A plain key is refused and the recording goes on, then the chord.
+        _ = try panelClick(app, owner, field)
+        try app.waitUntil("recording again") { try isRecording(app, owner: owner, field) }
+        try pressChord(app, KeyChord([], .u), at: try capPoint())
+        app.sleep(0.3)
+        try expect(try binding() == nil, "a plain key was recorded")
+        try pressChord(app, chord, at: try capPoint())
+        try app.waitUntil("recorded again") { try binding() == chord }
         try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
         try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
         try app.waitForPageInput(PageID(window: owner, item: item), at: app.site.url("site-policy.html"))
@@ -400,9 +494,9 @@ enum PageSiteFixScenarios {
             try SitePolicyScenarios.evaluate(app, item, "document.title='shortcut-ready:'+document.documentElement.getAttribute('data-brk-extension')")
             return try tab(item, in: app.view())?.title == "shortcut-ready:installed"
         }
-        try WindowServerKeys.press(app, KeyChord([.command, .shift], .u), window: owner)
+        try WindowServerKeys.press(app, chord, window: owner)
         try waitForTitle(app, item, "extension-command:fixture-command")
-        app.note("Click, ⌘A, the typed text cmd+shift+u (real key codes through the HID event tap), the click on Save shortcut and ⇧⌘U were all window-server events; the field is Brk's text entry for a shortcut (Chrome's own page records the chord instead).")
+        app.note("The clicks, the recorded chord, Esc, Delete, the refused plain key and ⇧⌘U were all window-server events; the key cap is the Shortcuts pane's recorder.")
     }
 
     // MARK: ATC-routes (A111)

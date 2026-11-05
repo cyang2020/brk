@@ -219,6 +219,8 @@ final class IdentityIntegrationTests: XCTestCase {
     func testGlobalFallbackAndLastRetirementAreDeterministic() throws {
         let d = Driver()
         let (tab, other, _, _) = try pair(d)
+        // Pinned, so the row outlives its last page: a Today tab whose last page closes itself is archived.
+        d.user(.tab(.togglePin(.item(tab))))
         let last = url("https://example.com/last")
         d.page(tab, .committed(last), in: other)
         XCTAssertEqual(d.state.address(of: tab, in: nil, for: .savedDocument), start)

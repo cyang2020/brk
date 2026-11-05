@@ -92,7 +92,7 @@ final class AppProcess {
     /// The last "Fatal error" line the Swift runtime wrote to stderr: "BrkDomain/CommandBar.swift:15: Fatal error: ...".
     var fatalLine: String? {
         guard let text = try? String(contentsOf: log, encoding: .utf8) else { return nil }
-        return text.split(whereSeparator: \.isNewline).last { $0.contains("Fatal error") }.map(String.init)
+        return text.split(whereSeparator: \.isNewline).last { $0.contains("Fatal error") || $0.contains("Teardown watchdog expired") }.map(String.init)
     }
 
     /// "W1: BrkDomain/CommandBar.swift:15", from `fatalLine`.
@@ -224,8 +224,10 @@ final class AppUnderTest {
         try waitUntil("the first window render", timeout: 10) { (try? self.view()) != nil }
     }
 
-    /// `quit` over the socket, then waits up to 10 s for the exit. A process that does not exit is killed and the
-    /// outcome says so. Idempotent: a second call returns the first outcome.
+    /// `quit` over the socket, then waits up to 12 s for the exit: Chromium's own teardown watchdog ends the process 10 s
+    /// after its teardown began, so a stuck teardown reports as that (exit status 2, "Teardown watchdog expired") rather
+    /// than as this wait's kill. Either is a failed quit. A process that does not exit is killed and the outcome says so.
+    /// Idempotent: a second call returns the first outcome.
     @discardableResult
     func quit() throws -> QuitOutcome {
         if let quitOutcome { return quitOutcome }
@@ -235,11 +237,11 @@ final class AppUnderTest {
             let reply = try? client.send(.quit, timeout: 5)
             client.close()
             if reply != .ok { notes.append("quit did not reply ok (\(reply.map { "\($0)" } ?? "no reply"))") }
-            if process.waitForExit(timeout: 10) {
+            if process.waitForExit(timeout: 12) {
                 exit = process.exitDescription
             } else {
                 process.kill()
-                exit = "did not exit within 10 s of quit (killed)"
+                exit = "did not exit within 12 s of quit (killed)"
             }
         } else {
             client.close()

@@ -14,7 +14,8 @@ let Draw = SidebarDrawMetrics()
 struct SidebarDrawMetrics: MetricGroup {
     // Type: one family, the system font (visual-and-copy.md, Fonts: the default UI font is `system`).
     let rowTitleFont = Metric(14.0, .anatomy("cra L115: sidebar rows have 14 pt titles"))
-    let groupTitleFont = Metric(12.0, .guess("tab group header title; Arc's TabGroupHeaderCellView was not captured, drawn as a section label"))
+    let groupTitleLeading = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x100048260: the header's stack starts 18 in from the cell, the rows' selection 8"))
+    let groupTitleFont = Metric(12.0, .guess("tab group header title; Arc reads its font through a key path (bin:0x100d93d68), not resolved to a size"))
     let spaceHeaderFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 P01-a, P20-a: 对照 is 24.5 x 12 and This Window 80 wide, 13 pt semibold (cra L180 had 14 medium)"))
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
@@ -33,9 +34,17 @@ struct SidebarDrawMetrics: MetricGroup {
     /// Tidy on the Today divider (P46-b, 2x): the hairline stops at x 241 px, the broom spans 259 to 273 px (y 790 to
     /// 813), "Tidy" 290 to 327 px, a separator at 344 px, Clear from 366 px.
     let tidyGaps = Metric([9.0, 6.5, 6.5, 9.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
-    /// The auto-archive banner's padding and its × (the banner itself keeps the sidebar's 8 pt inset and 68 pt height).
-    let educationInset = Metric(8.0, .guess("Arc's banner was not captured (P16-a needs a new Arc profile); the rows' 8 pt inset"))
-    let educationClose = Metric(18.0, .guess("a small × in the banner's top right corner"))
+    /// The auto-archive banner, from Arc's `AutoArchiveEducationView` (bin 0x10256c910 to 0x10256e720), as no Arc capture
+    /// of it exists: a card 2 + 8 in from its surroundings, radius 12, with a band, the message and a filled button.
+    let educationMargin = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256c7f0 padding 8 around bin:0x10256cb34 padding 2"))
+    let educationCorner = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256ca88 clipShape radius 12, all four corners"))
+    let educationPadding = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256d190 the band, bin:0x10256d3a8 the message (top and sides), bin:0x10256e5f0 around the button"))
+    let educationTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256cfcc Font.body (13 pt on macOS) weight medium"))
+    let educationMessageFont = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256d280 Font.callout (12 pt on macOS) weight regular"))
+    let educationButtonFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256e090 Font.body (13 pt on macOS) weight light"))
+    let educationButtonPadding = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256e2d4 vertical padding 8 inside the button"))
+    let educationButtonCorner = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256e5b4 clipShape radius 12, all four corners"))
+    let educationIconGap = Metric(6.0, .guess("SwiftUI's Label spacing; Arc uses Label with its title-and-icon style"))
     let tidyGlyph = Metric([7.0, 11.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: the broom is 14 x 23 px"))
     let tidySeparatorHeight = Metric(10.0, .guess("the bar between Tidy and Clear, about the height of the capitals"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
@@ -208,17 +217,27 @@ struct Ink {
 
 extension Palette {
     var ink: Ink { Ink(scheme: scheme, accent: accent) }
+    /// Arc's `focus` palette color, seen as its split focus ring (P23-a, P23-c): light, the theme's hue and saturation at
+    /// relative luminance 0.097; dark, a lighter shade of the hue (the same numbers as `ThemeAccent.splitFocusRing`).
+    var focusColor: NSColor {
+        if scheme == .light { return color(themeShade(accent, luminance: 0.097)) }
+        var hue: CGFloat = 0, saturation: CGFloat = 0, value: CGFloat = 0, alpha: CGFloat = 0
+        NSColor(srgbRed: accent.red, green: accent.green, blue: accent.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
+        return NSColor(hue: hue, saturation: min(0.53, saturation * 9), brightness: 0.8, alpha: 1)
+    }
 }
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).
 enum SidebarCopy {
     /// Arc: "Subtitle shown on tab with hint on how to rename tab." (Q13-h)
     static let renameHint = "Double-click to rename"
-    static let dismissArchiveEducation = "Dismiss"
+    /// Arc's banner title and button, Swift small strings in the code that fills its state (bin:0x1025517b0, 0x102551890).
+    static let archiveEducationTitle = "We cleaned up!"
+    static let archiveEducationDismiss = "Got it"
     static let closeKeepPinned = "Close and Keep Pinned"
-    /// The group header's × (Arc: "Tooltip for the button to close a group of tabs in the sidebar"; the text itself
-    /// is not in the static strings).
-    static let closeTabGroup = "Close Tab Group"
+    /// The group header's × (bin:0x10004866c, a Swift small string; its comment: "Tooltip for the button to close a
+    /// group of tabs in the sidebar").
+    static let closeTabGroup = "Close tab group"
     static let refreshLiveFolder = "Refresh Live Folder"
 
     /// The note in an open Live Folder without rows.

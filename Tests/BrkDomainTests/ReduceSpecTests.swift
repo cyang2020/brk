@@ -593,18 +593,19 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: a)))
     }
 
-    /// A page that closes itself (window.close()) leaves no blank card: a Today tab is archived and the window shows
-    /// the most recent other tab; a Pinned tab keeps its row and loses its page (regression finding 7).
-    func testAPageClosingItselfLeavesNoBlankCard() throws {
+    /// A page that closes itself (window.close()) is Cmd+W on its row, as Arc does (Q12-c): a Today tab leaves for the
+    /// archive and the window shows the most recent other tab; a Pinned tab keeps its row and loses its page.
+    func testAPageClosingItselfIsCmdWOnItsRow() throws {
         let d = Driver()
         let a = d.todayIDs[0]
         let b = d.open("127.0.0.1:9/close.html")
         let t = d.page(b, .closedByPage)
-        XCTAssertEqual(t.effects, [])
-        XCTAssertEqual(d.todayIDs, [b, a])
+        XCTAssertEqual(t.effects, [.sound(.tabsArchived)], "as Cmd+W: the archive's sound")
+        XCTAssertEqual(d.todayIDs, [a], "the row is gone")
         XCTAssertEqual(d.paneIDs, [a])
         XCTAssertEqual(d.snapshot.pages.map(\.id), [PageID(window: d.window, item: a)])
-        XCTAssertTrue(d.archive().isEmpty)
+        XCTAssertEqual(d.archive().count, 1)
+        XCTAssertEqual(d.archive().first?.reason, .manual)
         d.user(.tab(.togglePin(.item(a))))
         d.page(a, .closedByPage)
         XCTAssertEqual(d.pinnedIDs, [a])
@@ -612,6 +613,68 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.snapshot.pages, [])
         XCTAssertEqual(d.view.content.panes, [])
         assertUnchanged(d.state, d.page(a, .closedByPage))
+    }
+
+    private func opened(_ d: Driver, from opener: ItemID, _ path: String) throws -> ItemID {
+        let before = Set(d.todayIDs)
+        let address = url("http://127.0.0.1:9/" + path)
+        d.page(opener, .openRequested(address, .foregroundTab))
+        let child = try XCTUnwrap(d.todayIDs.first { !before.contains($0) })
+        d.page(child, .committed(address))
+        return child
+    }
+
+    /// Q12: a page's window.open tab that closes itself hands the window back to the page that opened it, even when
+    /// another tab was used more recently.
+    func testASelfClosingTabGoesBackToItsOpener() throws {
+        let d = Driver()
+        let first = d.todayIDs[0]
+        let opener = d.open("127.0.0.1:9/opener")
+        let child = try opened(d, from: opener, "child")
+        XCTAssertEqual(d.current?.id, child)
+        d.user(.tab(.focus(first)))
+        d.user(.tab(.focus(child)))
+        d.page(child, .closedByPage)
+        XCTAssertFalse(d.todayIDs.contains(child), "the row is gone")
+        XCTAssertEqual(d.current?.id, opener, "the opener is in front, not the most recent tab")
+        XCTAssertEqual(d.archive().count, 1)
+    }
+
+    /// The opener's child.close() while the opener is in front: the row goes and the opener stays in front.
+    func testAnOpenerClosingItsTabKeepsTheOpenerInFront() throws {
+        let d = Driver()
+        let opener = d.open("127.0.0.1:9/opener")
+        let child = try opened(d, from: opener, "child")
+        d.user(.tab(.focus(opener)))
+        d.page(child, .closedByPage)
+        XCTAssertFalse(d.todayIDs.contains(child))
+        XCTAssertEqual(d.current?.id, opener)
+    }
+
+    /// A tab that closes itself behind another tab changes nothing about what is in front.
+    func testASelfClosingTabInTheBackgroundLeavesTheFrontTab() throws {
+        let d = Driver()
+        let first = d.todayIDs[0]
+        let opener = d.open("127.0.0.1:9/opener")
+        let child = try opened(d, from: opener, "child")
+        d.user(.tab(.focus(first)))
+        d.page(child, .closedByPage)
+        XCTAssertFalse(d.todayIDs.contains(child))
+        XCTAssertEqual(d.current?.id, first)
+    }
+
+    /// The opener is gone: Cmd+W's usual choice, the most recent other tab.
+    func testASelfClosingTabWithoutItsOpenerFollowsTheCloseRule() throws {
+        let d = Driver()
+        let first = d.todayIDs[0]
+        let opener = d.open("127.0.0.1:9/opener")
+        let child = try opened(d, from: opener, "child")
+        d.user(.tab(.close(.item(opener))))
+        d.user(.tab(.focus(first)))
+        d.user(.tab(.focus(child)))
+        d.page(child, .closedByPage)
+        XCTAssertEqual(d.todayIDs, [first])
+        XCTAssertEqual(d.current?.id, first)
     }
 
     /// The engine's close report clears what the page reported (loading, back/forward); the tab keeps its row.
