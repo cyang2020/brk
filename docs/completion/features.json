@@ -1017,7 +1017,7 @@
       "arc_evidence": "`ARC_AppTray`; anatomy-v 3 \"Drag to add Favorites\"",
       "description": "Tiles shared by every space of a profile; drag in, reorder, empty state",
       "historical_status": "done",
-      "status": "verified",
+      "status": "partial",
       "acceptance": "Share Favorites between spaces of one profile; support empty state, dropping in and grid reorder.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1056,7 +1056,8 @@
         }
       ],
       "remaining": [
-        "Domain and geometry tests are not a native drag demonstration; verify same-grid and cross-space pointer drops and profile switching."
+        "Domain and geometry tests are not a native drag demonstration; verify same-grid and cross-space pointer drops and profile switching.",
+        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -1885,7 +1886,7 @@
       "arc_evidence": "anatomy-m 1.4 `SidebarMutation.move`",
       "description": "Reorder rows, drop into folders, onto Favorites, onto a dock space",
       "historical_status": "done",
-      "status": "verified",
+      "status": "partial",
       "acceptance": "Drag to reorder rows, nest items in folders, add or reorder Favorites and move items to a dock space without cycles or lost tabs.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1932,7 +1933,8 @@
       "remaining": [
         "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag.",
         "R4-6 独立复核（2026-11-04）：证据不足。验收标准的四种目标：同区重排、拖进普通文件夹、拖到收藏（加入或重排）、拖到底栏的 Space，都没有真指针拖动的原生证据（拖进的只有标签组）；\"不产生环、不丢标签\"只有单元测试；DragController 本身没有单元测试。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-Drag 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Drag 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。"
       ],
       "implementation": [
         "Sources/BrkSidebar/DragController.swift",
