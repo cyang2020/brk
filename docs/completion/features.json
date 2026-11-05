@@ -7350,7 +7350,7 @@
       "arc_evidence": "anatomy-v 3 \"Drag a tab from your sidebar into the middle of the screen…\"",
       "description": "Dropping a row on the content makes a split",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Dropping a tab onto a content edge previews and creates or extends a split with a defined orientation.",
       "owner": "parent-split-integration",
       "required_checks": [
@@ -7463,6 +7463,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-4-all all",
           "artifact": "verify/completion/review-r4/merge-gates/r5-4/q17-preview-kinds.tsv",
           "scope": "真 Arc 上实测的 44 条拖动路径（Q17 的 A–F），父任务在合并后的 main 上用真实鼠标逐条重做并拍照：预览种类 44 条全部和 Arc 一致。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-4b-releases --only R54-Pinned,R54-PaneHold,R54-PaneDrop,R54-FullSplit,R54-Halves,R54-Frame,R54-Favorite,R54-Paths",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-4b/parent-gate-r5-4b-releases/REPORT.md",
+          "scope": "父任务在自己的工作树（main e3fee5b8）独立重跑 41 条全过（真实鼠标）：置顶标签落在半边后置顶行还在、Today 多一个新标签（R54-Pinned）；第三个标签落在分屏某一栏的描边上换掉那一栏、被换下的标签排到分屏行后面（R54-PaneDrop）；四栏已满时只有描边（R54-FullSplit）。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-4b/swift-test-main.log",
+          "scope": "合并后 main 的完整单元测试 1218 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -7472,7 +7486,8 @@
         "R5-3：标签拖到标签上按鼠标位置选左右；分屏行上通栏带。没在 Arc 上试的：目标是置顶标签或收藏格、第四第五栏、上下分屏、落在分屏行中间。",
         "2026-11-05 父任务在真 Arc 上补试了拖到网页上的松手结果（verify/visual-pairs/run-20261103/Q17/NOTES.md）：Arc 的落位分区和 Brk 不同（Arc 到网页中点之前都分左半，Brk 只有离边 25% 以内）；标签落在整卡描边上后的当前标签不同；收藏落在半边上 Arc 是新开标签、收藏格保留，Brk 把收藏移走。标签拖到标签上的那部分（Q15）已对齐。交 R5-4。",
         "R5-4（2026-11-05，合并 5c5fcd90）：拖到网页上的落位算法从 Arc 二进制读出后重做，三个松手结果对上。还和 Arc 不同或没核到的：网页最左边 22–52 点内 Arc 不算网页、Brk 显示左半；四栏已满时 Arc 只有描边、Brk 没有预览；空位在 Arc 里从窄到宽展开、Brk 立刻出现；置顶标签落在半边、落在分屏某一栏的描边上、上下半边松手，这三种结果没在 Arc 上拍过。",
-        "2026-11-05 下午父任务在真 Arc 上补核（Q17/NOTES.md \"Second probe\"）：置顶标签落在半边上 Arc 是新开 Today 标签、置顶标签不动，Brk 把它移进分屏；已有分屏时落在某一栏的描边上 Arc 换掉那一栏、被换下的标签排到分屏行后面，Brk 只切当前标签。交 R5-4 的后续。"
+        "2026-11-05 下午父任务在真 Arc 上补核（Q17/NOTES.md \"Second probe\"）：置顶标签落在半边上 Arc 是新开 Today 标签、置顶标签不动，Brk 把它移进分屏；已有分屏时落在某一栏的描边上 Arc 换掉那一栏、被换下的标签排到分屏行后面，Brk 只切当前标签。交 R5-4 的后续。",
+        "R5-4b 的松手规则（2026-11-05 傍晚合并 e3fee5b8）：置顶标签落在半边上新开 Today 标签、置顶不动；已有分屏时落在某一栏描边上换掉那一栏。拖动卡片外观的打磨还在那个任务的分支上，没合。"
       ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
