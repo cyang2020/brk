@@ -541,7 +541,6 @@ final class RowView: HoverView {
         identify(.row(row.id))
         button.identify(.rowClose(row.id))
         joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
-        var dimmed = false
         media.isHidden = true
         renameHint.isHidden = true
         renderLive(row, palette: palette)
@@ -559,7 +558,6 @@ final class RowView: HoverView {
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
-            dimmed = !tab.loaded && section != .today && section != .scratch
             configureButton(tab: tab, palette: palette)
             setSegments([], palette: palette)
             peekMarker.isHidden = !tab.peeking
@@ -601,7 +599,6 @@ final class RowView: HoverView {
             peekMarker.isHidden = true
         }
         if case .folder(let folder) = row, folder.group { title.textColor = palette.color(palette.tokens.foreground) } else { title.textColor = palette.ink.text }
-        for view in [icon, title] as [NSView] { view.alphaValue = dimmed ? Draw.unloadedAlpha.value : 1 }
         if renaming, row.kind != .split { showRenameField(palette: palette) } else { retire() }
         stateChanged()
         needsLayout = true
@@ -627,14 +624,18 @@ final class RowView: HoverView {
 
     private func configureButton(tab: TabRow, palette: Palette) {
         // A window's own tabs (blank and incognito windows) archive like Today's.
-        let today = section == .today || section == .scratch
-        hasButton = today || tab.loaded
+        // Arc (Q18-rowbutton-*): the current Pinned row has a minus that closes the page and keeps the row; every
+        // other row, Pinned ones too, loaded or not, has the × that archives it.
+        let keeps = keepsPinned(tab)
+        hasButton = true
         button.isHidden = !hasButton && !dragLifted
-        button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
-        // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
-        button.render(.archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
+        button.toolTip = keeps ? SidebarCopy.closeKeepPinned : Copy.archiveTabTooltip
+        button.render(keeps ? .closeKeepPinned : .archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
     }
+
+    /// The current tab of the Pinned section: its button closes the page and keeps the row.
+    private func keepsPinned(_ tab: TabRow) -> Bool { section != .today && section != .scratch && tab.status == .current }
 
     private func setSegments(_ panes: [TabRow], palette: Palette) {
         while segments.count < panes.count {
@@ -805,7 +806,10 @@ final class RowView: HoverView {
         guard let row else { return }
         if case .folder(let folder) = row, folder.group { dispatch(.tabTools(.closeGroup(folder.id))); return }
         if case .folder(let folder) = row, folder.live != nil { dispatch(.tabTools(.site(.refreshFolder(folder.id)))); return }
-        dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), .close)))
+        // A Pinned row that is not the current tab is archived, like a Today row (Arc, Q18-rowbutton-pinned-x-removed-the-row).
+        var action = BulkTabAction.close
+        if case .tab(let tab) = row, section != .today, section != .scratch, !keepsPinned(tab) { action = .archive }
+        dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), action)))
         onClearMultiselect?()
     }
 
@@ -1078,7 +1082,7 @@ final class TidyButton: HoverView {
         label.textColor = color
         glyph.image = ArcGlyphs.broom(size: Draw.tidyGlyph.value[1])
         glyph.contentTintColor = color
-        for view in [glyph, label] as [NSView] { view.alphaValue = busy ? Draw.unloadedAlpha.value : 1 }
+        for view in [glyph, label] as [NSView] { view.alphaValue = busy ? Draw.busyAlpha.value : 1 }
         (superview as? HoverView)?.stateChanged()
     }
 
@@ -1253,8 +1257,10 @@ final class SpaceHeaderView: HoverView {
         needsLayout = true
     }
 
-    /// Pill, chevron and "…" show while hovered and while Pinned is collapsed (never on a blank window's header).
+    /// The chevron shows, and the name starts after it, while hovered and while Pinned is collapsed; the pill and
+    /// "…" only while hovered (Arc, Q18-collapse-b and -c). Never on a blank window's header.
     private var expanded: Bool { interactive && (isHovered || space?.pinned.collapsed == true) }
+    private var pillShown: Bool { interactive && isHovered }
 
     override func layout() {
         super.layout()
@@ -1267,15 +1273,15 @@ final class SpaceHeaderView: HoverView {
         let hasIcon = space?.icon != SpaceIcon.none
         let start = expanded || hasIcon ? g.titleX : g.selection.minX + Draw.spaceHeaderLeading.value
         let height = label.intrinsicContentSize.height
-        label.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, (expanded ? more.frame.minX : g.selection.maxX) - start), height: height)
+        label.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, (pillShown ? more.frame.minX : g.selection.maxX) - start), height: height)
     }
 
     override func stateChanged() {
         guard let palette else { return }
         let shown = expanded
-        background.layer?.backgroundColor = shown ? palette.color(isPressed ? palette.tokens.tabPressed : palette.tokens.itemBackground).cgColor : nil
+        background.layer?.backgroundColor = pillShown ? palette.color(isPressed ? palette.tokens.tabPressed : palette.tokens.itemBackground).cgColor : nil
         chevron.isHidden = !shown
-        more.isHidden = !shown
+        more.isHidden = !pillShown
         icon.isHidden = shown || space?.icon == SpaceIcon.none
         needsLayout = true
     }

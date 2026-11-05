@@ -131,7 +131,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let inactiveSpaceAlpha = Metric(0.45, .anatomy("cra L115: inactive space icons in the dock are dimmed; amount guessed"))
 
     // States and motion.
-    let unloadedAlpha = Metric(0.5, .guess("Snapshot.swift: unloaded Pinned and Favorites tabs draw dimmer; amount guessed"))
+    let busyAlpha = Metric(0.5, .guess("the Tidy button while a tidy runs; amount guessed"))
     let dragThreshold = Metric(3.0, .guess("pointer travel before a press becomes a drag (AppKit's own threshold)"))
     let dragPreviewAlpha = Metric(0.8, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image reads #E6E6E7 over the #A7ABAD strip and #F5 over the #EF sidebar"))
     let dragPreviewShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: a little darker under the tile than beside it"))

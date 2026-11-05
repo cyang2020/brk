@@ -106,6 +106,27 @@ final class SidebarReviewFixTests: XCTestCase {
         XCTAssertTrue(d.paneIDs.isEmpty)
     }
 
+    // Arc 1.170, 2026-11-05 (Q18-rowbutton-pinned-x-removed-the-row, -reopen-brought-it-back): the x of a Pinned row
+    // that is not current archives it, and Restore Last Closed Tab puts it back between its old neighbours, current.
+    func testAnArchivedPinnedTabComesBackToItsPlace() throws {
+        let d = Driver()
+        var ids: [ItemID] = []
+        for name in ["a", "b", "c"] {
+            ids.append(d.open("https://example.com/" + name))
+            d.user(.tab(.togglePin(.focused)))
+        }
+        let shown = d.open("https://example.com/today")
+        XCTAssertEqual(d.pinnedIDs, ids)
+        d.user(.tabTools(.bulk(.items([ids[1]]), .archive)))
+        XCTAssertEqual(d.pinnedIDs, [ids[0], ids[2]], "the row stayed in Pinned")
+        XCTAssertEqual(d.current?.id, shown)
+        d.user(.archive(.restoreLast))
+        XCTAssertEqual(d.pinnedIDs.count, 3)
+        XCTAssertEqual(d.pinnedIDs.first, ids[0])
+        XCTAssertEqual(d.pinnedIDs.last, ids[2], "the restored tab went to the end of Pinned")
+        XCTAssertEqual(d.current?.id, d.pinnedIDs[1], "the restored tab is not the current one")
+    }
+
     // MARK: Mail previews (A031)
 
     func testMailboxTitlesGiveTheUnreadCountAndMessageTitlesTheSubject() {

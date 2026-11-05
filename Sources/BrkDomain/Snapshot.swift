@@ -226,7 +226,7 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var icon: CustomIcon?
     public var status: RowStatus
     public var loading: Bool
-    /// Has a live page. Unloaded Pinned and Favorites tabs draw dimmer.
+    /// Has a live page. A closed Pinned or Favorites tab looks the same as a loaded one (Arc, Q18-unloaded-*).
     public var loaded: Bool
     /// Pinned or Favorites tab whose URL drifted from the one it was pinned with.
     public var sourceStatus: String? = nil

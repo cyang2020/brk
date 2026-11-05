@@ -111,8 +111,11 @@ extension Work {
                 let tab = snapshots[tabID] ?? original
                 unload(tabID)
                 guard !incognito, tab.url != nil else { continue }
+                // A Pinned tab archived on its own goes back to where it was (Arc, Q18-rowbutton-reopen-brought-it-back);
+                // a Today tab goes back to the top.
+                let placed = role.kind == .pinned && tabID == id && removed.count == 1
                 batch.append(ArchivedTab(id: ArchiveID(ctx.newID()), tabID: tabID, tab: tab, archivedAt: ctx.now, reason: reason,
-                                         fromSpace: role.space, fromSection: role.kind))
+                                         fromSpace: role.space, fromSection: role.kind, fromParent: placed ? parent : nil, fromIndex: placed ? index : nil))
             }
         }
         if !batch.isEmpty { state.doc.archive.insert(contentsOf: batch, at: 0) }
