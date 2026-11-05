@@ -108,12 +108,18 @@ extension Work {
                 guard moveItem(pane, to: .after(split)) else { return }
             }
             restoreSplitSelections(previous, split: split)
-        case .dropTab(let offer, let edge):
-            let source = offer.source, target = offer.target
-            guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[source] == offer,
+        case .dropTab(let offer, let edge, let index):
+            let target = offer.target
+            guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[offer.source] == offer,
                   let scope = state.locate(target) else { return }
-            if state.role(of: source)?.kind == .favorites { guard moveItem(source, to: .after(target)) else { return } }
-            group(source, with: target, edge: edge, in: scope, window: window)
+            var source = offer.source
+            if state.role(of: source)?.kind == .favorites {
+                // The Favorite stays in the grid: the split gets a new Today tab at its address (Arc, Q17-drop-favorite-right-half).
+                guard let url = state.address(of: source, in: nil, for: .savedDocument), let space = state.doc.windows[window]?.space,
+                      let opened = openTab(url, inSpace: space, window: window, focus: false) else { return }
+                source = opened
+            }
+            group(source, with: target, edge: edge, at: index, in: scope, window: window)
         case .joinRow(let source, let target, let index):
             let units = state.units(in: window)
             guard state.doc.windows[window]?.kind != .little, units.contains(source), units.contains(target),

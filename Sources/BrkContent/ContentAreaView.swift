@@ -24,6 +24,14 @@ public final class ContentAreaView: NSView {
     private var dragSource: ItemID?
     private var dragOffer: SplitDropOffer? { dragSource.flatMap { drop?.offers[$0] } }
     private var dragPosition: CGPoint?
+    /// What Arc's rule has decided so far for this drag (`PageDropRule`); the view only draws it.
+    private var pageDrop: PageDropRule.State?
+    private var drawnPreview: PageDropPreview = .none
+    private var dropTimer: Timer?
+    private var shownTabs: [ItemID] = []
+    private var shownOrientation: SplitOrientation = .horizontal
+    /// The rule's clock. Tests set it.
+    var dropClock: () -> Double = { ProcessInfo.processInfo.systemUptime }
     /// The shown panes' shares and where their cards and shadows rest, so a drop preview can make room and give it back.
     private var fractions: [Double] = [1]
     private var resting: [(card: CGRect, shadow: CGRect)] = []
@@ -66,6 +74,8 @@ public final class ContentAreaView: NSView {
         drop = content.drop
         dropArea = frames.contentArea
         fractions = content.presentedPanes.map(\.fraction)
+        shownTabs = content.presentedPanes.map(\.tab)
+        shownOrientation = content.orientation
         resting = []
         accent = ThemeAccent.splitFocusRing(theme)
         while cards.count < frames.cards.count {
@@ -146,8 +156,7 @@ public final class ContentAreaView: NSView {
         dropPreview.layer?.borderWidth = Metrics.content.highlightBorder.value
         dropPreview.layer?.cornerCurve = .continuous
         addSubview(dropPreview, positioned: .above, relativeTo: cards.last)
-        if let offer = dragOffer, let point = dragPosition { _ = dropCommand(offer.source, at: point) }
-        else { clearDrop() }
+        if dragPosition != nil, dropInput() != nil { drawDrop(animated: false) } else { clearDrop() }
     }
 
     // MARK: Pointer in the window (the pane headers' ×)
@@ -172,48 +181,105 @@ public final class ContentAreaView: NSView {
         for card in cards { card.pointerInWindow(inside) }
     }
 
+    /// The pointer is at `point` while `source` is dragged. Returns what a release gives now.
     func dropCommand(_ source: ItemID, at point: CGPoint) -> Command? {
-        guard isDropEnabled, let offer = dragOffer, offer.source == source, dropArea.contains(point) else {
+        let now = dropClock()
+        guard source == dragSource, let input = dropInput(), dropArea.contains(point) else {
+            pageDrop?.leave(at: now)
             clearDrop()
             return nil
         }
         dragPosition = point
-        guard let edge = SplitToolsLayout.edge(at: point, in: dropArea) else {
-            // The middle of the page rings the whole of it, in the focus color at full strength (Q13-e). A release here does
-            // nothing: Arc's result for it has not been seen.
-            for ((card, shadow), rest) in zip(zip(cards, shadows), resting) {
-                card.release(to: rest.card)
-                shadow.frame = rest.shadow
+        var state = pageDrop ?? PageDropRule.State(paneCount: shownTabs.count, orientation: shownOrientation)
+        state.sync(paneCount: shownTabs.count, orientation: shownOrientation)
+        state.move(to: point, at: now, input)
+        pageDrop = state
+        drawDrop(animated: true)
+        scheduleDropRead(input)
+        return pageDrop.flatMap { PageDropRule.releaseCommand($0, source: source, offer: dragOffer, paneCount: shownTabs.count) }
+    }
+
+    /// The rule's two questions to the window, nil when the window takes no drop at all (an overlay, Find, a full split). A
+    /// tab already shown gets the same slots as any other (Arc, Q17 C), and a release on them leaves it where it is.
+    private func dropInput() -> PageDropRule.Input? {
+        guard isDropEnabled, drop != nil, let dragSource, dragOffer != nil || shownTabs.contains(dragSource) else { return nil }
+        return PageDropRule.Input(area: dropArea, fractions: fractions, replaceable: shownTabs.map { $0 != dragSource }, insertable: true)
+    }
+
+    /// The throttle's newest position is read when its interval ends, whether or not the pointer moves again.
+    private func scheduleDropRead(_ input: PageDropRule.Input) {
+        dropTimer?.invalidate()
+        dropTimer = nil
+        guard let state = pageDrop, state.hasPending, let due = state.nextRead else { return }
+        let timer = Timer(timeInterval: max(due - dropClock(), 0.001), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.readPendingDrop() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dropTimer = timer
+    }
+
+    private func readPendingDrop() {
+        guard var state = pageDrop, let input = dropInput() else { return }
+        state.advance(to: dropClock(), input)
+        pageDrop = state
+        drawDrop(animated: true)
+        scheduleDropRead(input)
+    }
+
+    /// Draws the rule's state. Only a change of preview animates: a render while the preview stands must not replay it.
+    private func drawDrop(animated: Bool) {
+        guard let state = pageDrop, let input = dropInput() else { return clearDrop() }
+        let preview = PageDropRule.preview(state)
+        let layout = PageDropRule.layout(state, input)
+        let draw = { [self] in
+            switch preview {
+            case .none, .frame:
+                for ((card, shadow), rest) in zip(zip(cards, shadows), resting) { card.release(to: rest.card); shadow.frame = rest.shadow }
+            case .slot:
+                // The shown panes make room; their pages keep their size and are clipped rather than re-laid out.
+                for ((card, shadow), rect) in zip(zip(cards, shadows), layout.panes) { card.hold(at: rect); shadow.frame = rect }
             }
-            dropPreview.frame = dropArea
+        }
+        if animated, preview != drawnPreview {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = PageDropRule.collapse
+                context.allowsImplicitAnimation = true
+                draw()
+            }
+        } else {
+            draw()
+        }
+        drawnPreview = preview
+        switch preview {
+        case .none:
+            dropPreview.isHidden = true
+        case .frame(let pane):
+            // Around the whole pane, in the focus color at full strength (Q13-e).
+            dropPreview.frame = layout.panes.indices.contains(pane) ? layout.panes[pane] : dropArea
             dropPreview.layer?.borderColor = accent.cgColor
             dropPreview.layer?.borderWidth = SplitDropDraw.middleBorder.value
             dropPreview.isHidden = false
-            return nil
+        case .slot:
+            dropPreview.frame = layout.slot ?? dropArea
+            dropPreview.layer?.borderColor = accent.withAlphaComponent(SplitDropDraw.slotBorderAlpha.value).cgColor
+            dropPreview.layer?.borderWidth = Metrics.content.highlightBorder.value
+            dropPreview.isHidden = false
         }
-        dropPreview.layer?.borderColor = accent.withAlphaComponent(SplitDropDraw.slotBorderAlpha.value).cgColor
-        dropPreview.layer?.borderWidth = Metrics.content.highlightBorder.value
-        let layout = SplitToolsLayout.dropLayout(edge, in: dropArea, fractions: fractions)
-        dropPreview.frame = layout.slot
-        dropPreview.isHidden = false
-        // The shown panes make room; their pages keep their size and are clipped rather than re-laid out.
-        for ((card, shadow), rect) in zip(zip(cards, shadows), layout.panes) {
-            card.hold(at: rect)
-            shadow.frame = rect
-        }
-        return .split(.dropTab(offer, edge: edge))
     }
 
     func clearDrop() {
+        dropTimer?.invalidate()
+        dropTimer = nil
         dropPreview.isHidden = true
         dragPosition = nil
+        drawnPreview = .none
         for ((card, shadow), rest) in zip(zip(cards, shadows), resting) {
             card.release(to: rest.card)
             shadow.frame = rest.shadow
         }
     }
-    func beginDrop(_ source: ItemID) { clearDrop(); dragSource = source }
-    func endDrop() { clearDrop(); dragSource = nil }
+    func beginDrop(_ source: ItemID) { clearDrop(); pageDrop = nil; dragSource = source }
+    func endDrop() { clearDrop(); pageDrop = nil; dragSource = nil }
 }
 
 /// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the

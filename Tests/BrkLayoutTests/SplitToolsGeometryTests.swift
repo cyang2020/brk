@@ -21,16 +21,6 @@ final class SplitToolsGeometryTests: XCTestCase {
         }
     }
 
-    func testEdgesHaveFeedbackAndTheCenterAndOutsideCancel() {
-        let area = CGRect(x: 240, y: 10, width: 800, height: 600)
-        for (point, expected) in [(CGPoint(x: 250, y: 310), SplitEdge.left), (CGPoint(x: 1030, y: 310), .right),
-                                  (CGPoint(x: 640, y: 20), .top), (CGPoint(x: 640, y: 600), .bottom)] {
-            XCTAssertEqual(SplitToolsLayout.edge(at: point, in: area), expected)
-            XCTAssertTrue(area.contains(SplitToolsLayout.preview(expected, in: area)))
-        }
-        XCTAssertNil(SplitToolsLayout.edge(at: CGPoint(x: 640, y: 310), in: area))
-        XCTAssertNil(SplitToolsLayout.edge(at: CGPoint(x: 100, y: 310), in: area))
-    }
     /// Arc's P23-d: a tab held at the right edge of the 1042 x 756 content area halves it on the 10 pt gap: the page
     /// keeps 228...744 and the slot is 754...1270. An existing split gains the slot at the end with the mean share.
     func testDropLayoutMakesRoomForTheNewPaneOnTheSplitGap() {
