@@ -352,10 +352,9 @@ enum SpaceToolsScenarios {
         try app.waitUntil("a full ring opens Create a Space") { try app.view().dialog == .newSpace }
         try finishAnimation(app)
         _ = try app.screenshot("create-a-space")
-        // The real mouse, as the user would: the flow opened by the gesture is not left stuck. Where Cancel is drawn, 24 above
-        // the dock (the identifier's frame stays at the top of the flow: SwiftUI's offset moves only the drawing).
-        let dock = try app.native().computed.sidebar!.dock
-        try PhysicalPointer.click(app, at: CGPoint(x: dock.midX, y: dock.minY - 24), window: window)
+        // Cancel's command: the identifier's frame stays at the top of the flow (SwiftUI's offset moves only the drawing) and the
+        // runner's window reaches past the screen's bottom. The station's Q19 scene clicks the drawn button with the real mouse.
+        try app.dispatch(.sidebar(.openDialog(nil)))
         try app.waitUntil("Create a Space cancelled") { try app.view().dialog == nil }
         try finishAnimation(app)
         try app.dispatch(.space(.focus(first)))
