@@ -20,6 +20,33 @@ final class SpaceToolsTests: XCTestCase {
         XCTAssertEqual(d.view.pendingSpaceDeletion?.id, space)
     }
 
+    /// The Spaces either side of the current one come with the snapshot: the sidebar draws their pages while the column moves.
+    func testTheSnapshotCarriesTheNeighbouringSpacesPages() throws {
+        let d = Driver()
+        let first = d.view.space.id
+        let tab = d.open("a.example")
+        let second = d.newSpace("Second", color: RGBA(hex: "#336699"))
+        let inSecond = d.open("b.example")
+        let third = d.newSpace("Third", color: RGBA(hex: "#993366"))
+        XCTAssertEqual(d.view.neighbors.previous?.space.id, second)
+        XCTAssertNil(d.view.neighbors.next, "the last Space has nothing after it")
+        d.user(.space(.focus(second)))
+        let around = d.view.neighbors
+        XCTAssertEqual(around.previous?.space.id, first)
+        XCTAssertEqual(around.next?.space.id, third)
+        d.user(.space(.focus(first)))
+        XCTAssertNil(d.view.neighbors.previous)
+        let page = try XCTUnwrap(d.view.neighbors.next)
+        XCTAssertEqual(page.space.title, "Second")
+        XCTAssertEqual(page.theme, resolveTheme(try XCTUnwrap(d.state.doc.spaces[second]).theme, systemScheme: .light))
+        XCTAssertEqual(page.favorites.root, d.view.favorites.root, "one profile, one set of Favorites")
+        let row = try XCTUnwrap(page.space.today.rows.first { $0.id == inSecond })
+        if case .tab(let shown) = row { XCTAssertEqual(shown.status, .current, "the tab that Space would show looks current on its page") } else { XCTFail("not a tab") }
+        // What the current Space shows is untouched by working out its neighbours' rows.
+        let here = try XCTUnwrap(d.view.space.today.rows.first { $0.id == tab })
+        if case .tab(let shown) = here { XCTAssertEqual(shown.status, .current) } else { XCTFail("not a tab") }
+    }
+
     func testClosingNativeOwnerRetiresSpaceToolsRequestsEvenForLastSavedWindow() throws {
         let d = Driver()
         let second = d.newSpace("Owner close")

@@ -38,6 +38,9 @@ final class ThemeRenderer {
     private var from = 0
     /// What the last frame drew (index of the pair, premultiplied wash), nil before the first frame.
     private var last: (output: Int, wash: SIMD4<Float>)?
+    /// Two themes mixed at a progress the caller holds (a Space swipe's position), instead of a timed crossfade.
+    /// `baseDrawn`: the "from" side of the pair holds `base`.
+    private var scrubbing: (base: ResolvedTheme, progress: Double, baseDrawn: Bool)?
 
     /// Called with the kind of a tile that finished generating in the background.
     var onTileReady: ((Texture) -> Void)? {
@@ -85,6 +88,7 @@ final class ThemeRenderer {
 
     /// Fades from what the last frame showed to `theme` over `duration`; 0 (or no frame drawn yet) switches at once.
     func transition(to theme: ResolvedTheme, duration: Double, at now: CFTimeInterval) {
+        scrubbing = nil
         self.theme = theme
         start = now
         if let last, duration > 0 {
@@ -96,8 +100,18 @@ final class ThemeRenderer {
         }
     }
 
+    var isScrubbing: Bool { scrubbing != nil }
+
+    /// Mixes `base` and `theme` at `progress` from the next frame on (linear, as Arc's colors follow the page position).
+    func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
+        let drawn = scrubbing.map { $0.base == base && $0.baseDrawn } ?? false
+        scrubbing = (base, min(max(progress, 0), 1), drawn)
+        self.theme = theme
+    }
+
     /// Progress of the running transition at `time`, 0...1, eased in and out; 1 when none is running.
     func progress(at time: CFTimeInterval) -> Double {
+        if let scrubbing { return scrubbing.progress }
         guard duration > 0 else { return 1 }
         let t = min(max((time - start) / duration, 0), 1)
         return t * t * (3 - 2 * t)
@@ -109,9 +123,35 @@ final class ThemeRenderer {
     func encode(into texture: any MTLTexture, scale: Int, at time: CFTimeInterval, commandBuffer: any MTLCommandBuffer) -> Bool {
         guard let theme else { return false }
         let targets = targets(width: texture.width, height: texture.height, scale: scale)
+        if let scrub = scrubbing, !scrub.baseDrawn {
+            // The base goes into the pair's "from" side, whole; the frames after it mix over it.
+            layers(of: scrub.base, into: from, over: 1 - from, progress: 1, scale: scale, targets: targets, commandBuffer: commandBuffer)
+            fromWash = Self.wash(scrub.base)
+            scrubbing?.baseDrawn = true
+        }
         let p = Float(progress(at: time))
         let output = 1 - from
+        layers(of: theme, into: output, over: from, progress: p, scale: scale, targets: targets, commandBuffer: commandBuffer)
 
+        // 3. Composite and wash.
+        let to = Self.wash(theme)
+        let wash = p >= 1 ? to : fromWash + (to - fromWash) * p
+        pass(commandBuffer, into: texture, renderPipeline, uniforms: [wash.x, wash.y, wash.z, wash.w],
+             textures: [targets.gradients[output], targets.overlays[output]])
+
+        last = (output, wash)
+        if scrubbing != nil { return false }
+        if p >= 1 { duration = 0 }
+        return p < 1
+    }
+
+    private static func wash(_ theme: ResolvedTheme) -> SIMD4<Float> {
+        SIMD4<Float>(Float(theme.wash.red * theme.wash.alpha), Float(theme.wash.green * theme.wash.alpha),
+                     Float(theme.wash.blue * theme.wash.alpha), Float(theme.wash.alpha))
+    }
+
+    /// The gradient and overlay of `theme` into one side of the texture pairs, mixed over the other side.
+    private func layers(of theme: ResolvedTheme, into output: Int, over from: Int, progress p: Float, scale: Int, targets: Targets, commandBuffer: any MTLCommandBuffer) {
         // 1. Gradient.
         let stops = (theme.gradient + Array(repeating: theme.gradient.last ?? RGBA(0, 0, 0), count: 3)).prefix(3)
         var gradient: [Float] = []
@@ -131,17 +171,6 @@ final class ThemeRenderer {
                                 Float(theme.textureContrast), tile?.mean ?? 1, p, 0, 0]
         pass(commandBuffer, into: targets.overlays[output], overlayPipeline, uniforms: overlay,
              textures: [tile?.texture ?? blank, targets.overlays[from]])
-
-        // 3. Composite and wash.
-        let to = SIMD4<Float>(Float(theme.wash.red * theme.wash.alpha), Float(theme.wash.green * theme.wash.alpha),
-                              Float(theme.wash.blue * theme.wash.alpha), Float(theme.wash.alpha))
-        let wash = p >= 1 ? to : fromWash + (to - fromWash) * p
-        pass(commandBuffer, into: texture, renderPipeline, uniforms: [wash.x, wash.y, wash.z, wash.w],
-             textures: [targets.gradients[output], targets.overlays[output]])
-
-        last = (output, wash)
-        if p >= 1 { duration = 0 }
-        return p < 1
     }
 
     /// Draws one frame into the layer's next drawable and presents it with the current Core Animation transaction
@@ -188,6 +217,7 @@ final class ThemeRenderer {
         targets = made
         duration = 0
         last = nil
+        scrubbing?.baseDrawn = false
         return made
     }
 

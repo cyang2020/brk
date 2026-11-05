@@ -53,6 +53,35 @@ public final class SidebarView: NSView {
     private var swipeHeld: [NSEvent] = []
     private var swallowMomentum = false
     private var canSwipe = false
+    private var wheel = PageSwipeWheel()
+    /// Where the column stands in the row of pages (`SpacePager`). The header and the rows sit in `strip`, which moves;
+    /// `pagesClip` cuts it at the sidebar's edges, and the Favorites sit in it too, moving only at the edge of their group.
+    private let pager = SpacePager()
+    private let pagesClip = PagesContainerView()
+    private let strip = PagesContainerView()
+    private lazy var previousPage = SpaceSidePageView(frame: .zero)
+    private lazy var nextPage = SpaceSidePageView(frame: .zero)
+    private let edgeFeedback = SpaceEdgeFeedbackView(frame: .zero)
+    /// The ring is full, since when: lifting 0.1 s after that opens Create a Space.
+    private var edgeArmedAt: CFTimeInterval?
+    /// The page left by a Space switch, until the move ends; `jumpFrom` says on which side it stands when it is not the
+    /// new Space's neighbour in the dock.
+    private var outgoing: SpacePage?
+    private var jumpFrom: SpacePager.Page?
+    /// A swipe holds the Library: it opened it on its way there or began with it open, and may still come back. The Library
+    /// closes when the column settles on a Space.
+    private var swipeHoldsLibrary = false
+    private var closingLibrary = false
+    /// The window's background follows the position: two themes and how far between them; nil when the move is over.
+    public var onThemeBlend: ((ResolvedTheme, ResolvedTheme, Double) -> Void)?
+    public var onThemeBlendEnded: (() -> Void)?
+    /// How far the Library has come in while the column moves toward it, 0...1 (Arc: `LayoutState.transitioning`); nil at rest.
+    public var onLibraryProgress: ((Double?) -> Void)?
+    private var libraryProgress: Double?
+    private var themeBlending = false
+    /// The column moves, so the root's crossfade and the Library's own layout wait.
+    public var isPaging: Bool { pager.isActive }
+    public var isPagingLibrary: Bool { libraryProgress != nil }
     /// The pointer is over the column: Arc then shows the pill's accessories and Today's Clear.
     private var hoverTracking: NSTrackingArea?
     private var pointerInside = false {
@@ -107,7 +136,21 @@ public final class SidebarView: NSView {
         revealStrip = RevealStripView(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [backdrop, header, urlPill, favorites, spaceHeader, tablist, dock, miniPlayers] as [NSView] { addSubview(view) }
+        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, edgeFeedback] as [NSView] { addSubview(view) }
+        pagesClip.clipsToBounds = true
+        pagesClip.addSubview(strip)
+        pagesClip.addSubview(favorites)
+        strip.addSubview(spaceHeader)
+        strip.addSubview(tablist)
+        pager.host = self
+        pager.onMove = { [weak self] in self?.pagerMoved() }
+        pager.onSelect = { [weak self] page in self?.pagerSelected(page) }
+        pager.onLift = { [weak self] in self?.pagerLifted() }
+        pager.onDetent = { [weak self] in
+            guard self?.last?.sidebar.hapticsEnabled == true else { return }
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
+        pager.onSettled = { [weak self] in self?.pagerSettled() }
         miniPlayers.onHoverChange = { [weak self] _ in self?.renderAfterDrag() }
         dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
         drag.sidebar = self
@@ -171,8 +214,14 @@ public final class SidebarView: NSView {
     }
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
+        defer {
+            if pager.isActive { renderSidePages() }
+            applyPagePosition()
+        }
+        let before = lastRender?.snapshot
         lastRender = (snapshot, frames, palette)
-        canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
+        syncPager(snapshot, frames: frames, before: before)
+        canSwipe = snapshot.kind == .standard && (snapshot.overlay == nil || libraryOpen(snapshot)) && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
         // A blank or incognito window: no favorites, no space dots, "This Window" or "Incognito Tabs" over its own tabs.
         let thisWindow = SidebarLayout.listsOwnTabs(snapshot.kind)
@@ -204,7 +253,10 @@ public final class SidebarView: NSView {
         if let hover = miniPlayers.hover { f = MiniPlayerLayout.applying(snapshot.miniPlayers.map(\.tab), hover: hover, to: f) }
         isHidden = false
         identify(frames.sidebarFloats ? .floatingSidebar : .sidebar)
-        place(f.frame, slideIn: previous != nil && previous?.frames == nil)
+        place(f.frame, slideIn: previous != nil && previous?.frames == nil && !pager.isActive)
+        pagesClip.frame = bounds
+        strip.frame.size = bounds.size
+        edgeFeedback.frame = bounds
         backdrop.isHidden = !frames.sidebarFloats
         if frames.sidebarFloats { backdrop.render(snapshot.theme, palette: palette) }
         backdrop.frame = bounds
@@ -223,7 +275,7 @@ public final class SidebarView: NSView {
         Slide.place(spaceHeader, at: local(f.spaceHeader), sliding: sliding)
         spaceHeader.render(space, palette: palette, interactive: !thisWindow)
         Slide.place(tablist, at: local(f.tablistViewport), sliding: sliding)
-        tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
+        tablist.render(space, renaming: snapshot.renaming, frames: f, palette: palette, tools: snapshot.tabTools,
                        newTabCurrent: newTabCurrent, now: snapshot.now)
         miniPlayers.frame = bounds
         miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
@@ -244,26 +296,27 @@ public final class SidebarView: NSView {
     public func handleScrollWheel(_ event: NSEvent) -> Bool {
         // The native window's callback already scopes this invocation. CG-backed in-process events have no window.
         let ownsEvent = event.window == nil || event.window === window
-        guard ownsEvent, canSwipe, !isHiddenOrHasHiddenAncestor, window?.isVisible == true, window?.attachedSheet == nil else {
+        let library = lastRender.map { libraryOpen($0.snapshot) } ?? false
+        guard ownsEvent, canSwipe, library || !isHiddenOrHasHiddenAncestor, window?.isVisible == true, window?.attachedSheet == nil else {
             resetSwipe(); return false
         }
         if !event.momentumPhase.isEmpty {
-            let over = event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled)
-            // A short quick swipe: the inertia after the fingers lift says it was a flick.
-            if let step = swipe.inertia(horizontal: event.scrollingDeltaX, ended: over) { switchSpace(by: step) }
+            // Arc ignores inertia after a swipe: the release decided (bin:0x100a1a2b0 with a settling page).
             let consumed = swallowMomentum
-            if over { swallowMomentum = false }
+            if event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) { swallowMomentum = false }
             return consumed
         }
+        // With the Library open the gesture is the column's anywhere in the window (bin:0x100215694).
+        let starts = library || bounds.contains(convert(event.locationInWindow, from: nil))
+        if event.phase.isEmpty || !event.hasPreciseScrollingDeltas { return handleWheel(event, starts: starts) }
         let phase: SpaceSwipe.Phase
         if event.phase.contains(.began) { phase = .began; swallowMomentum = false; swipeHeld = [] }
         else if event.phase.contains(.cancelled) { phase = .cancelled }
         else if event.phase.contains(.ended) { phase = .ended }
         else if event.phase.contains(.changed) { phase = .changed }
         else { return false }
-        let point = convert(event.locationInWindow, from: nil)
         let verdict = swipe.update(horizontal: event.scrollingDeltaX, vertical: event.scrollingDeltaY, phase: phase,
-                                   startsInSidebar: bounds.contains(point), precise: event.hasPreciseScrollingDeltas)
+                                   startsInSidebar: starts, precise: event.hasPreciseScrollingDeltas)
         switch verdict {
         case .pass:
             return false
@@ -271,42 +324,226 @@ public final class SidebarView: NSView {
             swipeHeld.append(event)
             return true
         case .handOver:
-            // The list gets the events held so far now, and this one and the rest by the normal path.
+            // What is under the pointer gets the events held so far now, and this one and the rest by the normal path.
             let held = swipeHeld
             swipeHeld = []
-            if let first = held.first, tablist.frame.contains(convert(first.locationInWindow, from: nil)) {
-                for event in held { tablist.scrollWheel(with: event) }
+            if let first = held.first, let scroller = window?.contentView?.hitTest(window?.contentView?.superview?.convert(first.locationInWindow, from: nil) ?? first.locationInWindow)?.enclosingScrollView {
+                for event in held { scroller.scrollWheel(with: event) }
             }
             return false
-        case .swipe:
+        case .begin(let travel):
             swipeHeld = []
-            let offset = min(max(swipe.translation, -bounds.width * 0.65), bounds.width * 0.65)
-            tablist.layer?.transform = CATransform3DMakeTranslation(offset, 0, 0)
-            tablist.alphaValue = 1 - min(abs(offset) / max(bounds.width, 1), 0.65)
+            renderSidePages()
+            swipeHoldsLibrary = library
+            pager.beginTracking(at: event.timestamp)
+            if travel != 0 { pager.track(delta: travel, at: event.timestamp) }
+            if phase == .ended {
+                swipe = SpaceSwipe()
+                swallowMomentum = true
+                pager.endTracking(at: event.timestamp)
+            }
             return true
-        case .finish(let step):
+        case .move(let delta):
+            pager.track(delta: delta, at: event.timestamp)
+            return true
+        case .end:
+            swallowMomentum = true
+            pager.endTracking(at: event.timestamp)
+            return true
+        case .cancel:
             swipeHeld = []
             swallowMomentum = true
-            tablist.layer?.transform = CATransform3DIdentity
-            tablist.alphaValue = 1
-            if let step { switchSpace(by: step) }
+            pager.cancelTracking()
             return true
         }
     }
 
-    /// The next or previous Space of the dock, when there is one on that side.
-    private func switchSpace(by step: Int) {
-        let order = last?.dock ?? []
-        guard let current = order.firstIndex(where: \.active), order.indices.contains(current + step) else { return }
-        if last?.sidebar.hapticsEnabled == true { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
-        dispatch(.space(.step(step > 0 ? .next : .previous)))
+    /// A wheel's sideways travel steps one page (Arc: `nonGesturalScrollState`). Its vertical travel stays the list's.
+    private func handleWheel(_ event: NSEvent, starts: Bool) -> Bool {
+        guard starts, event.scrollingDeltaX != 0, !pager.isTracking else { return false }
+        if let step = wheel.update(horizontal: event.scrollingDeltaX, inverted: event.isDirectionInvertedFromDevice, at: CACurrentMediaTime()) {
+            renderSidePages()
+            pager.step(by: step)
+        }
+        return true
     }
 
     private func resetSwipe() {
         swipe = SpaceSwipe()
         swipeHeld = []
-        tablist.layer?.transform = CATransform3DIdentity
-        tablist.alphaValue = 1
+        pager.cancelTracking()
+    }
+
+    private func libraryOpen(_ snapshot: WindowSnapshot) -> Bool {
+        if case .library? = snapshot.overlay { true } else { false }
+    }
+
+    // MARK: The pages
+
+    /// The row of pages from the snapshot, and the selected page when something other than the fingers changed it.
+    private func syncPager(_ snapshot: WindowSnapshot, frames: WindowFrames, before: WindowSnapshot?) {
+        guard snapshot.kind == .standard else { return }
+        let width = snapshot.sidebar.width
+        var libraryWidth = LibraryLayout.panelWidth(windowWidth: frames.contentSize.width, sidebarWidth: width)
+        if case .library(let library)? = snapshot.overlay {
+            libraryWidth = LibraryLayout.panelWidth(windowWidth: frames.contentSize.width, sidebarWidth: width, page: library.page, spaces: library.spaces.count)
+        }
+        let spaces = snapshot.dock.map { SpacePager.Page.space($0.id) }
+        pager.update(pages: [.library] + spaces, widths: [libraryWidth] + spaces.map { _ in width })
+        let open = libraryOpen(snapshot)
+        if !open { closingLibrary = false }
+        let current = SpacePager.Page.space(snapshot.space.id)
+        guard let selected = pager.selectedPage else { return }
+        // A swipe holds the Library open while it decides, whichever page it is on.
+        let shown: SpacePager.Page
+        if !open || closingLibrary { shown = current }
+        else if swipeHoldsLibrary { shown = selected == .library ? .library : current }
+        else { shown = .library }
+        if let before, before.space.id != snapshot.space.id {
+            outgoing = SpacePage(space: before.space, favorites: before.favorites, theme: before.theme)
+        }
+        guard shown != selected else { return }
+        if shown == .library || selected == .library { return pager.select(shown, animated: false) }
+        let adjacent = abs((pager.pages.firstIndex(of: shown) ?? 0) - pager.selected) <= 1
+        jumpFrom = adjacent ? nil : selected
+        pager.select(shown, animated: before != nil)
+    }
+
+    /// The neighbouring page on one side of the current Space, and which page it stands for.
+    private func sidePage(previous: Bool, snapshot: WindowSnapshot) -> SpacePage? {
+        if let outgoing, case .space(let from)? = jumpFrom, let here = pager.pages.firstIndex(of: .space(snapshot.space.id)),
+           let there = pager.pages.firstIndex(of: .space(from)), (there < here) == previous {
+            return outgoing
+        }
+        return previous ? snapshot.neighbors.previous : snapshot.neighbors.next
+    }
+
+    /// Draws the neighbouring pages, for as long as the column moves.
+    private func renderSidePages() {
+        guard let lastRender, let f = lastRender.frames.sidebar ?? last?.frames else { return }
+        let snapshot = lastRender.snapshot
+        for (view, previous) in [(previousPage, true), (nextPage, false)] {
+            guard let page = sidePage(previous: previous, snapshot: snapshot) else {
+                view.removeFromSuperview()
+                continue
+            }
+            if view.superview !== strip { strip.addSubview(view, positioned: .below, relativeTo: nil) }
+            let width = f.frame.width
+            view.frame = CGRect(x: previous ? -width : width, y: 0, width: width, height: f.frame.height)
+            view.render(page, sharesFavorites: page.favorites.root == snapshot.favorites.root, column: f.frame, snapshot: snapshot, now: snapshot.now)
+        }
+    }
+
+    private func pagerMoved() {
+        applyPagePosition()
+        // Toward the Library: it opens as soon as the column leaves the first Space, and closes again if the swipe comes back.
+        if pager.isTracking, (libraryProgress ?? 0) > 0, let lastRender, !libraryOpen(lastRender.snapshot) {
+            swipeHoldsLibrary = true
+            dispatch(.library(.open(nil)))
+        }
+    }
+
+    private func pagerSelected(_ page: SpacePager.Page) {
+        guard let lastRender else { return }
+        switch page {
+        case .library:
+            swipeHoldsLibrary = true
+            if !libraryOpen(lastRender.snapshot) { dispatch(.library(.open(nil))) }
+        case .space(let id):
+            // Out of the Library the Space changes when the column stands on it (`pagerSettled`).
+            if !libraryOpen(lastRender.snapshot) { dispatch(.space(.focus(id))) }
+        }
+    }
+
+    /// The fingers lifted: a full ring past the last Space opens Create a Space (bin:0x10021ca38).
+    private func pagerLifted() {
+        if let armed = edgeArmedAt, CACurrentMediaTime() - armed > Metrics.pageSwipe.edgeHold.value {
+            dispatch(.sidebar(.openDialog(.newSpace)))
+        }
+        edgeArmedAt = nil
+    }
+
+    private func pagerSettled() {
+        jumpFrom = nil
+        outgoing = nil
+        let held = swipeHoldsLibrary
+        swipeHoldsLibrary = false
+        guard let lastRender else { return }
+        if held, libraryOpen(lastRender.snapshot), case .space(let id)? = pager.selectedPage {
+            closingLibrary = true
+            dispatch(.library(.close))
+            if id != lastRender.snapshot.space.id { dispatch(.space(.focus(id))) }
+        }
+    }
+
+    /// Puts everything that follows the position where it belongs; at rest, back in its place.
+    private func applyPagePosition() {
+        guard let lastRender, lastRender.snapshot.kind == .standard, let here = pager.pages.firstIndex(of: .space(lastRender.snapshot.space.id)),
+              pager.origins.count > 1 else { return }
+        guard pager.isActive else { return restPages() }
+        let snapshot = lastRender.snapshot, origins = pager.origins, position = pager.position
+        let firstSpace = origins[1]
+        // Toward the Library the pages stand still: the whole column goes (`onLibraryProgress`).
+        let along = max(position, firstSpace)
+        strip.setFrameOrigin(CGPoint(x: origins[here] - along, y: 0))
+        if previousPage.superview == nil, nextPage.superview == nil { renderSidePages() }
+        // The Favorites stand still over the pages of their profile, and move past the edge of that group (bin:0x10010b144).
+        let sharesPrevious = here > 1 && snapshot.neighbors.previous?.favorites.root == snapshot.favorites.root
+        let sharesNext = snapshot.neighbors.next?.favorites.root == snapshot.favorites.root
+        let low = origins[sharesPrevious ? here - 1 : here], high = origins[sharesNext ? here + 1 : here]
+        let tray = last?.frames.map { $0.favoritesTray.offsetBy(dx: -$0.frame.minX, dy: -$0.frame.minY) } ?? favorites.frame
+        favorites.setFrameOrigin(CGPoint(x: tray.minX - (along - min(max(along, low), high)), y: tray.minY))
+        // The colors between the two pages, the dots in the dock likewise (bin:0x10021dcf4).
+        if let pair = PageSwipeRule.pair(at: along, origins: origins) {
+            let theme = { (index: Int) -> ResolvedTheme in
+                if index == here - 1, let page = self.sidePage(previous: true, snapshot: snapshot) { return page.theme }
+                if index == here + 1, let page = self.sidePage(previous: false, snapshot: snapshot) { return page.theme }
+                return snapshot.theme
+            }
+            themeBlending = true
+            onThemeBlend?(theme(pair.floor), theme(pair.ceil), pair.progress)
+            var factors: [SpaceID: Double] = [:]
+            if case .space(let id) = pager.pages[pair.floor] { factors[id] = 1 - pair.progress }
+            if case .space(let id) = pager.pages[pair.ceil], pair.ceil != pair.floor { factors[id] = pair.progress }
+            dock.showSelection(factors)
+        }
+        // Past the last Space.
+        let pressed = position - (origins.last ?? 0)
+        if here == origins.count - 1, pressed > 0, let palette = last?.palette {
+            let feedback = PageSwipeRule.edgeFeedback(pressed: pressed)
+            edgeFeedback.render(fade: feedback.fade, progress: feedback.progress, palette: palette)
+            if pager.isTracking {
+                let full = feedback.progress >= 1
+                if full != (edgeArmedAt != nil), last?.sidebar.hapticsEnabled == true {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                }
+                edgeArmedAt = full ? (edgeArmedAt ?? CACurrentMediaTime()) : nil
+            }
+        } else {
+            edgeFeedback.isHidden = true
+        }
+        setLibraryProgress(position < firstSpace || libraryOpen(snapshot) ? min(max((firstSpace - position) / firstSpace, 0), 1) : nil)
+    }
+
+    private func restPages() {
+        strip.setFrameOrigin(.zero)
+        previousPage.removeFromSuperview()
+        nextPage.removeFromSuperview()
+        edgeFeedback.isHidden = true
+        edgeArmedAt = nil
+        if let tray = last?.frames.map({ $0.favoritesTray.offsetBy(dx: -$0.frame.minX, dy: -$0.frame.minY) }) { favorites.setFrameOrigin(tray.origin) }
+        dock.showSelection(nil)
+        if themeBlending {
+            themeBlending = false
+            onThemeBlendEnded?()
+        }
+        setLibraryProgress(nil)
+    }
+
+    private func setLibraryProgress(_ progress: Double?) {
+        guard progress != libraryProgress else { return }
+        libraryProgress = progress
+        onLibraryProgress?(progress)
     }
 
     /// A drag's grid layout: the column takes it at once.

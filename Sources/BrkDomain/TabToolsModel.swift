@@ -218,6 +218,7 @@ public struct RecentTabRow: Equatable, Sendable, Codable {
     public var favicon: URL? = nil
 }
 public struct TabToolsSnapshot: Equatable, Sendable, Codable {
+    public init() {}
     public var pendingSiteRequest: String? = nil
     public var selected: [ItemID] = []
     public var reveal: ItemID?

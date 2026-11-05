@@ -37,6 +37,7 @@ public final class WindowRootView: NSView {
     private let captureOverlay: CaptureOverlayView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
+    private var libraryProgress: Double?
     private var sidebarFloats = false
     /// The Create a Space draft while the flow is open: its theme on the window and its icon in the dock (Arc shows
     /// both before the space exists, P24 flow).
@@ -87,6 +88,12 @@ public final class WindowRootView: NSView {
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
         // Both span the window from its top left, so the Library's coordinates are the dialog host's.
         spaceDialog.cardHeader = { [weak library] space in library?.spaceCardHeader(space) }
+        sidebar.onThemeBlend = { [weak background] from, to, progress in background?.scrub(from: from, to: to, progress: progress) }
+        sidebar.onThemeBlendEnded = { [weak self] in
+            guard let self, let theme = self.lastTheme else { return }
+            self.background.show(theme, animated: false)
+        }
+        sidebar.onLibraryProgress = { [weak self] progress in self?.libraryMoved(progress) }
         spaceDialog.onDraft = { [weak self] draft in
             guard let self else { return }
             self.draft = draft
@@ -142,6 +149,7 @@ public final class WindowRootView: NSView {
             else { addSubview(sidebar, positioned: .above, relativeTo: inactiveVeil) }
         }
         renderChrome(snapshot, frames: frames)
+        defer { placeForLibrary() }
         let palette = Palette(snapshot.theme)
         content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil && snapshot.pendingEaselDeletion == nil
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
@@ -206,13 +214,60 @@ public final class WindowRootView: NSView {
             shown.dock = snapshot.dock.map { var item = $0; item.active = false; return item } + [cell]
             shownFrames = WindowLayout.compute(shown, contentSize: frames.contentSize)
         }
+        // While the column moves toward or away from the Library it stays drawn, as it stands with the Library closed.
+        if sidebar.isPagingLibrary, case .library? = shown.overlay {
+            var closed = shown
+            closed.overlay = nil
+            shownFrames = WindowLayout.compute(closed, contentSize: frames.contentSize)
+        }
         background.frame = bounds
-        background.show(shown.theme, animated: lastTheme != nil && lastTheme != shown.theme)
+        let themeChanged = lastTheme != nil && lastTheme != shown.theme
         inactiveVeil.frame = bounds
         inactiveVeil.scheme = shown.theme.scheme
         inactiveVeil.darkWebsites = shown.websiteAppearance == .dark
         lastTheme = shown.theme
         sidebar.render(shown, frames: shownFrames, palette: Palette(shown.theme))   // hidden, it keeps its reveal strip and slide-in
+        // A Space change moves the column, and the colors follow its position; another theme change crossfades.
+        if !sidebar.isPaging { background.show(shown.theme, animated: themeChanged) }
+    }
+
+    /// The Library's position changed (`SidebarView.onLibraryProgress`): nil at rest.
+    private func libraryMoved(_ progress: Double?) {
+        let changed = (progress == nil) != (libraryProgress == nil)
+        libraryProgress = progress
+        // The column appears or goes as the move starts or ends.
+        if changed, let last { renderChrome(last.snapshot, frames: last.frames) }
+        placeForLibrary()
+    }
+
+    /// Between a Space and the Library (Arc: `WindowLayoutController` with `LayoutState.transitioning`, Q19-library): the Library
+    /// panel comes in one to one with the position, the cards run from the sidebar's edge to the panel's, and the column
+    /// shrinks a little, moves right and fades.
+    private func placeForLibrary() {
+        guard let last else { return }
+        let moving: [NSView] = [content, history, easel, toolbar, loadingBar, findBar]
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let progress = libraryProgress, case .library? = last.snapshot.overlay, let panel = last.frames.library?.frame else {
+            for view in moving { view.layer?.transform = CATransform3DIdentity }
+            library.layer?.transform = CATransform3DIdentity
+            sidebar.layer?.transform = CATransform3DIdentity
+            sidebar.alphaValue = 1
+            return
+        }
+        var closed = last.snapshot
+        closed.overlay = nil
+        let closedFrames = WindowLayout.compute(closed, contentSize: last.frames.contentSize)
+        let shift = (last.frames.contentArea.minX - closedFrames.contentArea.minX) * (1 - progress)
+        for view in moving { view.layer?.transform = CATransform3DMakeTranslation(-shift, 0, 0) }
+        library.layer?.transform = CATransform3DMakeTranslation(-panel.width * (1 - progress), 0, 0)
+        let m = Metrics.pageSwipe
+        let scale = 1 - m.librarySidebarScale.value * progress
+        var column = CATransform3DMakeTranslation(sidebar.bounds.width / 2 + m.librarySidebarSlide.value * progress, sidebar.bounds.height / 2, 0)
+        column = CATransform3DScale(column, scale, scale, 1)
+        sidebar.layer?.transform = CATransform3DTranslate(column, -sidebar.bounds.width / 2, -sidebar.bounds.height / 2, 0)
+        sidebar.alphaValue = max(0, 1 - m.librarySidebarFade.value * progress)
     }
 
     private static let draftSpace = SpaceID("brk-create-a-space-draft")
