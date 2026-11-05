@@ -210,23 +210,158 @@ final class SplitToolsTests: XCTestCase {
         XCTAssertTrue(d.view.enabledActions.contains(.addSplitView), "a full split answers the shortcut with Cannot Add New Pane")
     }
 
-    /// Arc's P23-d: a tab in a pinned folder dragged beside the current Today tab is offered the drop, and the
-    /// release makes the split where the Today tab was; the tab leaves Pinned (and its folder) for it.
-    func testPinnedFolderTabJoinsATodaySplitWhereTheTargetIs() throws {
+    /// Arc, Q17-drop-pinned-right-half and -then-separated: a pinned tab released on a slot stays pinned; the split, where
+    /// the Today tab was, holds a new Today tab at its address, on the right and focused; apart, it is a row of Today.
+    func testAPinnedTabDroppedOnASlotOpensANewTabAndStaysPinned() throws {
         let d = Driver()
         let original = d.paneIDs[0], source = d.open("https://fixture.example/pinned")
+        d.commitRequested()
+        d.user(.item(.move(source, to: .into(parent: d.view.space.pinned.root, index: 0))))
+        d.user(.tab(.focus(original)))
+        let offered = try XCTUnwrap(d.view.content.drop?.offers[source], "a pinned tab was not offered the content drop")
+        let rows = d.view.space.today.rows.count
+        d.user(.split(.dropTab(offered, edge: .right)))
+        XCTAssertEqual(d.view.space.pinned.rows.map(\.id), [source], "the pinned tab moved")
+        XCTAssertEqual(d.paneIDs.first, original)
+        let new = try XCTUnwrap(d.paneIDs.last)
+        XCTAssertNotEqual(new, source)
+        XCTAssertEqual(d.view.content.panes.last?.focused, true)
+        let split = try XCTUnwrap(d.view.content.split)
+        d.commitRequested()
+        guard case .split(let row)? = d.view.space.today.rows.first(where: { $0.id == split }) else { return XCTFail("the split is not in Today") }
+        XCTAssertEqual(row.panes.last?.url, url("https://fixture.example/pinned"))
+        XCTAssertEqual(d.view.space.today.rows.count, rows, "the split takes the place of the row it joined")
+        d.user(.split(.separateAll))
+        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == new }, "the new tab is not in Today")
+        XCTAssertEqual(d.view.space.pinned.rows.map(\.id), [source])
+    }
+
+    /// A tab in a pinned folder follows the same rule (P23-d shows the hold; the release has not been seen on Arc).
+    func testAPinnedFolderTabDroppedOnASlotStaysInItsFolder() throws {
+        let d = Driver()
+        let original = d.paneIDs[0], source = d.open("https://fixture.example/pinned")
+        d.commitRequested()
         d.user(.item(.newFolder))
         let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
         d.user(.item(.move(source, to: .into(parent: folder, index: 0))))
         d.user(.tab(.focus(original)))
-        let offered = try XCTUnwrap(d.view.content.drop?.offers[source], "a pinned tab was not offered the content drop")
-        d.user(.split(.dropTab(offered, edge: .right)))
-        XCTAssertEqual(d.paneIDs, [original, source])
-        let split = try XCTUnwrap(d.view.content.split)
-        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == split })
+        d.user(.split(.dropTab(try XCTUnwrap(d.view.content.drop?.offers[source]), edge: .left)))
+        XCTAssertEqual(d.paneIDs.count, 2)
+        XCTAssertEqual(d.paneIDs.last, original)
+        XCTAssertNotEqual(d.paneIDs.first, source)
         guard case .folder(let pinnedFolder)? = d.view.space.pinned.rows.first(where: { $0.id == folder }) else { return XCTFail("folder lost") }
-        XCTAssertTrue(pinnedFolder.children.isEmpty)
-        XCTAssertEqual(d.state.address(of: source, in: d.window, for: .savedDocument), url("https://fixture.example/pinned"))
+        XCTAssertEqual(pinnedFolder.children.map(\.id), [source])
+    }
+
+    // MARK: A drop on a framed pane (Arc, Q17 second probe)
+
+    /// A split [first, second, ...] of `count` panes in Today and the shown one, with an extra Today tab `source` above it.
+    private func splitAndSource(_ d: Driver, count: Int = 2) throws -> (split: ItemID, panes: [ItemID], source: ItemID) {
+        let source = d.paneIDs[0]
+        let first = d.open("https://fixture.example/first")
+        d.commitRequested()
+        for n in 2...count {
+            d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/\(n)"))); d.commitRequested()
+        }
+        XCTAssertEqual(d.paneIDs.first, first)
+        return (try XCTUnwrap(d.view.content.split), d.paneIDs, source)
+    }
+
+    func testADropOnAFramedPaneReplacesItAndTheOldTabFollowsTheSplit() throws {
+        for pane in 0...2 {
+            let d = Driver()
+            let (split, panes, source) = try splitAndSource(d, count: 3)
+            d.user(.split(.setOrientation(split, .vertical)))
+            d.user(.split(.resize(split, fractions: [panes[0]: 0.2, panes[1]: 0.3, panes[2]: 0.5])))
+            let shares = d.view.content.panes.map(\.fraction)
+            let observations = d.snapshot.observations
+            d.user(.split(.replacePane(try XCTUnwrap(d.view.content.drop?.offers[source]), pane: pane)))
+            var expected = panes
+            expected[pane] = source
+            XCTAssertEqual(d.paneIDs, expected, "pane \(pane)")
+            XCTAssertEqual(d.view.content.split, split, "the split changed")
+            XCTAssertEqual(d.view.content.orientation, .vertical)
+            XCTAssertEqual(d.view.content.panes.map(\.fraction), shares, "the shares changed")
+            XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, source)
+            let rows = d.view.space.today.rows.map(\.id)
+            let at = try XCTUnwrap(rows.firstIndex(of: split))
+            XCTAssertEqual(rows[at + 1], panes[pane], "the old tab is not right after the split")
+            XCTAssertFalse(rows.contains(source))
+            for (page, observation) in observations where page.item == panes[pane] {
+                XCTAssertEqual(d.snapshot.observations[page], observation, "the old tab's page changed")
+            }
+        }
+    }
+
+    /// Arc's own case: two panes, the tab dragged from above the split, the right pane replaced: the split must not dissolve.
+    func testADropOnAPaneOfTwoKeepsTheSplitAndItsPlace() throws {
+        let d = Driver()
+        let (split, panes, source) = try splitAndSource(d)
+        let before = d.view.space.today.rows.map(\.id)
+        d.user(.split(.replacePane(try XCTUnwrap(d.view.content.drop?.offers[source]), pane: 1)))
+        XCTAssertEqual(d.paneIDs, [panes[0], source])
+        XCTAssertEqual(d.view.content.split, split)
+        XCTAssertEqual(d.view.space.today.rows.map(\.id), before.filter { $0 != source }.flatMap { $0 == split ? [split, panes[1]] : [$0] })
+        d.user(.split(.separateAll))
+        XCTAssertEqual(d.view.space.today.rows.map(\.id).filter { [panes[0], source, panes[1]].contains($0) }, [panes[0], source, panes[1]])
+    }
+
+    func testAFavoriteOrPinnedTabDroppedOnAPaneOpensANewTabAndStaysWhereItIs() throws {
+        for favorite in [true, false] {
+            let d = Driver()
+            let (_, panes, source) = try splitAndSource(d)
+            let root = favorite ? d.view.favorites.root : d.view.space.pinned.root
+            d.user(.item(.move(source, to: .into(parent: root, index: 0))))
+            d.user(.split(.replacePane(try XCTUnwrap(d.view.content.drop?.offers[source]), pane: 1)))
+            XCTAssertEqual(favorite ? d.view.favorites.tiles.map(\.id) : d.view.space.pinned.rows.map(\.id), [source], "it moved")
+            XCTAssertEqual(d.paneIDs.first, panes[0])
+            let new = try XCTUnwrap(d.paneIDs.last)
+            XCTAssertNotEqual(new, source)
+            XCTAssertNotEqual(new, panes[1])
+            XCTAssertEqual(d.view.content.panes.last?.focused, true)
+            XCTAssertTrue(d.view.space.today.rows.contains { $0.id == panes[1] })
+        }
+    }
+
+    /// A pinned split keeps its section: the old tab stays pinned, right after it, and the Today tab that took its place is pinned now.
+    func testADropOnAPaneOfAPinnedSplitKeepsTheOldTabPinned() throws {
+        let d = Driver()
+        let (split, panes, source) = try splitAndSource(d)
+        d.user(.tab(.togglePin(.focused)))
+        XCTAssertEqual(d.view.space.pinned.rows.map(\.id), [split])
+        d.user(.split(.replacePane(try XCTUnwrap(d.view.content.drop?.offers[source]), pane: 0)))
+        XCTAssertEqual(d.paneIDs, [source, panes[1]])
+        XCTAssertEqual(d.view.space.pinned.rows.map(\.id), [split, panes[0]])
+        XCTAssertNotNil(d.state.tab(source)?.pinnedURL, "the new pinned pane has no pinned address")
+    }
+
+    /// Arc only frames a full split: no slot, but a pane can be replaced and the count stays four.
+    func testAFullSplitTakesNoSlotButAPaneCanBeReplaced() throws {
+        let d = Driver()
+        let (split, panes, source) = try splitAndSource(d, count: 4)
+        let offered = try XCTUnwrap(d.view.content.drop?.offers[source], "a full split offered nothing")
+        let before = d.state
+        assertUnchanged(before, d.user(.split(.dropTab(offered, edge: .right))))
+        d.user(.split(.replacePane(offered, pane: 2)))
+        XCTAssertEqual(d.paneIDs, [panes[0], panes[1], source, panes[3]])
+        XCTAssertEqual(d.view.content.split, split)
+        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == panes[2] })
+    }
+
+    func testADropOnAPaneRefusesStaleOffersAndBadIndexes() throws {
+        let d = Driver()
+        let (_, panes, source) = try splitAndSource(d)
+        let offered = try XCTUnwrap(d.view.content.drop?.offers[source])
+        let before = d.state
+        assertUnchanged(before, d.user(.split(.replacePane(offered, pane: 2))))
+        assertUnchanged(before, d.user(.split(.replacePane(offered, pane: -1))))
+        // Another page shown: the offer no longer names what the window shows.
+        d.user(.tab(.focus(source)))
+        let later = d.state
+        assertUnchanged(later, d.user(.split(.replacePane(offered, pane: 0))))
+        XCTAssertEqual(d.paneIDs, [source])
+        d.user(.tab(.focus(panes[0])))
+        XCTAssertEqual(d.paneIDs, panes)
     }
 
     /// Arc's P23-e/f: a Today tab dropped on the middle of another Today tab's row makes one split where the target

@@ -231,7 +231,7 @@ extension Work {
         case .openInSplit(let targets):
             let ids = state.requestedItems(targets, in: window).filter { tree[$0]?.kind == .tab }
             guard let first = ids.first, w.kind != .little else { return }
-            // A Favorite stays a Favorite here: it opens beside itself through a new pane. Only a drag moves one out.
+            // A Favorite opens beside itself through a new pane. `.dropTab` keeps a pinned tab pinned, as a drag does (Q17).
             if state.role(of: first)?.kind != .favorites, let offer = state.splitDrop(in: window)?.offers[first] {
                 splits(.dropTab(offer, edge: .right), in: window)
             } else {

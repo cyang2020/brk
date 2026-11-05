@@ -170,8 +170,10 @@ enum SplitToolsScenarios {
         row = try visible(app.native(), .row(fifth)).frame
         area = try app.native().computed.contentArea
         try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: CGPoint(x: area.minX + 12, y: area.midY))
+        // A full split takes no slot: the left zone falls back to framing the pane, and the release replaces it (Arc, Q17).
         try expect(try app.view().content.panes.count == 4, "drag exceeded four panes")
-        try expect(!isShown(try app.native(), .splitDropPreview), "cap rejection left feedback")
+        try expect(try app.view().content.panes[0].tab == fifth, "a release on a full split's frame did not take the pane")
+        try expect(!isShown(try app.native(), .splitDropPreview), "drag feedback left behind")
         try app.recordWindows("four-dropped-panes")
     }
 

@@ -148,6 +148,9 @@ struct SplitPanes: Sendable, Equatable {
     /// Nil when the result would have fewer than two panes (the caller dissolves the split).
     func removing(_ id: ItemID) -> SplitPanes? { SplitPanes(ids.filter { $0 != id }) }
 
+    /// `id` in `old`'s place. Nil when `id` is already a pane.
+    func replacing(_ old: ItemID, with id: ItemID) -> SplitPanes? { SplitPanes(ids.map { $0 == old ? id : $0 }) }
+
     /// Nil when already at the cap or `id` is already a pane.
     func inserting(_ id: ItemID, at index: Int) -> SplitPanes? {
         var copy = ids
@@ -418,6 +421,26 @@ struct SidebarTree: Sendable, Equatable {
         items[tab]!.parent = result
         stampPinnedURLs(under: tab)
         return result
+    }
+
+    /// `tab` takes `old`'s place among the panes of `old`'s split, with its share; the split's orientation and its other
+    /// panes stay. `old` becomes the row right after the split, in the split's section (Arc, Q17-split-drop-on-framed-pane).
+    mutating func replacePane(_ old: ItemID, with tab: ItemID) throws(TreeError) {
+        guard tab != old, let source = items[tab], source.kind == .tab, let oldParent = source.parent, items[oldParent]?.kind != .split,
+              let splitID = items[old]?.parent, case .split(var split)? = items[splitID]?.body, let parent = items[splitID]?.parent,
+              let sourceRole = role(of: tab), let splitRole = role(of: splitID), sourceRole.joinsSplit(in: splitRole),
+              let panes = split.panes.replacing(old, with: tab) else { throw .forbiddenPlacement }
+        try checkPlacement(.tab, under: parent)
+        detach(tab, from: oldParent)
+        let width = split.widths[old]
+        split.panes = panes
+        split.widths[old] = nil
+        split.widths[tab] = width
+        items[splitID]!.body = .split(split)
+        items[tab]!.parent = splitID
+        items[old]!.parent = parent
+        attach(old, to: parent, at: items[parent]!.children.firstIndex(of: splitID)! + 1)
+        stampPinnedURLs(under: tab)
     }
 
     // MARK: Payload writes (kind-preserving; cannot reach children or panes)
