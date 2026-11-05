@@ -165,6 +165,24 @@ final class PageDropRuleTests: XCTestCase {
         XCTAssertEqual(layout.slot, CGRect(x: 754, y: 10, width: 516, height: 756))
     }
 
+    /// A left slot, and a stacked split's bottom slot with the mean share: the gap comes out of the pane above (P23-c).
+    func testTheOtherSlots() throws {
+        var left = PageDropRule.State(paneCount: 1, orientation: .horizontal)
+        left.move(to: p(300, 330), at: 10, input(replaceable: true))
+        let layout = PageDropRule.layout(left, input(replaceable: true))
+        XCTAssertEqual(layout.slot, CGRect(x: 228, y: 10, width: 516, height: 756))
+        XCTAssertEqual(layout.panes, [CGRect(x: 754, y: 10, width: 516, height: 756)])
+        let stacked = PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true)
+        var bottom = PageDropRule.State(paneCount: 2, orientation: .vertical)
+        bottom.move(to: p(700, 760), at: 10, stacked)
+        XCTAssertEqual(PageDropRule.preview(bottom), .slot(before: 2, orientation: .vertical))
+        let cards = PageDropRule.layout(bottom, stacked)
+        XCTAssertEqual(cards.panes.count, 2)
+        XCTAssertEqual(cards.slot?.maxY, area.maxY)
+        XCTAssertEqual(cards.slot?.width, area.width)
+        XCTAssertEqual(try XCTUnwrap(cards.slot).height, cards.panes[0].height + Metrics.content.splitGap.value, accuracy: 1)
+    }
+
     func testASlotInsideASplitAsksForItsIndex() {
         let input = PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true)
         var state = PageDropRule.State(paneCount: 2, orientation: .horizontal)

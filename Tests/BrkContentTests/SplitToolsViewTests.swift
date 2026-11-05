@@ -81,11 +81,11 @@ final class SplitDropPreviewTests: XCTestCase {
         content.beginDrop(m.source)
         let area = frames.contentArea
         XCTAssertNotNil(content.dropCommand(m.source, at: CGPoint(x: area.maxX - 12, y: area.midY)))
-        let layout = SplitToolsLayout.dropLayout(.right, in: area)
-        XCTAssertEqual(card.frame, layout.panes[0])
+        let half = (area.width - Metrics.content.splitGap.value) / 2
+        XCTAssertEqual(card.frame, CGRect(x: area.minX, y: area.minY, width: half, height: area.height))
         XCTAssertEqual(page.frame, pageFrame, "the page was resized for the preview")
         let slot = try XCTUnwrap(content.subviews.first { $0.accessibilityIdentifier() == ViewID.splitDropPreview.identifier })
-        XCTAssertEqual(slot.frame, layout.slot)
+        XCTAssertEqual(slot.frame, CGRect(x: area.maxX - half, y: area.minY, width: half, height: area.height))
         // Over the narrowed page it falls back to the whole page; the middle of that page rings the whole of it (Q13-e),
         // and a release there makes the dragged tab the shown one (Q17-drop-tab-framed-middle).
         clock += 1
