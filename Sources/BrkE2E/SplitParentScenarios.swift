@@ -38,13 +38,15 @@ enum SplitParentScenarios {
         try app.dispatch(.tab(.focus(first.item)))
         try app.waitForPageInput(first, at: app.site.url("find.html"))
         try app.press("cmd+f"); try FindScenarios.typeQuery(app, "needle"); try FindScenarios.matches(app, 3)
-        let area = try app.native().computed.contentArea
+        // A press on another row opens it (Arc, Q13-press-row), and that ends Find, so no drag reaches the page behind Find's
+        // controls with Find still open; a drop offered before Find opened is refused in SplitToolsTests.
         let row = try visible(app.native(), .row(source)).frame
-        let edge = CGPoint(x: area.maxX - 12, y: area.midY)
-        try pointer(app, .down, CGPoint(x: row.midX, y: row.midY)); try pointer(app, .dragged, edge)
-        try expect(!isShown(try app.native(), .splitDropPreview), "Find admitted a content drop behind its controls")
-        try pointer(app, .up, edge)
-        try expect(try app.view().content.panes.count == 1 && app.view().find?.page == first, "Rejected drop changed Find's target")
+        try pointer(app, .down, CGPoint(x: row.midX, y: row.midY))
+        try app.waitUntil("the press opened the row and ended Find") { try app.view().content.panes.first?.tab == source && app.view().find == nil }
+        try pointer(app, .up, CGPoint(x: row.midX, y: row.midY))
+        try app.dispatch(.tab(.focus(first.item)))
+        try app.waitForPageInput(first, at: app.site.url("find.html"))
+        try app.press("cmd+f"); try FindScenarios.typeQuery(app, "needle"); try FindScenarios.matches(app, 3)
         try app.click(.findClose)
         for number in 2...4 {
             try app.dispatch(.split(.addPane))
