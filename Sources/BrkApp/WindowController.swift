@@ -401,9 +401,25 @@ extension HostWindow {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
         guard let origin, let container = buttons.first?.superview else {
             buttons.forEach { $0.isHidden = true }
-            RestingTrafficLights.find(in: buttons.first?.superview)?.isHidden = true
+            let resting = RestingTrafficLights.find(in: buttons.first?.superview)
+            resting?.isHidden = true
+            resting?.origin = nil
             return
         }
+        let resting = RestingTrafficLights.find(in: container) ?? {
+            let made = RestingTrafficLights(buttons: buttons)
+            container.addSubview(made, positioned: .below, relativeTo: buttons.first)
+            // AppKit lays the titlebar out again on its own (a window resize, a change of key status) and puts the
+            // buttons back at the system's spots; nothing of Brk's is laid out then, so the buttons say so themselves.
+            made.movedByAppKit = { [weak self, weak made] in
+                guard let self, let made, let origin = made.origin else { return }
+                self.placeArcTrafficLights(origin: origin)
+            }
+            return made
+        }()
+        resting.origin = origin
+        resting.placing = true
+        defer { resting.placing = false }
         let pitch = Metrics.window.trafficLightSize.value + Metrics.window.trafficLightSpacing.value
         for (i, button) in buttons.enumerated() {
             button.isHidden = false
@@ -413,11 +429,6 @@ extension HostWindow {
             let y = container.bounds.height - origin.y - size.height
             button.setFrameOrigin(CGPoint(x: x, y: y))
         }
-        let resting = RestingTrafficLights.find(in: container) ?? {
-            let made = RestingTrafficLights(buttons: buttons)
-            container.addSubview(made, positioned: .below, relativeTo: buttons.first)
-            return made
-        }()
         resting.isHidden = false
         resting.frame = buttons.map(\.frame).reduce(buttons[0].frame) { $0.union($1) }
         resting.needsDisplay = true
@@ -433,11 +444,29 @@ final class RestingTrafficLights: NSView {
     private let buttons: [NSButton]
     private var tracking: NSTrackingArea?
 
+    /// Where Brk last put the lights (the window's top-left content space), nil while they are hidden.
+    var origin: CGPoint?
+    /// True while Brk itself moves the buttons, so its own moves are not taken for AppKit's.
+    var placing = false
+    /// A button's frame changed and Brk did not change it: put the lights back.
+    var movedByAppKit: (() -> Void)?
+
     init(buttons: [NSButton]) {
         self.buttons = buttons
         super.init(frame: .zero)
         identifier = Self.id
-        buttons.forEach { $0.alphaValue = Self.restingAlpha }
+        for button in buttons {
+            button.alphaValue = Self.restingAlpha
+            button.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(buttonFrameChanged(_:)), name: NSView.frameDidChangeNotification, object: button)
+        }
+    }
+
+    /// The user's report (verify/visual-pairs/run-20261103/Q16): after a window resize the colored buttons came up at
+    /// the system's spots, 4 pt left of and 7.5 pt above the grey circles, and the circles' own spots took no click.
+    @objc private func buttonFrameChanged(_ note: Notification) {
+        guard !placing, origin != nil, !isHidden, (note.object as? NSView)?.superview === superview else { return }
+        movedByAppKit?()
     }
 
     /// The standard buttons at rest: effectively invisible under the grey circles. Not 0: AppKit treats a fully
