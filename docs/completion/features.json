@@ -5612,7 +5612,7 @@
       "arc_evidence": "`space_swiping.mp4`; `SidebarPagingContainerViewController`",
       "description": "Two-finger swipe pages the sidebar from space to space",
       "historical_status": "not started",
-      "status": "verified",
+      "status": "partial",
       "acceptance": "Two-finger horizontal swipes page the sidebar between spaces with appropriate gesture ownership and cancellation.",
       "owner": "parent-ledger-reconciliation",
       "required_checks": [
@@ -5679,7 +5679,8 @@
         }
       ],
       "remaining": [
-        "Input is real in-process phased NSEvents. A physical trackpad and physical haptic pulse are not claimed."
+        "Input is real in-process phased NSEvents. A physical trackpad and physical haptic pulse are not claimed.",
+        "用户报告 Q19（2026-11-05 晚）：横滑 Space 很卡、总是识别不到。原因（Q19/NOTES.md）：手势的第一个事件没有位移，Brk 判断不了方向就把它放给了标签列表；系统的滚动列表拿到第一个事件后自己接管整次手势，Brk 再也收不到后面的事件，所以在标签列表上起手的横滑从来不会成功。原有原生场景是在应用内逐个塞事件，绕过了这条通路，所以一直通过，这一行此前的\"已验证\"不成立。已修（92cd458c）：列表不再用系统的整次接管方式，侧栏先接住手势、走满 6 点后按哪个方向走得多来定，竖向交还给列表，短距离加惯性算轻扫。真实通路上十种手势改前 0 次成功，改后 8 次成功（两次慢滑 60 点按设计不切换）；原生场景 R56-SwipeReal，父任务门 27 条全过，单元 1229/0。还差：Arc 是整列跟着手指走、旁边露出下一个 Space 的内容（程序里的 PageSwipeController），Brk 现在只动当前列表、松手才切换；距离和惯性的数值是 Brk 自己定的，不是从 Arc 读的。交 R5-7。"
       ],
       "implementation": [
         "Sources/BrkSidebar/SidebarView.swift",
@@ -5702,7 +5703,15 @@
           "proposal": "verify/completion/batch-spaces/proposal.json",
           "proposal_sha256": "a0e4115ccb24558ad4823ff99b2f71d700249c2a2ac33af848d534a41cf1fad0"
         }
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-05",
+          "from": "verified",
+          "to": "partial",
+          "why": "user report Q19: the swipe was not recognised on the real event path; recognition fixed, Arc's finger-following pager still to do"
+        }
+      ]
     },
     {
       "id": "A059",
