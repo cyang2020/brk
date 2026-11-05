@@ -619,7 +619,7 @@ final class RowView: HoverView {
                 audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette, tint: speakerInk,
                              radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
             } else {
-                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, weight: .regular, palette: palette, tint: speakerInk,
+                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, weight: .medium, palette: palette, tint: speakerInk,
                              radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
             }
             audio.tip = tab.muted ? SidebarCopy.unmuteThisTab : SidebarCopy.muteThisTab
