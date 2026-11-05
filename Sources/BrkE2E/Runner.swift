@@ -1,5 +1,6 @@
 import BrkBase
 import BrkControl
+import CoreGraphics
 import Foundation
 
 /// Runs the selected scenarios, each in its own app launch with a fresh data directory, and collects the report.
