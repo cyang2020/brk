@@ -472,6 +472,29 @@ enum PhysicalPointer {
         }
     }
 
+    /// The real pointer moved to `point` (window content coordinates), gliding as a person's does: tracking areas answer.
+    static func move(_ app: AppUnderTest, to point: CGPoint, window: WindowID) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        let from = CGEvent(source: nil)?.location ?? at
+        for step in 1...12 {
+            let t = Double(step) / 12
+            try post(.mouseMoved, at: CGPoint(x: from.x + (at.x - from.x) * t, y: from.y + (at.y - from.y) * t))
+            usleep(10_000)
+        }
+        usleep(120_000)
+    }
+
+    /// Real wheel lines at `point`; negative scrolls the content up, as a finger moving up does.
+    static func scroll(_ app: AppUnderTest, lines: Int32, at point: CGPoint, window: WindowID) throws {
+        try move(app, to: point, window: window)
+        for _ in 0..<8 {
+            CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
+            usleep(30_000)
+        }
+        usleep(300_000)
+    }
+
     /// A press with the button held while `held` runs. `point` in window content coordinates.
     static func press(_ app: AppUnderTest, at point: CGPoint, window: WindowID, held: () throws -> Void) throws {
         let at = try screen(app, point, window: window)
