@@ -336,11 +336,13 @@ public enum PageDropRule {
     }
 
     /// The command a release gives: the slot makes a split (`Command.split(.dropTab)`, nil for a tab already shown, which
-    /// stays where it is), the frame shows the tab, nothing shown does nothing.
+    /// stays where it is); the frame shows the tab, or in a split it takes that pane (`.split(.replacePane)`, Q17); nothing
+    /// shown does nothing.
     public static func releaseCommand(_ state: State, source: ItemID, offer: SplitDropOffer?, paneCount: Int) -> Command? {
         guard let target = state.target else { return nil }
         switch target {
-        case .replace:
+        case .replace(let pane):
+            if paneCount > 1, let offer { return .split(.replacePane(offer, pane: pane)) }
             return .tab(.focus(source))
         case .insert(let index):
             guard let offer, case .slot(_, let orientation) = preview(state) else { return nil }

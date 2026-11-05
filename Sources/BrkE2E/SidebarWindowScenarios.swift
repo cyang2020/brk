@@ -69,13 +69,15 @@ enum SidebarWindowScenarios {
         try expect(isShown(n, .rowClose(source)), "the lifted row shows no ×")
         try app.screenshot("pinned-drop-preview")
         try pointer(app, .up, held)
-        try app.waitUntil("the release to split") { try app.view().content.panes.map(\.tab) == [target, source] }
+        // Arc keeps a pinned tab pinned and puts a new Today tab in the split (Q17-drop-pinned-right-half; a tab in a pinned
+        // folder is treated the same, which has not been seen on Arc).
+        try app.waitUntil("the release to split") { let panes = try app.view().content.panes; return panes.count == 2 && panes[0].tab == target && panes[1].tab != source }
         let view = try app.view()
         try expect(view.space.today.rows.contains { $0.id == view.content.split }, "the split is not where the Today tab was")
-        try expect(!view.space.pinned.rows.contains { row in
+        try expect(view.space.pinned.rows.contains { row in
             if case .folder(let f) = row { return f.children.contains { $0.id == source } }
             return row.id == source
-        }, "the dropped tab is still in Pinned")
+        }, "the dropped tab left Pinned")
         let after = try app.native()
         try expect(!isShown(after, .tabTool("content-drag-card")) && !isShown(after, .splitDropPreview), "drag feedback left behind")
         try app.screenshot("pinned-drop-split")

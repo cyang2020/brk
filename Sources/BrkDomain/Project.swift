@@ -294,7 +294,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         return pane
     }
     var content = ContentSnapshot(expanded: splitID != nil && session.expandedSplit == splitID,
-                                  drop: state.splitDrop(in: id), panes: contentPanes, split: splitID, orientation: orientation)
+                                  drop: state.splitDrop(in: id, allowingFull: true), panes: contentPanes, split: splitID, orientation: orientation)
     content.windowDragging = state.doc.settings.advanced.windowDraggingFromPages && !doc.toolbarVisible && doc.kind != .little
 
     // URL pill. The profile badge shows a non-default profile, or incognito (F2).

@@ -217,4 +217,49 @@ final class PageDropRuleTests: XCTestCase {
         XCTAssertEqual(PageDropRule.preview(state), .slot(before: 0, orientation: .horizontal))
         XCTAssertNil(PageDropRule.releaseCommand(state, source: ItemID("tab"), offer: nil, paneCount: 1))
     }
+
+    // MARK: A split already shown (Q17 second probe)
+
+    /// A straight leg from the Today row over the split [228...744, 754...1270], with the rule's own throttle.
+    private func runOverSplit(to end: CGPoint, panes: Int = 2) -> PageDropRule.State {
+        let input = PageDropRule.Input(area: area, fractions: Array(repeating: 1 / Double(panes), count: panes), replaceable: Array(repeating: true, count: panes), insertable: true)
+        var state = PageDropRule.State(paneCount: panes, orientation: .horizontal)
+        var now = 1000.0
+        for k in 1...40 {
+            let f = Double(k) / 40, e = f * f * (3 - 2 * f)
+            let q = CGPoint(x: today.x + (end.x - today.x) * e, y: today.y + (end.y - today.y) * e)
+            now += 0.014
+            if area.contains(q) { state.move(to: q, at: now, input) } else { state.leave(at: now) }
+        }
+        now += 0.4
+        state.advance(to: now, input)
+        return state
+    }
+
+    func testOverASplitTheLeftPaneHoldsASlotAndTheRightPaneIsFramed() {
+        let left = runOverSplit(to: p(486, 330))
+        XCTAssertEqual(PageDropRule.preview(left), .slot(before: 0, orientation: .horizontal), "Q17-split-hold-486-330")
+        let input = PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true)
+        let layout = PageDropRule.layout(left, input)
+        XCTAssertEqual(layout.slot, CGRect(x: 228, y: 10, width: 341, height: 756))
+        XCTAssertEqual(layout.panes, [CGRect(x: 579, y: 10, width: 340, height: 756), CGRect(x: 929, y: 10, width: 341, height: 756)])
+        let right = runOverSplit(to: p(1012, 330))
+        XCTAssertEqual(PageDropRule.preview(right), .frame(pane: 1), "Q17-split-hold-1012-330")
+        XCTAssertEqual(PageDropRule.layout(right, input).panes[1], CGRect(x: 754, y: 10, width: 516, height: 756))
+    }
+
+    func testAFullSplitOnlyFrames() {
+        for x in [240.0, 500, 749, 1000, 1260] {
+            let state = runOverSplit(to: p(x, 330), panes: 4)
+            guard case .frame = PageDropRule.preview(state) else { return XCTFail("x=\(x): \(PageDropRule.preview(state))") }
+        }
+    }
+
+    func testAReleaseOnAFramedPaneOfASplitReplacesIt() throws {
+        // The offer comes from the domain; here only that the frame asks for that pane and a page alone still shows the tab.
+        var state = PageDropRule.State(paneCount: 2, orientation: .horizontal)
+        state.move(to: p(1012, 330), at: 10, PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true))
+        XCTAssertEqual(state.target, .replace(pane: 1))
+        XCTAssertEqual(PageDropRule.releaseCommand(state, source: ItemID("tab"), offer: nil, paneCount: 2), .tab(.focus(ItemID("tab"))), "no offer: a tab the window cannot take")
+    }
 }

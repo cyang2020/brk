@@ -199,7 +199,8 @@ public final class ContentAreaView: NSView {
         return pageDrop.flatMap { PageDropRule.releaseCommand($0, source: source, offer: dragOffer, paneCount: shownTabs.count) }
     }
 
-    /// The rule's two questions to the window, nil when the window takes no drop at all (an overlay, Find, a full split). A
+    /// The rule's two questions to the window, nil when the window takes no drop at all (an overlay, Find). A full split
+    /// takes no slot: the rule itself refuses a fifth pane, and only the frame is left, as in Arc. A
     /// tab already shown gets the same slots as any other (Arc, Q17 C), and a release on them leaves it where it is.
     private func dropInput() -> PageDropRule.Input? {
         guard isDropEnabled, drop != nil, let dragSource, dragOffer != nil || shownTabs.contains(dragSource) else { return nil }

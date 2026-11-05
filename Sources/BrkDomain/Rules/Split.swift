@@ -112,15 +112,21 @@ extension Work {
             let target = offer.target
             guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[offer.source] == offer,
                   let scope = state.locate(target) else { return }
-            var source = offer.source
-            if state.role(of: source)?.kind == .favorites {
-                // The Favorite stays in the grid: the split gets a new Today tab at its address (Arc, Q17-drop-favorite-right-half).
-                guard let url = state.address(of: source, in: nil, for: .savedDocument) ?? state.address(of: source, in: window, for: .visible),
-                      let space = state.doc.windows[window]?.space,
-                      let opened = openTab(url, inSpace: space, window: window, focus: false) else { return }
-                source = opened
-            }
+            guard let source = droppedTab(offer.source, in: window) else { return }
             group(source, with: target, edge: edge, at: index, in: scope, window: window)
+        case .replacePane(let offer, let pane):
+            let split = offer.target
+            let panes = state.panes(of: split)
+            guard offer.window == window, let admission = state.splitDrop(in: window, allowingFull: true), admission.offers[offer.source] == offer,
+                  state.canUseSplit(split, in: window), panes.indices.contains(pane), let scope = state.locate(split),
+                  let source = droppedTab(offer.source, in: window) else { return }
+            var replaced = false
+            state.withTree(scope) { tree in
+                do { try tree.replacePane(panes[pane], with: source); replaced = true } catch {}
+            }
+            guard replaced else { return }
+            repairPaneFocus(split, previous: panes)
+            focus(source, in: window)
         case .joinRow(let source, let target, let index):
             let units = state.units(in: window)
             guard state.doc.windows[window]?.kind != .little, units.contains(source), units.contains(target),
@@ -137,6 +143,15 @@ extension Work {
                 return
             }
         }
+    }
+
+    /// What a drop on the page puts in a split: the dragged tab, or, for a Favorite or a pinned tab (one in a pinned folder
+    /// too), which stay where they are, a new Today tab at its address (Arc, Q17-drop-favorite-right-half, Q17-drop-pinned-right-half).
+    private mutating func droppedTab(_ source: ItemID, in window: WindowID) -> ItemID? {
+        guard let kind = state.role(of: source)?.kind, kind == .favorites || kind == .pinned else { return source }
+        guard let url = state.address(of: source, in: nil, for: .savedDocument) ?? state.address(of: source, in: window, for: .visible),
+              let space = state.doc.windows[window]?.space else { return nil }
+        return openTab(url, inSpace: space, window: window, focus: false)
     }
 
     /// `source` joins `target` in a split (`SidebarTree.groupTab`) and the window shows it with `source` focused. Any

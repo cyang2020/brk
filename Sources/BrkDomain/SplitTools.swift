@@ -40,15 +40,16 @@ extension AppState {
         return panes(of: shown)
     }
 
-    func splitDrop(in window: WindowID) -> SplitDropSnapshot? {
+    /// `allowingFull`: a full split takes no slot but its panes can still be replaced (Arc only frames them then).
+    func splitDrop(in window: WindowID, allowingFull: Bool = false) -> SplitDropSnapshot? {
         guard doc.windows[window]?.kind != .little, session.windows[window]?.overlay == nil,
               session.windows[window]?.find == nil,
               session.windows[window]?.dialog == nil, session.windows[window]?.profileDialog == nil,
               session.windows[window]?.expandedSplit == nil,
               let target = shownItem(in: window), let role = role(of: target), role.kind != .favorites,
-              panes(of: target).count < Metrics.content.maxPanes.value else { return nil }
+              allowingFull || panes(of: target).count < Metrics.content.maxPanes.value else { return nil }
         guard let tree = tree(of: window) else { return nil }
-        // A Favorite dragged over the page offers the same slots (Arc, Q13-e); the drop moves it out first.
+        // A Favorite dragged over the page offers the same slots (Arc, Q13-e); the drop opens a new tab at its address.
         let sources = Set(tree.allTabs().filter { tab in
             tab != target && tree.splitContaining(tab) == nil && (self.role(of: tab)?.joinsSplit(in: role) == true || self.role(of: tab)?.kind == .favorites)
         })
