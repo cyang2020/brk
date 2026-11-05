@@ -14,7 +14,6 @@ final class TabToolsOverlayView: NSView {
     private var toastClick: Command?
     private var toastActionCloses = false
     private let banner = NoticeBanner()
-    private let education = NSButton(title: "", target: nil, action: nil)
     private let outputStatus = NSTextField(labelWithString: "")
     private var outputTask: Task<Void, Never>?
     private var lastOutput: OutputUpdate?
@@ -25,7 +24,7 @@ final class TabToolsOverlayView: NSView {
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
         super.init(frame: .zero)
-        for view in [recent, toast, banner, education, outputStatus] as [NSView] { addSubview(view) }
+        for view in [recent, toast, banner, outputStatus] as [NSView] { addSubview(view) }
         banner.isHidden = true
         banner.onLink = { [weak self] command in
             self?.dispatch(.tabTools(.dismissToast))
@@ -39,7 +38,6 @@ final class TabToolsOverlayView: NSView {
         recent.identify(.tabTool("switcher"))
         toast.identify(.tabTool("toast"))
         banner.identify(.tabTool("notice"))
-        education.identify(.tabTool("education-overlay"))
         toast.onClick = { [weak self] in
             if let command = self?.toastClick { self?.dispatch(command) }
             self?.dispatch(.tabTools(.dismissToast))
@@ -48,10 +46,6 @@ final class TabToolsOverlayView: NSView {
             if let command = self?.toastCommand { self?.dispatch(command) }
             if self?.toastActionCloses == true { self?.dispatch(.tabTools(.dismissToast)) }
         }
-        education.target = self
-        education.action = #selector(dismissEducation)
-        education.font = .systemFont(ofSize: 11)
-        education.toolTip = "Click to dismiss this auto-archive explanation"
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -111,13 +105,8 @@ final class TabToolsOverlayView: NSView {
         }
         banner.isHidden = notice == nil
         if let notice, let link = notice.link { banner.show(notice.text, link: link, right: right, top: ToastDraw.top.value) }
-        education.isHidden = true
-        education.title = tools.archiveEducation.map(Copy.archiveEducation) ?? ""
-        education.cell?.wraps = true
-        education.frame = NSRect(x: 8, y: bounds.height - 130, width: max(0, sidebarWidth - 16), height: 68)
     }
     @objc private func dismissToast() { dispatch(.tabTools(.dismissToast)) }
-    @objc private func dismissEducation() { dispatch(.tabTools(.dismissArchiveEducation)) }
 }
 
 /// Arc's notice at the window's top right (P43-a, "ChatGPT in the Command Bar not enabled"): a pale rounded banner

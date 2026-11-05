@@ -65,7 +65,6 @@ final class TablistView: NSScrollView {
         for view in [pinnedSection, todaySection, dropLine] { document.addSubview(view) }
         todaySection.addSubview(divider)
         todaySection.addSubview(newTab)
-        document.addSubview(education)
         dropLine.wantsLayer = true
         dropLine.isHidden = true
         for edge in [topEdge, bottomEdge] {
@@ -73,6 +72,7 @@ final class TablistView: NSScrollView {
             edge.isHidden = true
             addSubview(edge)
         }
+        addSubview(education)
     }
 
     @available(*, unavailable)
@@ -139,8 +139,13 @@ final class TablistView: NSScrollView {
         contentBottom = Double(f.rows.last?.rect.maxY ?? 0)
         education.isHidden = tools.archiveEducation == nil
         education.render(tools.archiveEducation, palette: palette)
-        education.frame = NSRect(x: 8, y: contentBottom + 10, width: max(0, width - 16), height: 68)
-        if tools.archiveEducation != nil { contentBottom += 88 }
+        // Arc's banners are cards at the bottom of the sidebar, under the list, not in it: the rows scroll clear of it.
+        if tools.archiveEducation != nil {
+            let margin = Draw.educationMargin.value, cardWidth = max(0, width - 2 * margin)
+            let height = education.height(forWidth: cardWidth)
+            education.frame = NSRect(x: margin, y: isFlipped ? f.tablistViewport.height - margin - height : margin, width: cardWidth, height: height)
+            contentBottom += height + 2 * margin
+        }
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
 
         multiselection.removeAll { rows[$0] == nil }
@@ -556,7 +561,7 @@ final class RowView: HoverView {
             setSegments(split.panes, palette: palette)
             peekMarker.isHidden = true
         }
-        if case .folder(let folder) = row, folder.group { title.textColor = palette.ink.secondary } else { title.textColor = palette.ink.text }
+        if case .folder(let folder) = row, folder.group { title.textColor = palette.color(palette.tokens.foreground) } else { title.textColor = palette.ink.text }
         for view in [icon, title] as [NSView] { view.alphaValue = dimmed ? Draw.unloadedAlpha.value : 1 }
         if renaming, row.kind != .split { showRenameField(palette: palette) } else { retire() }
         stateChanged()
@@ -621,6 +626,11 @@ final class RowView: HoverView {
             : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
             : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
+        // Arc's group header starts its title where a tab's favicon starts (no icon column).
+        if case .folder(let folder)? = row, folder.group {
+            let start = g.selection.minX + Draw.groupTitleLeading.value
+            title.frame = CGRect(x: start, y: title.frame.minY, width: max(0, trailing - start), height: height)
+        }
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
     }
@@ -1280,65 +1290,156 @@ final class LivePlaceholderView: HoverView {
     }
 }
 
-/// Arc's auto-archive banner (`bin:0x103a0cc20`): "Arc archives tabs that you haven’t used in the past 12 hours. You
-/// can adjust this in Settings." with Settings a link (Settings → Profiles, where Archive tabs after lives) and a ×
-/// that dismisses it for good. A click on the words does nothing.
+/// Arc's auto-archive banner (`AutoArchiveEducationView`, its numbers in `SidebarDraw`): a card with a band ("We cleaned
+/// up!" after the archive box), "Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in
+/// Settings." (`bin:0x103a0cc20`) with Settings a link, and the filled "Got it". Both dismiss it for good (Arc's dismiss
+/// reasons `settingsLearnMore`, `manual`); Settings also opens Settings → Profiles, where Archive tabs after lives.
 @MainActor
-final class ArchiveEducationView: HoverView {
+final class ArchiveEducationView: NSView {
+    private let card = FlippedView()
+    private let band = FlippedView()
+    private let icon = NSImageView()
+    private let title = NSTextField(labelWithString: SidebarCopy.archiveEducationTitle)
     private let text = NSTextView()
     private let link = LinkHotspot()
-    private let close = GlyphButton()
-    private let dispatch: Dispatch
+    private let dismiss = EducationButton()
     private var shown: String?
     private var ink: NSColor?
+    private var focus: NSColor?
 
     init(dispatch: @escaping Dispatch) {
-        self.dispatch = dispatch
         super.init(frame: .zero)
-        layer?.cornerCurve = .continuous
-        layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        wantsLayer = true
+        // bin:0x10256cab0: a black shadow at 20%, radius 1, one point up (bin:0x1036baf68 holds 1, 0, -1).
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.2
+        layer?.shadowRadius = 1
+        layer?.shadowOffset = CGSize(width: 0, height: 1)
+        card.wantsLayer = true
+        card.layer?.cornerCurve = .continuous
+        card.layer?.cornerRadius = Draw.educationCorner.value
+        card.layer?.masksToBounds = true
+        band.wantsLayer = true
+        icon.image = NSImage(systemSymbolName: "archivebox", accessibilityDescription: nil)
+        icon.symbolConfiguration = .init(pointSize: Draw.educationTitleFont.value, weight: .medium)
+        title.font = .systemFont(ofSize: Draw.educationTitleFont.value, weight: .medium)
         text.isEditable = false
         text.isSelectable = false
         text.drawsBackground = false
         text.textContainerInset = .zero
         text.textContainer?.lineFragmentPadding = 0
-        addSubview(text)
-        addSubview(link)
-        addSubview(close)
+        text.textContainer?.widthTracksTextView = false
+        addSubview(card)
+        card.addSubview(band)
+        band.addSubview(icon)
+        band.addSubview(title)
+        card.addSubview(text)
+        card.addSubview(link)
+        card.addSubview(dismiss)
         identify(.tabTool("education"))
         link.identify(.tabTool("education-settings"))
-        close.identify(.tabTool("education-close"))
-        close.toolTip = SidebarCopy.dismissArchiveEducation
-        close.action = { _ in dispatch(.tabTools(.dismissArchiveEducation)) }
-        link.action = { dispatch(.settings(.openPane(.profiles))) }
+        dismiss.identify(.tabTool("education-dismiss"))
+        dismiss.action = { dispatch(.tabTools(.dismissArchiveEducation)) }
+        link.action = {
+            dispatch(.tabTools(.dismissArchiveEducation))
+            dispatch(.settings(.openPane(.profiles)))
+        }
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
     func render(_ threshold: String?, palette: Palette) {
-        layer?.backgroundColor = palette.color(palette.tokens.itemHover).cgColor
-        close.render(.close, size: Draw.smallFont.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+        let light = palette.scheme == .light
+        // `backgroundExtra`, `focus` are Arc's palette fields (bin:0x10256ca3c, 0x10256e3e8): the card has no capture,
+        // so the white card of the sidebar's current tab stands for the first; the second is the theme's dark shade.
+        card.layer?.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
+        band.layer?.backgroundColor = NSColor(white: light ? 0 : 1, alpha: light ? 0.08 : 0.05).cgColor
+        let titleInk = NSColor(white: light ? 0 : 1, alpha: 0.8)
+        title.textColor = titleInk
+        icon.contentTintColor = titleInk
+        let fill = palette.focusColor
+        dismiss.render(fill: fill)
         guard let threshold else { shown = nil; return }
         let sentence = Copy.archiveEducation(threshold)
-        guard sentence != shown || ink != palette.ink.text else { return }
+        let message = NSColor(white: light ? 0 : 1, alpha: 0.5)
+        guard sentence != shown || ink != message || focus != fill else { return }
         shown = sentence
-        ink = palette.ink.text
-        let body = NSMutableAttributedString(string: sentence, attributes: [.font: NSFont.systemFont(ofSize: Draw.captionFont.value), .foregroundColor: palette.ink.text])
+        ink = message
+        focus = fill
+        let body = NSMutableAttributedString(string: sentence, attributes: [.font: NSFont.systemFont(ofSize: Draw.educationMessageFont.value), .foregroundColor: message])
         let range = (sentence as NSString).range(of: Copy.archiveEducationLink, options: .backwards)
-        body.addAttributes([.foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue], range: range)
+        // bin:0x10256eb4c: the link's run is medium; bin:0x10256ec0c: white when dark, else the palette's focus.
+        body.addAttributes([.font: NSFont.systemFont(ofSize: Draw.educationMessageFont.value, weight: .medium), .foregroundColor: light ? fill : NSColor.white], range: range)
         text.textStorage?.setAttributedString(body)
         needsLayout = true
     }
 
+    private var bandHeight: CGFloat { 2 * Draw.educationPadding.value + ceil(title.intrinsicContentSize.height) }
+    private func messageHeight(forWidth width: CGFloat) -> CGFloat {
+        guard let manager = text.layoutManager, let container = text.textContainer else { return 0 }
+        container.containerSize = CGSize(width: max(0, width - 2 * Draw.educationPadding.value), height: .greatestFiniteMagnitude)
+        manager.ensureLayout(for: container)
+        return ceil(manager.usedRect(for: container).height)
+    }
+
+    /// The band, the message under 12 pt, the button with 12 pt around it.
+    func height(forWidth width: CGFloat) -> CGFloat {
+        bandHeight + Draw.educationPadding.value + messageHeight(forWidth: width) + 2 * Draw.educationPadding.value + dismiss.height
+    }
+
     override func layout() {
         super.layout()
-        let inset = Draw.educationInset.value, button = Draw.educationClose.value
-        close.frame = CGRect(x: bounds.width - inset - button, y: inset, width: button, height: button)
-        text.frame = CGRect(x: inset, y: inset, width: max(0, close.frame.minX - inset * 2), height: max(0, bounds.height - inset * 2))
-        text.textContainer?.containerSize = CGSize(width: text.frame.width, height: .greatestFiniteMagnitude)
+        let padding = Draw.educationPadding.value, width = bounds.width
+        card.frame = bounds
+        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: Draw.educationCorner.value, cornerHeight: Draw.educationCorner.value, transform: nil)
+        band.frame = CGRect(x: 0, y: 0, width: width, height: bandHeight)
+        let titleSize = title.intrinsicContentSize, iconSize = icon.intrinsicContentSize
+        icon.frame = CGRect(x: padding, y: ((bandHeight - iconSize.height) / 2).rounded(), width: iconSize.width, height: iconSize.height)
+        title.frame = CGRect(x: icon.frame.maxX + Draw.educationIconGap.value, y: ((bandHeight - titleSize.height) / 2).rounded(), width: max(0, width - icon.frame.maxX - Draw.educationIconGap.value - padding), height: titleSize.height)
+        let height = messageHeight(forWidth: width)
+        text.frame = CGRect(x: padding, y: band.frame.maxY + padding, width: max(0, width - 2 * padding), height: height)
+        dismiss.frame = CGRect(x: padding, y: text.frame.maxY + padding, width: max(0, width - 2 * padding), height: dismiss.height)
         guard let manager = text.layoutManager, let container = text.textContainer, let sentence = shown else { return }
-        manager.ensureLayout(for: container)
         let glyphs = manager.glyphRange(forCharacterRange: (sentence as NSString).range(of: Copy.archiveEducationLink, options: .backwards), actualCharacterRange: nil)
-        let rect = manager.boundingRect(forGlyphRange: glyphs, in: container)
-        link.frame = rect.offsetBy(dx: text.frame.minX, dy: text.frame.minY)
+        link.frame = manager.boundingRect(forGlyphRange: glyphs, in: container).offsetBy(dx: text.frame.minX, dy: text.frame.minY)
+    }
+}
+
+/// The banner's "Got it": white light text in the middle of a filled, rounded rectangle (bin 0x10256e028 to 0x10256e720).
+@MainActor
+final class EducationButton: HoverView {
+    var action: () -> Void = {}
+    private let label = NSTextField(labelWithString: SidebarCopy.archiveEducationDismiss)
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = Draw.educationButtonCorner.value
+        label.font = .systemFont(ofSize: Draw.educationButtonFont.value, weight: .light)
+        label.textColor = .white
+        label.alignment = .center
+        addSubview(label)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    var height: CGFloat { 2 * Draw.educationButtonPadding.value + ceil(label.intrinsicContentSize.height) }
+    func render(fill: NSColor) { layer?.backgroundColor = fill.cgColor }
+
+    override func layout() {
+        super.layout()
+        let line = label.intrinsicContentSize.height
+        label.frame = CGRect(x: 0, y: ((bounds.height - line) / 2).rounded(), width: bounds.width, height: line)
+    }
+
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if bounds.contains(local(event)) { action() }
     }
 }
 

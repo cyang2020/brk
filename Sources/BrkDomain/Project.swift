@@ -670,8 +670,9 @@ private func projectTabTools(_ state: AppState, window: WindowID, now: Instant) 
         result.recent = RecentTabsSnapshot(items: rows, selected: cycle.order[cycle.index])
     }
     result.littleTip = !state.doc.tabPreferences.littleTipDismissed && state.doc.windows[window]?.kind == .little
-    // Only a fresh profile's first space explains auto-archive; a space made later does not (Arc 1.170).
-    if !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
+    // Only a fresh profile's first space explains auto-archive; a space made later does not (Arc 1.170). It explains
+    // what just happened ("We cleaned up!"), so not before the first auto-archive.
+    if state.doc.tabPreferences.archiveEducationEarned, !state.doc.tabPreferences.archiveEducationDismissed, state.doc.windows[window]?.kind == .standard,
        let space = state.doc.windows[window].flatMap({ state.doc.spaces[$0.space] }),
        state.doc.spaceOrder.first(where: { state.doc.spaces[$0]?.profile == space.profile }) == space.id {
         let threshold = state.profileSettings(space.profile).autoArchive

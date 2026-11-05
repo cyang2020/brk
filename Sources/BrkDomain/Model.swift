@@ -250,6 +250,9 @@ struct Session: Sendable, Equatable {
     /// Window/tab slots that demand a page. Every visible slot is loaded. A tab leaves the set
     /// when archived, removed, or closed-and-kept (Cmd+W on Pinned or Favorites); only focusing it puts it back.
     var loaded: Set<PageID>
+    /// The tab each tab was opened from by a page (window.open, a link), while both may live. Not saved: the pages'
+    /// relationship ends with them. A page closing itself hands the window back to its opener (`closePage`).
+    var pageOpeners: [ItemID: ItemID] = [:]
     /// What loaded pages report.
     var live: [PageID: LivePage]
     var generations: [PageID: UInt64] = [:]

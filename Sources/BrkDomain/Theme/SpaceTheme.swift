@@ -256,8 +256,12 @@ private func rgb(hue: Double, saturation s: Double, lightness l: Double) -> RGBA
 /// (this gives #221811), a neutral theme in #1A1A1A, a teal one in #001E1D and a blank window's lavender in #090D4F;
 /// all four sit within 0.001 of that luminance.
 public func sidebarInk(_ primary: RGBA) -> RGBA {
+    themeShade(primary, luminance: relativeLuminance(RGBA(26 / 255, 26 / 255, 26 / 255)))
+}
+
+/// `primary`'s hue and HSL saturation at the HSL lightness (at most 0.5) whose relative luminance is `target`.
+public func themeShade(_ primary: RGBA, luminance target: Double) -> RGBA {
     let (h, s, _) = hsl(opaque(primary))
-    let target = relativeLuminance(RGBA(26 / 255, 26 / 255, 26 / 255))
     var lo = 0.0, hi = 0.5
     for _ in 0..<32 {
         let mid = (lo + hi) / 2

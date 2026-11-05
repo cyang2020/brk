@@ -155,16 +155,37 @@ final class TabToolsTests: XCTestCase {
         d.system(.clockTick)
         XCTAssertNil(d.view.tabTools.toast)
         d.user(.tabTools(.dismissToast))
-        // Arc's banner names the profile's threshold ("… haven’t used in the past 12 hours."); none while it is Never.
+        d.user(.tabTools(.preferences(includeFavorites: false, previews: false)))
+        XCTAssertFalse(Driver(file: d.savedFile).view.tabTools.hoverPreviews)
+    }
+    /// Arc's auto-archive banner explains what just happened, so it waits for the first auto-archive ("We cleaned up!").
+    /// It names the profile's threshold ("… haven’t used in the past 12 hours."), none while that is Never. Got it and
+    /// Settings dismiss it for good, as does a new tab (Arc's dismiss reasons: manual, settingsLearnMore, onCreateNewTab).
+    func testTheArchiveBannerWaitsForTheFirstAutoArchiveAndEndsOnANewTab() {
+        func archived() -> Driver {
+            let d = Driver()
+            d.open("127.0.0.1:9/a")
+            d.open("127.0.0.1:9/b")
+            XCTAssertNil(d.view.tabTools.archiveEducation, "nothing was cleaned up yet")
+            d.advance(.seconds(13 * 3600))
+            d.system(.clockTick)
+            return d
+        }
+        let d = archived()
         XCTAssertEqual(d.view.tabTools.archiveEducation, "12 hours")
         d.user(.settings(.profile(.default, .autoArchive(.never))))
         XCTAssertNil(d.view.tabTools.archiveEducation)
         d.user(.settings(.profile(.default, .autoArchive(.twelveHours))))
+        XCTAssertEqual(Driver(file: d.savedFile).view.tabTools.archiveEducation, "12 hours", "it stays across a restart until dismissed")
         d.user(.tabTools(.dismissArchiveEducation))
+        XCTAssertNil(d.view.tabTools.archiveEducation)
         XCTAssertNil(Driver(file: d.savedFile).view.tabTools.archiveEducation)
-        d.user(.tabTools(.preferences(includeFavorites: false, previews: false)))
-        XCTAssertFalse(Driver(file: d.savedFile).view.tabTools.hoverPreviews)
+        let next = archived()
+        XCTAssertNotNil(next.view.tabTools.archiveEducation)
+        next.open("127.0.0.1:9/c")
+        XCTAssertNil(next.view.tabTools.archiveEducation, "a new tab ended it")
     }
+
     /// Clear Today and Delete Space leave Arc's undo toast; ⌘Z (`.undoToast`) brings the tabs and the space back.
     func testClearTodayAndDeleteSpaceToastsUndo() throws {
         let d = Driver()

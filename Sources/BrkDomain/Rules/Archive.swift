@@ -52,6 +52,7 @@ extension Work {
             }
         }
         archiveTabs(victims, reason: .auto)
+        if !swept.isEmpty { state.doc.tabPreferences.archiveEducationEarned = true }
         // Arc's "Auto archived %d tabs", in the windows showing a space that lost tabs, over no other toast.
         for id in state.doc.windows.keys.sorted() {
             guard let window = state.doc.windows[id], window.kind == .standard, let count = swept[window.space], count > 0,

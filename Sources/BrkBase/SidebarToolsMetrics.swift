@@ -5,12 +5,12 @@ import CoreGraphics
 public struct SidebarToolsMetrics: MetricGroup {
     /// Arc's favorites overlay (`AppTrayItemOverlay`: `badge(NSColor)` or `subtitle(...)`): a dot or a capsule.
     public let unreadDot = Metric(8.0, .guess("unread dot on the favicon's top-right corner; Arc's AppTrayItemBadgeView size was not traced (P08 pending)"))
-    public let subtitleHeight = Metric(14.0, .guess("calendar subtitle capsule height inside the 47 pt tile (P08 pending)"))
-    public let subtitlePadding = Metric(4.0, .guess("calendar subtitle capsule side padding beyond the label cell's own 2 pt"))
-    public let subtitleFont = Metric(9.0, .guess("calendar subtitle text size; fits 'in 45m' in the narrowest tile"))
+    public let subtitleHeight = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x101cf4458: AppTrayItemSubtitleView's layer radius is 7, a 14 pt capsule"))
+    public let subtitlePadding = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x101cf43e8: the text field is inset 2 in the capsule; 4 here with the label cell's own 2"))
+    public let subtitleFont = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x101cf4058: systemFont(ofSize: 9, weight: .medium)"))
     public let subtitleInset = Metric(2.0, .guess("the capsule never touches the tile's sides"))
     public let subtitleBottom = Metric(4.0, .guess("capsule gap above the tile's bottom edge"))
-    public let subtitleIconTop = Metric(8.0, .guess("favicon moves up so the capsule fits under it"))
+    public let subtitleIconLift = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x101cf0698: the favicon's layer translates by -8 while the tile has a subtitle"))
     public let glowRadius = Metric(2.0, .guess("soft progress line inside the existing URL pill"))
     public let glowHeight = Metric(3.0, .guess("visible halo without changing the recovered 36 point pill geometry"))
     public let glowBlur = Metric(8.0, .guess("diffuse glow around real progress; Arc shader geometry unrecovered"))

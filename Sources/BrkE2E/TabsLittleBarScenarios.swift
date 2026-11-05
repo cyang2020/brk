@@ -218,8 +218,9 @@ enum TabsLittleBarScenarios {
             return f.id == target && f.children.map(\.id).contains(c) && f.children.count == 3
         }
         _ = try app.screenshot("R36-group-merged")
-        let newTab = try visible(app.native(), .todayNewTab).frame
         for tab in [c] + restoredTabs {
+            // Read each time: the group shortens as tabs leave, and a drop on the middle of a Today row would join a split.
+            let newTab = try visible(app.native(), .todayNewTab).frame
             let rowFrame = try visible(app.native(), .row(tab)).frame
             _ = try app.send(.pointerDrag(from: centre(rowFrame), to: CGPoint(x: newTab.midX, y: newTab.maxY + 4), cancel: false))
             try app.waitUntil("dragged out of the group") { try app.view().space.today.rows.contains { $0.id == tab } }

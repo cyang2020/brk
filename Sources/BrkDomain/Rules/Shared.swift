@@ -46,6 +46,8 @@ extension Work {
         } catch { return nil }
         request(url, for: PageID(window: window, item: id))
         if focusIt { focus(id, in: window) }
+        // A new tab ends the auto-archive banner (Arc's dismiss reason `onCreateNewTab`).
+        if state.doc.tabPreferences.archiveEducationEarned { state.doc.tabPreferences.archiveEducationDismissed = true }
         return id
     }
 

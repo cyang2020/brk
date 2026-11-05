@@ -105,8 +105,8 @@ enum RegressionScenarios {
         try app.waitUntil("the second hold to return to C") { try currentTab(app.view())?.id == c.id }
     }
 
-    /// R7a (CEF): close.html closes itself: closed without closeRequested (page-initiated), the row stays unloaded, and every
-    /// card has a surface or is the placeholder `view()` predicts.
+    /// R7a (CEF): close.html closes itself: closed without closeRequested (page-initiated), the row leaves Today for the
+    /// archive as Cmd+W does (Arc, Q12-c), and every card has a surface or is the placeholder `view()` predicts.
     @Sendable static func pageCloses(_ app: AppUnderTest) throws {
         let t = try openTab(app, app.site.url("close.html"))
         let page = PageID(window: app.window!, item: t.id)
@@ -116,10 +116,9 @@ enum RegressionScenarios {
             try expect(!entries.contains { $0.kind == .closeRequested }, "the engine requested the close: \(entries.map(\.kind))")
             return true
         }
-        try app.waitUntil("the row to remain unloaded with another selection", timeout: 8) {
+        try app.waitUntil("the row to leave Today with another selection", timeout: 8) {
             let view = try app.view()
-            let row = tab(t.id, in: view)
-            return row?.loaded == false && currentTab(view)?.id != t.id
+            return tab(t.id, in: view) == nil && currentTab(view)?.id != t.id
         }
         try expect(try app.pageLog().filter { $0.page == page && $0.kind == .created }.count == 1, "local close immediately recreated the page")
         try app.waitUntil("every card to show what view() predicts", timeout: 8) {

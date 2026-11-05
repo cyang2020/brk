@@ -109,16 +109,19 @@ final class ControlExecutor {
             return try await SidebarPanelControl.run(action, in: window)
         case .siteControlInput(let owner, let field, let action):
             guard let panel = store.sitePanels.window(for: owner), panel.isVisible,
-                  let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel) as? NSControl,
-                  !control.isHiddenOrHasHiddenAncestor, control.isEnabled else { throw Failure(message: "The owned site control is unavailable: " + field) }
+                  let control = ViewTree.find(ViewID.settingsField(field).identifier, in: panel),
+                  !control.isHiddenOrHasHiddenAncestor, (control as? NSControl)?.isEnabled != false else { throw Failure(message: "The owned site control is unavailable: " + field) }
             // A control below the fold of the second page is scrolled to, as a user would before using it.
             if control.visibleRect.intersection(control.bounds).isEmpty, control.enclosingScrollView != nil {
                 control.scrollToVisible(control.bounds); panel.displayIfNeeded()
             }
             guard !control.visibleRect.intersection(control.bounds).isEmpty else { throw Failure(message: "The owned site control is off screen: " + field) }
-            NSApp.activate(ignoringOtherApps: true)
-            panel.makeKeyAndOrderFront(nil)
-            store.inputWindow = panel
+            // Looking only: ordering the panel front again can make it choose a new first responder, which ends a recording key cap.
+            if action != .locate {
+                NSApp.activate(ignoringOtherApps: true)
+                panel.makeKeyAndOrderFront(nil)
+                store.inputWindow = panel
+            }
             switch action {
             case .focus:
                 guard let text = control as? NSTextField, text.isEditable, panel.makeFirstResponder(text) else {
@@ -129,8 +132,8 @@ final class ControlExecutor {
                     throw Failure(message: "The native field editor did not accept focus")
                 }
             case .press:
-                guard let button = control as? NSButton else { throw Failure(message: "The site control is not a button") }
-                button.performClick(nil)
+                if let button = control as? NSButton { button.performClick(nil) }
+                else if !control.accessibilityPerformPress() { throw Failure(message: "The site control is not a button") }
             case .locate:
                 // The editable field itself when the identifier sits on a container around it.
                 func field(in view: NSView) -> NSTextField? {
@@ -142,10 +145,11 @@ final class ControlExecutor {
                 let screen = panel.convertToScreen(target.convert(target.bounds, to: nil))
                 let top = NSScreen.screens.first?.frame.maxY ?? screen.maxY
                 let editor = (target as? NSTextField)?.currentEditor()
-                let focused = editor != nil && panel.firstResponder === editor
+                let focused = panel.firstResponder === (editor ?? target)
                 return .menuItems([screen.minX, top - screen.maxY, screen.width, screen.height].map { String(Double($0)) } + ["focused:\(focused)",
                                   "key:\(panel.isKeyWindow) level:\(panel.level.rawValue) number:\(panel.windowNumber) class:\(type(of: control))/\(type(of: target)) window:\(Int(panel.frame.minX)),\(Int(top - panel.frame.maxY)),\(Int(panel.frame.width))x\(Int(panel.frame.height)) responder:" + ViewTree.describe(panel.firstResponder),
-                                  "value:" + ((target as? NSTextField)?.stringValue ?? "")])
+                                  // A text field's text; a key cap says what it shows (Type Shortcut… while it records).
+                                  "value:" + ((target as? NSTextField)?.stringValue ?? target.accessibilityLabel() ?? "")])
             }
             print("[control] site action=\(action.rawValue) field=\(field) window=\(panel.windowNumber) responder=\(ViewTree.describe(panel.firstResponder))")
             return .ok

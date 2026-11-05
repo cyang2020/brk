@@ -208,7 +208,9 @@ final class FixtureServer: @unchecked Sendable {
         } else if path.hasPrefix("/suggest") {
             countLock.withLock { suggests.append(URLComponents(string: target)?.query ?? "") }
             let query = URLComponents(string: target)?.queryItems?.first { $0.name == "q" }?.value ?? ""
-            guard let body = try? JSONSerialization.data(withJSONObject: [query, [query + "ft", query + "m"]]) else { return }
+            // P49: what Arc's engine answered for this question; anything else gets "<q>ft" and "<q>m" (W2-10).
+            let answers = query == "how do browsers render fonts" ? [query, "how do browsers render text", "browser font rendering", "how do browsers render html"] : [query + "ft", query + "m"]
+            guard let body = try? JSONSerialization.data(withJSONObject: [query, answers]) else { return }
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
         } else if path == "/download-active" {
             // Keep a response open until the browser cancels it. The shutdown scenario waits for received bytes,

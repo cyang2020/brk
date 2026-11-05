@@ -549,6 +549,16 @@ enum SidebarEvidenceScenarios {
             return text.contains(app.site.url("page2.html?group=a").absoluteString) && text.contains(app.site.url("page2.html?group=b").absoluteString)
         }
         _ = try app.screenshot("group")
+        // Arc's header (TabGroupHeaderCellView): the title starts 18 in from the sidebar's edge, where a tab's favicon starts.
+        let groupRow = try visible(app.native(), .row(group)).frame
+        let facts = try app.native()
+        let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
+        let screen = CGRect(x: facts.windowFrame.minX + groupRow.minX, y: top + groupRow.minY, width: groupRow.width, height: groupRow.height)
+        guard let label = NativeSystemInput.staticTexts(pid: app.hello!.pid).first(where: { $0.text == "Reading" && screen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }) else {
+            throw Check(description: "no group title on screen")
+        }
+        let x = label.frame.minX - facts.windowFrame.minX
+        try expect(abs(x - 18) <= 2, "the group's title starts at \(x), Arc's at 18")
         // A normal restart keeps the group, its title and its tabs.
         try app.flush(); try app.restart()
         guard let restored = folder(group, in: try app.view().space.pinned.rows) else { throw Check(description: "the group is gone after a restart") }
