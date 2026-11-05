@@ -15,6 +15,7 @@ enum FavoritesDragScenarios {
         Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", cefOnly: "real mouse", out),
         Scenario("R53-Strip", "a tab held on the Space name strip darkens it; dropped, it is the first pinned tab, current, with Double-click to rename", cefOnly: "real mouse", strip),
         Scenario("R53-Empty", "Favorites dragged out one at a time go 3 wide, 2 wide, 1 full width, then the dashed box; a tab dropped on the box is one full-width tile", cefOnly: "real mouse", empty),
+        Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", cefOnly: "real mouse", splitSides),
         Scenario("R53-Page", "a Favorite over the page brings the earlier tab back, shows the big card and the slots; released at the edge it makes the split, in the middle nothing moves", cefOnly: "real mouse", page),
     ]
 
@@ -277,5 +278,78 @@ enum FavoritesDragScenarios {
         }
         try app.waitUntil("the split") { try app.view().content.panes.map(\.tab) == [f.c, tile] }
         try expect(try !tiles(app).contains(tile), "the Favorite stayed in the grid")
+    }
+
+    // MARK: Rule 9
+
+    @Sendable static func splitSides(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        // Today: c, b, a, then the first page. c held on b.
+        func slot(_ row: ItemID) -> ViewID { .tabTool("split-join-slot-" + row.rawValue) }
+        func panes() throws -> [ItemID] { try app.view().content.panes.map(\.tab) }
+        func heldOn(_ target: ItemID, dx: Double) throws -> CGPoint {
+            let row = try frame(app, .row(target))
+            return CGPoint(x: row.midX + dx, y: row.midY)
+        }
+        // The drag image keeps its grab, and runs over the page past the sidebar's edge (Q15-c).
+        let sourceRow = try frame(app, .row(f.c))
+        let grab = CGPoint(x: sourceRow.minX + 86, y: sourceRow.midY)
+        try PhysicalPointer.drag(app, through: [grab, try heldOn(f.b, dx: 80)], window: app.window!) {
+            let image = try image(app), row = try frame(app, .row(f.b))
+            try expect(image.width == 212 && image.height == 36, "the image is \(image)")
+            try expect(image.maxX > row.maxX, "the image stops at the sidebar's edge: \(image)")
+            try expect(isShown(try app.native(), slot(f.b)), "no slot")
+            let shown = try frame(app, slot(f.b))
+            try expect(shown.minX >= row.midX, "the pointer is in the right half and the slot is \(shown)")
+            try expect(try app.view().content.panes.map(\.tab) == [f.c], "the page changed while holding")
+            _ = try app.screenshot("right-half")
+        }
+        try app.waitUntil("the tab on the right, focused") { try panes() == [f.b, f.c] }
+        try expect(try app.view().content.panes.first(where: \.focused)?.tab == f.c, "the dropped tab is not the focused pane")
+        let split = try shownSplit(app)
+        try expect(try app.view().space.today.rows.map(\.id).first == split, "the split row is not where b was")
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("separated") { try app.view().content.split == nil }
+
+        // Left half.
+        try app.dispatch(.tab(.focus(f.a)))
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.c))), try heldOn(f.b, dx: -60)], window: app.window!) {
+            let shown = try frame(app, slot(f.b)), row = try frame(app, .row(f.b))
+            try expect(shown.maxX <= row.midX + 0.5, "the pointer is in the left half and the slot is \(shown)")
+            _ = try app.screenshot("left-half")
+        }
+        try app.waitUntil("the tab on the left, focused") { try panes() == [f.c, f.b] }
+        try expect(try app.view().content.panes.first(where: \.focused)?.tab == f.c, "the dropped tab is not the focused pane")
+        let two = try shownSplit(app)
+
+        // The edge of a's row: 9.5 from the top is the line, 11.5 is the slot.
+        let aRow = try frame(app, .row(f.a))
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(two))), CGPoint(x: aRow.midX, y: aRow.minY + 9.5)], window: app.window!) {
+            try expect(!isShown(try app.native(), slot(f.a)), "a slot 9.5 from the edge")
+        }
+
+        // A split row: one band, the ends take first and last. a is standalone.
+        try app.dispatch(.tab(.focus(f.a)))
+        try app.waitUntil("a shown") { try shown(app) == f.a }
+        let splitRow = try frame(app, .row(two))
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), CGPoint(x: splitRow.minX + 30, y: splitRow.midY)], window: app.window!) {
+            let band = try frame(app, .tabTool("split-join-band"))
+            try expect(band.minX == splitRow.minX && band.width == splitRow.width && band.height == 41, "the band is \(band)")
+            _ = try app.screenshot("split-band")
+        }
+        try app.waitUntil("first pane") { try panes() == [f.a, f.c, f.b] }
+        try expect(try app.view().content.panes.first(where: \.focused)?.tab == f.a, "the new pane is not focused")
+
+        // The right end: the last pane.
+        let extra = try E.loadReady(app, "page2.html?today=extra")
+        let row3 = try frame(app, .row(two))
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(extra))), CGPoint(x: row3.maxX - 28, y: row3.midY)], window: app.window!) {}
+        try app.waitUntil("last pane") { try panes() == [f.a, f.c, f.b, extra] }
+        try expect(try app.view().content.panes.first(where: \.focused)?.tab == extra, "the new pane is not focused")
+    }
+
+    private static func shownSplit(_ app: AppUnderTest) throws -> ItemID {
+        guard let split = try app.view().content.split else { throw Check(description: "no split") }
+        return split
     }
 }

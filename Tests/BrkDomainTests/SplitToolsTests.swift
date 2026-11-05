@@ -229,8 +229,55 @@ final class SplitToolsTests: XCTestCase {
         XCTAssertEqual(d.paneIDs, [other, target])
     }
 
-    /// Refused, changing nothing: the tab onto itself, a Favorites tab either way, a folder or a split as the target, a
-    /// pane as the source, and a tab of another space.
+    /// Arc's Q15-d and P23-f: the tab takes the side it was dropped on and the focus; the split sits where the target was.
+    func testJoinRowTakesTheSideItWasDroppedOn() throws {
+        for (index, panes) in [(0, ["source", "target"]), (1, ["target", "source"])] {
+            let d = Driver()
+            let start = d.paneIDs[0]
+            let target = d.open("https://fixture.example/target"), other = d.open("https://fixture.example/other"), source = d.open("https://fixture.example/source")
+            d.user(.split(.joinRow(source, onto: target, at: index)))
+            let split = try XCTUnwrap(d.view.content.split)
+            XCTAssertEqual(d.todayIDs, [other, split, start])
+            XCTAssertEqual(d.paneIDs, panes.map { $0 == "source" ? source : target }, "dropped at \(index)")
+            XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, source)
+            XCTAssertEqual(d.view.content.orientation, .horizontal)
+        }
+    }
+
+    /// Arc's Q15-f and Q15-g: dropped on a split row at its left end the tab is the first pane, at its right end the last,
+    /// focused both ways. Between two panes it goes between them (inferred: Arc's middle was not tried).
+    func testJoinRowOntoASplitRowTakesThePlaceUnderThePointer() throws {
+        for (index, order) in [(0, [2, 0, 1]), (1, [0, 2, 1]), (2, [0, 1, 2])] {
+            let d = Driver()
+            let a = d.paneIDs[0], b = d.open("https://fixture.example/b"), c = d.open("https://fixture.example/c")
+            d.user(.split(.joinRow(b, onto: a, at: 1)))
+            let split = try XCTUnwrap(d.view.content.split)
+            d.user(.split(.joinRow(c, onto: split, at: index)))
+            XCTAssertEqual(d.view.content.split, split, "a new split instead of the same one")
+            XCTAssertEqual(d.paneIDs, order.map { [a, b, c][$0] }, "dropped at \(index)")
+            XCTAssertEqual(d.view.content.panes.first(where: \.focused)?.tab, c)
+            XCTAssertEqual(d.todayIDs, [split])
+        }
+    }
+
+    /// A stacked split stays stacked (what Arc does there was not seen); a full split takes no more.
+    func testJoinRowKeepsAStackedSplitAndRefusesAFullOne() throws {
+        let d = Driver()
+        let a = d.paneIDs[0], b = d.open("https://fixture.example/b"), c = d.open("https://fixture.example/c")
+        d.user(.split(.joinRow(b, onto: a, at: 1)))
+        let split = try XCTUnwrap(d.view.content.split)
+        d.user(.split(.orientCurrent(.vertical)))
+        d.user(.split(.joinRow(c, onto: split, at: 2)))
+        XCTAssertEqual(d.paneIDs, [a, b, c])
+        XCTAssertEqual(d.view.content.orientation, .vertical)
+        let e = d.open("https://fixture.example/e"), f = d.open("https://fixture.example/f")
+        d.user(.split(.joinRow(e, onto: split, at: 3)))
+        XCTAssertEqual(d.paneIDs, [a, b, c, e])
+        assertUnchanged(d.state, d.user(.split(.joinRow(f, onto: split, at: 4))))
+    }
+
+    /// Refused, changing nothing: the tab onto itself, a Favorites tab either way, a folder as the target, a pane as the
+    /// source, and a tab of another space.
     func testJoinRowRefusesWhatGroupTabRefuses() throws {
         let d = Driver()
         let start = d.paneIDs[0], a = d.open("https://fixture.example/a"), fav = d.open("https://fixture.example/fav")
@@ -243,8 +290,7 @@ final class SplitToolsTests: XCTestCase {
         assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: fav))))
         assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: folder))))
         d.user(.split(.joinRow(a, onto: start)))
-        let split = try XCTUnwrap(d.view.content.split)
-        assertUnchanged(d.state, d.user(.split(.joinRow(b, onto: split))))
+        _ = try XCTUnwrap(d.view.content.split)
         assertUnchanged(d.state, d.user(.split(.joinRow(a, onto: b))))
         let other = d.open("https://fixture.example/other")
         d.newSpace("Work")

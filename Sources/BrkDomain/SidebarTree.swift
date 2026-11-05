@@ -383,7 +383,8 @@ struct SidebarTree: Sendable, Equatable {
 
     /// Groups an existing standalone tab without replacing either tab or its live window slots.
     /// All checks precede writes. The destination's section decides pinning through the existing policy.
-    mutating func groupTab(_ tab: ItemID, with target: ItemID, splitID: ItemID, edge: SplitEdge, createdAt: Instant) throws(TreeError) -> ItemID {
+    /// `index`: the tab's place among a split's panes; without one the edge says first or last.
+    mutating func groupTab(_ tab: ItemID, with target: ItemID, splitID: ItemID, edge: SplitEdge, at index: Int? = nil, createdAt: Instant) throws(TreeError) -> ItemID {
         guard tab != target, let source = items[tab], source.kind == .tab, let oldParent = source.parent,
               items[oldParent]?.kind != .split, let destination = items[target], let parent = destination.parent,
               let sourceRole = role(of: tab), let targetRole = role(of: target), sourceRole.joinsSplit(in: targetRole) else { throw .forbiddenPlacement }
@@ -397,7 +398,7 @@ struct SidebarTree: Sendable, Equatable {
                           orientation: edge.orientation, lastActiveAt: createdAt, icon: nil)
             result = splitID
         case .split(let current):
-            guard let panes = current.panes.inserting(tab, at: edge.isLeading ? 0 : current.panes.count) else { throw .splitFull }
+            guard let panes = current.panes.inserting(tab, at: index ?? (edge.isLeading ? 0 : current.panes.count)) else { throw .splitFull }
             split = current
             split.panes = panes
             split.orientation = edge.orientation

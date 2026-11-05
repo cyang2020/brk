@@ -15,8 +15,9 @@ import BrkUIKit
 /// - the favorites tray: the cell under the pointer in the grid laid out with the item in it (`FavoritesGrid.dropTarget`);
 /// - the Space name strip: the top of Pinned (Q13-g/h);
 /// - a dock space cell: `.space(id)`;
-/// - the tab list: first `TablistLayout.splitTarget`, the middle half of another standalone tab's row, where a tab
-///   joins it in a split (Arc's preview capsule, P23-e; the release sends `.split(.joinRow)`); else
+/// - the tab list: first `TablistLayout.splitTarget`, the middle band of another tab or split row, where a tab joins it
+///   in a split (the half under the pointer on a tab, the whole row on a split, Q15; the release sends
+///   `.split(.joinRow)`); else
 ///   `TablistLayout.dropTarget` (the same `Placement.canPlace` the reducer applies). It sees row frames, not which
 ///   item is dragged, so its index counts the attached list; the dragged item's own slot is removed here
 ///   (`Destination` counts children after the item is detached), and drops into the item itself or its own subtree
@@ -49,8 +50,8 @@ final class DragController {
         case list(Destination, point: CGPoint)
         case dock(SpaceID)
         case content(Command)
-        /// Joins this standalone tab in a split.
-        case split(ItemID)
+        /// Makes or grows a split with this row.
+        case split(SplitJoin)
         case spaceHeader
 
         var destination: Destination? {
@@ -141,13 +142,11 @@ final class DragController {
             card.center(on: local)
             card.isHidden = !session.overContent
         }
-        // Over the page the card stands for the drag; over another tab's middle, the capsule on that row (P23-e).
-        var joining = false
-        if case .split? = session.target { joining = true }
-        session.preview.isHidden = session.overContent || joining
+        // Over the page the card stands for the drag.
+        session.preview.isHidden = session.overContent
         session.preview.place(shape(session.target, item: session.item, context: latest), pointer: local)
         if hapticsEnabled, session.target?.destination != nil, session.target?.destination != previous?.destination { haptic() }
-        show(session.target, item: session.item, context: latest, shift: event.locationInWindow.x - session.press.start.x)
+        show(session.target, item: session.item, context: latest)
         return true
     }
 
@@ -163,7 +162,7 @@ final class DragController {
         finish(session)
         switch session.target {
         case .content(let command)?: dispatch(command)
-        case .split(let target)?: dispatch(.split(.joinRow(session.item.id, onto: target)))
+        case .split(let join)?: dispatch(.split(.joinRow(session.item.id, onto: join.target, at: join.paneIndex)))
         case .favorites(let index)?:
             if let root = context?.favorites.root { dispatch(.item(.move(session.item.id, to: .into(parent: root, index: index)))) }
         case .spaceHeader?: dispatch(.item(.dropOnSpaceHeader(session.item.id)))
@@ -266,8 +265,8 @@ final class DragController {
         if let space = f.dockSpaces.first(where: { $0.value.contains(root) })?.key { return .dock(space) }
         guard f.tablistViewport.contains(root) else { return nil }
         let point = sidebar.tablist.documentPoint(fromRoot: root, frames: f)
-        if let tab = TablistLayout.splitTarget(at: point, rows: f.rows, space: context.space, dragging: item.kind, from: item.section, item: item.id) {
-            return .split(tab)
+        if let join = TablistLayout.splitTarget(at: point, rows: f.rows, space: context.space, dragging: item.kind, from: item.section, item: item.id) {
+            return .split(join)
         }
         guard let raw = TablistLayout.dropTarget(at: point, rows: f.rows, space: context.space, dragging: item.kind),
               let destination = Self.detached(raw, dragging: item.id, in: context.space) else { return nil }
@@ -313,8 +312,7 @@ final class DragController {
         }
     }
 
-    /// `shift`: how far the pointer has moved right since the press; Arc's split capsule follows it (P23-e).
-    private func show(_ target: Target?, item: Item, context: Context, shift: Double = 0) {
+    private func show(_ target: Target?, item: Item, context: Context) {
         guard let sidebar else { return }
         let f = context.frames
         if case .favorites? = target { sidebar.favorites.showEmptyDrop(true) } else { sidebar.favorites.showEmptyDrop(false) }
@@ -325,11 +323,7 @@ final class DragController {
             sidebar.tablist.showDrop(nil, dragging: nil, at: nil, frames: f, space: context.space)
         }
         if case .dock(let space)? = target { sidebar.dock.showDrop(space: space) } else { sidebar.dock.showDrop(space: nil) }
-        if case .split(let tab)? = target, let row = session?.press.source as? RowView, case .tab(let dragged)? = row.row {
-            sidebar.tablist.showSplitJoin(tab, dragged: dragged, shift: shift, frames: f, space: context.space, palette: sidebar.currentPalette)
-        } else {
-            sidebar.tablist.showSplitJoin(nil, dragged: nil, frames: f, space: context.space, palette: nil)
-        }
+        if case .split(let join)? = target { sidebar.tablist.showSplitJoin(join, frames: f) } else { sidebar.tablist.showSplitJoin(nil, frames: f) }
     }
 }
 
@@ -503,94 +497,5 @@ final class ContentDragCard: NSView {
     /// `point` in the superview's coordinates.
     func center(on point: CGPoint) {
         setFrameOrigin(CGPoint(x: (point.x - bounds.width / 2).rounded(), y: (point.y - bounds.height / 2).rounded()))
-    }
-}
-
-/// Arc's preview while a tab is held over the middle of another standalone tab's row (P23-e): the target row becomes
-/// a raised capsule on the selected-row card; its left half holds the dragged tab (icon and title on a light chip,
-/// the darker slot it will fill showing at the chip's left edge), its right half the target's title, faint and
-/// truncated, and a ×. Laid out in the target row's frame (tab list document coordinates).
-@MainActor
-final class SplitJoinPreview: NSView {
-    private let capsule = NSView()
-    private let slot = NSView()
-    private let chip = NSView()
-    private let icon = IconView()
-    private let title = NSTextField(labelWithString: "")
-    private let target = NSTextField(labelWithString: "")
-    private let close = GlyphButton()
-    private var depth = 0
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        for view in [capsule, slot, chip] {
-            view.wantsLayer = true
-            view.layer?.cornerCurve = .continuous
-        }
-        capsule.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
-        slot.layer?.cornerRadius = Draw.splitSegmentRadius.value
-        chip.layer?.cornerRadius = Draw.splitSegmentRadius.value
-        for label in [title, target] {
-            label.font = .systemFont(ofSize: Draw.rowTitleFont.value)
-            label.lineBreakMode = .byTruncatingTail
-            label.isSelectable = false
-        }
-        for view in [capsule, slot, chip, icon, title, target, close] as [NSView] { addSubview(view) }
-        identify(.tabTool("split-join-preview"))
-        chip.identify(.tabTool("split-join-chip"))
-        target.identify(.tabTool("split-join-target"))
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override var isFlipped: Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    func render(dragged: TabRow, onto row: TabRow, depth: Int, palette: Palette) {
-        self.depth = depth
-        let ink = HueInk(palette)
-        capsule.layer?.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
-        let shadow = NSShadow()
-        shadow.shadowColor = palette.color(palette.tokens.tabShadow)
-        shadow.shadowBlurRadius = Draw.selectedShadowRadius.value
-        shadow.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
-        capsule.shadow = shadow
-        // The theme's hue at Arc's measured strength (P23-e: slot #82A9A8, chip #E0E7E7 on the pale teal theme); dark
-        // windows take the hue ink's back and front.
-        if palette.scheme == .light {
-            let (h, sat, _) = HueInk.hsl(palette.accent)
-            let slotInk = Draw.splitJoinSlotInk.value, chipInk = Draw.splitJoinChipInk.value
-            slot.layer?.backgroundColor = HueInk.color(h, min(sat, 0.5) * slotInk[0], slotInk[1]).cgColor
-            chip.layer?.backgroundColor = HueInk.color(h, min(sat, 0.5) * chipInk[0], chipInk[1]).cgColor
-        } else {
-            slot.layer?.backgroundColor = ink.back.cgColor
-            chip.layer?.backgroundColor = ink.front.cgColor
-        }
-        icon.render(IconContent(tab: dragged), tint: palette.ink.secondary, palette: palette)
-        title.stringValue = dragged.awaitingFirstDocument ? SidebarCopy.untitled : dragged.title
-        title.textColor = palette.ink.text
-        target.stringValue = row.awaitingFirstDocument ? SidebarCopy.untitled : row.title
-        target.textColor = palette.scheme == .light ? NSColor(white: 0, alpha: Draw.splitJoinTargetInk.value) : NSColor(white: 1, alpha: Draw.splitJoinTargetInk.value)
-        close.render(.archiveTab, size: Draw.smallFont.value, palette: palette, tint: palette.ink.secondary,
-                     radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: nil)
-        needsLayout = true
-    }
-
-    override func layout() {
-        super.layout()
-        let g = RowGeometry(bounds: bounds, depth: depth)
-        capsule.frame = g.selection
-        let c = g.selection.insetBy(dx: 0, dy: Draw.hairline.value / 2)
-        slot.frame = CGRect(x: c.minX, y: c.minY, width: (c.width * Draw.splitJoinChipWidth.value).rounded(), height: c.height)
-        chip.frame = slot.frame.offsetBy(dx: Draw.splitJoinChipOffset.value, dy: 0)
-        let side = Metrics.tablist.favicon.value
-        icon.frame = CGRect(x: chip.frame.minX + Draw.faviconLeading.value, y: bounds.midY - side / 2, width: side, height: side)
-        let height = title.intrinsicContentSize.height
-        let titleX = chip.frame.minX + Draw.titleLeading.value
-        title.frame = CGRect(x: titleX, y: (bounds.height - height) / 2, width: max(0, chip.frame.maxX - Draw.titleTrailing.value - titleX), height: height)
-        close.frame = g.button
-        let targetX = g.selection.midX + Draw.splitJoinTargetLeading.value
-        target.frame = CGRect(x: targetX, y: (bounds.height - height) / 2, width: max(0, g.button.midX - Draw.splitJoinTargetTrailing.value - targetX), height: height)
     }
 }

@@ -179,15 +179,14 @@ public final class ContentAreaView: NSView {
         }
         dragPosition = point
         guard let edge = SplitToolsLayout.edge(at: point, in: dropArea) else {
-            // The middle of the page rings the whole of it, in the line's stronger ink (Q13-e). A release here does nothing:
-            // Arc's result for it has not been seen.
+            // The middle of the page rings the whole of it, in the focus color at full strength (Q13-e). A release here does
+            // nothing: Arc's result for it has not been seen.
             for ((card, shadow), rest) in zip(zip(cards, shadows), resting) {
                 card.release(to: rest.card)
                 shadow.frame = rest.shadow
             }
             dropPreview.frame = dropArea
-            let ink = SplitDropDraw.middleInk.value
-            dropPreview.layer?.borderColor = NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha).cgColor
+            dropPreview.layer?.borderColor = accent.cgColor
             dropPreview.layer?.borderWidth = SplitDropDraw.middleBorder.value
             dropPreview.isHidden = false
             return nil
@@ -486,7 +485,6 @@ struct SplitDropMetrics: MetricGroup {
     /// just under it, 4% still 9 pt away; with the other pane's own shadow the 10 pt gap reads #D0CBC7 to #DBD6D2).
     let liftedShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the focused pane's edges fade like an 8 pt Gaussian"))
     let liftedShadowAlpha = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: 13% above plus 15% below the focused pane"))
-    let middleInk = Metric(RGBA(0x57 / 255, 0x57 / 255, 0x57 / 255, 1), .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-e-arc.png: a drag over the middle of the page rings it in #575757"))
     let middleBorder = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-e-arc.png: that ring is 3 pt"))
     let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }

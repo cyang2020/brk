@@ -114,17 +114,27 @@ extension Work {
                   let scope = state.locate(target) else { return }
             if state.role(of: source)?.kind == .favorites { guard moveItem(source, to: .after(target)) else { return } }
             group(source, with: target, edge: edge, in: scope, window: window)
-        case .joinRow(let source, let target):
+        case .joinRow(let source, let target, let index):
             let units = state.units(in: window)
             guard state.doc.windows[window]?.kind != .little, units.contains(source), units.contains(target),
-                  let scope = state.locate(target), state.locate(source) == scope, state.tree(scope)?[target]?.kind == .tab else { return }
-            group(source, with: target, edge: .left, in: scope, window: window)
+                  let scope = state.locate(target), state.locate(source) == scope, let body = state.tree(scope)?[target]?.body else { return }
+            switch body {
+            case .tab:
+                group(source, with: target, edge: index == 0 ? .left : .right, in: scope, window: window)
+            case .split(let split):
+                // Its orientation stays: how Arc treats a tab dropped on a stacked split has not been seen.
+                let first = index == 0
+                let edge: SplitEdge = split.orientation == .vertical ? (first ? .top : .bottom) : (first ? .left : .right)
+                group(source, with: target, edge: edge, at: index, in: scope, window: window)
+            default:
+                return
+            }
         }
     }
 
     /// `source` joins `target` in a split (`SidebarTree.groupTab`) and the window shows it with `source` focused. Any
     /// window that showed either tab shows the split instead, with the pane it showed focused.
-    private mutating func group(_ source: ItemID, with target: ItemID, edge: SplitEdge, in scope: ContainerScope, window: WindowID) {
+    private mutating func group(_ source: ItemID, with target: ItemID, edge: SplitEdge, at index: Int? = nil, in scope: ContainerScope, window: WindowID) {
         let before = state.doc.windows.mapValues { doc in
             doc.activeBySpace.filter { $0.value == target || $0.value == source }.mapValues { shown in
                 shown == source ? source : (state.focusedPane(of: target, in: doc.id) ?? target)
@@ -132,7 +142,7 @@ extension Work {
         }
         var grouped: ItemID?
         state.withTree(scope) { tree in
-            grouped = try? tree.groupTab(source, with: target, splitID: ItemID(ctx.newID()), edge: edge, createdAt: ctx.now)
+            grouped = try? tree.groupTab(source, with: target, splitID: ItemID(ctx.newID()), edge: edge, at: index, createdAt: ctx.now)
         }
         guard let split = grouped else { return }
         for (owner, spaces) in before {

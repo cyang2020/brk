@@ -8,8 +8,8 @@ import XCTest
 
 /// R4-12, the two problems a user reported (verify/visual-pairs/run-20261103: P05-f, P07-b, P23-e/f): at every sidebar
 /// width from Arc's 228 down to the 164 minimum no sidebar text leaves its frame and the empty Favorites box keeps
-/// Arc's composition inside it; dragging one tab row onto the middle of another shows Arc's split capsule and the
-/// release joins them, while a row's edges still reorder and a folder's middle still takes the tab in.
+/// Arc's composition inside it; dragging one tab row onto the middle of another shows a slot in the half under the
+/// pointer and the release joins them on that side, while a row's edges still reorder and a folder's middle still takes the tab in.
 @MainActor
 final class SidebarJoinAndNarrowTests: XCTestCase {
     static let size = CGSize(width: 1280, height: 776)
@@ -179,36 +179,87 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
         row.convert(CGPoint(x: row.bounds.midX, y: row.bounds.height * fraction), to: nil)
     }
 
-    /// Arc's P23-e/f: Inbox held on the middle of Secondary reference shows the capsule in Secondary's place (Inbox's
-    /// title on the chip, Secondary's beside it), keeps Inbox lifted with its ×, and the release asks for the split.
-    func testHoldingATabOnAnotherTabsMiddleShowsArcsCapsuleAndTheReleaseJoinsThem() throws {
-        let sink = Sink()
-        let (window, root, view) = try rig(width: 228, sink: sink)
-        defer { window.close() }
-        let today = view.space.today.rows.map(\.id)
-        let inbox = today[0], secondary = today[2]
-        let source = try row(inbox, in: root), target = try row(secondary, in: root)
-        let held = point(in: target, fraction: 0.5)
-        drag(source, to: held, in: window)
-        let preview = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-preview").identifier, in: root))
-        XCTAssertFalse(preview.isHidden, "no capsule on the middle of the row")
-        XCTAssertEqual(preview.convert(preview.bounds, to: nil), target.convert(target.bounds, to: nil), "the capsule is not in the target row's place")
-        XCTAssertEqual(target.alphaValue, 0, "the target row shows under the capsule")
-        let chip = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-chip").identifier, in: preview))
-        let rest = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-target").identifier, in: preview) as? NSTextField)
-        XCTAssertEqual(rest.stringValue, "Secondary reference")
-        XCTAssertLessThan(chip.frame.maxX, rest.frame.minX, "the dragged tab is not on the left half")
-        let titles = preview.subviews.compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(titles.contains("Inbox"), "the chip does not carry the dragged tab: \(titles)")
-        XCTAssertTrue(source.dragLifted, "the dragged row is not lifted in place")
-        XCTAssertFalse(source.dragSource)
-        source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
-        XCTAssertEqual(sink.commands.last, .split(.joinRow(inbox, onto: secondary)))
-        XCTAssertTrue(preview.isHidden, "the capsule stayed after the release")
-        XCTAssertEqual(target.alphaValue, 1)
+    private func slot(_ row: RowView, in root: NSView) throws -> NSView {
+        try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-slot-" + (row.row?.id.rawValue ?? "")).identifier, in: root))
     }
 
-    /// The row's upper and lower quarters still reorder (a drop line, no capsule), and a pinned folder's middle still
+    /// Arc's Q15-a/b/d, P23-f: a tab held on the middle of another tab's row: the row image rides the pointer, a slot shows
+    /// in the half under the pointer, the row's own title moves to the other half; the release asks for that side.
+    func testATabOnAnotherTabsMiddleShowsASlotInTheHalfUnderThePointer() throws {
+        for (dx, leading, index) in [(-20.0, true, 0), (0.0, false, 1), (60.0, false, 1), (-90.0, true, 0)] {
+            let sink = Sink()
+            let (window, root, view) = try rig(width: 228, sink: sink)
+            defer { window.close() }
+            let today = view.space.today.rows.map(\.id)
+            let inbox = today[0], secondary = today[2]
+            let source = try row(inbox, in: root), target = try row(secondary, in: root)
+            let middle = point(in: target, fraction: 0.5)
+            let held = CGPoint(x: middle.x + dx, y: middle.y)
+            drag(source, to: held, in: window)
+            XCTAssertEqual(target.joinLeading, leading, "pointer \(dx) from the midpoint")
+            let shown = try slot(target, in: root)
+            XCTAssertFalse(shown.isHidden)
+            XCTAssertEqual(shown.frame.minX, leading ? 14 : 120, accuracy: 0.5, "pointer \(dx)")
+            XCTAssertEqual(shown.frame.maxX, leading ? 114 : 220, accuracy: 0.5, "pointer \(dx)")
+            XCTAssertEqual(shown.frame.height, 36)
+            let title = try XCTUnwrap(target.subviews.first { ($0 as? NSTextField)?.stringValue == "Secondary reference" })
+            XCTAssertEqual(title.frame.minX, leading ? 42 + 106 : 42, accuracy: 3, "the title is not in the other half")
+            XCTAssertLessThanOrEqual(title.frame.maxX, leading ? 220 : 114, "the title runs into the slot")
+            let image = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("drag-image").identifier, in: root))
+            XCTAssertFalse(image.isHidden, "the row image does not stay with the pointer")
+            XCTAssertEqual(image.frame.size, CGSize(width: 212, height: 36))
+            XCTAssertEqual(image.frame.midX, held.x, accuracy: 1, "the image does not keep its grab")
+            XCTAssertTrue(source.dragLifted, "the dragged row is not lifted in place")
+            XCTAssertFalse(source.dragSource)
+            source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
+            XCTAssertEqual(sink.commands.last, .split(.joinRow(inbox, onto: secondary, at: index)))
+            XCTAssertTrue(shown.isHidden, "the slot stayed after the release")
+            XCTAssertNil(target.joinLeading)
+        }
+    }
+
+    /// Arc's Q15: 9.5 pt from a row's top or bottom edge is a reorder, 11.5 pt a slot.
+    func testNearARowsEdgeReordersAndFurtherInIsASlot() throws {
+        for (fromTop, distance, slotted) in [(true, 9.5, false), (true, 11.5, true), (false, 9.5, false), (false, 11.5, true)] {
+            let sink = Sink()
+            let (window, root, view) = try rig(width: 228, sink: sink)
+            defer { window.close() }
+            let today = view.space.today.rows.map(\.id)
+            let source = try row(today[0], in: root), target = try row(today[2], in: root)
+            let fraction = (fromTop ? distance : target.bounds.height - distance) / target.bounds.height
+            let held = point(in: target, fraction: fraction)
+            drag(source, to: held, in: window)
+            XCTAssertEqual(target.joinLeading != nil, slotted, "\(distance) from the \(fromTop ? "top" : "bottom")")
+            source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
+        }
+    }
+
+    /// Arc's Q15-e: a split row answers with one band across the whole sidebar, at any x; the place goes by the pointer.
+    func testASplitRowShowsOneBandAndTakesThePlaceUnderThePointer() throws {
+        for (x, index) in [(30.0, 0), (114.0, 1), (200.0, 2)] {
+            let sink = Sink()
+            let (window, root, view) = try rig(width: 228, sink: sink) { view in
+                let today = view.space.today.rows.map(\.id)
+                return [.split(.joinRow(today[1], onto: today[2], at: 1))]
+            }
+            defer { window.close() }
+            let split = try XCTUnwrap(view.content.split)
+            let source = try row(view.space.today.rows.map(\.id)[0], in: root)
+            let target = try XCTUnwrap(ViewTreeSearch.find(ViewID.row(split).identifier, in: root))
+            let middle = target.convert(CGPoint(x: x, y: target.bounds.midY), to: nil)
+            drag(source, to: middle, in: window)
+            let band = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-band").identifier, in: root))
+            XCTAssertFalse(band.isHidden, "no band at \(x)")
+            XCTAssertEqual(band.frame.minX, 0)
+            XCTAssertEqual(band.frame.width, 228)
+            XCTAssertEqual(band.frame.height, 41)
+            source.mouseUp(with: mouse(.leftMouseUp, middle, in: window))
+            XCTAssertEqual(sink.commands.last, .split(.joinRow(try XCTUnwrap(source.row?.id), onto: split, at: index)))
+            XCTAssertTrue(band.isHidden, "the band stayed")
+        }
+    }
+
+    /// The row's upper and lower quarters still reorder (a drop line, no slot), and a pinned folder's middle still
     /// takes the tab in.
     func testARowsEdgesStillReorderAndAFoldersMiddleStillTakesTheTabIn() throws {
         let sink = Sink()
@@ -220,8 +271,7 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
             let source = try row(inbox, in: root), target = try row(secondary, in: root)
             let held = point(in: target, fraction: fraction)
             drag(source, to: held, in: window)
-            let preview = ViewTreeSearch.find(ViewID.tabTool("split-join-preview").identifier, in: root)
-            XCTAssertTrue(preview == nil || preview!.isHidden, "a capsule at \(fraction) of the row")
+            XCTAssertNil(target.joinLeading, "a slot at \(fraction) of the row")
             source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
             XCTAssertEqual(sink.commands.last, .item(.move(inbox, to: .into(parent: view.space.today.root, index: index))), "at \(fraction)")
         }
@@ -244,28 +294,9 @@ final class SidebarJoinAndNarrowTests: XCTestCase {
         let source = try row(design, in: root)
         let held = point(in: try row(inbox, in: root), fraction: 0.5)
         drag(source, to: held, in: window)
-        let preview = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-preview").identifier, in: root))
-        XCTAssertFalse(preview.isHidden)
+        XCTAssertNotNil(try row(inbox, in: root).joinLeading)
         source.mouseUp(with: mouse(.leftMouseUp, held, in: window))
-        XCTAssertEqual(sink.commands.last, .split(.joinRow(design, onto: inbox)))
-    }
-
-    /// The capsule follows the pointer sideways (Arc's sits 7 pt right of the row in P23-e), no further than the list's
-    /// 8 pt side inset.
-    func testTheCapsuleFollowsThePointerSideways() throws {
-        for (dx, expected) in [(7.0, 7.0), (-5.0, -5.0), (30.0, 8.0)] {
-            let sink = Sink()
-            let (window, root, view) = try rig(width: 228, sink: sink)
-            defer { window.close() }
-            let today = view.space.today.rows.map(\.id)
-            let source = try row(today[0], in: root), target = try row(today[2], in: root)
-            let start = point(in: source, fraction: 0.5), middle = point(in: target, fraction: 0.5)
-            drag(source, to: CGPoint(x: start.x + dx, y: middle.y), in: window)
-            let preview = try XCTUnwrap(ViewTreeSearch.find(ViewID.tabTool("split-join-preview").identifier, in: root))
-            XCTAssertFalse(preview.isHidden)
-            XCTAssertEqual(preview.convert(preview.bounds, to: nil).minX - target.convert(target.bounds, to: nil).minX, expected, accuracy: 0.5, "pointer moved \(dx)")
-            source.mouseUp(with: mouse(.leftMouseUp, CGPoint(x: start.x + dx, y: middle.y), in: window))
-        }
+        XCTAssertEqual(sink.commands.last, .split(.joinRow(design, onto: inbox, at: 1)))
     }
 
     /// Arc's lifted row keeps the current tab's shadow (P23-e: Inbox is the shown tab); a lifted row that is not the

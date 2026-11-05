@@ -322,25 +322,62 @@ public enum TablistLayout {
         return .into(parent: t.parent, index: t.index)
     }
 
-    /// The tab a drag at `point` (tab list document coordinates) would join in a split (Arc 1.170, P23-e): the middle
-    /// half of a standalone tab row other than `item`, when the dragged item is a tab of a `section` that may join the
-    /// row's (`Placement.canJoinSplit`). Nil elsewhere, where `dropTarget` decides: the row's upper and lower quarters
-    /// still reorder, a folder's middle still drops into it, a split row keeps its halves.
+    /// What a tab held at `point` (tab list document coordinates) would join in a split (Arc 1.170, Q15): the row's middle
+    /// band (a quarter of a row from either edge reorders instead), on a row other than `item`, when the dragged item is a
+    /// tab of a `section` that may join the row's (`Placement.canJoinSplit`). On a standalone tab the half under the
+    /// pointer takes it, by the pointer against the row's midpoint, wherever the drag image is. On a split row the place
+    /// is the boundary between panes nearest the pointer: Arc's two ends were seen (Q15-f, Q15-g), the ones between are
+    /// inferred. A full split takes no more. Nil elsewhere, where `dropTarget` decides; a folder's middle still drops into it.
     public static func splitTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind, from section: SectionKind,
-                                   item: ItemID) -> ItemID? {
+                                   item: ItemID) -> SplitJoin? {
         guard kind == .tab, let hit = rows.first(where: { point.y >= $0.rect.minY && point.y < $0.rect.maxY }),
               case .item(let id) = hit.kind, id != item else { return nil }
         let f = (point.y - hit.rect.minY) / max(hit.rect.height, 1)
         guard f >= Metrics.tablist.splitJoinZone.value.lowerBound, f <= Metrics.tablist.splitJoinZone.value.upperBound else { return nil }
-        func standaloneTab(in rows: [Row]) -> Bool {
-            rows.contains { row in
-                if case .folder(let folder) = row { return standaloneTab(in: folder.children) }
-                return row.id == id && row.kind == .tab
+        func joinable(in rows: [Row]) -> Row? {
+            for row in rows {
+                if case .folder(let folder) = row {
+                    if let hit = joinable(in: folder.children) { return hit }
+                } else if row.id == id { return row }
             }
+            return nil
         }
-        let target: SectionKind? = standaloneTab(in: space.pinned.rows) ? .pinned : standaloneTab(in: space.today.rows) ? space.today.kind : nil
-        guard let target, Placement.canJoinSplit(section, with: target) else { return nil }
-        return id
+        let pinned = joinable(in: space.pinned.rows), today = joinable(in: space.today.rows)
+        guard let row = pinned ?? today, Placement.canJoinSplit(section, with: pinned != nil ? .pinned : space.today.kind) else { return nil }
+        switch row {
+        case .tab:
+            return .tab(id, leading: point.x < hit.rect.midX)
+        case .split(let split):
+            guard split.panes.count < Metrics.content.maxPanes.value else { return nil }
+            let t = Metrics.tablist
+            let start = hit.rect.minX + t.selectionInset.value + Double(hit.depth) * t.folderIndent.value
+            let pane = max(1, hit.rect.maxX - t.selectionInset.value - start) / Double(split.panes.count)
+            return .split(id, index: min(max(0, Int(((point.x - start) / pane).rounded())), split.panes.count))
+        case .folder:
+            return nil
+        }
+    }
+}
+
+/// A tab held over the middle of another row, where a release makes or grows a split (Arc 1.170, Q15).
+public enum SplitJoin: Sendable, Equatable {
+    /// A standalone tab: the tab would take the half under the pointer.
+    case tab(ItemID, leading: Bool)
+    /// A split row: the whole row answers, and the tab would be pane `index`.
+    case split(ItemID, index: Int)
+
+    public var target: ItemID {
+        switch self {
+        case .tab(let id, _), .split(let id, _): id
+        }
+    }
+
+    /// The dragged tab's place among the panes (`SplitCommand.joinRow`).
+    public var paneIndex: Int {
+        switch self {
+        case .tab(_, let leading): leading ? 0 : 1
+        case .split(_, let index): index
+        }
     }
 }
 
