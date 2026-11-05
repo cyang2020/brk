@@ -24,6 +24,7 @@ enum SidebarEvidenceScenarios {
         Scenario("R49-Groups", "a tab group's menu renames it, copies its links and closes it; the group survives a restart", cefOnly: "native group header menu", groups),
         Scenario("R49-WindowMenu", "Zoom, Minimize, Bring All to Front, Hide and Show All act on Brk's own windows and keep page focus", cefOnly: "native window states", windowMenu),
         Scenario("R49-StayOnTop", "Stay on Top raises one window, drops while full screen, comes back after, and survives a restart", cefOnly: "native window level", stayOnTop),
+        Scenario("R55-PinnedButton", "a Pinned row that is not current is archived by its x and comes back to its place; the current one's minus closes the page and keeps the row", cefOnly: "native sidebar rows", pinnedButton),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -119,6 +120,44 @@ enum SidebarEvidenceScenarios {
         try app.click(.row(unloaded))
         try app.waitUntil("the unloaded tab opens at its pinned address") { try committed(app, S.page(app, unloaded)) == app.site.url("page2.html?reset=unloaded") }
         app.passed("Tabs > Reset all tabs in this Space: top, nested folder, both split panes, unloaded (row, then on click)")
+    }
+
+    // MARK: Q18: the hover button of a Pinned row (Arc: the x archives a row that is not current; the current row's
+    // minus closes the page and keeps the row; Restore Last Closed Tab puts an archived Pinned tab back in its place)
+
+    @Sendable static func pinnedButton(_ app: AppUnderTest) throws {
+        let first = try loadReady(app, "page2.html?pinned=first")
+        let second = try loadReady(app, "page2.html?pinned=second")
+        let third = try loadReady(app, "page2.html?pinned=third")
+        for id in [third, second, first] { try app.dispatch(.item(.move(id, to: .into(parent: try app.view().space.pinned.root, index: 0)))) }
+        let today = try loadReady(app, "red.html?pinned=today")
+        func pinned() throws -> [ItemID] { try app.view().space.pinned.rows.map(\.id) }
+        let start = try pinned()
+        try expect(try start == [first, second, third] && shown(app.view()) == today, "setup: \(start)")
+        func pressButton(_ id: ItemID) throws {
+            let row = try app.native().actual[ViewID.row(id).identifier]!.frame
+            try app.hover(CGPoint(x: row.midX, y: row.midY))
+            try app.waitUntil("the row's button") { isShown(try app.native(), .rowClose(id)) }
+            try app.click(.rowClose(id))
+        }
+        try pressButton(second)
+        try app.waitUntil("the Pinned row that was not current is archived") { try pinned() == [first, third] }
+        try expect(try shown(app.view()) == today, "archiving another row changed what is shown")
+        _ = try app.screenshot("archived")
+        try app.press("cmd+shift+t")
+        try app.waitUntil("the restored tab is back between its neighbours") { let p = try pinned(); return p.count == 3 && p.first == first && p.last == third }
+        let restored = try pinned()[1]
+        try app.waitUntil("the restored tab is shown and loaded") { try shown(app.view()) == restored && tab(restored, in: app.view())?.loaded == true }
+        _ = try app.screenshot("restored")
+        try pressButton(restored)
+        try app.waitUntil("the current Pinned row stays, without its page") { try pinned().count == 3 && tab(restored, in: app.view())?.loaded == false }
+        try expect(try shown(app.view()) != restored, "the closed pinned tab is still shown")
+        _ = try app.screenshot("closed-and-kept")
+        try app.perform(.menuAction("Collapse Pinned Section"))
+        try app.waitUntil("Pinned collapsed") { try app.view().space.pinned.collapsed }
+        _ = try app.screenshot("collapsed-pointer-away")
+        try app.perform(.menuAction("Expand Pinned Section"))
+        try app.waitUntil("Pinned expanded") { try !app.view().space.pinned.collapsed }
     }
 
     // MARK: A012

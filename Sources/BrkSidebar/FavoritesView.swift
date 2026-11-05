@@ -239,7 +239,6 @@ final class FavoriteTileView: HoverView {
         subtitle.isHidden = row.subtitle == nil
         subtitle.render(row.subtitle ?? "", selected: row.status == .current, scheme: palette.scheme)
         icon.render(IconContent(tab: row), tint: palette.ink.secondary, palette: palette)
-        icon.alphaValue = row.loaded ? 1 : Draw.unloadedAlpha.value
         if renaming { showRenameField(row, palette: palette) } else { retireRenameField() }
         stateChanged()
         needsLayout = true

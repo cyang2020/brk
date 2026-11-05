@@ -262,4 +262,12 @@ final class PageDropRuleTests: XCTestCase {
         XCTAssertEqual(state.target, .replace(pane: 1))
         XCTAssertEqual(PageDropRule.releaseCommand(state, source: ItemID("tab"), offer: nil, paneCount: 2), .tab(.focus(ItemID("tab"))), "no offer: a tab the window cannot take")
     }
+
+    /// Arc 0x10048ee6c: the share a new pane would get, scaled to fit 250 pt.
+    func testTheCardFollowsThePanes() {
+        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 1), CGSize(width: 169, height: 250), "P23-d")
+        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 2), CGSize(width: 113, height: 250), "Q17-split-hold")
+        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 4), CGSize(width: 68, height: 250))
+        XCTAssertEqual(PageDropRule.cardSize(area: CGRect(x: 0, y: 0, width: 2020, height: 400), paneCount: 1), CGSize(width: 250, height: 100), "a wide, low window")
+    }
 }

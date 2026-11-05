@@ -123,7 +123,8 @@ public enum TabCommand: Hashable, Sendable, Codable {
     /// Ctrl+Tab / Ctrl+Shift+Tab: move the switcher's selection along the frozen recent order. The window switches
     /// to the selection only when the walk commits (Control released, or any other command); Esc cancels it.
     case cycleRecent(Step)
-    /// Cmd+W and the hover x. Today: archive. Pinned or Favorites: unload, keep the row ("Close and Keep Pinned").
+    /// Cmd+W and the current row's hover button. Today: archive. Pinned or Favorites: unload, keep the row ("Close and
+    /// Keep Pinned"). The hover x of a Pinned row that is not current archives it (`BulkTabAction.archive`).
     case close(ItemRef)
     /// Context-menu "Archive Tab": archive whatever the section.
     case archive(ItemRef)
