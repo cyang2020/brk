@@ -108,6 +108,20 @@ public struct SidebarFrames: Sendable, Equatable, Codable {
     public var dockSpaces: [SpaceID: CGRect]
     public var libraryButton: CGRect
     public var plusButton: CGRect
+    /// The mini player cards above the dock, oldest first; `tablistViewport` ends above them (`MiniPlayerLayout`).
+    public var miniPlayers: [MiniPlayerFrame] = []
+}
+
+/// One mini player card in window coordinates.
+public struct MiniPlayerFrame: Sendable, Equatable, Codable {
+    public var tab: ItemID
+    public var rect: CGRect
+    /// The cards behind the front one fade at rest (Metrics.miniPlayer.restAlphaStep).
+    public var alpha: Double
+
+    public init(tab: ItemID, rect: CGRect, alpha: Double) {
+        self.tab = tab; self.rect = rect; self.alpha = alpha
+    }
 }
 
 /// One line of the tab list, after flattening folders.

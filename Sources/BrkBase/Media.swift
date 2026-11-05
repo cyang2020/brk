@@ -14,18 +14,31 @@ public struct MediaPlayer: Hashable, Sendable, Codable {
     public let paused: Bool
     public let ended: Bool
     public let pictureInPicture: Bool
-    public init(id: MediaPlayerID, kind: MediaKind, paused: Bool, ended: Bool, pictureInPicture: Bool = false) {
+    /// The page has muted this element, or it plays at volume 0 by the page's own choice: it makes no sound, so it gets
+    /// no mini player (`media.js` reports it).
+    public let silent: Bool
+    /// The player's frame has a Media Session handler for the next or previous track (Arc's `MediaSessionState`).
+    public let hasNextTrack: Bool
+    public let hasPreviousTrack: Bool
+    public init(id: MediaPlayerID, kind: MediaKind, paused: Bool, ended: Bool, pictureInPicture: Bool = false, silent: Bool = false,
+                hasNextTrack: Bool = false, hasPreviousTrack: Bool = false) {
         self.id = id; self.kind = kind; self.paused = paused; self.ended = ended; self.pictureInPicture = pictureInPicture
+        self.silent = silent; self.hasNextTrack = hasNextTrack; self.hasPreviousTrack = hasPreviousTrack
     }
 }
-public enum MediaOperation: String, Hashable, Sendable, Codable { case play, pause, enterPictureInPicture, exitPictureInPicture }
+public enum MediaOperation: String, Hashable, Sendable, Codable { case play, pause, enterPictureInPicture, exitPictureInPicture, nextTrack, previousTrack, setVolume }
 public struct MediaControl: Hashable, Sendable, Codable {
     public let document: DocumentToken
     public let player: MediaPlayerID
     public let userInitiated: Bool
     public let operation: MediaOperation
-    public init(document: DocumentToken, player: MediaPlayerID, operation: MediaOperation, userInitiated: Bool = true) { self.document = document; self.player = player; self.operation = operation; self.userInitiated = userInitiated }
+    /// `setVolume`: the volume, 0 to 1.
+    public let volume: Double?
+    public init(document: DocumentToken, player: MediaPlayerID, operation: MediaOperation, userInitiated: Bool = true, volume: Double? = nil) { self.document = document; self.player = player; self.operation = operation; self.userInitiated = userInitiated; self.volume = volume }
 }
+/// What a mini player's transport buttons ask of a tab (Arc: `ADKClient.playMediaSession`, `pauseMediaSession`,
+/// `playNextMediaSessionTrack`, `playPreviousMediaSessionTrack`). Unlike `MediaOperation` it names no player.
+public enum MediaSessionOperation: String, Hashable, Sendable, Codable { case play, pause, nextTrack, previousTrack }
 
 public enum PictureInPictureIntent: String, Hashable, Sendable, Codable { case video, document, close }
 public struct DocumentPiPControl: Hashable, Sendable, Codable {

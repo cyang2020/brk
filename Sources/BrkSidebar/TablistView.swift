@@ -25,6 +25,9 @@ final class TablistView: NSScrollView {
     private let dropLine = DropLineView()
     private let topEdge = NSView()
     private let bottomEdge = NSView()
+    /// The round button at the list's edge while the current row is scrolled out of view (Arc, Q18-media-q, -r).
+    private let currentArrow = CurrentRowArrowView()
+    private var currentRow: (id: ItemID, title: String)?
     private var rowViews: [ItemID: RowView] = [:]
     /// A render cache of the domain selection. Pointer gestures dispatch typed selection and bulk commands.
     private var multiselection: [ItemID] = []
@@ -75,6 +78,9 @@ final class TablistView: NSScrollView {
             addSubview(edge)
         }
         addSubview(education)
+        addSubview(currentArrow)
+        currentArrow.isHidden = true
+        currentArrow.action = { [weak self] in self?.scrollToCurrentRow() }
     }
 
     @available(*, unavailable)
@@ -115,10 +121,13 @@ final class TablistView: NSScrollView {
         if let previousSpace, previousSpace != space.id { pushTransition(from: previousSpace, to: space.id, order: dockOrder) }
 
         var rows: [ItemID: (row: Row, section: SectionKind)] = [:]
+        currentRow = nil
         func index(_ list: [Row], _ section: SectionKind) {
             for row in list {
                 rows[row.id] = (row, section)
                 if case .folder(let folder) = row { index(folder.children, section) }
+                if case .tab(let tab) = row, tab.status == .current { currentRow = (row.id, tab.title) }
+                if case .split(let split) = row, split.status == .current { currentRow = (row.id, split.panes.first { $0.status == .current }?.title ?? "") }
             }
         }
         index(space.pinned.rows, .pinned)
@@ -270,6 +279,26 @@ final class TablistView: NSScrollView {
         bottomEdge.frame = CGRect(x: 0, y: bottom, width: bounds.width, height: line)
         topEdge.isHidden = visible.minY <= 0
         bottomEdge.isHidden = visible.maxY >= contentBottom
+        updateCurrentArrow(visible: visible)
+    }
+
+    private func updateCurrentArrow(visible: CGRect) {
+        guard let last, let palette = Optional(last.palette) else { return }
+        let row = currentRow.flatMap { current in last.frames.rows.first { $0.kind == .item(current.id) }?.rect }
+        guard let arrow = TablistLayout.currentRowArrow(row: row, visible: visible) else {
+            currentArrow.isHidden = true
+            return
+        }
+        currentArrow.isHidden = false
+        var frame = TablistLayout.currentRowArrowFrame(arrow, in: bounds.size)
+        if !isFlipped { frame.origin.y = bounds.height - frame.maxY }
+        currentArrow.frame = frame
+        currentArrow.render(arrow, tip: currentRow?.title, palette: palette)
+    }
+
+    private func scrollToCurrentRow() {
+        guard let last, let current = currentRow, let row = last.frames.rows.first(where: { $0.kind == .item(current.id) }) else { return }
+        document.scrollToVisible(row.rect)
     }
 
     // MARK: Drag feedback (DragController)
@@ -373,6 +402,41 @@ final class TablistView: NSScrollView {
     }
 }
 
+/// Arc's round button at the list's edge: an arrow towards the current row, its title as the tooltip; a click scrolls the
+/// row back into view. It has nothing to do with media; a taller mini player is just one way to lose the row (Q18-media-e).
+@MainActor
+final class CurrentRowArrowView: NSView {
+    private let button = GlyphButton()
+    var action: (() -> Void)? { didSet { button.action = { [weak self] _ in self?.action?() } } }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        addSubview(button)
+        identify(.tabTool("current-row-arrow"))
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor(white: 0, alpha: Draw.currentArrowShadow.value)
+        shadow.shadowBlurRadius = Draw.currentArrowShadowBlur.value
+        shadow.shadowOffset = CGSize(width: 0, height: -Draw.currentArrowShadowOffset.value)
+        self.shadow = shadow
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func layout() { super.layout(); button.frame = bounds }
+
+    func render(_ arrow: CurrentRowArrow, tip: String?, palette: Palette) {
+        let light = palette.scheme == .light
+        button.latchedFill = light ? Draw.currentArrowFillLight.value : Draw.currentArrowFillDark.value
+        button.tip = tip
+        button.render(arrow == .up ? .currentRowUp : .currentRowDown, size: Draw.currentArrowGlyph.value, palette: palette,
+                      tint: NSColor(white: light ? 0 : 1, alpha: Draw.currentArrowInkLight.value), radius: Metrics.tablist.currentArrowSide.value / 2,
+                      hoverFill: nil)
+    }
+}
+
 /// Where a dragged row lands in the list (Arc, Q13-d): a line ending in a small ring at its left.
 @MainActor
 final class DropLineView: NSView {
@@ -422,14 +486,17 @@ struct RowGeometry {
     let icon: CGRect
     let titleX: Double
     let button: CGRect
+    /// The speaker button, between the icon and the title.
+    let speaker: CGRect
 
-    init(bounds: CGRect, depth: Int) {
+    init(bounds: CGRect, depth: Int, speaker hasSpeaker: Bool = false) {
         let t = Metrics.tablist
         let indent = Double(depth) * t.folderIndent.value
         selection = CGRect(x: t.selectionInset.value + indent, y: (bounds.height - t.selectionHeight.value) / 2,
                            width: max(0, bounds.width - 2 * t.selectionInset.value - indent), height: t.selectionHeight.value)
         icon = CGRect(x: selection.minX + Draw.faviconLeading.value, y: bounds.midY - t.favicon.value / 2, width: t.favicon.value, height: t.favicon.value)
-        titleX = selection.minX + Draw.titleLeading.value
+        titleX = selection.minX + TablistLayout.titleStart(leading: Draw.titleLeading.value, speaker: hasSpeaker)
+        speaker = TablistLayout.speakerButton(selection: selection)
         let size = 2 * t.hoverButtonRadius.value
         button = CGRect(x: selection.maxX - Draw.closeTrailing.value - size, y: bounds.midY - size / 2, width: size, height: size)
     }
@@ -462,7 +529,7 @@ final class RowView: HoverView {
     private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
     /// The half of this row a held tab would take (Q15).
     private let joinSlot = NSView()
-    private lazy var media = MediaRowControls(dispatch: dispatch)
+    /// Arc's `_audibilityButton`: the speaker between the icon and the title of a tab that makes sound or is muted.
     private let audio = GlyphButton()
     private let button = GlyphButton()
     private var segments: [SplitSegmentView] = []
@@ -518,7 +585,7 @@ final class RowView: HoverView {
         joinSlot.layer?.cornerCurve = .continuous
         joinSlot.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         joinSlot.isHidden = true
-        for view in [background, joinSlot, icon, title, renameHint, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        for view in [background, joinSlot, icon, title, renameHint, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         peekMarker.isHidden = true
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -542,16 +609,20 @@ final class RowView: HoverView {
         button.identify(.rowClose(row.id))
         joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
         var dimmed = false
-        media.isHidden = true
+        audio.isHidden = true
         renameHint.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
-            media.render(tab)
-            audio.isHidden = !tab.audible && !tab.muted
-            audio.render(tab.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
-                         radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
-            audio.toolTip = tab.muted ? "Unmute Tab" : "Mute Tab"
+            audio.isHidden = tab.speaker == nil
+            if tab.muted {
+                audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette,
+                             radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
+            } else {
+                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, palette: palette,
+                             radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
+            }
+            audio.tip = tab.muted ? SidebarCopy.unmuteThisTab : SidebarCopy.muteThisTab
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
             renameHint.isHidden = !tab.renameHint || renaming
@@ -649,12 +720,11 @@ final class RowView: HoverView {
 
     override func layout() {
         super.layout()
-        let g = RowGeometry(bounds: bounds, depth: depth)
+        let g = RowGeometry(bounds: bounds, depth: depth, speaker: !audio.isHidden)
         background.frame = g.selection
         icon.frame = g.icon
         button.frame = g.button
-        audio.frame = g.button.offsetBy(dx: -g.button.width, dy: 0)
-        media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
+        audio.frame = g.speaker
         let height = title.intrinsicContentSize.height
         peekMarker.frame = g.button
         spinner.frame = g.button.insetBy(dx: (g.button.width - 16) / 2, dy: (g.button.height - 16) / 2)
@@ -662,7 +732,7 @@ final class RowView: HoverView {
         // The hover button takes room from the title only while it shows (Arc truncates at the selection's end).
         let buttonShown = !button.isHidden && button.alphaValue > 0
         let trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
-            : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
+            : !peekMarker.isHidden ? g.button.minX
             : buttonShown ? g.selection.maxX - Draw.rowTitleOverButton.value : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         if let leading = joinLeading {
@@ -853,8 +923,6 @@ final class SplitSegmentView: HoverView {
     private(set) var pane: TabRow?
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
-    private lazy var media = MediaRowControls(dispatch: dispatch)
-    private let audio = GlyphButton()
     private let close = GlyphButton()
     private var palette: Palette?
 
@@ -866,8 +934,7 @@ final class SplitSegmentView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        audio.action = { [weak self] _ in self?.toggleMute() }
-        for view in [icon, title, audio, media, close] as [NSView] { addSubview(view) }
+        for view in [icon, title, close] as [NSView] { addSubview(view) }
         close.action = { [weak self] _ in
             guard let id = self?.pane?.id else { return }
             dispatch(.split(.closePaneAt(id)))
@@ -877,14 +944,8 @@ final class SplitSegmentView: HoverView {
 
     func render(_ pane: TabRow, palette: Palette) {
         self.pane = pane
-        media.render(pane)
         identify(.splitSegment(pane.id))
         self.palette = palette
-        audio.isHidden = !pane.audible && !pane.muted
-        audio.render(pane.muted ? .speakerMuted : .speaker, size: Draw.smallFont.value, palette: palette,
-                     radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
-        audio.toolTip = pane.muted ? "Unmute Tab" : "Mute Tab"
-        audio.identify(.tabTool("audio-" + pane.id.rawValue))
         title.stringValue = pane.title
         title.textColor = palette.ink.text
         icon.render(IconContent(tab: pane), tint: palette.ink.secondary, palette: palette)
@@ -902,15 +963,11 @@ final class SplitSegmentView: HoverView {
         let iconX = showsTitle ? Draw.splitSegmentIconLeading.value : max(0, min(Draw.splitSegmentIconLeading.value, (bounds.width - side) / 2))
         icon.frame = CGRect(x: iconX, y: (bounds.height - side) / 2, width: side, height: side)
         close.frame = CGRect(x: bounds.width - size, y: (bounds.height - size) / 2, width: size, height: size)
-        audio.frame = close.frame.offsetBy(dx: -size, dy: 0)
-        media.frame = audio.frame.offsetBy(dx: -audio.frame.width, dy: 0)
         let height = title.intrinsicContentSize.height
         let start = Draw.splitSegmentTitleLeading.value
-        let end = !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX : close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
+        let end = close.alphaValue > 0 ? close.frame.minX : bounds.width - Draw.faviconLeading.value / 2
         title.frame = CGRect(x: start, y: (bounds.height - height) / 2, width: max(0, end - start), height: height)
     }
-
-    @objc private func toggleMute() { if let pane { dispatch(.tabTools(.mute(.item(pane.id)))) } }
 
     override func stateChanged() {
         guard let palette else { return }

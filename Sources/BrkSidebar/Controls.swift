@@ -102,7 +102,10 @@ final class GlyphButton: HoverView {
     /// Fill when hovered; pressed uses the pressed token.
     private var hoverFill: RGBA?
     /// Fill that stays while the button's popover is open.
-    var latchedFill: RGBA?
+    var latchedFill: RGBA? { didSet { if latchedFill != oldValue { stateChanged() } } }
+    /// Arc's own tooltip while the pointer is on the button (`ArcTooltip`), for the controls that have it.
+    var tip: String?
+    private var symbolName: String?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -121,11 +124,28 @@ final class GlyphButton: HoverView {
         if self.glyph != glyph || glyphSize != size { icon.image = glyph.image(size: size, weight: weight) }
         self.glyph = glyph
         glyphSize = size
+        apply(palette: palette, tint: tint, radius: radius, hoverFill: hoverFill)
+    }
+
+    /// The same with a symbol picked by name (the mini player's speaker changes with the volume).
+    func renderSymbol(_ name: String, size: Double, weight: NSFont.Weight = .medium, palette: Palette, tint: NSColor? = nil, radius: Double, hoverFill: RGBA?) {
+        if symbolName != name || glyphSize != size { icon.image = symbolImage(name, size: size, weight: weight) }
+        symbolName = name
+        glyphSize = size
+        apply(palette: palette, tint: tint, radius: radius, hoverFill: hoverFill)
+    }
+
+    private func apply(palette: Palette, tint: NSColor?, radius: Double, hoverFill: RGBA?) {
         self.palette = palette
         self.radius = radius
         self.hoverFill = hoverFill
         icon.contentTintColor = tint ?? (isEnabled ? palette.ink.secondary : palette.ink.placeholder)
         stateChanged()
+    }
+
+    override func setHovered(_ hovered: Bool) {
+        super.setHovered(hovered)
+        if tip != nil { ArcTooltip.pointer(on: self, text: hovered && isEnabled ? tip : nil) }
     }
 
     override func layout() {
@@ -142,6 +162,7 @@ final class GlyphButton: HoverView {
 
     override func mouseDown(with event: NSEvent) {
         guard isEnabled else { return }
+        if tip != nil { ArcTooltip.pointer(on: self, text: nil) }
         isPressed = true
     }
 

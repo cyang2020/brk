@@ -12,6 +12,55 @@ import BrkUIKit
 let Draw = SidebarDrawMetrics()
 
 struct SidebarDrawMetrics: MetricGroup {
+    // The tab row's speaker (Q18-media-a, -f, -g) and Arc's own tooltip (Q18-media-e, -f).
+    let rowSpeakerGlyph = Metric(10.7, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-a-arc.png: the speaker's ink is 17.5 x 12.5, speaker.wave.3 at this size"))
+    let rowSpeakerMutedGlyph = Metric(12.5, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-g-arc.png: the struck speaker's ink is 15 x 14.5, speaker.slash at this size"))
+    let rowSpeakerRadius = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the speaker's hover square"))
+    let tooltipDelay = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249be50: Arc's tooltip modifier takes 0.45"))
+    let tooltipOffsetX = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: pointer at 53, 467, the pill from 59, 474"))
+    let tooltipOffsetY = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: pointer at 53, 467, the pill from 59, 474"))
+    let tooltipHeight = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the pill spans y 474 to 502"))
+    let tooltipPadding = Metric(10.75, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-f-arc.png: the pill is 97 wide around 75.5 of text"))
+    let tooltipFont = Metric(12.0, .anatomy("cra L790: Arc's tooltips are 12 pt medium"))
+    let tooltipFillLight = Metric(0.937, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: #EFEFEF"))
+    let tooltipFillDark = Metric(0.2, .guess("no capture of Arc's tooltip on a dark appearance"))
+    let tooltipInkLight = Metric(0.1, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: #1A1A1A"))
+    let tooltipShadow = Metric(0.18, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the pill's soft shadow"))
+    let tooltipShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the pill's soft shadow"))
+    let tooltipShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the pill's soft shadow"))
+
+    // The mini player's drawing (Q18-media-c, -e, -g, -j; verify/visual-pairs/run-20261103/r5-5/REPORT.md).
+    let miniPlayerTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: Media fixture (playing) is 135 wide, 144 in a 14 pt row"))
+    let miniPlayerInkLight = Metric(0.47, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: the glyphs read #878787 on #FDFDFD, #7D7D7D on the hover fill #ECECEC (the asset PlaybackControlForeground says 0.5)"))
+    let miniPlayerInkDark = Metric(0.66, .anatomy("docs/arc-anatomy/visual-and-copy.md, ARC_MediaControlsFeature: PlaybackControlForeground dark #FFFFFF @ 0.66"))
+    let miniPlayerDim = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: a disabled previous reads #D6D6D6 on #FDFDFD"))
+    let miniPlayerFillLight = Metric(0.992, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: #FDFDFD, Arc's `backgroundExtra`, bin:0x10249a610"))
+    let miniPlayerHoverLight = Metric(RGBA(0, 0, 0, 0.067), .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: #ECECEC over #FDFDFD"))
+    let miniPlayerHoverDark = Metric(RGBA(1, 1, 1, 0.1), .guess("no capture of a mini player on a dark theme"))
+    let miniPlayerButtonRadius = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the pause button's hover square"))
+    let miniPlayerCloseGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249be30: xmark at 14"))
+    let miniPlayerTrackGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249cf10: previous and next at 14"))
+    let miniPlayerPlayGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: the pause glyph's ink is 9 x 12"))
+    let miniPlayerSpeakerGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249d650: the speaker at 14"))
+    let miniPlayerEmptyIcon = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: the empty icon spans x 22 to 38"))
+    let miniPlayerEmptyIconAlpha = Metric(0.78, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-c-arc.png: #DADADA on #FDFDFD against a row's #C7CBCD on #F0FAFC"))
+    let miniPlayerShadowLight = Metric(0.08, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249b3e4: black at 0.08 on a light theme"))
+    let miniPlayerShadowDark = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249b3f8: black at 0.2 on a dark theme"))
+    let miniPlayerShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249b43c: radius 4 in SwiftUI, 8 as an NSShadow's blur"))
+    let miniPlayerDarkStroke = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249a760: a 0.5 line on a dark theme"))
+    let miniPlayerDarkStrokeAlpha = Metric(0.1, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249a71c: white at 0.1 on a dark theme"))
+    let miniPlayerTrackAlpha = Metric(0.66, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-j-volume-arc.png: the track reads #555555 on #FDFDFD"))
+    let miniPlayerKnobShadow = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-j-volume-arc.png: the knob's edge fades through #E5E5E5"))
+    let miniPlayerKnobShadowRadius = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-j-volume-arc.png: the knob's edge fades within 4 pt"))
+    let miniPlayerKnobShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-j-volume-arc.png: the fade below the knob is stronger"))
+    let currentArrowGlyph = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the arrow's ink is 10 x 12"))
+    let currentArrowFillLight = Metric(RGBA(hex: "#F5F5F5"), .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the circle reads #F5F5F5"))
+    let currentArrowFillDark = Metric(RGBA(hex: "#3A3A3C"), .guess("no capture of the round button on a dark theme"))
+    let currentArrowInkLight = Metric(0.84, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the arrow reads #2A2A2A"))
+    let currentArrowShadow = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the circle's edge fades through #DBDFE0"))
+    let currentArrowShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the fade reaches about 5 pt"))
+    let currentArrowShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-media-e-arc.png: the fade below the circle is stronger"))
+
     // Type: one family, the system font (visual-and-copy.md, Fonts: the default UI font is `system`).
     let rowTitleFont = Metric(14.0, .anatomy("cra L115: sidebar rows have 14 pt titles"))
     let groupTitleLeading = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x100048260: the header's stack starts 18 in from the cell, the rows' selection 8"))
@@ -276,6 +325,17 @@ enum SidebarCopy {
     /// The dock's left button opens the Library (Arc's `HomeButton`, "View Library").
     static let library = "Library"
     static let copyLink = "Copy Link"
+    // Arc's tooltips on the speaker and the mini player (bin:0x1002b4f84, bin:0x1002b5038, bin:0x10249b63c, bin:0x10249c1f0,
+    // bin:0x10249e37c, bin:0x102495738).
+    static let muteThisTab = "Mute this tab"
+    static let unmuteThisTab = "Unmute this tab"
+    static let closeMiniPlayer = "Close Mini Player"
+    static let backToTab = "Back to Tab"
+    static let previousTrack = "Previous Track"
+    static let nextTrack = "Next Track"
+    static let adjustTabVolume = "Adjust Tab Volume"
+    static let pauseMedia = "Pause"
+    static let playMedia = "Play"
     static let newSpaceMenu = "New…"
     /// Arc's title for a new tab before its first document commits.
     static let untitled = "Untitled"

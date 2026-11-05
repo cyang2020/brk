@@ -496,6 +496,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         }, overlay: overlay, focus: focus,
         enabledActions: enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: focusedPane.flatMap { p in focusedTab.map { (p, $0) } }),
         tabTools: projectTabTools(state, window: id, now: ctx.now),
+        miniPlayers: projectMiniPlayers(state, window: id),
         boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil,
         websiteAppearance: state.sitePreferences(state.siteTarget(in: id)?.context ?? state.libraryContext(in: id)).appearance
             ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic

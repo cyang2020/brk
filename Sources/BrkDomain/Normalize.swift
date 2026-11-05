@@ -17,7 +17,8 @@ import Foundation
 /// 4. Overlay, rename, dialog and cycle targets exist; otherwise they close.
 /// 5. Every visible tab (a pane of any window's shown item) is in `session.loaded`; `loaded` names only existing
 ///    tabs and `live` only loaded ones.
-/// 6. Archive and history caps; sidebar width within Metrics.sidebar bounds (a non-finite width becomes the default).
+/// 6. A window's mini players follow what its pages are doing (`repairMiniPlayers`).
+/// 7. Archive and history caps; sidebar width within Metrics.sidebar bounds (a non-finite width becomes the default).
 @discardableResult
 func normalize(_ state: inout AppState) -> [String] {
     var repairs: [String] = []
@@ -30,6 +31,7 @@ func normalize(_ state: inout AppState) -> [String] {
     repairTabTools(&state)
     closeEmptyLittleWindows(&state)
     repairLoaded(&state)
+    repairMiniPlayers(&state)
     for (window, session) in state.session.windows {
         guard let editor = session.boostEditor else { continue }
         if state.boostProfile(in: window) != editor.profile { state.session.windows[window]?.boostEditor = nil }

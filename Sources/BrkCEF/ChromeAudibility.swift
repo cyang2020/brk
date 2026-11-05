@@ -122,7 +122,12 @@ final class ChromeAudibility: CefBrowserDelegate {
                 await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,documentIds:missing},files:['media.js']});
                 frames = await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:tab.id,allFrames:true},func:()=>globalThis.__brkMedia?.snapshot() ?? []});
               }
-              for (const frame of frames) for (const player of frame.result ?? []) players.push({...player,document:frame.documentId,frame:frame.frameId});
+              const tracks = new Map();
+              if (frames.some(f => f.result?.length)) {
+                const session = await chrome.scripting.executeScript({injectImmediately:true,world:'MAIN',target:{tabId:tab.id,allFrames:true},func:()=>globalThis[Symbol.for('brk.mediaSession')]?.tracks() ?? null});
+                for (const frame of session) tracks.set(frame.frameId, frame.result);
+              }
+              for (const frame of frames) for (const player of frame.result ?? []) players.push({...player,document:frame.documentId,frame:frame.frameId,next:tracks.get(frame.frameId)?.next === true,previous:tracks.get(frame.frameId)?.previous === true});
             } catch(e) { mediaError = String(e); }
             result.push({token: request.token, target: id, tab: tab.id, audible: tab.audible, incognito: tab.incognito, players, mediaError});
           }
@@ -146,7 +151,8 @@ final class ChromeAudibility: CefBrowserDelegate {
                       let element = value["element"] as? String, let rawKind = value["kind"] as? String,
                       let kind = MediaKind(rawValue: rawKind), let paused = value["paused"] as? Bool,
                       let ended = value["ended"] as? Bool, let pip = value["pictureInPicture"] as? Bool else { return nil }
-                return MediaPlayer(id: MediaPlayerID(document: document, frame: frame, element: element), kind: kind, paused: paused, ended: ended, pictureInPicture: pip)
+                return MediaPlayer(id: MediaPlayerID(document: document, frame: frame, element: element), kind: kind, paused: paused, ended: ended, pictureInPicture: pip,
+                                   silent: value["silent"] as? Bool ?? false, hasNextTrack: value["next"] as? Bool ?? false, hasPreviousTrack: value["previous"] as? Bool ?? false)
             }
             return Reading(token: token, target: target, tab: tab, audible: audible, incognito: incognito, players: players, mediaError: row["mediaError"] as? String)
         }
@@ -154,9 +160,9 @@ final class ChromeAudibility: CefBrowserDelegate {
         return readings.filter { $0.token == token && $0.incognito == isPrivate && targets.contains($0.target) }
     }
 
-    func control(target: String, tab: Int, player: MediaPlayerID, operation: MediaOperation, userInitiated: Bool = true) async throws {
+    func control(target: String, tab: Int, player: MediaPlayerID, operation: MediaOperation, volume: Double? = nil, userInitiated: Bool = true) async throws {
         guard ready, !stopping, let transport else { throw CefDevTools.Failure.unavailable }
-        let args = String(decoding: try JSONSerialization.data(withJSONObject: ["target": target, "tab": tab, "document": player.document, "frame": player.frame, "element": player.element, "operation": operation.rawValue]), as: UTF8.self)
+        let args = String(decoding: try JSONSerialization.data(withJSONObject: ["target": target, "tab": tab, "document": player.document, "frame": player.frame, "element": player.element, "operation": operation.rawValue, "volume": volume ?? 1]), as: UTF8.self)
         let script = """
         (async()=>{
           if (location.href !== '\(AudioExtension.url.absoluteString)' || chrome.runtime.id !== '\(AudioExtension.id)') throw Error('observer origin');
@@ -164,8 +170,12 @@ final class ChromeAudibility: CefBrowserDelegate {
           if (!targets.some(t=>t.id===r.target && t.tabId===r.tab && t.type==='page')) throw Error('Target changed');
           const tab=await chrome.tabs.get(r.tab);
           if (tab.incognito !== chrome.extension.inIncognitoContext) throw Error('Context changed');
-          const result=await chrome.scripting.executeScript({injectImmediately:true,target:{tabId:r.tab,documentIds:[r.document]},args:[r.element,r.operation],func:async(id,op)=>{
-            try { if (!globalThis.__brkMedia) throw Error('Player document unavailable'); return {value:await globalThis.__brkMedia.control(id,op)}; }
+          // The page's own Media Session handlers live in its world; everything else stays in the isolated one.
+          const track=r.operation==='nextTrack'||r.operation==='previousTrack';
+          const result=await chrome.scripting.executeScript(track ? {injectImmediately:true,world:'MAIN',target:{tabId:r.tab,documentIds:[r.document]},args:[r.operation],func:op=>{
+            globalThis[Symbol.for('brk.mediaSession')]?.run(op); return {};
+          }} : {injectImmediately:true,target:{tabId:r.tab,documentIds:[r.document]},args:[r.element,r.operation,r.volume],func:async(id,op,volume)=>{
+            try { if (!globalThis.__brkMedia) throw Error('Player document unavailable'); return {value:await globalThis.__brkMedia.control(id,op,volume)}; }
             catch(e) { return {error:e.name+': '+e.message}; }
           }});
           if (result.length!==1 || result[0].frameId!==r.frame || result[0].documentId!==r.document) throw Error('Player document changed');

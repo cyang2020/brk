@@ -37,7 +37,7 @@ public enum SidebarLayout {
     /// the window's own tabs. With the toolbar shown the pill and the navigation buttons move to the toolbar: the pill
     /// is empty and the favorites tray starts under the traffic lights (Metrics.sidebar.toolbarTrayTop).
     public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true,
-                               thisWindow: Bool = false, toolbarVisible: Bool = false) -> SidebarFrames {
+                               thisWindow: Bool = false, toolbarVisible: Bool = false, miniPlayers: [ItemID] = []) -> SidebarFrames {
         let dock = thisWindow ? [] : dock
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
@@ -54,9 +54,92 @@ public enum SidebarLayout {
         for (item, rect) in zip(dock, cells.spaces) { dockSpaces[item.id] = rect }
         let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: headerVisible ? Metrics.tablist.spaceHeaderHeight.value : 0)
         let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, dockRect.minY - header.maxY))
-        return SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
-                             favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width, divider: !thisWindow),
-                             dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus)
+        let frames = SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
+                                   favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width, divider: !thisWindow),
+                                   dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus)
+        return MiniPlayerLayout.applying(miniPlayers, to: frames)
+    }
+}
+
+/// What the pointer does to the mini player stack: view state, never in the document or the snapshot.
+public struct MiniPlayerHover: Sendable, Equatable {
+    /// The pointer is on the stack: the cards come apart and each shows its title.
+    public var expanded: Bool
+    /// The card whose volume slider is open.
+    public var volumeOpen: ItemID?
+
+    public init(expanded: Bool, volumeOpen: ItemID? = nil) { self.expanded = expanded; self.volumeOpen = volumeOpen }
+}
+
+/// Arc's mini player stack (`MediaControlsView.ViewState`, bin:0x1024942a4, walks the cards from the newest). At rest every
+/// card is one line, the newest in front at the bottom and each older one 7 higher, 10 narrower and fainter. Under the
+/// pointer they come apart, newest at the bottom, each two lines (three with its slider) and 5 apart. The stack stands
+/// over the dock, and the list ends above it, so a taller stack cuts the list.
+public enum MiniPlayerLayout {
+    /// The cards of `tabs` (oldest first) standing on `bottom`, in a column from `minX` of `width`.
+    public static func frames(_ tabs: [ItemID], minX: Double, width: Double, bottom: Double, hover: MiniPlayerHover? = nil) -> [MiniPlayerFrame] {
+        let m = Metrics.miniPlayer
+        let full = max(0, width - 2 * m.sideInset.value)
+        var result: [MiniPlayerFrame] = []
+        var above = 0.0
+        for (index, tab) in tabs.reversed().enumerated() {
+            if hover?.expanded == true {
+                let height = hover?.volumeOpen == tab ? m.volumeHeight.value : m.expandedHeight.value
+                result.append(MiniPlayerFrame(tab: tab, rect: CGRect(x: minX + m.sideInset.value, y: bottom - above - height, width: full, height: height), alpha: 1))
+                above += height + m.expandedGap.value
+            } else {
+                let narrower = min(m.restWidthMax.value, Double(index) * m.restWidthStep.value)
+                let up = Double(index) * m.restStep.value
+                result.append(MiniPlayerFrame(tab: tab, rect: CGRect(x: minX + m.sideInset.value + narrower / 2, y: bottom - up - m.rowHeight.value,
+                                                                     width: max(0, full - narrower), height: m.rowHeight.value),
+                                              alpha: max(m.restAlphaMin.value, 1 - Double(index) * m.restAlphaStep.value)))
+            }
+        }
+        return result.reversed()
+    }
+
+    /// `frames` with the cards of `tabs` in place and the list ending above them.
+    public static func applying(_ tabs: [ItemID], hover: MiniPlayerHover? = nil, to frames: SidebarFrames) -> SidebarFrames {
+        var f = frames
+        let cards = self.frames(tabs, minX: f.frame.minX, width: f.frame.width, bottom: f.dock.minY - Metrics.miniPlayer.bottomGap.value, hover: hover)
+        f.miniPlayers = cards
+        let end = (cards.map(\.rect.minY).min().map { $0 - Metrics.miniPlayer.listGap.value }) ?? f.dock.minY
+        f.tablistViewport.size.height = max(0, end - f.tablistViewport.minY)
+        return f
+    }
+
+    /// The controls row's five buttons (site icon, previous, play or pause, next, speaker) in a card of `width`, in the
+    /// row's own coordinates: the first and the last 10 in, the gaps equal, centred in the row's height.
+    public static func controls(width: Double) -> [CGRect] {
+        let m = Metrics.miniPlayer
+        let side = m.buttonSide.value, y = (m.rowHeight.value - side) / 2
+        let pitch = (width - 2 * m.controlsInset.value - side) / 4
+        return (0..<5).map { CGRect(x: m.controlsInset.value + Double($0) * pitch, y: y, width: side, height: side) }
+    }
+
+    /// The title row's × button in a card of `width`, in the row's own coordinates: over the controls row's last button.
+    public static func closeButton(width: Double) -> CGRect { controls(width: width)[4] }
+
+    /// The volume slider's track in its row, in the row's own coordinates.
+    public static func sliderTrack(width: Double) -> CGRect {
+        let m = Metrics.miniPlayer
+        return CGRect(x: m.sliderInset.value, y: (m.rowHeight.value - m.sliderTrack.value) / 2,
+                      width: max(0, width - 2 * m.sliderInset.value), height: m.sliderTrack.value)
+    }
+
+    /// The volume a pointer at `x` (the row's own coordinates) asks for: the knob's middle follows the pointer.
+    public static func sliderVolume(atX x: Double, width: Double) -> Double {
+        let track = sliderTrack(width: width), knob = Metrics.miniPlayer.sliderKnob.value.width
+        let span = max(1, track.width - knob)
+        return min(1, max(0, (x - track.minX - knob / 2) / span))
+    }
+
+    /// The knob's frame for `volume`, in the row's own coordinates.
+    public static func sliderKnob(volume: Double, width: Double) -> CGRect {
+        let track = sliderTrack(width: width), knob = Metrics.miniPlayer.sliderKnob.value
+        let level = min(1, max(0, volume))
+        return CGRect(x: track.minX + level * max(0, track.width - knob.width), y: (Metrics.miniPlayer.rowHeight.value - knob.height) / 2,
+                      width: knob.width, height: knob.height)
     }
 }
 
@@ -270,6 +353,34 @@ public enum TablistLayout {
         return out
     }
 
+    /// Which way the current row lies when it is scrolled out of the list's `visible` rect (document coordinates): Arc's
+    /// round button at that edge of the list points to it and scrolls it back. Nil while any of the row shows.
+    public static func currentRowArrow(row: CGRect?, visible: CGRect) -> CurrentRowArrow? {
+        guard let row else { return nil }
+        if row.maxY <= visible.minY { return .up }
+        if row.minY >= visible.maxY { return .down }
+        return nil
+    }
+
+    /// The round button's frame in a list viewport of `size`.
+    public static func currentRowArrowFrame(_ arrow: CurrentRowArrow, in size: CGSize) -> CGRect {
+        let t = Metrics.tablist, side = t.currentArrowSide.value
+        let y = arrow == .up ? t.currentArrowInset.value : size.height - t.currentArrowInset.value - side
+        return CGRect(x: (size.width - side) / 2, y: y, width: side, height: side)
+    }
+
+    /// Where a tab row's title starts, measured from the selection's left edge: further right while its speaker shows.
+    public static func titleStart(leading: Double, speaker: Bool) -> Double {
+        leading + (speaker ? Metrics.tablist.speakerTitleAdvance.value : 0)
+    }
+
+    /// The row's speaker button: between the icon and the title, centred in the row, for a selection rect in row coordinates.
+    public static func speakerButton(selection: CGRect) -> CGRect {
+        let t = Metrics.tablist
+        return CGRect(x: selection.minX + t.speakerLeading.value, y: selection.midY - t.speakerSide.value / 2,
+                      width: t.speakerSide.value, height: t.speakerSide.value)
+    }
+
     /// Where a drag at `point` (tab list document coordinates) would drop an item of `kind`, or nil where the
     /// reducer would refuse it (`Placement.canPlace`, the same rule `SidebarTree.move` applies).
     /// - Over a tab or split row: before it in the upper half, after it in the lower half.
@@ -372,6 +483,9 @@ public enum TablistLayout {
         }
     }
 }
+
+/// Which way Arc's round button at the list's edge points (`TablistLayout.currentRowArrow`).
+public enum CurrentRowArrow: String, Sendable, Equatable { case up, down }
 
 /// A tab held over the middle of another row, where a release makes or grows a split (Arc 1.170, Q15).
 public enum SplitJoin: Sendable, Equatable {
