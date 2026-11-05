@@ -84,10 +84,15 @@ final class SplitDropPreviewTests: XCTestCase {
         XCTAssertEqual(page.frame, pageFrame, "the page was resized for the preview")
         let slot = try XCTUnwrap(content.subviews.first { $0.accessibilityIdentifier() == ViewID.splitDropPreview.identifier })
         XCTAssertEqual(slot.frame, layout.slot)
+        // The middle of the page gives the card back and rings the whole of it (Q13-e); a release there moves nothing.
         XCTAssertNil(content.dropCommand(m.source, at: CGPoint(x: area.midX, y: area.midY)))
         XCTAssertEqual(card.frame, rest)
         XCTAssertEqual(page.frame, pageFrame)
-        XCTAssertTrue(slot.isHidden)
+        XCTAssertFalse(slot.isHidden)
+        XCTAssertEqual(slot.frame, area)
+        XCTAssertEqual(slot.layer?.borderWidth, 3)
+        XCTAssertNil(content.dropCommand(m.source, at: CGPoint(x: area.minX - 40, y: area.midY)))
+        XCTAssertTrue(slot.isHidden, "out of the page nothing is ringed")
     }
 
     /// Q02 b: with nothing shown the card is Arc's opaque #FCFCFC with its shadow, not the theme.

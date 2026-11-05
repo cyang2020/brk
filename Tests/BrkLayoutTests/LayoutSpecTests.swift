@@ -71,9 +71,10 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertEqual(dividers, [CGRect(x: 579, y: 10, width: 10, height: 756)])
         XCTAssertEqual(two[1].maxX, area.maxX)
         for rect in two { XCTAssertEqual(rect, rect.integral) }
-        // Four panes: three gaps, widths sum to the content width minus the gaps, the last ends at the edge.
+        // Four panes: three gaps, widths sum to the content width minus the gaps, the last ends at the edge. Each boundary
+        // rounds where it falls (Arc's three panes of 1022 are 341, 340, 341, Q15-f).
         let (four, gaps) = ContentLayout.cards(in: area, fractions: [0.25, 0.25, 0.25, 0.25])
-        XCTAssertEqual(four.map(\.width), [251, 251, 251, 249])
+        XCTAssertEqual(four.map(\.width), [251, 250, 251, 250])
         XCTAssertEqual(gaps.count, 3)
         XCTAssertEqual(four.last?.maxX, area.maxX)
         // Stacked (vertical orientation) splits the height instead, the gap out of the upper pane (Arc's P23-c:
@@ -223,7 +224,7 @@ final class DropTargetTests: XCTestCase {
         let rows = TablistLayout.rows(space, width: 228)
         // p 3...43, folder 44...84, f1 85...125, t2 184...224, t1 225...265.
         func join(_ y: Double, _ kind: ItemKind = .tab, from section: SectionKind = .today, item: ItemID) -> ItemID? {
-            TablistLayout.splitTarget(at: CGPoint(x: 50, y: y), rows: rows, space: space, dragging: kind, from: section, item: item)
+            TablistLayout.splitTarget(at: CGPoint(x: 50, y: y), rows: rows, space: space, dragging: kind, from: section, item: item)?.target
         }
         XCTAssertNil(join(190, item: t1), "top quarter of t2: reorder")
         XCTAssertEqual(join(194, item: t1), t2, "a quarter down t2")
@@ -243,30 +244,67 @@ final class DropTargetTests: XCTestCase {
         let split = try XCTUnwrap(d.view.content.split)
         XCTAssertEqual(d.view.space.today.rows.map(\.id), [split])
         XCTAssertEqual(d.view.content.panes.map(\.tab), [t1, t2])
-        // A split row keeps its halves.
-        XCTAssertNil(TablistLayout.splitTarget(at: CGPoint(x: 50, y: 204), rows: TablistLayout.rows(d.view.space, width: 228), space: d.view.space,
-                                               dragging: .tab, from: .pinned, item: p))
+        // Left or right is the pointer against the row's midpoint (Q15: 428 and 434 on screen are 108 and 114 in the window).
+        func side(_ x: Double, _ y: Double = 204, rows: [RowFrame]? = nil, space: SpaceSnapshot? = nil, item: ItemID) -> SplitJoin? {
+            TablistLayout.splitTarget(at: CGPoint(x: x, y: y), rows: rows ?? TablistLayout.rows(space ?? d.view.space, width: 228), space: space ?? d.view.space,
+                                      dragging: .tab, from: .today, item: item)
+        }
+        d.user(.split(.separateAll))
+        let after = d.view.space.today.rows.map(\.id)
+        let plain = TablistLayout.rows(d.view.space, width: 228)
+        let target = try XCTUnwrap(after.first { $0 != t1 })
+        let y = try XCTUnwrap(plain.first { $0.kind == .item(target) }).rect.midY
+        XCTAssertEqual(side(108, y, rows: plain, item: t1)?.paneIndex, 0)
+        XCTAssertEqual(side(114, y, rows: plain, item: t1)?.paneIndex, 1)
+        XCTAssertEqual(side(10, y, rows: plain, item: t1), .tab(target, leading: true))
+        XCTAssertEqual(side(220, y, rows: plain, item: t1), .tab(target, leading: false))
     }
 
-    func testFavoriteTilesReorderInsideTheGrid() throws {
+    /// Arc's Q15-e/f/g: a split row answers as a whole; the place follows the pointer, the nearest boundary between panes.
+    func testASplitRowTakesAPlaceBetweenItsPanes() throws {
+        let (d, _, _, _, t1, t2, _) = makeSidebar()
+        d.user(.split(.joinRow(t1, onto: t2, at: 0)))
+        let split = try XCTUnwrap(d.view.content.split)
+        let extra = d.open("extra.example.com")
+        let space = d.view.space, rows = TablistLayout.rows(space, width: 228)
+        let y = try XCTUnwrap(rows.first { $0.kind == .item(split) }).rect.midY
+        func at(_ x: Double, _ y: Double) -> SplitJoin? { TablistLayout.splitTarget(at: CGPoint(x: x, y: y), rows: rows, space: space, dragging: .tab, from: .today, item: extra) }
+        // Two panes over 8...220: boundaries at 8, 114, 220.
+        XCTAssertEqual(at(30, y), .split(split, index: 0), "Q15-f: the left end")
+        XCTAssertEqual(at(114, y), .split(split, index: 1), "between the two (inferred)")
+        XCTAssertEqual(at(200, y), .split(split, index: 2), "Q15-g: the right end")
+        // The row's top and bottom edges still reorder.
+        let row = try XCTUnwrap(rows.first { $0.kind == .item(split) }).rect
+        XCTAssertNil(at(114, row.minY + 9.5))
+        XCTAssertNil(at(114, row.maxY - 9.5))
+        XCTAssertNotNil(at(114, row.minY + 11.5))
+        XCTAssertNotNil(at(114, row.maxY - 11.5))
+    }
+
+    func testFavoriteTilesDropOnTheCellUnderThePointer() throws {
         let (d, _, _, _, t1, _, v) = makeSidebar()
         let frames = try XCTUnwrap(d.frames().sidebar)
         let favorites = d.view.favorites
-        // Three tiles at width 228: x 8, 63, 118 (47 wide, gap 8), one row at y 90...137.
-        XCTAssertEqual(v.map { frames.favoriteTiles[$0] }, [
-            CGRect(x: 8, y: 90, width: 47, height: 47), CGRect(x: 63, y: 90, width: 47, height: 47), CGRect(x: 118, y: 90, width: 47, height: 47),
-        ])
+        // Three tiles at width 228 fill the row: third-width tiles, one row at y 90...137.
+        let third = 196.0 / 3
+        for (id, x) in zip(v, [8, 8 + third + 8, 8 + 2 * third + 16]) {
+            let rect = try XCTUnwrap(frames.favoriteTiles[id])
+            XCTAssertEqual(rect.minX, x, accuracy: 1e-9)
+            XCTAssertEqual(rect.minY, 90)
+            XCTAssertEqual(rect.size.width, third, accuracy: 1e-9)
+            XCTAssertEqual(rect.size.height, 47)
+        }
         func drop(_ x: Double, _ y: Double, _ kind: ItemKind = .tab, item: ItemID?) -> Destination? {
             FavoritesGrid.dropTarget(at: CGPoint(x: x, y: y), frames: frames, favorites: favorites, dragging: kind, item: item)
         }
-        // v3 dragged before v1: index 0.
+        // A reorder keeps three cells: v3 over the first cell lands first, v1 over the second lands second.
         XCTAssertEqual(drop(10, 100, item: v[2]), .into(parent: favorites.root, index: 0))
-        // v1 dragged right of v2's centre: after v2, counted after v1 is detached: index 1.
         XCTAssertEqual(drop(100, 100, item: v[0]), .into(parent: favorites.root, index: 1))
-        // A Today tab dropped in the row's band (half a gap around the tiles) goes by x; below it, it appends; a
-        // folder is refused; outside the tray (82...145) is nil.
-        XCTAssertEqual(drop(100, 140, item: t1), .into(parent: favorites.root, index: 2))
-        XCTAssertEqual(drop(100, 143, item: t1), .into(parent: favorites.root, index: 3))
+        // A Today tab makes four cells (47 wide): x 114 is the second... at 8, 63, 118, 173.
+        XCTAssertEqual(drop(60, 100, item: t1), .into(parent: favorites.root, index: 1), "half a gap left of the second cell")
+        XCTAssertEqual(drop(114, 100, item: t1), .into(parent: favorites.root, index: 2))
+        XCTAssertEqual(drop(200, 143, item: t1), .into(parent: favorites.root, index: 3), "the tray's bottom edge counts as the last row")
+        // A folder is refused; outside the tray (82...145) is nil.
         XCTAssertNil(drop(100, 100, .folder, item: nil))
         XCTAssertNil(drop(100, 300, item: t1))
         d.user(.item(.move(v[2], to: try XCTUnwrap(drop(10, 100, item: v[2])))))

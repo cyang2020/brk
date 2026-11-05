@@ -50,7 +50,7 @@ enum CommandInventory {
         .tabTools(.openFolder(item)), .tabTools(.replacePinned(item)), .tabTools(.muteAll(true)), .split(.addPaneAt(.left)),
         .page(.back(.focused)), .page(.forward(.focused)), .page(.reload(.focused, ignoringCache: false)), .page(.stop(.focused)),
         .page(.developer(.source)), .page(.output(.pdf)), .page(.cancelOutput), .page(.zoom(.reset)), .page(.toggleDevTools), .page(.cast), .page(.copyURL(.plain)), .page(.shareQuote),
-        .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.newFolder),
+        .item(.beginRename(.focused)), .item(.rename(item, title: "x")), .item(.move(item, to: .space(space))), .item(.dropOnSpaceHeader(item)), .item(.newFolder),
         .item(.toggleFolder(item)), .item(.deleteFolder(item)), .item(.setIcon(item, .emoji("x"))),
         .space(.create(title: "", icon: .none, theme: .default)), .space(.update(space, title: "x", icon: nil, theme: nil)),
         .space(.delete(space)), .space(.move(space, index: 0)), .space(.focus(space)), .space(.step(.previous)),
@@ -352,6 +352,7 @@ enum CommandInventory {
             case .beginRename: "beginRename"
             case .rename: "rename"
             case .move: "move"
+            case .dropOnSpaceHeader: "dropOnSpaceHeader"
             case .newFolder: "newFolder"
             case .toggleFolder: "toggleFolder"
             case .deleteFolder: "deleteFolder"

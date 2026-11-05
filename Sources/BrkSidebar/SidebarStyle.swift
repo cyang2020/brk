@@ -48,7 +48,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let tidyGlyph = Metric([7.0, 11.5], .anatomy("verify/visual-pairs/run-20261103/P46/P46-b-arc.png: the broom is 14 x 23 px"))
     let tidySeparatorHeight = Metric(10.0, .guess("the bar between Tidy and Clear, about the height of the capitals"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
-    let closeTrailing = Metric(6.0, .guess("the hover button's right padding inside the selection: (36 - 24) / 2"))
+    let closeTrailing = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-press-row-arc.png: the × centres 19 from the row's right end"))
     let emptyFavicon = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))
     let emptyFaviconRadius = Metric(2.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the empty favicon's corners round over about 2.5 pt"))
     let folderGlyphWidth = Metric(22.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's open folder spans x 16 to 38 in the 16 pt icon row"))
@@ -60,10 +60,10 @@ struct SidebarDrawMetrics: MetricGroup {
     let splitSegmentInset = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane boxes 4 pt inside the row's selection"))
     let splitSegmentGap = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: 4 pt between pane boxes"))
     let splitSegmentRadius = Metric(8.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane box corners about 8 pt"))
-    let splitSegmentIconLeading = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's icon 7 pt inside its box"))
-    let splitSegmentTitleLeading = Metric(36.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's title 36 pt inside its box"))
+    let splitSegmentIconLeading = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png and Q15/Q15-d-arc.png: the pane's icon starts 19 along the row, 7 inside its box at 12, with the 16 pt slot's 1 pt margin"))
+    let splitSegmentTitleLeading = Metric(32.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png, P23-f-arc.png and Q15/Q15-d-arc.png: the pane's title ink starts 4 pt before where 36 put it"))
     let peekMarkerIcon = Metric(14.0, .guess("measured on the 2026-11-03 Arc capture P22a: a 14 pt icon in the 24 pt Peek marker"))
-    let splitSegmentTitleMinWidth = Metric(80.0, .guess("the 2026-11-03 Arc capture P23b: four pane boxes of about 50 pt show icons only, two of 100 pt show titles"))
+    let splitSegmentTitleMinWidth = Metric(60.0, .anatomy("verify/visual-pairs/run-20261103: four pane boxes of about 50 pt show icons only (P23-b), three of 65 pt show titles (Q15-f)"))
 
     // Title row (cra L1215, Arc 1.170 AX tree).
     let navButton = Metric(32.0, .anatomy("cra L1215: Go back, Go forward and Reload are 32 x 32"))
@@ -133,9 +133,29 @@ struct SidebarDrawMetrics: MetricGroup {
     // States and motion.
     let unloadedAlpha = Metric(0.5, .guess("Snapshot.swift: unloaded Pinned and Favorites tabs draw dimmer; amount guessed"))
     let dragThreshold = Metric(3.0, .guess("pointer travel before a press becomes a drag (AppKit's own threshold)"))
-    let dragPreviewAlpha = Metric(0.9, .guess("opacity of the dragged row image"))
+    let dragPreviewAlpha = Metric(0.8, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image reads #E6E6E7 over the #A7ABAD strip and #F5 over the #EF sidebar"))
+    let dragPreviewShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: a little darker under the tile than beside it"))
+    let dragPreviewShadowOpacity = Metric(0.25, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: black at about 8% at the tile's edge, under the image's own 0.8"))
+    let dragTileRingOpacity = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: the dragged tile's ring reads #EAEAEB against its #F6F7F9 fill"))
+    let rowTitleOverButton = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-e-arc.png: with the × showing the title may reach 28 from the row's right end"))
+    let dragRowOverHeaderScale = Metric(0.875, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image over the Space name strip is 186 x 31 for the 212 x 36 row"))
+    let dropHintAlpha = Metric(0.475, .anatomy("verify/visual-pairs/run-20261103: a drop area is the theme's focus color at this strength: Q13-g's strip and Q15-e's band #A7ABAD over #F0F7FC with focus #575757, P23-e's slot #82A9A8 over #FCFCFC with focus #006362"))
+    let splitJoinTitleTrailing = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-a-arc.png and Q15-b-arc.png: the row's own title ends 3 pt before the end of its half"))
+    let splitJoinSlotInset = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-a-arc.png and Q15-b-arc.png: the slots span x 14 to 114 and 120 to 220, each half of the 8 to 220 row less 6 at its left"))
+    let dropRingSide = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring at the drop line's left end spans 7 pt"))
+    let dropRingLeading = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring starts 16 from the sidebar's edge"))
+    let dropLineTrailing = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the line ends 217 along the 228 sidebar"))
+    let favoritesReflow = Metric(0.18, .guess("how long tiles and the list take to slide while a drag reflows the grid; Arc's held frames show only where they end"))
+    let renameHintInk = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: its darkest pixels read #858686, the title's #1A1A1A"))
+    let currentTileShadow = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-n5-arc.png: the current tile's shadow fades over about 4 pt"))
+    let currentTileShadowOpacity = Metric(0.11, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-n5-arc.png: #F2 against the #FD sidebar at the tile's edge"))
+    let pressedTileShade = Metric(0.02, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-press-favorite-arc.png: a pressed tile reads #F7F7F7, the current tile #FBFBFB"))
+    let rowCloseGlyph = Metric(13.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-press-row-arc.png: the row's × is 10 pt across"))
+    let renameHintFont = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: \"Double-click to rename\" is 119.5 pt wide"))
+    let renameHintTitleShift = Metric(-7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the title's ink spans 192 to 202.5 in the row at 186...221.5"))
+    let renameHintTop = Metric(21.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the hint's ink spans 208 to 216 in that row"))
     let dragSourceAlpha = Metric(0.3, .guess("opacity of the row left behind while it is dragged"))
-    let dragPreviewShadow = Metric(8.0, .guess("blur of the shadow under the dragged row or tile"))
+    let dragPreviewShadow = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: the tile's shadow is half gone 5 pt out and nearly gone at 10 (an NSShadow's blur is about twice its spread)"))
     // The card a tab drag shows over the content (P23-d-arc.png: card x 989.5...1158.5, y 273.5...523.5 in the window).
     let dragCardWidth = Metric(169.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 338 px wide at 2x"))
     let dragCardHeight = Metric(250.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 500 px tall at 2x"))
@@ -145,19 +165,12 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragCardTitleFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: \"Interface comparison\" is 137 pt wide in bold, SF 13 bold"))
     let dragCardTitleTop = Metric(137.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the title's capitals span 140.5...150 below the card top"))
     let dragCardInset = Metric(8.0, .guess("the title's side margin inside the card: Arc keeps the 137 pt \"Interface comparison\" on one line in the 169 pt card"))
-    let dragCardShadow = Metric(10.0, .guess("blur of the drag card's shadow: it fades over about 16 pt at the sides, 20 below (P23-d-arc.png)"))
-    let dragCardShadowOpacity = Metric(0.16, .guess("the drag card's shadow darkens #FCFCFC to #E4E5E5 at its side (P23-d-arc.png)"))
+    let dragCardShadow = Metric(20.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the card's shadow fades over about 16 pt at the sides and 20 below"))
+    let dragCardShadowOpacity = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: #DDDDDD right under the card on the white page"))
     let dropLineWidth = Metric(2.0, .guess("drop indicator thickness (DragHintHighlighted)"))
     // The split preview over a tab row's middle (P23-e-arc.png: capsule x 15...233.5, slot from 15, chip 22...114,
     // "Seconda…" from 150, × centred at 216 in the window).
-    let splitJoinChipWidth = Metric(0.42, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the dragged tab's chip is 92 pt of the 218.5 pt capsule"))
-    let splitJoinChipOffset = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the darker slot shows 7 pt left of the chip (x 15...22)"))
-    let splitJoinTargetLeading = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title starts 26 pt right of the capsule's middle"))
-    let splitJoinTargetTrailing = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title ends about 7 pt before the ×'s centre"))
     /// Saturation (a share of the theme's, capped at 0.5 like `HueInk`) and lightness of the slot and the chip.
-    let splitJoinSlotInk = Metric([0.37, 0.586], .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the slot is #82A9A8 (HSL 178, 0.185, 0.586) on the pale teal theme"))
-    let splitJoinChipInk = Metric([0.254, 0.892], .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the chip is #E0E7E7 (HSL 180, 0.127, 0.892)"))
-    let splitJoinTargetInk = Metric(0.15, .anatomy("verify/visual-pairs/run-20261103/P23/P23-e-arc.png: the target's title is #D8D8D8 on the #F5F5F5 capsule"))
     let selectedShadowRadius = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's current tab card has a 1.5 pt shadow line under its lower edge, darkest at the edge"))
     let selectedShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a: the shadow line sits under the card, not around it"))
     let floatingShadowRadius = Metric(16.0, .guess("floating sidebar shadow blur; not recovered (layout-constants.md, Not recovered)"))
@@ -218,6 +231,8 @@ extension Palette {
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).
 enum SidebarCopy {
+    /// Arc: "Subtitle shown on tab with hint on how to rename tab." (Q13-h)
+    static let renameHint = "Double-click to rename"
     /// Arc's banner title and button, Swift small strings in the code that fills its state (bin:0x1025517b0, 0x102551890).
     static let archiveEducationTitle = "We cleaned up!"
     static let archiveEducationDismiss = "Got it"

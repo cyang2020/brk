@@ -22,7 +22,7 @@ final class TablistView: NSScrollView {
     private let divider: DividerRowView
     private let education: ArchiveEducationView
     private let newTab: NewTabRowView
-    private let dropLine = NSView()
+    private let dropLine = DropLineView()
     private let topEdge = NSView()
     private let bottomEdge = NSView()
     private var rowViews: [ItemID: RowView] = [:]
@@ -32,9 +32,9 @@ final class TablistView: NSScrollView {
     private var tools: TabToolsSnapshot?
     private var lastReveal: UInt64?
     private var dropFolder: ItemID?
-    /// The split preview over a row (DragController) and the row it covers.
-    private var splitJoin: SplitJoinPreview?
+    /// The row a held tab would join (DragController), and the band across it when it is a split.
     private var splitJoinTarget: ItemID?
+    private let joinBand = NSView()
     private var contentBottom = 0.0
     /// The pointer is over the sidebar: Today's Clear shows (Arc).
     var sidebarHovered = false { didSet { divider.sidebarHovered = sidebarHovered } }
@@ -62,10 +62,12 @@ final class TablistView: NSScrollView {
         documentView = document
         pinnedSection.identify(.section(.pinned))
         todaySection.identify(.section(.today))
-        for view in [pinnedSection, todaySection, dropLine] { document.addSubview(view) }
+        for view in [joinBand, pinnedSection, todaySection, dropLine] { document.addSubview(view) }
+        joinBand.wantsLayer = true
+        joinBand.isHidden = true
+        joinBand.identify(.tabTool("split-join-band"))
         todaySection.addSubview(divider)
         todaySection.addSubview(newTab)
-        dropLine.wantsLayer = true
         dropLine.isHidden = true
         for edge in [topEdge, bottomEdge] {
             edge.wantsLayer = true
@@ -200,7 +202,7 @@ final class TablistView: NSScrollView {
             view.removeFromSuperview()
             rowViews[id] = nil
         }
-        dropLine.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).cgColor
+        dropLine.ink = palette.focusColor
         for edge in [topEdge, bottomEdge] { edge.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor }
         if let reveal = tools.reveal, tools.revealGeneration != lastReveal, let row = rowViews[reveal] {
             document.scrollToVisible(document.convert(row.bounds, from: row))
@@ -322,37 +324,29 @@ final class TablistView: NSScrollView {
         } else if parent == space.today.root, let newTabRow = f.rows.first(where: { $0.kind == .newTab }) {
             y = newTabRow.rect.maxY + half
         } else { return }
-        let indent = t.selectionInset.value + Double(depth) * t.folderIndent.value
-        let line = Draw.dropLineWidth.value
-        dropLine.frame = CGRect(x: indent, y: y - line / 2, width: max(0, document.bounds.width - indent - t.selectionInset.value), height: line)
-        dropLine.layer?.cornerRadius = line / 2
+        let indent = Draw.dropRingLeading.value + Double(depth) * t.folderIndent.value
+        let ring = Draw.dropRingSide.value
+        dropLine.frame = CGRect(x: indent, y: y - ring / 2, width: max(ring, document.bounds.width - indent - Draw.dropLineTrailing.value), height: ring)
         dropLine.isHidden = false
     }
 
-    /// Arc's split preview in place of `target`'s row while `dragged` is held on its middle (P23-e); the row under it
-    /// is hidden meanwhile. Nil clears it. The capsule follows the pointer sideways by `shift` (Arc's sits 7 pt right
-    /// of the row in P23-e), as far as the list's side insets, so it never leaves the list.
-    func showSplitJoin(_ target: ItemID?, dragged: TabRow?, shift: Double = 0, frames f: SidebarFrames, space: SpaceSnapshot, palette: Palette?) {
-        if splitJoinTarget != target, let old = splitJoinTarget { rowViews[old]?.alphaValue = 1 }
-        splitJoinTarget = nil
-        guard let target, let dragged, let palette, let frame = f.rows.first(where: { $0.kind == .item(target) }),
-              case .tab(let row)? = Self.find(target, in: space.pinned.rows + space.today.rows) else {
-            splitJoin?.isHidden = true
-            return
+    /// Where a held tab would join (Arc, Q15): a slot in the half of a tab's row under the pointer, the row's own icon and
+    /// title moved to the other half; or one band across a split row, the whole sidebar wide. Nil clears it.
+    func showSplitJoin(_ join: SplitJoin?, frames f: SidebarFrames) {
+        if let old = splitJoinTarget, old != join?.target { rowViews[old]?.joinLeading = nil }
+        splitJoinTarget = join?.target
+        joinBand.isHidden = true
+        switch join {
+        case .tab(let id, let leading)?:
+            rowViews[id]?.joinLeading = leading
+        case .split(let id, _)?:
+            guard let palette = last?.palette, let row = f.rows.first(where: { $0.kind == .item(id) }) else { return }
+            joinBand.layer?.backgroundColor = palette.focusColor.withAlphaComponent(Draw.dropHintAlpha.value).cgColor
+            joinBand.frame = CGRect(x: 0, y: row.rect.minY, width: row.rect.width, height: row.rect.height + Metrics.tablist.rowSpacing.value)
+            joinBand.isHidden = false
+        case nil:
+            break
         }
-        let preview = splitJoin ?? {
-            let made = SplitJoinPreview(frame: .zero)
-            document.addSubview(made)
-            splitJoin = made
-            return made
-        }()
-        let inset = Metrics.tablist.selectionInset.value
-        preview.frame = frame.rect.offsetBy(dx: min(inset, max(-inset, shift)).rounded(), dy: 0)
-        preview.render(dragged: dragged, onto: row, depth: frame.depth, palette: palette)
-        preview.layoutSubtreeIfNeeded()
-        preview.isHidden = false
-        splitJoinTarget = target
-        rowViews[target]?.alphaValue = 0
     }
 
     private func setDropFolder(_ id: ItemID?) {
@@ -376,6 +370,25 @@ final class TablistView: NSScrollView {
     static func lastVisible(_ row: Row) -> ItemID? {
         if case .folder(let folder) = row, !folder.collapsed, let child = folder.children.last { return lastVisible(child) }
         return row.id
+    }
+}
+
+/// Where a dragged row lands in the list (Arc, Q13-d): a line ending in a small ring at its left.
+@MainActor
+final class DropLineView: NSView {
+    var ink = NSColor.gray { didSet { needsDisplay = true } }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let width = Draw.dropLineWidth.value, side = bounds.height
+        ink.setStroke()
+        let ring = NSBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: width / 2, dy: width / 2))
+        ring.lineWidth = width
+        ring.stroke()
+        ink.setFill()
+        NSBezierPath(roundedRect: CGRect(x: side - width / 2, y: (side - width) / 2, width: max(0, bounds.width - side + width / 2), height: width), xRadius: width / 2, yRadius: width / 2).fill()
     }
 }
 
@@ -445,6 +458,10 @@ final class RowView: HoverView {
     private let background = NSView()
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
+    private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
+    /// The half of this row a held tab would take (Q15).
+    private let joinSlot = NSView()
     private lazy var media = MediaRowControls(dispatch: dispatch)
     private let audio = GlyphButton()
     private let button = GlyphButton()
@@ -464,6 +481,16 @@ final class RowView: HoverView {
     /// The row a tab drag left while the pointer is over the content: Arc keeps it in place on the selected-row card
     /// with its × showing (P23-d), and the white drag card follows the pointer instead.
     var dragLifted = false { didSet { if dragLifted != oldValue { stateChanged() } } }
+    /// A tab held over this row's middle would take its left half (true) or right half (false); nil when none is (Q15).
+    var joinLeading: Bool? {
+        didSet {
+            guard joinLeading != oldValue else { return }
+            joinSlot.isHidden = joinLeading == nil
+            if let palette { joinSlot.layer?.backgroundColor = palette.focusColor.withAlphaComponent(Draw.dropHintAlpha.value).cgColor }
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+        }
+    }
     /// Whether this row has a hover × at all (Today tabs, loaded Pinned tabs).
     private var hasButton = false
     var onRangeSelect: ((ItemID) -> Void)?
@@ -483,7 +510,15 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        renameHint.font = .systemFont(ofSize: Draw.renameHintFont.value)
+        renameHint.isSelectable = false
+        renameHint.lineBreakMode = .byTruncatingTail
+        renameHint.isHidden = true
+        joinSlot.wantsLayer = true
+        joinSlot.layer?.cornerCurve = .continuous
+        joinSlot.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        joinSlot.isHidden = true
+        for view in [background, joinSlot, icon, title, renameHint, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         peekMarker.isHidden = true
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -505,8 +540,10 @@ final class RowView: HoverView {
         self.multiselected = multiselected
         identify(.row(row.id))
         button.identify(.rowClose(row.id))
+        joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
         var dimmed = false
         media.isHidden = true
+        renameHint.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
@@ -517,6 +554,8 @@ final class RowView: HoverView {
             audio.toolTip = tab.muted ? "Unmute Tab" : "Mute Tab"
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
+            renameHint.isHidden = !tab.renameHint || renaming
+            renameHint.textColor = palette.ink.text.withAlphaComponent(Draw.renameHintInk.value)
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
@@ -593,7 +632,7 @@ final class RowView: HoverView {
         button.isHidden = !hasButton && !dragLifted
         button.toolTip = today ? Copy.archiveTabTooltip : SidebarCopy.closeKeepPinned
         // Arc draws × on Pinned rows too; there it unloads the tab and keeps it pinned.
-        button.render(.archiveTab, size: Draw.smallFont.value, palette: palette,
+        button.render(.archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
     }
 
@@ -624,8 +663,20 @@ final class RowView: HoverView {
         let buttonShown = !button.isHidden && button.alphaValue > 0
         let trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
             : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
-            : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
+            : buttonShown ? g.selection.maxX - Draw.rowTitleOverButton.value : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
+        if let leading = joinLeading {
+            // The slot takes one half, the row's own icon and title the other, cut off at its end (Q15-a, Q15-b).
+            let half = g.selection.width / 2, inset = Draw.splitJoinSlotInset.value
+            joinSlot.frame = CGRect(x: (leading ? g.selection.minX : g.selection.midX) + inset, y: g.selection.minY, width: half - inset, height: g.selection.height)
+            if leading { icon.frame.origin.x += half }
+            let start = g.titleX + (leading ? half : 0), end = (leading ? g.selection.maxX : g.selection.midX) - Draw.splitJoinTitleTrailing.value
+            title.frame = CGRect(x: start, y: title.frame.minY, width: max(0, end - start), height: title.frame.height)
+        }
+        if !renameHint.isHidden {
+            title.frame.origin.y += Draw.renameHintTitleShift.value
+            renameHint.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value, width: title.frame.width, height: renameHint.intrinsicContentSize.height)
+        }
         // Arc's group header starts its title where a tab's favicon starts (no icon column).
         if case .folder(let folder)? = row, folder.group {
             let start = g.selection.minX + Draw.groupTitleLeading.value
@@ -691,6 +742,23 @@ final class RowView: HoverView {
         button.alphaValue = shown ? 1 : 0
     }
 
+    /// The row's icon, title and button for the drag image: no card and no shadow, the image has its own.
+    func dragImage() -> NSImage? {
+        layoutSubtreeIfNeeded()
+        let shadow = background.shadow, fill = background.layer?.backgroundColor
+        background.shadow = nil
+        background.layer?.backgroundColor = nil
+        defer {
+            background.shadow = shadow
+            background.layer?.backgroundColor = fill
+        }
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
     // MARK: Pointer
 
     override func mouseDown(with event: NSEvent) {
@@ -702,7 +770,10 @@ final class RowView: HoverView {
             return
         }
         isPressed = true
+        // The press opens a tab or a split's pane right away (Arc, Q13-press-row); `press` first, it notes what the window shows.
         drag.press(.init(id: row.id, kind: row.kind, section: section), source: self, event: event)
+        let point = local(event)
+        SidebarPress.commands(for: row, pane: segments.first { $0.frame.contains(point) }?.pane?.id, command: false, shift: false).forEach(dispatch)
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -713,19 +784,12 @@ final class RowView: HoverView {
         isPressed = false
         if drag.release(event) { return }
         guard let row, !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), bounds.contains(local(event)) else { return }
-        onSelect?(row.id)
+        if case .folder = row { onSelect?(row.id) }
         if event.clickCount == 2, row.kind != .split {
             dispatch(.item(.beginRename(.item(row.id))))
             return
         }
-        switch row {
-        case .folder: dispatch(.item(.toggleFolder(row.id)))
-        case .tab: dispatch(.tab(.focus(row.id)))
-        case .split:
-            let point = local(event)
-            let pane = segments.first { $0.frame.contains(point) }?.pane?.id
-            dispatch(.tab(.focus(pane ?? row.id)))
-        }
+        if case .folder = row { dispatch(.item(.toggleFolder(row.id))) }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -1147,6 +1211,13 @@ final class SpaceHeaderView: HoverView {
     private let more = GlyphButton()
     private var space: SpaceSnapshot?
     private var palette: Palette?
+    /// A drag is over the strip: the whole of it turns dark grey (Arc, Q13-g).
+    var dropHighlighted = false {
+        didSet {
+            guard dropHighlighted != oldValue, let palette else { return }
+            layer?.backgroundColor = dropHighlighted ? palette.focusColor.withAlphaComponent(Draw.dropHintAlpha.value).cgColor : nil
+        }
+    }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch

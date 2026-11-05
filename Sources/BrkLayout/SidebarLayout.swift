@@ -44,11 +44,10 @@ public enum SidebarLayout {
         let lights = CGPoint(x: frame.minX + w.trafficLightLeft.value, y: frame.minY + w.trafficLightCenterY.value - w.trafficLightSize.value / 2)
         let pill = CGRect(x: frame.minX + p.sideInset.value, y: titleRow.maxY + p.topGap.value,
                           width: max(0, frame.width - 2 * p.sideInset.value), height: toolbarVisible ? 0 : p.height.value)
-        let grid = FavoritesGrid.tiles(count: favorites.tiles.count, width: frame.width, hintDismissed: favorites.hintDismissed)
+        let grid = FavoritesGrid.layout(favorites.tiles.map(\.id), width: frame.width, hintDismissed: favorites.hintDismissed)
         let tray = CGRect(x: frame.minX, y: toolbarVisible ? frame.minY + s.toolbarTrayTop.value : pill.maxY, width: frame.width,
                           height: thisWindow ? 0 : grid.tray.height)
-        var tiles: [ItemID: CGRect] = [:]
-        if !thisWindow { for (tile, rect) in zip(favorites.tiles, grid.tiles) { tiles[tile.id] = rect.offsetBy(dx: tray.minX, dy: tray.minY) } }
+        let tiles = thisWindow ? [:] : grid.tiles.mapValues { $0.offsetBy(dx: tray.minX, dy: tray.minY) }
         let dockRect = CGRect(x: frame.minX, y: frame.maxY - Metrics.dock.height.value, width: frame.width, height: Metrics.dock.height.value)
         let cells = DockLayout.cells(count: dock.count, in: dockRect)
         var dockSpaces: [SpaceID: CGRect] = [:]
@@ -61,20 +60,44 @@ public enum SidebarLayout {
     }
 }
 
-/// Arc's favorites grid (cra L1590-1594, `FavoritesGridView.columns(forWidth:)`): 4 columns while a tile is at
-/// least 47 wide, else 2, else 1 (never 3); 8 pt insets and gaps; tiles are 47 tall and as wide as the columns
-/// allow, rounded down to whole points.
+/// A drag over the Favorites grid, as the grid shows it before anything is dropped (Arc 1.170, Q13). Only the sidebar's
+/// drag code holds one; the document does not change until the release.
+public enum FavoritesDrag: Sendable, Equatable {
+    /// A tab from the list is held over the grid: the grid already counts it, and `slot` is the empty cell it lands in.
+    case incoming(slot: Int)
+    /// A favorite is held over the grid: the others flow around `slot`, the empty cell it lands in.
+    case reordering(ItemID, slot: Int)
+    /// A favorite is held outside the grid: its own cell stays empty and nothing else moves until the release.
+    case leaving(ItemID)
+}
+
+/// Arc's favorites grid (Q13-n0...n10, Q13-w*): balanced by count, not a fixed number of columns. The width only sets
+/// the most columns a row may have (the largest of 4, 3, 2, 1 whose tile is at least 47 wide); then rows =
+/// ceil(count / most) and columns = ceil(count / rows), so 5 tiles are 3+2 and 7 are 4+3 at any width that allows 4.
+/// Tiles are 47 tall and as wide as it takes to fill a row (fractions of a point: 65.33 for three at 228); an
+/// incomplete last row keeps the same width and starts at the left. 8 pt insets and gaps.
 public enum FavoritesGrid {
-    /// The column count for a tray of `width`.
-    public static func columns(forWidth width: Double) -> Int {
+    /// The most columns a tray of `width` may have.
+    public static func maxColumns(forWidth width: Double) -> Int {
         let f = Metrics.favorites
-        let inner = width - 2 * f.inset.value
-        func tile(_ columns: Int) -> Double { (inner - Double(columns - 1) * f.gap.value) / Double(columns) }
-        for columns in [f.maxColumns.value, 2] where tile(columns) >= f.minTile.value { return columns }
+        for columns in stride(from: f.maxColumns.value, to: 1, by: -1) where tileWidth(columns: columns, width: width) >= f.minTile.value { return columns }
         return 1
     }
 
-    /// Tile rects in tray coordinates (origin at the tray's top-left) and the tray's size. With no favorites the
+    /// The columns `count` tiles take in a tray of `width`. Zero tiles lay out as one.
+    public static func columns(count: Int, width: Double) -> Int {
+        ceilingDivide(max(1, count), rows(count: count, width: width))
+    }
+
+    /// The rows `count` tiles take in a tray of `width`.
+    public static func rows(count: Int, width: Double) -> Int { ceilingDivide(max(1, count), maxColumns(forWidth: width)) }
+
+    /// The size of every tile when the grid holds `count`.
+    public static func tileSize(count: Int, width: Double) -> CGSize {
+        CGSize(width: max(0, tileWidth(columns: columns(count: count, width: width), width: width)), height: Metrics.favorites.minTile.value)
+    }
+
+    /// The `count` cells in tray coordinates (origin at the tray's top-left) and the tray's size. With no favorites the
     /// tray holds Arc's "Drag to add Favorites" box (Metrics.favorites.emptyTrayHeight), or nothing once dismissed.
     public static func tiles(count: Int, width: Double, hintDismissed: Bool = false) -> (tray: CGSize, tiles: [CGRect]) {
         let f = Metrics.favorites
@@ -82,18 +105,72 @@ public enum FavoritesGrid {
             let box = emptyBox(width: width).box
             return (CGSize(width: width, height: hintDismissed ? 0 : f.emptyTrayHeight.value - f.emptyBoxHeight.value + box.height), [])
         }
-        let columns = columns(forWidth: width)
-        let inner = width - 2 * f.inset.value
-        let tileWidth = max(0, floor((inner - Double(columns - 1) * f.gap.value) / Double(columns)))
-        let tileHeight = f.minTile.value
-        let rows = count == 0 ? 1 : (count + columns - 1) / columns
+        let columns = columns(count: count, width: width), rows = rows(count: count, width: width)
+        let size = tileSize(count: count, width: width)
         let rects = (0..<count).map { i in
-            CGRect(x: f.inset.value + Double(i % columns) * (tileWidth + f.gap.value), y: f.inset.value + Double(i / columns) * (tileHeight + f.gap.value),
-                   width: tileWidth, height: tileHeight)
+            CGRect(x: f.inset.value + Double(i % columns) * (size.width + f.gap.value), y: f.inset.value + Double(i / columns) * (size.height + f.gap.value),
+                   width: size.width, height: size.height)
         }
-        let height = 2 * f.inset.value + Double(rows) * tileHeight + Double(rows - 1) * f.gap.value
+        let height = 2 * f.inset.value + Double(rows) * size.height + Double(rows - 1) * f.gap.value
         return (CGSize(width: width, height: height), rects)
     }
+
+    /// The cell a drag at `point` (tray coordinates) falls in when the grid holds `count`: half a gap around each tile
+    /// belongs to it, outside the tiles counts as the nearest row and column, and the empty end of the last row is
+    /// the last cell (an append).
+    public static func slot(at point: CGPoint, count: Int, width: Double) -> Int {
+        guard count > 0 else { return 0 }
+        let f = Metrics.favorites
+        let columns = columns(count: count, width: width), rows = rows(count: count, width: width)
+        let size = tileSize(count: count, width: width)
+        func cell(_ position: Double, inset: Double, pitch: Double, limit: Int) -> Int {
+            Int(floor((position - inset + f.gap.value / 2) / pitch)).clamped(to: 0...(limit - 1))
+        }
+        let column = cell(point.x, inset: f.inset.value, pitch: size.width + f.gap.value, limit: columns)
+        let row = cell(point.y, inset: f.inset.value, pitch: size.height + f.gap.value, limit: rows)
+        return min(row * columns + column, count - 1)
+    }
+
+    /// The grid with `ids` while `drag` is held: the tray's size, every tile's cell (tray coordinates) and the empty cell.
+    /// This is the only place that says where tiles go; `tiles(count:)` is the same answer at rest. An empty grid keeps its
+    /// box while a tab is held over it (a tile there would pull the tray out from under the pointer).
+    public static func layout(_ ids: [ItemID], width: Double, hintDismissed: Bool = false, drag: FavoritesDrag? = nil) -> FavoritesLayout {
+        var order: [ItemID?] = ids
+        var gap: Int?
+        switch drag {
+        case nil:
+            break
+        case .incoming(let slot):
+            if !ids.isEmpty {
+                let at = slot.clamped(to: 0...ids.count)
+                order.insert(nil, at: at)
+                gap = at
+            }
+        case .reordering(let item, let slot):
+            if let from = ids.firstIndex(of: item) {
+                order.remove(at: from)
+                let at = slot.clamped(to: 0...order.count)
+                order.insert(nil, at: at)
+                gap = at
+            }
+        case .leaving(let item):
+            if let from = ids.firstIndex(of: item) {
+                order[from] = nil
+                gap = from
+            }
+        }
+        let grid = tiles(count: order.count, width: width, hintDismissed: hintDismissed)
+        var placed: [ItemID: CGRect] = [:]
+        for (id, rect) in zip(order, grid.tiles) { if let id { placed[id] = rect } }
+        return FavoritesLayout(tray: grid.tray, tiles: placed, gap: gap.map { grid.tiles[$0] })
+    }
+
+    private static func tileWidth(columns: Int, width: Double) -> Double {
+        let f = Metrics.favorites
+        return (width - 2 * f.inset.value - Double(columns - 1) * f.gap.value) / Double(columns)
+    }
+
+    private static func ceilingDivide(_ a: Int, _ b: Int) -> Int { (a + b - 1) / b }
 
     /// Arc's "Drag to add Favorites" box in a tray of `width` (tray coordinates), and the factor its contents are
     /// drawn at. At Arc's default 228 the box is 7.5 in from the sides, 7 below the pill and 94.5 tall (P07-b); a
@@ -107,24 +184,43 @@ public enum FavoritesGrid {
         return (CGRect(x: inset.width, y: inset.height, width: boxWidth, height: f.emptyBoxHeight.value * scale), scale)
     }
 
-    /// Where a drag at `point` (window coordinates, like `SidebarFrames.favoriteTiles`) would drop into Favorites,
-    /// or nil outside the tray or for a kind Favorites cannot hold (tabs only). Over a row of tiles the drop goes
-    /// before the first tile of that row whose centre is right of the pointer, else after the row's last tile;
-    /// anywhere else in the tray it appends. `item` (the dragged item, when it is already a favorite) makes the index
-    /// count after it is detached, as `Destination.into` requires, so reordering inside the grid lands where shown.
+    /// Where a drag at `point` (window coordinates, like `SidebarFrames.favoriteTiles`) would drop into Favorites, or nil
+    /// outside the tray or for a kind Favorites cannot hold (tabs only). The drop is the cell under the pointer in the
+    /// grid as it is laid out with the item in it (a new tile makes one more cell). `item`, the dragged item, tells a
+    /// reorder from a new tile; the cell is already the index `Destination.into` wants, counted with the item detached.
     public static func dropTarget(at point: CGPoint, frames: SidebarFrames, favorites: FavoritesSnapshot, dragging kind: ItemKind,
                                   item: ItemID? = nil) -> Destination? {
         guard frames.favoritesTray.contains(point), Placement.canPlace(kind, inSection: .favorites, parentKind: .section) else { return nil }
-        let gap = Metrics.favorites.gap.value
-        let placed = favorites.tiles.enumerated().compactMap { i, tile in frames.favoriteTiles[tile.id].map { (i, $0) } }
-        var index = favorites.tiles.count
-        let row = placed.filter { point.y >= $0.1.minY - gap / 2 && point.y < $0.1.maxY + gap / 2 }
-        if let last = row.last {
-            index = row.first(where: { point.x < $0.1.midX })?.0 ?? last.0 + 1
-        }
-        if let item, let from = favorites.tiles.firstIndex(where: { $0.id == item }), from < index { index -= 1 }
-        return .into(parent: favorites.root, index: index)
+        let count = favorites.tiles.count + (favorites.tiles.contains { $0.id == item } ? 0 : 1)
+        let local = CGPoint(x: point.x - frames.favoritesTray.minX, y: point.y - frames.favoritesTray.minY)
+        return .into(parent: favorites.root, index: slot(at: local, count: count, width: frames.favoritesTray.width))
     }
+
+    /// `frames` as they read while `drag` is held: the tray takes the height of its new layout, its tiles their cells,
+    /// and the Space name strip and the tab list move with the tray's bottom.
+    public static func applying(_ drag: FavoritesDrag?, to frames: SidebarFrames, favorites: FavoritesSnapshot) -> SidebarFrames {
+        guard let drag, frames.favoritesTray.height > 0 else { return frames }
+        let grid = layout(favorites.tiles.map(\.id), width: frames.favoritesTray.width, hintDismissed: favorites.hintDismissed, drag: drag)
+        let shift = grid.tray.height - frames.favoritesTray.height
+        var f = frames
+        f.favoritesTray.size.height = grid.tray.height
+        f.favoriteTiles = grid.tiles.mapValues { $0.offsetBy(dx: frames.favoritesTray.minX, dy: frames.favoritesTray.minY) }
+        f.spaceHeader.origin.y += shift
+        f.tablistViewport.origin.y += shift
+        f.tablistViewport.size.height = max(0, frames.tablistViewport.height - shift)
+        return f
+    }
+}
+
+/// The answer of `FavoritesGrid.layout`: tray coordinates. `gap` is the empty cell of a drag, nil at rest.
+public struct FavoritesLayout: Sendable, Equatable {
+    public var tray: CGSize
+    public var tiles: [ItemID: CGRect]
+    public var gap: CGRect?
+}
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self { min(max(self, range.lowerBound), range.upperBound) }
 }
 
 /// The tab list: spacer (2), Pinned rows (none while the section is collapsed; a collapsed folder's children are not
@@ -226,25 +322,62 @@ public enum TablistLayout {
         return .into(parent: t.parent, index: t.index)
     }
 
-    /// The tab a drag at `point` (tab list document coordinates) would join in a split (Arc 1.170, P23-e): the middle
-    /// half of a standalone tab row other than `item`, when the dragged item is a tab of a `section` that may join the
-    /// row's (`Placement.canJoinSplit`). Nil elsewhere, where `dropTarget` decides: the row's upper and lower quarters
-    /// still reorder, a folder's middle still drops into it, a split row keeps its halves.
+    /// What a tab held at `point` (tab list document coordinates) would join in a split (Arc 1.170, Q15): the row's middle
+    /// band (a quarter of a row from either edge reorders instead), on a row other than `item`, when the dragged item is a
+    /// tab of a `section` that may join the row's (`Placement.canJoinSplit`). On a standalone tab the half under the
+    /// pointer takes it, by the pointer against the row's midpoint, wherever the drag image is. On a split row the place
+    /// is the boundary between panes nearest the pointer: Arc's two ends were seen (Q15-f, Q15-g), the ones between are
+    /// inferred. A full split takes no more. Nil elsewhere, where `dropTarget` decides; a folder's middle still drops into it.
     public static func splitTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind, from section: SectionKind,
-                                   item: ItemID) -> ItemID? {
+                                   item: ItemID) -> SplitJoin? {
         guard kind == .tab, let hit = rows.first(where: { point.y >= $0.rect.minY && point.y < $0.rect.maxY }),
               case .item(let id) = hit.kind, id != item else { return nil }
         let f = (point.y - hit.rect.minY) / max(hit.rect.height, 1)
         guard f >= Metrics.tablist.splitJoinZone.value.lowerBound, f <= Metrics.tablist.splitJoinZone.value.upperBound else { return nil }
-        func standaloneTab(in rows: [Row]) -> Bool {
-            rows.contains { row in
-                if case .folder(let folder) = row { return standaloneTab(in: folder.children) }
-                return row.id == id && row.kind == .tab
+        func joinable(in rows: [Row]) -> Row? {
+            for row in rows {
+                if case .folder(let folder) = row {
+                    if let hit = joinable(in: folder.children) { return hit }
+                } else if row.id == id { return row }
             }
+            return nil
         }
-        let target: SectionKind? = standaloneTab(in: space.pinned.rows) ? .pinned : standaloneTab(in: space.today.rows) ? space.today.kind : nil
-        guard let target, Placement.canJoinSplit(section, with: target) else { return nil }
-        return id
+        let pinned = joinable(in: space.pinned.rows), today = joinable(in: space.today.rows)
+        guard let row = pinned ?? today, Placement.canJoinSplit(section, with: pinned != nil ? .pinned : space.today.kind) else { return nil }
+        switch row {
+        case .tab:
+            return .tab(id, leading: point.x < hit.rect.midX)
+        case .split(let split):
+            guard split.panes.count < Metrics.content.maxPanes.value else { return nil }
+            let t = Metrics.tablist
+            let start = hit.rect.minX + t.selectionInset.value + Double(hit.depth) * t.folderIndent.value
+            let pane = max(1, hit.rect.maxX - t.selectionInset.value - start) / Double(split.panes.count)
+            return .split(id, index: min(max(0, Int(((point.x - start) / pane).rounded())), split.panes.count))
+        case .folder:
+            return nil
+        }
+    }
+}
+
+/// A tab held over the middle of another row, where a release makes or grows a split (Arc 1.170, Q15).
+public enum SplitJoin: Sendable, Equatable {
+    /// A standalone tab: the tab would take the half under the pointer.
+    case tab(ItemID, leading: Bool)
+    /// A split row: the whole row answers, and the tab would be pane `index`.
+    case split(ItemID, index: Int)
+
+    public var target: ItemID {
+        switch self {
+        case .tab(let id, _), .split(let id, _): id
+        }
+    }
+
+    /// The dragged tab's place among the panes (`SplitCommand.joinRow`).
+    public var paneIndex: Int {
+        switch self {
+        case .tab(_, let leading): leading ? 0 : 1
+        case .split(_, let index): index
+        }
     }
 }
 

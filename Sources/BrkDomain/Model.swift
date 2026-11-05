@@ -310,6 +310,9 @@ struct WindowSession: Sendable, Equatable {
     var overlayOpens: Int
     var peek: Bool
     var renaming: ItemID?
+    /// The tab showing "Double-click to rename" (Arc's window state: `renameHintItemID`). It goes when the tab is renamed
+    /// or stops being the shown tab.
+    var renameHint: ItemID? = nil
     var pendingSpaceDeletion: SpaceDeletionRequest? = nil
     var pendingEaselDeletion: EaselDeletionRequest? = nil
     /// The Easel this window just created: its title box shows selected until the board is first edited.

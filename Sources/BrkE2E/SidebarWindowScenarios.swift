@@ -14,9 +14,9 @@ enum SidebarWindowScenarios {
         Scenario("SidebarWindow3", "a dock reorder drag carries the space in a capsule that follows the pointer and drops where it is released", cefOnly: "native pointer sequences", dockCapsule),
         Scenario("SidebarWindow4", "with Today emptied the divider and Clear are gone, New Tab sits under Pinned and the empty card shows", cefOnly: "native sidebar rows", emptyToday),
         // R4-12 (user reports; P23-e/f, P05-f, P07-b).
-        Scenario("SidebarWindow5", "a Today tab held on the middle of another Today tab's row shows Arc's split capsule there; the release makes the split in the target's place, two panes, the dragged one focused", cefOnly: "native sidebar pointer drags and CEF surfaces", rowJoin),
+        Scenario("SidebarWindow5", "a Today tab held on the middle of another Today tab's row shows a slot in the half under the pointer; the release makes the split in the target's place on that side, two panes, the dragged one focused", cefOnly: "native sidebar pointer drags and CEF surfaces", rowJoin),
         Scenario("SidebarWindow6", "a pinned folder's tab dropped on the middle of a Today tab's row joins it in a split where the Today tab was", cefOnly: "native sidebar pointer drags and CEF surfaces", pinnedRowJoin),
-        Scenario("SidebarWindow7", "a tab dropped on another row's upper or lower edge only reorders, and on a folder's middle goes into the folder; no capsule, no split", cefOnly: "native sidebar pointer drags", rowEdges),
+        Scenario("SidebarWindow7", "a tab dropped on another row's upper or lower edge only reorders, and on a folder's middle goes into the folder; no slot, no split", cefOnly: "native sidebar pointer drags", rowEdges),
         Scenario("SidebarWindow8", "from 228 down to 164 in 16 pt steps the empty Favorites box shrinks with its badge, title, two lines and × inside it; Favorites tiles go two by two", cefOnly: "native sidebar layout", narrowSidebar),
     ]
 
@@ -151,7 +151,7 @@ enum SidebarWindowScenarios {
 
     // MARK: R4-12
 
-    private static let capsule = ViewID.tabTool("split-join-preview")
+    private static func joinSlot(_ row: ItemID) -> ViewID { .tabTool("split-join-slot-" + row.rawValue) }
 
     /// Press on `source`'s row and drag in steps to `held` (window points), staying pressed.
     private static func press(_ app: AppUnderTest, row source: ItemID, to held: CGPoint) throws {
@@ -163,9 +163,9 @@ enum SidebarWindowScenarios {
     }
 
     /// A point `fraction` of the way down `item`'s row (0 is its top).
-    private static func onRow(_ app: AppUnderTest, _ item: ItemID, _ fraction: Double) throws -> CGPoint {
+    private static func onRow(_ app: AppUnderTest, _ item: ItemID, _ fraction: Double, dx: Double = 0) throws -> CGPoint {
         let row = try visible(app.native(), .row(item)).frame
-        return CGPoint(x: row.midX, y: row.minY + row.height * fraction)
+        return CGPoint(x: row.midX + dx, y: row.minY + row.height * fraction)
     }
 
     private static func loadTabs(_ app: AppUnderTest, _ names: [String]) throws -> [ItemID] {
@@ -177,16 +177,14 @@ enum SidebarWindowScenarios {
         }
     }
 
-    /// Asserts Arc's capsule over `target` while the drag is held: in the target row's place, the chip on its left
-    /// half, the target's title on the right, the dragged row lifted in place with its ×.
-    private static func expectCapsule(_ app: AppUnderTest, over target: ItemID, dragging source: ItemID) throws {
+    /// Asserts Arc's slot in `target`'s left half while the drag is held (Q15-a), with the row image at the pointer and
+    /// the dragged row lifted in place with its ×.
+    private static func expectLeftSlot(_ app: AppUnderTest, over target: ItemID, dragging source: ItemID) throws {
         let n = try app.native()
-        try expect(isShown(n, capsule), "no split capsule on the middle of the row")
-        let shown = try visible(n, capsule).frame, row = n.actual[ViewID.row(target).identifier]!.frame
-        try expect(near(shown.minX, row.minX) && near(shown.minY, row.minY) && near(shown.width, row.width) && near(shown.height, row.height),
-                   "the capsule \(shown) is not in the target row's place \(row)")
-        let chip = try visible(n, .tabTool("split-join-chip")).frame, rest = try visible(n, .tabTool("split-join-target")).frame
-        try expect(chip.maxX < rest.minX && chip.midX < shown.midX && rest.minX > shown.midX, "the chip \(chip) and the target's title \(rest) are not left and right halves of \(shown)")
+        let slot = try visible(n, joinSlot(target)).frame, row = try visible(n, .row(target)).frame
+        try expect(near(slot.minX, row.minX + 14) && near(slot.maxX, row.minX + 114) && slot.height == 36 && slot.minY > row.minY && slot.maxY < row.maxY,
+                   "the slot \(slot) is not the left half of \(row)")
+        try expect(isShown(n, .tabTool("drag-image")), "the row image is not at the pointer")
         try expect(isShown(n, .rowClose(source)), "the dragged row is not lifted with its ×")
     }
 
@@ -195,10 +193,10 @@ enum SidebarWindowScenarios {
         let inbox = tabs[0], secondary = tabs[2]
         let before = try app.view().space.today.rows.map(\.id)
         guard let at = before.firstIndex(of: secondary) else { throw Check(description: "no Secondary row") }
-        let held = try onRow(app, secondary, 0.5)
+        let held = try onRow(app, secondary, 0.5, dx: -40)
         try press(app, row: inbox, to: held)
-        try expectCapsule(app, over: secondary, dragging: inbox)
-        try app.screenshot("row-join-capsule")
+        try expectLeftSlot(app, over: secondary, dragging: inbox)
+        try app.screenshot("row-join-slot")
         try pointer(app, .up, held)
         try app.waitUntil("the release to join the two tabs") { try app.view().content.panes.map(\.tab) == [inbox, secondary] }
         let view = try app.view()
@@ -207,7 +205,7 @@ enum SidebarWindowScenarios {
                    "the split is not where Secondary was (index \(at)): \(view.space.today.rows.map(\.id))")
         try expect(view.content.panes.first(where: \.focused)?.tab == inbox, "the dragged tab is not the focused pane")
         let n = try app.native()
-        try expect(!isShown(n, capsule), "the capsule stayed after the release")
+        try expect(!isShown(n, .tabTool("split-join-band")), "the band stayed after the release")
         let left = try visible(n, .card(0)).frame, right = try visible(n, .card(1)).frame
         try expect(left.maxX < right.minX && near(left.width, right.width, 2), "the content is not two side-by-side panes: \(left) \(right)")
         try expect(isShown(n, .splitSegment(inbox)) && isShown(n, .splitSegment(secondary)), "the sidebar row is not one split row of the two tabs")
@@ -221,10 +219,10 @@ enum SidebarWindowScenarios {
 
     @Sendable static func pinnedRowJoin(_ app: AppUnderTest) throws {
         let (target, source) = try pinnedPair(app)
-        let held = try onRow(app, target, 0.5)
+        let held = try onRow(app, target, 0.5, dx: -40)
         try press(app, row: source, to: held)
-        try expectCapsule(app, over: target, dragging: source)
-        try app.screenshot("pinned-row-join-capsule")
+        try expectLeftSlot(app, over: target, dragging: source)
+        try app.screenshot("pinned-row-join-slot")
         try pointer(app, .up, held)
         try app.waitUntil("the release to join the pinned tab") { try app.view().content.panes.map(\.tab) == [source, target] }
         let view = try app.view()
@@ -246,7 +244,7 @@ enum SidebarWindowScenarios {
         // a onto c's upper quarter: before c.
         var held = try onRow(app, c, 0.12)
         try press(app, row: a, to: held)
-        try expect(!isShown(try app.native(), capsule), "a capsule on the row's upper edge")
+        try expect(!isShown(try app.native(), joinSlot(c)), "a slot on the row's upper edge")
         try app.screenshot("row-edge-reorder")
         try pointer(app, .up, held)
         try app.waitUntil("a to move above c") { try order() == [a, c, b] }
@@ -254,7 +252,7 @@ enum SidebarWindowScenarios {
         // a onto b's lower quarter: after b.
         held = try onRow(app, b, 0.88)
         try press(app, row: a, to: held)
-        try expect(!isShown(try app.native(), capsule), "a capsule on the row's lower edge")
+        try expect(!isShown(try app.native(), joinSlot(b)), "a slot on the row's lower edge")
         try pointer(app, .up, held)
         try app.waitUntil("a to move below b") { try order() == [c, b, a] }
         // a onto a pinned folder's middle: into the folder.
@@ -264,7 +262,7 @@ enum SidebarWindowScenarios {
         try app.dispatch(.item(.rename(folder, title: "Folder")))
         held = try onRow(app, folder, 0.5)
         try press(app, row: a, to: held)
-        try expect(!isShown(try app.native(), capsule), "a capsule on a folder")
+        try expect(!isShown(try app.native(), joinSlot(folder)), "a slot on a folder")
         try pointer(app, .up, held)
         try app.waitUntil("a to go into the folder") {
             guard case .folder(let f)? = try app.view().space.pinned.rows.first(where: { $0.id == folder }) else { return false }

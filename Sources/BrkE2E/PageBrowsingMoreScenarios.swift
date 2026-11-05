@@ -449,4 +449,70 @@ enum PhysicalPointer {
             usleep(type == .mouseMoved ? 150_000 : 60_000)
         }
     }
+
+    private static func post(_ type: CGEventType, at point: CGPoint, clickCount: Int64 = 1) throws {
+        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: type, mouseCursorPosition: point, mouseButton: .left) else {
+            throw Check(description: "mouse event")
+        }
+        event.setIntegerValueField(.mouseEventClickState, value: clickCount)
+        event.post(tap: .cghidEventTap)
+    }
+
+    /// `point` in the window's content coordinates (top-left origin) on the screen.
+    private static func screen(_ app: AppUnderTest, _ point: CGPoint, window: WindowID) throws -> CGPoint {
+        let frame = try app.native(window).windowFrame
+        return CGPoint(x: frame.minX + point.x, y: CGDisplayBounds(CGMainDisplayID()).height - frame.maxY + point.y)
+    }
+
+    /// Refuses (throws) unless this run's Brk is the frontmost window at the point, like `click`.
+    private static func checkFront(_ app: AppUnderTest, at point: CGPoint, window: WindowID) throws {
+        try WindowServerKeys.ensureFrontmost(app, window)
+        guard case .hello(let hello) = try app.send(.hello), let front = frontmost(at: point), front.pid == hello.pid else {
+            throw Check(description: "another window is in front of Brk at \(point); real mouse events not posted")
+        }
+    }
+
+    /// A press with the button held while `held` runs. `point` in window content coordinates.
+    static func press(_ app: AppUnderTest, at point: CGPoint, window: WindowID, held: () throws -> Void) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        try post(.mouseMoved, at: at); usleep(150_000)
+        try post(.leftMouseDown, at: at); usleep(100_000)
+        defer { try? post(.leftMouseUp, at: at); usleep(100_000) }
+        try held()
+    }
+
+    static func doubleClick(_ app: AppUnderTest, at point: CGPoint, window: WindowID) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        try post(.mouseMoved, at: at); usleep(150_000)
+        for count: Int64 in [1, 2] {
+            try post(.leftMouseDown, at: at, clickCount: count); usleep(30_000)
+            try post(.leftMouseUp, at: at, clickCount: count); usleep(30_000)
+        }
+    }
+
+    /// A real drag: press at the first point (window content coordinates), glide through the rest with the button down,
+    /// run `held` at the last and release there.
+    static func drag(_ app: AppUnderTest, through path: [CGPoint], window: WindowID, held: () throws -> Void) throws {
+        guard let first = path.first else { return }
+        let start = try screen(app, first, window: window)
+        try checkFront(app, at: start, window: window)
+        try post(.mouseMoved, at: start); usleep(150_000)
+        try post(.leftMouseDown, at: start); usleep(120_000)
+        var current = start
+        defer { try? post(.leftMouseUp, at: current); usleep(200_000) }
+        for point in path.dropFirst() {
+            let next = try screen(app, point, window: window), from = current
+            for step in 1...24 {
+                let t = Double(step) / 24, eased = t * t * (3 - 2 * t)
+                current = CGPoint(x: from.x + (next.x - from.x) * eased, y: from.y + (next.y - from.y) * eased)
+                try post(.leftMouseDragged, at: current)
+                usleep(10_000)
+            }
+            current = next
+        }
+        usleep(150_000)
+        try held()
+    }
 }
