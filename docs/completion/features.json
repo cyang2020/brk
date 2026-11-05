@@ -5622,7 +5622,7 @@
       "arc_evidence": "`space_swiping.mp4`; `SidebarPagingContainerViewController`",
       "description": "Two-finger swipe pages the sidebar from space to space",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Two-finger horizontal swipes page the sidebar between spaces with appropriate gesture ownership and cancellation.",
       "owner": "parent-ledger-reconciliation",
       "required_checks": [
@@ -5690,7 +5690,8 @@
       ],
       "remaining": [
         "Input is real in-process phased NSEvents. A physical trackpad and physical haptic pulse are not claimed.",
-        "用户报告 Q19（2026-11-05 晚）：横滑 Space 很卡、总是识别不到。原因（Q19/NOTES.md）：手势的第一个事件没有位移，Brk 判断不了方向就把它放给了标签列表；系统的滚动列表拿到第一个事件后自己接管整次手势，Brk 再也收不到后面的事件，所以在标签列表上起手的横滑从来不会成功。原有原生场景是在应用内逐个塞事件，绕过了这条通路，所以一直通过，这一行此前的\"已验证\"不成立。已修（92cd458c）：列表不再用系统的整次接管方式，侧栏先接住手势、走满 6 点后按哪个方向走得多来定，竖向交还给列表，短距离加惯性算轻扫。真实通路上十种手势改前 0 次成功，改后 8 次成功（两次慢滑 60 点按设计不切换）；原生场景 R56-SwipeReal，父任务门 27 条全过，单元 1229/0。还差：Arc 是整列跟着手指走、旁边露出下一个 Space 的内容（程序里的 PageSwipeController），Brk 现在只动当前列表、松手才切换；距离和惯性的数值是 Brk 自己定的，不是从 Arc 读的。交 R5-7。"
+        "用户报告 Q19（2026-11-05 晚）：横滑 Space 很卡、总是识别不到。原因（Q19/NOTES.md）：手势的第一个事件没有位移，Brk 判断不了方向就把它放给了标签列表；系统的滚动列表拿到第一个事件后自己接管整次手势，Brk 再也收不到后面的事件，所以在标签列表上起手的横滑从来不会成功。原有原生场景是在应用内逐个塞事件，绕过了这条通路，所以一直通过，这一行此前的\"已验证\"不成立。已修（92cd458c）：列表不再用系统的整次接管方式，侧栏先接住手势、走满 6 点后按哪个方向走得多来定，竖向交还给列表，短距离加惯性算轻扫。真实通路上十种手势改前 0 次成功，改后 8 次成功（两次慢滑 60 点按设计不切换）；原生场景 R56-SwipeReal，父任务门 27 条全过，单元 1229/0。还差：Arc 是整列跟着手指走、旁边露出下一个 Space 的内容（程序里的 PageSwipeController），Brk 现在只动当前列表、松手才切换；距离和惯性的数值是 Brk 自己定的，不是从 Arc 读的。交 R5-7。",
+        "R5-7（2026-11-06 凌晨合并 f592a838）：滑动过程按 Arc 程序里的 PageSwipeController 重做。整列跟手（列表走手指位移的一半），旁边露出相邻 Space 的内容，主题颜色随位置过渡，松手后用弹簧停到位；松手时手指还在动就切换，停住超过 0.1 秒才按最近的一页；第一个 Space 再往前滑进来的是 Library，最后一个再往后滑出现带进度环的\"+\"，拉满松手打开 Create a Space。真 Arc 能用合成手势驱动了（手势第一个事件要带横向位移），参照图和录像在 Q19/。父任务独立重跑：R56-SwipeReal、R57-SwipeFollows、SpaceTools-1 到 4 都过，单元 1279/0（verify/completion/review-r4/merge-gates/r5-7/）；站台 Q19 滑动中三对 0.25–0.52%、到头四对 0.61–0.88%。还差：没有真实触控板，全部是合成事件，等用户上手试；判断方向仍是 Brk 自己的\"累计 6 点再判\"（Arc 只看第一个事件）；主线程忙时停靠动画会掉帧（Arc 交给系统渲染）；三指滑动没做；用快捷键或按钮开关 Library 没有动画；隔着 Space 跳转没法在只有两个 Space 的 Arc 上核对。"
       ],
       "implementation": [
         "Sources/BrkSidebar/SidebarView.swift",
@@ -5720,6 +5721,12 @@
           "from": "verified",
           "to": "partial",
           "why": "user report Q19: the swipe was not recognised on the real event path; recognition fixed, Arc's finger-following pager still to do"
+        },
+        {
+          "date": "2026-11-06",
+          "from": "partial",
+          "to": "verified",
+          "why": "R5-7 merged; the parent reran the swipe scenarios and the station; not yet tried on a physical trackpad"
         }
       ]
     },
