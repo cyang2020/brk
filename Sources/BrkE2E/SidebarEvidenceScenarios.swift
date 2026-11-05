@@ -132,7 +132,8 @@ enum SidebarEvidenceScenarios {
         for id in [third, second, first] { try app.dispatch(.item(.move(id, to: .into(parent: try app.view().space.pinned.root, index: 0)))) }
         let today = try loadReady(app, "red.html?pinned=today")
         func pinned() throws -> [ItemID] { try app.view().space.pinned.rows.map(\.id) }
-        try expect(try pinned() == [first, second, third] && shown(app.view()) == today, "setup: \(try pinned())")
+        let start = try pinned()
+        try expect(try start == [first, second, third] && shown(app.view()) == today, "setup: \(start)")
         func pressButton(_ id: ItemID) throws {
             let row = try app.native().actual[ViewID.row(id).identifier]!.frame
             try app.hover(CGPoint(x: row.midX, y: row.midY))
