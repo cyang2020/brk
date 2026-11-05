@@ -15,6 +15,7 @@ enum FavoritesDragScenarios {
         Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", cefOnly: "real mouse", out),
         Scenario("R53-Strip", "a tab held on the Space name strip darkens it; dropped, it is the first pinned tab, current, with Double-click to rename", cefOnly: "real mouse", strip),
         Scenario("R53-Empty", "Favorites dragged out one at a time go 3 wide, 2 wide, 1 full width, then the dashed box; a tab dropped on the box is one full-width tile", cefOnly: "real mouse", empty),
+        Scenario("R53-EmptyClosed", "with no Favorites and the hint closed, a tab held on the URL pill opens one full-width cell and the release makes it the first Favorite", cefOnly: "real mouse", emptyClosed),
         Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", cefOnly: "real mouse", splitSides),
         Scenario("R53-Page", "a Favorite over the page brings the earlier tab back, shows the big card and the slots; released on a slot its tile stays and a new tab joins, in the middle nothing moves and it is the current tab", cefOnly: "real mouse", page),
         Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", cefOnly: "real mouse", halves),
@@ -255,6 +256,41 @@ enum FavoritesDragScenarios {
         try app.waitUntil("one tile") { try tiles(app) == [f.b] }
         try app.waitUntil("full width") { abs(try frame(app, .favorite(f.b)).width - 212) < 0.75 }
         _ = try app.screenshot("one-tile")
+    }
+
+    /// The user's report (verify/visual-pairs/run-20261103/Q18): with no Favorites and the "Drag to add Favorites" box
+    /// closed, the tray had no height and there was nowhere to drop a tab. The strip of the URL pill is the way in: a tab
+    /// held there opens one full-width cell under the pill, and the release makes it the first Favorite.
+    @Sendable static func emptyClosed(_ app: AppUnderTest) throws {
+        let f = try fixture(app, favorites: 1)
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(f.favorites[0]))), CGPoint(x: 86, y: try frame(app, .row(f.c)).midY - 10)], window: app.window!) {}
+        try app.waitUntil("no Favorites") { try tiles(app).isEmpty }
+        try app.waitUntil("the dashed box") { isShown(try app.native(), .tabTool("favorites-empty-close")) }
+        try PhysicalPointer.press(app, at: centre(frame(app, .tabTool("favorites-empty-close"))), window: app.window!) {}
+        try app.waitUntil("the box is closed") { try app.view().favorites.hintDismissed }
+        // The views as drawn (the held layout is the sidebar's own, not the snapshot's): the tray, and the first pinned
+        // row, which moves down with the Space name when the tray opens.
+        func tray() throws -> Double { Double(try app.native().actual[ViewID.favoritesTray.identifier]?.frame.height ?? 0) }
+        func firstPinned() throws -> Double { Double(try frame(app, .row(f.home)).minY) }
+        try app.waitUntil("the tray has no height") { try tray() == 0 }
+        let pill = try frame(app, .urlPill), home = try firstPinned()
+        try expect(try app.native().computed.sidebar?.spaceHeader.minY == pill.maxY, "the Space name is not right under the pill")
+        _ = try app.screenshot("closed")
+        // Held on the pill: one full-width cell opens under it and the list moves down by it; the image is a tile.
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.b))), centre(pill)], window: app.window!) {
+            try app.waitUntil("the tray opens one cell") { abs(try tray() - 63) < 0.5 }
+            try app.waitUntil("the list moves down") { abs(try firstPinned() - (home + 63)) < 0.5 }
+            let image = try image(app)
+            try expect(abs(image.width - 212) < 0.75 && abs(image.height - 47) < 0.75, "the drag image is \(image), not a full-width tile")
+            _ = try app.screenshot("held-on-pill")
+        }
+        try app.waitUntil("one tile") { try tiles(app) == [f.b] }
+        try app.waitUntil("full width") { abs(try frame(app, .favorite(f.b)).width - 212) < 0.75 }
+        try expect(try shown(app) == f.b, "the dropped tab is not the current tab")
+        _ = try app.screenshot("one-tile")
+        // A tab held on the Space name, not on the pill, is still the strip's (first pinned), with a tile above it now.
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), centre(frame(app, .favorite(f.b)))], window: app.window!) {}
+        try app.waitUntil("two tiles") { try Set(tiles(app)) == [f.a, f.b] }
     }
 
     // MARK: The page

@@ -255,7 +255,9 @@ final class DragController {
         guard let sidebar else { return nil }
         if item.kind == .tab, let command = sidebar.contentDrop?(item.id, root) { return .content(command) }
         let f = context.frames
-        if f.favoritesTray.contains(root) {
+        // The strip above an empty, hint-less tray is the way in (`FavoritesGrid.emptyDropZone`), in a space's own window only.
+        let wayIn = context.spaceHeaderDrops && FavoritesGrid.emptyDropZone(frames: f, favorites: context.favorites)?.contains(root) == true
+        if f.favoritesTray.contains(root) || wayIn {
             guard case .into(_, let index)? = FavoritesGrid.dropTarget(at: root, frames: f, favorites: context.favorites, dragging: item.kind, item: item.id) else { return nil }
             return .favorites(index: index)
         }

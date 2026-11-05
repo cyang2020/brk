@@ -311,6 +311,45 @@ final class DropTargetTests: XCTestCase {
         XCTAssertEqual(d.view.favorites.tiles.map(\.id), [v[2], v[0], v[1]])
     }
 
+    /// The user's report (verify/visual-pairs/run-20261103/Q18): with no Favorites and the hint closed the tray has no
+    /// height, so there was nowhere to drop a tab. The strip above the Space name (the URL pill) is the way in: a tab
+    /// held there opens one full-width cell and a release makes it the first Favorite.
+    func testAnEmptyTrayWithTheHintClosedTakesATabFromThePillStrip() throws {
+        let d = LayoutDriver()
+        let tab = d.view.space.today.rows[0].id
+        XCTAssertTrue(d.view.favorites.tiles.isEmpty)
+        // With the box showing there is no strip: the box itself is the target.
+        XCTAssertNil(FavoritesGrid.emptyDropZone(frames: try XCTUnwrap(d.frames().sidebar), favorites: d.view.favorites))
+        d.user(.tabTools(.dismissFavoritesHint))
+        let rest = try XCTUnwrap(d.frames().sidebar)
+        let favorites = d.view.favorites
+        XCTAssertEqual(rest.favoritesTray.height, 0)
+        XCTAssertEqual(rest.spaceHeader.minY, rest.urlPill.maxY, "the Space name sits right under the pill")
+        let zone = try XCTUnwrap(FavoritesGrid.emptyDropZone(frames: rest, favorites: favorites))
+        XCTAssertEqual(zone, CGRect(x: rest.frame.minX, y: rest.urlPill.minY, width: rest.frame.width, height: rest.urlPill.height))
+        func drop(_ point: CGPoint, _ frames: SidebarFrames, _ kind: ItemKind = .tab) -> Destination? {
+            FavoritesGrid.dropTarget(at: point, frames: frames, favorites: favorites, dragging: kind, item: tab)
+        }
+        let onPill = CGPoint(x: rest.urlPill.midX, y: rest.urlPill.midY)
+        XCTAssertEqual(drop(onPill, rest), .into(parent: favorites.root, index: 0))
+        XCTAssertNil(drop(onPill, rest, .folder), "Favorites hold tabs only")
+        XCTAssertNil(drop(CGPoint(x: rest.spaceHeader.midX, y: rest.spaceHeader.midY), rest), "the Space name strip is its own target")
+        // Held there, the tray opens one cell and everything below moves down by it.
+        let open = FavoritesGrid.applying(.incoming(slot: 0), to: rest, favorites: favorites)
+        let one = FavoritesGrid.tiles(count: 1, width: rest.frame.width)
+        XCTAssertEqual(open.favoritesTray.height, one.tray.height)
+        XCTAssertEqual(open.spaceHeader.minY, rest.spaceHeader.minY + one.tray.height)
+        XCTAssertEqual(open.tablistViewport.minY, rest.tablistViewport.minY + one.tray.height)
+        XCTAssertEqual(FavoritesGrid.layout([], width: rest.frame.width, hintDismissed: true, drag: .incoming(slot: 0)).gap, one.tiles[0])
+        // The open cell and the strip both take the release.
+        XCTAssertEqual(drop(CGPoint(x: open.favoritesTray.midX, y: open.favoritesTray.midY), open), .into(parent: favorites.root, index: 0))
+        XCTAssertEqual(drop(onPill, open), .into(parent: favorites.root, index: 0))
+        d.user(.item(.move(tab, to: try XCTUnwrap(drop(onPill, rest)))))
+        XCTAssertEqual(d.view.favorites.tiles.map(\.id), [tab])
+        XCTAssertEqual(try XCTUnwrap(d.frames().sidebar?.favoriteTiles[tab]).width, rest.frame.width - 16, "one tile, the full width")
+        XCTAssertNil(FavoritesGrid.emptyDropZone(frames: try XCTUnwrap(d.frames().sidebar), favorites: d.view.favorites), "no strip once there is a tile")
+    }
+
     func testRowFramesConvertToWindowCoordinates() throws {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id

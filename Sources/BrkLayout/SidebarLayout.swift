@@ -141,7 +141,8 @@ public enum FavoritesGrid {
         case nil:
             break
         case .incoming(let slot):
-            if !ids.isEmpty {
+            // With the hint dismissed there is no box to keep: the tray opens one cell for the tab (`emptyDropZone`).
+            if !ids.isEmpty || hintDismissed {
                 let at = slot.clamped(to: 0...ids.count)
                 order.insert(nil, at: at)
                 gap = at
@@ -184,13 +185,26 @@ public enum FavoritesGrid {
         return (CGRect(x: inset.width, y: inset.height, width: boxWidth, height: f.emptyBoxHeight.value * scale), scale)
     }
 
+    /// The way into Favorites when there is nothing to aim at: with no Favorites and the "Drag to add Favorites" box
+    /// dismissed the tray has no height, and a tab is made the first Favorite by holding it on the strip above the Space
+    /// name: the URL pill, or the title row when the toolbar holds the pill. The tray then opens one cell under it. (The
+    /// user's report, verify/visual-pairs/run-20261103/Q18: after closing the hint there was nowhere left to drop a tab.
+    /// Where exactly Arc's zone lies has not been seen: its hint cannot be dismissed there without changing the profile.)
+    public static func emptyDropZone(frames: SidebarFrames, favorites: FavoritesSnapshot) -> CGRect? {
+        guard favorites.tiles.isEmpty, favorites.hintDismissed else { return nil }
+        let top = frames.urlPill.height > 0 ? frames.urlPill.minY : frames.titleRow.minY
+        return CGRect(x: frames.frame.minX, y: top, width: frames.frame.width, height: max(0, frames.favoritesTray.minY - top))
+    }
+
     /// Where a drag at `point` (window coordinates, like `SidebarFrames.favoriteTiles`) would drop into Favorites, or nil
     /// outside the tray or for a kind Favorites cannot hold (tabs only). The drop is the cell under the pointer in the
     /// grid as it is laid out with the item in it (a new tile makes one more cell). `item`, the dragged item, tells a
     /// reorder from a new tile; the cell is already the index `Destination.into` wants, counted with the item detached.
     public static func dropTarget(at point: CGPoint, frames: SidebarFrames, favorites: FavoritesSnapshot, dragging kind: ItemKind,
                                   item: ItemID? = nil) -> Destination? {
-        guard frames.favoritesTray.contains(point), Placement.canPlace(kind, inSection: .favorites, parentKind: .section) else { return nil }
+        let reached = frames.favoritesTray.contains(point) || emptyDropZone(frames: frames, favorites: favorites)?.contains(point) == true
+        guard reached, Placement.canPlace(kind, inSection: .favorites, parentKind: .section) else { return nil }
+        if favorites.tiles.isEmpty { return .into(parent: favorites.root, index: 0) }
         let count = favorites.tiles.count + (favorites.tiles.contains { $0.id == item } ? 0 : 1)
         let local = CGPoint(x: point.x - frames.favoritesTray.minX, y: point.y - frames.favoritesTray.minY)
         return .into(parent: favorites.root, index: slot(at: local, count: count, width: frames.favoritesTray.width))
@@ -199,7 +213,7 @@ public enum FavoritesGrid {
     /// `frames` as they read while `drag` is held: the tray takes the height of its new layout, its tiles their cells,
     /// and the Space name strip and the tab list move with the tray's bottom.
     public static func applying(_ drag: FavoritesDrag?, to frames: SidebarFrames, favorites: FavoritesSnapshot) -> SidebarFrames {
-        guard let drag, frames.favoritesTray.height > 0 else { return frames }
+        guard let drag, frames.favoritesTray.height > 0 || (favorites.tiles.isEmpty && favorites.hintDismissed) else { return frames }
         let grid = layout(favorites.tiles.map(\.id), width: frames.favoritesTray.width, hintDismissed: favorites.hintDismissed, drag: drag)
         let shift = grid.tray.height - frames.favoritesTray.height
         var f = frames
