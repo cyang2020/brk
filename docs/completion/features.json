@@ -1017,7 +1017,7 @@
       "arc_evidence": "`ARC_AppTray`; anatomy-v 3 \"Drag to add Favorites\"",
       "description": "Tiles shared by every space of a profile; drag in, reorder, empty state",
       "historical_status": "done",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Share Favorites between spaces of one profile; support empty state, dropping in and grid reorder.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1053,11 +1053,33 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P07",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P07: P07-b 1.3% 已修（一致）; P07-c 0.8% 一致; P07-d 0.8% 已修（一致）. References in verify/visual-pairs/run-20261103/P07/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-3 --only R53-PressOpens,R53-TabIn,R53-Reorder,R53-Out,R53-Empty",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/parent-gate-r5-3/REPORT.md",
+          "scope": "父任务在自己的工作树（main 63290349，R5-3 合并后）独立重跑（真实鼠标）：R53-PressOpens, R53-TabIn, R53-Reorder, R53-Out, R53-Empty 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/swift-test-main.log",
+          "scope": "R5-3 合并后 main 的完整单元测试 1191 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-3-all2 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-dcb8f76b-sheet.tsv",
+          "scope": "真 Arc 1.170 的参照（Q13、Q15 都是父任务在真 Arc 上做同样操作拍的）对合并后 main：Q13-a 0.30%, Q13-c 0.61%, Q13-d 0.36%, Q13-n5 0.92%, Q13-n7 0.86%, Q13-w166-n5 0.99%。"
         }
       ],
       "remaining": [
         "Domain and geometry tests are not a native drag demonstration; verify same-grid and cross-space pointer drops and profile switching.",
-        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。"
+        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。",
+        "R5-3（2026-11-05，合并 63290349）：排布、拖入、区内重排、拖出、按下即打开都按真 Arc 重做，父任务独立重跑通过。没在 Arc 上弄清、所以没做的：拖收藏时 Clear 前的 ↓、MDN 选中格的深色描边、收藏个数上限（不设上限）。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -1901,7 +1923,7 @@
       "arc_evidence": "anatomy-m 1.4 `SidebarMutation.move`",
       "description": "Reorder rows, drop into folders, onto Favorites, onto a dock space",
       "historical_status": "done",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Drag to reorder rows, nest items in folders, add or reorder Favorites and move items to a dock space without cycles or lost tabs.",
       "owner": "native-grounding",
       "required_checks": [
@@ -1943,13 +1965,35 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-3 --only R53-TabIn,R53-Reorder,R53-Out,R53-Strip,R53-Page,SidebarWindow1,SidebarWindow5,SidebarWindow6,SidebarWindow7",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/parent-gate-r5-3/REPORT.md",
+          "scope": "父任务在自己的工作树（main 63290349，R5-3 合并后）独立重跑（真实鼠标）：R53-TabIn, R53-Reorder, R53-Out, R53-Strip, R53-Page, SidebarWindow1, SidebarWindow5, SidebarWindow6, SidebarWindow7 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/swift-test-main.log",
+          "scope": "R5-3 合并后 main 的完整单元测试 1191 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-3-all2 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-dcb8f76b-sheet.tsv",
+          "scope": "真 Arc 1.170 的参照（Q13、Q15 都是父任务在真 Arc 上做同样操作拍的）对合并后 main：Q13-a 0.30%, Q13-d 0.36%, Q13-g 0.79%, Q13-h 1.40%。"
         }
       ],
       "remaining": [
         "Run native pointer scenarios for each destination, scrolling and cancellation; R5b uses a domain move, not a pointer drag.",
         "R4-6 独立复核（2026-11-04）：证据不足。验收标准的四种目标：同区重排、拖进普通文件夹、拖到收藏（加入或重排）、拖到底栏的 Space，都没有真指针拖动的原生证据（拖进的只有标签组）；\"不产生环、不丢标签\"只有单元测试；DragController 本身没有单元测试。",
         "R4-9（2026-11-04，合并 9633b81b）：R49-Drag 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
-        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。"
+        "2026-11-05 用户报告收藏区和 Arc 不一样，父任务在真 Arc 上逐项对过（verify/visual-pairs/run-20261103/Q13/NOTES.md）：排布应按个数平衡而不是固定四列；拖进来时收藏区要实时让位、跟着指针的是格子；区内重排要实时滑动；拖出去时原格变空、指针处是一行；按下即打开；Space 名字条是落点。之前的\"已验证\"只核了 Brk 自己的行为，没有逐项对 Arc。交 R5-3。",
+        "R5-3：Space 名字条是落点；列表落点线左端带圆环。没在 Arc 上核到的松手结果（待父任务补拍）：在网页中间松手（Brk 不移动任何东西）；把收藏拖到网页边缘松手（Brk 把它移出收藏并建分屏，是推断）。"
       ],
       "implementation": [
         "Sources/BrkSidebar/DragController.swift",
@@ -7306,7 +7350,7 @@
       "arc_evidence": "anatomy-v 3 \"Drag a tab from your sidebar into the middle of the screen…\"",
       "description": "Dropping a row on the content makes a split",
       "historical_status": "not started",
-      "status": "partial",
+      "status": "verified",
       "acceptance": "Dropping a tab onto a content edge previews and creates or extends a split with a defined orientation.",
       "owner": "parent-split-integration",
       "required_checks": [
@@ -7377,12 +7421,34 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P23",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P23: P23-d 站台未拍 未比较; P23-a 5.3% 已修；栏头 32 点（Arc 图量得）; P23-b 5.7% 已修; P23-c 站台未拍 未比较. References in verify/visual-pairs/run-20261103/P23/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-3 --only R53-SplitSides,R53-Page,SplitTools2,SidebarWindow5",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/parent-gate-r5-3/REPORT.md",
+          "scope": "父任务在自己的工作树（main 63290349，R5-3 合并后）独立重跑（真实鼠标）：R53-SplitSides, R53-Page, SplitTools2, SidebarWindow5 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-3/swift-test-main.log",
+          "scope": "R5-3 合并后 main 的完整单元测试 1191 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-3-all2 all",
+          "artifact": "verify/visual-pairs/run-20261103/final/main-dcb8f76b-sheet.tsv",
+          "scope": "真 Arc 1.170 的参照（Q13、Q15 都是父任务在真 Arc 上做同样操作拍的）对合并后 main：Q15-a 0.30%, Q15-b 0.33%, Q15-d 0.89%, Q15-e 0.57%, Q15-f 0.89%, Q15-g 0.89%, P23-d 0.39%, P23-e 0.47%, P23-f 0.51%。"
         }
       ],
       "remaining": [
         "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
         "Arc 对照 R3-1（2026-11-04，合并 087ee736）：同 A073；新增命令：前后挪动当前栏（Move Left/Right）、在左侧加一栏（Add Left Split）。",
-        "2026-11-05 用户报告把标签拖到另一个标签上做分屏的显示和操作不对。真 Arc 上核过（verify/visual-pairs/run-20261103/Q15/NOTES.md）：拖动图是整行本身，目标行在鼠标所在的一半出现落位、可以选左边或右边，松手后被拖的标签在那一侧；Brk 画的是固定在左的深色胶囊。R4-12 当时只凭一张 Arc 截图做的。交 R5-3。"
+        "2026-11-05 用户报告把标签拖到另一个标签上做分屏的显示和操作不对。真 Arc 上核过（verify/visual-pairs/run-20261103/Q15/NOTES.md）：拖动图是整行本身，目标行在鼠标所在的一半出现落位、可以选左边或右边，松手后被拖的标签在那一侧；Brk 画的是固定在左的深色胶囊。R4-12 当时只凭一张 Arc 截图做的。交 R5-3。",
+        "R5-3：标签拖到标签上按鼠标位置选左右；分屏行上通栏带。没在 Arc 上试的：目标是置顶标签或收藏格、第四第五栏、上下分屏、落在分屏行中间。"
       ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
