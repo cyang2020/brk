@@ -244,7 +244,8 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     /// Transient presentation in this window. The split and hidden pages remain intact.
     case toggleExpanded
     case restore
-    case dropTab(SplitDropOffer, edge: SplitEdge)
+    /// `at`: the pane index of a slot between two panes (Arc's insertion index); nil is the end `edge` says.
+    case dropTab(SplitDropOffer, edge: SplitEdge, at: Int? = nil)
     /// A tab dropped on the middle of another row (Arc, Q15): the tab and the standalone tab become a split where the row
     /// was, or the tab joins the split row. `at` is its place among the panes (on a standalone tab: 0 left, 1 right).
     case joinRow(ItemID, onto: ItemID, at: Int = 0)

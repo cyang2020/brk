@@ -46,12 +46,14 @@ enum SidebarWindowScenarios {
         let area = try app.native().computed.contentArea
         let row = try visible(app.native(), .row(source)).frame
         let before = try app.native().pages[page]?.surfaceFrame
-        // Arc's P23-d hold: 196 in from the right edge, at mid height (inside the right quarter).
+        // Arc's P23-d hold: 196 in from the right edge, at mid height.
         let held = CGPoint(x: area.maxX - 196, y: area.midY)
         try pointer(app, .down, CGPoint(x: row.midX, y: row.midY))
         try pointer(app, .dragged, CGPoint(x: row.midX + 8, y: row.midY))
         try pointer(app, .dragged, CGPoint(x: (row.midX + held.x) / 2, y: (row.midY + held.y) / 2))
         try pointer(app, .dragged, held)
+        // The rule reads the newest position once per 100 ms, as Arc's does.
+        app.sleep(0.25)
         let n = try app.native()
         try expect(isShown(n, .splitDropPreview), "a pinned folder tab got no edge preview")
         let half = (area.width - Metrics.content.splitGap.value) / 2

@@ -76,21 +76,26 @@ final class SplitDropPreviewTests: XCTestCase {
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: Palette(snapshot.theme), surface: { _ in page })
         let card = try XCTUnwrap(content.subviews.compactMap { $0 as? CardView }.first)
         let rest = card.frame, pageFrame = page.frame
+        var clock = 100.0
+        content.dropClock = { clock }
         content.beginDrop(m.source)
         let area = frames.contentArea
         XCTAssertNotNil(content.dropCommand(m.source, at: CGPoint(x: area.maxX - 12, y: area.midY)))
-        let layout = SplitToolsLayout.dropLayout(.right, in: area)
-        XCTAssertEqual(card.frame, layout.panes[0])
+        let half = (area.width - Metrics.content.splitGap.value) / 2
+        XCTAssertEqual(card.frame, CGRect(x: area.minX, y: area.minY, width: half, height: area.height))
         XCTAssertEqual(page.frame, pageFrame, "the page was resized for the preview")
         let slot = try XCTUnwrap(content.subviews.first { $0.accessibilityIdentifier() == ViewID.splitDropPreview.identifier })
-        XCTAssertEqual(slot.frame, layout.slot)
-        // The middle of the page gives the card back and rings the whole of it (Q13-e); a release there moves nothing.
-        XCTAssertNil(content.dropCommand(m.source, at: CGPoint(x: area.midX, y: area.midY)))
+        XCTAssertEqual(slot.frame, CGRect(x: area.maxX - half, y: area.minY, width: half, height: area.height))
+        // Over the narrowed page it falls back to the whole page; the middle of that page rings the whole of it (Q13-e),
+        // and a release there makes the dragged tab the shown one (Q17-drop-tab-framed-middle).
+        clock += 1
+        XCTAssertEqual(content.dropCommand(m.source, at: CGPoint(x: area.midX, y: area.midY)), .tab(.focus(m.source)))
         XCTAssertEqual(card.frame, rest)
         XCTAssertEqual(page.frame, pageFrame)
         XCTAssertFalse(slot.isHidden)
         XCTAssertEqual(slot.frame, area)
         XCTAssertEqual(slot.layer?.borderWidth, 3)
+        clock += 1
         XCTAssertNil(content.dropCommand(m.source, at: CGPoint(x: area.minX - 40, y: area.midY)))
         XCTAssertTrue(slot.isHidden, "out of the page nothing is ringed")
     }

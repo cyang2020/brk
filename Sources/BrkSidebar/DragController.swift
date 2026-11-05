@@ -11,7 +11,7 @@ import BrkUIKit
 /// what the window showed before the press again, because that is the tab the drop would split with (P23-d, Q13-e).
 ///
 /// Targets, in the order they are tested:
-/// - the page: a slot at its edges (`SplitToolsLayout`);
+/// - the page: a slot or a frame (`PageDropRule`);
 /// - the favorites tray: the cell under the pointer in the grid laid out with the item in it (`FavoritesGrid.dropTarget`);
 /// - the Space name strip: the top of Pinned (Q13-g/h);
 /// - a dock space cell: `.space(id)`;

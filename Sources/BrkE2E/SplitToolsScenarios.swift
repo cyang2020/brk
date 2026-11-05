@@ -27,7 +27,10 @@ enum SplitToolsScenarios {
         for step in 1...8 {
             let t = Double(step) / 8
             try pointer(app, .dragged, CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t))
+            app.sleep(0.03)
         }
+        // The drop rule reads the newest position once per 100 ms, as Arc's does: let it read the last one.
+        app.sleep(0.15)
         try pointer(app, .up, to)
     }
 
@@ -132,8 +135,12 @@ enum SplitToolsScenarios {
         try app.press("escape"); try pointer(app, .up, edge)
         try expect(try app.view().content.split == nil, "Escape committed a cancelled drag")
         try expect(!isShown(try app.native(), .splitDropPreview), "Escape left preview behind")
-        try drag(app, from: origin, to: CGPoint(x: area.midX, y: area.midY))
+        // Past the middle of the page (from the left, a slot that shows holds up to the middle): the frame. No split, the
+        // dragged tab is the current one (Arc, Q17-drop-tab-framed-middle).
+        try drag(app, from: origin, to: CGPoint(x: area.midX + 40, y: area.midY))
         try expect(try app.view().content.split == nil, "center drop created a split")
+        try expect(try app.view().content.panes.map(\.tab) == [source], "center drop did not show the dragged tab")
+        try app.click(.row(target))
         let idsBefore = try app.pageLog().filter { $0.kind == .created && ($0.page.item == target || $0.page.item == source) }
         try drag(app, from: origin, to: edge)
         try expect(try app.view().content.panes.map(\.tab) == [target, source], "right-edge pointer drag did not group tabs")
@@ -151,9 +158,11 @@ enum SplitToolsScenarios {
             try app.click(.row(split))
             area = try app.native().computed.contentArea
             row = try visible(app.native(), .row(tab)).frame
-            let end = n == 3 ? CGPoint(x: area.midX, y: area.minY + 12) : CGPoint(x: area.midX, y: area.maxY - 12)
+            // In a side by side split only its own axis has zones (Arc 0x100a46638): at most 80 pt from a pane's sides.
+            let end = n == 3 ? CGPoint(x: area.midX + 8, y: area.minY + 12) : CGPoint(x: area.maxX - 12, y: area.midY)
             try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: end)
-            try expect(try app.view().content.panes.count == n && app.view().content.orientation == .vertical, "top/bottom edge failed to extend split")
+            try expect(try app.view().content.panes.count == n && app.view().content.orientation == .horizontal, "a side zone failed to extend the split")
+            if n == 3 { try expect(try app.view().content.panes[1].tab == tab, "a slot between the panes did not take its index") }
         }
         let split = try app.view().content.split!
         let fifth = try app.load(app.site.url("split-tools.html?fifth"))

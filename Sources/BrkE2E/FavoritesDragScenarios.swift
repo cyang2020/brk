@@ -16,7 +16,11 @@ enum FavoritesDragScenarios {
         Scenario("R53-Strip", "a tab held on the Space name strip darkens it; dropped, it is the first pinned tab, current, with Double-click to rename", cefOnly: "real mouse", strip),
         Scenario("R53-Empty", "Favorites dragged out one at a time go 3 wide, 2 wide, 1 full width, then the dashed box; a tab dropped on the box is one full-width tile", cefOnly: "real mouse", empty),
         Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", cefOnly: "real mouse", splitSides),
-        Scenario("R53-Page", "a Favorite over the page brings the earlier tab back, shows the big card and the slots; released at the edge it makes the split, in the middle nothing moves", cefOnly: "real mouse", page),
+        Scenario("R53-Page", "a Favorite over the page brings the earlier tab back, shows the big card and the slots; released on a slot its tile stays and a new tab joins, in the middle nothing moves and it is the current tab", cefOnly: "real mouse", page),
+        Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", cefOnly: "real mouse", halves),
+        Scenario("R54-Frame", "a tab held on the middle of the page frames it; released, no split, nothing moves and the dragged tab is current", cefOnly: "real mouse", frameDrop),
+        Scenario("R54-Favorite", "a Favorite released on the right half: its tile stays, the split holds a new Today tab at its address, and the tab stays in Today when the split comes apart", cefOnly: "real mouse", favoriteDrop),
+        Scenario("R54-Paths", "the same place shows a different preview by path, as in Arc: a left slot holds up to the middle, a right slot back to the middle, the frame otherwise; a tab over its own page gets slots and no frame", cefOnly: "real mouse", paths),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -255,20 +259,23 @@ enum FavoritesDragScenarios {
         let f = try fixture(app)
         let area = try app.native().computed.contentArea
         let tile = f.favorites[3]
-        // The middle first: the earlier tab comes back, the card rides, the page is ringed, and the release moves nothing.
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(tile))), centre(area)], window: app.window!) {
+        // Past the middle (from the left, a slot holds up to it): the earlier tab comes back, the card rides, the page is
+        // framed. The release moves nothing and the Favorite is the current tab (the rule's replaceContent).
+        let past = CGPoint(x: area.midX + 40, y: area.midY)
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(tile))), past], window: app.window!) {
             try app.waitUntil("c shows again") { try shown(app) == f.c }
             let card = try frame(app, .tabTool("content-drag-card"))
             try expect(card.width == 169 && card.height == 250, "the card is \(card)")
-            let ring = try frame(app, .splitDropPreview)
-            try expect(ring == area, "the ring is \(ring), the page \(area)")
+            try app.waitUntil("the frame") { try frame(app, .splitDropPreview) == area }
             try expect(!isShown(try app.native(), .tabTool("drag-image")), "the row image is still showing")
             _ = try app.screenshot("middle")
         }
         app.sleep(0.3)
         try expect(try tiles(app).contains(tile), "a release in the middle moved the Favorite")
-        try expect(try shown(app) == f.c, "a release in the middle left the dragged tab shown")
-        // The right edge: the same slot as a row's (P23-d), and the release makes the split.
+        try expect(try shown(app) == tile, "a release in the middle did not show the dragged tab")
+        try app.dispatch(.tab(.focus(f.c)))
+        try app.waitUntil("c shown") { try shown(app) == f.c }
+        // The right half: the same slot as a row's (P23-d), and the release makes the split with a new tab.
         let edge = CGPoint(x: area.maxX - 40, y: area.midY)
         try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(tile))), edge], window: app.window!) {
             try app.waitUntil("c shows again") { try shown(app) == f.c }
@@ -276,8 +283,125 @@ enum FavoritesDragScenarios {
             try expect(slot.minX > area.midX - 10 && slot.maxX <= area.maxX + 0.5, "the slot is \(slot)")
             _ = try app.screenshot("edge")
         }
-        try app.waitUntil("the split") { try app.view().content.panes.map(\.tab) == [f.c, tile] }
-        try expect(try !tiles(app).contains(tile), "the Favorite stayed in the grid")
+        try app.waitUntil("the split") { try app.view().content.panes.count == 2 && app.view().content.panes[0].tab == f.c }
+        try expect(try app.view().content.panes[1].tab != tile, "the Favorite itself went into the split")
+        try expect(try tiles(app).contains(tile), "the Favorite left the grid")
+    }
+
+    // MARK: R5-4, the page (Q17)
+
+    @Sendable static func halves(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        let area = try app.native().computed.contentArea
+        let left = CGPoint(x: area.minX + 200, y: area.midY), right = CGPoint(x: area.maxX - 200, y: area.midY)
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), left], window: app.window!) {
+            try app.waitUntil("c shows again") { try shown(app) == f.c }
+            try app.waitUntil("the left slot") {
+                let slot = try frame(app, .splitDropPreview)
+                return slot.minX == area.minX && abs(slot.width - 516) < 1
+            }
+            _ = try app.screenshot("left")
+        }
+        try app.waitUntil("the split") { try app.view().content.panes.map(\.tab) == [f.a, f.c] }
+        try expect(try app.view().content.panes[0].focused, "the dragged tab is not focused")
+        try app.dispatch(.split(.separateAll))
+        try app.dispatch(.tab(.focus(f.c)))
+        try app.waitUntil("c alone") { try app.view().content.panes.map(\.tab) == [f.c] }
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.b))), right], window: app.window!) {
+            try app.waitUntil("the right slot") {
+                let slot = try frame(app, .splitDropPreview)
+                return slot.maxX == area.maxX && abs(slot.width - 516) < 1
+            }
+            _ = try app.screenshot("right")
+        }
+        try app.waitUntil("the split") { try app.view().content.panes.map(\.tab) == [f.c, f.b] }
+        try expect(try app.view().content.panes[1].focused, "the dragged tab is not focused")
+    }
+
+    @Sendable static func frameDrop(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        let area = try app.native().computed.contentArea
+        let order = try app.view().space.today.rows.map(\.id), pinned = try app.view().space.pinned.rows.map(\.id)
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), CGPoint(x: area.midX + 40, y: area.midY)], window: app.window!) {
+            try app.waitUntil("c shows again") { try shown(app) == f.c }
+            try app.waitUntil("the frame") { try frame(app, .splitDropPreview) == area }
+            _ = try app.screenshot("frame")
+        }
+        try app.waitUntil("a shown") { try app.view().content.panes.map(\.tab) == [f.a] }
+        try expect(try app.view().content.split == nil, "a split was made")
+        try expect(try app.view().space.today.rows.map(\.id) == order && app.view().space.pinned.rows.map(\.id) == pinned, "something moved")
+    }
+
+    @Sendable static func favoriteDrop(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        let area = try app.native().computed.contentArea
+        let tile = f.favorites[3]
+        let address = try app.view().favorites.tiles.first { $0.id == tile }?.url
+        let grid = try tiles(app), today = try app.view().space.today.rows.map(\.id)
+        // Through the page's left part first, as a person's drag goes, then to the right half: the tile stays out of the way.
+        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(tile))), CGPoint(x: area.maxX - 150, y: area.midY)], window: app.window!) {
+            try app.waitUntil("the right slot") {
+                let slot = try frame(app, .splitDropPreview)
+                return slot.maxX == area.maxX && abs(slot.width - 516) < 1
+            }
+        }
+        try app.waitUntil("the split") { try app.view().content.panes.count == 2 }
+        let panes = try app.view().content.panes
+        try expect(panes[0].tab == f.c && panes[1].focused, "the panes are \(panes.map(\.tab))")
+        try expect(panes[1].tab != tile && !today.contains(panes[1].tab), "the second pane is not a new tab")
+        func paneURL() throws -> URL? {
+            for case .split(let row) in try app.view().space.today.rows { if let pane = row.panes.first(where: { $0.id == panes[1].tab }) { return pane.url } }
+            return nil
+        }
+        try app.waitUntil("the new tab at the Favorite's address") { try paneURL() == address }
+        let after = try tiles(app)
+        try expect(after == grid, "the grid changed: \(after)")
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("apart") { try app.view().content.split == nil }
+        try expect(try app.view().space.today.rows.contains { $0.id == panes[1].tab }, "the new tab left Today")
+        try expect(try tiles(app) == grid, "the grid changed when the split came apart")
+    }
+
+    /// Holds the drag along `path`, checks, and cancels with Escape. The press opens the row and the cancel keeps it open, so the shown tab comes back afterwards.
+    private static func held(_ app: AppUnderTest, _ path: [CGPoint], back: ItemID, check: () throws -> Void) throws {
+        try PhysicalPointer.drag(app, through: path, window: app.window!) {
+            app.sleep(0.3)
+            try check()
+            try app.press("escape")
+        }
+        try app.dispatch(.tab(.focus(back)))
+        try app.waitUntil("the shown tab is back") { try shown(app) == back }
+    }
+
+    @Sendable static func paths(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        let area = try app.native().computed.contentArea
+        let row = centre(try frame(app, .row(f.a)))
+        func point(_ x: Double, _ y: Double? = nil) -> CGPoint { CGPoint(x: area.minX + x, y: y ?? area.midY) }
+        func slot() throws -> CGRect { try frame(app, .splitDropPreview) }
+        func isLeft(_ s: CGRect) -> Bool { s.minX == area.minX && abs(s.width - 516) < 1 }
+        func isRight(_ s: CGRect) -> Bool { s.maxX == area.maxX && abs(s.width - 516) < 1 }
+        // A straight leg from the row, Q17 A: a slot from the left holds through the page's middle (x 520 of 1042), then the frame.
+        try held(app, [row, point(520)], back: f.c) { let s = try slot(); try expect(isLeft(s), "slot \(s) at 520") }
+        try held(app, [row, point(540)], back: f.c) { let s = try slot(); try expect(s == area, "not the frame at 540: \(s)") }
+        try held(app, [row, point(650)], back: f.c) { let s = try slot(); try expect(isRight(s), "not the right slot at 650: \(s)") }
+        // From the right, Q17 C's first two: the right slot holds back past the middle, where a straight leg shows the frame.
+        try held(app, [row, point(950), point(552)], back: f.c) { let s = try slot(); try expect(isRight(s), "not the right slot from the right: \(s)") }
+        // From a left slot upwards past 100 pt and a tenth: it turns into the top slot, Q17 E.
+        try held(app, [row, point(160), point(160, area.minY + 40)], back: f.c) {
+            let s = try slot()
+            try expect(s.minY == area.minY && s.width == area.width && s.height < area.height, "not the top slot: \(s)")
+        }
+        // Its own page, Q17 C and E: the tab is the shown one. Slots, no frame, and a release on one changes nothing.
+        try app.dispatch(.tab(.focus(f.c)))
+        let own = centre(try frame(app, .row(f.c)))
+        try PhysicalPointer.drag(app, through: [own, point(950)], window: app.window!) {
+            app.sleep(0.3)
+            let s = try slot()
+            try expect(isRight(s), "no right slot over its own page: \(s)")
+        }
+        app.sleep(0.3)
+        try expect(try app.view().content.panes.map(\.tab) == [f.c] && app.view().content.split == nil, "a release on its own page changed the panes")
     }
 
     // MARK: Rule 9

@@ -150,15 +150,54 @@ final class SplitToolsTests: XCTestCase {
         }
     }
 
+    /// Arc, Q17-drop-favorite-right-half and -then-separated: the split holds a new tab, the tile stays, and the new tab
+    /// stays in Today when the split is taken apart.
+    func testAFavoriteDroppedOnASlotOpensANewTabAndKeepsItsTile() throws {
+        let d = Driver()
+        let original = d.paneIDs[0], favorite = d.open("https://fixture.example/apple")
+        d.commitRequested()
+        d.user(.tab(.focus(original)))
+        d.user(.item(.move(favorite, to: .into(parent: d.view.favorites.root, index: 0))))
+        let rows = d.view.space.today.rows.count
+        d.user(.split(.dropTab(offer(d, favorite, original), edge: .right)))
+        XCTAssertEqual(d.view.favorites.tiles.map(\.id), [favorite])
+        XCTAssertEqual(d.paneIDs.first, original)
+        let new = try XCTUnwrap(d.paneIDs.last)
+        XCTAssertNotEqual(new, favorite)
+        XCTAssertEqual(d.view.content.panes.last?.focused, true)
+        d.commitRequested()
+        guard case .split(let row)? = d.view.space.today.rows.first(where: { $0.id == d.view.content.split }) else { return XCTFail("no split row") }
+        XCTAssertEqual(row.panes.last?.url?.absoluteString, "https://fixture.example/apple")
+        XCTAssertEqual(d.view.space.today.rows.count, rows, "the split takes the place of the row it joined")
+        d.user(.split(.separateAll))
+        XCTAssertTrue(d.view.space.today.rows.contains { $0.id == new }, "the new tab is not in Today")
+        XCTAssertEqual(d.view.favorites.tiles.map(\.id), [favorite])
+    }
+
+    /// A slot between two panes: the tab takes that index in the split.
+    func testADropBetweenPanesInsertsAtTheIndex() throws {
+        let d = Driver()
+        let first = d.paneIDs[0]
+        d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/2"))); d.commitRequested()
+        let second = d.paneIDs[1]
+        let split = try XCTUnwrap(d.view.content.split)
+        let extra = d.open("https://fixture.example/extra")
+        d.user(.tab(.focus(split)))
+        d.user(.split(.dropTab(offer(d, extra, split), edge: .right, at: 1)))
+        XCTAssertEqual(d.paneIDs, [first, extra, second])
+    }
+
     func testDropRefusesFavoritesProfilesStaleTargetsAndFullSplits() throws {
         let d = Driver()
         let original = d.paneIDs[0], source = d.open("https://fixture.example/source")
         d.user(.tab(.focus(original)))
         d.user(.item(.move(source, to: .into(parent: d.view.favorites.root, index: 0))))
-        // A Favorite on the page offers the same slots (Q13-e); the drop takes it out of Favorites and splits.
+        // A Favorite on the page offers the same slots (Q13-e); the drop keeps it and splits with a new tab at its address.
         XCTAssertNotNil(d.view.content.drop?.offers[source], "a Favorites tile offered no content drop")
         d.user(.split(.dropTab(offer(d, source, original), edge: .right)))
-        XCTAssertFalse(d.view.favorites.tiles.contains { $0.id == source })
+        XCTAssertTrue(d.view.favorites.tiles.contains { $0.id == source })
+        XCTAssertEqual(d.view.content.panes.count, 2)
+        XCTAssertFalse(d.view.content.panes.contains { $0.tab == source })
         var before = d.state
         let split = try XCTUnwrap(d.view.content.split)
         for n in 3...4 { d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/\(n)"))); d.commitRequested() }
