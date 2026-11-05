@@ -444,12 +444,17 @@ enum FavoritesDragScenarios {
         try expect(view.content.split == split, "the split changed")
         try expect(view.space.today.rows.map(\.id) == [split, f.a] + rest, "Today reads \(view.space.today.rows.map(\.id))")
         try expect(view.space.pinned.rows.map(\.id) == pinned, "Pinned changed")
-        try app.waitUntil("the old tab keeps its browser") { try app.native().pages[page]?.browserID == browser || browser == nil }
         _ = try app.screenshot("pane-released")
         try app.dispatch(.split(.separateAll))
         try app.waitUntil("apart") { try app.view().content.split == nil }
         let apart = try app.view().space.today.rows.map(\.id)
         try expect(apart == [f.c, f.b, f.a] + rest, "after separating Today reads \(apart)")
+        // The old tab's page was never closed: shown again it is the same browser, without a new load.
+        let created = try app.pageLog().filter { $0.kind == .created && $0.page == page }
+        try app.dispatch(.tab(.focus(f.a)))
+        try app.waitUntil("the old tab shown with its browser") { try browser != nil && app.native().pages[page]?.browserID == browser }
+        let after = try app.pageLog().filter { $0.kind == .created && $0.page == page }
+        try expect(after == created, "the old tab's page was created again")
     }
 
     @Sendable static func fullSplit(_ app: AppUnderTest) throws {
