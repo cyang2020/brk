@@ -58,6 +58,18 @@ final class Runner {
         return results
     }
 
+    /// The real pointer goes to the screen's bottom right corner before each scenario. A scenario that hovers through
+    /// the control socket depends on where the real pointer rests: left inside the app's window by a real-pointer
+    /// scenario before it (N3R, the R53 drags), AppKit's own tracking of that pointer undoes the hover, and
+    /// R36-HoverCards, R49-MailCard and SidebarToolsPreview fail; parked at the corner they pass (2026-11-05, four runs).
+    private static func parkPointer() {
+        guard CGPreflightPostEventAccess() else { return }
+        let bounds = CGDisplayBounds(CGMainDisplayID())
+        let corner = CGPoint(x: bounds.maxX - 2, y: bounds.maxY - 2)
+        CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: .mouseMoved, mouseCursorPosition: corner, mouseButton: .left)?.post(tap: .cghidEventTap)
+        usleep(150_000)
+    }
+
     private func run(_ scenario: Scenario, index: Int, server: FixtureServer, scratch: URL, shots: URL, logs: URL) -> E2EResult {
         let engine: AppUnderTest.Engine = arguments.engine == .stub ? .stub : .cef
         if let owner = scenario.pending {
@@ -74,6 +86,7 @@ final class Runner {
         var message: String?
         var died = false
         do {
+            Self.parkPointer()
             try app.launch()
             if backingScale == nil { backingScale = try? app.native().backingScale }
             try scenario.run(app)
