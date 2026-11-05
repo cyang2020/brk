@@ -135,7 +135,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragThreshold = Metric(3.0, .guess("pointer travel before a press becomes a drag (AppKit's own threshold)"))
     let dragPreviewAlpha = Metric(0.8, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image reads #E6E6E7 over the #A7ABAD strip and #F5 over the #EF sidebar"))
     let dragPreviewShadowOffset = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: a little darker under the tile than beside it"))
-    let dragPreviewShadowOpacity = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: black at about 8% at the tile's edge, under the image's own 0.8"))
+    let dragPreviewShadowOpacity = Metric(0.17, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: black at about 8% at the tile's edge, under the image's own 0.8"))
     let dragRowOverHeaderScale = Metric(0.875, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image over the Space name strip is 186 x 31 for the 212 x 36 row"))
     let dropHintAlpha = Metric(0.475, .anatomy("verify/visual-pairs/run-20261103: a drop area is the theme's focus color at this strength: Q13-g's strip and Q15-e's band #A7ABAD over #F0F7FC with focus #575757, P23-e's slot #82A9A8 over #FCFCFC with focus #006362"))
     let splitJoinSlotInset = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q15/Q15-a-arc.png and Q15-b-arc.png: the slots span x 14 to 114 and 120 to 220, each half of the 8 to 220 row less 6 at its left"))
@@ -152,7 +152,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let renameHintTitleShift = Metric(-7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the title's ink spans 192 to 202.5 in the row at 186...221.5"))
     let renameHintTop = Metric(21.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the hint's ink spans 208 to 216 in that row"))
     let dragSourceAlpha = Metric(0.3, .guess("opacity of the row left behind while it is dragged"))
-    let dragPreviewShadow = Metric(7.5, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: the tile's shadow is half gone 5 pt out and nearly gone at 10"))
+    let dragPreviewShadow = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-c-arc.png: the tile's shadow is half gone 5 pt out and nearly gone at 10 (an NSShadow's blur is about twice its spread)"))
     // The card a tab drag shows over the content (P23-d-arc.png: card x 989.5...1158.5, y 273.5...523.5 in the window).
     let dragCardWidth = Metric(169.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 338 px wide at 2x"))
     let dragCardHeight = Metric(250.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the drag card is 500 px tall at 2x"))

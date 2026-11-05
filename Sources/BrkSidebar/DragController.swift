@@ -341,6 +341,7 @@ final class DragImage: NSView {
     /// The pointer's place in the image, as fractions of its width and height.
     var grab = CGPoint(x: 0.5, y: 0.5)
     private let rowImage = NSImageView()
+    private let rowCard = NSView()
     private let rowSize: CGSize
     /// The row's own image rect, relative to the image at full size (the row is wider than its card).
     private let rowImageFrame: CGRect
@@ -364,11 +365,24 @@ final class DragImage: NSView {
             layer.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
             layer.cornerCurve = .continuous
             layer.cornerRadius = Metrics.tablist.selectionRadius.value
-            layer.shadowColor = NSColor.black.cgColor
-            layer.shadowOpacity = Float(Draw.dragPreviewShadowOpacity.value)
-            layer.shadowRadius = Draw.dragPreviewShadow.value
-            layer.shadowOffset = CGSize(width: 0, height: -Draw.dragPreviewShadowOffset.value)
         }
+        // AppKit owns a layer-backed view's shadow: set on the layer it never shows. The offset is not flipped, so negative is down.
+        let soft = NSShadow()
+        soft.shadowColor = NSColor.black.withAlphaComponent(Draw.dragPreviewShadowOpacity.value)
+        soft.shadowBlurRadius = Draw.dragPreviewShadow.value
+        soft.shadowOffset = CGSize(width: 0, height: -Draw.dragPreviewShadowOffset.value)
+        shadow = soft
+        // A row image keeps the selected row's own shadow line under it (Q15-a: darkest right under the row); a tile has none.
+        rowCard.wantsLayer = true
+        rowCard.layer?.backgroundColor = palette.color(palette.tokens.tabCurrent).cgColor
+        rowCard.layer?.cornerCurve = .continuous
+        rowCard.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        let line = NSShadow()
+        line.shadowColor = palette.color(palette.tokens.tabShadow)
+        line.shadowBlurRadius = Draw.selectedShadowRadius.value
+        line.shadowOffset = CGSize(width: 0, height: -Draw.selectedShadowOffset.value)
+        rowCard.shadow = line
+        addSubview(rowCard)
         rowImage.imageScaling = .scaleAxesIndependently
         rowImage.image = row?.dragImage() ?? tab.flatMap { DragRowImage.make(tab: $0, size: rowImageFrame.size, in: source, palette: palette) }
         addSubview(rowImage)
@@ -404,11 +418,14 @@ final class DragImage: NSView {
         switch shape {
         case .row(let scale):
             rowImage.isHidden = false
+            rowCard.isHidden = false
+            rowCard.frame = bounds
             icon.isHidden = true
             ring.isHidden = true
             rowImage.frame = CGRect(x: rowImageFrame.minX * scale, y: rowImageFrame.minY * scale, width: rowImageFrame.width * scale, height: rowImageFrame.height * scale)
         case .tile:
             rowImage.isHidden = true
+            rowCard.isHidden = true
             icon.isHidden = false
             let side = Draw.tileFavicon.value
             icon.frame = CGRect(x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side)
