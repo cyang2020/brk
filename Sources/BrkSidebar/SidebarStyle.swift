@@ -60,8 +60,8 @@ struct SidebarDrawMetrics: MetricGroup {
     let splitSegmentInset = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane boxes 4 pt inside the row's selection"))
     let splitSegmentGap = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P23a: 4 pt between pane boxes"))
     let splitSegmentRadius = Metric(8.0, .guess("measured on the 2026-11-03 Arc capture P23a: pane box corners about 8 pt"))
-    let splitSegmentIconLeading = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's icon 7 pt inside its box"))
-    let splitSegmentTitleLeading = Metric(36.0, .guess("measured on the 2026-11-03 Arc capture P23a: the pane's title 36 pt inside its box"))
+    let splitSegmentIconLeading = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png and Q15/Q15-d-arc.png: the pane's icon starts 19 along the row, 7 inside its box at 12, with the 16 pt slot's 1 pt margin"))
+    let splitSegmentTitleLeading = Metric(32.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png, P23-f-arc.png and Q15/Q15-d-arc.png: the pane's title ink starts 4 pt before where 36 put it"))
     let peekMarkerIcon = Metric(14.0, .guess("measured on the 2026-11-03 Arc capture P22a: a 14 pt icon in the 24 pt Peek marker"))
     let splitSegmentTitleMinWidth = Metric(60.0, .anatomy("verify/visual-pairs/run-20261103: four pane boxes of about 50 pt show icons only (P23-b), three of 65 pt show titles (Q15-f)"))
 
