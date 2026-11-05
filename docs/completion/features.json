@@ -7306,7 +7306,7 @@
       "arc_evidence": "anatomy-v 3 \"Drag a tab from your sidebar into the middle of the screen…\"",
       "description": "Dropping a row on the content makes a split",
       "historical_status": "not started",
-      "status": "verified",
+      "status": "partial",
       "acceptance": "Dropping a tab onto a content edge previews and creates or extends a split with a defined orientation.",
       "owner": "parent-split-integration",
       "required_checks": [
@@ -7381,7 +7381,8 @@
       ],
       "remaining": [
         "Arc 对照（run-20261103 P23）仍有差异或无参照：P23-d: 要修（窗口类型组：拖标签进内容区时显示半屏落点预览和拖动卡片，并让当前页让位） | P23-a: 已修；栏头 32 点（Arc 图量得） | P23-b: 已修 | P23-c: 已修",
-        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：同 A073；新增命令：前后挪动当前栏（Move Left/Right）、在左侧加一栏（Add Left Split）。"
+        "Arc 对照 R3-1（2026-11-04，合并 087ee736）：同 A073；新增命令：前后挪动当前栏（Move Left/Right）、在左侧加一栏（Add Left Split）。",
+        "2026-11-05 用户报告把标签拖到另一个标签上做分屏的显示和操作不对。真 Arc 上核过（verify/visual-pairs/run-20261103/Q15/NOTES.md）：拖动图是整行本身，目标行在鼠标所在的一半出现落位、可以选左边或右边，松手后被拖的标签在那一侧；Brk 画的是固定在左的深色胶囊。R4-12 当时只凭一张 Arc 截图做的。交 R5-3。"
       ],
       "implementation": [
         "Sources/BrkContent/ContentAreaView.swift",
