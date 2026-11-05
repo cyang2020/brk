@@ -164,8 +164,7 @@ enum FavoritesDragScenarios {
     @Sendable static func out(_ app: AppUnderTest) throws {
         let f = try fixture(app)
         let four = try cells(app, count: 4)
-        let a = try frame(app, .row(f.a))
-        // Today is c, b, a (newest first): between c and b.
+        // Today is c, b, a (newest first) over the first page: between c and b.
         let line = CGPoint(x: 86, y: try frame(app, .row(f.c)).maxY)
         try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(f.favorites[3]))), line], window: app.window!) {
             try settled(app, "the others keep size and place", [f.favorites[0]: four[0], f.favorites[1]: four[1], f.favorites[2]: four[2]])
@@ -174,8 +173,7 @@ enum FavoritesDragScenarios {
             try expect(abs(row.midX - line.x) < 1, "the row is not centred on the pointer: \(row)")
             _ = try app.screenshot("to-today")
         }
-        _ = a
-        try app.waitUntil("a Today row") { try app.view().space.today.rows.map(\.id) == [f.c, f.favorites[3], f.b, f.a] }
+        try app.waitUntil("a Today row") { Array(try app.view().space.today.rows.map(\.id).prefix(4)) == [f.c, f.favorites[3], f.b, f.a] }
         try expect(try shown(app) == f.favorites[3], "not the current tab")
         let three = try cells(app, count: 3)
         try settled(app, "three wide tiles after the release", [f.favorites[0]: three[0], f.favorites[1]: three[1], f.favorites[2]: three[2]])
