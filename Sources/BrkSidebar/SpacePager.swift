@@ -19,7 +19,9 @@ final class SpacePager: NSObject {
     private var raw = 0.0
     private var begin: (page: Int, interrupted: Bool)?
     private var velocity = PageSwipeVelocity()
-    private var spring: (curve: PageSpring, start: CFTimeInterval)?
+    /// `start` is set by the first display-link tick: its clock runs from then, after the render a Space change costs (Arc's
+    /// spring does the same: a recorded release has the column stand still for that long, then the whole curve, Q19-h2).
+    private var spring: (curve: PageSpring, start: CFTimeInterval?)?
     private var link: CADisplayLink?
     private var detent: Int?
 
@@ -62,7 +64,7 @@ final class SpacePager: NSObject {
             return
         }
         raw = origins[selected] + (isActive ? offset : 0)
-        if let current = spring { spring = (PageSpring(from: raw, target: origins[selected], velocity: current.curve.velocity), CACurrentMediaTime()) }
+        if let current = spring { spring = (PageSpring(from: raw, target: origins[selected], velocity: current.curve.velocity), nil) }
     }
 
     /// `page` is the selected one now, for a reason other than the fingers. `animated`: settles there on the spring, from one
@@ -140,7 +142,7 @@ final class SpacePager: NSObject {
         raw = from
         let curve = PageSpring(from: from, target: origins[selected], velocity: velocity)
         guard !curve.isSettled(at: 0), let host, host.window?.isVisible == true else { return settle() }
-        spring = (curve, CACurrentMediaTime())
+        spring = (curve, nil)
         if link == nil {
             let link = host.displayLink(target: self, selector: #selector(step(_:)))
             link.add(to: .main, forMode: .common)
@@ -151,7 +153,9 @@ final class SpacePager: NSObject {
 
     @objc private func step(_ link: CADisplayLink) {
         guard let spring else { return stopSpring() }
-        let t = link.targetTimestamp - spring.start
+        let start = spring.start ?? link.timestamp
+        self.spring?.start = start
+        let t = link.targetTimestamp - start
         if spring.curve.isSettled(at: t) { return settle() }
         raw = spring.curve.position(at: t)
         onMove?()
