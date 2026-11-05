@@ -82,6 +82,7 @@ public final class WindowRootView: NSView {
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
+        sidebar.contentDropCardSize = { [weak content] in content?.dropCardSize ?? .zero }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
         sidebar.endContentDrop = { [weak content] in content?.endDrop() }
         // Both span the window from its top left, so the Library's coordinates are the dialog host's.
