@@ -75,14 +75,14 @@ final class SpaceToolsLayoutTests: XCTestCase {
         XCTAssertEqual(PageSwipeRule.moved(645, by: -150), 720)
     }
 
-    /// Reach: the neighbours of the page the swipe began on. Past it Arc drew 15 for a raw 105, 26.9 for a raw 202.5.
+    /// Reach: the neighbours of the page the swipe began on. Past it Arc drew 15 for a raw 105, 27 for a raw 202.5 (Q19-edge-210, -armed-405).
     func testTheReachAndTheRubberBand() {
         XCTAssertEqual(PageSwipeRule.range(around: 2, origins: origins), 417...645)
         XCTAssertEqual(PageSwipeRule.range(around: 1, origins: origins), 0...645)
         XCTAssertEqual(PageSwipeRule.range(around: 0, origins: origins), 0...417)
         XCTAssertEqual(PageSwipeRule.rubberBanded(600, in: 417...645), 600, "inside it, one to one")
         XCTAssertEqual(PageSwipeRule.rubberBanded(645 + 105, in: 417...645) - 645, 14.84, accuracy: 0.01)
-        XCTAssertEqual(PageSwipeRule.rubberBanded(645 + 202.5, in: 417...645) - 645, 26.9, accuracy: 0.05)
+        XCTAssertEqual(PageSwipeRule.rubberBanded(645 + 202.5, in: 417...645) - 645, 27.14, accuracy: 0.01)
         XCTAssertEqual(PageSwipeRule.rubberBanded(417 - 105, in: 417...645) - 417, -14.84, accuracy: 0.01, "the same at the other end")
         for shown in [640.0, 650, 660, 680, 400, 380] {
             let raw = PageSwipeRule.unbanded(shown, in: 417...645)
@@ -106,7 +106,8 @@ final class SpaceToolsLayoutTests: XCTestCase {
         XCTAssertEqual(target(300, -400), 1, "never further than one page from where it began")
         XCTAssertEqual(target(-20, -400, begin: 0), 0)
         XCTAssertEqual(target(600, 4), 2, "under 5 points a second the nearest page decides")
-        XCTAssertEqual(target(645, -5), 1, "at 5 the direction does")
+        XCTAssertEqual(target(644, -5), 1, "at 5 the direction does")
+        XCTAssertEqual(target(645, -300), 2, "standing exactly on a page, going back ends on that page: the page under the position")
         XCTAssertEqual(target(600, 400, interrupted: true), 2, "a swipe that caught a moving page goes one past where it began")
         XCTAssertEqual(target(600, -400, interrupted: true), 1)
     }

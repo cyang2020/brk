@@ -53,7 +53,7 @@ final class SpaceSidePageView: NSView {
         header.frame = local(f.spaceHeader)
         header.render(page.space, palette: palette)
         list.frame = local(f.tablistViewport)
-        list.render(page.space, renaming: nil, frames: f, palette: palette, tools: TabToolsSnapshot(), now: now)
+        list.render(page.space, renaming: nil, frames: f, palette: palette, tools: .idle, now: now)
     }
 }
 

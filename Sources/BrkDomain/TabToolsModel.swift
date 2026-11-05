@@ -217,8 +217,12 @@ public struct RecentTabRow: Equatable, Sendable, Codable {
     /// The tab's favicon, drawn before its title under the switcher's thumbnail.
     public var favicon: URL? = nil
 }
+extension TabToolsSnapshot {
+    /// No tools at work: what a page that only shows a Space's rows passes (`SpaceSidePageView`).
+    public static let idle = TabToolsSnapshot()
+}
+
 public struct TabToolsSnapshot: Equatable, Sendable, Codable {
-    public init() {}
     public var pendingSiteRequest: String? = nil
     public var selected: [ItemID] = []
     public var reveal: ItemID?
