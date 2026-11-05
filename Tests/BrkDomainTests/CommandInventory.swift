@@ -88,6 +88,9 @@ enum CommandInventory {
         .boost(.enable("ghost", false)), .boost(.remove("ghost")), .boost(.export("ghost")), .boost(.importFile),
         .boost(.importSelected(URL(fileURLWithPath: "/tmp/boost.json"))), .boost(.exportSelected("ghost", URL(fileURLWithPath: "/tmp/boost.json"))),
         .page(.media(.item(item), MediaPlayerID(document: "ghost", frame: 0, element: "ghost"), .pause)),
+        .page(.mediaSession(.item(item), .pause)),
+        .page(.mediaVolume(.item(item), 0.5)),
+        .page(.closeMiniPlayer(item)),
         .easel(.create), .easel(.open(easel)), .easel(.rename(easel, title: "x")), .easel(.stepTitleSize(easel, by: 1)),
         .easel(.add(easel, EaselElement(id: "ghost", shape: .rectangle, frame: CGRect(x: 0, y: 0, width: 10, height: 10)))),
         .easel(.update(easel, [])), .easel(.remove(easel, ["ghost"])), .easel(.duplicate(easel, ["ghost"])),
@@ -341,6 +344,9 @@ enum CommandInventory {
             case .developer: "developer"
             case .pictureInPicture: "pictureInPicture"
             case .media: "media"
+            case .mediaSession: "mediaSession"
+            case .mediaVolume: "mediaVolume"
+            case .closeMiniPlayer: "closeMiniPlayer"
             case .output: "output"
             case .cancelOutput: "cancelOutput"
             case .copyURL: "copyURL"

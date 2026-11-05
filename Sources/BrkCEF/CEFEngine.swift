@@ -352,7 +352,7 @@ public final class CEFEngine: WebEngine {
                     // expires five seconds after the user last touched the page. As with an explicit PiP request, the
                     // injected call runs with that gesture inside the page.
                     let gesture = request.userInitiated || request.operation == .enterPictureInPicture
-                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, userInitiated: gesture)
+                    try await observer.control(target: target, tab: tab, player: request.player, operation: request.operation, volume: request.volume, userInitiated: gesture)
                     if !request.userInitiated, request.operation == .enterPictureInPicture, let self, let live,
                        !self.isLive(live) || live.readyDocument != request.document || live.websitePolicy.visible {
                         try? await observer.control(target: target, tab: tab, player: request.player, operation: .exitPictureInPicture, userInitiated: false)

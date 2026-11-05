@@ -310,6 +310,11 @@ struct WindowSession: Sendable, Equatable {
     var overlayOpens: Int
     var peek: Bool
     var renaming: ItemID?
+    /// The tabs with a mini player at the bottom of this window's sidebar, oldest first; the last is the front card
+    /// (`repairMiniPlayers`, Arc: `MediaControlsFeature.State.miniPlayers`).
+    var miniPlayers: [ItemID] = []
+    /// Tabs whose mini player was closed with its ×: no card until the tab has been shown again (Q18).
+    var closedMiniPlayers: Set<ItemID> = []
     /// The tab showing "Double-click to rename" (Arc's window state: `renameHintItemID`). It goes when the tab is renamed
     /// or stops being the shown tab.
     var renameHint: ItemID? = nil
@@ -433,6 +438,10 @@ struct LivePage: Sendable, Equatable {
     var automaticPiPPlayer: MediaPlayerID? = nil
     var mediaPlayers: [MediaPlayer] = []
     var mediaError: String? = nil
+    /// The players a mini player's Pause stopped; its Play starts these again (Arc suspends and resumes a media session).
+    var suspendedPlayers: [MediaPlayerID] = []
+    /// The mini player's volume slider, 0 to 1.
+    var mediaVolume: Double = 1
     var audible: Bool = false
     /// The ready document's language as the page declares it (`<html lang>`), for the URL pill's Translation
     /// Available and the page menu's Translate to English.

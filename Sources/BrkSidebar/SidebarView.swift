@@ -36,6 +36,8 @@ public final class SidebarView: NSView {
     let spaceHeader: SpaceHeaderView
     let tablist: TablistView
     let dock: DockView
+    /// Arc's mini players, between the list and the dock.
+    let miniPlayers: MiniPlayerStackView
     /// The edge views straddle or sit outside the column, so they live beside it in the root (installed when this
     /// view moves into a superview) and are framed from `WindowFrames`.
     let resizeHandle: ResizeHandleView
@@ -87,6 +89,8 @@ public final class SidebarView: NSView {
         /// Create a Space is open: its flow takes the column's place.
         var creatingSpace: Bool
         var favoritesDrag: FavoritesDrag?
+        var miniPlayers: [MiniPlayerSnapshot]
+        var miniPlayerHover: MiniPlayerHover?
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -98,11 +102,13 @@ public final class SidebarView: NSView {
         spaceHeader = SpaceHeaderView(dispatch: dispatch)
         tablist = TablistView(dispatch: dispatch, drag: drag)
         dock = DockView(dispatch: dispatch)
+        miniPlayers = MiniPlayerStackView(dispatch: dispatch)
         resizeHandle = ResizeHandleView(dispatch: dispatch)
         revealStrip = RevealStripView(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [backdrop, header, urlPill, favorites, spaceHeader, tablist, dock] as [NSView] { addSubview(view) }
+        for view in [backdrop, header, urlPill, favorites, spaceHeader, tablist, dock, miniPlayers] as [NSView] { addSubview(view) }
+        miniPlayers.onHoverChange = { [weak self] _ in self?.renderAfterDrag() }
         dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
         drag.sidebar = self
         identify(.sidebar)
@@ -178,7 +184,8 @@ public final class SidebarView: NSView {
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: dockItems, plusMenu: snapshot.plusMenu, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
-                          newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag)
+                          newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
+                          miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover)
         guard slice != last else { return }
         let previous = last
         // While a drag changes the grid, and as it ends, the tiles and everything under them slide.
@@ -193,7 +200,8 @@ public final class SidebarView: NSView {
             drag.cancel()
             return
         }
-        let f = FavoritesGrid.applying(favoritesDrag, to: rest, favorites: snapshot.favorites)
+        var f = FavoritesGrid.applying(favoritesDrag, to: rest, favorites: snapshot.favorites)
+        if let hover = miniPlayers.hover { f = MiniPlayerLayout.applying(snapshot.miniPlayers.map(\.tab), hover: hover, to: f) }
         isHidden = false
         identify(frames.sidebarFloats ? .floatingSidebar : .sidebar)
         place(f.frame, slideIn: previous != nil && previous?.frames == nil)
@@ -217,6 +225,10 @@ public final class SidebarView: NSView {
         Slide.place(tablist, at: local(f.tablistViewport), sliding: sliding)
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
                        newTabCurrent: newTabCurrent, now: snapshot.now)
+        miniPlayers.frame = bounds
+        miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
+        miniPlayers.render(snapshot.miniPlayers, frames: f.miniPlayers, origin: f.frame.origin, palette: palette,
+                           animated: previous != nil && previous?.miniPlayerHover != miniPlayers.hover)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)

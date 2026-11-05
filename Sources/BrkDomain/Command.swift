@@ -150,6 +150,12 @@ public enum PageCommand: Hashable, Sendable, Codable {
     case cast
     case pictureInPicture(PictureInPictureIntent)
     case media(ItemRef, MediaPlayerID, MediaOperation)
+    /// A mini player's transport buttons: the tab as a whole, not one player. Muted, they do nothing (Arc, Q18).
+    case mediaSession(ItemRef, MediaSessionOperation)
+    /// A mini player's volume slider, 0 to 1.
+    case mediaVolume(ItemRef, Double)
+    /// A mini player's ×: the card goes, the sound goes on.
+    case closeMiniPlayer(ItemID)
     case output(OutputIntent)
     case cancelOutput
     case developer(DeveloperOperation)

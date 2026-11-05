@@ -58,6 +58,7 @@ public struct MetricsTable: MetricGroup {
     public let favorites = FavoritesMetrics()
     public let tablist = TablistMetrics()
     public let dock = DockMetrics()
+    public let miniPlayer = MiniPlayerMetrics()
     public let content = ContentMetrics()
     public let commandBar = CommandBarMetrics()
     public let ai = AIMetrics()
@@ -169,6 +170,14 @@ public struct TablistMetrics: MetricGroup {
     public let favicon = Metric(16.0, .guess("favicon size was not recovered; cra L142 measures rows only"))
     /// The part of a tab row, as fractions of its height from the top, where a dragged tab joins it in a split; the
     /// quarters above and below still reorder.
+    /// The speaker of a tab that is making sound: a button between the icon and the title, from the selection's left edge.
+    public let speakerLeading = Metric(34.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square spans x 42 to 66, the row's selection starts at 8"))
+    public let speakerSide = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square is 24 x 24"))
+    /// How much further right the title starts while the speaker shows.
+    public let speakerTitleAdvance = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-a-arc.png: the title's ink starts at x 70 instead of 44"))
+    /// The round button at the list's top or bottom edge while the current row is scrolled out of view.
+    public let currentArrowSide = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle spans x 100 to 128, y 578 to 606"))
+    public let currentArrowInset = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle ends 5 above the list's lower edge at y 611; Q18-media-r-arrow-up-arc.png: it starts 6 below the upper edge"))
     public let splitJoinZone = Metric(0.25...0.75, .anatomy("verify/visual-pairs/run-20261103/Q15/NOTES.md: 9.5 pt from a row's top or bottom edge reorders, 11.5 pt joins"))
 }
 
@@ -183,6 +192,43 @@ public struct DockMetrics: MetricGroup {
     public let buttonSize = Metric(32.0, .arc("\"+\" and Library buttons", .low, note: "32 x 32 (cra L1521-1522)"))
     public let buttonInset = Metric(8.0, .arc("\"+\" and Library buttons", .low, note: "8 from the edge"))
     public let libraryBottom = Metric(9.0, .arc("\"+\" and Library buttons", .low, note: "Library 9 from the bottom"))
+}
+
+/// Arc's mini player at the bottom of the sidebar (`MediaControlsFeature.MediaControlsView`, read from the binary and
+/// measured; verify/visual-pairs/run-20261103/r5-5/REPORT.md has the addresses).
+public struct MiniPlayerMetrics: MetricGroup {
+    /// One line of a card: the title, the controls or the volume slider.
+    public let rowHeight = Metric(33.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102494318: a card at rest is 33 tall"))
+    /// A card under the pointer: the title and the controls.
+    public let expandedHeight = Metric(66.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
+    /// With its volume slider open.
+    public let volumeHeight = Metric(99.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
+    public let sideInset = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card spans x 8 to 220 of a 228 sidebar"))
+    public let bottomGap = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card ends 8 above Arc's update banner, which ends 8 above the dock; Brk has no banner"))
+    /// From the list's lower edge down to the stack.
+    public let listGap = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the hairline at y 644, the card from y 653"))
+    /// Cards at rest, per card behind the front one: up, narrower in all, and fainter down to a floor.
+    public let restStep = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: yOffset -7 per card"))
+    public let restWidthStep = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset 10 per card"))
+    public let restWidthMax = Metric(90.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset at most 90"))
+    public let restAlphaStep = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity 1 - 0.2 per card"))
+    public let restAlphaMin = Metric(0.4, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity at least 0.4"))
+    /// Cards under the pointer, apart.
+    public let expandedGap = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: height + 5 per card"))
+    public let radius = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249a5f4: RoundedRectangle 8, continuous"))
+    /// The controls row: five buttons, the first and the last this far in, the gaps equal.
+    public let controlsInset = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the buttons centre at 30, 72, 114, 156 and 198 on a card from x 8"))
+    public let buttonSide = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the pause button's hover square spans x 102 to 126"))
+    /// The title's frame in the title row, from the card's left edge, and where it stops before the × button.
+    public let titleLeading = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the title's ink starts at x 23, 15 in from the card; the label keeps 2 of its own and the M 1 more"))
+    public let titleTrailing = Metric(4.0, .guess("the title's end before the × button; no capture has a title long enough to reach it"))
+    /// The volume slider's track in its row, from the card's edges (Q18-media-j-arc).
+    public let sliderInset = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track spans x 16 to 212 on a card from x 8 to 220"))
+    public let sliderTrack = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track is 6 tall"))
+    public let sliderKnob = Metric(CGSize(width: 20, height: 16), .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the white knob spans 19.5 x 15.5"))
+    /// The pointer leaving the stack closes it at once (Q18, k10), but with a slider open only after this long.
+    public let sliderHoverOffDelay = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493f9c: debounce(for: 2), and Q18-media-z4, -z5"))
+    public let hoverAnimation = Metric(0.25, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493070: a spring of response 0.25, damping 0.9"))
 }
 
 public struct ContentMetrics: MetricGroup {

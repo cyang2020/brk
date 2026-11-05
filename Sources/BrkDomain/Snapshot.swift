@@ -96,6 +96,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     /// Shortcut-table actions that apply right now (menu validation greys out the others).
     public var enabledActions: Set<ActionID>
     public var tabTools = TabToolsSnapshot()
+    /// The mini players at the bottom of the sidebar, oldest first; the last is the front card.
+    public var miniPlayers: [MiniPlayerSnapshot] = []
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
     /// Arc's 5-Second Preview card under a link Shift was held over (P45-a).
@@ -281,6 +283,37 @@ public struct TabRow: Sendable, Equatable, Codable {
 }
 
 public enum InstantRowState: String, Sendable, Equatable, Codable { case searching, failed }
+
+/// The speaker a tab's row shows between its icon and its title (Arc: `TabCellState.isAudible`, `isMuted`).
+public enum RowSpeaker: String, Sendable, Equatable, Codable { case audible, muted }
+
+extension TabRow {
+    /// Nil once the tab has been silent for a moment (Chromium keeps `audible` for about two seconds after the sound).
+    public var speaker: RowSpeaker? { muted ? .muted : audible ? .audible : nil }
+}
+
+/// One card of the sidebar's mini player stack (Arc: `MiniPlayerFeature.State`).
+public struct MiniPlayerSnapshot: Sendable, Equatable, Codable {
+    public var tab: ItemID
+    public var title: String
+    public var favicon: URL?
+    public var icon: CustomIcon?
+    /// Something in the tab is playing: the middle button pauses; otherwise it plays.
+    public var playing: Bool
+    public var muted: Bool
+    public var hasNextTrack: Bool
+    public var hasPreviousTrack: Bool
+    public var volume: Double
+
+    /// The speaker on the card: a `speaker.…fill` by level, as Arc's `MiniPlayerView` picks it (bin:0x10249e788).
+    public var speakerSymbol: String {
+        if muted { return "speaker.slash.fill" }
+        if volume <= 0 { return "speaker.fill" }
+        if volume < 1.0 / 3 { return "speaker.wave.1.fill" }
+        if volume < 2.0 / 3 { return "speaker.wave.2.fill" }
+        return "speaker.wave.3.fill"
+    }
+}
 
 public struct FolderRow: Sendable, Equatable, Codable {
     public var group: Bool = false

@@ -11,7 +11,9 @@ import BrkUIKit
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
-    case siteControls, search, globe, chevronDown, chevronRight, speaker, speakerMuted, more, close, warning
+    case siteControls, search, globe, chevronDown, chevronRight, more, close, warning
+    /// A tab row's outlined speaker (Arc draws its own `SpeakerIcon`; these are the nearest symbols) and the mini player's.
+    case rowSpeaker, rowSpeakerMuted, mediaPrevious, mediaPlay, mediaPause, mediaNext, currentRowUp, currentRowDown
 
     var symbol: String {
         switch self {
@@ -31,8 +33,14 @@ enum Glyph {
         case .globe: "globe"
         case .chevronDown: "chevron.down"
         case .chevronRight: "chevron.right"
-        case .speaker: "speaker.wave.2.fill"
-        case .speakerMuted: "speaker.slash.fill"
+        case .rowSpeaker: "speaker.wave.3"
+        case .rowSpeakerMuted: "speaker.slash"
+        case .mediaPrevious: "backward.end.fill"
+        case .mediaPlay: "play.fill"
+        case .mediaPause: "pause.fill"
+        case .mediaNext: "forward.end.fill"
+        case .currentRowUp: "arrow.up"
+        case .currentRowDown: "arrow.down"
         case .more: "ellipsis"
         case .close: "xmark"
         case .warning: "exclamationmark.triangle.fill"
@@ -93,6 +101,9 @@ final class IconView: NSView {
     private var palette: Palette?
     /// A site with no favicon draws nothing here instead of the empty favicon (a Favorite's tile, Q13-n5).
     var hidesEmptyFavicon = false
+    /// The empty favicon at this size and strength instead of the row's (the mini player's, Q18-media-c).
+    var emptyFaviconSide: Double?
+    var emptyFaviconAlpha = 1.0
     /// That is what it is doing now. A favicon can arrive later, so it can change after a render.
     private(set) var showsNothing = false {
         didSet { if showsNothing != oldValue { showsNothingChanged?() } }
@@ -194,12 +205,13 @@ final class IconView: NSView {
             image.contentTintColor = tint
             return
         }
-        let side = Draw.emptyFavicon.value * square.width / Metrics.tablist.favicon.value
+        let side = emptyFaviconSide ?? Draw.emptyFavicon.value * square.width / Metrics.tablist.favicon.value
         let rect = CGRect(x: square.midX - side / 2, y: square.midY - side / 2, width: side, height: side)
         let radius = Draw.emptyFaviconRadius.value * side / Draw.emptyFavicon.value
         dot.isHidden = false
         dot.path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
-        dot.fillColor = HueInk(palette).emptyFavicon.cgColor
+        let ink = HueInk(palette).emptyFavicon
+        dot.fillColor = ink.withAlphaComponent(ink.alphaComponent * emptyFaviconAlpha).cgColor
     }
 
     private func showSymbol(_ name: String, side: Double) {

@@ -14,12 +14,12 @@
         let id = ids.get(e);
         if (!id) { id = crypto.randomUUID(); ids.set(e, id); }
         players.set(id, new WeakRef(e)); current.add(id);
-        return {element:id, kind:e.localName, paused:e.paused, ended:e.ended, pictureInPicture:document.pictureInPictureElement === e};
+        return {element:id, kind:e.localName, paused:e.paused, ended:e.ended, silent:e.muted, pictureInPicture:document.pictureInPictureElement === e};
       });
       for (const id of players.keys()) if (!current.has(id)) players.delete(id);
       return result;
     },
-    async control(id, operation) {
+    async control(id, operation, volume) {
       const player = players.get(id)?.deref();
       if (!player?.isConnected) throw Error('Player is no longer in this document');
       switch (operation) {
@@ -31,6 +31,7 @@
         case 'exitPictureInPicture':
           if (document.pictureInPictureElement !== player) break;
           await document.exitPictureInPicture(); break;
+        case 'setVolume': player.volume = Math.min(1, Math.max(0, volume)); break;
         default: throw Error('Unknown media operation');
       }
       return {paused:player.paused, pictureInPicture:document.pictureInPictureElement === player};

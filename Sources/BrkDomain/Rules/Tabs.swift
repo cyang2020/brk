@@ -124,6 +124,9 @@ extension Work {
             guard let live = state.session.live[page], case .ready(let document) = live.document,
                   live.mediaPlayers.contains(where: { $0.id == player }) else { return }
             effects.append(.page(page, .media(MediaControl(document: document, player: player, operation: operation))))
+        case .mediaSession(let ref, let operation): mediaSession(ref, operation, in: window)
+        case .mediaVolume(let ref, let volume): mediaVolume(ref, volume, in: window)
+        case .closeMiniPlayer(let tab): closeMiniPlayer(tab, in: window)
         case .output(let intent):
             guard let tab = state.resolveTab(.focused, in: window),
                   case .ready(let document) = state.session.live[PageID(window: window, item: tab)]?.document else { return }
@@ -226,6 +229,7 @@ extension Work {
             live.document = document
             live.documentPictureInPicture = false; live.automaticPiPPlayer = nil
             live.mediaPlayers = []; live.mediaError = nil
+            live.suspendedPlayers = []; live.mediaVolume = 1
         case .navigationRequested(let url):
             live.loadProgress = 0
             live.requestedURL = url
