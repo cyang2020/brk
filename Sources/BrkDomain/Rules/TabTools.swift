@@ -231,14 +231,15 @@ extension Work {
         case .openInSplit(let targets):
             let ids = state.requestedItems(targets, in: window).filter { tree[$0]?.kind == .tab }
             guard let first = ids.first, w.kind != .little else { return }
-            if let offer = state.splitDrop(in: window)?.offers[first] {
+            // A Favorite stays a Favorite here: it opens beside itself through a new pane. Only a drag moves one out.
+            if state.role(of: first)?.kind != .favorites, let offer = state.splitDrop(in: window)?.offers[first] {
                 splits(.dropTab(offer, edge: .right), in: window)
             } else {
                 focus(first, in: window)
                 guard state.shownItem(in: window) == (tree.splitContaining(first) ?? first) else { return }
                 if ids.count == 1 { splits(.addPane, in: window); return }
             }
-            for id in ids.dropFirst() {
+            for id in ids.dropFirst() where state.role(of: id)?.kind != .favorites {
                 guard let offer = state.splitDrop(in: window)?.offers[id] else { continue }
                 splits(.dropTab(offer, edge: .right), in: window)
             }

@@ -39,6 +39,10 @@ public final class SidebarView: NSView {
     let resizeHandle: ResizeHandleView
     let revealStrip: RevealStripView
     private var last: Slice?
+    /// The last render's input: a drag's grid layout renders the column again from it.
+    private var lastRender: (snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette)?
+    /// The grid's layout while a drag holds one (DragController). Not in the document.
+    private(set) var favoritesDrag: FavoritesDrag?
     private var floatingWatch: FloatingSidebarTracking?
     private var swipe = SpaceSwipe()
     private var swallowMomentum = false
@@ -78,6 +82,7 @@ public final class SidebarView: NSView {
         var newTabCurrent: Bool
         /// Create a Space is open: its flow takes the column's place.
         var creatingSpace: Bool
+        var favoritesDrag: FavoritesDrag?
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -156,6 +161,7 @@ public final class SidebarView: NSView {
     }
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
+        lastRender = (snapshot, frames, palette)
         canSwipe = snapshot.kind == .standard && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.pendingSpaceDeletion == nil
         let space = SidebarLayout.space(in: snapshot)
         // A blank or incognito window: no favorites, no space dots, "This Window" or "Incognito Tabs" over its own tabs.
@@ -168,19 +174,22 @@ public final class SidebarView: NSView {
         let slice = Slice(tools: snapshot.tabTools, sidebar: snapshot.sidebar, urlPill: snapshot.urlPill, favorites: snapshot.favorites, space: space,
                           dock: dockItems, plusMenu: snapshot.plusMenu, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
-                          newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace)
+                          newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag)
         guard slice != last else { return }
         let previous = last
+        // While a drag changes the grid, and as it ends, the tiles and everything under them slide.
+        let sliding = previous != nil && previous?.favoritesDrag != favoritesDrag
         last = slice
         resizeHandle.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         resizeHandle.render(frames.resizeHandle, width: snapshot.sidebar.width, palette: palette)
         revealStrip.render(frames.revealStrip)
-        guard let f = frames.sidebar else {
+        guard let rest = frames.sidebar else {
             isHidden = true
             stopFloatingWatch()
             drag.cancel()
             return
         }
+        let f = FavoritesGrid.applying(favoritesDrag, to: rest, favorites: snapshot.favorites)
         isHidden = false
         identify(frames.sidebarFloats ? .floatingSidebar : .sidebar)
         place(f.frame, slideIn: previous != nil && previous?.frames == nil)
@@ -197,11 +206,11 @@ public final class SidebarView: NSView {
         urlPill.render(snapshot.urlPill, palette: palette, searchField: true)
         favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
-        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette, now: snapshot.now)
+        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette, now: snapshot.now, sliding: sliding)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
-        spaceHeader.frame = local(f.spaceHeader)
+        Slide.place(spaceHeader, at: local(f.spaceHeader), sliding: sliding)
         spaceHeader.render(space, palette: palette, interactive: !thisWindow)
-        tablist.frame = local(f.tablistViewport)
+        Slide.place(tablist, at: local(f.tablistViewport), sliding: sliding)
         tablist.render(space, renaming: snapshot.renaming, frames: f, dockOrder: snapshot.dock.map(\.id), palette: palette, tools: snapshot.tabTools,
                        newTabCurrent: newTabCurrent, now: snapshot.now)
         dock.frame = local(f.dock)
@@ -210,7 +219,8 @@ public final class SidebarView: NSView {
         // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
         if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
         else { tablist.isHidden = false }
-        drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f)
+        drag.context = DragController.Context(space: space, favorites: snapshot.favorites, frames: f, shown: snapshot.content.panes.first(where: \.focused)?.tab,
+                                              spaceHeaderDrops: !thisWindow)
         drag.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         if frames.sidebarFloats { watchFloatingExit() } else { stopFloatingWatch() }
     }
@@ -256,6 +266,19 @@ public final class SidebarView: NSView {
         swipe = SpaceSwipe()
         tablist.layer?.transform = CATransform3DIdentity
         tablist.alphaValue = 1
+    }
+
+    /// A drag's grid layout: the column takes it at once.
+    func setFavoritesDrag(_ drag: FavoritesDrag?) {
+        favoritesDrag = drag
+        renderAfterDrag()
+    }
+
+    /// The drag is over: nothing renders until `renderAfterDrag`, so its command reaches the grid first.
+    func clearFavoritesDrag() { favoritesDrag = nil }
+
+    func renderAfterDrag() {
+        if let lastRender { render(lastRender.snapshot, frames: lastRender.frames, palette: lastRender.palette) }
     }
 
     /// The palette of the last render (the drag preview's card color).
@@ -869,5 +892,18 @@ final class RevealStripView: NSView {
     override func mouseEntered(with event: NSEvent) {
         guard !isHidden, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         dispatch(.sidebar(.peek(true)))
+    }
+}
+
+/// Moves a view to its new frame, over `Draw.favoritesReflow` when the grid is reflowing for a drag.
+@MainActor
+enum Slide {
+    static func place(_ view: NSView, at rect: CGRect, sliding: Bool) {
+        // A zero-length group also stops a slide still under way; setting `frame` alone would not.
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = sliding ? Draw.favoritesReflow.value : 0
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            view.animator().frame = rect
+        }
     }
 }

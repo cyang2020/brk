@@ -150,6 +150,7 @@ private func repairSessionTargets(_ state: inout AppState) {
         if let pending = session.pendingEaselDeletion, state.doc.easels[pending.id] == nil { session.pendingEaselDeletion = nil }
         if let editing = session.easelTitleEditing, state.doc.easels[editing] == nil { session.easelTitleEditing = nil }
         if let renaming = session.renaming, tree?[renaming] == nil { session.renaming = nil }
+        if let hint = session.renameHint, tree?[hint] == nil || state.shownItem(in: id) != hint { session.renameHint = nil }
         switch session.overlay {
         case .commandBar(_, .navigate(let tab, _)), .commandBar(_, .fillPane(let tab)):
             if tree?[tab]?.kind != .tab { session.overlay = nil }

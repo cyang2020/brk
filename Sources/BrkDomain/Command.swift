@@ -182,6 +182,9 @@ public enum ItemCommand: Hashable, Sendable, Codable {
     /// Ends a rename. Nil cancels; "" on a tab clears its custom title.
     case rename(ItemID, title: String?)
     case move(ItemID, to: Destination)
+    /// Dropped on the Space name strip (Arc, Q13-g/h): the first item of the current space's Pinned; a tab shows
+    /// "Double-click to rename" under its title.
+    case dropOnSpaceHeader(ItemID)
     /// Cmd+Shift+N: new folder at the top of the current space's Pinned, in rename mode.
     case newFolder
     case toggleFolder(ItemID)

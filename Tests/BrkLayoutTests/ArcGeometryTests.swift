@@ -19,21 +19,10 @@ final class ArcGeometryTests: XCTestCase {
                        Metrics.window.trafficLightCenterY.value)
     }
 
-    /// cra L1590-1594: 4 columns at sidebar width 230, 2 columns at 227.
-    func testFavoritesColumnsFallTo2Below228() throws {
-        // cra L1590-1594: widths -> tile widths (47 tall), 4 columns while a tile is at least 47 wide, else 2, else 1.
-        let table: [(Double, Int, Double)] = [
-            (347, 4, 76), (300, 4, 65), (260, 4, 55), (230, 4, 47), (228, 4, 47), (227, 2, 101), (225, 2, 100), (220, 2, 98),
-            (212, 2, 94), (205, 2, 90), (200, 2, 88), (170, 2, 73), (140, 2, 58), (100, 1, 84),
-        ]
-        for (width, columns, tile) in table {
-            XCTAssertEqual(FavoritesGrid.columns(forWidth: width), columns, "width \(width)")
-            XCTAssertEqual(FavoritesGrid.tiles(count: 4, width: width).tiles.map(\.size), Array(repeating: CGSize(width: tile, height: 47), count: 4), "width \(width)")
-        }
-        let grid = FavoritesGrid.tiles(count: 4, width: 227)
-        XCTAssertEqual(grid.tiles, [CGRect(x: 8, y: 8, width: 101, height: 47), CGRect(x: 117, y: 8, width: 101, height: 47),
-                                    CGRect(x: 8, y: 63, width: 101, height: 47), CGRect(x: 117, y: 63, width: 101, height: 47)])
-        XCTAssertEqual(grid.tray, CGSize(width: 227, height: 118))
+    /// The most columns a tray may have: the largest of 4, 3, 2, 1 whose tile is at least 47 wide (Q13-w200: 3 is used).
+    func testTheWidthSetsTheMostColumns() throws {
+        let table: [(Double, Int)] = [(500, 4), (347, 4), (228, 4), (227, 3), (205, 3), (200, 3), (173, 3), (172, 2), (166, 2), (164, 2), (118, 2), (117, 1), (100, 1)]
+        for (width, columns) in table { XCTAssertEqual(FavoritesGrid.maxColumns(forWidth: width), columns, "width \(width)") }
         XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228).tray, CGSize(width: 228, height: 114), "Arc's Drag to add Favorites box (P07-b)")
         XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228, hintDismissed: true).tray, CGSize(width: 228, height: 0), "dismissed: no room")
     }

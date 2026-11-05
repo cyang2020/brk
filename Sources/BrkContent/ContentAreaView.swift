@@ -19,7 +19,10 @@ public final class ContentAreaView: NSView {
     private let dropPreview = SplitDropPreview(frame: .zero)
     private var drop: SplitDropSnapshot?
     private var dropArea = CGRect.zero
-    private var dragOffer: SplitDropOffer?
+    /// The tab being dragged. Its offer is read when needed: the press opened it, so it has none until the drag
+    /// reaches the page and the window shows the tab it would split with.
+    private var dragSource: ItemID?
+    private var dragOffer: SplitDropOffer? { dragSource.flatMap { drop?.offers[$0] } }
     private var dragPosition: CGPoint?
     /// The shown panes' shares and where their cards and shadows rest, so a drop preview can make room and give it back.
     private var fractions: [Double] = [1]
@@ -170,12 +173,27 @@ public final class ContentAreaView: NSView {
     }
 
     func dropCommand(_ source: ItemID, at point: CGPoint) -> Command? {
-        guard isDropEnabled, let offer = dragOffer, offer.source == source, drop?.offers[source] == offer,
-              let edge = SplitToolsLayout.edge(at: point, in: dropArea) else {
+        guard isDropEnabled, let offer = dragOffer, offer.source == source, dropArea.contains(point) else {
             clearDrop()
             return nil
         }
         dragPosition = point
+        guard let edge = SplitToolsLayout.edge(at: point, in: dropArea) else {
+            // The middle of the page rings the whole of it, in the line's stronger ink (Q13-e). A release here does nothing:
+            // Arc's result for it has not been seen.
+            for ((card, shadow), rest) in zip(zip(cards, shadows), resting) {
+                card.release(to: rest.card)
+                shadow.frame = rest.shadow
+            }
+            dropPreview.frame = dropArea
+            let ink = SplitDropDraw.middleInk.value
+            dropPreview.layer?.borderColor = NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha).cgColor
+            dropPreview.layer?.borderWidth = SplitDropDraw.middleBorder.value
+            dropPreview.isHidden = false
+            return nil
+        }
+        dropPreview.layer?.borderColor = accent.withAlphaComponent(SplitDropDraw.slotBorderAlpha.value).cgColor
+        dropPreview.layer?.borderWidth = Metrics.content.highlightBorder.value
         let layout = SplitToolsLayout.dropLayout(edge, in: dropArea, fractions: fractions)
         dropPreview.frame = layout.slot
         dropPreview.isHidden = false
@@ -195,8 +213,8 @@ public final class ContentAreaView: NSView {
             shadow.frame = rest.shadow
         }
     }
-    func beginDrop(_ source: ItemID) { clearDrop(); dragOffer = drop?.offers[source] }
-    func endDrop() { clearDrop(); dragOffer = nil }
+    func beginDrop(_ source: ItemID) { clearDrop(); dragSource = source }
+    func endDrop() { clearDrop(); dragSource = nil }
 }
 
 /// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the
@@ -468,6 +486,8 @@ struct SplitDropMetrics: MetricGroup {
     /// just under it, 4% still 9 pt away; with the other pane's own shadow the 10 pt gap reads #D0CBC7 to #DBD6D2).
     let liftedShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the focused pane's edges fade like an 8 pt Gaussian"))
     let liftedShadowAlpha = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: 13% above plus 15% below the focused pane"))
+    let middleInk = Metric(RGBA(0x57 / 255, 0x57 / 255, 0x57 / 255, 1), .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-e-arc.png: a drag over the middle of the page rings it in #575757"))
+    let middleBorder = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-e-arc.png: that ring is 3 pt"))
     let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }
 

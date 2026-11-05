@@ -48,8 +48,9 @@ extension AppState {
               let target = shownItem(in: window), let role = role(of: target), role.kind != .favorites,
               panes(of: target).count < Metrics.content.maxPanes.value else { return nil }
         guard let tree = tree(of: window) else { return nil }
+        // A Favorite dragged over the page offers the same slots (Arc, Q13-e); the drop moves it out first.
         let sources = Set(tree.allTabs().filter { tab in
-            tab != target && tree.splitContaining(tab) == nil && self.role(of: tab)?.joinsSplit(in: role) == true
+            tab != target && tree.splitContaining(tab) == nil && (self.role(of: tab)?.joinsSplit(in: role) == true || self.role(of: tab)?.kind == .favorites)
         })
         guard let parent = tree[target]?.parent else { return nil }
         let orientation: SplitOrientation = if case .split(let split)? = tree[target]?.body { split.orientation } else { .horizontal }

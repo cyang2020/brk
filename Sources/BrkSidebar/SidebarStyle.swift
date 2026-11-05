@@ -124,7 +124,18 @@ struct SidebarDrawMetrics: MetricGroup {
     // States and motion.
     let unloadedAlpha = Metric(0.5, .guess("Snapshot.swift: unloaded Pinned and Favorites tabs draw dimmer; amount guessed"))
     let dragThreshold = Metric(3.0, .guess("pointer travel before a press becomes a drag (AppKit's own threshold)"))
-    let dragPreviewAlpha = Metric(0.9, .guess("opacity of the dragged row image"))
+    let dragPreviewAlpha = Metric(0.8, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image over the #A7ABAD strip reads #E6E6E7 and over the #E5EDF1 sidebar #F6F7F8"))
+    let dragPreviewShadowOffset = Metric(3.0, .guess("the drag image's shadow sits lower than it is wide (Q13-a: darker under the tile than beside it)"))
+    let dragRowOverHeaderScale = Metric(0.875, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the row image over the Space name strip is 186 x 31 for the 212 x 36 row"))
+    let headerDropAlpha = Metric(0.3, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-g-arc.png: the strip reads #A7ABAD over the #F0F7FC sidebar: black at 0.3"))
+    let dropRingSide = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring at the drop line's left end spans 7 pt"))
+    let dropRingLeading = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the ring starts 16 from the sidebar's edge"))
+    let dropLineTrailing = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the line ends 217 along the 228 sidebar"))
+    let dropInkLight = Metric(RGBA(0x57 / 255, 0x57 / 255, 0x57 / 255, 1), .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-d-arc.png: the line reads #575757 on the pale sidebar"))
+    let favoritesReflow = Metric(0.18, .guess("how long tiles and the list take to slide while a drag reflows the grid; Arc's held frames show only where they end"))
+    let renameHintFont = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: \"Double-click to rename\" is 119.5 pt wide"))
+    let renameHintTitleShift = Metric(-6.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the title's ink spans 192 to 202.5 in the row at 186...221.5"))
+    let renameHintTop = Metric(20.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-h-arc.png: the hint's ink spans 208 to 216 in that row"))
     let dragSourceAlpha = Metric(0.3, .guess("opacity of the row left behind while it is dragged"))
     let dragPreviewShadow = Metric(8.0, .guess("blur of the shadow under the dragged row or tile"))
     // The card a tab drag shows over the content (P23-d-arc.png: card x 989.5...1158.5, y 273.5...523.5 in the window).
@@ -201,6 +212,8 @@ extension Palette {
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).
 enum SidebarCopy {
+    /// Arc: "Subtitle shown on tab with hint on how to rename tab." (Q13-h)
+    static let renameHint = "Double-click to rename"
     static let dismissArchiveEducation = "Dismiss"
     static let closeKeepPinned = "Close and Keep Pinned"
     /// The group header's × (Arc: "Tooltip for the button to close a group of tabs in the sidebar"; the text itself

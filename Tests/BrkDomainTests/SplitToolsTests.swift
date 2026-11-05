@@ -155,12 +155,11 @@ final class SplitToolsTests: XCTestCase {
         let original = d.paneIDs[0], source = d.open("https://fixture.example/source")
         d.user(.tab(.focus(original)))
         d.user(.item(.move(source, to: .into(parent: d.view.favorites.root, index: 0))))
-        var before = d.state
-        XCTAssertNil(d.view.content.drop?.offers[source], "a Favorites tile offered a content drop")
-        assertUnchanged(before, d.user(.split(.dropTab(offer(d, source, original), edge: .right))))
-        d.user(.item(.move(source, to: .into(parent: d.view.space.today.root, index: 0))))
-        d.user(.tab(.focus(original)))
+        // A Favorite on the page offers the same slots (Q13-e); the drop takes it out of Favorites and splits.
+        XCTAssertNotNil(d.view.content.drop?.offers[source], "a Favorites tile offered no content drop")
         d.user(.split(.dropTab(offer(d, source, original), edge: .right)))
+        XCTAssertFalse(d.view.favorites.tiles.contains { $0.id == source })
+        var before = d.state
         let split = try XCTUnwrap(d.view.content.split)
         for n in 3...4 { d.user(.split(.addPane)); d.user(.commandBar(.submit("https://fixture.example/\(n)"))); d.commitRequested() }
         let extra = d.open("https://fixture.example/extra")

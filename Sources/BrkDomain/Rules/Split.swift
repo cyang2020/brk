@@ -112,6 +112,7 @@ extension Work {
             let source = offer.source, target = offer.target
             guard offer.window == window, let admission = state.splitDrop(in: window), admission.offers[source] == offer,
                   let scope = state.locate(target) else { return }
+            if state.role(of: source)?.kind == .favorites { guard moveItem(source, to: .after(target)) else { return } }
             group(source, with: target, edge: edge, in: scope, window: window)
         case .joinRow(let source, let target):
             let units = state.units(in: window)

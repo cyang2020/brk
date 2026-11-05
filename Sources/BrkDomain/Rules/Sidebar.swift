@@ -9,7 +9,7 @@ extension Work {
         // Shared dock/space actions have their own policy. Item editing never crosses a private container.
         let target: ItemID?
         switch command {
-        case .beginRename(.item(let id)), .rename(let id, _), .move(let id, _), .toggleFolder(let id), .deleteFolder(let id), .setIcon(let id, _): target = id
+        case .beginRename(.item(let id)), .rename(let id, _), .move(let id, _), .dropOnSpaceHeader(let id), .toggleFolder(let id), .deleteFolder(let id), .setIcon(let id, _): target = id
         default: target = nil
         }
         if let target, state.tree(of: window)?[target] == nil { return }
@@ -33,6 +33,7 @@ extension Work {
                 ancestor = node.parent
             }
             reveal(id, in: window)
+            state.session.windows[window]?.renameHint = nil
             if state.session.windows[window]?.renaming != id { state.session.windows[window]!.renaming = id }
             peekIfHidden(window)
         case .rename(let id, let title):
@@ -40,6 +41,7 @@ extension Work {
             // shows again); a folder keeps its old title for blank text. At most 500 characters.
             if state.session.windows[window]?.renaming != nil { state.session.windows[window]!.renaming = nil }
             guard let title, let scope = state.locate(id) else { return }
+            state.session.windows[window]?.renameHint = nil
             let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
             state.withTree(scope) { tree in
                 tree.updateTab(id) { tab in
@@ -57,6 +59,10 @@ extension Work {
                state.role(of: id)?.kind == .pinned || state.role(of: id)?.kind == .favorites {
                 setPinnedAddresses(under: id, in: window)
             }
+        case .dropOnSpaceHeader(let id):
+            guard let space = state.doc.windows[window]?.space, let root = state.doc.spaces[space]?.pinnedRoot else { return }
+            items(.move(id, to: .into(parent: root, index: 0)), in: window)
+            if state.role(of: id)?.kind == .pinned, state.tree(of: window)?[id]?.kind == .tab { state.session.windows[window]?.renameHint = id }
         case .move(let id, .space(let target)):
             // Dropped on a dock space: a Pinned item goes to the end of that space's Pinned, anything else to the top
             // of its Today. The moved tabs count as used now (regression finding 5: a dragged tab is not swept

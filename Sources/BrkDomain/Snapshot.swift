@@ -252,6 +252,8 @@ public struct TabRow: Sendable, Equatable, Codable {
     /// page's icon at its trailing end (Arc's Peek marker). `peekFavicon` is that page's favicon.
     public var peeking: Bool = false
     public var peekFavicon: URL? = nil
+    /// The row shows "Double-click to rename" under its title (dropped on the Space name strip, Q13-h).
+    public var renameHint: Bool = false
     /// An Instant Links row, not a tab (Arc's `instantLinks` sidebar item, P48-a): Max's flower and "Searching the
     /// web for you…", or "Oops, something went wrong." when nothing opened.
     public var instant: InstantRowState? = nil

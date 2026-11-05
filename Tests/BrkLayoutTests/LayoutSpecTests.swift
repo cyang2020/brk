@@ -248,25 +248,30 @@ final class DropTargetTests: XCTestCase {
                                                dragging: .tab, from: .pinned, item: p))
     }
 
-    func testFavoriteTilesReorderInsideTheGrid() throws {
+    func testFavoriteTilesDropOnTheCellUnderThePointer() throws {
         let (d, _, _, _, t1, _, v) = makeSidebar()
         let frames = try XCTUnwrap(d.frames().sidebar)
         let favorites = d.view.favorites
-        // Three tiles at width 228: x 8, 63, 118 (47 wide, gap 8), one row at y 90...137.
-        XCTAssertEqual(v.map { frames.favoriteTiles[$0] }, [
-            CGRect(x: 8, y: 90, width: 47, height: 47), CGRect(x: 63, y: 90, width: 47, height: 47), CGRect(x: 118, y: 90, width: 47, height: 47),
-        ])
+        // Three tiles at width 228 fill the row: third-width tiles, one row at y 90...137.
+        let third = 196.0 / 3
+        for (id, x) in zip(v, [8, 8 + third + 8, 8 + 2 * third + 16]) {
+            let rect = try XCTUnwrap(frames.favoriteTiles[id])
+            XCTAssertEqual(rect.minX, x, accuracy: 1e-9)
+            XCTAssertEqual(rect.minY, 90)
+            XCTAssertEqual(rect.size.width, third, accuracy: 1e-9)
+            XCTAssertEqual(rect.size.height, 47)
+        }
         func drop(_ x: Double, _ y: Double, _ kind: ItemKind = .tab, item: ItemID?) -> Destination? {
             FavoritesGrid.dropTarget(at: CGPoint(x: x, y: y), frames: frames, favorites: favorites, dragging: kind, item: item)
         }
-        // v3 dragged before v1: index 0.
+        // A reorder keeps three cells: v3 over the first cell lands first, v1 over the second lands second.
         XCTAssertEqual(drop(10, 100, item: v[2]), .into(parent: favorites.root, index: 0))
-        // v1 dragged right of v2's centre: after v2, counted after v1 is detached: index 1.
         XCTAssertEqual(drop(100, 100, item: v[0]), .into(parent: favorites.root, index: 1))
-        // A Today tab dropped in the row's band (half a gap around the tiles) goes by x; below it, it appends; a
-        // folder is refused; outside the tray (82...145) is nil.
-        XCTAssertEqual(drop(100, 140, item: t1), .into(parent: favorites.root, index: 2))
-        XCTAssertEqual(drop(100, 143, item: t1), .into(parent: favorites.root, index: 3))
+        // A Today tab makes four cells (47 wide): x 114 is the second... at 8, 63, 118, 173.
+        XCTAssertEqual(drop(60, 100, item: t1), .into(parent: favorites.root, index: 1), "half a gap left of the second cell")
+        XCTAssertEqual(drop(114, 100, item: t1), .into(parent: favorites.root, index: 2))
+        XCTAssertEqual(drop(200, 143, item: t1), .into(parent: favorites.root, index: 3), "the tray's bottom edge counts as the last row")
+        // A folder is refused; outside the tray (82...145) is nil.
         XCTAssertNil(drop(100, 100, .folder, item: nil))
         XCTAssertNil(drop(100, 300, item: t1))
         d.user(.item(.move(v[2], to: try XCTUnwrap(drop(10, 100, item: v[2])))))

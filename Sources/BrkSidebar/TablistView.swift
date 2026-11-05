@@ -22,7 +22,7 @@ final class TablistView: NSScrollView {
     private let divider: DividerRowView
     private let education: ArchiveEducationView
     private let newTab: NewTabRowView
-    private let dropLine = NSView()
+    private let dropLine = DropLineView()
     private let topEdge = NSView()
     private let bottomEdge = NSView()
     private var rowViews: [ItemID: RowView] = [:]
@@ -66,7 +66,6 @@ final class TablistView: NSScrollView {
         todaySection.addSubview(divider)
         todaySection.addSubview(newTab)
         document.addSubview(education)
-        dropLine.wantsLayer = true
         dropLine.isHidden = true
         for edge in [topEdge, bottomEdge] {
             edge.wantsLayer = true
@@ -195,7 +194,7 @@ final class TablistView: NSScrollView {
             view.removeFromSuperview()
             rowViews[id] = nil
         }
-        dropLine.layer?.backgroundColor = palette.color(palette.tokens.dragHintStrong).cgColor
+        dropLine.ink = palette.scheme == .light ? palette.color(Draw.dropInkLight.value) : palette.color(palette.tokens.dragHintStrong)
         for edge in [topEdge, bottomEdge] { edge.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor }
         if let reveal = tools.reveal, tools.revealGeneration != lastReveal, let row = rowViews[reveal] {
             document.scrollToVisible(document.convert(row.bounds, from: row))
@@ -317,10 +316,9 @@ final class TablistView: NSScrollView {
         } else if parent == space.today.root, let newTabRow = f.rows.first(where: { $0.kind == .newTab }) {
             y = newTabRow.rect.maxY + half
         } else { return }
-        let indent = t.selectionInset.value + Double(depth) * t.folderIndent.value
-        let line = Draw.dropLineWidth.value
-        dropLine.frame = CGRect(x: indent, y: y - line / 2, width: max(0, document.bounds.width - indent - t.selectionInset.value), height: line)
-        dropLine.layer?.cornerRadius = line / 2
+        let indent = Draw.dropRingLeading.value + Double(depth) * t.folderIndent.value
+        let ring = Draw.dropRingSide.value
+        dropLine.frame = CGRect(x: indent, y: y - ring / 2, width: max(ring, document.bounds.width - indent - Draw.dropLineTrailing.value), height: ring)
         dropLine.isHidden = false
     }
 
@@ -371,6 +369,25 @@ final class TablistView: NSScrollView {
     static func lastVisible(_ row: Row) -> ItemID? {
         if case .folder(let folder) = row, !folder.collapsed, let child = folder.children.last { return lastVisible(child) }
         return row.id
+    }
+}
+
+/// Where a dragged row lands in the list (Arc, Q13-d): a line ending in a small ring at its left.
+@MainActor
+final class DropLineView: NSView {
+    var ink = NSColor.gray { didSet { needsDisplay = true } }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let width = Draw.dropLineWidth.value, side = bounds.height
+        ink.setStroke()
+        let ring = NSBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: width / 2, dy: width / 2))
+        ring.lineWidth = width
+        ring.stroke()
+        ink.setFill()
+        NSBezierPath(roundedRect: CGRect(x: side - width / 2, y: (side - width) / 2, width: max(0, bounds.width - side + width / 2), height: width), xRadius: width / 2, yRadius: width / 2).fill()
     }
 }
 
@@ -440,6 +457,8 @@ final class RowView: HoverView {
     private let background = NSView()
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
+    /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
+    private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
     private lazy var media = MediaRowControls(dispatch: dispatch)
     private let audio = GlyphButton()
     private let button = GlyphButton()
@@ -478,7 +497,11 @@ final class RowView: HoverView {
         title.lineBreakMode = .byTruncatingTail
         title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
         title.isSelectable = false
-        for view in [background, icon, title, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        renameHint.font = .systemFont(ofSize: Draw.renameHintFont.value)
+        renameHint.isSelectable = false
+        renameHint.lineBreakMode = .byTruncatingTail
+        renameHint.isHidden = true
+        for view in [background, icon, title, renameHint, audio, media, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         peekMarker.isHidden = true
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -502,6 +525,7 @@ final class RowView: HoverView {
         button.identify(.rowClose(row.id))
         var dimmed = false
         media.isHidden = true
+        renameHint.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
@@ -512,6 +536,8 @@ final class RowView: HoverView {
             audio.toolTip = tab.muted ? "Unmute Tab" : "Mute Tab"
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
+            renameHint.isHidden = !tab.renameHint || renaming
+            renameHint.textColor = palette.ink.secondary
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
@@ -621,6 +647,10 @@ final class RowView: HoverView {
             : !peekMarker.isHidden ? g.button.minX : !media.isHidden ? media.frame.minX : !audio.isHidden ? audio.frame.minX
             : buttonShown ? g.button.minX : g.selection.maxX - Draw.titleTrailing.value
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
+        if !renameHint.isHidden {
+            title.frame.origin.y += Draw.renameHintTitleShift.value
+            renameHint.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value, width: title.frame.width, height: renameHint.intrinsicContentSize.height)
+        }
         renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         layoutSegments(g)
     }
@@ -681,6 +711,23 @@ final class RowView: HoverView {
         button.alphaValue = shown ? 1 : 0
     }
 
+    /// The row's icon, title and button for the drag image: no card and no shadow, the image has its own.
+    func dragImage() -> NSImage? {
+        layoutSubtreeIfNeeded()
+        let shadow = background.shadow, fill = background.layer?.backgroundColor
+        background.shadow = nil
+        background.layer?.backgroundColor = nil
+        defer {
+            background.shadow = shadow
+            background.layer?.backgroundColor = fill
+        }
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
     // MARK: Pointer
 
     override func mouseDown(with event: NSEvent) {
@@ -692,7 +739,10 @@ final class RowView: HoverView {
             return
         }
         isPressed = true
+        // The press opens a tab or a split's pane right away (Arc, Q13-press-row); `press` first, it notes what the window shows.
         drag.press(.init(id: row.id, kind: row.kind, section: section), source: self, event: event)
+        let point = local(event)
+        SidebarPress.commands(for: row, pane: segments.first { $0.frame.contains(point) }?.pane?.id, command: false, shift: false).forEach(dispatch)
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -703,19 +753,12 @@ final class RowView: HoverView {
         isPressed = false
         if drag.release(event) { return }
         guard let row, !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), bounds.contains(local(event)) else { return }
-        onSelect?(row.id)
+        if case .folder = row { onSelect?(row.id) }
         if event.clickCount == 2, row.kind != .split {
             dispatch(.item(.beginRename(.item(row.id))))
             return
         }
-        switch row {
-        case .folder: dispatch(.item(.toggleFolder(row.id)))
-        case .tab: dispatch(.tab(.focus(row.id)))
-        case .split:
-            let point = local(event)
-            let pane = segments.first { $0.frame.contains(point) }?.pane?.id
-            dispatch(.tab(.focus(pane ?? row.id)))
-        }
+        if case .folder = row { dispatch(.item(.toggleFolder(row.id))) }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -1137,6 +1180,14 @@ final class SpaceHeaderView: HoverView {
     private let more = GlyphButton()
     private var space: SpaceSnapshot?
     private var palette: Palette?
+    /// A drag is over the strip: the whole of it turns dark grey (Arc, Q13-g).
+    var dropHighlighted = false {
+        didSet {
+            guard dropHighlighted != oldValue, let palette else { return }
+            let ink = palette.scheme == .light ? NSColor.black : NSColor.white
+            layer?.backgroundColor = dropHighlighted ? ink.withAlphaComponent(Draw.headerDropAlpha.value).cgColor : nil
+        }
+    }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch

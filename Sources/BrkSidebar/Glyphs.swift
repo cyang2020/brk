@@ -91,6 +91,8 @@ final class IconView: NSView {
     private var content: IconContent = .none
     private var tint: NSColor = .labelColor
     private var palette: Palette?
+    /// A site with no favicon draws nothing here instead of the empty favicon (a Favorite's tile, Q13-n5).
+    var hidesEmptyFavicon = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -132,7 +134,7 @@ final class IconView: NSView {
                 image.isHidden = false
                 image.image = loaded
                 image.contentTintColor = nil
-            } else {
+            } else if !hidesEmptyFavicon {
                 showEmptyFavicon(in: square)
             }
         case .custom(.emoji(let text)):
