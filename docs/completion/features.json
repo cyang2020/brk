@@ -1165,6 +1165,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only R36-FavoriteOverlay,R49-Badge",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：R36-FavoriteOverlay, R49-Badge 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -1173,7 +1187,8 @@
         "R3-6（2026-11-04，合并 2c2f3306）：按 Arc 的类型字段，一个收藏只显示一种标记：日历显示距下一场会议的时间（Now / in 12m / in 3h），GitHub 有未读显示黑色圆点，颜色取自 Arc 资源；去掉了原来的数字角标、状态小点、Access/Expired 字样和常规悬停提示；右键菜单加了 Show Unread Badge、Show Time to Next Meeting、Show Hover Preview 三个按站点的开关和 Connect GitHub Notifications…、Select Calendar Export… 入口（原生场景 R36-FavoriteOverlay）。圆点大小、胶囊尺寸、时间文字格式是猜的，待 P08 的 Arc 图（要在用户的 Arc 里登录 GitHub 和日历）。",
         "R4-6 独立复核（2026-11-04）：缺陷。缺陷：已有一个正常未读角标时，再点 Connect GitHub Notifications… 然后取消，角标被清掉（Sources/BrkDomain/SiteTools.swift 的 siteResult .cancelled 分支把收藏数据换成 badge 0、\"Selection cancelled. Connect again.\"）。这是台账里 Opus 评审的 F9，还没修。其余验收内容有证据。复现见 REVIEW.md。",
         "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['visual']（没有对应的 Arc 参照对）。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-Badge 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Badge 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "R5-2：按二进制核对并改了收藏图标位置；未读圆点尺寸没核到。没有 Arc 画面可比（要登录 GitHub/日历）。"
       ],
       "implementation": [
         "Sources/BrkSidebar/FavoritesView.swift",
@@ -3202,6 +3217,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only R49-Groups,R36-TabGroups",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：R49-Groups, R36-TabGroups 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -3209,7 +3238,8 @@
         "R3-6（2026-11-04，合并 2c2f3306）：组标题行无文件夹图标、小号灰字，组内标签不缩进；悬停 × 把整组作为一条记录归档，⌘Z 可撤销；右键四项 Rename Group… / Remove Group Header / Copy All Links / Close Tab Group；拖组到组上合并，拖标签进组出组，组空了自动消失（原生场景 R36-TabGroups）。归档原因记成手动（Arc 的 clearTabGroup 要改资料库页面）；组标题样式是猜的，Arc 的 Tidy 在这台机器上触发不了，没有参照。",
         "R4-6 独立复核（2026-11-04）：证据不足。建组没有从界面驱动（都是命令）；右键菜单里 Rename Group…、Copy All Links、Close Tab Group 列出但没有选过；普通重启（不经过归档）后组标志是否保留没有原生检查；组标题样式没有 Arc 参照（P14 在这台机器的 Arc 上触发不了）。",
         "R4-9 后（2026-11-04）：原生和单元证据有了，required_checks 还缺 ['visual']（没有对应的 Arc 参照对）。",
-        "R4-9（2026-11-04，合并 9633b81b）：R49-Groups 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。"
+        "R4-9（2026-11-04，合并 9633b81b）：R49-Groups 由父任务独立重跑通过；详情 verify/completion/review-r4/sidebar-windows-fixes/README.md。",
+        "R5-2：按二进制核对并改了分组标题的位置、颜色和 × 的提示；标题字号没核到。没有 Arc 画面可比（Tidy 在 Arc 上触发不了）。"
       ],
       "implementation": [
         "Sources/BrkDomain/SidebarTree.swift",
@@ -4732,12 +4762,27 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only OpenerTab,R7a,I2,T2",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：OpenerTab, R7a, I2, T2 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
         "Anonymous nonempty URL popup opens retain domain tabs and therefore lose native opener/geometry. Native-child download/dialog forwarding and native named/empty creation from an already hidden private source remain incomplete or unverified; BO2 proves retention after hiding.",
         "R3-7（2026-11-04，合并 00800f02）：前台页面发起的带尺寸参数的弹窗是真正的弹出窗口，保留 window.opener 和请求的尺寸位置（520×380 在 240,180；原来是 800×600 放角落）；弹窗里的 alert/confirm 挂在弹窗自己窗口上；弹窗里的下载进打开者的下载目录和 Library（PB5）。未做：已隐藏的私密页面发起的具名或空白弹窗。",
-        "R4-7 独立复核（2026-11-04）：缺陷。Defect: a plain window.open(url) from a page opens a tab without window.opener; Chrome (and so Arc) keeps the opener for this case unless the page asks for noopener, and sign-in or payment pages that post back to their opener break. The ledger already lists \"anonymous nonempty URL popups ... lose native opener\". Also still open per the ledger: named/empty popups from an already hidden private page."
+        "R4-7 独立复核（2026-11-04）：缺陷。Defect: a plain window.open(url) from a page opens a tab without window.opener; Chrome (and so Arc) keeps the opener for this case unless the page asks for noopener, and sign-in or payment pages that post back to their opener break. The ledger already lists \"anonymous nonempty URL popups ... lose native opener\". Also still open per the ledger: named/empty popups from an already hidden private page.",
+        "R5-2：页面自己关闭后那一行归档并消失、焦点回到打开者（真 Arc 核过，Q12）。同一标签在另一个窗口还有页面时只关当前窗口的页面，这一点没在 Arc 上核。"
       ],
       "implementation": [
         "Sources/BrkCEF/ChromePage.swift",
@@ -7802,12 +7847,27 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only R52-ArchiveBanner,R52-ArchiveBannerDismiss,TabTools6",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：R52-ArchiveBanner, R52-ArchiveBannerDismiss, TabTools6 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
         "Threshold copy and dismissal persistence are implemented. Initial capture exposed truncation; the button now uses a wrapping square style. Inspect a final native capture and dismissal/restart result.",
         "Arc 对照（run-20261103 P16）仍有差异或无参照：P16-a: 未比较（待用户决定是否在 Arc 里新建 Profile 取参照） | P16-b: 一致",
-        "R4-8 独立复核（2026-11-04）：缺陷。缺陷：文字和样子与 Arc 不同。Arc 1.170 二进制里的提示是“Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in Settings.”（Settings 是链接）；Brk 是“Idle Today tabs archive after 12 hours. Tabs on screen stay open.”（阈值为 Never 时是 “Auto-archive is off. Change it in Archive.”），没有指向设置的链接；整块是一个系统方形按钮，文字后面接一个 ×，点哪里都会关掉。画面检查做不了：P16-a 没有 Arc 参照（要在 Arc 里新建 Profile 才会出现，待用户决定），P16 不在站台 sheet 上。"
+        "R4-8 独立复核（2026-11-04）：缺陷。缺陷：文字和样子与 Arc 不同。Arc 1.170 二进制里的提示是“Arc archives tabs that you haven’t used in the past 12 hours. You can adjust this in Settings.”（Settings 是链接）；Brk 是“Idle Today tabs archive after 12 hours. Tabs on screen stay open.”（阈值为 Never 时是 “Auto-archive is off. Change it in Archive.”），没有指向设置的链接；整块是一个系统方形按钮，文字后面接一个 ×，点哪里都会关掉。画面检查做不了：P16-a 没有 Arc 参照（要在 Arc 里新建 Profile 才会出现，待用户决定），P16 不在站台 sheet 上。",
+        "R5-2：横幅按 Arc 二进制重做（We cleaned up! / Got it，侧栏底部，第一次自动归档后才出现）。没有 Arc 画面可比（要新建 Arc 账号才会出现），卡片底色数值没读到。"
       ],
       "implementation": [
         "Sources/BrkDomain/Model.swift",
@@ -9504,6 +9564,20 @@
           "command": "python3 verify/completion/review-r4/manual/parent-session-4/session.py <outdir>",
           "artifact": "verify/completion/review-r4/manual/parent-session-4/session.log",
           "scope": "父任务亲手检查：装好测试扩展后，真鼠标点进快捷键输入框（焦点从页面转到输入框），真按键打 cmd+shift+u，真鼠标点 Save shortcut，Chromium 读回 ⇧⌘U（A098-panel-saved.png，Current: ⇧⌘U）。按组合键触发命令这一步在这次会话里没复现（页面重载后内容脚本没跑），由原生场景 Ext-shortcut-mouse 覆盖。输入框是打字式的，Chrome 是按键录制式，R5-2 在改。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only Ext-shortcut-mouse,Ext-shortcut-physical,Ext-shortcuts",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：Ext-shortcut-mouse, Ext-shortcut-physical, Ext-shortcuts 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -9702,12 +9776,27 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only EaselExport,EaselShareTypedTitle,EaselNew",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：EaselExport, EaselShareTypedTitle, EaselNew 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
         "No complete user-facing workflow is implemented in current source.",
         "R3-3（2026-11-04，合并 662007f2）：File > New Easel / Ctrl+Shift+E 在置顶区末尾加一行 Untitled Easel，内容区是按 Q09-a 量的白板（标题框、+/Aa/− 字号卡、底部工具栏：选择、图片、文字、圆、方、箭头、画笔｜复制，右下人像按钮，胶囊 🔒 Share）；能画形状、箭头、画笔、文字框，能选中、移动、删除、复制，插图走文件面板或拖入；存在 Brk 自己的状态文件和 <数据目录>/Easels/<id>/，重启后一样；Library → Easels 按 P32-c（搜索框、卡片、Open/Share…/Delete…），删除确认同删除 Space 的对话框；Share 存成 PNG。站台 Q09-a 1.7%、Q09-c 1.4%、P32-c 6.5%；原生场景 EaselNew/Draw/Reopen/Library/Delete 通过。未做：拖角把手改大小（画了但不响应）、撤销、选颜色；Share 的保存对话框只有单元测试。",
-        "R4-8 独立复核（2026-11-04）：缺陷。新建、画、文字、改动（选中、移动、删除、复制）、重开、Library 列表、删除都通过。缺陷：选中元素时四个角画出了把手，但拖把手不会改大小（按下把手落到移动或框选），是只画不响应的控件；复现：新建 Easel → 方形工具画一个方块 → 选择工具点中它 → 拖右下角把手，方块只会整体移动或开始框选，大小不变。验收里的“带截图”和“导出结果”只有单元测试：Media 卡片 Insert in Easel 把截图放进白板、胶囊 Share 存成 PNG 都没有原生场景。撤销、选颜色没做（R3-3 已写明），Arc 是否有这两样这次没有核对。"
+        "R4-8 独立复核（2026-11-04）：缺陷。新建、画、文字、改动（选中、移动、删除、复制）、重开、Library 列表、删除都通过。缺陷：选中元素时四个角画出了把手，但拖把手不会改大小（按下把手落到移动或框选），是只画不响应的控件；复现：新建 Easel → 方形工具画一个方块 → 选择工具点中它 → 拖右下角把手，方块只会整体移动或开始框选，大小不变。验收里的“带截图”和“导出结果”只有单元测试：Media 卡片 Insert in Easel 把截图放进白板、胶囊 Share 存成 PNG 都没有原生场景。撤销、选颜色没做（R3-3 已写明），Arc 是否有这两样这次没有核对。",
+        "R5-2：导出真的经过保存面板（Cancel 不写文件，Save 写出 PNG）。还缺：撤销、颜色（R4-11 报告）。"
       ]
     },
     {
@@ -12157,7 +12246,7 @@
       "arc_evidence": "Max \"Press Command + F on any page to ask a question\"",
       "description": "Questions about the current page",
       "historical_status": "stand-in",
-      "status": "implemented",
+      "status": "excluded",
       "acceptance": "Answer questions from the active page context, preserve source attribution, and never expose unrelated profile or private data.",
       "owner": "batch2-ai-features",
       "required_checks": [
@@ -12221,6 +12310,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r4-5groups/swift-test-main.log",
           "scope": "合并后 main（a15eb7a0）的完整单元测试 1145 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only AIPageRowStyle,AIPage",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：AIPageRowStyle, AIPage 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
@@ -12245,7 +12348,8 @@
           "proposal_sha256": "b0dc37e459e203d91b97045d33c5d002b9734e470b14501c65f23a2670264517",
           "native_run": "verify/completion/browser-basic-parent/integration-final-2/REPORT.md"
         }
-      }
+      },
+      "decision": "Arc 1.170 没有 Ask on Page 这个入口（父任务在真 Arc 上核过：Cmd+F 打问句只显示 NOT FOUND）。Brk 保留它作为自己的功能，只在命令栏和 Advanced → More Settings… 里，不计入和 Arc 的对齐。2026-11-05。"
     },
     {
       "id": "A136",
@@ -12805,11 +12909,26 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P49-cmd 0.35%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only AIAskRows,AIAskRow",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：AIAskRows, AIAskRow 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
         "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
-        "R4-8 独立复核（2026-11-04）：缺陷。功能按验收标准通过。Arc 1.170 桌面版没有 Browse for Me（P49：命令栏输入问句 how do browsers render fonts，列表是搜索建议加一行带 ChatGPT 图标的 Ask ChatGPT →；Tabs 菜单也没有），父任务定的是“Browse for Me 保留 Brk 的做法，命令栏加一行 Ask 入口参照 P49”。缺陷：Brk 的普通命令栏输入问句时没有这行 Ask 入口（只有先进入 AI 模式才出现一行 Ask the local AI tool）；另外 Tabs 菜单多一行 Arc 没有的 Browse for Me…，来源要手打地址。画面检查做不了：Arc 没有这个界面。"
+        "R4-8 独立复核（2026-11-04）：缺陷。功能按验收标准通过。Arc 1.170 桌面版没有 Browse for Me（P49：命令栏输入问句 how do browsers render fonts，列表是搜索建议加一行带 ChatGPT 图标的 Ask ChatGPT →；Tabs 菜单也没有），父任务定的是“Browse for Me 保留 Brk 的做法，命令栏加一行 Ask 入口参照 P49”。缺陷：Brk 的普通命令栏输入问句时没有这行 Ask 入口（只有先进入 AI 模式才出现一行 Ask the local AI tool）；另外 Tabs 菜单多一行 Arc 没有的 Browse for Me…，来源要手打地址。画面检查做不了：Arc 没有这个界面。",
+        "R5-2 合并后 P49-cmd 3.7%：差在选中行颜色，原因是拍摄脚本用浅蓝主题模仿 Arc 侧栏透出的浅蓝（见 results.tsv P49 行）；Ask 行和五行列表一致。"
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -12918,6 +13037,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P50-b 0.38%, P50-c 0.41%, P50-d 0.60%, P50-e 0.81%, P50-f 0.46%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py parent-gate-r5-2 --only AILanguageDetect,AITranslate",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/parent-gate-r5-2/REPORT.md",
+          "scope": "父任务在自己的工作树（main 6caac116，R5-2 合并后）独立重跑：AILanguageDetect, AITranslate 通过。"
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
+          "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
         }
       ],
       "remaining": [
