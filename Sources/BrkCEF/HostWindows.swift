@@ -38,7 +38,13 @@ enum HostWindows {
         }
         if host.parent !== parent {
             host.parent?.removeChildWindow(host)
-            parent?.addChildWindow(host, ordered: .above)
+            guard let parent else { return }
+            // A page that left the window keeps its host on screen, wherever it then is among all the windows: behind
+            // another program's window once the user has been there and come back by a click on ours. The window server
+            // puts a parent and its new child together where the CHILD is, so our window went down behind that program's
+            // (the user's recording of 2026-11-06, Q22). The host goes to the parent first; it is empty, nothing shows.
+            if host.isVisible, parent.isVisible { host.order(.above, relativeTo: parent.windowNumber) }
+            parent.addChildWindow(host, ordered: .above)
         }
     }
 
