@@ -154,7 +154,9 @@ struct SidebarDrawMetrics: MetricGroup {
     let translationMenuOffset = Metric([2.75, 15.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-f-arc.png: the menu's left edge at x 117 pt and its top at y 161 pt"))
     let translationTextLeading = Metric(51.0, .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Translated from French. starts at x 134 px"))
     let translationButtons = Metric([10.5, 58.5, 104.0, 32.0, 8.0], .anatomy("verify/visual-pairs/run-20261103/P50/P50-d-popover-arc.png: Options x 46 to 254 px, Use Original x 270 to 478 px, both y 142 to 206 px"))
-    let pillSearchTextLeading = Metric(2.0, .guess("measured on the 2026-11-03 Arc capture P20a: a blank window's placeholder starts 34 pt into the pill, right after the magnifier"))
+    let pillSearchTextLeading = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/Q23/NOTES.md: in Q02-b-arc.png the placeholder's S starts 42.5 pt from the window's edge, 34.5 into the pill; a label draws 2 pt inside its frame"))
+    let pillSearchGlyph = Metric(12.5, .anatomy("verify/visual-pairs/run-20261103/Q23/NOTES.md: in Q02-b-arc.png the magnifier is 12 pt across; SF's magnifyingglass at 14 draws 13.5"))
+    let pillSearchGlyphInk = Metric(0.4, .anatomy("verify/visual-pairs/run-20261103/Q23/NOTES.md: in Q02-b-arc.png the magnifier's line reads 140 on the pill's 236, black at 0.41; the placeholder beside it reads 164 (0.3) and an address 93 (0.6)"))
     let pillAccessoryInset = Metric(4.0, .guess("accessory button inset: (pill 36 - button 28) / 2"))
     let pillAccessoryGap = Metric(1.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-c: copy link and site controls centred 29 apart (cra L1222-1223)"))
     let pillAccessoryGlyph = Metric(15.0, .guess("copy-link and site-control glyph size inside the 28 pt accessory"))
@@ -269,6 +271,8 @@ struct Ink {
     var secondary: NSColor { bw(0.6, 0.6) }
     /// CommandBarPlaceholderPlaceholderText @ 0.3: "Search or Enter URL…".
     var placeholder: NSColor { bw(0.3, 0.3) }
+    /// The magnifier before the placeholder (Q23: darker than the placeholder, lighter than an address).
+    var searchGlyph: NSColor { bw(Draw.pillSearchGlyphInk.value, Draw.pillSearchGlyphInk.value) }
     /// TabCellSlash: black or white @ 0.3, the stroke between split panes in one row.
     var slash: NSColor { bw(0.3, 0.3) }
     /// LoadingPageBorder: #0C50FF light, #2AB6F6 dark.

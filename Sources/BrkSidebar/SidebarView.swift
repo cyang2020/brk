@@ -770,13 +770,19 @@ final class URLPillView: HoverView {
         self.palette = palette
         self.searchField = search
         let text = pill.host ?? pill.text
+        // No tip: Arc shows none over its pill (Q23, the pointer held on it for 3.5 s).
         label.stringValue = (text ?? Copy.urlPlaceholder) + (pill.zoomPercent == 100 ? "" : "  \(pill.zoomPercent)%")
-        toolTip = "Zoom: \(pill.zoomPercent)%"
         label.textColor = text == nil ? palette.ink.placeholder : palette.ink.secondary
+        // Arc's placeholder is a weight heavier than an address: 134 pt wide in Q02-b, SF 13 medium; "wikipedia.org" in
+        // Q13-c is 79 pt, SF 13 regular.
+        label.font = .systemFont(ofSize: Draw.urlFont.value, weight: text == nil ? .medium : .regular)
         let radius = Metrics.urlPill.accessoryRadius.value
         copyLink.render(.copyLink, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
-        siteInfo.render(search ? .search : .siteControls, size: search ? Draw.navGlyph.value : Draw.pillAccessoryGlyph.value, palette: palette,
-                        radius: radius, hoverFill: palette.tokens.itemHover)
+        if search {
+            siteInfo.render(.search, size: Draw.pillSearchGlyph.value, palette: palette, tint: palette.ink.searchGlyph, radius: radius, hoverFill: palette.tokens.itemHover)
+        } else {
+            siteInfo.render(.siteControls, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
+        }
         siteInfo.isEnabled = !search
         // Arc's incognito pill keeps its own background but shows no badge (the 2026-11-03 capture Q03).
         badge.render(pill.profile?.incognito == true ? nil : pill.profile, palette: palette)
@@ -811,12 +817,14 @@ final class URLPillView: HoverView {
             badge.frame = CGRect(x: trailing - width, y: (bounds.height - BadgeDraw.height.value) / 2, width: width, height: BadgeDraw.height.value)
             trailing = badge.frame.minX - BadgeDraw.gap.value
         }
-        let height = max(label.intrinsicContentSize.height, Metrics.urlPill.textMinHeight.value)
+        let text = label.intrinsicContentSize.height
         if translationLine.isHidden {
-            label.frame = CGRect(x: leading, y: (bounds.height - height) / 2, width: max(0, trailing - leading), height: height)
+            // One line: the line's own box in the pill's middle. A label draws at the top of its frame, so a taller frame
+            // (it was Arc's 20 pt text area) put the line 2 pt high. Arc, 2x px from the pill's top: the capitals of
+            // "Search or Enter URL…" span 26 to 46 of 72 (P24-e), "wikipedia.org" 26 to 50 with its p (Q13-c).
+            label.frame = CGRect(x: leading, y: (bounds.height - text) / 2, width: max(0, trailing - leading), height: text)
         } else {
             // Two lines: the host higher, the translation line under it (P45-a).
-            let text = label.intrinsicContentSize.height
             label.frame = CGRect(x: leading, y: Draw.pillHostCenter.value - text / 2, width: max(0, trailing - leading), height: text)
             let line = ceil(NSFont.systemFont(ofSize: Draw.pillSubtitleFont.value).boundingRectForFont.height)
             translationLine.frame = CGRect(x: leading, y: Draw.pillSubtitleCenter.value - line / 2,
