@@ -29,6 +29,16 @@ final class FavoritesView: NSView {
     /// Arc Previews over a supported Favorite (a calendar's meetings, a site's recent pages).
     private lazy var cards = FolderPreview(dispatch: dispatch)
     private var now = Instant(milliseconds: 0)
+    /// The image of a drop is still gliding to this tile's cell (`DragController.land`): the cell stays empty until it
+    /// gets there.
+    var arriving: ItemID? {
+        didSet {
+            guard arriving != oldValue else { return }
+            if let oldValue { tiles[oldValue]?.alphaValue = 1 }
+            if let arriving { tiles[arriving]?.alphaValue = 0 }
+            placeGlow(sliding: false)
+        }
+    }
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -100,22 +110,37 @@ final class FavoritesView: NSView {
                 section.addSubview(t)
                 return t
             }()
+            // The tile a drop's image is gliding to is in its cell already, unseen.
+            let awaited = row.id == arriving
             if let rect = frames.favoriteTiles[row.id] {
-                Slide.place(tile, at: rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding && existing != nil)
+                Slide.place(tile, at: rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding && existing != nil && !awaited)
             }
+            if awaited { tile.alphaValue = 0 }
             tile.trayWidth = frames.favoritesTray.width
             tile.render(row, renaming: row.id == renaming, palette: palette)
         }
-        // Hidden while the current tile is the one being dragged: its cell is empty.
-        let current = favorites.tiles.first { $0.status == .current }.flatMap { frames.favoriteTiles[$0.id] }
-        currentGlow.isHidden = current == nil
-        if let current { currentGlow.place(around: current.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding) }
+        placeGlow(sliding: sliding)
         let empty = favorites.tiles.isEmpty && !favorites.hintDismissed
         for view in [emptyBadge, emptyTitle, emptySubtitle, emptyClose] as [NSView] { view.isHidden = !empty }
         emptyBox.isHidden = !empty
         emptyTitle.textColor = palette.ink.text
         emptySubtitle.textColor = palette.ink.secondary
         drawEmptyState()
+    }
+
+    /// The current tile's shadow. None while that tile's cell is empty: it is the one being dragged, or its image has not
+    /// arrived yet.
+    private func placeGlow(sliding: Bool) {
+        guard let (favorites, _, frames, _) = last else { return }
+        let current = favorites.tiles.first { $0.status == .current && $0.id != arriving }.flatMap { frames.favoriteTiles[$0.id] }
+        currentGlow.isHidden = current == nil
+        if let current { currentGlow.place(around: current.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY), sliding: sliding) }
+    }
+
+    /// The cell of `id` as last drawn, in this view's coordinates.
+    func cell(of id: ItemID) -> CGRect? {
+        guard let (_, _, frames, _) = last, let rect = frames.favoriteTiles[id] else { return nil }
+        return rect.offsetBy(dx: -frames.favoritesTray.minX, dy: -frames.favoritesTray.minY)
     }
 
     /// The empty tray (`FavoritesGrid`, Metrics.favorites.emptyTrayHeight) holds the dashed box: the badge, the
@@ -204,6 +229,8 @@ final class FavoriteTileView: HoverView {
     var shownRow: TabRow? { row }
     /// False for a site with no icon: the tile is empty (Q13-n5).
     var hasIcon: Bool { !icon.showsNothing }
+    /// What the current tile's rim shows (`FaviconWash`); nil for a custom icon, whose rim is the separator color.
+    var rimPicture: CGImage? { icon.shownFavicon.flatMap(FaviconWash.picture(of:)) }
     private var reportedHover = false
     /// The press opened this tab, so the release has nothing left to do (a Command or Shift press opens on the release).
     private var openedOnPress = false

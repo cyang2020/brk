@@ -1177,10 +1177,11 @@ final class RevealStripView: NSView {
 @MainActor
 enum Slide {
     static func place(_ view: NSView, at rect: CGRect, sliding: Bool) {
+        let curve = Draw.favoritesReflowCurve.value.map(Float.init)
         // A zero-length group also stops a slide still under way; setting `frame` alone would not.
         NSAnimationContext.runAnimationGroup { context in
             context.duration = sliding ? Draw.favoritesReflow.value : 0
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.timingFunction = CAMediaTimingFunction(controlPoints: curve[0], curve[1], curve[2], curve[3])
             view.animator().frame = rect
         }
     }

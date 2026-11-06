@@ -196,7 +196,14 @@ final class FavoritesDragTests: XCTestCase {
         XCTAssertEqual(live.view.favorites.tiles.count, 5)
         XCTAssertEqual(live.view.content.panes.first?.tab, tabID, "the dropped tab is not the current one")
         XCTAssertNil(live.root.sidebar.favoritesDrag)
-        XCTAssertNil(image(live))
+        // Arc (Q21): the image goes on into the new tile's cell, which stays empty until it gets there.
+        let landing = try XCTUnwrap(image(live), "the image went at the release")
+        let dropped = try tile(1, live)
+        XCTAssertEqual(dropped.alphaValue, 0, "the new tile shows while its image is still on the way")
+        XCTAssertEqual(landing.superview?.convert(landing.frame, to: dropped.superview), dropped.frame, "the image is not sent to the tile's cell")
+        waitForLanding(live)
+        XCTAssertNil(image(live), "the image stayed")
+        XCTAssertEqual(dropped.alphaValue, 1)
     }
 
     func testAFolderOverTheGridChangesNothing() throws {
@@ -251,7 +258,50 @@ final class FavoritesDragTests: XCTestCase {
         XCTAssertEqual(shown.frame.midX, 141, accuracy: 0.01)
         tile.mouseUp(with: mouse(.leftMouseUp, point, in: w))
         XCTAssertEqual(live.view.favorites.tiles.map(\.id), [ids[1], ids[2], ids[0], ids[3]])
+        // Arc (Q21): the image glides from where it was let go into the cell. The tile is in that cell at once, unseen (the
+        // user's recording of 2026-11-06: it showed in its old cell and slid over), and shows when the image arrives.
+        XCTAssertEqual(tile.alphaValue, 0, "the tile shows while its image is still on the way")
+        XCTAssertEqual(tile.frame, FavoritesGrid.tiles(count: 4, width: 228).tiles[2], "the tile is not in its new cell")
+        let landing = try XCTUnwrap(image(live), "the image went at the release")
+        XCTAssertEqual(landing.superview?.convert(landing.frame, to: tile.superview), tile.frame, "the image is not sent to the tile's cell")
+        waitForLanding(live)
+        XCTAssertNil(image(live), "the image stayed")
         XCTAssertEqual(tile.alphaValue, 1)
+    }
+
+    /// A press while the image is still on its way: the tile shows at once, so the next drag starts from a tile on screen.
+    func testAPressEndsTheLandingAtOnce() throws {
+        let (w, live) = try rig()
+        defer { w.close() }
+        let tile = try tile(0, live)
+        let f0 = try XCTUnwrap(drag(live).context?.frames)
+        let point = window(CGPoint(x: 141, y: f0.favoritesTray.minY + 31))
+        hold(tile, from: centre(tile), at: point, in: w)
+        tile.mouseUp(with: mouse(.leftMouseUp, point, in: w))
+        XCTAssertNotNil(image(live))
+        tile.mouseDown(with: mouse(.leftMouseDown, centre(tile), in: w))
+        XCTAssertNil(image(live), "the old image stayed under a new press")
+        XCTAssertEqual(tile.alphaValue, 1)
+        tile.mouseUp(with: mouse(.leftMouseUp, centre(tile), in: w))
+    }
+
+    /// A Favorite let go outside the grid has no cell to glide to: the image goes at the release.
+    func testADropOutsideTheGridKeepsNoImage() throws {
+        let (w, live) = try rig()
+        defer { w.close() }
+        let tile = try tile(3, live)
+        let inbox = try row("Inbox", live)
+        let line = CGPoint(x: 86, y: inbox.convert(CGPoint(x: 0, y: inbox.bounds.maxY - 1), to: nil).y)
+        hold(tile, from: centre(tile), at: line, in: w)
+        tile.mouseUp(with: mouse(.leftMouseUp, line, in: w))
+        XCTAssertNil(image(live))
+        XCTAssertNil(live.root.sidebar.favorites.arriving)
+    }
+
+    /// Lets the landing's animation run out.
+    private func waitForLanding(_ live: Live) {
+        let end = Date().addingTimeInterval(3)
+        while image(live) != nil, Date() < end { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
     }
 
     // MARK: Rule 6: a favorite dragged out

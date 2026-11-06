@@ -9,6 +9,7 @@ import BrkUIKit
 /// pointer shows where it lands; release dispatches one move or split command. The press itself has already opened the
 /// item (`SidebarPress`, Arc: Q13-press-*), so the dragged tab is the current one, except over the page: there Arc shows
 /// what the window showed before the press again, because that is the tab the drop would split with (P23-d, Q13-e).
+/// Released on the Favorites grid, the image glides on into its cell and the tile shows when it gets there (`land`).
 ///
 /// Targets, in the order they are tested:
 /// - the page: a slot or a frame (`PageDropRule`);
@@ -103,6 +104,8 @@ final class DragController {
     private var session: Session?
     private var escapeMonitor: Any?
     private var cancelledPress = false
+    /// The image of the last drop on the grid, still gliding to its cell.
+    private var landing: DragImage?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -113,6 +116,7 @@ final class DragController {
     /// Mouse down on a row or tile: remember it; it becomes a drag once the pointer travels far enough. Called before
     /// the press opens the item, so `shownBefore` is still the tab it replaces.
     func press(_ item: Item, source: NSView, event: NSEvent) {
+        endLanding()
         cancelledPress = false
         pressed = Press(item: item, source: source, start: event.locationInWindow, shownBefore: context?.shown)
         session = nil
@@ -164,8 +168,11 @@ final class DragController {
         if let sidebar, let context {
             session.target = target(at: sidebar.rootPoint(fromWindow: event.locationInWindow), item: session.item, context: context)
         }
+        var lands = false
+        if case .favorites? = session.target { lands = true }
         // The grid goes from its drag layout straight to the document's new one, so the command comes before any render.
-        finish(session)
+        finish(session, keepsImage: lands)
+        if lands { sidebar?.favorites.arriving = session.item.id }
         switch session.target {
         case .content(let command)?: dispatch(command)
         case .split(let join)?: dispatch(.split(.joinRow(session.item.id, onto: join.target, at: join.paneIndex)))
@@ -178,11 +185,35 @@ final class DragController {
             break
         }
         sidebar?.renderAfterDrag()
+        if lands { land(session.preview, on: session.item.id) }
         return true
+    }
+
+    /// A drop on the grid (Arc, Q21): the image glides from where it was let go into the tile's cell over `Draw.dropLanding`,
+    /// and only then does the tile show there. A drop the grid did not take has no cell: the image just goes.
+    private func land(_ image: DragImage, on id: ItemID) {
+        landing = image
+        guard let favorites = sidebar?.favorites, let cell = favorites.cell(of: id), let host = image.superview else { return endLanding() }
+        let end = host.convert(cell, from: favorites)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = Draw.dropLanding.value
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            image.animator().frame = end
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated { if self?.landing === image { self?.endLanding() } }
+        })
+    }
+
+    /// The image is in its cell, or something else took over (a new press, the sidebar going away): the tile shows.
+    func endLanding() {
+        landing?.removeFromSuperview()
+        landing = nil
+        sidebar?.favorites.arriving = nil
     }
 
     /// Ends a drag without moving anything (the sidebar went away under it).
     func cancel() {
+        endLanding()
         if pressed != nil || session != nil { cancelledPress = true }
         pressed = nil
         if let session {
@@ -230,12 +261,12 @@ final class DragController {
         }
     }
 
-    /// Clears everything the drag drew. The grid's drag layout goes too, but nothing is rendered yet: the caller
-    /// sends its command first and then `SidebarView.renderAfterDrag`.
-    private func finish(_ session: Session) {
+    /// Clears everything the drag drew, but for the image when it goes on to a cell (`land`). The grid's drag layout goes
+    /// too, but nothing is rendered yet: the caller sends its command first and then `SidebarView.renderAfterDrag`.
+    private func finish(_ session: Session, keepsImage: Bool = false) {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor); self.escapeMonitor = nil }
         sidebar?.endContentDrop?()
-        session.preview.removeFromSuperview()
+        if !keepsImage { session.preview.removeFromSuperview() }
         session.card?.removeFromSuperview()
         let source = session.press.source
         (source as? RowView)?.dragSource = false
@@ -337,8 +368,8 @@ final class DragController {
 }
 
 /// What follows the pointer in the sidebar: the row (Q13-d, Q13-g) or, over the grid, a raised tile of the grid's size
-/// (Q13-a, Q13-c). A tile from a row has no ring; a Favorite's own tile keeps the current tile's ring, since the press opened
-/// it. The pointer stays at the same fraction of the image as it was of the item it pressed (Q13-a's tile: 24.5 of 65
+/// (Q13-a, Q13-c). A tile from a row has no ring; a Favorite's own tile keeps the current tile's rim, since the press opened
+/// it: the icon's colors, light around Wikipedia's in Q13-c and dark grey around MDN's in Q21. The pointer stays at the same fraction of the image as it was of the item it pressed (Q13-a's tile: 24.5 of 65
 /// in from the left, pressed 0.37 along the row; Q13-d's row: centred, pressed in a tile's middle).
 @MainActor
 final class DragImage: NSView {
@@ -357,6 +388,11 @@ final class DragImage: NSView {
     private let icon = IconView()
     private let ring = CAShapeLayer()
     private let ringed: Bool
+    /// The tile's own rim (`FavoriteTileView`): the icon's picture through the ring's line.
+    private let rim = CALayer()
+    private let rimMask = CAShapeLayer()
+    private let rimPicture: CGImage?
+    private let trayWidth: Double
     private var shape: Shape?
     /// A tile fills this view; a row fills `rowCard`, which also casts the row's shadow line.
     private let fill: CGColor
@@ -368,7 +404,10 @@ final class DragImage: NSView {
         let card = RowGeometry(bounds: bounds, depth: 0).selection
         rowSize = card.size
         rowImageFrame = bounds.offsetBy(dx: -card.minX, dy: -card.minY)
-        ringed = (source as? FavoriteTileView)?.hasIcon == true && tab?.status == .current
+        let tile = source as? FavoriteTileView
+        ringed = tile?.hasIcon == true && tab?.status == .current
+        rimPicture = tile?.rimPicture
+        trayWidth = tile?.trayWidth ?? 0
         fill = palette.color(palette.tokens.tabCurrent).cgColor
         super.init(frame: CGRect(origin: .zero, size: rowSize))
         wantsLayer = true
@@ -405,6 +444,13 @@ final class DragImage: NSView {
         ring.lineWidth = Draw.tileRingWidth.value
         ring.opacity = Float(Draw.dragTileRingOpacity.value)
         layer?.addSublayer(ring)
+        rimMask.fillColor = nil
+        rimMask.strokeColor = NSColor.black.cgColor
+        rimMask.lineWidth = Draw.tileRingWidth.value
+        rim.mask = rimMask
+        rim.contents = rimPicture
+        rim.isHidden = true
+        layer?.addSublayer(rim)
         identify(.tabTool("drag-image"))
     }
 
@@ -435,6 +481,7 @@ final class DragImage: NSView {
             layer?.backgroundColor = nil
             icon.isHidden = true
             ring.isHidden = true
+            rim.isHidden = true
             rowImage.frame = CGRect(x: rowImageFrame.minX * scale, y: rowImageFrame.minY * scale, width: rowImageFrame.width * scale, height: rowImageFrame.height * scale)
         case .tile:
             rowImage.isHidden = true
@@ -446,7 +493,12 @@ final class DragImage: NSView {
             let m = Metrics.favorites
             ring.frame = bounds
             ring.path = CGPath(roundedRect: bounds.insetBy(dx: m.ringInset.value, dy: m.ringInset.value), cornerWidth: m.ringRadius.value, cornerHeight: m.ringRadius.value, transform: nil)
-            ring.isHidden = !ringed
+            ring.isHidden = !ringed || rimPicture != nil
+            rim.frame = bounds
+            rimMask.frame = bounds
+            rimMask.path = ring.path
+            rim.contentsRect = FaviconWash.window(tile: size, trayWidth: trayWidth)
+            rim.isHidden = !ringed || rimPicture == nil
         }
         CATransaction.commit()
     }
