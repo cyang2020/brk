@@ -11,6 +11,7 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
 | `~/brk-chromium/` (not in the repo) | `depot_tools`, `chromium/src` at tag 154.0.8037.98, `logs/`, `STATE.md` |
 | `engine/config.sh` | the pinned tag and commit, the paths |
 | `engine/fetch.sh` | depot_tools and the source. 18 minutes, 30 GB on this machine and connection. Safe to rerun |
+| `engine/patches/` (11 files) | `0001` brk/ itself, `0002` hooks, `0003` the shell owns NSApp, `0004`-`0005` the framework's name and exports, `0006`-`0011` fixes the runs found |
 | `engine/args/brk.gn` | pinned build arguments |
 | `engine/configure.sh` | writes `out/Brk/args.gn`, runs `gn gen` |
 | `engine/build.sh <target>` | compiles at low priority, pausing itself (below). `chrome` builds everything |
@@ -32,6 +33,17 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
     nohup engine/build.sh chrome >/dev/null 2>&1 &   # many hours; rerunning continues
     engine/build-demo.sh                             # then run the demo
     scripts/build.sh && engine/assemble-app.sh       # then BRK_ENGINE=core dist-core/Brk.app/Contents/MacOS/Brk
+
+## Measured on this machine (Apple M1, 8 cores, 16 GB)
+
+| Step | Time | Disk |
+| --- | --- | --- |
+| `fetch.sh` | 18 min | 30 GB source and toolchains, 0.8 GB depot_tools |
+| first `build.sh chrome` | 8 h 43 min wall, 2 h 3 min of it paused for other agents | `out/Brk` 10 GB |
+| a change in `brk/` | 1 to 2 min (compile and relink) | |
+| a change in a widely used Chromium file | not measured; avoid it | |
+
+Total under `~/brk-chromium`: 42 GB. `dist-core/Brk.app`: 891 MB, mostly APFS clones of `dist/Brk.app` and the framework.
 
 ## Build arguments
 

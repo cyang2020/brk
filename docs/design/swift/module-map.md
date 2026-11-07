@@ -20,6 +20,7 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 | Layout | `BrkLayout/WindowFrames.swift` (contract), `WindowLayout.swift` (`LibraryLayout`: F5), `SidebarLayout.swift`, `SidebarResizeDrag.swift` | W1 | all geometry | `WindowFrames` (with `library`, `peek`), `LibraryFrames`, `CardFrame`, `SidebarFrames`, `RowFrame`, `ViewID`, `WindowLayout.compute`, `ContentLayout`, `CommandBarLayout`, `LibraryLayout`, `WindowPlacement.fit`, `SidebarLayout`, `FavoritesGrid`, `TablistLayout`, `DockLayout`, `SidebarResizeDrag` | every UI target, BrkControl, BrkApp, BrkE2E |
 | Engine interface | `BrkEngine/WebEngine.swift` (contract), `PageLedger.swift` (contract), `PressCorrelator.swift`, `StubEngine.swift` | W2 | for the stub: placeholder views and synchronous load events | `WebEngine` (plus `forget(_ context:)`), `WebEngineDelegate` (plus `decideDownload`, `shouldNavigateTo`), `PageSurfaceView`, `PageLedger`, `PressCorrelator`, `StubEngine` | BrkCEF, BrkApp, `Brk` (main) |
 | CEF engine | `BrkCEF/` | W2 | CEF init, the Chrome-runtime browser and host window per page, moving Chromium's views into the card, the key guard on host windows, CEF key translation, page close bookkeeping, shutdown order | `CEFEngine` (`bootstrap`, `Configuration`, the `WebEngine` methods) | `Brk` (main) only |
+| BrkCore engine | `BrkCoreEngine/`, `CBrkCore/` | engine/ (2026-11-07) | the engine on BrkCore.framework, Brk's own Chromium build, picked with `BRK_ENGINE=core`; the framework's Objective-C interface (`CBrkCore/include/BrkCore.h`), found at run time. See `engine/README.md`, `docs/chromium/ARC-ENGINE.md` | | |
 | Theme renderer | `BrkTheme/` | W5 | Metal pipeline, shader source, procedural textures, display-link crossfade (today: a gradient layer with a Core Animation crossfade) | `ThemeBackgroundView` (`show(_:animated:)`), `TexturePixels` | BrkContent |
 | View contract | `BrkUIKit/Rendering.swift` | contract (W1 maintains) | nothing | `Dispatch`, `identify(_:)`, `Palette`, `Copy` | BrkSidebar, BrkOverlays, BrkContent, BrkApp |
 | Sidebar views | `BrkSidebar/` | W3 | all AppKit drawing of the column, hover, drag preview, scroll, the rename field | `SidebarView` (`init(dispatch:)`, `render`, `focusRenameField`, `focusList`) | BrkContent |
@@ -57,6 +58,7 @@ BrkDomain   -> BrkBase
 BrkLayout   -> BrkDomain, BrkBase
 BrkEngine   -> BrkBase
 BrkCEF      -> BrkEngine, BrkBase, CefKit (vendored)
+BrkCoreEngine -> BrkEngine, BrkBase, CBrkCore (a header; BrkCore.framework is loaded at run time)
 BrkTheme    -> BrkDomain, BrkBase
 BrkUIKit    -> BrkLayout, BrkDomain, BrkBase
 BrkSidebar  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
@@ -66,7 +68,7 @@ BrkSettings -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkContent  -> BrkSidebar, BrkOverlays, BrkLibrary, BrkTheme, BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkControl  -> BrkLayout, BrkDomain, BrkBase
 BrkApp      -> BrkContent, BrkSettings, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
-Brk (main)  -> BrkApp, BrkCEF, BrkEngine, BrkBase
+Brk (main)  -> BrkApp, BrkCEF, BrkCoreEngine, BrkEngine, BrkBase
 BrkE2E      -> BrkControl, BrkLayout, BrkDomain, BrkBase
 ```
 

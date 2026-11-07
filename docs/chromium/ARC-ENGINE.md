@@ -209,3 +209,30 @@ Calls the first version has, by Arc's model:
   window and profile, which is what BrkCore does.
 - What `PaneHostCompositorOverlayView` and `content_layer_glue_helper.cc` are for. Brk starts without an equivalent.
 - Arc's codec set and whether it ships Widevine: needs running Arc. Not done, as the task forbids driving it.
+
+## Part 4: What was built and run (2026-11-07)
+
+All runs below were on this machine under `/tmp/brk-core-native.lock`; the evidence folders are in `verify/chromium/`.
+
+- **Source and toolchain (M1).** `engine/fetch.sh`: 18 minutes, 30 GB. The unmodified `chrome` target, 57,389 steps: 8 h 43 min wall clock, of which
+  2 h 3 min paused while other agents held the native lock. `out/Brk/Chromium.app` ran once: Chromium 154.0.8037.98 by its own `userAgentData`, VP8, VP9,
+  AV1, MP3, Opus, FLAC decode, H.264, HEVC, AAC, AC-3 do not, Widevine unavailable, the same as the CEF binary (`verify/chromium/m1-vanilla-probe.json`).
+- **The framework (M2).** Branch `brk/154.0.8037.98` = the tag plus `engine/patches/0001` to `0011`: 42 files, 22 of them new in `brk/`, 20 of Chromium's own
+  with 14 lines removed. Applying the series to the tag in a separate index gives the branch's tree exactly. `BrkCore.framework` is 441 MB (arm64 only) and
+  exports `ChromeMain`, `BrkCoreApplicationPrepare`, `BrkCoreApplicationShared`. Relinking after a change in `brk/` takes 1 to 2 minutes.
+  `engine/demo/main.swift` (an AppKit window, nothing else from Brk) opened `page2.html`, drew it, ran JavaScript, and exited 0 two seconds after SIGTERM
+  (`verify/chromium/m2-demo/`).
+- **Brk on BrkCore (M3).** `BRK_ENGINE=core dist-core/Brk.app`: N1, N2, N3, N4, BB1, BB2, BB3, BB4 all pass (`verify/chromium/m3-final/REPORT.md`). The same
+  eight pass on CEF with the same branch, the default (`verify/chromium/cef-default-1/`).
+- **Extension popups (M4).** `Core-popup`: the fixture extension `verify/completion/batch2-extensions-sites/toolbar/Fixtures/Extension` installs, its action
+  opens from the site controls' `invokeExtension`, Chromium's own popup page shows in a native panel sized by the page (368x290), the panel is key, typed
+  text and a Return reach the popup, and the popup's `chrome.tabs.query({active: true, currentWindow: true})` and `chrome.tabs.sendMessage` reach the page
+  the popup was opened on (the receipt's `tabId` equals the page's). `Core-activeTab` (`Tests/Fixtures/ExtensionActiveTab`): the window type extensions
+  see is `normal`, `chrome.scripting.executeScript` works on the page the popup opened on and is denied on the three other tabs, whose URLs are hidden.
+  Both are skipped on CEF. Screenshot of the panel: `verify/chromium/m4-popup4/shots/Core-popup-panel.png`.
+
+What the runs found in Chromium 154 that a Brk window has to answer, each fixed in the series: a tab feature (Read Anything) and the toast controller check
+that they run in a test when there is no side panel; a page made hidden keeps its view hidden until Chrome's Views host shows it; Chromium's exit ends in
+`-[NSApp terminate:]`, which must not reach the shell twice; `--no-startup-window` with a debugging port keeps Chromium alive until a DevTools client closes
+it; the browser process needs AppController's keepalive; unpacked extensions stay disabled without developer mode; pages restored from the back-forward
+cache get no load-finished callback; the popup's first frame is replaced when it navigates, and auto-resize has to be turned on again for the new one.
