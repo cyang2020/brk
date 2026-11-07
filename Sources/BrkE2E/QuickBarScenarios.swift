@@ -167,8 +167,14 @@ enum QuickBarScenarios {
 
     private static func inputText(_ app: AppUnderTest) throws -> String { try app.native().editorText ?? "" }
 
-    /// `word` and a real Space: the pill must show, or (`enters` false) the word must stay plain text.
+    /// `word` and a real Space (Tab for a word Space leaves alone): the pill must show, or (`enters` false) the word must stay plain text.
     private static func typeWord(_ app: AppUnderTest, _ word: String, enters: Bool = true) throws {
+        if enters, !QuickPrefixes.entersOnSpace(word) {
+            try type(app, word)
+            app.sleep(0.2)
+            try press(app, [], .tab)
+            return try app.waitUntil("\(word) and Tab entered") { try pillShown(app) && inputText(app).isEmpty }
+        }
         try type(app, word + " ")
         if enters {
             try app.waitUntil("\(word) and Space entered") { try pillShown(app) && inputText(app).isEmpty }
@@ -664,7 +670,7 @@ enum QuickBarScenarios {
         try type(app, "quickbar")
         try assertNoLocalRows("the bar over the address")
         try press(app, [.command], .a)
-        try typeWord(app, "file", enters: false)
+        try typeWord(app, "emoji", enters: false)
         try dismiss(app)
 
         // Site search.
@@ -708,7 +714,7 @@ enum QuickBarScenarios {
         try expect(!pane.contains { has($0, "Copy Result") }, "an answer in the empty pane: \(pane)")
         // No prefix enters there either.
         try press(app, [.command], .a)
-        try typeWord(app, "file", enters: false)
+        try typeWord(app, "emoji", enters: false)
         try dismiss(app)
         app.passed("No file, app or answer rows over the address, in site search, in AI mode or in an empty pane")
     }
@@ -747,6 +753,17 @@ enum QuickBarScenarios {
             app.sleep(0.2)
             try press(app, [], .tab)
             try app.waitUntil("Tab entered") { try pillShown(app) && inputText(app).isEmpty }
+            try dismiss(app)
+
+            // A word that often begins a search: Space stays a space, so "app store" is a search; Tab enters.
+            try open(app)
+            try type(app, "app store")
+            app.sleep(0.2)
+            let everyday = try inputText(app)
+            try expect(try !pillShown(app) && everyday == "app store", "Space entered after an everyday word: \(everyday)")
+            try dismiss(app)
+            try open(app)
+            try typeWord(app, "app")
             try dismiss(app)
 
             // Pasted text never enters.
@@ -891,7 +908,7 @@ enum QuickBarScenarios {
         try dismiss(app)
         try app.dispatch(.settings(.max(.feature(.askPage, false))))
         try open(app)
-        try typeWord(app, "page", enters: false)
+        try typeWord(app, "summarize", enters: false)
         try dismiss(app)
         app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor stayed plain; Max off left the words plain")
     }

@@ -19,8 +19,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case color
 }
 
-/// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
-/// keys and leaving as site search (`CommandBarView`). Its name shows in the pill.
+/// A word that, typed whole and followed by Tab, or by Space unless it often begins an ordinary search, makes the command
+/// bar's input mean one thing: the same pill, keys and leaving as site search (`CommandBarView`). Its name shows in the pill.
 public struct QuickPrefix: Hashable, Sendable, Codable {
     public let title: String
     public let words: [String]
@@ -57,6 +57,11 @@ public enum QuickPrefixes {
         QuickPrefix("Calculate", ["calc", "=", "算"], .calculate, "Calculate…"),
     ]
 
+    /// Words that begin everyday searches ("app store", "ai art", "file format"): Space stays a space, Tab enters.
+    private static let tabOnlyWords: Set<String> = ["ask", "ai", "page", "window", "color", "colour", "file", "app"]
+
+    public static func entersOnSpace(_ word: String) -> Bool { !tabOnlyWords.contains(fold(word)) }
+
     /// The prefix whose whole word this is, nil when there is none or it cannot work here now, so the word stays plain text.
     public static func entry(named word: String, in bar: CommandBarSnapshot) -> QuickPrefix? {
         let needle = fold(word)
@@ -65,14 +70,14 @@ public enum QuickPrefixes {
     }
 
     /// The prefix to offer beside the input for a part-typed word: three letters at least, or a whole word in a script
-    /// typed through an input method, where three letters mean little.
+    /// typed through an input method, where three letters mean little, or whose only way in is Tab.
     public static func offer(for typed: String, in bar: CommandBarSnapshot) -> QuickPrefix? {
         let needle = fold(typed)
         guard !needle.isEmpty, !needle.contains(where: \.isWhitespace), accepts(bar) else { return nil }
         return all.first { prefix in
             prefix.isActive(in: bar) && prefix.words.contains { word in
                 let word = fold(word)
-                return word.hasPrefix(needle) && (needle.count >= 3 || (word == needle && !needle.allSatisfy(\.isASCII)))
+                return word.hasPrefix(needle) && (needle.count >= 3 || (word == needle && (!needle.allSatisfy(\.isASCII) || !entersOnSpace(word))))
             }
         }
     }

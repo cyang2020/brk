@@ -7,10 +7,13 @@ import Foundation
 public struct LocalHit: Sendable, Hashable, Codable {
     public var path: String
     public var name: String
+    /// The kind of file as the index knows it. The row's icon comes from this, not from the file: see `LocalIcons`.
+    public var contentType: String?
 
-    public init(path: String, name: String) {
+    public init(path: String, name: String, contentType: String? = nil) {
         self.path = path
         self.name = name
+        self.contentType = contentType
     }
 }
 

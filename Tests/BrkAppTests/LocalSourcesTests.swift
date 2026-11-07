@@ -93,6 +93,19 @@ final class LocalSourcesTests: XCTestCase {
         XCTAssertEqual(finder.asked, ["budget"])
     }
 
+    /// The real path: ordinary typing finds apps and asks the file index nothing, the `file` prefix does.
+    func testWithFilesWhileTypingOffOnlyTheFilePrefixReachesTheIndex() async {
+        let finder = SlowFinder(), window = WindowID("w")
+        let search = LocalSearch(send: { [unowned self] in self.sent.append($0) }, finder: finder, applicationRoots: [], filesWhileTyping: false, debounce: .milliseconds(1))
+        search.search(window, LocalSearchRequest(query: "typed", name: "typed"))
+        await wait { !answers().isEmpty }
+        XCTAssertEqual(finder.asked, [])
+        XCTAssertEqual(answers().first?.files, [])
+        search.search(window, LocalSearchRequest(query: "asked", name: "asked", scope: .files))
+        await wait { answers().count == 2 }
+        XCTAssertEqual(finder.asked, ["asked"])
+    }
+
     func testCancellingLeavesNoAnswer() async {
         let finder = SlowFinder(), window = WindowID("w")
         let search = LocalSearch(send: { [unowned self] in self.sent.append($0) }, finder: finder, applicationRoots: [], debounce: .milliseconds(1))

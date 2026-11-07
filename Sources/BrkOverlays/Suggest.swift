@@ -37,7 +37,7 @@ public struct Suggestion: Equatable, Sendable {
     public var tile = false
     /// The symbol's own color instead of the row's text color (the YouTube mark).
     public var accent: RGBA? = nil
-    /// Instead of a symbol: the system's icon for this path, or this emoji.
+    /// Instead of a symbol: the system's icon for this path (an app), for this kind of file, or this emoji.
     public var icon: Icon? = nil
     /// What ⌘Return and ⌥Return do on this row; nil keeps those keys' usual behaviour.
     public var commandReturn: Command? = nil
@@ -45,6 +45,7 @@ public struct Suggestion: Equatable, Sendable {
 
     public enum Icon: Equatable, Sendable {
         case file(String)
+        case document(name: String, contentType: String?)
         case emoji(String)
         case swatch(RGBA)
     }
@@ -390,7 +391,7 @@ public enum Suggest {
     private static func fileRow(_ hit: LocalHit) -> Suggestion {
         let folder = ((hit.path as NSString).deletingLastPathComponent as NSString).abbreviatingWithTildeInPath
         return Suggestion(kind: .file, title: hit.name, subtitle: folder, symbol: nil, favicon: nil, hint: OverlayCopy.fileRowKeys,
-                          command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path),
+                          command: .commandBar(.local(.open, path: hit.path)), icon: .document(name: hit.name, contentType: hit.contentType),
                           commandReturn: .commandBar(.local(.reveal, path: hit.path)), optionReturn: .commandBar(.local(.copyPath, path: hit.path)))
     }
 

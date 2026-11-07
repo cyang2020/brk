@@ -3,6 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkLayout
 import BrkUIKit
+import UniformTypeIdentifiers
 
 /// Owner: W4 / F4. The command bar: input row, then up to 5 results (`Suggest.rank`: the completed site or the top
 /// hit, switch to tab, what you typed, top domains, the engine's suggestions, history, type travel). The typed query,
@@ -32,9 +33,9 @@ import BrkUIKit
 /// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, apps and files in the last rows, Tab to ask the local AI. A
 /// file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do nothing new on any other row.
 ///
-/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by a typed
-/// Space or Tab enters, the word's name sits in the pill, Backspace in the empty input or Esc leaves and gives the word
-/// back. An engine of the same name wins. Pasted text never enters, and after a word was given back Space stays a space,
+/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by Tab, or
+/// by a typed Space unless it often begins an ordinary search, enters, the word's name sits in the pill, Backspace in the
+/// empty input or Esc leaves and gives the word back. An engine of the same name wins. Pasted text never enters, and after a word was given back Space stays a space,
 /// so the word can be typed as a search. Part of a word (three letters) offers the prefix beside the input with the Tab
 /// key while no site search is on offer.
 ///
@@ -325,7 +326,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             if let engine = Suggest.siteSearchEngine(named: word, bar) { return enter(.site(engine), namedBy: word) }
             // Exactly what was there and one typed space: pasted text never enters, nor does a space an input method is composing.
             let composing = (input.currentEditor() as? NSTextView)?.hasMarkedText() == true
-            if text == typed + " ", !composing, declinedWord != Suggest.fold(word), let prefix = QuickPrefixes.entry(named: word, in: bar) {
+            if text == typed + " ", !composing, declinedWord != Suggest.fold(word), QuickPrefixes.entersOnSpace(word), let prefix = QuickPrefixes.entry(named: word, in: bar) {
                 return enter(.prefix(prefix), namedBy: word)
             }
         }
@@ -900,8 +901,9 @@ final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
-/// The pictures of Brk's own rows: the system's icon for a file or app, once per path, or an emoji drawn at the row's
-/// icon size.
+/// The pictures of Brk's own rows: the system's icon for an app, once per path, for a kind of file, or an emoji drawn at
+/// the row's icon size. A file's row uses its kind because asking for a file's own icon touches the file, and macOS asks
+/// the user before an app touches the Desktop, Documents or Downloads folder.
 @MainActor
 enum LocalIcons {
     private static var files: [String: NSImage] = [:]
@@ -914,6 +916,8 @@ enum LocalIcons {
             let image = NSWorkspace.shared.icon(forFile: path)
             files[path] = image
             return image
+        case .document(let name, let contentType):
+            return NSWorkspace.shared.icon(for: contentType.flatMap { UTType($0) } ?? UTType(filenameExtension: (name as NSString).pathExtension) ?? .data)
         case .swatch(let color):
             let side = OverlayMetrics.commandBar.iconSize.value
             return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in

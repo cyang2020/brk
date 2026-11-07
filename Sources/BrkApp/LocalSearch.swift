@@ -21,27 +21,36 @@ final class LocalSearch {
     private let finder: (any LocalFileFinder)?
     private let applicationRoots: [URL]
     private let debounce: Duration
+    /// Ordinary typing also looks in the file index (off, the `file` prefix does). See `live`.
+    private let filesWhileTyping: Bool
     private var pending: [WindowID: Task<Void, Never>] = [:]
 
-    init(send: @escaping @MainActor (Input) -> Void, finder: (any LocalFileFinder)?, applicationRoots: [URL], debounce: Duration = .seconds(Metrics.commandBar.suggestionDebounce.value)) {
+    init(send: @escaping @MainActor (Input) -> Void, finder: (any LocalFileFinder)?, applicationRoots: [URL], filesWhileTyping: Bool = true,
+         debounce: Duration = .seconds(Metrics.commandBar.suggestionDebounce.value)) {
         self.send = send
         self.finder = finder
         self.applicationRoots = applicationRoots
+        self.filesWhileTyping = filesWhileTyping
         self.debounce = debounce
     }
 
     /// The real home folder, or under the control socket only the fixture folder.
+    ///
+    /// On the real path ordinary typing does not reach the file index, only the `file` prefix does. The first real search
+    /// made macOS ask for the Desktop folder (verify/visual-pairs/run-20261103/cmdt/NOTES.md), and a question that comes up
+    /// while typing a web search is one nobody asked for. Whether the home scope asks anything is not checked yet.
     static func live(send: @escaping @MainActor (Input) -> Void, options: LaunchOptions = LaunchOptions()) -> LocalSearch {
         if options.controlSocket != nil {
             guard let fixture = options.localSearchFixture else { return LocalSearch(send: send, finder: nil, applicationRoots: []) }
             let finder: any LocalFileFinder = options.localSearchSpotlight
-                ? SpotlightFinder(home: fixture, otherScopes: [])
+                ? SpotlightFinder(home: fixture, scopes: [fixture])
                 : FolderFinder(home: fixture)
             return LocalSearch(send: send, finder: finder, applicationRoots: [fixture.appendingPathComponent("Applications", isDirectory: true)])
         }
         let home = FileManager.default.homeDirectoryForCurrentUser, applications = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        return LocalSearch(send: send, finder: SpotlightFinder(home: home, otherScopes: [applications]),
-                           applicationRoots: [applications, home.appendingPathComponent("Applications", isDirectory: true)])
+        return LocalSearch(send: send, finder: SpotlightFinder(home: home, scopes: [NSMetadataQueryUserHomeScope, applications]),
+                           applicationRoots: [applications, URL(fileURLWithPath: "/System/Applications", isDirectory: true), home.appendingPathComponent("Applications", isDirectory: true)],
+                           filesWhileTyping: false)
     }
 
     func cancel(_ window: WindowID) { pending.removeValue(forKey: window)?.cancel() }
@@ -57,12 +66,13 @@ final class LocalSearch {
         cancel(window)
         guard let finder else { return }
         let roots = applicationRoots, debounce = debounce, send = send
+        let wantsFiles = request.scope == .files || (request.scope == .filesAndApps && filesWhileTyping)
         pending[window] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: debounce)
             guard !Task.isCancelled else { return }
             let apps = request.scope != .files ? await Task.detached(priority: .userInitiated) { Self.apps(named: request.name, in: roots) }.value : []
             guard !Task.isCancelled else { return }
-            let files = request.scope != .apps ? LocalSources.rank(await finder.find(request.name), needle: request.name) : []
+            let files = wantsFiles ? LocalSources.rank(await finder.find(request.name), needle: request.name) : []
             guard !Task.isCancelled else { return }
             self?.pending[window] = nil
             send(.system(.localResults(window, LocalResults(query: request.query, scope: request.scope, apps: apps, files: files))))
@@ -110,35 +120,28 @@ final class FolderFinder: LocalFileFinder {
     }
 }
 
-/// The real source: the Spotlight index, by file name only (`kMDItemFSName`), newest first. The home folder's own
-/// non-hidden folders are the search scopes, so `~/Library` and hidden folders are not searched at all; files lying
-/// directly in the home folder are matched from its listing. A hit also goes through `LocalSources.isExcluded`.
+/// The real source: the Spotlight index, by file name only (`kMDItemFSName`), newest first. It asks the index and never
+/// touches a folder or file itself: macOS asks the user before an app reads the Desktop, Documents or Downloads folder.
+/// `~/Library` and hidden folders are in the home scope, so hits go through `LocalSources.isExcluded`.
 @MainActor
 final class SpotlightFinder: LocalFileFinder {
     private let home: URL
-    private let otherScopes: [URL]
+    private let scopes: [Any]
     private let timeout: Duration
     private let log = Logger(subsystem: "brk", category: "local-search")
-    /// How many hits are read from the index for one question; an index query can match a great many.
-    static let readLimit = 300
+    /// How many hits are kept for one question, and how many are looked at to find them: an index query can match a great
+    /// many, and the newest of them can all be in `~/Library`.
+    static let readLimit = 300, scanLimit = 3000
 
-    init(home: URL, otherScopes: [URL], timeout: Duration = .seconds(1.5)) {
+    init(home: URL, scopes: [Any], timeout: Duration = .seconds(1.5)) {
         self.home = home.resolvingSymlinksInPath()
-        self.otherScopes = otherScopes
+        self.scopes = scopes
         self.timeout = timeout
     }
 
     func find(_ name: String) async -> [LocalHit] {
-        let entries = (try? FileManager.default.contentsOfDirectory(at: home, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
-        var scopes = otherScopes, direct: [LocalHit] = []
-        for entry in entries {
-            if (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-                if entry.lastPathComponent != "Library" { scopes.append(entry) }
-            } else if LocalSources.match(entry.lastPathComponent, needle: name) != nil {
-                direct.append(LocalHit(path: entry.path, name: entry.lastPathComponent))
-            }
-        }
-        let run = SpotlightRun(predicate: Self.predicate(for: name), scopes: scopes, timeout: timeout)
+        let homePath = home.path
+        let run = SpotlightRun(predicate: Self.predicate(for: name), scopes: scopes, timeout: timeout) { !LocalSources.isExcluded($0, home: homePath) }
         let began = ContinuousClock.now
         let found = await withTaskCancellationHandler {
             await run.results()
@@ -146,7 +149,7 @@ final class SpotlightFinder: LocalFileFinder {
             Task { @MainActor in run.stop() }
         }
         log.info("spotlight: \(found.count) hits read in \(String(describing: began.duration(to: .now)), privacy: .public)")
-        return direct + found.filter { !LocalSources.isExcluded($0.path, home: home.path) }
+        return found
     }
 
     /// Every word of the name, anywhere in the file's name, case and accents aside; `*` and `?` in the text mean themselves.
@@ -174,8 +177,10 @@ final class SpotlightRun {
     private var waiter: CheckedContinuation<[LocalHit], Never>?
     private var clock: Task<Void, Never>?
     private var finished = false
+    private let keeps: (String) -> Bool
 
-    init(predicate: NSPredicate, scopes: [URL], timeout: Duration) {
+    init(predicate: NSPredicate, scopes: [Any], timeout: Duration, keeps: @escaping (String) -> Bool = { _ in true }) {
+        self.keeps = keeps
         query.predicate = predicate
         query.searchScopes = scopes
         query.sortDescriptors = [NSSortDescriptor(key: NSMetadataItemFSContentChangeDateKey, ascending: false)]
@@ -210,9 +215,9 @@ final class SpotlightRun {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         query.disableUpdates()
         var hits: [LocalHit] = []
-        for index in 0..<min(query.resultCount, SpotlightFinder.readLimit) {
-            guard let item = query.result(at: index) as? NSMetadataItem, let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else { continue }
-            hits.append(LocalHit(path: path, name: (path as NSString).lastPathComponent))
+        for index in 0..<min(query.resultCount, SpotlightFinder.scanLimit) where hits.count < SpotlightFinder.readLimit {
+            guard let item = query.result(at: index) as? NSMetadataItem, let path = item.value(forAttribute: NSMetadataItemPathKey) as? String, keeps(path) else { continue }
+            hits.append(LocalHit(path: path, name: (path as NSString).lastPathComponent, contentType: item.value(forAttribute: NSMetadataItemContentTypeKey) as? String))
         }
         query.stop()
         waiter.resume(returning: hits)
