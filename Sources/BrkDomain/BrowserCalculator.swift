@@ -3,7 +3,13 @@ import Foundation
 /// A bounded arithmetic parser. No JavaScript, shell or general-purpose expression evaluator is involved.
 public enum BrowserCalculator {
     public static func result(_ text: String) -> String? {
-        guard text.count <= 160, text.contains(where: { "+-*/×÷^%".contains($0) }) else { return nil }
+        guard text.contains(where: { "+-*/×÷^%".contains($0) }) else { return nil }
+        return forced(text)
+    }
+
+    /// `result` without asking for an operator: under the `calc` prefix a plain number is an answer too.
+    public static func forced(_ text: String) -> String? {
+        guard text.count <= 160 else { return nil }
         var parser = Parser(characters: Array(text.filter { !$0.isWhitespace }))
         guard let value = parser.sum(), parser.index == parser.characters.count, value.isFinite, abs(value) < 1e100 else { return nil }
         return String(format: "%.12g", locale: Locale(identifier: "en_US_POSIX"), value == 0 ? 0 : value)

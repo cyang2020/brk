@@ -39,6 +39,14 @@ public struct LaunchOptions: Sendable, Equatable {
     /// own suggest host as `engine`), so the e2e fixture server can answer W2-10 without the network and tell which
     /// engine asked.
     public var suggestOverride: URL?
+    /// `BRK_LOCAL_SEARCH_FIXTURE=/folder`: under the control socket the command bar's file and app sources read this
+    /// folder and never the real home folder (`/folder/Applications` holds the apps). Without it they find nothing.
+    public var localSearchFixture: URL?
+    /// `BRK_LOCAL_SEARCH_SPOTLIGHT=1`: the fixture folder is searched through the Spotlight index, as a real run does.
+    public var localSearchSpotlight: Bool
+    /// `BRK_CURRENCY_RATES_FILE=/file`: under the control socket the exchange rates come from this file, never the
+    /// network. Without it there are none.
+    public var currencyRatesFile: URL?
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         engine = EngineKind(rawValue: environment["BRK_ENGINE"] ?? "") ?? .cef
@@ -47,5 +55,8 @@ public struct LaunchOptions: Sendable, Equatable {
         startURL = environment["BRK_START_URL"].flatMap(URL.init(string:))
         remoteDebuggingPort = environment["BRK_REMOTE_DEBUGGING_PORT"].flatMap(Int.init)
         suggestOverride = environment["BRK_SUGGEST_URL"].flatMap(URL.init(string:))
+        localSearchFixture = environment["BRK_LOCAL_SEARCH_FIXTURE"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        localSearchSpotlight = environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] == "1"
+        currencyRatesFile = environment["BRK_CURRENCY_RATES_FILE"].map { URL(fileURLWithPath: $0) }
     }
 }

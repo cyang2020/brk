@@ -183,9 +183,24 @@ final class AppUnderTest {
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
         if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
-        if scenarioID.hasPrefix("AI") {
+        if scenarioID.hasPrefix("QuickBar") {
+            environment["BRK_LOCAL_SEARCH_FIXTURE"] = QuickBarScenarios.fixtureFolder(self).path
+            if scenarioID == "QuickBar-Spotlight" { environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] = "1" }
+            if scenarioID != "QuickBar-NoRates" { environment["BRK_CURRENCY_RATES_FILE"] = QuickBarScenarios.ratesFile(self).path }
+        }
+        if (scenarioID.hasPrefix("AI") && !scenarioID.hasPrefix("AIReal")) || ["QuickBar-AskTab", "QuickBar-AIPrefix", "QuickBar-Translate"].contains(scenarioID) {
             environment["BRK_AI_FIXTURE_EXECUTABLE"] = site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/ai-provider").path
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
+        }
+        if scenarioID.hasPrefix("AIAgent") {
+            environment["BRK_AI_FIXTURE_PROTOCOL"] = "1"
+            environment["BRK_AI_FIXTURE_CHILD"] = dataDirectory.appendingPathComponent("ai-fixture-child").path
+            environment["BRK_TEST_AI_FOLDER"] = dataDirectory.appendingPathComponent("ai-work", isDirectory: true).path
+        }
+        // A real-agent run is opt-in (`AIRealScenarios`) and spends the user's quota.
+        if scenarioID.hasPrefix("AIReal") {
+            environment["BRK_AI_REAL_AGENTS"] = "1"
+            environment["BRK_TEST_AI_FOLDER"] = dataDirectory.appendingPathComponent("ai-work", isDirectory: true).path
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") || scenarioID.hasPrefix("R49") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }

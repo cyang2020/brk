@@ -113,12 +113,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         return ShortcutRow(action: action, title: action.spec.title, menu: action.spec.menu, state: binding.state, source: binding.source,
                            priority: binding.priority)
     }
-    let active: AIProviderKind? = switch doc.settings.max.provider {
-    case .off: nil
-    case .claude: state.session.detectedAI.contains(.claude) ? .claude : nil
-    case .codex: state.session.detectedAI.contains(.codex) ? .codex : nil
-    case .auto: state.session.detectedAI.contains(.claude) ? .claude : (state.session.detectedAI.contains(.codex) ? .codex : nil)
-    }
+    let active = state.activeAgent
     return SettingsSnapshot(
         sidebarData: state.sidebarDataSnapshot,
         pane: state.session.settingsPane, general: doc.settings.general,
@@ -132,7 +127,8 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         },
         engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
         shortcuts: shortcuts,
-        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName),
+        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName,
+                         agents: AIProviderKind.allCases.map { state.session.ai.agents[$0] ?? AIAgentStatus(kind: $0, state: state.session.detectedAI.contains($0) ? .checking : .missing) }),
         advanced: doc.settings.advanced,
         tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
         littleArcShortcut: state.session.globalShortcut
@@ -413,7 +409,17 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             newDocument: doc.kind == .little ? nil : state.profileSettings(in: id).documentApp,
             travel: state.travelCandidates(window: id, space: space, focused: state.resolveTab(.focused, in: id)),
             askProvider: doc.kind != .incognito && state.doc.settings.max.enabled(.commandBar) ? state.askProviderName : nil,
-            instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks)
+            instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks),
+            local: target == .newTab ? session.localResults : nil,
+            rates: state.session.currencyRates,
+            now: session.barClock ?? Instant(milliseconds: 0),
+            askAgentFound: state.activeAgent != nil,
+            agentsFound: state.session.detectedAI.map(\.rawValue),
+            askPageOn: doc.kind != .incognito && state.doc.settings.max.enabled(.askPage),
+            translationOn: doc.kind != .incognito && state.doc.settings.max.enabled(.translation),
+            translation: session.barTranslation,
+            definition: session.barDefinition,
+            isPrivate: doc.kind == .incognito
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).

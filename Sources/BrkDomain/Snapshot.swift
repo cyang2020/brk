@@ -560,6 +560,24 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var askProvider: String? = nil
     /// Max's Instant Links is on: Shift+Return opens the top results of a web search (P48-a).
     public var instantLinks: Bool = false
+    /// Files and apps for the bar's text; the view drops them once its text has moved on. Only in a new-tab bar.
+    public var local: LocalResults? = nil
+    public var rates: CurrencyRates? = nil
+    /// The time quick answers read (`WindowSession.barClock`).
+    public var now = Instant(milliseconds: 0)
+    /// Max's tool is chosen and on this Mac, so Tab can send the typed text to it (`Suggest.tabQuestion`).
+    public var askAgentFound: Bool = false
+    /// The agents on this Mac by their `AIProviderChoice` names; the `claude` and `gpt` prefixes go to these only.
+    public var agentsFound: [String] = []
+    /// Max's Ask on Page is on, for the `page` and `summarize` prefixes.
+    public var askPageOn: Bool = false
+    /// Max's Translation is on, for the `translate` prefix, and where that prefix's text has got to.
+    public var translationOn: Bool = false
+    public var translation: BarTranslation? = nil
+    /// The `define` prefix's answer; the view drops it once its text has moved on.
+    public var definition: BarDefinition? = nil
+    /// A private window lists nothing of the user's: no history, no bookmarks, no files.
+    public var isPrivate: Bool = false
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
@@ -703,6 +721,8 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var active: AIProviderKind?
     /// The tool's name where Arc says ChatGPT (the Max pane's "… in the Command Bar", the command bar's Ask row).
     public var askProvider: String? = nil
+    /// What each agent said about itself, in `AIProviderKind.allCases` order; only asked for while the card is open.
+    public var agents: [AIAgentStatus] = []
 }
 
 public struct ProfileDeletionRow: Sendable, Equatable, Codable {

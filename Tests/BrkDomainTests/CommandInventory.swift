@@ -18,16 +18,18 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
-        .assist(.open(.question)), .assist(.ask("why")), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
+        .assist(.open(.question)), .assist(.ask("why")), .assist(.askAgent("why", agent: .claude)), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
         .assist(.instant("query")), .assist(.translate("English")), .assist(.organizeToday), .assist(.undoOrganize),
         .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss),
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
+        .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
+        .commandBar(.splitTab(.right, ItemID("ghost"))), .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")), .commandBar(.prefixQuery(.files, "x")), .commandBar(.splitOpen(.right, "example.com")), .window(.place(.leftHalf)), .commandBar(.openDictionary("word")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
         .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
@@ -137,11 +139,13 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
+        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .barTranslationDue(WindowID("ghost"), "x"), .definition(WindowID("ghost"), BarDefinition(word: "x", text: nil)), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
         .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example, nil), .aiTranslated(AIRequestID("ghost"), false),
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
+        .aiConversation(AIRequestID("ghost"), .notice("x")), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -201,6 +205,7 @@ enum CommandInventory {
             switch intent {
             case .open: "open"
             case .ask: "ask"
+            case .askAgent: "askAgent"
             case .askPage: "askPage"
             case .browse: "browse"
             case .instant: "instant"
@@ -216,6 +221,10 @@ enum CommandInventory {
             case .languageSettings: "languageSettings"
             case .previewHover: "previewHover"
             case .sharePreview: "sharePreview"
+            case .followUp: "followUp"
+            case .stop: "stop"
+            case .chooseFolder: "chooseFolder"
+            case .approve: "approve"
             }
         case .easel(let c):
             switch c {
@@ -275,6 +284,12 @@ enum CommandInventory {
             switch c {
             case .queryChangedForSite: "queryChangedForSite"
             case .calculate: "calculate"
+            case .copyAnswer: "copyAnswer"
+            case .local: "local"
+            case .prefixQuery: "prefixQuery"
+            case .splitOpen: "splitOpen"
+            case .splitTab: "splitTab"
+            case .openDictionary: "openDictionary"
             case .open: "open"
             case .submit: "submit"
             case .submitSearch: "submitSearch"
@@ -438,6 +453,7 @@ enum CommandInventory {
         case .window(let c):
             switch c {
             case .newBlank: "newBlank"
+            case .place: "place"
             case .toggleStayOnTop: "toggleStayOnTop"
             case .new: "new"
             case .newIncognito: "newIncognito"
@@ -556,6 +572,10 @@ enum CommandInventory {
             }
         case .externalURL: "externalURL"
         case .suggestions: "suggestions"
+        case .localResults: "localResults"
+        case .barTranslationDue: "barTranslationDue"
+        case .definition: "definition"
+        case .currencyRates: "currencyRates"
         case .aiProvidersDetected: "aiProvidersDetected"
         case .globalShortcut: "globalShortcut"
         case .aiResult: "aiResult"
@@ -565,6 +585,10 @@ enum CommandInventory {
         case .aiHoverReady: "aiHoverReady"
         case .aiTranslated: "aiTranslated"
         case .aiDownloadRenamed: "aiDownloadRenamed"
+        case .aiConversation: "aiConversation"
+        case .aiAgents: "aiAgents"
+        case .aiAgentsWanted: "aiAgentsWanted"
+        case .aiFolderChosen: "aiFolderChosen"
         }
     }
 

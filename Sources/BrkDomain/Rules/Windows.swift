@@ -19,6 +19,8 @@ import Foundation
 extension Work {
     mutating func windows(_ command: WindowCommand, in window: WindowID) {
         switch command {
+        case .place(let placement):
+            effects.append(.window(window, .place(placement)))
         case .toggleStayOnTop:
             state.doc.windows[window]?.stayOnTop.toggle()
         case .newBlank:

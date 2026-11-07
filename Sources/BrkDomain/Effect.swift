@@ -30,10 +30,24 @@ public enum Effect: Hashable, Sendable {
     /// Share-by-link replaced by a file: BrkApp shows a save panel (JSON or HTML) and writes `ExportCodec`'s bytes.
     case export(ExportDocument, owner: WindowID)
     case exportSpaceFolder(WindowID, token: String, document: ExportDocument)
-    /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
-    /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
+    /// Run a task through a local agent (BrkApp/AIProvider.swift); the answer comes back as
+    /// `SystemEvent.aiResult(id, outcome)`. `choice` picks the agent for this request: an agent named explicitly runs or
+    /// says why it cannot, never another one; only `.auto` chooses, from what is installed and signed in.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
     case aiCancel(AIRequestID)
+    /// Keep a session for this conversation; it stays for `aiTurn`. `folder` nil: tools off, strictest read-only mode, and
+    /// the `.ai` request with the same id is its first turn and names its agent. A folder: tools on, approvals on, chosen
+    /// by the user, and this `choice` names the agent.
+    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice)
+    /// The next user message in a conversation; it answers as request `turn` (`aiPartial`, `aiResult`).
+    case aiTurn(conversation: AIRequestID, turn: AIRequestID, AITask)
+    case aiApprove(conversation: AIRequestID, approval: String, option: String)
+    /// The conversation is over: its session and every process it started go.
+    case aiCloseConversation(AIRequestID)
+    /// Ask the user for a working folder; the answer is `SystemEvent.aiFolderChosen`.
+    case aiChooseFolder(WindowID)
+    /// Ask every installed agent about itself; the answer is `SystemEvent.aiAgents`. Nothing is sent to a model.
+    case aiRefreshAgents
     case aiRead(AIRequestID, DocumentToken)
     case aiTranslate(AIRequestID, AIPageContent, [AITextNode])
     case aiWatch(AIRequestID, seconds: Int)
@@ -46,6 +60,20 @@ public enum Effect: Hashable, Sendable {
     /// Fetch the default engine's OpenSearch suggestions for `query` (BrkApp debounces by
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.
     case fetchSuggestions(WindowID, query: String, url: URL)
+    /// Look for a file and app by name (BrkApp debounces like the suggestions); the answer is `SystemEvent.localResults`.
+    case searchLocal(WindowID, LocalSearchRequest)
+    /// A text to translate under the `translate` prefix: after a pause in typing the answer is
+    /// `SystemEvent.barTranslationDue`. Any later key cancels it.
+    case barTranslationDue(WindowID, String)
+    /// Ask macOS's offline dictionary about a word (BrkApp debounces); the answer is `SystemEvent.definition`.
+    case lookUpWord(WindowID, String)
+    /// The word in Dictionary.app, through its `dict:` address.
+    case openDictionary(String)
+    /// Open a file with its default app, or launch an app.
+    case openLocalFile(String)
+    /// A currency question was typed: BrkApp reads its cache and fetches at most once a day; the answer is
+    /// `SystemEvent.currencyRates`.
+    case needCurrencyRates
     /// Drop a request context's data: incognito when its last window closed, a profile when it was deleted.
     case disposeContext(ContextDisposal)
     case loadWebsiteRules(URL, BrowsingContext)
@@ -98,6 +126,8 @@ public enum ExportOutcome: Hashable, Sendable, Codable {
 }
 
 public enum WindowEffect: Hashable, Sendable {
+    /// On the window's screen's visible frame (the next screen's for `nextDisplay`; with one screen it stays).
+    case place(WindowSnap)
     case requestArchiveClear
     case toggleFullScreen
     case pageFullScreen(Bool)

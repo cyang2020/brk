@@ -18,6 +18,8 @@ public struct Suggestion: Equatable, Sendable {
         case topDomain
         /// Max's Ask row (Arc's "Ask ChatGPT →", P49): the query, the local tool's name and the arrow square.
         case ask
+        /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji, one form of a colour.
+        case file, app, emoji, color
     }
     public let kind: Kind
     public let title: String
@@ -35,6 +37,18 @@ public struct Suggestion: Equatable, Sendable {
     public var tile = false
     /// The symbol's own color instead of the row's text color (the YouTube mark).
     public var accent: RGBA? = nil
+    /// Instead of a symbol: the system's icon for this path (an app), for this kind of file, or this emoji.
+    public var icon: Icon? = nil
+    /// What ⌘Return and ⌥Return do on this row; nil keeps those keys' usual behaviour.
+    public var commandReturn: Command? = nil
+    public var optionReturn: Command? = nil
+
+    public enum Icon: Equatable, Sendable {
+        case file(String)
+        case document(name: String, contentType: String?)
+        case emoji(String)
+        case swatch(RGBA)
+    }
 }
 
 public enum Suggest {
@@ -75,8 +89,15 @@ public enum Suggest {
     /// In site-search mode (`siteSearch` set) the rows are the query on that engine and the suggestions, each a
     /// `.commandBar(.submitSearch)` on it.
     /// Matching is case- and diacritic-insensitive. `resolve` is the domain's URL policy (default: the bar's engine).
-    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil,
-                            resolve: ((String) -> URL?)? = nil, completing: String? = nil) -> [Suggestion] {
+    ///
+    /// Brk's own sources beyond Arc, none of which changes a row when it has nothing to say, and none in site search, AI
+    /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
+    /// question, else sits right under the typed row so Return still searches; apps and files take the last two rows at
+    /// most (never the top hit, never the typed row) while `bar.local` answers exactly this text, in `createsTab` bars only.
+    /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search: the user asked for it with Tab.
+    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil,
+                            resolve: ((String) -> URL?)? = nil, completing: String? = nil,
+                            timeZone: TimeZone = .current, locale: Locale = .current) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if let mode = bar.aiMode {
@@ -96,6 +117,7 @@ public enum Suggest {
                                subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
+        if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName, resolve: resolve).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
@@ -108,15 +130,14 @@ public enum Suggest {
             return Array(([row] + arcRows).prefix(limit))
         }
 
-        let selectedEngine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
-            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
-        } ?? .google
+        let selectedEngine = selectedEngine(bar)
         let resolve = resolve ?? { resolveTypedInput($0, engine: selectedEngine) }
         let needle = fold(text)
         if let result = BrowserCalculator.result(text) {
             return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
                                command: .commandBar(.calculate(text)))]
         }
+        let quick = bar.fillsPane ? nil : QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: timeZone, locale: locale, rates: bar.rates)).map(quickRow)
         var typed: Suggestion?
         var isAddress = false
         let resolvedURL = resolve(text)
@@ -182,7 +203,225 @@ public enum Suggest {
         if let provider = bar.askProvider, !isAddress, completed == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
             rows.insert(askRow(text, provider: provider), at: min(2, rows.count))
         }
+        if let quick {
+            if QuickAnswers.leads(text) { rows.insert(quick, at: 0) }
+            else { rows.insert(quick, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count) }
+        }
+        if !bar.fillsPane, let color = QuickColors.parse(text) {
+            rows.insert(contentsOf: colorRows(color), at: QuickColors.leads(text) ? 0 : rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
+        }
+        rows = withLocalRows(rows, text, isAddress: isAddress, bar: bar, limit: limit)
+        // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
+        if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
         return Array(rows.prefix(limit))
+    }
+
+    // MARK: Brk's own sources
+
+    /// The most file and app rows among the others.
+    private static let inlineLocalCap = 2
+
+    private static func quickRow(_ answer: QuickAnswer) -> Suggestion {
+        let symbol = switch answer.kind { case .math: "equal"; case .date: "clock"; case .currency: "dollarsign.circle" }
+        return Suggestion(kind: .calculator, title: answer.answer, subtitle: answer.detail, symbol: symbol, favicon: nil, hint: "Copy Result",
+                          command: .commandBar(.copyAnswer(answer.answer)))
+    }
+
+    /// A prefix's own rows for the text after its word.
+    private static func selectedEngine(_ bar: CommandBarSnapshot) -> SearchEngine {
+        SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+    }
+
+    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot, appName: String, resolve: ((String) -> URL?)?) -> [Suggestion] {
+        switch prefix.action {
+        case .files:
+            guard let local = bar.local, local.query == text, local.scope == .files else { return [] }
+            return local.files.map(fileRow)
+        case .apps:
+            guard let local = bar.local, local.query == text, local.scope == .apps else { return [] }
+            return local.apps.map(appRow)
+        case .emoji:
+            return EmojiIndex.matches(text, limit: Metrics.commandBar.maxVisibleRows.value).map { entry in
+                Suggestion(kind: .emoji, title: entry.name, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.copyEmoji,
+                           command: .commandBar(.copyAnswer(entry.emoji)), icon: .emoji(entry.emoji))
+            }
+        case .calculate:
+            guard !text.isEmpty, let result = BrowserCalculator.forced(text) ?? QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: .current, locale: .current, rates: bar.rates))?.answer else { return [] }
+            return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result", command: .commandBar(.copyAnswer(result)))]
+        case .ask:
+            guard !text.isEmpty else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.ask(bar.askProvider ?? prefix.title), .assist(.ask(text)))]
+        case .askAgent(let name):
+            guard !text.isEmpty, let agent = AIProviderChoice(rawValue: name) else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.ask(prefix.title), .assist(.askAgent(text, agent: agent)))]
+        case .askPage:
+            guard !text.isEmpty else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.askThisPage, .assist(.askPage(text)))]
+        case .summarize:
+            // Return with no text summarises; a text says what to look for. The route is Ask on Page's.
+            let question = text.isEmpty ? OverlayCopy.summarizeThisPage : "\(OverlayCopy.summarizeThisPage): \(text)"
+            return [aiRow(question, subtitle: OverlayCopy.askThisPage, .assist(.askPage(question)))]
+        case .split:
+            return splitRows(text, bar: bar, appName: appName, resolve: resolve)
+        case .window:
+            return windowRows(text, bar: bar, appName: appName)
+        case .translate:
+            return translateRows(text, bar: bar)
+        case .color:
+            return QuickColors.parse(text, names: true).map(colorRows) ?? []
+        case .define:
+            guard let found = bar.definition, found.word == text else { return [] }
+            guard let definition = found.text else {
+                return [Suggestion(kind: .action, title: OverlayCopy.noDefinition(text), subtitle: nil, symbol: "character.book.closed", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+            }
+            return [Suggestion(kind: .action, title: definition, subtitle: nil, symbol: "character.book.closed", favicon: nil, hint: OverlayCopy.openDictionary, command: .commandBar(.openDictionary(text)))]
+        }
+    }
+
+    /// The existing split commands this mode also lists, where the menu would enable them (`bar.actions`).
+    private static let splitActions: [ActionID] = [.separateTabFromSplitView, .maximizeSplitPane, .splitHorizontal, .splitVertical, .removeSplitView, .separateAllSplit]
+
+    /// The new pane's row (no text: Add Split View or the named side's), open tabs by title, and the split commands. A
+    /// command the text names outright ("expand") leads, so Return runs it rather than searching for the word.
+    /// What the `split` prefix can bring beside the page: first what is already open, then what was visited, and only then a
+    /// web search for the text. An address leads, unless a tab already has it. No text: the recent tabs and an empty pane.
+    private static func splitRows(_ text: String, bar: CommandBarSnapshot, appName: String, resolve: ((String) -> URL?)?) -> [Suggestion] {
+        let (edge, rest) = QuickSplit.parse(text)
+        let side = edge ?? .right
+        let needle = fold(rest)
+        var scored: [(score: Int, row: Suggestion)] = []
+        for action in splitActions where bar.actions.contains(action) {
+            let score = needle.isEmpty ? 0 : score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName))
+            guard needle.isEmpty || score != nil else { continue }
+            scored.append((score ?? 0, Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil,
+                                                  hint: bar.keys[action]?.glyphs, command: action.spec.command)))
+        }
+        let named = scored.filter { $0.score >= 3 }.map(\.row), others = scored.filter { $0.score < 3 }.map(\.row)
+        let where_ = OverlayCopy.newPane(side)
+        let tabs = bar.tabs.filter { !$0.isFocused }
+        func tabRow(_ tab: SwitchCandidate) -> Suggestion {
+            Suggestion(kind: .action, title: tab.title, subtitle: where_, symbol: "globe", favicon: tab.favicon, hint: "Return", command: .commandBar(.splitTab(side, tab.tab)))
+        }
+        guard !rest.isEmpty else {
+            let add = Suggestion(kind: .action, title: edge.map(TypeTravelCopy.addSplit) ?? ActionID.addSplitView.barTitle(appName: appName), subtitle: nil, symbol: "square.split.2x1", favicon: nil,
+                                 hint: "Return", command: edge.map { .split(.addPaneAt($0)) } ?? .split(.addPane))
+            return tabs.prefix(emptyTabCap).map(tabRow) + [add] + others
+        }
+        let engine = selectedEngine(bar)
+        let url = (resolve ?? { resolveTypedInput($0, engine: engine) })(rest)
+        let isAddress = url.map { $0 != engine.searchURL(rest) && !isSearch($0, for: rest) } ?? false
+        let open = Suggestion(kind: .action, title: rest, subtitle: where_, symbol: isAddress ? "globe" : "magnifyingglass", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, rest)))
+        let matches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }
+        let taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
+        let visited = matching(recentHistory(bar.history, excluding: taken), needle) { [$0.title, $0.url.absoluteString] }.prefix(2).map { entry in
+            Suggestion(kind: .action, title: entry.title.isEmpty ? displayURL(entry.url) : entry.title, subtitle: where_, symbol: "clock", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, entry.url.absoluteString)))
+        }
+        if isAddress {
+            let exact = matches.filter { $0.url == url }, partial = matches.filter { $0.url != url }
+            return named + exact.map(tabRow) + [open] + partial.prefix(tabCap).map(tabRow) + visited + others
+        }
+        return named + matches.prefix(tabCap).map(tabRow) + visited + [open] + others
+    }
+
+    private static func placementRow(_ placement: WindowSnap) -> Suggestion {
+        let symbol = switch placement {
+        case .leftHalf: "rectangle.lefthalf.filled"
+        case .rightHalf: "rectangle.righthalf.filled"
+        case .topHalf: "rectangle.tophalf.filled"
+        case .bottomHalf: "rectangle.bottomhalf.filled"
+        case .maximize: "macwindow"
+        case .center: "macwindow.on.rectangle"
+        case .nextDisplay: "display.2"
+        }
+        return Suggestion(kind: .action, title: placement.title, subtitle: nil, symbol: symbol, favicon: nil, hint: nil, command: .window(.place(placement)))
+    }
+
+    /// The window's places, then its existing commands; the text narrows them. Not in type travel, so ordinary queries do
+    /// not meet these rows.
+    private static func windowRows(_ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
+        let needle = fold(text)
+        let places = WindowSnap.allCases.filter { needle.isEmpty || score(needle, title: $0.title, triggers: $0.triggers) != nil }.map(placementRow)
+        let existing = [ActionID.fullscreen, .minimize, .toggleStayOnTop].filter { action in
+            bar.actions.contains(action) && (needle.isEmpty || score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName)) != nil)
+        }.map { action in
+            Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil, hint: bar.keys[action]?.glyphs, command: action.spec.command)
+        }
+        return places + existing
+    }
+
+    /// The page translation's row, or the text's: waiting, its answer (Return copies), or why not.
+    private static func translateRows(_ text: String, bar: CommandBarSnapshot) -> [Suggestion] {
+        switch QuickTranslation.parse(text) {
+        case nil:
+            return []
+        case .page(let target)?:
+            return [aiRow(OverlayCopy.translatePage(target), subtitle: nil, .assist(.translate(target)))]
+        case .text(let source, let target)?:
+            let current = bar.translation?.text == text ? bar.translation : nil
+            if let answer = current?.answer {
+                let shown = answer.split(whereSeparator: \.isNewline).joined(separator: " ")
+                return [Suggestion(kind: .calculator, title: shown, subtitle: target, symbol: "character.bubble", favicon: nil, hint: "Copy Result", command: .commandBar(.copyAnswer(answer)))]
+            }
+            if let failure = current?.failure {
+                return [Suggestion(kind: .action, title: failure, subtitle: nil, symbol: "exclamationmark.triangle", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+            }
+            return [Suggestion(kind: .action, title: OverlayCopy.translating(target), subtitle: source, symbol: "character.bubble", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+        }
+    }
+
+    /// The colour's three forms, each row with its swatch; Return copies that row's form.
+    private static func colorRows(_ color: QuickColor) -> [Suggestion] {
+        [color.hex, color.rgb, color.hsl].map { value in
+            Suggestion(kind: .color, title: value, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.copyColor, command: .commandBar(.copyAnswer(value)), icon: .swatch(color.rgba))
+        }
+    }
+
+    private static func aiRow(_ title: String, subtitle: String?, _ command: Command) -> Suggestion {
+        Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
+    }
+
+    /// Apps, then files, in the last places: they replace what would be cut last, and the typed row and anything above
+    /// it stay.
+    private static func withLocalRows(_ rows: [Suggestion], _ text: String, isAddress: Bool, bar: CommandBarSnapshot, limit: Int) -> [Suggestion] {
+        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return rows }
+        let found = Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
+        return withLastRows(rows, found, limit: limit)
+    }
+
+    /// `found` in the last places: they replace what would be cut last, and the typed row and anything above it stay.
+    private static func withLastRows(_ rows: [Suggestion], _ found: [Suggestion], limit: Int) -> [Suggestion] {
+        guard !found.isEmpty else { return rows }
+        let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator || $0.kind == .color } ?? 0
+        let room = max(0, limit - (lastKept + 1))
+        let shown = Array(found.prefix(room))
+        return Array(rows.prefix(max(lastKept + 1, min(rows.count, limit - shown.count)))) + shown
+    }
+
+    private static func fileRow(_ hit: LocalHit) -> Suggestion {
+        let folder = ((hit.path as NSString).deletingLastPathComponent as NSString).abbreviatingWithTildeInPath
+        return Suggestion(kind: .file, title: hit.name, subtitle: folder, symbol: nil, favicon: nil, hint: OverlayCopy.fileRowKeys,
+                          command: .commandBar(.local(.open, path: hit.path)), icon: .document(name: hit.name, contentType: hit.contentType),
+                          commandReturn: .commandBar(.local(.reveal, path: hit.path)), optionReturn: .commandBar(.local(.copyPath, path: hit.path)))
+    }
+
+    private static func appRow(_ hit: LocalHit) -> Suggestion {
+        Suggestion(kind: .app, title: hit.name, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.openApp,
+                   command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path))
+    }
+
+    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address and not
+    /// a site being completed. Nil keeps Tab as it was. Site search's offer, a prefix word and the tool's name go first (the
+    /// view).
+    public static func tabQuestion(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound else { return nil }
+        let engine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+        guard let url = (resolve ?? { resolveTypedInput($0, engine: engine) })(text), url == engine.searchURL(text) || isSearch(url, for: text) else { return nil }
+        return text
     }
 
     /// The Ask row: the query after Max's flower, "Ask <tool>" and the arrow square on the right.
@@ -447,6 +686,18 @@ extension OverlayCopy {
     /// The key shown beside "Search Wikipedia" (P02-c, Q01-b); Space after an engine's whole name also enters site
     /// search, as the comments "Hint for using the Space key…" and "…the Tab key…" say.
     static let siteSearchKey = "Tab"
+    /// Brk's own rows' captions (beyond Arc).
+    static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
+    static let openApp = "Open App"
+    static let copyEmoji = "Copy Emoji"
+    static let copyColor = "Copy Color"
+    static let openDictionary = "Open Dictionary"
+    static func noDefinition(_ word: String) -> String { "No definition for \(word)" }
+    static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }
+    static func translating(_ target: String) -> String { "Translating to \(target)…" }
+    static func newPane(_ edge: SplitEdge) -> String { "New pane on the \(edge.rawValue)" }
+    static let askThisPage = "Ask about this page"
+    static let summarizeThisPage = "Summarize this page"
     /// GUESS: "Site Search placeholder where the wildcard is the name of the site."
     static func siteSearchPlaceholder(_ engine: String) -> String { "\(searchVerb) \(engine)…" }
     /// Observed: "Focus on <space>" (`TypeTravelCandidate.focusSpace`).

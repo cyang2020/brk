@@ -12,6 +12,19 @@ extension Work {
             guard let result = BrowserCalculator.result(expression) else { return }
             effects.append(.copyToPasteboard(result))
             state.session.windows[window]?.overlay = nil
+        case .copyAnswer(let text):
+            // A row still waiting for its answer has nothing to copy, and the bar stays.
+            guard !text.isEmpty, case .commandBar? = state.session.windows[window]?.overlay else { return }
+            effects.append(.copyToPasteboard(text))
+            state.session.windows[window]?.overlay = nil
+        case .local(let action, let path):
+            guard let results = state.session.windows[window]?.localResults, (results.apps + results.files).contains(where: { $0.path == path }) else { return }
+            switch action {
+            case .open: effects.append(.openLocalFile(path))
+            case .reveal: effects.append(.revealFile(path))
+            case .copyPath: effects.append(.copyToPasteboard(path))
+            }
+            state.session.windows[window]?.overlay = nil
         case .open(let mode):
             // Cmd+L edits the focused tab (over the URL pill while the sidebar shows it, else centered); with
             // nothing shown it behaves as Cmd+T. The same target already open is a no-op that keeps its openID (the
@@ -24,6 +37,8 @@ extension Work {
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)
             // A new opening starts with an empty query, so the last opening's suggestions answer nothing.
             if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
+            state.session.windows[window]?.localResults = nil
+            state.session.windows[window]?.barClock = ctx.now
         case .submit(let text):
             // Searches use the current space's profile's engine (Profiles pane, "Default Search Engine").
             guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
@@ -46,15 +61,45 @@ extension Work {
             // `SystemEvent.suggestions`. A blank query, or a profile that does not allow them (any more), clears
             // what is shown. Top domains and the host dedup list are view-local (Suggest.swift); only the network
             // fetch goes through here.
-            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
-            if case .commandBar(_, .ai)? = state.session.windows[window]?.overlay { return }
+            guard case .commandBar(_, let target)? = state.session.windows[window]?.overlay else { return }
+            if case .ai = target { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
-            guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, BrowserCalculator.result(trimmed) == nil, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
+            defer { askQuickSources(trimmed, target: target, in: window) }
+            // Out of the prefix: its translation stops. (Entering a pill sends this too, with no text.)
+            barTranslationText("", in: window)
+            // A text the bar answers itself is not a web search: a calculation, a conversion. A bar filling an empty pane
+            // has none of those but arithmetic.
+            var fillsPane = false
+            if case .fillPane = target { fillsPane = true }
+            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && (QuickAnswers.leads(trimmed) || QuickColors.leads(trimmed)))
+            guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, !answeredHere, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
             }
             effects.append(.fetchSuggestions(window, query: trimmed, url: url))
+        case .openDictionary(let word):
+            guard case .commandBar? = state.session.windows[window]?.overlay, !word.isEmpty else { return }
+            effects.append(.openDictionary(word))
+            state.session.windows[window]?.overlay = nil
+        case .splitOpen(let edge, let text):
+            run(.split(.addPaneAt(edge)), in: window)
+            if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(text)), in: window) }
+        case .splitTab(let edge, let tab):
+            guard let open = state.session.windows[window]?.overlay, case .commandBar(_, .newTab) = open else { return }
+            // An open bar holds drops off (`splitDrop`). A Favorite's or pinned tab's drop opens its address and leaves it where it is.
+            state.session.windows[window]?.overlay = nil
+            if let offer = state.splitDrop(in: window)?.offers[tab] {
+                run(.split(.dropTab(offer, edge: edge)), in: window)
+            } else if let url = state.displayedTab(tab, in: window)?.url {
+                run(.commandBar(.splitOpen(edge, url.absoluteString)), in: window)
+            } else {
+                state.session.windows[window]?.overlay = open
+            }
+        case .prefixQuery(let action, let text):
+            guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
+            if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
+            prefixQuery(action, text.trimmingCharacters(in: .whitespacesAndNewlines), in: window)
         case .dismiss:
             // Esc in the bar, or the archive's close: an empty pane the bar was filling stays (Ctrl+Shift+- closes it).
             if state.session.windows[window]?.overlay != nil { state.session.windows[window]!.overlay = nil }
@@ -63,6 +108,43 @@ extension Work {
 }
 
 extension Work {
+    /// The sources beside the search engine, none of them for a bar that fills an empty split pane; files and apps only
+    /// in a new-tab bar. A private window, which lists no history or bookmarks, lists no files and starts no fetch either;
+    /// rates already known still answer there. An ordinary keystroke changes no state here, so typing does not re-render
+    /// the window.
+    private mutating func askQuickSources(_ text: String, target: CommandBarTarget, in window: WindowID) {
+        let isPrivate = state.doc.windows[window]?.kind == .incognito
+        if !isPrivate, target == .newTab, let request = LocalSources.request(for: text, engine: state.searchEngine(in: window)),
+           state.session.windows[window]?.localResults.map({ $0.query == request.query && $0.scope == request.scope }) != true {
+            effects.append(.searchLocal(window, request))
+        }
+        if case .fillPane = target { return }
+        if QuickAnswers.usesClock(text) { state.session.windows[window]?.barClock = ctx.now }
+        if !isPrivate, QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
+    }
+
+    /// What the text after a prefix word asks of that prefix's source.
+    private mutating func prefixQuery(_ action: QuickPrefixAction, _ text: String, in window: WindowID) {
+        switch action {
+        case .files, .apps:
+            let scope: LocalScope = action == .files ? .files : .apps
+            guard text.count >= LocalSources.prefixMinLength, state.doc.windows[window]?.kind != .incognito else { return }
+            let results = state.session.windows[window]?.localResults
+            if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
+        case .translate: barTranslationText(text, in: window)
+        case .define:
+            if !text.isEmpty, state.session.windows[window]?.barDefinition?.word != text { effects.append(.lookUpWord(window, text)) }
+        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split, .window, .color: break
+        }
+    }
+
+    /// Kept for the view, which shows it only while its text is still `results.query` (`Suggest.rank`); BrkApp cancels a
+    /// search as soon as the text moves on.
+    mutating func localResults(_ window: WindowID, _ results: LocalResults) {
+        guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
+        state.session.windows[window]?.localResults = results
+    }
+
     /// What a submitted url does per the open bar's target: a live page navigates, a tab without a page (an empty
     /// pane) gets its page created from the url, a new-tab bar opens a tab; then the bar closes.
     private mutating func apply(_ url: URL, in window: WindowID) {

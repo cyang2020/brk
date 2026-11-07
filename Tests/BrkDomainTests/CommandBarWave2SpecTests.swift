@@ -7,6 +7,12 @@ import XCTest
 /// through the effect and event pair, the type-travel index (every real menu action is a result), shortcut
 /// remapping with conflicts.
 final class CommandBarWave2SpecTests: XCTestCase {
+    /// What goes to the search engine; the file and app sources' own effect has CommandBarQuickSourcesTests.
+    private func notLocalSearch(_ effect: Effect) -> Bool {
+        if case .searchLocal = effect { return false }
+        return true
+    }
+
     /// a search uses the current space's profile's default engine
     func test_searchesUseTheProfilesEngine() {
         let d = Driver()
@@ -36,7 +42,7 @@ final class CommandBarWave2SpecTests: XCTestCase {
         let d = Driver()
         d.user(.commandBar(.open(.newTab)))
         let t = d.user(.commandBar(.queryChanged("swi")))
-        XCTAssertEqual(t.effects, [.fetchSuggestions(d.window, query: "swi", url: url("https://suggestqueries.google.com/complete/search?client=firefox&q=swi"))])
+        XCTAssertEqual(t.effects.filter(notLocalSearch), [.fetchSuggestions(d.window, query: "swi", url: url("https://suggestqueries.google.com/complete/search?client=firefox&q=swi"))])
         XCTAssertFalse(t.changed, "the query is view-local; only the fetch leaves")
         d.system(.suggestions(d.window, query: "swi", ["swift", "swim"]))
         XCTAssertEqual(d.bar?.suggestions, ["swift", "swim"])
@@ -101,7 +107,7 @@ final class CommandBarWave2SpecTests: XCTestCase {
         d.user(.commandBar(.queryChanged("swi")), in: other)
         d.system(.suggestions(other, query: "swi", ["swift", "swim"]))
         d.user(.settings(.profile(.default, .searchSuggestions(false))))
-        XCTAssertEqual(d.user(.commandBar(.queryChanged("swim")), in: other).effects, [])
+        XCTAssertEqual(d.user(.commandBar(.queryChanged("swim")), in: other).effects.filter(notLocalSearch), [])
         guard case .commandBar(let bar)? = d.view(of: other).overlay else { return XCTFail("the other bar closed") }
         XCTAssertEqual(bar.suggestions, [])
     }

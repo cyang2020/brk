@@ -6,9 +6,12 @@ extension Work {
 
     mutating func assist(_ intent: AIIntent, in window: WindowID) {
         switch intent {
-        case .cancel, .dismiss:
+        case .cancel, .stop, .dismiss:
             cancelAI(in: window, slot: .panel)
             if intent == .dismiss { state.session.ai.answers[window] = nil }
+            return
+        case .approve(let approval, let option):
+            answerApproval(approval, option: option, in: window)
             return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:
@@ -68,7 +71,19 @@ extension Work {
         switch intent {
         case .ask(let question):
             guard aiEnabled(.commandBar, window), let q = aiQuestion(question) else { return }
-            _ = startAI(.ask(q), purpose: .answer, title: q, window: window)
+            askAgent(q, choice: state.doc.settings.max.provider, in: window)
+        case .askAgent(let question, let agent):
+            guard aiEnabled(.commandBar, window), let q = aiQuestion(question) else { return }
+            guard state.doc.settings.max.provider != .off, let kind = agent.kind, state.session.detectedAI.contains(kind) else {
+                aiMessage("\(agent.rawValue.capitalized) is not available on this Mac. Nothing was sent.", in: window); return
+            }
+            askAgent(q, choice: agent, in: window)
+        case .followUp(let text):
+            guard let q = aiQuestion(text) else { return }
+            followUp(q, in: window)
+        case .chooseFolder:
+            guard aiEnabled(.commandBar, window) else { return }
+            effects.append(.aiChooseFolder(window))
         case .askPage(let question):
             guard aiEnabled(.askPage, window), let q = aiQuestion(question) else { return }
             readActiveAI(.askPage(q), title: q, in: window)
@@ -139,23 +154,124 @@ extension Work {
     /// A new request replaces the window's earlier one of the same slot (one answer, one preview, one translation,
     /// one tidy); Instant Links searches run side by side, one Today row each. Only the panel's purposes write the
     /// answer panel.
-    private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true) -> AIRequestID {
+    private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true, seconds: Int = 120) -> AIRequestID {
         if purpose.slot != .instant { cancelAI(in: window, slot: purpose.slot) }
         let id = AIRequestID(ctx.newID())
         state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose)
-        state.session.ai.answerContexts[window] = state.libraryContext(in: window)
+        if purpose != .barTranslation { state.session.ai.answerContexts[window] = state.libraryContext(in: window) }
         if !purpose.inPlace {
-            state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [])
+            state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? Self.waiting : "Reading the selected page…", busy: true, sources: [])
         }
-        state.session.windows[window]?.overlay = nil
-        effects.append(.aiWatch(id, seconds: 120))
+        if purpose != .barTranslation { state.session.windows[window]?.overlay = nil }
+        effects.append(.aiWatch(id, seconds: seconds))
         if run { sendAI(id, task: task) }
         return id
     }
-    private mutating func sendAI(_ id: AIRequestID, task: AITask) {
+    /// A read-only panel turn's ceiling: the panel has Stop, and an agent writing a long answer is not stuck. A turn in
+    /// a folder has none; a command the user allowed may run for as long as it needs.
+    private static let panelSeconds = 300
+    /// A question in the panel to `choice`'s agent, read-only; its follow-ups stay with that agent.
+    private mutating func askAgent(_ q: String, choice: AIProviderChoice, in window: WindowID) {
+        let id = startAI(.ask(q), purpose: .answer, title: q, window: window, run: false, seconds: Self.panelSeconds)
+        openConversation(id, in: window)
+        sendAI(id, task: .ask(q), choice: choice)
+    }
+    /// The request becomes the first turn of a conversation: its session stays for follow-ups, with tools off.
+    private mutating func openConversation(_ id: AIRequestID, in window: WindowID) {
+        state.session.ai.answers[window]?.conversation = AIConversationSnapshot(id: id)
+        state.session.ai.turnText[id] = 0
+        effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider))
+    }
+    /// The next message in the panel's conversation. One turn at a time: the panel offers Stop while one runs.
+    private mutating func followUp(_ q: String, in window: WindowID) {
+        guard var answer = state.session.ai.answers[window], var conversation = answer.conversation, !conversation.ended, !answer.busy else { return }
+        let turn = AIRequestID(ctx.newID())
+        state.session.ai.requests[turn] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .followUp)
+        state.session.pendingAI[turn] = .ask(q)
+        conversation.items.append(.user(q))
+        state.session.ai.turnText[conversation.id] = 0
+        answer.conversation = conversation
+        answer.request = turn
+        answer.busy = true
+        answer.text = Self.waiting
+        state.session.ai.answers[window] = answer
+        if conversation.folder == nil { effects.append(.aiWatch(turn, seconds: Self.panelSeconds)) }
+        effects.append(.aiTurn(conversation: conversation.id, turn: turn, .ask(q)))
+    }
+    /// The user chose a folder: a new session with tools on and approvals on, waiting for the first message. Home and
+    /// the disk's root are refused; a coding session needs a folder that holds one project.
+    mutating func aiFolderChosen(_ folder: String?, in window: WindowID) {
+        guard let folder, state.doc.windows[window] != nil, state.doc.windows[window]?.kind != .incognito else { return }
+        if let refusal = AIValidation.workingFolderRefusal(folder, home: NSHomeDirectory()) { toast(refusal, in: window); return }
+        cancelAI(in: window, slot: .panel)
+        let id = AIRequestID(ctx.newID())
+        var conversation = AIConversationSnapshot(id: id, folder: folder)
+        conversation.items = [.notice("Working in \(folder). Tools are on; the agent asks here before it runs a command or changes a file.")]
+        state.session.ai.answerContexts[window] = state.libraryContext(in: window)
+        state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: (folder as NSString).lastPathComponent, text: "", busy: false, sources: [], conversation: conversation)
+        state.session.ai.turnText[id] = 0
+        state.session.windows[window]?.overlay = nil
+        effects.append(.aiOpenConversation(id, folder: folder, choice: state.doc.settings.max.provider))
+    }
+    private func conversationWindow(_ id: AIRequestID) -> WindowID? {
+        state.session.ai.answers.first { $0.value.conversation?.id == id }?.key
+    }
+    mutating func aiConversation(_ id: AIRequestID, _ event: AIConversationEvent) {
+        guard let window = conversationWindow(id), var conversation = state.session.ai.answers[window]?.conversation else { return }
+        switch event {
+        case .started(let agent, let name, let model, let effort):
+            conversation.agent = agent; conversation.agentName = name; conversation.model = model; conversation.effort = effort
+        case .step(let step, let turn):
+            guard state.session.ai.answers[window]?.request == turn else { return }
+            if let index = conversation.items.firstIndex(where: { if case .step(let s) = $0 { s.id == step.id } else { false } }) {
+                conversation.items[index] = .step(step)
+            } else {
+                holdTurnText(conversation.id, in: window)
+                conversation.items.append(.step(step))
+            }
+        case .approval(let approval, let turn):
+            guard state.session.ai.answers[window]?.request == turn else { return }
+            holdTurnText(conversation.id, in: window)
+            conversation.items.append(.approval(approval))
+        case .approvalClosed(let approval):
+            conversation.items = conversation.items.compactMap {
+                if case .approval(let a) = $0, a.id == approval, a.answer == nil { nil } else { $0 }
+            }
+        case .notice(let text): conversation.items.append(.notice(text))
+        }
+        state.session.ai.answers[window]?.conversation = conversation
+    }
+    /// A step or approval follows the text so far: the turn's later text goes into a new row under it.
+    private mutating func holdTurnText(_ id: AIRequestID, in window: WindowID) {
+        guard let answer = state.session.ai.answers[window], answer.busy, case .assistant? = answer.conversation?.items.last,
+              answer.request.flatMap({ state.session.pendingAI[$0] }) != nil else { return }
+        let shown = answer.text == Self.waiting ? 0 : answer.text.count
+        state.session.ai.turnText[id] = shown
+    }
+    private mutating func answerApproval(_ approval: String, option: String, in window: WindowID) {
+        guard var conversation = state.session.ai.answers[window]?.conversation, !conversation.ended,
+              let index = conversation.items.firstIndex(where: { if case .approval(let a) = $0 { a.id == approval && a.answer == nil } else { false } }),
+              case .approval(var value) = conversation.items[index], value.options.contains(where: { $0.id == option }) else { return }
+        value.answer = option
+        conversation.items[index] = .approval(value)
+        state.session.ai.answers[window]?.conversation = conversation
+        effects.append(.aiApprove(conversation: conversation.id, approval: approval, option: option))
+    }
+    /// The turn's text so far, minus what rows above the last step already show.
+    private mutating func showTurnText(_ text: String, in window: WindowID) {
+        guard var conversation = state.session.ai.answers[window]?.conversation else { return }
+        let rest = String(text.dropFirst(state.session.ai.turnText[conversation.id] ?? 0))
+        if case .assistant? = conversation.items.last { conversation.items[conversation.items.count - 1] = .assistant(rest) }
+        else if !rest.isEmpty { conversation.items.append(.assistant(rest)) }
+        state.session.ai.answers[window]?.conversation = conversation
+    }
+    mutating func aiAgents(_ statuses: [AIAgentStatus]) {
+        for status in statuses { state.session.ai.agents[status.kind] = status }
+    }
+    private mutating func sendAI(_ id: AIRequestID, task: AITask, choice: AIProviderChoice? = nil) {
         state.session.pendingAI[id] = task
         state.session.ai.requests[id]?.task = task
-        effects.append(.ai(id, task, choice: state.doc.settings.max.provider))
+        effects.append(.ai(id, task, choice: choice ?? state.doc.settings.max.provider))
     }
     private mutating func readActiveAI(_ purpose: AIPurpose, title: String, in window: WindowID) {
         guard let page = state.findPage(in: window), case .ready(let document) = state.session.live[page]?.document,
@@ -212,7 +328,9 @@ extension Work {
             return spec
         }
         state.session.ai.requests[id]?.hidden = hidden
-        effects.append(.aiWatch(id, seconds: request.purpose.isPreview ? 5 : 30))
+        // Time to load and read the pages; real pages take longer than fixtures, and a card that says it is reading
+        // costs nothing. The tool's answer gets its own time after this.
+        effects.append(.aiWatch(id, seconds: request.purpose.isPreview ? 15 : 30))
     }
 
     mutating func aiHiddenEvent(_ event: PageEvent, token: BrowserToken) -> Bool {
@@ -241,13 +359,26 @@ extension Work {
         return true
     }
     private mutating func aiHiddenReady(_ id: AIRequestID, document: DocumentToken) {
-        guard let r = state.session.ai.requests[id], !r.extracting.contains(document.browser.page) else { return }
+        // A reader that moved on to a new document (a redirect by script, a reload) is read again; the read of the old
+        // one fails or is ignored.
+        guard let r = state.session.ai.requests[id], r.hiddenDocuments[document.browser.page] != document else { return }
         state.session.ai.requests[id]?.hiddenDocuments[document.browser.page] = document
         state.session.ai.requests[id]?.extracting.insert(document.browser.page)
         effects.append(.aiRead(id, document))
     }
 
     mutating func aiReadResult(_ id: AIRequestID, page: PageID, content: AIPageContent?) {
+        if let request = state.session.ai.requests[id], request.document == nil {
+            // A reader's read: only the one still wanted counts, and only once.
+            guard request.hidden.contains(where: { $0.id == page }), let current = request.hiddenDocuments[page] else { return }
+            if let content, content.document != current { return }
+            // A busy machine can drop one read of a page that is fine: it gets a second.
+            if content == nil, !request.readAgain.contains(page) {
+                state.session.ai.requests[id]?.readAgain.insert(page)
+                effects.append(.aiRead(id, current))
+                return
+            }
+        }
         guard var request = state.session.ai.requests[id],
               state.libraryContext(in: request.window) == request.context,
               let content, content.document.browser.page == page,
@@ -262,6 +393,8 @@ extension Work {
         switch request.purpose {
         case .askPage(let question):
             state.session.ai.answers[request.window]?.sources = [AISource(title: content.title, url: content.url)]
+            openConversation(id, in: request.window)
+            effects.append(.aiWatch(id, seconds: Self.panelSeconds))
             sendAI(id, task: .pageQuestion(question, content))
         case .translate(let target):
             guard case .profile(let profile) = request.context else { return }
@@ -274,6 +407,9 @@ extension Work {
             sendAI(id, task: .translate(target: target, content: content))
         case .preview:
             state.session.ai.requests[id]?.hidden = []
+            // Reading the link had its own few seconds; the tool's answer gets its own time (a real agent takes 2 to
+            // 6 seconds to answer, and more when its account is busy).
+            effects.append(.aiWatch(id, seconds: 60))
             sendAI(id, task: .summarize(content))
         case .instant:
             // A real main-frame ready document establishes reachability using the original context: the page opens
@@ -287,6 +423,8 @@ extension Work {
             let pages = request.hidden.compactMap { request.contents[$0.id] }
             state.session.ai.requests[id]?.hidden = []
             state.session.ai.answers[request.window]?.sources = pages.map { AISource(title: $0.title, url: $0.url) }
+            openConversation(id, in: request.window)
+            effects.append(.aiWatch(id, seconds: Self.panelSeconds))
             sendAI(id, task: .browse(question, pages))
         default: break
         }
@@ -337,9 +475,10 @@ extension Work {
             guard AIValidation.citations(answer, sourceCount: pages.count) else {
                 completeAI(id, text: "The tool did not cite the selected sources correctly. Retry Browse for Me or open the sources below."); return
             }
-            completeAI(id, text: answer)
+            completeAI(id, text: answer, answered: true)
         case .ask, .pageQuestion:
-            completeAI(id, text: String(text.prefix(60_000)))
+            // A panel turn is an answer; the `translate` prefix's row takes it as its success.
+            completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
         case .summarize:
             guard let request = state.session.ai.requests[id], state.session.ai.previews[request.window]?.request == id else { completeAI(id, text: ""); return }
             guard let reply = AIValidation.preview(text) else { completeAI(id, text: "No preview available"); return }
@@ -353,7 +492,10 @@ extension Work {
         guard let request = state.session.ai.requests[id], state.session.pendingAI[id] != nil else { return }
         switch request.task {
         case .ask, .pageQuestion, .browse:
+            // The bar's row shows the finished answer; the answer panel is someone else's.
+            guard !request.purpose.inPlace, state.session.ai.answers[request.window]?.request == id else { return }
             state.session.ai.answers[request.window]?.text = String(text.prefix(60_000))
+            showTurnText(String(text.prefix(60_000)), in: request.window)
         default: break
         }
     }
@@ -375,10 +517,11 @@ extension Work {
         completeAI(id, text: success ? "Page translated. Controls and page structure were preserved. Reload to restore the original text." : "The document or text changed. Translation was not applied; reload and retry.", success: success)
     }
     private static let cancelled = "Request cancelled."
+    private static let waiting = "Waiting for the local AI tool…"
     static let instantRowPrefix = "instant-"
     /// `success`: the in-place purposes' good ending (their result is already applied); otherwise `text` says what
     /// went wrong, in the panel, on the preview card, as the Today row's "Oops, something went wrong." or a notice.
-    private mutating func completeAI(_ id: AIRequestID, text: String, success: Bool = false) {
+    private mutating func completeAI(_ id: AIRequestID, text: String, success: Bool = false, answered: Bool = false) {
         guard let request = state.session.ai.requests.removeValue(forKey: id) else { return }
         state.session.pendingAI[id] = nil
         effects.append(.aiCancel(id))
@@ -387,6 +530,13 @@ extension Work {
         state.session.ai.answers[request.window]?.text = text
         state.session.ai.answers[request.window]?.busy = false
         state.session.ai.answers[request.window]?.request = nil
+        guard var conversation = state.session.ai.answers[request.window]?.conversation else { return }
+        // An approval the agent still waits for goes with the turn.
+        conversation.items.removeAll { if case .approval(let a) = $0 { a.answer == nil } else { false } }
+        state.session.ai.answers[request.window]?.conversation = conversation
+        // The answer's text; otherwise what went wrong goes under whatever the agent had written.
+        if answered { showTurnText(text, in: request.window) }
+        else { state.session.ai.answers[request.window]?.conversation?.items.append(.notice(text == Self.cancelled ? "Stopped." : text)) }
     }
     private mutating func finishInPlace(_ id: AIRequestID, _ request: AIRequest, text: String, success: Bool) {
         let window = request.window
@@ -407,9 +557,48 @@ extension Work {
         case .organize:
             state.session.ai.tidying.remove(window)
             if !success, text != Self.cancelled { toast(text, in: window) }
-        case .answer, .askPage, .browse: break
+        case .barTranslation:
+            guard state.session.windows[window]?.barTranslationRequest == id else { return }
+            state.session.windows[window]?.barTranslationRequest = nil
+            if success { state.session.windows[window]?.barTranslation?.answer = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            else if text != Self.cancelled { state.session.windows[window]?.barTranslation?.failure = text }
+        case .answer, .askPage, .browse, .followUp: break
         }
     }
+
+    // MARK: The `translate` prefix
+
+    /// The text changed: whatever was asking stops at once, and the row waits for a pause in typing.
+    mutating func barTranslationText(_ text: String, in window: WindowID) {
+        guard state.session.windows[window]?.barTranslation?.text != text else { return }
+        cancelAI(in: window, slot: .bar)
+        state.session.windows[window]?.barTranslationRequest = nil
+        guard !text.isEmpty, case .text(_, let target)? = QuickTranslation.parse(text) else {
+            state.session.windows[window]?.barTranslation = nil
+            return
+        }
+        state.session.windows[window]?.barTranslation = BarTranslation(text: text, target: target)
+        effects.append(.barTranslationDue(window, text))
+    }
+
+    mutating func barTranslationDue(_ window: WindowID, _ text: String) {
+        guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay, let current = state.session.windows[window]?.barTranslation, current.text == text,
+              current.answer == nil, current.failure == nil, state.session.windows[window]?.barTranslationRequest == nil,
+              state.doc.windows[window]?.kind != .incognito, state.doc.settings.max.enabled(.translation),
+              case .text(let source, let target)? = QuickTranslation.parse(text), source.count <= 2000 else { return }
+        let request = startAI(.ask(QuickTranslation.prompt(source, target: target)), purpose: .barTranslation, title: source, window: window)
+        state.session.windows[window]?.barTranslationRequest = request
+    }
+
+    /// The bar went away, by whatever command: its translation stops too.
+    mutating func cancelBarTranslationsWithNoBar() {
+        let asking = state.session.ai.requests.values.filter { $0.purpose == .barTranslation }.map(\.window)
+        for window in Set(asking) {
+            if case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay { continue }
+            cancelAI(in: window, slot: .bar)
+        }
+    }
+
     private mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
         let ids = state.session.ai.requests.filter { $0.value.window == window && $0.value.purpose.slot == slot }.map(\.key)
         for id in ids { completeAI(id, text: Self.cancelled) }
@@ -472,11 +661,12 @@ extension Work {
             case .answer:
                 if case .renameDownload = request.task { state.doc.settings.max.enabled(.downloadRename) }
                 else { state.doc.settings.max.enabled(.commandBar) }
+            case .followUp: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) }
             case .askPage: state.doc.settings.max.enabled(.askPage)
             case .preview: state.doc.settings.max.enabled(.linkPreviews)
             case .instant: state.doc.settings.max.enabled(.instantLinks)
             case .browse: state.doc.settings.max.enabled(.browse)
-            case .translate: state.doc.settings.max.enabled(.translation)
+            case .translate, .barTranslation: state.doc.settings.max.enabled(.translation)
             case .organize: state.doc.settings.max.tidyTabs
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
@@ -488,6 +678,22 @@ extension Work {
             state.session.ai.answers[window] = nil; state.session.ai.undo[window] = nil; state.session.ai.hover[window] = nil; state.session.ai.hoverDocuments[window] = nil
             state.session.ai.previews[window] = nil; state.session.ai.previewHeld.remove(window); state.session.ai.instantRows[window] = nil
             state.session.ai.tidying.remove(window)
+        }
+        // A conversation that left the panel takes its session and every process it started with it. Another agent
+        // chosen ends the one on screen; its transcript stays to read.
+        let shown = Set(state.session.ai.answers.values.compactMap { $0.conversation?.id })
+        for answer in previous.session.ai.answers.values {
+            if let id = answer.conversation?.id, !shown.contains(id) {
+                effects.append(.aiCloseConversation(id)); state.session.ai.turnText[id] = nil
+            }
+        }
+        if providerChanged {
+            for (window, answer) in state.session.ai.answers {
+                guard let id = answer.conversation?.id, answer.conversation?.ended == false else { continue }
+                state.session.ai.answers[window]?.conversation?.ended = true
+                state.session.ai.answers[window]?.conversation?.items.append(.notice("Max's agent changed. Ask again to talk to the new one."))
+                effects.append(.aiCloseConversation(id))
+            }
         }
         // A translation belongs to one document: a reload or a new page shows the page's own text.
         for (page, translation) in state.session.ai.translations where state.session.live[page]?.document != .ready(translation.document) {
@@ -611,14 +817,15 @@ extension Work {
     }
 }
 extension AIPurpose {
-    enum Slot: Equatable { case panel, preview, instant, translate, organize }
+    enum Slot: Equatable { case panel, preview, instant, translate, organize, bar }
     var slot: Slot {
         switch self {
-        case .answer, .askPage, .browse: .panel
+        case .answer, .askPage, .browse, .followUp: .panel
         case .preview: .preview
         case .instant: .instant
         case .translate: .translate
         case .organize: .organize
+        case .barTranslation: .bar
         }
     }
     var isPreview: Bool { slot == .preview }
@@ -645,14 +852,38 @@ extension AppState {
     /// The local tool's name as the command bar's Ask row and the Max pane say it (Arc: ChatGPT): the chosen one,
     /// else under Automatic the first one found, else Claude. Nil while Max's tool is off.
     public var askProviderName: String? {
-        let kind: AIProviderKind
+        switch doc.settings.max.provider {
+        case .off: nil
+        case .auto: (activeAgent ?? session.detectedAI.first ?? .claude).displayName
+        case let choice: choice.kind?.displayName
+        }
+    }
+
+    /// What the choice resolves to now, nil when nothing can answer: the chosen agent when it is installed; under
+    /// Automatic the first installed one not known to be signed out, else the first installed one.
+    public var activeAgent: AIProviderKind? {
         switch doc.settings.max.provider {
         case .off: return nil
-        case .claude: kind = .claude
-        case .codex: kind = .codex
-        case .auto: kind = session.detectedAI.first ?? .claude
+        case .auto:
+            let usable = session.detectedAI.first { session.ai.agents[$0]?.state != .notSignedIn }
+            return usable ?? session.detectedAI.first
+        case let choice:
+            return choice.kind.flatMap { session.detectedAI.contains($0) ? $0 : nil }
         }
-        return kind.displayName
+    }
+}
+
+extension AIProviderChoice {
+    /// The agent this choice names; nil for Off and Automatic.
+    public var kind: AIProviderKind? {
+        switch self {
+        case .off, .auto: nil
+        case .claude: .claude
+        case .codex: .codex
+        case .gemini: .gemini
+        case .cursor: .cursor
+        case .opencode: .opencode
+        }
     }
 }
 
@@ -661,6 +892,9 @@ extension AIProviderKind {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
+        case .gemini: "Gemini"
+        case .cursor: "Cursor"
+        case .opencode: "OpenCode"
         }
     }
 }

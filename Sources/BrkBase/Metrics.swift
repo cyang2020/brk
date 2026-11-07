@@ -292,6 +292,7 @@ public struct CommandBarMetrics: MetricGroup {
     public let littleArcWidth = Metric(500.0, .arc("Little Arc command bar width", .low))
     /// Typing pause before the default engine's suggest endpoint is asked (`Effect.fetchSuggestions`).
     public let suggestionDebounce = Metric(0.15, .guess("debounce before a search-suggestion fetch; Arc's value was not traced"))
+    public let translationDebounce = Metric(1.0, .guess("pause in typing before the translate prefix asks a local agent, which takes seconds; Brk's own"))
     public let maxSearchSuggestions = Metric(5, .guess("search-engine suggestions shown; Arc shows a handful under the typed row"))
 }
 
@@ -632,6 +633,13 @@ public struct AIMetrics: MetricGroup {
     public let bodyFont = Metric(13.0, .guess("selectable answer body font"))
     public let cornerRadius = Metric(12.0, .guess("answer document rounded corners"))
     public let borderWidth = Metric(1.0, .guess("answer panel hairline"))
+    public let stepFont = Metric(12.0, .guess("the agent's steps and notices in the panel"))
+    public let sendWidth = Metric(64.0, .guess("the panel's Send and Stop button"))
+    public let folderWidth = Metric(136.0, .guess("the panel's Work in a Folder button"))
+    public let settingsWidth = Metric(70.0, .guess("the panel's agent settings button"))
+    public let approvalRadius = Metric(8.0, .guess("the approval card's corners"))
+    public let approvalTitleHeight = Metric(36.0, .guess("two lines of an approval's title"))
+    public let approvalDetailHeight = Metric(62.0, .guess("four lines of an approval's detail"))
 }
 
 /// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).

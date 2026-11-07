@@ -50,6 +50,9 @@ public final class AppStore {
     /// Fallback for in-process input while the display is locked or the app has no key window.
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
+    private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
+    private lazy var barLookups = BarLookups(send: { [weak self] in self?.dispatch($0) })
+    private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
     private var queue: [Input] = []
     private var dispatching = false
@@ -254,7 +257,7 @@ public final class AppStore {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
-            switch command { case .queryChanged, .queryChangedForSite, .dismiss: suggestions.cancel(window); default: break }
+            switch command { case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss: suggestions.cancel(window); localSearch.cancel(window); barLookups.cancel(window); default: break }
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false
@@ -293,6 +296,7 @@ public final class AppStore {
         }
         sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
+        localSearch.reconcile(snapshot)
         reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
@@ -474,6 +478,7 @@ public final class AppStore {
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }
                 switch effect {
+                case .place(let placement): place(window, placement)
                 case .toggleFullScreen: windows[id]?.toggleFullScreen()
                 case .pageFullScreen(let on): windows[id]?.setPageFullScreen(on)
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
@@ -553,8 +558,28 @@ public final class AppStore {
                 spacePanels.export(document, owner: owner, token: token, window: window) { [weak self] outcome in
                     self?.dispatch(.system(.spaceExportFinished(owner, token: token, outcome)))
                 }
-            case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, detected: snapshot.settings.max.detected)
+            case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, max: snapshot.settings.max)
             case .aiCancel(let id): aiServices.cancel(id)
+            case .aiOpenConversation(let id, let folder, let choice): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max)
+            case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task)
+            case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
+            case .aiCloseConversation(let id): aiServices.closeConversation(id)
+            case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)
+            case .aiChooseFolder(let id):
+                guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false; panel.canCreateDirectories = true
+                panel.message = "Choose the folder this session may work in."
+                panel.prompt = "Work Here"
+                panel.identifier = NSUserInterfaceItemIdentifier("brk-ai-folder")
+                // A test instance answers in its own data folder, without a dialog on the shared screen.
+                if let test = ProcessInfo.processInfo.environment["BRK_TEST_AI_FOLDER"] {
+                    dispatch(.system(.aiFolderChosen(id, test)))
+                    continue
+                }
+                panel.beginSheetModal(for: owner) { [weak self] response in
+                    self?.dispatch(.system(.aiFolderChosen(id, response == .OK ? panel.url?.path : nil)))
+                }
             case .aiRead(let id, let document): aiServices.read(id, document: document)
             case .aiTranslate(let id, let content, let nodes): aiServices.translate(id, content: content, nodes: nodes)
             case .aiWatch(let id, let seconds): aiServices.watch(id, seconds: seconds)
@@ -563,6 +588,13 @@ public final class AppStore {
             case .aiRenameDownload(let id, let path, let name): aiServices.rename(id, path: path, filename: name)
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
+            case .searchLocal(let window, let request): localSearch.search(window, request)
+            case .barTranslationDue(let window, let text): barLookups.translationDue(window, text: text)
+            case .lookUpWord(let window, let word): barLookups.define(window, word: word)
+            case .openDictionary(let word):
+                if let url = URL(string: "dict://" + (word.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")) { NSWorkspace.shared.open(url) }
+            case .openLocalFile(let path): NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            case .needCurrencyRates: currencyRates.need()
             case .disposeContext: break
             case .loadWebsiteRules(let file, let context):
                 Task { @MainActor [weak self] in
@@ -649,6 +681,18 @@ public final class AppStore {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         }
+    }
+
+    /// Brk's own window only. A window in full screen has its screen to itself and stays.
+    private func place(_ window: NSWindow, _ placement: WindowSnap) {
+        guard !window.styleMask.contains(.fullScreen), let screen = window.screen ?? NSScreen.main else { return }
+        guard placement == .nextDisplay else {
+            window.setFrame(placement.frame(current: window.frame, visible: screen.visibleFrame), display: true)
+            return
+        }
+        let screens = NSScreen.screens
+        guard screens.count > 1, let index = screens.firstIndex(of: screen) else { return }
+        window.setFrame(WindowSnap.moved(window.frame, from: screen.visibleFrame, to: screens[(index + 1) % screens.count].visibleFrame), display: true)
     }
 
     private func runSidebarData(_ effect: SidebarDataEffect) {

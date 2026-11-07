@@ -268,6 +268,8 @@ struct Session: Sendable, Equatable {
     /// Local AI command-line tools found on PATH at launch (`SystemEvent.aiProvidersDetected`); the Max pane
     /// shows them and `.auto` picks from them.
     var detectedAI: [AIProviderKind]
+    /// The day's exchange rates once a currency question asked for them.
+    var currencyRates: CurrencyRates? = nil
     /// AI requests in flight (`Effect.ai` sent, `SystemEvent.aiResult` not yet received), so a result can be
     /// applied to the item its task names.
     var siteRequests: [String: PendingSiteRequest] = [:]
@@ -333,6 +335,15 @@ struct WindowSession: Sendable, Equatable {
     /// Search-engine suggestions for the command bar's last query (`SystemEvent.suggestions`); shown only while
     /// the bar is open and the query still matches.
     var suggestions: Suggestions?
+    /// The file and app sources' last answer; the view shows it only while its text is still what the answer says.
+    var localResults: LocalResults?
+    /// The `translate` prefix's text and its answer, and the request asking for it.
+    var barTranslation: BarTranslation?
+    var barTranslationRequest: AIRequestID?
+    /// The `define` prefix's last answer.
+    var barDefinition: BarDefinition?
+    /// The time the bar's quick answers read: set on opening and on a date or time question, moved by the clock's tick.
+    var barClock: Instant?
     var recentCycle: RecentCycle?
     /// Last `WindowEvent.modifiersChanged`, to see Control go down and up.
     var heldModifiers: Modifiers

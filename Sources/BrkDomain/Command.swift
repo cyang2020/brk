@@ -99,11 +99,31 @@ public enum CommandBarCommand: Hashable, Sendable, Codable {
     case submit(String)
     /// Site search (Tab or Space on a known engine's name): `query` searched with `engine`, applied like `submit`.
     case submitSearch(engine: SearchEngineID, query: String)
+    /// The `split` prefix's Return: a new pane on that side (`.split(.addPaneAt)`), and `text` opened in it through the
+    /// route an empty pane's bar uses. A window that cannot add a pane opens nothing.
+    case splitOpen(SplitEdge, String)
+    /// The `split` prefix's Return on an open tab: the tab itself joins what the window shows, on that side, with its live
+    /// page. A Favorite or pinned tab stays put and its address opens beside the page; so does another Space's tab.
+    case splitTab(SplitEdge, ItemID)
+    /// The `define` prefix's Return: the word in Dictionary.app.
+    case openDictionary(String)
+    /// The text after a prefix word changed (`QuickPrefixes`): this asks the prefix's own source, never the search engine.
+    case prefixQuery(QuickPrefixAction, String)
     /// The typed query changed (the view keeps the text; this asks for search suggestions when the profile allows
     /// them: `Effect.fetchSuggestions`, answered by `SystemEvent.suggestions`). F4.
     case queryChanged(String)
     /// Esc in the bar.
     case dismiss
+    /// A quick answer's or an emoji row's Return: `text` to the pasteboard, then the bar closes.
+    case copyAnswer(String)
+    /// A file or app row (`LocalResults`): only a path the bar is showing is acted on.
+    case local(LocalAction, path: String)
+}
+
+/// Return on a file row opens it with its default app (an app launches); ⌘Return shows it in the Finder; ⌥Return copies
+/// its path.
+public enum LocalAction: Hashable, Sendable, Codable {
+    case open, reveal, copyPath
 }
 
 public enum ArchiveCommand: Hashable, Sendable, Codable {
@@ -478,6 +498,11 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     /// "Turn On Max": the automatic provider when none is chosen, and every feature the user never switched on.
     /// Off: the provider is `.off`.
     case enable(Bool)
+    /// The Max pane's Local AI agent card: the model and effort for an agent; nil is the agent's own default.
+    case agentModel(AIProviderKind, String?)
+    case agentEffort(AIProviderKind, String?)
+    /// The Max pane appeared: ask each installed agent about itself.
+    case refreshAgents
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {
@@ -515,6 +540,8 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.
 public enum WindowCommand: Hashable, Sendable, Codable {
+    /// The `window` prefix: this window on its screen's visible frame.
+    case place(WindowSnap)
     /// A public, session-only window with its own empty sidebar.
     case newBlank
     case toggleStayOnTop
@@ -596,6 +623,14 @@ public enum SystemEvent: Sendable, Equatable {
     case externalURL(URL)
     /// The default engine answered `Effect.fetchSuggestions` for this query (stale answers are dropped). F4.
     case suggestions(WindowID, query: String, [String])
+    /// The file and app sources answered `Effect.searchLocal`; the bar shows it only while its text is still the answer's.
+    case localResults(WindowID, LocalResults)
+    /// The dictionary answered `Effect.lookUpWord`.
+    case definition(WindowID, BarDefinition)
+    /// The pause after typing under the `translate` prefix is over (`Effect.barTranslationDue`) for this text.
+    case barTranslationDue(WindowID, String)
+    /// Exchange rates are known (`Effect.needCurrencyRates`), from the cache or the day's fetch.
+    case currencyRates(CurrencyRates)
     /// Which local AI command-line tools BrkApp found on PATH at launch (`AIProviderSeam.detect`).
     case aiProvidersDetected([AIProviderKind])
     /// What registering the system-wide New Little Arc Window shortcut came to (BrkApp/LittleEntryPoints.swift).
@@ -609,6 +644,14 @@ public enum SystemEvent: Sendable, Equatable {
     case aiHoverReady(WindowID, URL, CGRect?)
     case aiTranslated(AIRequestID, Bool)
     case aiDownloadRenamed(DownloadID, originalPath: String, newPath: String?, error: String?)
+    /// A session reported something other than text (its text comes as `aiPartial` and `aiResult`).
+    case aiConversation(AIRequestID, AIConversationEvent)
+    /// The app has PATH now: with Max on, it asks the installed agents about themselves (`Effect.aiRefreshAgents`).
+    case aiAgentsWanted
+    /// What the installed agents said about themselves (`Effect.aiRefreshAgents`).
+    case aiAgents([AIAgentStatus])
+    /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
+    case aiFolderChosen(WindowID, String?)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

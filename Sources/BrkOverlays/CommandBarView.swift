@@ -3,6 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkLayout
 import BrkUIKit
+import UniformTypeIdentifiers
 
 /// Owner: W4 / F4. The command bar: input row, then up to 5 results (`Suggest.rank`: the completed site or the top
 /// hit, switch to tab, what you typed, top domains, the engine's suggestions, history, type travel). The typed query,
@@ -29,6 +30,14 @@ import BrkUIKit
 /// (`.commandBar(.submitSearch)`). Backspace in the empty input or Esc leaves the mode and gives back the engine's
 /// name as typed.
 ///
+/// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, apps and files in the last rows, Tab to ask the local AI. A
+/// file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do nothing new on any other row.
+///
+/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by Tab
+/// enters, the word's name sits in the pill, Backspace in the empty input or Esc leaves and gives the word back. An engine
+/// of the same name wins. Space never enters, so a search can start with one of these words. The word, or three letters of
+/// it, offers the prefix beside the input with the Tab key while no site search is on offer.
+///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
 ///
@@ -42,19 +51,39 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     let input = NSTextField()
     /// Typed text -> URL: the domain's one URL policy with the bar's engine unless a test sets it.
     var resolve: ((String) -> URL?)?
-    /// Site-search mode: the engine the query goes to, and the text that named it (given back on leaving).
-    private(set) var siteSearch: SearchEngineCandidate?
+    /// What the pill before the input says the text is for. The two kinds share entering, the pill and leaving.
+    enum Pill: Equatable {
+        case site(SearchEngineCandidate)
+        case prefix(QuickPrefix)
+
+        var title: String {
+            switch self {
+            case .site(let engine): engine.name
+            case .prefix(let prefix): prefix.title
+            }
+        }
+    }
+    private var pill: Pill?
+    /// Site-search mode: the engine the query goes to.
+    var siteSearch: SearchEngineCandidate? { if case .site(let engine)? = pill { engine } else { nil } }
+    /// A prefix word's mode.
+    var prefix: QuickPrefix? { if case .prefix(let prefix)? = pill { prefix } else { nil } }
+    /// The text that named the pill (given back on leaving).
     private var namedBy = ""
     /// What the user typed; the input shows it followed by the rest of `completion`, selected.
     private(set) var typed = ""
     private(set) var completion: String?
     /// The engine Tab would search, shown beside the input.
     private(set) var offer: SearchEngineCandidate?
-    private let sitePill = NSView()
-    private let siteLabel = NSTextField(labelWithString: "")
+    /// The prefix Tab would enter, shown there when no engine is on offer.
+    private(set) var prefixOffer: QuickPrefix?
+    let sitePill = NSView()
+    let siteLabel = NSTextField(labelWithString: "")
     private let leadingIcon = NSImageView()
     private let info = InfoButton()
     private let offerLabel = NSTextField(labelWithString: "")
+    /// A prefix's colour beside its offer, so the word shows what Tab will enter.
+    let offerDot = NSView()
     private let keyCap = NSView()
     private let keyLabel = NSTextField(labelWithString: OverlayCopy.siteSearchKey)
     private(set) var results: [Suggestion] = []
@@ -103,6 +132,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         leadingIcon.imageScaling = .scaleProportionallyUpOrDown
         offerLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
         offerLabel.lineBreakMode = .byTruncatingTail
+        offerDot.wantsLayer = true
+        offerDot.layer?.cornerRadius = OverlayMetrics.commandBar.offerDotSize.value / 2
+        offerDot.isHidden = true
         keyCap.wantsLayer = true
         keyCap.layer?.cornerCurve = .continuous
         keyCap.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
@@ -121,7 +153,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         backdrop.layer?.masksToBounds = true
         backdropTint.wantsLayer = true
         backdrop.addSubview(backdropTint)
-        for view in [backdrop, leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
+        sitePill.identify(.commandBarPill)
+        for view in [backdrop, leadingIcon, sitePill, input, info, offerDot, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
@@ -165,7 +198,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         self.bar = bar
         if reopened {
             openID = bar.openID
-            siteSearch = nil
+            pill = nil
             typed = bar.initialQuery
             completion = nil
             input.stringValue = bar.initialQuery
@@ -197,7 +230,18 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     // MARK: Keys inside the input
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        takeSiteSearchEscape(event) || super.performKeyEquivalent(with: event)
+        takeSiteSearchEscape(event) || takeCommandReturn(event) || super.performKeyEquivalent(with: event)
+    }
+
+    /// ⌘Return on a row that has its own use for it (a file row). AppKit offers Command chords as key equivalents, so
+    /// the text field's delegate never sees this one.
+    private func takeCommandReturn(_ event: NSEvent) -> Bool {
+        guard !isHiddenOrHasHiddenAncestor, event.type == .keyDown, event.keyCode == Key.returnKey.code, !event.isARepeat,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command, results.indices.contains(highlighted),
+              let command = results[highlighted].commandReturn, let window, event.window == nil || event.window === window,
+              let editor = input.currentEditor() as? NSTextView, window.firstResponder === editor, !editor.hasMarkedText() else { return false }
+        dispatch(command)
+        return true
     }
 
     /// For the window's own Escape handling, which runs before the page and before this view's event monitor (the
@@ -207,11 +251,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// The window routes Escape to Exit before the text field's delegate sees it. Site search owns the first
     /// Escape while its input has focus. The key-equivalent path also covers input in an inactive window.
     private func takeSiteSearchEscape(_ event: NSEvent) -> Bool {
-        guard !isHiddenOrHasHiddenAncestor, siteSearch != nil, event.type == .keyDown, event.keyCode == Key.escape.code,
+        guard !isHiddenOrHasHiddenAncestor, pill != nil, event.type == .keyDown, event.keyCode == Key.escape.code,
               event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
               let window, event.window == nil || event.window === window,
               let editor = input.currentEditor() as? NSTextView, window.firstResponder === editor, !editor.hasMarkedText() else { return false }
-        leaveSiteSearch()
+        leavePill()
         return true
     }
 
@@ -222,6 +266,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             // A held Return auto-repeats; only the first press chooses (`isARepeat` exists on key events only).
             let event = NSApp?.currentEvent
             if event?.type == .keyDown && event?.isARepeat == true { return true }
+            // A file row's ⌥Return copies its path; on any other row it stays Return.
+            if event?.modifierFlags.contains(.option) == true, results.indices.contains(highlighted), let command = results[highlighted].optionReturn {
+                dispatch(command)
+                return true
+            }
             // Max's Instant Links: Shift+Return on a web search opens its top results instead (P48-a).
             if event?.modifierFlags.contains(.shift) == true, let bar {
                 // A site search is a web search too: its engine's name and the query go to Instant Links whole (Arc's P48
@@ -230,7 +279,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
                     dispatch(.assist(.instant((namedBy.isEmpty ? siteSearch.name : namedBy) + " " + typed.trimmingCharacters(in: .whitespaces))))
                     return true
                 }
-                if siteSearch == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
+                if pill == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
                     dispatch(.assist(.instant(query)))
                     return true
                 }
@@ -238,16 +287,22 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             choose(highlighted)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
+            if pill != nil { leavePill() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
             // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
-            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab).
-            if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
-            else if siteSearch == nil, let bar, Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab); any other text in a new-tab bar goes to
+            // the tool as a question (Brk's own, as Raycast's Quick AI). A prefix's whole word comes before the tool's name,
+            // a part-typed one after it.
+            guard pill == nil, let bar else { return true }
+            if let offer { enter(.site(offer), namedBy: typed) }
+            else if let whole = QuickPrefixes.entry(named: typed, in: bar) { enter(.prefix(whole), namedBy: typed) }
+            else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            else if let prefixOffer { enter(.prefix(prefixOffer), namedBy: typed) }
+            else if let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
             return true
-        case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
-            leaveSiteSearch()
+        case #selector(NSResponder.deleteBackward(_:)) where pill != nil && input.stringValue.isEmpty:
+            leavePill()
             return true
         case #selector(NSResponder.moveUp(_:)):
             step(-1)
@@ -266,20 +321,23 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public func controlTextDidChange(_ notification: Notification) {
         let text = input.stringValue
-        if bar?.aiMode == nil, siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
-           !text.dropLast().contains(where: \.isWhitespace) {
-            return enterSiteSearch(engine, namedBy: String(text.dropLast()))
+        if bar?.aiMode == nil, pill == nil, text.hasSuffix(" "), let bar, !text.dropLast().contains(where: \.isWhitespace) {
+            let word = String(text.dropLast())
+            if let engine = Suggest.siteSearchEngine(named: word, bar) { return enter(.site(engine), namedBy: word) }
         }
         // Typing (the caret at the end) may complete; a deletion, of the completion itself or of what was typed,
         // never does: the text is then the start of what was there.
         let typingOn = !typed.hasPrefix(text) && caretAtEnd()
         typed = text
         completion = nil
-        if siteSearch == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
+        if pill == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
             complete(to: domain)
         }
-        if let siteSearch { dispatch(.commandBar(.queryChangedForSite(siteSearch.id, text))) }
-        else { dispatch(.commandBar(.queryChanged(text))) }
+        switch pill {
+        case .site(let engine)?: dispatch(.commandBar(.queryChangedForSite(engine.id, text)))
+        case .prefix(let prefix)?: dispatch(.commandBar(.prefixQuery(prefix.action, text)))
+        case nil: dispatch(.commandBar(.queryChanged(text)))
+        }
         rerank(keepHighlight: false)
     }
 
@@ -312,9 +370,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
-    private func enterSiteSearch(_ engine: SearchEngineCandidate, namedBy name: String) {
+    private func enter(_ mode: Pill, namedBy name: String) {
         namedBy = name.trimmingCharacters(in: .whitespaces)
-        siteSearch = engine
+        pill = mode
         typed = ""
         completion = nil
         input.stringValue = ""
@@ -323,20 +381,34 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
-    private func leaveSiteSearch() {
-        siteSearch = nil
+    private func leavePill() {
+        pill = nil
         typed = namedBy
         completion = nil
         input.stringValue = namedBy
+        // The caret after the word: setting the text selects it, and the next key would replace it.
+        input.currentEditor()?.selectedRange = NSRange(location: (namedBy as NSString).length, length: 0)
         applySiteSearchLook()
         dispatch(.commandBar(.queryChanged(namedBy)))
         rerank(keepHighlight: false)
     }
 
+    /// A prefix wears its own colour; a search engine's pill stays Arc's.
+    private func applyPillColors() {
+        if let tint = prefix?.tint {
+            sitePill.layer?.backgroundColor = tint.pillColor.cgColor
+            siteLabel.textColor = .white
+        } else {
+            sitePill.layer?.backgroundColor = colors.accessory.cgColor
+            siteLabel.textColor = colors.accessoryText
+        }
+    }
+
     private func applySiteSearchLook() {
-        sitePill.isHidden = siteSearch == nil
-        siteLabel.stringValue = siteSearch?.name ?? ""
-        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
+        sitePill.isHidden = pill == nil
+        siteLabel.stringValue = pill?.title ?? ""
+        applyPillColors()
+        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? prefix?.placeholder ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
         input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.centeredInputFontSize.value),
         ])
@@ -371,8 +443,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, resolve: resolve, completing: completion)
-        offer = siteSearch == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
+        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
+        offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
+        prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
         while rows.count < results.count {
             let index = rows.count
@@ -412,7 +485,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         } else {
             leadingIcon.image = glyph
         }
-        leadingIcon.isHidden = siteSearch != nil
+        leadingIcon.isHidden = pill != nil
     }
 
     private func layoutCard() {
@@ -425,10 +498,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let side = o.accessorySize.value
 
         // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
-        offerLabel.isHidden = offer == nil
-        keyCap.isHidden = offer == nil
-        info.isHidden = offer != nil || bar?.aiMode != nil || fillsWindow
-        offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
+        let offered = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? prefixOffer?.title
+        offerLabel.isHidden = offered == nil
+        keyCap.isHidden = offered == nil
+        info.isHidden = offered != nil || bar?.aiMode != nil || fillsWindow
+        offerLabel.stringValue = offered ?? ""
         // A label draws its text 2 in from each side of its frame.
         func width(_ label: NSTextField) -> CGFloat {
             ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
@@ -436,7 +510,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let offerWidth = width(offerLabel) + 4
         // Half points, as Arc's 30.5 pt Tab key.
         let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
-        let accessoryWidth = offer != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
+        let offerTint = offer == nil ? prefixOffer?.tint : nil
+        offerDot.isHidden = offerTint == nil
+        let dotWidth = offerTint == nil ? 0 : o.offerDotSize.value + o.offerDotGap.value
+        let accessoryWidth = offered != nil ? dotWidth + offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
         let font = input.font ?? .systemFont(ofSize: o.attachedInputFontSize.value)
@@ -453,7 +530,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         leadingIcon.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - iconSide / 2).rounded(), width: iconSide, height: iconSide)
         let right = width - o.accessoryRightInset.value
         var accessoryLeft = right
-        if offer != nil {
+        if offered != nil {
             keyCap.frame = CGRect(x: right - keyWidth, y: (mid - side / 2).rounded(), width: keyWidth, height: side)
             let keyHeight = keyLabel.intrinsicContentSize.height
             // The whole key: a centred label keeps 4 on each side, so a frame about the text's width draws it right of centre.
@@ -461,6 +538,12 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let offerHeight = offerLabel.intrinsicContentSize.height
             offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
             accessoryLeft = offerLabel.frame.minX
+            if let offerTint {
+                let dot = o.offerDotSize.value
+                offerDot.frame = CGRect(x: offerLabel.frame.minX - o.offerDotGap.value - dot, y: (mid - dot / 2).rounded(), width: dot, height: dot)
+                offerDot.layer?.backgroundColor = offerTint.pillColor.cgColor
+                accessoryLeft = offerDot.frame.minX
+            }
         } else if !info.isHidden {
             info.frame = CGRect(x: right - side, y: (mid - side / 2).rounded(), width: side, height: side)
             accessoryLeft = info.frame.minX
@@ -473,7 +556,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let labelSize = siteLabel.intrinsicContentSize
             let pill = CGSize(width: ceil(labelSize.width) + 2 * o.hintPadding.value, height: max(o.hintHeight.value, ceil(labelSize.height) + 4))
             sitePill.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - pill.height / 2).rounded(), width: pill.width, height: pill.height)
-            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width), height: labelSize.height)
+            // The room goes to the right of the text, which keeps its place: the measured width alone can cut the last letter ("Emoji").
+            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width) + o.hintTextSlack.value, height: labelSize.height)
             fieldX = sitePill.frame.maxX + m.stackSpacing.value
         }
         // P21-a, Q01-a: the centered bar's text sits half a point above the row's middle.
@@ -510,8 +594,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             return shadow
         }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor
-        sitePill.layer?.backgroundColor = colors.accessory.cgColor
-        siteLabel.textColor = colors.accessoryText
+        applyPillColors()
         offerLabel.textColor = colors.secondary
         keyCap.layer?.backgroundColor = colors.accessory.cgColor
         keyLabel.textColor = colors.accessoryText
@@ -689,7 +772,11 @@ final class ResultRowView: NSView {
         icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)
         favicon = suggestion.favicon
         hasFavicon = false
-        if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
+        // A file's, an app's or an emoji's own picture draws in its colors, on the highlight's tile like a favicon.
+        if let picture = suggestion.icon.map(LocalIcons.image) {
+            icon.image = picture
+            hasFavicon = true
+        } else if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
             guard let self, self.favicon == url else { return }
             self.icon.image = image
             self.hasFavicon = true
@@ -779,7 +866,9 @@ final class ResultRowView: NSView {
             let pill = CGSize(width: textWidth + 2 * padding, height: isSwitch ? tileSide : o.hintHeight.value)
             hintPill.frame = CGRect(x: right - pill.width, y: ((bounds.height - pill.height) / 2).rounded(), width: pill.width, height: pill.height)
             let textHeight = hint.intrinsicContentSize.height
-            hint.frame = CGRect(x: padding, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth, height: textHeight)
+            // A little room each side of the centred text: exactly the measured width can cut its last letter ("Copy Emoji").
+            let slack = isSwitch ? 0 : o.hintTextSlack.value
+            hint.frame = CGRect(x: padding - slack, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth + 2 * slack, height: textHeight)
             right = hintPill.frame.minX - m.stackSpacing.value
         }
         let x = o.textX.value - o.rowInset.value - 2
@@ -824,6 +913,49 @@ extension NSShadow {
 /// A plain container with top-left origin, like every BrkUI container.
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+private extension RGBA {
+    var pillColor: NSColor { NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha) }
+}
+
+/// The pictures of Brk's own rows: the system's icon for an app, once per path, for a kind of file, or an emoji drawn at
+/// the row's icon size. A file's row uses its kind because asking for a file's own icon touches the file, and macOS asks
+/// the user before an app touches the Desktop, Documents or Downloads folder.
+@MainActor
+enum LocalIcons {
+    private static var files: [String: NSImage] = [:]
+
+    static func image(_ icon: Suggestion.Icon) -> NSImage {
+        switch icon {
+        case .file(let path):
+            if let image = files[path] { return image }
+            if files.count > 200 { files.removeAll() }
+            let image = NSWorkspace.shared.icon(forFile: path)
+            files[path] = image
+            return image
+        case .document(let name, let contentType):
+            return NSWorkspace.shared.icon(for: contentType.flatMap { UTType($0) } ?? UTType(filenameExtension: (name as NSString).pathExtension) ?? .data)
+        case .swatch(let color):
+            let side = OverlayMetrics.commandBar.iconSize.value
+            return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+                let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: OverlayMetrics.commandBar.hintRadius.value, yRadius: OverlayMetrics.commandBar.hintRadius.value)
+                NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha).setFill()
+                path.fill()
+                NSColor.black.withAlphaComponent(0.2).setStroke()
+                path.stroke()
+                return true
+            }
+        case .emoji(let emoji):
+            let side = OverlayMetrics.commandBar.iconSize.value
+            return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+                let text = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: side * 0.82)])
+                let size = text.size()
+                text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
+                return true
+            }
+        }
+    }
 }
 
 /// Favicons for result rows, archive entries and the tab switcher, fetched once per URL.

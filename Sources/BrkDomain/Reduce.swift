@@ -162,12 +162,12 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
         case .easel(let event):
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -204,6 +204,7 @@ struct Work {
         case .spaceExportFinished(let window, let token, let outcome): spaceExportFinished(window, token: token, outcome: outcome)
         case .clockTick:
             sweepAutoArchive()
+            for window in state.session.windows.keys where state.session.windows[window]?.barClock != nil { state.session.windows[window]?.barClock = ctx.now }
             for window in state.session.windows.keys {
                 if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now {
                     state.session.windows[window]?.toast = nil
@@ -216,6 +217,11 @@ struct Work {
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
+        case .localResults(let window, let results): localResults(window, results)
+        case .barTranslationDue(let window, let text): barTranslationDue(window, text)
+        case .definition(let window, let definition):
+            if case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay { state.session.windows[window]?.barDefinition = definition }
+        case .currencyRates(let rates): state.session.currencyRates = rates
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
         case .globalShortcut(let status): if state.session.globalShortcut != status { state.session.globalShortcut = status }
         case .aiResult(let id, let outcome): aiResult(id, outcome)
@@ -225,6 +231,12 @@ struct Work {
         case .aiHoverReady(let window, let url, let link): aiHoverReady(window, url: url, link: link)
         case .aiTranslated(let id, let success): aiTranslated(id, success: success)
         case .aiDownloadRenamed(let id, let original, let new, let error): aiDownloadRenamed(id, original: original, new: new, error: error)
+        case .aiConversation(let id, let event): aiConversation(id, event)
+        case .aiAgents(let statuses): aiAgents(statuses)
+        case .aiAgentsWanted:
+            let max = state.doc.settings.max
+            if max.provider != .off, max.tidyTabs || max.renamePinnedTabs || AIFeature.allCases.contains(where: max.enabled) { effects.append(.aiRefreshAgents) }
+        case .aiFolderChosen(let window, let folder): aiFolderChosen(folder, in: window)
         }
     }
 
@@ -280,6 +292,7 @@ struct Work {
     }
 
     mutating func finish(from input: AppState) -> Transition {
+        cancelBarTranslationsWithNoBar()
         normalize(&state)
         reconcileFind(from: input)
         reconcileAI(from: input)
