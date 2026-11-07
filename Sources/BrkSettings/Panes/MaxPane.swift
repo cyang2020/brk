@@ -7,8 +7,9 @@ import SwiftUI
 
 /// The Max pane as Arc 1.170 lays it out (P38-b, P38-c, P38-max-on, P38-max-list): the MAX banner, Arc's paragraph,
 /// the Enable Max card, one card row per feature with its picture and switch, the note about what is sent. Max runs
-/// the local `claude` or `codex` command-line tool; which one, and Brk's own three AI features (Ask on Page, Browse
-/// for Me, Translate Pages), are in Advanced's More Settings…, so this pane keeps Arc's six rows. The pane scrolls.
+/// the user's local coding agent. The pane keeps Arc's six rows and Arc's note under them; the note's words "your local
+/// AI tool" open the Local AI agent card under the note (which agent, model, effort), which Arc does not have. Brk's own
+/// three AI features (Ask on Page, Browse for Me, Translate Pages) are in Advanced's More Settings…. The pane scrolls.
 struct MaxPane: View {
     let context: PaneContext
     @State private var explaining = false
@@ -35,6 +36,7 @@ struct MaxPane: View {
                 enableCard.padding(.top, CardMetrics.introToCard.value)
                 SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
+                if max.agentCardOpen { agentCard.padding(.top, M.footerTop.value) }
             }
             .frame(width: Metrics.settings.contentWidth.value, alignment: .leading)
             .padding(.horizontal, Metrics.settings.horizontalPadding.value)
@@ -111,9 +113,52 @@ struct MaxPane: View {
             }
     }
 
+    /// Which agent runs Max, read from the agents themselves: signed in or not, the models and efforts they offer.
+    private var agentCard: some View {
+        let kind = max.active ?? max.settings.provider.kind
+        let status = kind.flatMap { wanted in max.agents.first { $0.kind == wanted } }
+        let chosen = kind.flatMap { max.settings.agentOptions?[$0] }
+        let model = status?.models.first { $0.id == chosen?.model } ?? status?.models.first { $0.isDefault }
+        let efforts = model?.efforts ?? []
+        return SettingsCard {
+            CardRow {
+                CardLabel(MaxCopy.provider)
+            } trailing: {
+                SettingsPopUp(field: "agentChoice", entries: AIProviderChoice.allCases.map { .option(SettingsCopy.provider($0), $0) },
+                              selected: max.settings.provider, width: .selected(minimum: M.agentPopup.value)) { send(.provider($0)) }
+            }
+            if let kind, let status, !status.models.isEmpty {
+                CardDivider()
+                CardRow {
+                    CardLabel(MaxCopy.model)
+                } trailing: {
+                    SettingsPopUp<String>(field: "agentModel", entries: [.option(MaxCopy.agentDefault, "")] + status.models.map { .option($0.name, $0.id) },
+                                          selected: chosen?.model ?? "", width: .selected(minimum: M.agentPopup.value)) { send(.agentModel(kind, $0.isEmpty ? nil : $0)) }
+                }
+                if !efforts.isEmpty {
+                    CardDivider()
+                    CardRow {
+                        CardLabel(MaxCopy.effort)
+                    } trailing: {
+                        SettingsPopUp<String>(field: "agentEffort", entries: [.option(MaxCopy.agentDefault, "")] + efforts.map { .option($0, $0) },
+                                              selected: chosen?.effort ?? "", width: .selected(minimum: M.agentPopup.value)) { send(.agentEffort(kind, $0.isEmpty ? nil : $0)) }
+                    }
+                }
+            }
+            CardDivider()
+            VStack(alignment: .leading, spacing: M.titleGap.value) {
+                ForEach(max.agents, id: \.kind) { agent in
+                    SettingsLabel(text: SettingsCopy.agentStatus(agent), field: "agentStatus-\(agent.kind.rawValue)", secondary: true)
+                }
+            }
+            .padding(CardMetrics.rowPadding.value)
+        }
+    }
+
     private var footer: some View {
         VStack(spacing: M.footerGap.value) {
-            Text(MaxCopy.footer).font(.system(size: M.footerSize.value)).foregroundStyle(SettingsStyle.secondaryText)
+            LinkedText(parts: [.text(MaxCopy.footerBefore), .link(MaxCopy.footerTool, id: "agents"), .text(MaxCopy.footerAfter)],
+                       font: .system(size: M.footerSize.value), color: SettingsStyle.secondaryText) { _ in send(.showAgents(!max.agentCardOpen)) }
             LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], font: .system(size: M.footerSize.value), color: SettingsStyle.link, underline: true) { _ in explaining = true }
                 .popover(isPresented: $explaining) {
                     VStack(alignment: .leading, spacing: CardMetrics.controlGap.value) {
@@ -181,11 +226,16 @@ enum MaxCopy {
     static var autoEnable: String { "Automatically enable future \(Product.name) Max features" }
     static let provider = "Local AI tool"
     /// Arc: "Max features require that we send data to our AI partners."; Brk sends it to the local tool.
-    static let footer = "Max features require that we send data to your local AI tool."
+    static let footerBefore = "Max features require that we send data to "
+    static let footerTool = "your local AI tool"
+    static let footerAfter = "."
+    static let model = "Model"
+    static let effort = "Effort"
+    static let agentDefault = "Default"
     static let learnMore = "Learn more about what we send"
-    static var whereToChoose: String { "Choose the tool, and turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off, in Advanced → More Settings…." }
+    static var whereToChoose: String { "Choose the agent under this note, and turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off in Advanced → More Settings…." }
 
-    /// "ChatGPT in the Command Bar" names the local tool (`AppState.askProviderName`: Claude, Codex).
+    /// "ChatGPT in the Command Bar" names the local tool (`AppState.askProviderName`: Claude, Codex, Gemini…).
     static func title(_ feature: MaxFeature, provider: String?) -> String {
         switch feature {
         case .tidyTabs: "Tidy Tabs"
@@ -351,4 +401,5 @@ struct MaxPaneMetricsTable: MetricGroup {
     let footerGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
     let footerBottom = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
     let popoverWidth = Metric(320.0, .guess("the privacy note's popover"))
+    let agentPopup = Metric(150.0, .guess("the Local AI agent card's pop-ups"))
 }
