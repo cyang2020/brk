@@ -545,6 +545,20 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(sink.sent, [.commandBar(.dismiss)])
     }
 
+    func testTheChineseWordsEnterToo() {
+        let sink = Box()
+        for (word, action) in [("文件", QuickPrefixAction.files), ("应用", .apps), ("表情", .emoji), ("算", .calculate), ("分屏", .split), ("窗口", .window), ("查", .define), ("颜色", .color)] {
+            let bar = view(self.bar(), sink)
+            var snapshot = self.bar()
+            snapshot.actions = [.addSplitView]
+            bar.show(snapshot, in: box, scheme: .light)
+            type(word, into: bar)
+            XCTAssertEqual(bar.prefixOffer?.action, action, word)
+            type(word + " ", into: bar)
+            XCTAssertEqual(bar.prefix?.action, action, word)
+        }
+    }
+
     func testBackspaceOnTextInThePillDoesNotLeave() {
         let sink = Box(), bar = view(bar(), sink)
         typeKeys("file a", into: bar)

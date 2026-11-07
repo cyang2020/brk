@@ -792,6 +792,18 @@ enum QuickBarScenarios {
             try press(app, [], .returnKey)
             try app.waitUntil("the engine searched") { currentTab(try app.view())?.title == "query:engine-abc" }
 
+            // A word in another script arrives as committed text, then a real Space: the input method's route.
+            try open(app)
+            PhysicalKeys.type("文件", pid: app.hello!.pid)
+            app.sleep(0.3)
+            if try inputText(app) == "文件" {
+                try press(app, [], .space)
+                try app.waitUntil("文件 and Space entered") { try pillShown(app) && inputText(app).isEmpty }
+            } else {
+                app.note("Key events carrying 文件 did not reach the field here; the Chinese words are covered by unit tests.")
+            }
+            try dismiss(app)
+
             // The calc prefix: forced calculation, with the = word and a plain number.
             try open(app)
             try typeWord(app, "calc")
@@ -1030,9 +1042,15 @@ enum QuickBarScenarios {
         else { try app.waitUntil("the next display") { try !near(frame(), before) } }
         app.note("Next Display ran on \(displays) display(s).")
 
-        // The existing commands.
-        try place("always")
+        // The existing commands. Stay on Top keeps an open bar, as it always has.
+        try open(app)
+        try typeWord(app, "window")
+        try type(app, "always")
+        try waitForRows(app, "Always on Top") { $0.first.map { has($0, "Always on Top") } ?? false }
+        app.sleep(0.15)
+        try press(app, [], .returnKey)
         try app.waitUntil("Stay on Top") { try app.view().stayOnTop }
+        try dismiss(app)
         try app.dispatch(.window(.toggleStayOnTop))
         try place("full")
         try app.waitUntil("full screen", timeout: 10) { let n = try app.native(); return n.fullscreen && n.fullscreenTransitioning != true }
