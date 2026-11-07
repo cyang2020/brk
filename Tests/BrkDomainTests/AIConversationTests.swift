@@ -164,6 +164,26 @@ final class AIConversationTests: XCTestCase {
         XCTAssertFalse(d.system(.aiFolderChosen(window, "/tmp/project")).effects.contains { if case .aiOpenConversation = $0 { true } else { false } })
     }
 
+    /// A reader's read that fails is asked for once more before the request gives up; a late or repeated one is ignored.
+    func testAReadersFailedReadGetsASecondTry() throws {
+        let d = enabled()
+        let url = URL(string: "https://example.com/source")!
+        let t = d.user(.assist(.browse(question: "What?", sources: [url])))
+        XCTAssertTrue(t.effects.contains { if case .aiWatch(_, 30) = $0 { true } else { false } })
+        let id = try XCTUnwrap(d.state.session.ai.requests.first?.key)
+        let spec = try XCTUnwrap(d.state.session.ai.requests[id]?.hidden.first)
+        let browser = BrowserToken(page: spec.id, generation: 1)
+        let document = DocumentToken(browser: browser, sequence: 1)
+        let ready = d.system(.page(browser, .documentChanged(.ready(document))))
+        XCTAssertTrue(ready.effects.contains(.aiRead(id, document)))
+        let again = d.system(.aiPageRead(id, spec.id, nil))
+        XCTAssertTrue(again.effects.contains(.aiRead(id, document)), "\(again.effects)")
+        XCTAssertEqual(d.view.ai?.busy, true, "the panel keeps waiting")
+        let giveUp = d.system(.aiPageRead(id, spec.id, nil))
+        XCTAssertFalse(giveUp.effects.contains(.aiRead(id, document)))
+        XCTAssertTrue(d.view.ai?.text.contains("could not be read") == true)
+    }
+
     func testRepliesWrappedInACodeBlockStillParse() throws {
         XCTAssertEqual(AIReplyCodec.preview("```json\n{\"blocked\":true}\n```")?.blocked, true)
         XCTAssertEqual(AIReplyCodec.nodes("Here it is:\n```json\n[{\"id\":0,\"text\":\"x\"}]\n```")?.first?.text, "x")

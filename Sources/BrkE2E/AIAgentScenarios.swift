@@ -34,7 +34,9 @@ enum AIAgentScenarios {
     private static func screen(_ app: AppUnderTest, _ view: ViewID) throws -> CGPoint {
         let facts = try app.native()
         let frame = try visible(facts, view).frame
-        return CGPoint(x: facts.windowFrame.minX + frame.midX, y: facts.windowFrame.minY + frame.midY)
+        // The window's frame has its origin at the screen's bottom left; a mouse event's point at the top left.
+        let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
+        return CGPoint(x: facts.windowFrame.minX + frame.midX, y: top + frame.midY)
     }
 
     /// A real click on a control in the panel, after checking this Brk's window is what is under the pointer.
@@ -44,7 +46,7 @@ enum AIAgentScenarios {
 
     private static let codes: [Character: (CGKeyCode, Bool)] = {
         var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), ":": (41, true), "-": (27, false), ".": (47, false), "/": (44, false), "?": (44, true)]
-        for (letter, code) in zip("asdfhgzxcvbqwertyuiopnmljk", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 32, 34, 31, 35, 45, 46, 37, 38, 40] as [CGKeyCode]) { map[letter] = (code, false) }
+        for (letter, code) in zip("asdfhgzxcvbqwerytuiopnmljk", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 32, 34, 31, 35, 45, 46, 37, 38, 40] as [CGKeyCode]) { map[letter] = (code, false) }
         for (digit, code) in zip("1234567890", [18, 19, 20, 21, 23, 22, 26, 28, 25, 29] as [CGKeyCode]) { map[digit] = (code, false) }
         return map
     }()

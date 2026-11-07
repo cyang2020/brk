@@ -322,7 +322,9 @@ extension Work {
             return spec
         }
         state.session.ai.requests[id]?.hidden = hidden
-        effects.append(.aiWatch(id, seconds: request.purpose.isPreview ? 5 : 30))
+        // Time to load and read the pages; real pages take longer than fixtures, and a card that says it is reading
+        // costs nothing. The tool's answer gets its own time after this.
+        effects.append(.aiWatch(id, seconds: request.purpose.isPreview ? 15 : 30))
     }
 
     mutating func aiHiddenEvent(_ event: PageEvent, token: BrowserToken) -> Bool {
@@ -351,13 +353,26 @@ extension Work {
         return true
     }
     private mutating func aiHiddenReady(_ id: AIRequestID, document: DocumentToken) {
-        guard let r = state.session.ai.requests[id], !r.extracting.contains(document.browser.page) else { return }
+        // A reader that moved on to a new document (a redirect by script, a reload) is read again; the read of the old
+        // one fails or is ignored.
+        guard let r = state.session.ai.requests[id], r.hiddenDocuments[document.browser.page] != document else { return }
         state.session.ai.requests[id]?.hiddenDocuments[document.browser.page] = document
         state.session.ai.requests[id]?.extracting.insert(document.browser.page)
         effects.append(.aiRead(id, document))
     }
 
     mutating func aiReadResult(_ id: AIRequestID, page: PageID, content: AIPageContent?) {
+        if let request = state.session.ai.requests[id], request.document == nil {
+            // A reader's read: only the one still wanted counts, and only once.
+            guard request.hidden.contains(where: { $0.id == page }), let current = request.hiddenDocuments[page] else { return }
+            if let content, content.document != current { return }
+            // A busy machine can drop one read of a page that is fine: it gets a second.
+            if content == nil, !request.readAgain.contains(page) {
+                state.session.ai.requests[id]?.readAgain.insert(page)
+                effects.append(.aiRead(id, current))
+                return
+            }
+        }
         guard var request = state.session.ai.requests[id],
               state.libraryContext(in: request.window) == request.context,
               let content, content.document.browser.page == page,

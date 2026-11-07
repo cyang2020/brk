@@ -154,7 +154,9 @@ final class AIServices {
     func read(_ id: AIRequestID, document: DocumentToken) {
         start(id) { [weak self] in
             guard let self else { return }
-            let content = try? await engine.readAIPage(document)
+            var content: AIPageContent?
+            do { content = try await engine.readAIPage(document) }
+            catch { FileHandle.standardError.write(Data("AI page read failed: \(error)\n".utf8)) }
             guard !Task.isCancelled else { return }
             send(.aiPageRead(id, document.browser.page, content))
         }

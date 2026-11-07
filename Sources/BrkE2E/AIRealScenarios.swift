@@ -60,6 +60,7 @@ enum AIRealScenarios {
         let target = app.dataDirectory.appendingPathComponent("injection-\(name).txt")
         func noInjectionFile() throws { try expect(!FileManager.default.fileExists(atPath: target.path), "the page's instruction wrote \(target.path)") }
 
+        var signedIn = false
         log.check("A142 status") {
             try app.dispatch(.settings(.openPane(.max)))
             try app.dispatch(.settings(.max(.showAgents(true))))
@@ -70,10 +71,23 @@ enum AIRealScenarios {
                 return status?.state != .checking && status != nil
             }
             guard let status else { throw Check(description: "no status") }
-            try expect(status.state == .ready, "state \(status.state)")
-            return "version \(status.version ?? "?"), models \(status.models.map(\.id))"
+            signedIn = status.state == .ready
+            return "state \(status.state), version \(status.version ?? "?"), models \(status.models.map(\.id))"
         }
         try app.dispatch(.settings(.closeWindow))
+        guard signedIn else {
+            // Nothing can run on an agent that is signed out or missing; what the user is told still can be checked.
+            log.check("The message when this agent cannot answer") {
+                try app.dispatch(.assist(.ask("Say ok.")))
+                let reply = try answer(app, timeout: 90)
+                _ = try app.screenshot("AIReal-\(name)-message")
+                try expect(reply.text.contains("not signed in") || reply.text.contains("not installed"), "the panel says: \(reply.text)")
+                return reply.text
+            }
+            log.write("failures: \(log.failures)")
+            try expect(log.failures == 0, "see real-audit-\(name).txt")
+            return
+        }
 
         log.check("A134 ask, streaming") {
             let started = Date()
@@ -167,7 +181,9 @@ enum AIRealScenarios {
         log.check("A138 tidy pinned title") {
             try app.dispatch(.settings(.max(.renamePinnedTabs(true))))
             let page = try load(app, "ai-source.html")
-            let before = try tab(page.item, in: app.view())?.title
+            let before = "The Swift Programming Language: Documentation - Concurrency | Swift.org"
+            try app.evaluate(page, "document.title=\(try literal(before))")
+            try waitForTitle(app, page.item, before)
             try app.dispatch(.tab(.togglePin(.item(page.item))))
             try app.waitUntil("a new title", timeout: 60) { try tab(page.item, in: app.view())?.title != before }
             return "\(short(before)) → \(short(try tab(page.item, in: app.view())?.title))"
@@ -178,18 +194,18 @@ enum AIRealScenarios {
             try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
             _ = try app.load(app.site.url("download"))
             try app.dispatch(.library(.open(.downloads)))
-            var name = ""
+            var original = "", name = ""
             try app.waitUntil("the file renamed", timeout: 60) {
-                guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first, first.state == .finished else { return false }
+                guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first else { return false }
+                if original.isEmpty { original = first.filename }
                 name = first.filename
-                return !name.hasPrefix("download") || FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path) && name != "download"
+                return first.state == .finished && name != original
             }
             try app.dispatch(.library(.close))
-            return "renamed to \(name)"
+            return "\(original) → \(name)"
         }
 
         log.check("A137 Tidy Tabs") {
-            try app.dispatch(.tab(.togglePin(.item(currentTab(app.view())!.id))))
             let titles = ["Swift concurrency guide", "Best pasta recipes", "AppKit release notes", "Ramen near me", "Swift macros", "Pizza dough", "Xcode tips"]
             for (index, title) in titles.enumerated() {
                 let page = try load(app, "ai-source.html?tab=\(index)")
@@ -228,17 +244,14 @@ enum AIRealScenarios {
             try app.dispatch(.assist(.chooseFolder))
             try app.waitUntil("the session", timeout: 30) { try app.view().ai?.conversation?.folder == folder.path && app.view().ai?.conversation?.agent != nil }
             try app.dispatch(.assist(.followUp("Create a file named denied.txt with the word hi in it, here in the working folder. Do not do anything else.")))
-            try approve(app, kind: .deny)
-            _ = try answer(app)
+            try answerAll(app, kind: .deny)
             try expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("denied.txt").path), "Deny still wrote the file")
             return "no file after Deny"
         }
         log.check("Tools: Allow, steps, approval shown") {
             try app.dispatch(.assist(.followUp("Create a file named hello.txt with the word hi in it, here in the working folder, then say done.")))
-            try approve(app, kind: .allowOnce)
-            _ = try app.screenshot("AIReal-\(name)-approval-answered")
-            // Some agents ask once per command; answer what they still ask, within this turn.
-            let reply = try answer(app)
+            try answerAll(app, kind: .allowOnce)
+            let reply = try XCTUnwrapValue(try app.view().ai)
             try expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("hello.txt").path), "no file. Items: \(String(describing: reply.conversation?.items))")
             let steps = reply.conversation?.items.compactMap { item -> String? in if case .step(let step) = item { "\(step.state.rawValue) \(step.title)" } else { nil } } ?? []
             _ = try app.screenshot("AIReal-\(name)-tools")
@@ -267,6 +280,22 @@ enum AIRealScenarios {
 
     private static func literal(_ text: String) throws -> String {
         String(decoding: try JSONSerialization.data(withJSONObject: text, options: .fragmentsAllowed), as: UTF8.self)
+    }
+
+    /// Answers whatever the agent asks with the option of this kind, until its turn ends: some agents ask once per
+    /// command, and a refused agent may try another way.
+    private static func answerAll(_ app: AppUnderTest, kind: AIAgentApproval.Option.Kind, timeout: Double = 120) throws {
+        var answered: Set<String> = []
+        try app.waitUntil("the turn ends", timeout: timeout) {
+            guard let ai = try app.view().ai else { return true }
+            for case .approval(let approval) in ai.conversation?.items ?? [] where approval.answer == nil && !answered.contains(approval.id) {
+                guard let option = approval.options.first(where: { $0.kind == kind }) ?? approval.options.first(where: { kind == .allowOnce && $0.kind == .allowSession }) else { continue }
+                _ = try app.screenshot("AIReal-approval-\(kind.rawValue)")
+                answered.insert(approval.id)
+                try app.dispatch(.assist(.approve(approval: approval.id, option: option.id)))
+            }
+            return !ai.busy
+        }
     }
 
     /// Answers the first approval the agent asks for with the option of this kind.

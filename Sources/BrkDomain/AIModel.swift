@@ -224,6 +224,8 @@ struct AIRequest: Equatable, Sendable {
     var hiddenDocuments: [PageID: DocumentToken] = [:]
     var contents: [PageID: AIPageContent] = [:]
     var extracting: Set<PageID> = []
+    /// Readers whose read failed once and were asked again.
+    var readAgain: Set<PageID> = []
     var purpose: AIPurpose
     /// Translation: the page being translated and the translated nodes sent to it.
     var page: PageID? = nil

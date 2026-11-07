@@ -59,7 +59,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
         scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
         progress.style = .spinning; progress.controlSize = .small; progress.isDisplayedWhenStopped = false
         close.setAccessibilityIdentifier("ai-close")
-        close.onPress = { [weak self] in guard let self else { return }; dispatch(.assist(answer?.busy == true ? .cancel : .dismiss)) }
+        close.onPress = { [weak self] in guard let self else { return }; dispatch(.assist(answer?.busy == true && answer?.conversation == nil ? .cancel : .dismiss)) }
         input.placeholderString = "Ask a follow-up"
         input.font = .systemFont(ofSize: Metrics.ai.bodyFont.value)
         input.lineBreakMode = .byTruncatingTail
