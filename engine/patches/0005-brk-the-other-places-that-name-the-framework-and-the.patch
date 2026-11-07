@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:21:31 +0800
+Subject: [PATCH 5/6] brk: the other places that name the framework, and the
+ order of its exports
+
+---
+ chrome/app/framework.order                                  | 4 ++++
+ chrome/browser/web_applications/os_integration/mac/BUILD.gn | 2 +-
+ content/public/app/BUILD.gn                                 | 2 +-
+ 3 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/chrome/app/framework.order b/chrome/app/framework.order
+index 6dbc3aeff3f8b61285d4324fcb0eee6dcfe1b6ca..617bac9bdc1bf3f9afe7ed2a5ce635383720b60b 100644
+--- a/chrome/app/framework.order
++++ b/chrome/app/framework.order
+@@ -29,5 +29,9 @@ _ChromeAppModeStart_v8
+ # Entry point for the web app shortcut copier.
+ _ChromeWebAppShortcutCopierMain
+ 
++# Entry points of Brk's shell (brk/browser/brk_application.mm).
++_BrkCoreApplicationPrepare
++_BrkCoreApplicationShared
++
+ # _ChromeMain must be listed last.  That's the whole point of this file.
+ _ChromeMain
+diff --git a/chrome/browser/web_applications/os_integration/mac/BUILD.gn b/chrome/browser/web_applications/os_integration/mac/BUILD.gn
+index 16a0aeeaa62275fb9bfc4ef8bf929afff6e0ce48..bdaee1489378e5bcbd3108b6d749d66bf8d23dee 100644
+--- a/chrome/browser/web_applications/os_integration/mac/BUILD.gn
++++ b/chrome/browser/web_applications/os_integration/mac/BUILD.gn
+@@ -42,7 +42,7 @@ executable("web_app_shortcut_copier") {
+       # The helper is a standalone tool rather than a bundled app so the
+       # framework's install name does not work as-is. Rewrite it so the
+       # relative path is correct given the executable's location.
+-      "-Wcrl,installnametool,-change,@executable_path/../Frameworks/${chrome_product_full_name} Framework.framework/Versions/${chrome_version_full}/${chrome_product_full_name} Framework,@executable_path/../${chrome_product_full_name} Framework",
++      "-Wcrl,installnametool,-change,@executable_path/../Frameworks/BrkCore.framework/Versions/${chrome_version_full}/BrkCore,@executable_path/../BrkCore",
+     ]
+ 
+     if (is_asan || is_ubsan_any) {
+diff --git a/content/public/app/BUILD.gn b/content/public/app/BUILD.gn
+index 0a7825672de1604b2e50e8f8d6967e40358b561d..1a71ff82fe2b06fd3815f6e8c17074958c65ad34 100644
+--- a/content/public/app/BUILD.gn
++++ b/content/public/app/BUILD.gn
+@@ -122,7 +122,7 @@ if (is_mac) {
+         "-Wl,-rpath,@loader_path/../../../../../../..",
+       ]
+     } else {
+-      ldflags += [ "-Wl,-install_name,@executable_path/../Frameworks/$chrome_product_full_name Framework.framework/Versions/$chrome_version_full/Libraries/libaperitif.dylib" ]
++      ldflags += [ "-Wl,-install_name,@executable_path/../Frameworks/BrkCore.framework/Versions/$chrome_version_full/Libraries/libaperitif.dylib" ]
+     }
+ 
+     allow_circular_includes_from = [

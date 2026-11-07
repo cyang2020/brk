@@ -12,10 +12,9 @@ public final class BrkCoreRuntime {
     }
 
     public let application: any BrkCoreApplication
-    private let userDataDirectory: URL
-    private let remoteDebuggingPort: Int?
 
     public init(userDataDirectory: URL, remoteDebuggingPort: Int?) throws {
+        try? FileManager.default.createDirectory(at: userDataDirectory, withIntermediateDirectories: true)
         let path = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/BrkCore.framework/BrkCore").path
         guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {
             throw Unavailable(description: "BrkCore.framework did not load: \(String(cString: dlerror()))")
@@ -23,24 +22,21 @@ public final class BrkCoreRuntime {
         guard let prepare = dlsym(handle, "BrkCoreApplicationPrepare"), let shared = dlsym(handle, "BrkCoreApplicationShared") else {
             throw Unavailable(description: "BrkCore.framework has no entry points")
         }
-        typealias Prepare = @convention(c) () -> Void
+        typealias Prepare = @convention(c) (Int32, UnsafePointer<UnsafePointer<CChar>>) -> Void
         typealias Shared = @convention(c) () -> UnsafeMutableRawPointer
-        unsafeBitCast(prepare, to: Prepare.self)()
+        let arguments = Self.arguments(userData: userDataDirectory, debugPort: remoteDebuggingPort, environment: ProcessInfo.processInfo.environment)
+        let copies = arguments.map { UnsafePointer<CChar>(strdup($0)!) }
+        copies.withUnsafeBufferPointer { unsafeBitCast(prepare, to: Prepare.self)(Int32(copies.count), $0.baseAddress!) }
+        copies.forEach { free(UnsafeMutablePointer(mutating: $0)) }
         let object = Unmanaged<AnyObject>.fromOpaque(unsafeBitCast(shared, to: Shared.self)()).takeUnretainedValue()
         guard let application = object as? any BrkCoreApplication else {
             throw Unavailable(description: "BrkCore.framework's application has another interface")
         }
         self.application = application
-        try? FileManager.default.createDirectory(at: userDataDirectory, withIntermediateDirectories: true)
-        self.userDataDirectory = userDataDirectory
-        self.remoteDebuggingPort = remoteDebuggingPort
     }
 
     /// Runs Chromium's main, which runs NSApp, until Chromium has shut down. The exit code.
-    public func run() -> Int32 {
-        Int32(application.run(withArguments: Self.arguments(userData: userDataDirectory, debugPort: remoteDebuggingPort,
-                                                            environment: ProcessInfo.processInfo.environment)))
-    }
+    public func run() -> Int32 { Int32(application.run()) }
 
     /// Chromium's command line. Test launches get what CEFEngine gives them, with no calls home on top.
     static func arguments(userData: URL, debugPort: Int?, environment: [String: String]) -> [String] {

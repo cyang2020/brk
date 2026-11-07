@@ -1,0 +1,2632 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:13:46 +0800
+Subject: [PATCH 1/6] brk: Brk's own code in brk/, unused by anything yet
+
+BrkCore's Objective-C interface, Brk's BrowserWindow without Views, the page, profile and
+extension popup objects, and the hooks header Chromium's files call.
+---
+ brk/.gitignore                         |   2 +
+ brk/BUILD.gn                           |  53 +++
+ brk/browser/brk_application.h          |  16 +
+ brk/browser/brk_application.mm         | 122 +++++++
+ brk/browser/brk_browser.h              |  40 +++
+ brk/browser/brk_browser.mm             | 349 +++++++++++++++++++
+ brk/browser/brk_browser_window.h       | 167 +++++++++
+ brk/browser/brk_browser_window.mm      | 372 ++++++++++++++++++++
+ brk/browser/brk_devtools_session.cc    | 102 ++++++
+ brk/browser/brk_devtools_session.h     |  48 +++
+ brk/browser/brk_extension_action.h     |  31 ++
+ brk/browser/brk_extension_action.mm    | 255 ++++++++++++++
+ brk/browser/brk_location_bar.cc        | 102 ++++++
+ brk/browser/brk_location_bar.h         |  61 ++++
+ brk/browser/brk_navigation_throttle.h  |  13 +
+ brk/browser/brk_navigation_throttle.mm |  43 +++
+ brk/browser/brk_profile.h              |  14 +
+ brk/browser/brk_profile.mm             | 103 ++++++
+ brk/browser/brk_web_contents.h         |  37 ++
+ brk/browser/brk_web_contents.mm        | 457 +++++++++++++++++++++++++
+ brk/embedding/embedding.cc             |  22 ++
+ brk/embedding/embedding.h              |  37 ++
+ 22 files changed, 2446 insertions(+)
+ create mode 100644 brk/.gitignore
+ create mode 100644 brk/BUILD.gn
+ create mode 100644 brk/browser/brk_application.h
+ create mode 100644 brk/browser/brk_application.mm
+ create mode 100644 brk/browser/brk_browser.h
+ create mode 100644 brk/browser/brk_browser.mm
+ create mode 100644 brk/browser/brk_browser_window.h
+ create mode 100644 brk/browser/brk_browser_window.mm
+ create mode 100644 brk/browser/brk_devtools_session.cc
+ create mode 100644 brk/browser/brk_devtools_session.h
+ create mode 100644 brk/browser/brk_extension_action.h
+ create mode 100644 brk/browser/brk_extension_action.mm
+ create mode 100644 brk/browser/brk_location_bar.cc
+ create mode 100644 brk/browser/brk_location_bar.h
+ create mode 100644 brk/browser/brk_navigation_throttle.h
+ create mode 100644 brk/browser/brk_navigation_throttle.mm
+ create mode 100644 brk/browser/brk_profile.h
+ create mode 100644 brk/browser/brk_profile.mm
+ create mode 100644 brk/browser/brk_web_contents.h
+ create mode 100644 brk/browser/brk_web_contents.mm
+ create mode 100644 brk/embedding/embedding.cc
+ create mode 100644 brk/embedding/embedding.h
+
+diff --git a/brk/.gitignore b/brk/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2682879a0ba74aa78d7868abcc17da10f775ee8
+--- /dev/null
++++ b/brk/.gitignore
+@@ -0,0 +1,2 @@
++# Copied from the Brk repo by engine/sync-header.sh.
++public/BrkCore.h
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+new file mode 100644
+index 0000000000000000000000000000000000000000..30447ded9920c0156fcd98ad6b45c03a45f7ff66
+--- /dev/null
++++ b/brk/BUILD.gn
+@@ -0,0 +1,53 @@
++# Brk's own code inside the Chromium tree. Linked into BrkCore.framework through //chrome:dependencies.
++
++# What Chromium's own files use to reach Brk: flags and function pointers, no other dependency, so including it never
++# recompiles or relinks anything else.
++source_set("embedding") {
++  sources = [
++    "embedding/embedding.cc",
++    "embedding/embedding.h",
++  ]
++}
++
++source_set("browser") {
++  sources = [
++    "browser/brk_application.h",
++    "browser/brk_application.mm",
++    "browser/brk_browser.h",
++    "browser/brk_browser.mm",
++    "browser/brk_browser_window.h",
++    "browser/brk_browser_window.mm",
++    "browser/brk_devtools_session.cc",
++    "browser/brk_devtools_session.h",
++    "browser/brk_extension_action.h",
++    "browser/brk_extension_action.mm",
++    "browser/brk_location_bar.cc",
++    "browser/brk_location_bar.h",
++    "browser/brk_navigation_throttle.h",
++    "browser/brk_navigation_throttle.mm",
++    "browser/brk_profile.h",
++    "browser/brk_profile.mm",
++    "browser/brk_web_contents.h",
++    "browser/brk_web_contents.mm",
++    "public/BrkCore.h",
++  ]
++  deps = [
++    ":embedding",
++    "//base",
++    "//chrome/browser",
++    "//chrome/browser/extensions",
++    "//chrome/browser/profiles:profile",
++    "//chrome/browser/ui",
++    "//components/keep_alive_registry",
++    "//components/sessions",
++    "//components/zoom",
++    "//content/public/browser",
++    "//extensions/browser",
++    "//extensions/common",
++  ]
++  frameworks = [ "AppKit.framework" ]
++
++  # Chromium's own code has no debug info (engine/args/brk.gn). Brk's has enough for a backtrace.
++  configs -= [ "//build/config/compiler:default_symbols" ]
++  configs += [ "//build/config/compiler:minimal_symbols" ]
++}
+diff --git a/brk/browser/brk_application.h b/brk/browser/brk_application.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..36d37d58533b758b842858a8ba6e6626bc0daeb1
+--- /dev/null
++++ b/brk/browser/brk_application.h
+@@ -0,0 +1,16 @@
++#ifndef BRK_BROWSER_BRK_APPLICATION_H_
++#define BRK_BROWSER_BRK_APPLICATION_H_
++
++#import <Foundation/Foundation.h>
++
++#include "brk/public/BrkCore.h"
++
++@interface BrkApplication : NSObject <BrkCoreApplication>
++@end
++
++namespace brkcore {
++// Starts Chromium's own shutdown. -[BrowserCrApplication replyToApplicationShouldTerminate:] calls this once the shell has agreed to quit.
++void QuitChromium();
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_APPLICATION_H_
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f618ded87a7a50a1b019a00502a99a5900690b7
+--- /dev/null
++++ b/brk/browser/brk_application.mm
+@@ -0,0 +1,122 @@
++#import "brk/browser/brk_application.h"
++
++#include <map>
++#include <memory>
++#include <string>
++#include <vector>
++
++#include "base/files/file_path.h"
++#include "base/functional/bind.h"
++#include "base/strings/sys_string_conversions.h"
++#include "brk/browser/brk_navigation_throttle.h"
++#import "brk/browser/brk_browser.h"
++#import "brk/browser/brk_profile.h"
++#include "brk/embedding/embedding.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/chrome_browser_application_mac.h"
++#include "chrome/browser/lifetime/application_lifetime.h"
++#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
++#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/profiles/profile_manager.h"
++#include "components/keep_alive_registry/keep_alive_types.h"
++#include "components/keep_alive_registry/scoped_keep_alive.h"
++#include "components/version_info/version_info.h"
++
++extern "C" {
++int ChromeMain(int argc, const char** argv);
++}
++
++@implementation BrkApplication {
++  // Brk keeps running with no Browser (a window with no page yet), and profiles stay loaded across that.
++  std::unique_ptr<ScopedKeepAlive> _keepAlive;
++  std::map<std::string, std::unique_ptr<ScopedProfileKeepAlive>> _profileKeepAlives;
++  BOOL _quitting;
++}
++
++- (NSString*)version {
++  return base::SysUTF8ToNSString(std::string(version_info::GetVersionNumber()));
++}
++
++- (int)runWithArguments:(NSArray<NSString*>*)arguments {
++  std::vector<std::string> storage;
++  for (NSString* argument in arguments) {
++    storage.push_back(base::SysNSStringToUTF8(argument));
++  }
++  std::vector<const char*> argv;
++  for (const std::string& argument : storage) {
++    argv.push_back(argument.c_str());
++  }
++  argv.push_back(nullptr);
++  return ChromeMain(static_cast<int>(storage.size()), argv.data());
++}
++
++- (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable))completion {
++  if (!_keepAlive) {
++    _keepAlive = std::make_unique<ScopedKeepAlive>(KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
++  }
++  ProfileManager* manager = g_browser_process->profile_manager();
++  const base::FilePath path = manager->user_data_dir().Append(base::SysNSStringToUTF8(directory));
++  __weak BrkApplication* weakSelf = self;
++  manager->CreateProfileAsync(path, base::BindOnce(^(Profile* profile) {
++    BrkApplication* strongSelf = weakSelf;
++    if (!profile || !strongSelf) {
++      completion(nil);
++      return;
++    }
++    [strongSelf keepProfile:profile];
++    completion([[BrkProfile alloc] initWithProfile:profile]);
++  }));
++}
++
++- (void)keepProfile:(Profile*)profile {
++  auto& keepAlive = _profileKeepAlives[profile->GetPath().value()];
++  if (!keepAlive) {
++    keepAlive = std::make_unique<ScopedProfileKeepAlive>(profile, ProfileKeepAliveOrigin::kBrowserWindow);
++  }
++}
++
++- (void)quit {
++  if (_quitting) {
++    return;
++  }
++  _quitting = YES;
++  _profileKeepAlives.clear();
++  _keepAlive.reset();
++  chrome::ExitIgnoreUnloadHandlers();
++}
++
++@end
++
++namespace brkcore {
++
++namespace {
++BrkApplication* SharedApplication() {
++  static BrkApplication* application = [[BrkApplication alloc] init];
++  return application;
++}
++}  // namespace
++
++void QuitChromium() {
++  [SharedApplication() quit];
++}
++
++}  // namespace brkcore
++
++extern "C" {
++
++__attribute__((visibility("default"))) void BrkCoreApplicationPrepare(void) {
++  brkcore::SetEmbedded();
++  brkcore::Hooks& hooks = brkcore::GetHooks();
++  hooks.create_browser_window = &brkcore::CreateBrowserWindowHook;
++  hooks.update_target_url = &brkcore::UpdateTargetURLHook;
++  hooks.add_navigation_throttles = &brkcore::AddNavigationThrottles;
++  hooks.quit_chromium = &brkcore::QuitChromium;
++  chrome_browser_application_mac::RegisterBrowserCrApp();
++}
++
++__attribute__((visibility("default"))) void* BrkCoreApplicationShared(void) {
++  return (__bridge void*)brkcore::SharedApplication();
++}
++
++}  // extern "C"
+diff --git a/brk/browser/brk_browser.h b/brk/browser/brk_browser.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..75898a8861c6926060e2de4687e104960ed1b051
+--- /dev/null
++++ b/brk/browser/brk_browser.h
+@@ -0,0 +1,40 @@
++#ifndef BRK_BROWSER_BRK_BROWSER_H_
++#define BRK_BROWSER_BRK_BROWSER_H_
++
++#import <Foundation/Foundation.h>
++
++#include "brk/public/BrkCore.h"
++
++class BrowserWindow;
++class BrowserWindowInterface;
++class GURL;
++class Profile;
++
++namespace content {
++class WebContents;
++}
++
++@class BrkWebContents;
++
++NS_ASSUME_NONNULL_BEGIN
++
++// Chrome's Browser for one Brk window and profile, with its pages as tabs.
++@interface BrkBrowser : NSObject <BrkCoreBrowser>
++- (instancetype)initWithProfile:(Profile*)profile
++                         window:(nullable NSWindow*)window
++                       delegate:(nullable id<BrkCoreBrowserDelegate>)delegate;
++@property(nonatomic, readonly, nullable) BrkWebContents* focusedPage;
++- (void)closeContents:(content::WebContents*)contents;
++- (void)pageDidGo:(BrkWebContents*)page;
++- (void)browserWillGo;
++@end
++
++namespace brkcore {
++// Installed in brkcore::Hooks. The window of the BrkBrowser being created; null for every other Browser.
++BrowserWindow* _Nullable CreateBrowserWindowHook(BrowserWindowInterface* browser);
++bool UpdateTargetURLHook(content::WebContents* source, const GURL& url);
++}  // namespace brkcore
++
++NS_ASSUME_NONNULL_END
++
++#endif  // BRK_BROWSER_BRK_BROWSER_H_
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..4124edbbf14c9ec87ce6805491de83374870f845
+--- /dev/null
++++ b/brk/browser/brk_browser.mm
+@@ -0,0 +1,349 @@
++#import "brk/browser/brk_browser.h"
++
++#include <map>
++#include <memory>
++#include <string>
++#include <utility>
++
++#include "base/memory/raw_ptr.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
++#import "brk/browser/brk_browser_window.h"
++#import "brk/browser/brk_extension_action.h"
++#import "brk/browser/brk_web_contents.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/browser_window/public/create_browser_window.h"
++#include "chrome/browser/ui/extensions/extension_action_delegate.h"
++#include "chrome/browser/ui/extensions/extension_action_view_model.h"
++#include "chrome/browser/ui/extensions/extension_popup_types.h"
++#include "chrome/browser/ui/extensions/extensions_container.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/navigation_entry.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "content/public/browser/web_contents.h"
++#include "extensions/browser/extension_action_manager.h"
++#include "extensions/browser/extension_registry.h"
++#include "extensions/common/extension.h"
++#include "net/base/apple/url_conversions.h"
++#include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
++#include "url/gurl.h"
++
++namespace {
++
++// Set while a BrkBrowser creates its Browser, so the window factory knows whose it is.
++BrkBrowser* g_creating = nil;
++brkcore::BrkBrowserWindow* g_created_window = nullptr;
++
++GURL TargetURL(content::WebContents* contents) {
++  content::NavigationEntry* entry = contents->GetController().GetPendingEntry();
++  if (!entry) {
++    entry = contents->GetController().GetVisibleEntry();
++  }
++  return entry ? entry->GetURL() : GURL();
++}
++
++}  // namespace
++
++@interface BrkBrowser ()
++- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active;
++- (nullable ExtensionActionViewModel*)modelForExtension:(const std::string&)extensionID;
++@end
++
++namespace brkcore {
++
++class BrkTabStripObserver : public TabStripModelObserver {
++ public:
++  explicit BrkTabStripObserver(BrkBrowser* owner) : owner_(owner) {}
++
++  void OnTabStripModelChanged(TabStripModel* model,
++                              const TabStripModelChange& change,
++                              const TabStripSelectionChange& selection) override {
++    if (change.type() != TabStripModelChange::kInserted) {
++      return;
++    }
++    for (const auto& inserted : change.GetInsert()->contents) {
++      [owner_ tabInserted:inserted.contents active:selection.new_contents == inserted.contents];
++    }
++  }
++
++ private:
++  __weak BrkBrowser* const owner_;
++};
++
++// What chrome.action.openPopup() and the DevTools protocol's Extensions.triggerAction look for in a Browser.
++class BrkExtensionsContainer final : public ExtensionsContainer {
++ public:
++  explicit BrkExtensionsContainer(BrkBrowser* owner) : owner_(owner) {}
++
++  ToolbarActionViewModel* GetActionForId(const std::string& action_id) override {
++    return [owner_ modelForExtension:action_id];
++  }
++  void HideActivePopup() override { [owner_ closeExtensionPopup]; }
++  void CloseExtensionsMenuIfOpen() override {}
++  bool ShowToolbarActionPopupForAPICall(const std::string& action_id, ShowPopupCallback callback) override {
++    ExtensionActionViewModel* model = [owner_ modelForExtension:action_id];
++    if (!model) {
++      return false;
++    }
++    [owner_ closeExtensionPopup];
++    model->TriggerPopupForAPI(std::move(callback));
++    return true;
++  }
++  void ToggleExtensionsMenu() override {}
++  bool HasAnyExtensions() const override { return true; }
++
++ private:
++  __weak BrkBrowser* const owner_;
++};
++
++BrowserWindow* CreateBrowserWindowHook(BrowserWindowInterface* browser) {
++  if (!g_creating) {
++    return nullptr;
++  }
++  g_created_window = new BrkBrowserWindow(browser, g_creating);
++  return g_created_window;
++}
++
++bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
++  BrkWebContents* page = PageForContents(source);
++  if (!page) {
++    return false;
++  }
++  [page hoverLink:url];
++  return true;
++}
++
++}  // namespace brkcore
++
++@implementation BrkBrowser {
++  raw_ptr<BrowserWindowInterface> _browser;
++  raw_ptr<brkcore::BrkBrowserWindow> _window;
++  std::unique_ptr<brkcore::BrkTabStripObserver> _observer;
++  std::unique_ptr<brkcore::BrkExtensionsContainer> _extensionsContainer;
++  std::unique_ptr<ui::ScopedUnownedUserData<ExtensionsContainer>> _extensionsContainerData;
++  NSMutableArray<BrkWebContents*>* _pages;
++  // Pages Chromium made by itself (a link with target=_blank) that the shell was told about and has not taken yet.
++  NSMutableArray<BrkWebContents*>* _unadopted;
++  __weak id<BrkCoreBrowserDelegate> _delegate;
++  __weak NSWindow* _nativeWindow;
++  std::map<std::string, std::unique_ptr<ExtensionActionViewModel>> _actionModels;
++  BOOL _creatingPage;
++  NSString* _openPopupExtension;
++}
++
++@synthesize delegate = _delegate;
++
++- (instancetype)initWithProfile:(Profile*)profile
++                         window:(NSWindow*)window
++                       delegate:(id<BrkCoreBrowserDelegate>)delegate {
++  if ((self = [super init])) {
++    _pages = [NSMutableArray array];
++    _unadopted = [NSMutableArray array];
++    _delegate = delegate;
++    _nativeWindow = window;
++    g_creating = self;
++    BrowserWindowCreateParams params(BrowserWindowInterface::TYPE_NORMAL, *profile, /*from_user_gesture=*/true);
++    _browser = CreateBrowserWindow(std::move(params));
++    g_creating = nil;
++    _window = g_created_window;
++    g_created_window = nullptr;
++    _window->SetNativeWindow(window);
++    _observer = std::make_unique<brkcore::BrkTabStripObserver>(self);
++    _browser->GetTabStripModel()->AddObserver(_observer.get());
++    _extensionsContainer = std::make_unique<brkcore::BrkExtensionsContainer>(self);
++    _extensionsContainerData = std::make_unique<ui::ScopedUnownedUserData<ExtensionsContainer>>(
++        _browser->GetUnownedUserDataHost(), *_extensionsContainer);
++  }
++  return self;
++}
++
++- (BOOL)isAlive {
++  return _browser != nullptr;
++}
++
++- (NSWindow*)window {
++  return _nativeWindow;
++}
++
++- (void)setWindow:(NSWindow*)window {
++  _nativeWindow = window;
++  if (_window) {
++    _window->SetNativeWindow(window);
++  }
++}
++
++- (BrkWebContents*)focusedPage {
++  for (BrkWebContents* page in _pages) {
++    content::RenderWidgetHostView* view =
++        page.contents ? page.contents->GetRenderWidgetHostView() : nullptr;
++    if (view && view->HasFocus()) {
++      return page;
++    }
++  }
++  content::WebContents* active = _browser ? _browser->GetTabStripModel()->GetActiveWebContents() : nullptr;
++  return active ? brkcore::PageForContents(active) : nil;
++}
++
++- (id<BrkCoreWebContents>)createWebContents {
++  content::WebContents::CreateParams params(_browser->GetProfile());
++  params.initially_hidden = true;
++  std::unique_ptr<content::WebContents> owned = content::WebContents::Create(params);
++  content::WebContents* contents = owned.get();
++  BrkWebContents* page = [[BrkWebContents alloc] initWithContents:contents browser:self];
++  page.adopted = YES;
++  [_pages addObject:page];
++  _creatingPage = YES;
++  _browser->GetTabStripModel()->AppendWebContents(std::move(owned), /*foreground=*/false);
++  _creatingPage = NO;
++  return page;
++}
++
++- (id<BrkCoreWebContents>)adoptWebContentsWithURL:(NSURL*)url {
++  const GURL target = net::GURLWithNSURL(url);
++  for (BrkWebContents* page in _unadopted) {
++    if (page.contents && TargetURL(page.contents) == target) {
++      page.adopted = YES;
++      [_unadopted removeObject:page];
++      [_pages addObject:page];
++      return page;
++    }
++  }
++  return nil;
++}
++
++- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active {
++  if (_creatingPage || brkcore::PageForContents(contents)) {
++    return;
++  }
++  // Chromium made this tab itself. The shell decides where it goes, on the next task, outside the tab strip's notification.
++  BrkWebContents* page = [[BrkWebContents alloc] initWithContents:contents browser:self];
++  [_unadopted addObject:page];
++  content::WebContents* openerContents = _browser->GetTabStripModel()->GetActiveWebContents();
++  BrkWebContents* opener = openerContents ? brkcore::PageForContents(openerContents) : nil;
++  const GURL target = TargetURL(contents);
++  __weak BrkBrowser* weakSelf = self;
++  dispatch_async(dispatch_get_main_queue(), ^{
++    BrkBrowser* strongSelf = weakSelf;
++    if (!strongSelf) {
++      return;
++    }
++    id<BrkCoreWebContentsDelegate> delegate = opener.delegate;
++    [delegate webContents:opener
++          requestsOpening:net::NSURLWithGURL(target)
++              disposition:active ? BrkCoreDispositionForegroundTab : BrkCoreDispositionBackgroundTab
++              userGesture:YES];
++    [strongSelf dropUnadopted:page];
++  });
++}
++
++- (void)dropUnadopted:(BrkWebContents*)page {
++  if ([_unadopted containsObject:page]) {
++    [_unadopted removeObject:page];
++    [page close];
++  }
++}
++
++- (void)activateWebContents:(id<BrkCoreWebContents>)contents {
++  BrkWebContents* page = (BrkWebContents*)contents;
++  if (!_browser || !page.contents) {
++    return;
++  }
++  TabStripModel* strip = _browser->GetTabStripModel();
++  const int index = strip->GetIndexOfWebContents(page.contents);
++  if (index != TabStripModel::kNoTab && strip->active_index() != index) {
++    strip->ActivateTabAt(index);
++  }
++}
++
++- (void)closeContents:(content::WebContents*)contents {
++  if (!_browser) {
++    return;
++  }
++  TabStripModel* strip = _browser->GetTabStripModel();
++  const int index = strip->GetIndexOfWebContents(contents);
++  if (index != TabStripModel::kNoTab) {
++    strip->DetachAndDeleteWebContentsAt(index);
++  }
++}
++
++- (void)pageDidGo:(BrkWebContents*)page {
++  [_pages removeObject:page];
++  [_unadopted removeObject:page];
++}
++
++- (void)browserWillGo {
++  [self closeExtensionPopup];
++  _actionModels.clear();
++  _extensionsContainerData.reset();
++  _extensionsContainer.reset();
++  if (_browser) {
++    _browser->GetTabStripModel()->RemoveObserver(_observer.get());
++  }
++  _browser = nullptr;
++  _window = nullptr;
++}
++
++- (ExtensionActionViewModel*)modelForExtension:(const std::string&)extensionID {
++  if (!_browser) {
++    return nullptr;
++  }
++  Profile* profile = _browser->GetProfile();
++  const extensions::Extension* extension =
++      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(extensionID);
++  if (!extension || !extensions::ExtensionActionManager::Get(profile)->GetExtensionAction(*extension)) {
++    return nullptr;
++  }
++  auto& model = _actionModels[extensionID];
++  if (!model) {
++    model = ExtensionActionViewModel::Create(extensionID, _browser,
++                                             brkcore::CreateExtensionActionDelegate(self, base::SysUTF8ToNSString(extensionID)));
++  }
++  return model.get();
++}
++
++- (NSString*)executeExtensionAction:(NSString*)extensionID {
++  if (!_browser) {
++    return @"The browser closed";
++  }
++  ExtensionActionViewModel* model = [self modelForExtension:base::SysNSStringToUTF8(extensionID)];
++  if (!model) {
++    return @"The extension has no action here";
++  }
++  content::WebContents* active = _browser->GetTabStripModel()->GetActiveWebContents();
++  if (!active) {
++    return @"No page is active";
++  }
++  if (!model->IsEnabled(active)) {
++    return @"The extension's action is not enabled on this page";
++  }
++  // Only one popup at a time, as in Chrome.
++  [self closeExtensionPopup];
++  model->ExecuteUserAction(ToolbarActionViewModel::InvocationSource::kToolbarButton);
++  return nil;
++}
++
++- (void)closeExtensionPopup {
++  for (auto& entry : _actionModels) {
++    if (entry.second->IsShowingPopup()) {
++      entry.second->HidePopup();
++    }
++  }
++}
++
++- (void)focusExtensionPopup {
++  for (auto& entry : _actionModels) {
++    brkcore::FocusExtensionPopup(entry.second.get());
++  }
++}
++
++- (void)close {
++  if (_window) {
++    _window->Close();
++  }
++}
++
++@end
+diff --git a/brk/browser/brk_browser_window.h b/brk/browser/brk_browser_window.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..770c38bdc22a0d173188bbb9fb25c726ede5bf31
+--- /dev/null
++++ b/brk/browser/brk_browser_window.h
+@@ -0,0 +1,167 @@
++#ifndef BRK_BROWSER_BRK_BROWSER_WINDOW_H_
++#define BRK_BROWSER_BRK_BROWSER_WINDOW_H_
++
++#import <AppKit/AppKit.h>
++
++#include <memory>
++#include <string>
++#include <vector>
++
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "chrome/browser/ui/browser_window.h"
++
++@class BrkBrowser;
++
++namespace brkcore {
++
++class BrkLocationBar;
++class BrkExclusiveAccessContext;
++
++// Chrome's window object for a Browser that Brk owns. No Views behind it: a page's native view sits directly in the shell's view tree.
++// What Chrome asks about the window it answers from the shell's NSWindow; what Chrome would draw in its own frame goes nowhere.
++class BrkBrowserWindow : public BrowserWindow {
++ public:
++  BrkBrowserWindow(BrowserWindowInterface* browser, BrkBrowser* owner);
++  ~BrkBrowserWindow() override;
++
++  void SetNativeWindow(NSWindow* window);
++
++  // ui::BaseWindow:
++  void Show() override;
++  void ShowInactive() override;
++  void Hide() override;
++  bool IsVisible() const override;
++  void SetBounds(const gfx::Rect& bounds) override;
++  void Close() override;
++  void Activate() override;
++  void Deactivate() override;
++  bool IsActive() const override;
++  gfx::Rect GetBounds() const override;
++  bool IsMaximized() const override;
++  bool IsMinimized() const override;
++  bool IsFullscreen() const override;
++  gfx::Rect GetRestoredBounds() const override;
++  ui::mojom::WindowShowState GetRestoredState() const override;
++  void Maximize() override;
++  void Minimize() override;
++  void Restore() override;
++  void FlashFrame(bool flash) override;
++  ui::ZOrderLevel GetZOrderLevel() const override;
++  void SetZOrderLevel(ui::ZOrderLevel order) override;
++
++  // BrowserWindow:
++  gfx::NativeWindow GetNativeWindow() const override;
++  bool IsOnCurrentWorkspace() const override;
++  bool IsVisibleOnScreen() const override;
++  void SetTopControlsShownRatio(content::WebContents* web_contents, float ratio) override;
++  bool DoBrowserControlsShrinkRendererSize(const content::WebContents* contents) const override;
++  ui::NativeTheme* GetNativeTheme() override;
++  const ui::ThemeProvider* GetThemeProvider() const override;
++  const ui::ColorProvider* GetColorProvider() const override;
++  int GetTopControlsHeight() const override;
++  void SetTopControlsGestureScrollInProgress(bool in_progress) override;
++  std::vector<StatusBubble*> GetStatusBubbles() override;
++  void UpdateTitleBar() override;
++  void UpdateLoadingAnimations(bool is_visible) override;
++  void OnActiveTabChanged(content::WebContents* old_contents,
++                          content::WebContents* new_contents,
++                          int index,
++                          int reason) override;
++  void OnTabDetached(content::WebContents* contents, bool was_active) override;
++  gfx::Size GetContentsSize() const override;
++  void SetContentsSize(const gfx::Size& size) override;
++  autofill::AutofillBubbleHandler* GetAutofillBubbleHandler() override;
++  LocationBar* GetLocationBar() const override;
++  void SetFocusToLocationBar(bool is_user_initiated) override;
++  void UpdateReloadStopState(bool is_loading, bool force) override;
++  void UpdateToolbar(content::WebContents* contents) override;
++  bool UpdateToolbarSecurityState() override;
++  void UpdateCustomTabBarVisibility(bool visible, bool animate) override;
++  void ResetToolbarTabState(content::WebContents* contents) override;
++  void FocusToolbar() override;
++  void ToolbarSizeChanged(bool is_animating) override;
++  void TabDraggingStatusChanged(bool is_dragging) override;
++  void LinkOpeningFromGesture(WindowOpenDisposition disposition) override;
++  void FocusAppMenu() override;
++  bool IsTabStripEditable() const override;
++  void DisableTabStripEditingForTesting() override;
++  bool IsToolbarVisible() const override;
++  bool IsToolbarShowing() const override;
++  bool IsLocationBarVisible() const override;
++  void ShowUpdateChromeDialog() override;
++  void ShowIntentPickerBubble(std::vector<apps::IntentPickerAppInfo> app_info,
++                              bool show_stay_in_chrome,
++                              bool show_remember_selection,
++                              apps::IntentPickerBubbleType bubble_type,
++                              const std::optional<url::Origin>& initiating_origin,
++                              IntentPickerResponse callback) override;
++  void ShowBookmarkBubble(const GURL& url, bool already_bookmarked) override;
++  ShowTranslateBubbleResult ShowTranslateBubble(content::WebContents* contents,
++                                                translate::TranslateStep step,
++                                                const std::string& source_language,
++                                                const std::string& target_language,
++                                                translate::TranslateErrors error_type,
++                                                bool is_user_gesture) override;
++  DownloadBubbleUIController* GetDownloadBubbleUIController() override;
++  void ConfirmBrowserCloseWithPendingDownloads(int download_count,
++                                               UnloadController::DownloadCloseType dialog_type,
++                                               base::OnceCallback<void(bool)> callback) override;
++  void ShowAppMenu() override;
++  void PreHandleDragUpdate(const content::DropData& drop_data, const gfx::PointF& point) override;
++  void PreHandleDragExit() override;
++  void HandleDragEnded() override;
++  content::KeyboardEventProcessingResult PreHandleKeyboardEvent(
++      const input::NativeWebKeyboardEvent& event) override;
++  bool HandleKeyboardEvent(const input::NativeWebKeyboardEvent& event) override;
++  std::unique_ptr<FindBar> CreateFindBar() override;
++  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost() override;
++  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHostFor(
++      content::WebContents* web_contents) override;
++  void ShowAvatarBubbleFromAvatarButton(bool is_source_accelerator) override;
++  void MaybeShowProfileSwitchIPH() override;
++  void MaybeShowSupervisedUserProfileSignInIPH() override;
++  void ShowHatsDialog(const std::string& site_id,
++                      const std::optional<std::string>& hats_histogram_name,
++                      const std::optional<uint64_t> hats_survey_ukm_id,
++                      base::OnceClosure success_callback,
++                      base::OnceClosure failure_callback,
++                      const SurveyBitsData& product_specific_bits_data,
++                      const SurveyStringData& product_specific_string_data) override;
++  ExclusiveAccessContext* GetExclusiveAccessContext() override;
++  std::string GetWorkspace() const override;
++  bool IsVisibleOnAllWorkspaces() const override;
++  void ShowEmojiPanel() override;
++  std::unique_ptr<content::EyeDropper> OpenEyeDropper(content::RenderFrameHost* frame,
++                                                      content::EyeDropperListener* listener) override;
++  void ShowCaretBrowsingDialog() override;
++  void CreateTabSearchBubble() override;
++  void CloseTabSearchBubble() override;
++  void ShowIncognitoClearBrowsingDataDialog() override;
++  void ShowIncognitoHistoryDisclaimerDialog() override;
++  bool IsUnframedModeEnabled() const override;
++  bool GetCanResize() override;
++  ui::mojom::WindowShowState GetWindowShowState() const override;
++  void ShowChromeLabs() override;
++  BrowserView* AsBrowserView() override;
++
++ protected:
++  void DeleteBrowserWindow() final;
++
++ private:
++  void DestroyBrowser();
++
++  const raw_ptr<BrowserWindowInterface> browser_;
++  __weak BrkBrowser* const owner_;
++  __weak NSWindow* window_ = nil;
++  std::unique_ptr<BrkLocationBar> location_bar_;
++  std::unique_ptr<BrkExclusiveAccessContext> exclusive_access_context_;
++  id key_observer_ = nil;
++  id resign_observer_ = nil;
++  bool closing_ = false;
++  base::WeakPtrFactory<BrkBrowserWindow> weak_factory_{this};
++};
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_BROWSER_WINDOW_H_
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..506c0b545eec79c3e2f6c49b9cfbac3fd4079742
+--- /dev/null
++++ b/brk/browser/brk_browser_window.mm
+@@ -0,0 +1,372 @@
++#import "brk/browser/brk_browser_window.h"
++
++#include <memory>
++#include <optional>
++#include <utility>
++
++#include "base/check.h"
++#include "base/functional/bind.h"
++#include "base/task/single_thread_task_runner.h"
++#import "brk/browser/brk_browser.h"
++#include "brk/browser/brk_location_bar.h"
++#import "brk/browser/brk_web_contents.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/themes/theme_service.h"
++#include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
++#include "chrome/browser/ui/browser_active_state_manager/browser_active_state_manager.h"
++#include "chrome/browser/ui/browser_manager_service.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_hide_callback.h"
++#include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
++#include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
++#include "chrome/browser/ui/exclusive_access/fullscreen_tab_params.h"
++#include "chrome/browser/ui/find_bar/find_bar.h"
++#include "chrome/browser/ui/hats/hats_service.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/unload_controller.h"
++#include "components/input/native_web_keyboard_event.h"
++#include "content/public/browser/eye_dropper.h"
++#include "content/public/browser/keyboard_event_processing_result.h"
++#include "content/public/browser/web_contents.h"
++#include "third_party/blink/public/common/input/web_input_event.h"
++#include "ui/base/mojom/window_show_state.mojom.h"
++#include "ui/base/ui_base_types.h"
++#include "ui/color/color_provider_manager.h"
++#import "ui/gfx/mac/coordinate_conversion.h"
++#include "ui/gfx/native_ui_types.h"
++#include "ui/native_theme/native_theme.h"
++#include "url/gurl.h"
++#include "url/origin.h"
++
++namespace brkcore {
++
++// Chrome's fullscreen and pointer lock state talks to this. Page fullscreen does not reach the shell yet (see
++// docs/chromium/ARC-ENGINE.md), so the context says it cannot enter.
++class BrkExclusiveAccessContext : public ExclusiveAccessContext {
++ public:
++  explicit BrkExclusiveAccessContext(BrowserWindowInterface* browser) : browser_(browser) {}
++
++  Profile* GetProfile() override { return browser_->GetProfile(); }
++  bool IsFullscreen() const override { return false; }
++  void EnterFullscreen(const url::Origin& origin,
++                       ExclusiveAccessBubbleType bubble_type,
++                       FullscreenTabParams fullscreen_tab_params) override {}
++  void ExitFullscreen() override {}
++  void UpdateExclusiveAccessBubble(const ExclusiveAccessBubbleParams& params,
++                                   ExclusiveAccessBubbleHideCallback first_hide_callback) override {
++    if (first_hide_callback) {
++      std::move(first_hide_callback).Run(ExclusiveAccessBubbleHideReason::kNotShown);
++    }
++  }
++  bool IsExclusiveAccessBubbleDisplayed() const override { return false; }
++  void OnExclusiveAccessUserInput() override {}
++  content::WebContents* GetWebContentsForExclusiveAccess() override {
++    return browser_->GetTabStripModel()->GetActiveWebContents();
++  }
++  bool CanUserEnterFullscreen() const override { return false; }
++  bool CanUserExitFullscreen() const override { return true; }
++
++ private:
++  const raw_ptr<BrowserWindowInterface> browser_;
++};
++
++BrkBrowserWindow::BrkBrowserWindow(BrowserWindowInterface* browser, BrkBrowser* owner)
++    : browser_(browser),
++      owner_(owner),
++      location_bar_(std::make_unique<BrkLocationBar>(browser)),
++      exclusive_access_context_(std::make_unique<BrkExclusiveAccessContext>(browser)) {}
++
++BrkBrowserWindow::~BrkBrowserWindow() {
++  SetNativeWindow(nil);
++  browser_->GetFeatures().TearDownPreBrowserWindowDestruction();
++}
++
++void BrkBrowserWindow::SetNativeWindow(NSWindow* window) {
++  NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
++  if (key_observer_) {
++    [center removeObserver:key_observer_];
++    [center removeObserver:resign_observer_];
++    key_observer_ = nil;
++    resign_observer_ = nil;
++  }
++  window_ = window;
++  if (!window) {
++    return;
++  }
++  BrowserWindowInterface* browser = browser_;
++  key_observer_ = [center addObserverForName:NSWindowDidBecomeKeyNotification
++                                      object:window
++                                       queue:nil
++                                  usingBlock:^(NSNotification*) {
++                                    BrowserActiveStateManager::From(browser)->DidBecomeActive();
++                                  }];
++  resign_observer_ = [center addObserverForName:NSWindowDidResignKeyNotification
++                                         object:window
++                                          queue:nil
++                                     usingBlock:^(NSNotification*) {
++                                       BrowserActiveStateManager::From(browser)->DidBecomeInactive();
++                                     }];
++  if (window.isKeyWindow) {
++    BrowserActiveStateManager::From(browser_)->DidBecomeActive();
++  }
++}
++
++void BrkBrowserWindow::Show() {}
++void BrkBrowserWindow::ShowInactive() {}
++void BrkBrowserWindow::Hide() {}
++bool BrkBrowserWindow::IsVisible() const {
++  return window_.visible;
++}
++void BrkBrowserWindow::SetBounds(const gfx::Rect& bounds) {}
++
++// Chrome calls this when the tab strip empties and when it closes all windows. It may be deep inside a tab strip notification, so the
++// Browser goes on the next task.
++void BrkBrowserWindow::Close() {
++  if (closing_) {
++    return;
++  }
++  closing_ = true;
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, base::BindOnce(&BrkBrowserWindow::DestroyBrowser, weak_factory_.GetWeakPtr()));
++}
++
++void BrkBrowserWindow::DestroyBrowser() {
++  // As Chrome's own window when its native widget goes: no warning about downloads, the shell has already decided.
++  UnloadController::From(browser_)->set_force_skip_warning_user_on_close(true);
++  UnloadController::From(browser_)->OnWindowClosing();
++  if (!browser_->GetTabStripModel()->empty()) {
++    browser_->GetTabStripModel()->CloseAllTabs();
++    closing_ = false;
++    return;  // Chrome calls Close() again when the strip is empty.
++  }
++  BrkBrowser* owner = owner_;
++  [owner browserWillGo];
++  BrowserManagerService::SynchronouslyDestroyBrowser(browser_);
++}
++
++void BrkBrowserWindow::Activate() {
++  [window_ makeKeyAndOrderFront:nil];
++}
++void BrkBrowserWindow::Deactivate() {}
++bool BrkBrowserWindow::IsActive() const {
++  return window_.keyWindow;
++}
++gfx::Rect BrkBrowserWindow::GetBounds() const {
++  return window_ ? gfx::ScreenRectFromNSRect(window_.frame) : gfx::Rect();
++}
++bool BrkBrowserWindow::IsMaximized() const {
++  return false;
++}
++bool BrkBrowserWindow::IsMinimized() const {
++  return window_.miniaturized;
++}
++bool BrkBrowserWindow::IsFullscreen() const {
++  return (window_.styleMask & NSWindowStyleMaskFullScreen) != 0;
++}
++gfx::Rect BrkBrowserWindow::GetRestoredBounds() const {
++  return GetBounds();
++}
++ui::mojom::WindowShowState BrkBrowserWindow::GetRestoredState() const {
++  return ui::mojom::WindowShowState::kNormal;
++}
++void BrkBrowserWindow::Maximize() {}
++void BrkBrowserWindow::Minimize() {}
++void BrkBrowserWindow::Restore() {}
++void BrkBrowserWindow::FlashFrame(bool flash) {}
++ui::ZOrderLevel BrkBrowserWindow::GetZOrderLevel() const {
++  return ui::ZOrderLevel::kNormal;
++}
++void BrkBrowserWindow::SetZOrderLevel(ui::ZOrderLevel order) {}
++
++gfx::NativeWindow BrkBrowserWindow::GetNativeWindow() const {
++  return gfx::NativeWindow(window_);
++}
++bool BrkBrowserWindow::IsOnCurrentWorkspace() const {
++  return true;
++}
++bool BrkBrowserWindow::IsVisibleOnScreen() const {
++  return window_.visible;
++}
++void BrkBrowserWindow::SetTopControlsShownRatio(content::WebContents*, float) {}
++bool BrkBrowserWindow::DoBrowserControlsShrinkRendererSize(const content::WebContents*) const {
++  return false;
++}
++ui::NativeTheme* BrkBrowserWindow::GetNativeTheme() {
++  return ui::NativeTheme::GetInstanceForNativeUi();
++}
++const ui::ThemeProvider* BrkBrowserWindow::GetThemeProvider() const {
++  return &ThemeService::GetThemeProviderForProfile(browser_->GetProfile());
++}
++const ui::ColorProvider* BrkBrowserWindow::GetColorProvider() const {
++  return ui::ColorProviderManager::Get().GetColorProviderFor(
++      ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(nullptr));
++}
++int BrkBrowserWindow::GetTopControlsHeight() const {
++  return 0;
++}
++void BrkBrowserWindow::SetTopControlsGestureScrollInProgress(bool) {}
++// Empty on purpose: Chrome casts these to its Views class. Status text reaches Brk through Hooks::update_target_url.
++std::vector<StatusBubble*> BrkBrowserWindow::GetStatusBubbles() {
++  return {};
++}
++void BrkBrowserWindow::UpdateTitleBar() {}
++void BrkBrowserWindow::UpdateLoadingAnimations(bool) {}
++void BrkBrowserWindow::OnActiveTabChanged(content::WebContents*, content::WebContents*, int, int) {}
++void BrkBrowserWindow::OnTabDetached(content::WebContents*, bool) {}
++gfx::Size BrkBrowserWindow::GetContentsSize() const {
++  return GetBounds().size();
++}
++void BrkBrowserWindow::SetContentsSize(const gfx::Size&) {}
++autofill::AutofillBubbleHandler* BrkBrowserWindow::GetAutofillBubbleHandler() {
++  return nullptr;
++}
++LocationBar* BrkBrowserWindow::GetLocationBar() const {
++  return location_bar_.get();
++}
++void BrkBrowserWindow::SetFocusToLocationBar(bool) {}
++void BrkBrowserWindow::UpdateReloadStopState(bool, bool) {}
++void BrkBrowserWindow::UpdateToolbar(content::WebContents*) {}
++bool BrkBrowserWindow::UpdateToolbarSecurityState() {
++  return false;
++}
++void BrkBrowserWindow::UpdateCustomTabBarVisibility(bool, bool) {}
++void BrkBrowserWindow::ResetToolbarTabState(content::WebContents*) {}
++void BrkBrowserWindow::FocusToolbar() {}
++void BrkBrowserWindow::ToolbarSizeChanged(bool) {}
++void BrkBrowserWindow::TabDraggingStatusChanged(bool) {}
++void BrkBrowserWindow::LinkOpeningFromGesture(WindowOpenDisposition) {}
++void BrkBrowserWindow::FocusAppMenu() {}
++bool BrkBrowserWindow::IsTabStripEditable() const {
++  return true;
++}
++void BrkBrowserWindow::DisableTabStripEditingForTesting() {}
++bool BrkBrowserWindow::IsToolbarVisible() const {
++  return false;
++}
++bool BrkBrowserWindow::IsToolbarShowing() const {
++  return false;
++}
++bool BrkBrowserWindow::IsLocationBarVisible() const {
++  return false;
++}
++void BrkBrowserWindow::ShowUpdateChromeDialog() {}
++void BrkBrowserWindow::ShowIntentPickerBubble(std::vector<apps::IntentPickerAppInfo>,
++                                              bool,
++                                              bool,
++                                              apps::IntentPickerBubbleType,
++                                              const std::optional<url::Origin>&,
++                                              IntentPickerResponse) {}
++void BrkBrowserWindow::ShowBookmarkBubble(const GURL&, bool) {}
++ShowTranslateBubbleResult BrkBrowserWindow::ShowTranslateBubble(content::WebContents*,
++                                                                translate::TranslateStep,
++                                                                const std::string&,
++                                                                const std::string&,
++                                                                translate::TranslateErrors,
++                                                                bool) {
++  return ShowTranslateBubbleResult::kBrowserWindowNotValid;
++}
++DownloadBubbleUIController* BrkBrowserWindow::GetDownloadBubbleUIController() {
++  return nullptr;
++}
++void BrkBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(int,
++                                                               UnloadController::DownloadCloseType,
++                                                               base::OnceCallback<void(bool)> callback) {
++  std::move(callback).Run(true);
++}
++void BrkBrowserWindow::ShowAppMenu() {}
++void BrkBrowserWindow::PreHandleDragUpdate(const content::DropData&, const gfx::PointF&) {}
++void BrkBrowserWindow::PreHandleDragExit() {}
++void BrkBrowserWindow::HandleDragEnded() {}
++
++content::KeyboardEventProcessingResult BrkBrowserWindow::PreHandleKeyboardEvent(
++    const input::NativeWebKeyboardEvent& event) {
++  BrkBrowser* owner = owner_;
++  BrkWebContents* page = owner.focusedPage;
++  if (!page) {
++    return content::KeyboardEventProcessingResult::NOT_HANDLED;
++  }
++  const BrkCoreKeyAnswer answer = [page keyBeforePage:event];
++  if (answer.handled) {
++    return content::KeyboardEventProcessingResult::HANDLED;
++  }
++  return answer.shortcut ? content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT
++                         : content::KeyboardEventProcessingResult::NOT_HANDLED;
++}
++
++bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent& event) {
++  BrkBrowser* owner = owner_;
++  BrkWebContents* page = owner.focusedPage;
++  if (page && [page keyAfterPage:event]) {
++    return true;
++  }
++  // The page left it and so did the shell's table. As in Chrome: the menu bar gets it, so Edit > Copy and friends still have their keys.
++  NSEvent* native = event.os_event.Get();
++  if (native && event.GetType() != blink::WebInputEvent::Type::kKeyUp &&
++      (native.modifierFlags & NSEventModifierFlagCommand)) {
++    return [NSApp.mainMenu performKeyEquivalent:native];
++  }
++  return false;
++}
++
++std::unique_ptr<FindBar> BrkBrowserWindow::CreateFindBar() {
++  return nullptr;
++}
++web_modal::WebContentsModalDialogHost* BrkBrowserWindow::GetWebContentsModalDialogHost() {
++  return nullptr;
++}
++web_modal::WebContentsModalDialogHost* BrkBrowserWindow::GetWebContentsModalDialogHostFor(
++    content::WebContents*) {
++  return nullptr;
++}
++void BrkBrowserWindow::ShowAvatarBubbleFromAvatarButton(bool) {}
++void BrkBrowserWindow::MaybeShowProfileSwitchIPH() {}
++void BrkBrowserWindow::MaybeShowSupervisedUserProfileSignInIPH() {}
++void BrkBrowserWindow::ShowHatsDialog(const std::string&,
++                                      const std::optional<std::string>&,
++                                      const std::optional<uint64_t>,
++                                      base::OnceClosure,
++                                      base::OnceClosure failure_callback,
++                                      const SurveyBitsData&,
++                                      const SurveyStringData&) {
++  std::move(failure_callback).Run();
++}
++ExclusiveAccessContext* BrkBrowserWindow::GetExclusiveAccessContext() {
++  return exclusive_access_context_.get();
++}
++std::string BrkBrowserWindow::GetWorkspace() const {
++  return std::string();
++}
++bool BrkBrowserWindow::IsVisibleOnAllWorkspaces() const {
++  return false;
++}
++void BrkBrowserWindow::ShowEmojiPanel() {
++  [NSApp orderFrontCharacterPalette:nil];
++}
++std::unique_ptr<content::EyeDropper> BrkBrowserWindow::OpenEyeDropper(content::RenderFrameHost*,
++                                                                      content::EyeDropperListener*) {
++  return nullptr;
++}
++void BrkBrowserWindow::ShowCaretBrowsingDialog() {}
++void BrkBrowserWindow::CreateTabSearchBubble() {}
++void BrkBrowserWindow::CloseTabSearchBubble() {}
++void BrkBrowserWindow::ShowIncognitoClearBrowsingDataDialog() {}
++void BrkBrowserWindow::ShowIncognitoHistoryDisclaimerDialog() {}
++bool BrkBrowserWindow::IsUnframedModeEnabled() const {
++  return false;
++}
++bool BrkBrowserWindow::GetCanResize() {
++  return true;
++}
++ui::mojom::WindowShowState BrkBrowserWindow::GetWindowShowState() const {
++  return ui::mojom::WindowShowState::kNormal;
++}
++void BrkBrowserWindow::ShowChromeLabs() {}
++BrowserView* BrkBrowserWindow::AsBrowserView() {
++  return nullptr;
++}
++void BrkBrowserWindow::DeleteBrowserWindow() {
++  delete this;
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_devtools_session.cc b/brk/browser/brk_devtools_session.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..f9893c1a5854565cfec569c9c794239fb01edd5e
+--- /dev/null
++++ b/brk/browser/brk_devtools_session.cc
+@@ -0,0 +1,102 @@
++#include "brk/browser/brk_devtools_session.h"
++
++#include <utility>
++
++#include "base/containers/span.h"
++#include "base/json/json_reader.h"
++#include "base/json/json_writer.h"
++#include "base/values.h"
++#include "content/public/browser/web_contents.h"
++
++namespace brkcore {
++
++BrkDevToolsSession::BrkDevToolsSession(content::WebContents* contents) : contents_(contents) {}
++
++BrkDevToolsSession::~BrkDevToolsSession() {
++  if (host_) {
++    host_->DetachClient(this);
++  }
++  FailAll("The page closed");
++}
++
++void BrkDevToolsSession::Send(const std::string& method,
++                              const std::string& parameters_json,
++                              Reply reply) {
++  std::optional<base::Value> parameters = base::JSONReader::Read(
++      parameters_json.empty() ? "{}" : parameters_json, base::JSON_PARSE_RFC);
++  if (!parameters || !parameters->is_dict()) {
++    std::move(reply).Run(std::string(), "Parameters are not a JSON object");
++    return;
++  }
++  if (!host_) {
++    host_ = content::DevToolsAgentHost::GetOrCreateFor(contents_);
++    if (!host_->AttachClient(this)) {
++      host_ = nullptr;
++      std::move(reply).Run(std::string(), "DevTools could not attach");
++      return;
++    }
++  }
++  const int id = next_id_++;
++  waiting_[id] = std::move(reply);
++  base::DictValue command;
++  command.Set("id", id);
++  command.Set("method", method);
++  command.Set("params", std::move(*parameters));
++  std::string text;
++  base::JSONWriter::Write(command, &text);
++  host_->DispatchProtocolMessage(this, base::as_byte_span(text));
++}
++
++void BrkDevToolsSession::DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
++                                                 base::span<const uint8_t> message) {
++  std::optional<base::Value> parsed = base::JSONReader::Read(
++      std::string_view(reinterpret_cast<const char*>(message.data()), message.size()),
++      base::JSON_PARSE_RFC);
++  if (!parsed || !parsed->is_dict()) {
++    return;
++  }
++  const base::DictValue& dict = parsed->GetDict();
++  std::optional<int> id = dict.FindInt("id");
++  if (!id) {
++    return;  // An event; none was enabled on purpose.
++  }
++  auto waiter = waiting_.find(*id);
++  if (waiter == waiting_.end()) {
++    return;
++  }
++  Reply reply = std::move(waiter->second);
++  waiting_.erase(waiter);
++  if (const base::DictValue* error = dict.FindDict("error")) {
++    const std::string* text = error->FindString("message");
++    std::move(reply).Run(std::string(), text ? *text : std::string("DevTools error"));
++  } else {
++    std::string result = "{}";
++    if (const base::DictValue* value = dict.FindDict("result")) {
++      base::JSONWriter::Write(*value, &result);
++    }
++    std::move(reply).Run(result, std::string());
++  }
++  if (waiting_.empty() && host_) {
++    host_->DetachClient(this);
++    host_ = nullptr;
++  }
++}
++
++void BrkDevToolsSession::AgentHostClosed(content::DevToolsAgentHost* agent_host) {
++  host_ = nullptr;
++  FailAll("DevTools closed");
++}
++
++bool BrkDevToolsSession::IsTrusted() {
++  return true;
++}
++
++void BrkDevToolsSession::FailAll(const std::string& error) {
++  std::map<int, Reply> waiting = std::move(waiting_);
++  waiting_.clear();
++  for (auto& entry : waiting) {
++    std::move(entry.second).Run(std::string(), error);
++  }
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_devtools_session.h b/brk/browser/brk_devtools_session.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..f2507655c43ead6e119583ba343beaca69a30d79
+--- /dev/null
++++ b/brk/browser/brk_devtools_session.h
+@@ -0,0 +1,48 @@
++#ifndef BRK_BROWSER_BRK_DEVTOOLS_SESSION_H_
++#define BRK_BROWSER_BRK_DEVTOOLS_SESSION_H_
++
++#include <map>
++#include <string>
++
++#include "base/functional/callback.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/scoped_refptr.h"
++#include "content/public/browser/devtools_agent_host.h"
++#include "content/public/browser/devtools_agent_host_client.h"
++
++namespace content {
++class WebContents;
++}
++
++namespace brkcore {
++
++// One page's DevTools protocol commands, for what the shell asks (page text, PDF, MHTML). Attaches for a command and detaches when
++// none is waiting, so a page has no DevTools session attached while idle.
++class BrkDevToolsSession : public content::DevToolsAgentHostClient {
++ public:
++  // (result JSON, error). Exactly one is non-empty.
++  using Reply = base::OnceCallback<void(const std::string& result, const std::string& error)>;
++
++  explicit BrkDevToolsSession(content::WebContents* contents);
++  ~BrkDevToolsSession() override;
++
++  void Send(const std::string& method, const std::string& parameters_json, Reply reply);
++
++  // content::DevToolsAgentHostClient:
++  void DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
++                               base::span<const uint8_t> message) override;
++  void AgentHostClosed(content::DevToolsAgentHost* agent_host) override;
++  bool IsTrusted() override;
++
++ private:
++  void FailAll(const std::string& error);
++
++  const raw_ptr<content::WebContents> contents_;
++  scoped_refptr<content::DevToolsAgentHost> host_;
++  std::map<int, Reply> waiting_;
++  int next_id_ = 1;
++};
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_DEVTOOLS_SESSION_H_
+diff --git a/brk/browser/brk_extension_action.h b/brk/browser/brk_extension_action.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..a4a9ca69b781750d926335cc33f90589aa2fe7ea
+--- /dev/null
++++ b/brk/browser/brk_extension_action.h
+@@ -0,0 +1,31 @@
++#ifndef BRK_BROWSER_BRK_EXTENSION_ACTION_H_
++#define BRK_BROWSER_BRK_EXTENSION_ACTION_H_
++
++#import <Foundation/Foundation.h>
++
++#include <memory>
++
++#include "brk/public/BrkCore.h"
++
++class ExtensionActionDelegate;
++class ExtensionActionViewModel;
++@class BrkBrowser;
++
++namespace extensions {
++class Extension;
++}
++
++@interface BrkExtension : NSObject <BrkCoreExtension>
++- (instancetype)initWithExtension:(const extensions::Extension*)extension
++                          enabled:(BOOL)enabled
++                        hasAction:(BOOL)hasAction;
++@end
++
++namespace brkcore {
++// What ExtensionActionViewModel calls to show the action's popup. This is where Chrome plugs in its Views bubble; here the popup's
++// WebContents goes to the shell, which hosts its view in a native panel.
++std::unique_ptr<ExtensionActionDelegate> CreateExtensionActionDelegate(BrkBrowser* browser, NSString* extensionID);
++void FocusExtensionPopup(ExtensionActionViewModel* model);
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_EXTENSION_ACTION_H_
+diff --git a/brk/browser/brk_extension_action.mm b/brk/browser/brk_extension_action.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..0349b40be743ac04e5c552b443d72618fb75efbf
+--- /dev/null
++++ b/brk/browser/brk_extension_action.mm
+@@ -0,0 +1,255 @@
++#import "brk/browser/brk_extension_action.h"
++
++#include <memory>
++#include <string>
++#include <utility>
++
++#include "base/check.h"
++#include "base/functional/bind.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/notimplemented.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
++#import "brk/browser/brk_browser.h"
++#include "chrome/browser/extensions/extension_view.h"
++#include "chrome/browser/extensions/extension_view_host.h"
++#include "chrome/browser/ui/extensions/extension_action_delegate.h"
++#include "chrome/browser/ui/extensions/extension_action_view_model.h"
++#include "chrome/browser/ui/extensions/extension_popup_types.h"
++#include "components/input/native_web_keyboard_event.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "content/public/browser/web_contents.h"
++#include "extensions/common/constants.h"
++#include "extensions/common/extension.h"
++#include "extensions/common/manifest_handlers/icons_handler.h"
++#include "ui/events/keycodes/keyboard_codes.h"
++#include "ui/gfx/geometry/size.h"
++#include "ui/gfx/native_ui_types.h"
++
++namespace brkcore {
++
++namespace {
++
++// Chrome's limits for an action popup (ExtensionPopup::kMinSize, kMaxSize).
++constexpr gfx::Size kMinSize(25, 25);
++constexpr gfx::Size kMaxSize(800, 600);
++
++class BrkExtensionActionDelegate;
++
++// One open popup. Owns the host, so Chromium's ExtensionViewHost and the popup's WebContents live exactly as long as the popup.
++class BrkExtensionPopup : public extensions::ExtensionView {
++ public:
++  BrkExtensionPopup(std::unique_ptr<extensions::ExtensionViewHost> host,
++                    BrkExtensionActionDelegate* delegate,
++                    BrkBrowser* browser,
++                    NSString* extension_id,
++                    ShowPopupCallback callback);
++  ~BrkExtensionPopup() override;
++
++  void Focus() { host_->host_contents()->Focus(); }
++  gfx::NativeView NativeView() { return host_->host_contents()->GetNativeView(); }
++
++  // extensions::ExtensionView:
++  gfx::NativeView GetNativeView() override { return NativeView(); }
++  void ResizeDueToAutoResize(content::WebContents* web_contents, const gfx::Size& new_size) override;
++  void RenderFrameCreated(content::RenderFrameHost* frame) override;
++  bool HandleKeyboardEvent(content::WebContents* source, const input::NativeWebKeyboardEvent& event) override;
++  void OnLoaded() override;
++
++ private:
++  void HostAskedToClose(extensions::ExtensionHost* host);
++
++  std::unique_ptr<extensions::ExtensionViewHost> host_;
++  const raw_ptr<BrkExtensionActionDelegate> delegate_;
++  __weak BrkBrowser* const browser_;
++  NSString* const extension_id_;
++  // Tells chrome.action.openPopup() the popup is up, or (null) that it never came.
++  ShowPopupCallback callback_;
++  gfx::Size size_ = kMinSize;
++  bool shown_ = false;
++};
++
++class BrkExtensionActionDelegate : public ExtensionActionDelegate {
++ public:
++  BrkExtensionActionDelegate(BrkBrowser* browser, NSString* extension_id)
++      : browser_(browser), extension_id_(extension_id) {}
++
++  void ClosePopup() { popup_.reset(); }
++  void ClosePopupSoon() {
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++        FROM_HERE, base::BindOnce(&BrkExtensionActionDelegate::ClosePopup, weak_factory_.GetWeakPtr()));
++  }
++  void FocusPopup() {
++    if (popup_) {
++      popup_->Focus();
++    }
++  }
++
++  // ExtensionActionDelegate:
++  void AttachToModel(ExtensionActionViewModel* model) override {}
++  void DetachFromModel() override { popup_.reset(); }
++  void RegisterCommand() override {}
++  void UnregisterCommand() override {}
++  bool IsShowingPopup() const override { return !!popup_; }
++  void HidePopup() override { popup_.reset(); }
++  gfx::NativeView GetPopupNativeViewForTesting() override {
++    return popup_ ? popup_->NativeView() : gfx::NativeView();
++  }
++  void TriggerPopup(std::unique_ptr<extensions::ExtensionViewHost> host,
++                    PopupShowAction show_action,
++                    bool by_user,
++                    ShowPopupCallback callback) override {
++    popup_.reset();
++    popup_ = std::make_unique<BrkExtensionPopup>(std::move(host), this, browser_, extension_id_, std::move(callback));
++  }
++  void ShowContextMenuAsFallback() override {}
++  void CloseExtensionsMenuIfOpen() override {}
++
++ private:
++  __weak BrkBrowser* const browser_;
++  NSString* const extension_id_;
++  std::unique_ptr<BrkExtensionPopup> popup_;
++  base::WeakPtrFactory<BrkExtensionActionDelegate> weak_factory_{this};
++};
++
++BrkExtensionPopup::BrkExtensionPopup(std::unique_ptr<extensions::ExtensionViewHost> host,
++                                     BrkExtensionActionDelegate* delegate,
++                                     BrkBrowser* browser,
++                                     NSString* extension_id,
++                                     ShowPopupCallback callback)
++    : host_(std::move(host)),
++      delegate_(delegate),
++      browser_(browser),
++      extension_id_(extension_id),
++      callback_(std::move(callback)) {
++  host_->set_view(this);
++  host_->SetCloseHandler(base::BindOnce(&BrkExtensionPopup::HostAskedToClose, base::Unretained(this)));
++  host_->CreateRendererSoon();
++}
++
++BrkExtensionPopup::~BrkExtensionPopup() {
++  if (callback_) {
++    std::move(callback_).Run(nullptr);
++  }
++  host_->set_view(nullptr);
++  BrkBrowser* browser = browser_;
++  if (shown_) {
++    [browser.delegate browser:browser didCloseExtensionPopup:extension_id_];
++  }
++}
++
++void BrkExtensionPopup::ResizeDueToAutoResize(content::WebContents*, const gfx::Size& new_size) {
++  size_ = new_size;
++  size_.SetToMax(kMinSize);
++  size_.SetToMin(kMaxSize);
++  if (shown_) {
++    BrkBrowser* browser = browser_;
++    [browser.delegate browser:browser
++        didResizeExtensionPopup:extension_id_
++                           size:NSMakeSize(size_.width(), size_.height())];
++  }
++}
++
++void BrkExtensionPopup::RenderFrameCreated(content::RenderFrameHost* frame) {
++  if (frame->IsInPrimaryMainFrame() && frame->GetView()) {
++    frame->GetView()->EnableAutoResize(kMinSize, kMaxSize);
++  }
++}
++
++bool BrkExtensionPopup::HandleKeyboardEvent(content::WebContents*, const input::NativeWebKeyboardEvent& event) {
++  if (event.windows_key_code == ui::VKEY_ESCAPE && event.GetType() != blink::WebInputEvent::Type::kKeyUp) {
++    delegate_->ClosePopupSoon();
++    return true;
++  }
++  return false;
++}
++
++void BrkExtensionPopup::OnLoaded() {
++  if (shown_) {
++    return;
++  }
++  shown_ = true;
++  BrkBrowser* browser = browser_;
++  [browser.delegate browser:browser
++      didOpenExtensionPopup:extension_id_
++                       view:host_->host_contents()->GetNativeView().GetNativeNSView()];
++  [browser.delegate browser:browser
++      didResizeExtensionPopup:extension_id_
++                         size:NSMakeSize(size_.width(), size_.height())];
++  if (callback_) {
++    std::move(callback_).Run(host_.get());
++  }
++}
++
++void BrkExtensionPopup::HostAskedToClose(extensions::ExtensionHost*) {
++  delegate_->ClosePopupSoon();
++}
++
++}  // namespace
++
++std::unique_ptr<ExtensionActionDelegate> CreateExtensionActionDelegate(BrkBrowser* browser, NSString* extensionID) {
++  return std::make_unique<BrkExtensionActionDelegate>(browser, extensionID);
++}
++
++void FocusExtensionPopup(ExtensionActionViewModel* model) {
++  // The view model owns its delegate and does not hand it out; the only delegates it can have here are Brk's.
++  static_cast<BrkExtensionActionDelegate*>(model->delegate())->FocusPopup();
++}
++
++}  // namespace brkcore
++
++@implementation BrkExtension {
++  NSString* _extensionID;
++  NSString* _name;
++  NSString* _version;
++  NSData* _iconData;
++  BOOL _enabled;
++  BOOL _hasAction;
++}
++
++- (instancetype)initWithExtension:(const extensions::Extension*)extension
++                          enabled:(BOOL)enabled
++                        hasAction:(BOOL)hasAction {
++  if ((self = [super init])) {
++    _extensionID = base::SysUTF8ToNSString(extension->id());
++    _name = base::SysUTF8ToNSString(extension->name());
++    _version = base::SysUTF8ToNSString(extension->VersionString());
++    _enabled = enabled;
++    _hasAction = hasAction;
++    const std::string relative =
++        extensions::IconsInfo::GetIcons(extension).Get(extension_misc::EXTENSION_ICON_SMALL, ExtensionIconSet::Match::kBigger);
++    if (!relative.empty()) {
++      _iconData = [NSData
++          dataWithContentsOfFile:base::SysUTF8ToNSString(extension->path().AppendASCII(relative).value())];
++    }
++  }
++  return self;
++}
++
++- (NSString*)extensionID {
++  return _extensionID;
++}
++
++- (NSString*)name {
++  return _name;
++}
++
++- (NSString*)version {
++  return _version;
++}
++
++- (BOOL)enabled {
++  return _enabled;
++}
++
++- (BOOL)hasAction {
++  return _hasAction;
++}
++
++- (NSData*)iconData {
++  return _iconData;
++}
++
++@end
+diff --git a/brk/browser/brk_location_bar.cc b/brk/browser/brk_location_bar.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..8044448774745e10f2d6b2706e4d8fb848979653
+--- /dev/null
++++ b/brk/browser/brk_location_bar.cc
+@@ -0,0 +1,102 @@
++#include "brk/browser/brk_location_bar.h"
++
++#include "chrome/browser/ui/views/bubble_anchor_util_views.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "ui/gfx/geometry/rect.h"
++#include "ui/gfx/geometry/size.h"
++
++namespace brkcore {
++
++BrkLocationBar::BrkLocationBar(BrowserWindowInterface* browser)
++    : LocationBar(nullptr), browser_(browser) {}
++BrkLocationBar::~BrkLocationBar() = default;
++
++void BrkLocationBar::FocusLocation(bool, bool) {}
++void BrkLocationBar::FocusSearch() {}
++void BrkLocationBar::UpdateFocusBehavior(bool) {}
++void BrkLocationBar::UpdateContentSettingsIcons() {}
++void BrkLocationBar::SaveStateToContents(content::WebContents*) {}
++void BrkLocationBar::Revert() {}
++OmniboxView* BrkLocationBar::GetOmniboxView() {
++  return nullptr;
++}
++OmniboxPopupView* BrkLocationBar::GetOmniboxPopupView() {
++  return nullptr;
++}
++OmniboxController* BrkLocationBar::GetOmniboxController() {
++  return nullptr;
++}
++bool BrkLocationBar::ShouldCloseOmniboxPopup(ui::MouseEvent*) {
++  return false;
++}
++ChipController* BrkLocationBar::GetChipController() {
++  return nullptr;
++}
++PermissionDashboardController* BrkLocationBar::GetPermissionDashboardController() {
++  return nullptr;
++}
++content::WebContents* BrkLocationBar::GetWebContents() {
++  return nullptr;
++}
++LocationBarModel* BrkLocationBar::GetLocationBarModel() {
++  return nullptr;
++}
++std::optional<bubble_anchor_util::AnchorConfiguration> BrkLocationBar::GetChipAnchor() {
++  return std::nullopt;
++}
++ui::TrackedElement* BrkLocationBar::GetAnchorOrNull() {
++  return nullptr;
++}
++BrowserWindowInterface* BrkLocationBar::GetBrowser() {
++  return browser_;
++}
++Profile* BrkLocationBar::GetProfile() {
++  return browser_->GetProfile();
++}
++void BrkLocationBar::OnChanged() {}
++void BrkLocationBar::UpdateWithoutTabRestore() {}
++bool BrkLocationBar::IsInitialized() const {
++  return true;
++}
++bool BrkLocationBar::IsVisible() const {
++  return false;
++}
++bool BrkLocationBar::IsDrawn() const {
++  return false;
++}
++bool BrkLocationBar::IsFullscreen() const {
++  return false;
++}
++bool BrkLocationBar::IsEditingOrEmpty() const {
++  return false;
++}
++bool BrkLocationBar::IsMouseHovered() const {
++  return false;
++}
++bool BrkLocationBar::IsFocusWithin() const {
++  return false;
++}
++void BrkLocationBar::InvalidateLayout() {}
++gfx::Rect BrkLocationBar::Bounds() const {
++  return gfx::Rect();
++}
++gfx::Rect BrkLocationBar::BoundsInScreen() const {
++  return gfx::Rect();
++}
++gfx::Size BrkLocationBar::MinimumSize() const {
++  return gfx::Size();
++}
++gfx::Size BrkLocationBar::PreferredSize() const {
++  return gfx::Size();
++}
++void BrkLocationBar::Update(content::WebContents*) {}
++void BrkLocationBar::ResetTabState(content::WebContents*) {}
++bool BrkLocationBar::HasSecurityStateChanged() {
++  return false;
++}
++LocationBarTesting* BrkLocationBar::GetLocationBarForTesting() {
++  return nullptr;
++}
++void BrkLocationBar::AnnounceAlert(const std::u16string&) {}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_location_bar.h b/brk/browser/brk_location_bar.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..db3b815b8df67a912d34d84fb90d6d0f4c6fdf5b
+--- /dev/null
++++ b/brk/browser/brk_location_bar.h
+@@ -0,0 +1,61 @@
++#ifndef BRK_BROWSER_BRK_LOCATION_BAR_H_
++#define BRK_BROWSER_BRK_LOCATION_BAR_H_
++
++#include "base/memory/raw_ptr.h"
++#include "chrome/browser/ui/location_bar/location_bar.h"
++
++class BrowserWindowInterface;
++
++namespace brkcore {
++
++// Chrome reads the window's location bar when tabs change. Brk's address field is native and elsewhere, so this one has nothing in it.
++class BrkLocationBar : public LocationBar {
++ public:
++  explicit BrkLocationBar(BrowserWindowInterface* browser);
++  ~BrkLocationBar() override;
++
++  void FocusLocation(bool is_user_initiated, bool clear_focus_if_failed) override;
++  void FocusSearch() override;
++  void UpdateFocusBehavior(bool toolbar_visible) override;
++  void UpdateContentSettingsIcons() override;
++  void SaveStateToContents(content::WebContents* contents) override;
++  void Revert() override;
++  OmniboxView* GetOmniboxView() override;
++  OmniboxPopupView* GetOmniboxPopupView() override;
++  OmniboxController* GetOmniboxController() override;
++  bool ShouldCloseOmniboxPopup(ui::MouseEvent* event) override;
++  ChipController* GetChipController() override;
++  PermissionDashboardController* GetPermissionDashboardController() override;
++  content::WebContents* GetWebContents() override;
++  LocationBarModel* GetLocationBarModel() override;
++  std::optional<bubble_anchor_util::AnchorConfiguration> GetChipAnchor() override;
++  ui::TrackedElement* GetAnchorOrNull() override;
++  BrowserWindowInterface* GetBrowser() override;
++  Profile* GetProfile() override;
++  void OnChanged() override;
++  void UpdateWithoutTabRestore() override;
++  bool IsInitialized() const override;
++  bool IsVisible() const override;
++  bool IsDrawn() const override;
++  bool IsFullscreen() const override;
++  bool IsEditingOrEmpty() const override;
++  bool IsMouseHovered() const override;
++  bool IsFocusWithin() const override;
++  void InvalidateLayout() override;
++  gfx::Rect Bounds() const override;
++  gfx::Rect BoundsInScreen() const override;
++  gfx::Size MinimumSize() const override;
++  gfx::Size PreferredSize() const override;
++  void Update(content::WebContents* contents) override;
++  void ResetTabState(content::WebContents* contents) override;
++  bool HasSecurityStateChanged() override;
++  LocationBarTesting* GetLocationBarForTesting() override;
++  void AnnounceAlert(const std::u16string& announcement) override;
++
++ private:
++  const raw_ptr<BrowserWindowInterface> browser_;
++};
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_LOCATION_BAR_H_
+diff --git a/brk/browser/brk_navigation_throttle.h b/brk/browser/brk_navigation_throttle.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..f78e895011383da0a85623a05420ead85b8ed7be
+--- /dev/null
++++ b/brk/browser/brk_navigation_throttle.h
+@@ -0,0 +1,13 @@
++#ifndef BRK_BROWSER_BRK_NAVIGATION_THROTTLE_H_
++#define BRK_BROWSER_BRK_NAVIGATION_THROTTLE_H_
++
++namespace content {
++class NavigationThrottleRegistry;
++}
++
++namespace brkcore {
++// Asks the shell before a page's main frame navigates or redirects (CEF's OnBeforeBrowse).
++void AddNavigationThrottles(content::NavigationThrottleRegistry& registry);
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_NAVIGATION_THROTTLE_H_
+diff --git a/brk/browser/brk_navigation_throttle.mm b/brk/browser/brk_navigation_throttle.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..2b3d32e8a0dce9250f0fec7a51c212e78c68f2cc
+--- /dev/null
++++ b/brk/browser/brk_navigation_throttle.mm
+@@ -0,0 +1,43 @@
++#include "brk/browser/brk_navigation_throttle.h"
++
++#include <memory>
++
++#import "brk/browser/brk_web_contents.h"
++#include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/navigation_throttle.h"
++#include "content/public/browser/navigation_throttle_registry.h"
++
++namespace brkcore {
++
++namespace {
++
++class BrkNavigationThrottle : public content::NavigationThrottle {
++ public:
++  explicit BrkNavigationThrottle(content::NavigationThrottleRegistry& registry)
++      : content::NavigationThrottle(registry) {}
++
++  ThrottleCheckResult WillStartRequest() override { return Decide(/*redirect=*/false); }
++  ThrottleCheckResult WillRedirectRequest() override { return Decide(/*redirect=*/true); }
++  const char* GetNameForLogging() override { return "BrkNavigationThrottle"; }
++
++ private:
++  ThrottleCheckResult Decide(bool redirect) {
++    BrkWebContents* page = PageForContents(navigation_handle()->GetWebContents());
++    if (!page || !navigation_handle()->IsInPrimaryMainFrame()) {
++      return PROCEED;
++    }
++    return [page decideNavigationTo:navigation_handle()->GetURL()
++                         isRedirect:redirect
++                        userGesture:navigation_handle()->HasUserGesture()]
++               ? PROCEED
++               : CANCEL_AND_IGNORE;
++  }
++};
++
++}  // namespace
++
++void AddNavigationThrottles(content::NavigationThrottleRegistry& registry) {
++  registry.AddThrottle(std::make_unique<BrkNavigationThrottle>(registry));
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_profile.h b/brk/browser/brk_profile.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..ca698be6da55b866130639fdae6a57bb3e073830
+--- /dev/null
++++ b/brk/browser/brk_profile.h
+@@ -0,0 +1,14 @@
++#ifndef BRK_BROWSER_BRK_PROFILE_H_
++#define BRK_BROWSER_BRK_PROFILE_H_
++
++#import <Foundation/Foundation.h>
++
++#include "brk/public/BrkCore.h"
++
++class Profile;
++
++@interface BrkProfile : NSObject <BrkCoreProfile>
++- (instancetype)initWithProfile:(Profile*)profile;
++@end
++
++#endif  // BRK_BROWSER_BRK_PROFILE_H_
+diff --git a/brk/browser/brk_profile.mm b/brk/browser/brk_profile.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..e84803f671acd4c5979d1d1c2d9e880aa924afbb
+--- /dev/null
++++ b/brk/browser/brk_profile.mm
+@@ -0,0 +1,103 @@
++#import "brk/browser/brk_profile.h"
++
++#include <string>
++
++#include "base/files/file_path.h"
++#include "base/functional/bind.h"
++#include "base/memory/scoped_refptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/one_shot_event.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#import "brk/browser/brk_browser.h"
++#import "brk/browser/brk_extension_action.h"
++#include "chrome/browser/profiles/profile.h"
++#include "extensions/browser/extension_action_manager.h"
++#include "extensions/browser/extension_registry.h"
++#include "extensions/browser/extension_system.h"
++#include "extensions/browser/unpacked_installer.h"
++#include "extensions/common/manifest.h"
++#include "extensions/common/extension.h"
++
++@implementation BrkProfile {
++  base::WeakPtr<Profile> _profile;
++}
++
++- (instancetype)initWithProfile:(Profile*)profile {
++  if ((self = [super init])) {
++    _profile = profile->GetWeakPtr();
++  }
++  return self;
++}
++
++- (NSString*)path {
++  return _profile ? base::SysUTF8ToNSString(_profile->GetPath().value()) : @"";
++}
++
++- (BOOL)isOffTheRecord {
++  return _profile && _profile->IsOffTheRecord();
++}
++
++- (id<BrkCoreBrowser>)createBrowserForWindow:(NSWindow*)window delegate:(id<BrkCoreBrowserDelegate>)delegate {
++  return [[BrkBrowser alloc] initWithProfile:_profile.get() window:window delegate:delegate];
++}
++
++- (id<BrkCoreProfile>)incognitoProfile {
++  Profile* incognito = _profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
++  return [[BrkProfile alloc] initWithProfile:incognito];
++}
++
++- (void)whenExtensionsReady:(void (^)(void))completion {
++  if (!_profile) {
++    completion();
++    return;
++  }
++  extensions::ExtensionSystem::Get(_profile.get())->ready().Post(FROM_HERE, base::BindOnce(^{
++    completion();
++  }));
++}
++
++- (NSArray<id<BrkCoreExtension>>*)installedExtensions {
++  NSMutableArray<id<BrkCoreExtension>>* out = [NSMutableArray array];
++  if (!_profile) {
++    return out;
++  }
++  auto* registry = extensions::ExtensionRegistry::Get(_profile.get());
++  auto* actions = extensions::ExtensionActionManager::Get(_profile.get());
++  auto add = [&](const extensions::ExtensionSet& set, BOOL enabled) {
++    for (const auto& extension : set) {
++      if (extensions::Manifest::IsComponentLocation(extension->location())) {
++        continue;
++      }
++      [out addObject:[[BrkExtension alloc] initWithExtension:extension.get()
++                                                     enabled:enabled
++                                                   hasAction:actions->GetExtensionAction(*extension) != nullptr]];
++    }
++  };
++  add(registry->enabled_extensions(), YES);
++  add(registry->disabled_extensions(), NO);
++  return out;
++}
++
++- (void)installUnpackedExtensionAtPath:(NSString*)path
++                            completion:(void (^)(NSString* _Nullable, NSString* _Nullable))completion {
++  if (!_profile) {
++    completion(nil, @"The profile closed");
++    return;
++  }
++  scoped_refptr<extensions::UnpackedInstaller> installer = extensions::UnpackedInstaller::Create(_profile.get());
++  installer->set_be_noisy_on_failure(false);
++  installer->set_completion_callback(base::BindOnce(
++      [](void (^completion)(NSString*, NSString*), const extensions::Extension* extension, const base::FilePath&,
++         const std::u16string& error) {
++        if (extension) {
++          completion(base::SysUTF8ToNSString(extension->id()), nil);
++        } else {
++          completion(nil, error.empty() ? @"The extension did not load" : base::SysUTF16ToNSString(error));
++        }
++      },
++      completion));
++  installer->Load(base::FilePath(base::SysNSStringToUTF8(path)));
++}
++
++@end
+diff --git a/brk/browser/brk_web_contents.h b/brk/browser/brk_web_contents.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..884efa98cdf0ed7f6caa05b56ee3ec66bea4973f
+--- /dev/null
++++ b/brk/browser/brk_web_contents.h
+@@ -0,0 +1,37 @@
++#ifndef BRK_BROWSER_BRK_WEB_CONTENTS_H_
++#define BRK_BROWSER_BRK_WEB_CONTENTS_H_
++
++#import <Foundation/Foundation.h>
++
++#include "brk/public/BrkCore.h"
++
++class GURL;
++
++namespace content {
++class WebContents;
++}
++namespace input {
++struct NativeWebKeyboardEvent;
++}
++
++@class BrkBrowser;
++
++// One page. Lives as long as the shell keeps it; `contents` is null once Chromium's WebContents is gone, and every call is then a no-op.
++@interface BrkWebContents : NSObject <BrkCoreWebContents>
++- (instancetype)initWithContents:(content::WebContents*)contents browser:(BrkBrowser*)browser;
++@property(nonatomic, readonly) content::WebContents* contents;
++@property(nonatomic, readonly, weak) BrkBrowser* browser;
++// The shell has taken this page. A page Chromium made itself (target=_blank) waits unadopted until then.
++@property(nonatomic) BOOL adopted;
++- (BOOL)decideNavigationTo:(const GURL&)url isRedirect:(BOOL)isRedirect userGesture:(BOOL)userGesture;
++- (BrkCoreKeyAnswer)keyBeforePage:(const input::NativeWebKeyboardEvent&)event;
++- (BOOL)keyAfterPage:(const input::NativeWebKeyboardEvent&)event;
++- (void)hoverLink:(const GURL&)url;
++@end
++
++namespace brkcore {
++// The BrkWebContents of a WebContents, nil when Brk did not wrap it.
++BrkWebContents* PageForContents(content::WebContents* contents);
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_WEB_CONTENTS_H_
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ecee513d3825bdff160eecdd75238859cf9e0a9
+--- /dev/null
++++ b/brk/browser/brk_web_contents.mm
+@@ -0,0 +1,457 @@
++#import "brk/browser/brk_web_contents.h"
++
++#include <memory>
++#include <optional>
++#include <string>
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "base/json/json_writer.h"
++#include "base/memory/raw_ptr.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/values.h"
++#import "brk/browser/brk_browser.h"
++#include "brk/browser/brk_devtools_session.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "components/input/native_web_keyboard_event.h"
++#include "components/sessions/content/session_tab_helper.h"
++#include "components/zoom/zoom_controller.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/navigation_entry.h"
++#include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/browser/web_contents_observer.h"
++#include "content/public/browser/web_contents_user_data.h"
++#include "content/public/common/isolated_world_ids.h"
++#include "net/base/apple/url_conversions.h"
++#include "third_party/blink/public/common/input/web_input_event.h"
++#include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
++#include "ui/gfx/native_ui_types.h"
++#include "url/gurl.h"
++
++namespace {
++
++NSURL* NSURLFromGURL(const GURL& url) {
++  return url.is_valid() ? net::NSURLWithGURL(url) : nil;
++}
++
++NSEventModifierFlags FlagsFromModifiers(int modifiers) {
++  NSEventModifierFlags flags = 0;
++  if (modifiers & blink::WebInputEvent::kMetaKey) {
++    flags |= NSEventModifierFlagCommand;
++  }
++  if (modifiers & blink::WebInputEvent::kShiftKey) {
++    flags |= NSEventModifierFlagShift;
++  }
++  if (modifiers & blink::WebInputEvent::kAltKey) {
++    flags |= NSEventModifierFlagOption;
++  }
++  if (modifiers & blink::WebInputEvent::kControlKey) {
++    flags |= NSEventModifierFlagControl;
++  }
++  return flags;
++}
++
++// Holds the page's Chromium side: the observer that turns Chromium's callbacks into delegate calls, and its DevTools session.
++class BrkPage : public content::WebContentsObserver,
++                public content::WebContentsUserData<BrkPage> {
++ public:
++  ~BrkPage() override = default;
++
++  BrkWebContents* owner() const { return owner_; }
++  brkcore::BrkDevToolsSession& devtools() {
++    if (!devtools_) {
++      devtools_ = std::make_unique<brkcore::BrkDevToolsSession>(&GetWebContents());
++    }
++    return *devtools_;
++  }
++  bool closing_by_shell() const { return closing_by_shell_; }
++  void set_closing_by_shell() { closing_by_shell_ = true; }
++
++  // content::WebContentsObserver:
++  void DidFinishNavigation(content::NavigationHandle* handle) override {
++    if (!handle->IsInPrimaryMainFrame()) {
++      return;
++    }
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    NSURL* url = NSURLFromGURL(handle->GetURL());
++    if (handle->HasCommitted() && !handle->IsErrorPage()) {
++      if (handle->IsSameDocument()) {
++        [delegate webContents:owner_ didChangeAddress:url];
++      } else {
++        [delegate webContents:owner_ didStartDocument:url];
++      }
++    } else if (handle->GetNetErrorCode() != net::OK) {
++      [delegate webContents:owner_
++            didFailLoadCode:handle->GetNetErrorCode()
++                description:base::SysUTF8ToNSString(net::ErrorToShortString(handle->GetNetErrorCode()))
++                        url:base::SysUTF8ToNSString(handle->GetURL().spec())];
++    }
++    ReportLoading();
++  }
++  void DidStartLoading() override { ReportLoading(); }
++  void DidStopLoading() override { ReportLoading(); }
++  void DidFinishLoad(content::RenderFrameHost* frame, const GURL& url) override {
++    if (frame->IsInPrimaryMainFrame()) {
++      [owner_.delegate webContents:owner_ didFinishDocument:NSURLFromGURL(url)];
++    }
++  }
++  void DidFailLoad(content::RenderFrameHost* frame, const GURL& url, int error_code) override {
++    if (frame->IsInPrimaryMainFrame()) {
++      [owner_.delegate webContents:owner_
++                   didFailLoadCode:error_code
++                       description:base::SysUTF8ToNSString(net::ErrorToShortString(error_code))
++                               url:base::SysUTF8ToNSString(url.spec())];
++    }
++  }
++  void LoadProgressChanged(double progress) override {
++    [owner_.delegate webContents:owner_ didChangeProgress:progress];
++  }
++  void TitleWasSet(content::NavigationEntry* entry) override {
++    [owner_.delegate webContents:owner_
++                  didChangeTitle:base::SysUTF16ToNSString(GetWebContents().GetTitle())];
++  }
++  void DidUpdateFaviconURL(content::RenderFrameHost* frame,
++                           const std::vector<blink::mojom::FaviconURLPtr>& candidates,
++                           blink::mojom::FaviconUpdateReason reason) override {
++    if (!frame->IsInPrimaryMainFrame()) {
++      return;
++    }
++    [owner_.delegate webContents:owner_
++                didChangeFavicon:candidates.empty() ? nil : NSURLFromGURL(candidates[0]->icon_url)];
++  }
++  void PrimaryMainFrameRenderProcessGone(base::TerminationStatus status) override {
++    [owner_.delegate webContentsRendererGone:owner_];
++  }
++  void OnWebContentsFocused(content::RenderWidgetHost* host) override {
++    [owner_.delegate webContentsDidGainFocus:owner_];
++  }
++  void WebContentsDestroyed() override;
++
++ private:
++  friend class content::WebContentsUserData<BrkPage>;
++  BrkPage(content::WebContents* contents, BrkWebContents* owner)
++      : content::WebContentsObserver(contents),
++        content::WebContentsUserData<BrkPage>(*contents),
++        owner_(owner) {}
++
++  void ReportLoading() {
++    content::WebContents& contents = GetWebContents();
++    [owner_.delegate webContents:owner_
++                didChangeLoading:contents.IsLoading()
++                       canGoBack:contents.GetController().CanGoBack()
++                    canGoForward:contents.GetController().CanGoForward()];
++  }
++
++  __weak BrkWebContents* owner_;
++  std::unique_ptr<brkcore::BrkDevToolsSession> devtools_;
++  bool closing_by_shell_ = false;
++
++  WEB_CONTENTS_USER_DATA_KEY_DECL();
++};
++
++WEB_CONTENTS_USER_DATA_KEY_IMPL(BrkPage);
++
++}  // namespace
++
++namespace brkcore {
++BrkWebContents* PageForContents(content::WebContents* contents) {
++  BrkPage* page = BrkPage::FromWebContents(contents);
++  return page ? page->owner() : nil;
++}
++}  // namespace brkcore
++
++@interface BrkWebContents ()
++- (void)contentsWillGo:(BOOL)byShell;
++@end
++
++@implementation BrkWebContents {
++  raw_ptr<content::WebContents> _contents;
++  __weak id<BrkCoreWebContentsDelegate> _delegate;
++  __weak BrkBrowser* _browser;
++  NSView* _nativeView;
++}
++
++@synthesize delegate = _delegate;
++@synthesize adopted = _adopted;
++
++- (instancetype)initWithContents:(content::WebContents*)contents browser:(BrkBrowser*)browser {
++  if ((self = [super init])) {
++    _contents = contents;
++    _browser = browser;
++    BrkPage::CreateForWebContents(contents, self);
++    _nativeView = contents->GetNativeView().GetNativeNSView();
++  }
++  return self;
++}
++
++- (content::WebContents*)contents {
++  return _contents;
++}
++
++- (BrkBrowser*)browser {
++  return _browser;
++}
++
++- (void)contentsWillGo:(BOOL)byShell {
++  _contents = nullptr;
++  id<BrkCoreWebContentsDelegate> delegate = _delegate;
++  if (!byShell) {
++    [delegate webContentsClosedByPage:self];
++  }
++  [delegate webContentsDidClose:self];
++  [_browser pageDidGo:self];
++}
++
++- (NSView*)nativeView {
++  return _nativeView;
++}
++
++- (NSView*)inputView {
++  if (!_contents || !_contents->GetRenderWidgetHostView()) {
++    return nil;
++  }
++  return _contents->GetRenderWidgetHostView()->GetNativeView().GetNativeNSView();
++}
++
++- (NSURL*)visibleURL {
++  return _contents ? NSURLFromGURL(_contents->GetVisibleURL()) : nil;
++}
++
++- (BOOL)isLoading {
++  return _contents && _contents->IsLoading();
++}
++
++- (BOOL)canGoBack {
++  return _contents && _contents->GetController().CanGoBack();
++}
++
++- (BOOL)canGoForward {
++  return _contents && _contents->GetController().CanGoForward();
++}
++
++- (double)zoomLevel {
++  auto* zoom = _contents ? zoom::ZoomController::FromWebContents(_contents) : nullptr;
++  return zoom ? zoom->GetZoomLevel() : 0;
++}
++
++- (void)setZoomLevel:(double)level {
++  if (auto* zoom = _contents ? zoom::ZoomController::FromWebContents(_contents) : nullptr) {
++    zoom->SetZoomLevel(level);
++  }
++}
++
++- (BOOL)audioMuted {
++  return _contents && _contents->IsAudioMuted();
++}
++
++- (void)setAudioMuted:(BOOL)muted {
++  if (_contents) {
++    _contents->SetAudioMuted(muted);
++  }
++}
++
++- (int)tabID {
++  return _contents ? sessions::SessionTabHelper::IdForTab(_contents).id() : -1;
++}
++
++- (void)loadURL:(NSURL*)url {
++  if (!_contents) {
++    return;
++  }
++  content::NavigationController::LoadURLParams params(net::GURLWithNSURL(url));
++  params.transition_type = ui::PAGE_TRANSITION_AUTO_TOPLEVEL;
++  _contents->GetController().LoadURLWithParams(params);
++}
++
++- (void)goBack {
++  if (_contents && _contents->GetController().CanGoBack()) {
++    _contents->GetController().GoBack();
++  }
++}
++
++- (void)goForward {
++  if (_contents && _contents->GetController().CanGoForward()) {
++    _contents->GetController().GoForward();
++  }
++}
++
++- (void)reloadBypassingCache:(BOOL)bypassCache {
++  if (_contents) {
++    _contents->GetController().Reload(
++        bypassCache ? content::ReloadType::BYPASSING_CACHE : content::ReloadType::NORMAL, false);
++  }
++}
++
++- (void)stopLoading {
++  if (_contents) {
++    _contents->Stop();
++  }
++}
++
++- (void)setPageFocused:(BOOL)focused {
++  if (_contents && focused) {
++    _contents->Focus();
++  }
++}
++
++- (void)setHidden:(BOOL)hidden {
++  if (!_contents) {
++    return;
++  }
++  if (hidden) {
++    _contents->WasHidden();
++  } else {
++    _contents->WasShown();
++  }
++}
++
++- (void)evaluateJavaScript:(NSString*)script
++                completion:(void (^)(NSString* _Nullable, NSString* _Nullable))completion {
++  if (!_contents) {
++    if (completion) {
++      completion(nil, @"The page closed");
++    }
++    return;
++  }
++  content::RenderFrameHost::AllowInjectingJavaScript();
++  _contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
++      base::SysNSStringToUTF16(script),
++      base::BindOnce(
++          [](void (^completion)(NSString*, NSString*), base::Value value) {
++            if (completion) {
++              std::string json;
++              base::JSONWriter::Write(value, &json);
++              completion(base::SysUTF8ToNSString(json), nil);
++            }
++          },
++          completion),
++      content::ISOLATED_WORLD_ID_GLOBAL);
++}
++
++- (void)sendDevToolsCommand:(NSString*)method
++                 parameters:(NSString*)parameters
++                 completion:(void (^)(NSString* _Nullable, NSString* _Nullable))completion {
++  BrkPage* page = _contents ? BrkPage::FromWebContents(_contents) : nullptr;
++  if (!page) {
++    completion(nil, @"The page closed");
++    return;
++  }
++  page->devtools().Send(
++      base::SysNSStringToUTF8(method), base::SysNSStringToUTF8(parameters),
++      base::BindOnce(
++          [](void (^completion)(NSString*, NSString*), const std::string& result,
++             const std::string& error) {
++            completion(error.empty() ? base::SysUTF8ToNSString(result) : nil,
++                       error.empty() ? nil : base::SysUTF8ToNSString(error));
++          },
++          completion));
++}
++
++- (void)cutSelection {
++  if (_contents) {
++    _contents->Cut();
++  }
++}
++
++- (void)copySelection {
++  if (_contents) {
++    _contents->Copy();
++  }
++}
++
++- (void)pasteClipboard {
++  if (_contents) {
++    _contents->Paste();
++  }
++}
++
++- (void)pasteAndMatchStyle {
++  if (_contents) {
++    _contents->PasteAndMatchStyle();
++  }
++}
++
++- (void)selectAllContent {
++  if (_contents) {
++    _contents->SelectAll();
++  }
++}
++
++- (void)deleteSelection {
++  if (_contents) {
++    _contents->Delete();
++  }
++}
++
++- (void)undoEdit {
++  if (_contents) {
++    _contents->Undo();
++  }
++}
++
++- (void)redoEdit {
++  if (_contents) {
++    _contents->Redo();
++  }
++}
++
++- (void)close {
++  if (!_contents) {
++    return;
++  }
++  BrkPage::FromWebContents(_contents)->set_closing_by_shell();
++  [_browser closeContents:_contents];
++}
++
++- (BOOL)decideNavigationTo:(const GURL&)url isRedirect:(BOOL)isRedirect userGesture:(BOOL)userGesture {
++  id<BrkCoreWebContentsDelegate> delegate = _delegate;
++  return !delegate || [delegate webContents:self
++                         decideNavigationTo:net::NSURLWithGURL(url)
++                                 isRedirect:isRedirect
++                                userGesture:userGesture];
++}
++
++- (BrkCoreKeyPress)pressFromEvent:(const input::NativeWebKeyboardEvent&)event {
++  BrkCoreKeyPress press{};
++  press.nativeKeyCode = event.native_key_code;
++  NSEvent* native = event.os_event.Get();
++  press.modifierFlags = native ? native.modifierFlags : FlagsFromModifiers(event.GetModifiers());
++  press.isDown = event.GetType() != blink::WebInputEvent::Type::kKeyUp;
++  press.isRepeat = (event.GetModifiers() & blink::WebInputEvent::kIsAutoRepeat) != 0;
++  press.editableFocused = _contents && _contents->IsFocusedElementEditable();
++  press.timestamp = native ? native.timestamp : 0;
++  return press;
++}
++
++- (BrkCoreKeyAnswer)keyBeforePage:(const input::NativeWebKeyboardEvent&)event {
++  id<BrkCoreWebContentsDelegate> delegate = _delegate;
++  if (!delegate || event.GetType() == blink::WebInputEvent::Type::kChar) {
++    return BrkCoreKeyAnswer{false, false};
++  }
++  return [delegate webContents:self keyBeforePage:[self pressFromEvent:event]];
++}
++
++- (BOOL)keyAfterPage:(const input::NativeWebKeyboardEvent&)event {
++  id<BrkCoreWebContentsDelegate> delegate = _delegate;
++  if (!delegate || event.GetType() == blink::WebInputEvent::Type::kChar) {
++    return NO;
++  }
++  return [delegate webContents:self keyAfterPage:[self pressFromEvent:event]];
++}
++
++- (void)hoverLink:(const GURL&)url {
++  [_delegate webContents:self didHoverLink:url.is_empty() ? nil : NSURLFromGURL(url)];
++}
++
++@end
++
++namespace {
++void BrkPage::WebContentsDestroyed() {
++  [owner_ contentsWillGo:closing_by_shell_];
++}
++}  // namespace
+diff --git a/brk/embedding/embedding.cc b/brk/embedding/embedding.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..f44f80ee2bc0a4ee470c727bb5a43ecbf176e23e
+--- /dev/null
++++ b/brk/embedding/embedding.cc
+@@ -0,0 +1,22 @@
++#include "brk/embedding/embedding.h"
++
++namespace brkcore {
++
++namespace {
++bool g_embedded = false;
++}  // namespace
++
++bool IsEmbedded() {
++  return g_embedded;
++}
++
++void SetEmbedded() {
++  g_embedded = true;
++}
++
++Hooks& GetHooks() {
++  static Hooks hooks;
++  return hooks;
++}
++
++}  // namespace brkcore
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..b262a90edf9ba03d937166e4915c743c65d0ab15
+--- /dev/null
++++ b/brk/embedding/embedding.h
+@@ -0,0 +1,37 @@
++// What Chromium's own files use to reach Brk's code. It has no dependencies, so the few files patched to include it need nothing
++// else, and every entry is empty unless BrkCore.framework was started through BrkCoreApplicationPrepare. Then Chromium behaves as
++// plain Chromium, which is what lets `chrome` still be built and run from the same tree.
++
++#ifndef BRK_EMBEDDING_EMBEDDING_H_
++#define BRK_EMBEDDING_EMBEDDING_H_
++
++class BrowserWindow;
++class BrowserWindowInterface;
++class GURL;
++
++namespace content {
++class NavigationThrottleRegistry;
++class WebContents;
++}  // namespace content
++
++namespace brkcore {
++
++struct Hooks {
++  // Makes the window object of a Browser that Brk is creating. Null for every other Browser: DevTools windows and popups a page opens
++  // stay Chrome's own.
++  BrowserWindow* (*create_browser_window)(BrowserWindowInterface* browser) = nullptr;
++  // True when the status text went to Brk instead of Chrome's status bubble.
++  bool (*update_target_url)(content::WebContents* source, const GURL& url) = nullptr;
++  void (*add_navigation_throttles)(content::NavigationThrottleRegistry& registry) = nullptr;
++  // The shell agreed to quit. Runs Chromium's own shutdown; the run loop stops when that is done.
++  void (*quit_chromium)() = nullptr;
++};
++
++// True when BrkCore.framework was started by Brk's shell: the shell owns NSApp's delegate, the menu and the quit.
++bool IsEmbedded();
++void SetEmbedded();
++Hooks& GetHooks();
++
++}  // namespace brkcore
++
++#endif  // BRK_EMBEDDING_EMBEDDING_H_

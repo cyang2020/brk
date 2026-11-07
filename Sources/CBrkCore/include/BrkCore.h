@@ -199,9 +199,9 @@ NS_SWIFT_UI_ACTOR
 @protocol BrkCoreApplication <NSObject>
 /// Chromium's version, 154.0.8037.98.
 @property(nonatomic, readonly, copy) NSString* version;
-/// Runs Chromium's main with these command line arguments (the first is the program). Blocks in Chromium's run loop, which runs
-/// -[NSApp run], until Chromium has shut down. Answers its exit code.
-- (int)runWithArguments:(NSArray<NSString*>*)arguments;
+/// Runs Chromium's main with the arguments given to BrkCoreApplicationPrepare. Blocks in Chromium's run loop, which runs -[NSApp run],
+/// until Chromium has shut down. Answers its exit code.
+- (int)run;
 /// The profile named `directory` under the user data folder, loading it if needed; nil when it could not be.
 - (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable profile))completion;
 /// Starts Chromium's own shutdown; -runWithArguments: returns when it is done. Close every page first.
@@ -212,8 +212,9 @@ NS_SWIFT_UI_ACTOR
 extern "C" {
 #endif
 
-/// C entry points, found with dlsym. Installs Chromium's NSApplication class. Call before anything touches NSApp.
-__attribute__((visibility("default"))) void BrkCoreApplicationPrepare(void);
+/// C entry points, found with dlsym. Takes Chromium's command line (the first argument is the program) and installs Chromium's
+/// NSApplication class. Call once, before anything touches NSApp.
+__attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc, const char* _Nonnull const* _Nonnull argv);
 /// The one application object, conforming to BrkCoreApplication. It is never released.
 __attribute__((visibility("default"))) void* BrkCoreApplicationShared(void);
 

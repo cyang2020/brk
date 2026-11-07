@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:13:52 +0800
+Subject: [PATCH 3/6] brk: when embedded, the shell owns NSApp's delegate, the
+ menu bar and the quit
+
+---
+ chrome/browser/app_controller_mac.mm          |  7 ++++--
+ .../browser/chrome_browser_application_mac.mm | 22 +++++++++++++++++++
+ chrome/browser/chrome_browser_main_mac.mm     |  9 +++++++-
+ 3 files changed, 35 insertions(+), 3 deletions(-)
+
+diff --git a/chrome/browser/app_controller_mac.mm b/chrome/browser/app_controller_mac.mm
+index 608f3503bb68c6039b5e18d2d6214ff8a852d49e..201e3d1ba25278048484c185aec8cd1d21bcf548 100644
+--- a/chrome/browser/app_controller_mac.mm
++++ b/chrome/browser/app_controller_mac.mm
+@@ -43,6 +43,7 @@
+ #include "chrome/browser/apps/app_shim/app_shim_termination_manager.h"
+ #include "chrome/browser/apps/platform_apps/app_window_registry_util.h"
+ #include "chrome/browser/browser_features.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/browser_process_platform_part.h"
+ #include "chrome/browser/command_updater_impl.h"
+@@ -792,12 +793,14 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
+ + (AppController*)sharedController {
+   static AppController* sharedController = [] {
+     AppController* sharedController = [[AppController alloc] init];
+-    NSApp.delegate = sharedController;
++    if (!brkcore::IsEmbedded()) {
++      NSApp.delegate = sharedController;
++    }
+     return sharedController;
+   }();
+ 
+   CHECK_NE(nil, sharedController);
+-  CHECK_EQ(NSApp.delegate, sharedController);
++  CHECK(brkcore::IsEmbedded() || NSApp.delegate == sharedController);
+   return sharedController;
+ }
+ 
+diff --git a/chrome/browser/chrome_browser_application_mac.mm b/chrome/browser/chrome_browser_application_mac.mm
+index 823b03b27cc31d2535d748dcf79b3a1e78a3d7ca..3df611a86268d05d824dfe7d021a357eabaa1f77 100644
+--- a/chrome/browser/chrome_browser_application_mac.mm
++++ b/chrome/browser/chrome_browser_application_mac.mm
+@@ -17,6 +17,7 @@
+ #include "base/trace_event/trace_event.h"
+ #import "chrome/browser/app_controller_mac.h"
+ #import "chrome/browser/mac/exception_processor.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/ui/cocoa/l10n_util.h"
+ #include "chrome/common/chrome_switches.h"
+ #include "components/crash/core/common/crash_key.h"
+@@ -316,14 +317,35 @@ std::string DescriptionForNSEvent(NSEvent* event) {
+ // NSApplication event loop, so final post- MessageLoop::Run() work is done
+ // before exiting.
+ - (void)terminate:(id)sender {
++  // Embedded: the shell's delegate answers, and -replyToApplicationShouldTerminate: below takes it from there.
++  if (brkcore::IsEmbedded()) {
++    [super terminate:sender];
++    return;
++  }
+   [AppController.sharedController tryToTerminateApplication];
+   // Return, don't exit. The application is responsible for exiting on its own.
+ }
+ 
+ - (void)cancelTerminate:(id)sender {
++  if (brkcore::IsEmbedded()) {
++    return;
++  }
+   [AppController.sharedController stopTryingToTerminateApplication];
+ }
+ 
++// Embedded: AppKit would exit() in here, under Chromium's running threads. Leave -terminate: and run Chromium's own shutdown, which stops the
++// run loop; the process ends when Chromium's main returns to the shell.
++- (void)replyToApplicationShouldTerminate:(BOOL)shouldTerminate {
++  if (brkcore::IsEmbedded() && shouldTerminate) {
++    [super replyToApplicationShouldTerminate:NO];
++    dispatch_async(dispatch_get_main_queue(), ^{
++      brkcore::GetHooks().quit_chromium();
++    });
++    return;
++  }
++  [super replyToApplicationShouldTerminate:shouldTerminate];
++}
++
+ 
+ - (void)sendEvent:(NSEvent*)event {
+   TRACE_EVENT0("toplevel", "BrowserCrApplication::sendEvent");
+diff --git a/chrome/browser/chrome_browser_main_mac.mm b/chrome/browser/chrome_browser_main_mac.mm
+index b269f1610a55d31aa58beab694fa7cbb214b58d1..9aa29c942218795c37f90f2906bcf15ba9c6b3b9 100644
+--- a/chrome/browser/chrome_browser_main_mac.mm
++++ b/chrome/browser/chrome_browser_main_mac.mm
+@@ -23,6 +23,7 @@
+ #include "build/branding_buildflags.h"
+ #import "chrome/browser/app_controller_mac.h"
+ #include "chrome/browser/apps/app_shim/app_shim_listener.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/browser_process_platform_part.h"
+ #include "chrome/browser/buildflags.h"
+@@ -154,6 +155,10 @@ int ChromeBrowserMainPartsMac::PreCreateThreads() {
+     return ret;
+   }
+ 
++  if (brkcore::IsEmbedded()) {
++    return content::RESULT_CODE_NORMAL_EXIT;
++  }
++
+   // Create the app delegate by requesting the shared AppController.
+   CHECK_EQ(nil, NSApp.delegate);
+   AppController* app_controller = AppController.sharedController;
+@@ -182,5 +187,7 @@ void ChromeBrowserMainPartsMac::PostProfileInit(Profile* profile,
+ }
+ 
+ void ChromeBrowserMainPartsMac::DidEndMainMessageLoop() {
+-  [AppController.sharedController didEndMainMessageLoop];
++  if (!brkcore::IsEmbedded()) {
++    [AppController.sharedController didEndMainMessageLoop];
++  }
+ }

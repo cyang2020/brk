@@ -1,0 +1,84 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:29:35 +0800
+Subject: [PATCH 6/6] brk: Prepare takes Chromium's command line; a shown page
+ shows its view
+
+---
+ brk/browser/brk_application.mm  | 23 +++++++++++++++--------
+ brk/browser/brk_web_contents.mm |  3 +++
+ 2 files changed, 18 insertions(+), 8 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 5f618ded87a7a50a1b019a00502a99a5900690b7..bfb31e3b70214a01cc55c057ef8f6cc4d7a2b4ee 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -5,6 +5,8 @@
+ #include <string>
+ #include <vector>
+ 
++#include "base/command_line.h"
++#include "base/compiler_specific.h"
+ #include "base/files/file_path.h"
+ #include "base/functional/bind.h"
+ #include "base/strings/sys_string_conversions.h"
+@@ -31,6 +33,7 @@ int ChromeMain(int argc, const char** argv);
+   // Brk keeps running with no Browser (a window with no page yet), and profiles stay loaded across that.
+   std::unique_ptr<ScopedKeepAlive> _keepAlive;
+   std::map<std::string, std::unique_ptr<ScopedProfileKeepAlive>> _profileKeepAlives;
++  std::vector<std::string> _arguments;
+   BOOL _quitting;
+ }
+ 
+@@ -38,17 +41,18 @@ int ChromeMain(int argc, const char** argv);
+   return base::SysUTF8ToNSString(std::string(version_info::GetVersionNumber()));
+ }
+ 
+-- (int)runWithArguments:(NSArray<NSString*>*)arguments {
+-  std::vector<std::string> storage;
+-  for (NSString* argument in arguments) {
+-    storage.push_back(base::SysNSStringToUTF8(argument));
+-  }
++- (void)setArgc:(int)argc argv:(const char* const*)argv {
++  // SAFETY: argv has argc entries, as for main().
++  UNSAFE_BUFFERS(_arguments.assign(argv, argv + argc));
++}
++
++- (int)run {
+   std::vector<const char*> argv;
+-  for (const std::string& argument : storage) {
++  for (const std::string& argument : _arguments) {
+     argv.push_back(argument.c_str());
+   }
+   argv.push_back(nullptr);
+-  return ChromeMain(static_cast<int>(storage.size()), argv.data());
++  return ChromeMain(static_cast<int>(_arguments.size()), argv.data());
+ }
+ 
+ - (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable))completion {
+@@ -105,7 +109,10 @@ void QuitChromium() {
+ 
+ extern "C" {
+ 
+-__attribute__((visibility("default"))) void BrkCoreApplicationPrepare(void) {
++__attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc, const char* const* argv) {
++  // BrowserCrApplication reads the command line as its class loads. ChromeMain's own CommandLine::Init then keeps this one.
++  base::CommandLine::Init(argc, argv);
++  [brkcore::SharedApplication() setArgc:argc argv:argv];
+   brkcore::SetEmbedded();
+   brkcore::Hooks& hooks = brkcore::GetHooks();
+   hooks.create_browser_window = &brkcore::CreateBrowserWindowHook;
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 2ecee513d3825bdff160eecdd75238859cf9e0a9..ce51f97456b314cb19dbc106bcc3d3299bdb5303 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -303,6 +303,9 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   if (!_contents) {
+     return;
+   }
++  // A page made hidden has its view hidden as well (WebContentsViewMac::CreateView), and in Chrome only the Views host shows it again
++  // (ViewsHostableSetVisible). Brk has no Views host, so the view follows here.
++  _nativeView.hidden = hidden;
+   if (hidden) {
+     _contents->WasHidden();
+   } else {

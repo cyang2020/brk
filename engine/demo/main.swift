@@ -37,6 +37,7 @@ final class Demo: NSObject, NSApplicationDelegate, BrkCoreWebContentsDelegate, B
             contents.nativeView.frame = window.contentView!.bounds
             contents.nativeView.autoresizingMask = [.width, .height]
             window.contentView!.addSubview(contents.nativeView)
+            contents.setHidden(false)
             contents.load(self.url)
             self.browser = browser
             self.contents = contents
@@ -54,10 +55,24 @@ final class Demo: NSObject, NSApplicationDelegate, BrkCoreWebContentsDelegate, B
         return true
     }
     func webContents(_ c: any BrkCoreWebContents, didChangeAddress url: URL?) {}
+
+    /// What the page and its views look like now: for runs that are read without looking at the screen.
+    func diagnose(_ c: any BrkCoreWebContents) {
+        func tree(_ v: NSView, _ depth: Int) -> [String] {
+            ["\(String(repeating: "  ", count: depth))\(NSStringFromClass(type(of: v))) \(NSStringFromRect(v.frame)) hidden=\(v.isHidden) layer=\(v.layer.map { NSStringFromClass(type(of: $0)) } ?? "none")"]
+                + (depth < 4 ? v.subviews.flatMap { tree($0, depth + 1) } : [])
+        }
+        for line in tree(c.nativeView, 0) { say("view \(line)") }
+        say("window visible=\(window?.isVisible ?? false) key=\(window?.isKeyWindow ?? false) occlusion visible=\(window?.occlusionState.contains(.visible) ?? false)")
+        c.evaluateJavaScript("[document.visibilityState, innerWidth, innerHeight, document.hasFocus()].join(' ')") { [weak self] json, error in
+            self?.say("page \(json ?? error ?? "?")")
+        }
+    }
     func webContents(_ c: any BrkCoreWebContents, didStartDocument url: URL?) { say("committed \(url?.absoluteString ?? "?")") }
     func webContents(_ c: any BrkCoreWebContents, didFinishDocument url: URL?) {
         say("loaded \(url?.absoluteString ?? "?")")
         c.evaluateJavaScript("navigator.userAgent") { [weak self] json, error in self?.say("javascript \(json ?? error ?? "?")") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.diagnose(c) }
     }
     func webContents(_ c: any BrkCoreWebContents, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {}
     func webContents(_ c: any BrkCoreWebContents, didChangeProgress progress: Double) {}
@@ -82,23 +97,31 @@ final class Demo: NSObject, NSApplicationDelegate, BrkCoreWebContentsDelegate, B
     func browser(_ browser: any BrkCoreBrowser, didCloseExtensionPopup extensionID: String) {}
 }
 
+func step(_ text: String) { FileHandle.standardError.write(Data("[demo] step \(text)\n".utf8)) }
+
 MainActor.assumeIsolated {
+    step("start")
     let bundle = Bundle.main.bundleURL
     let framework = bundle.appendingPathComponent("Contents/Frameworks/BrkCore.framework/BrkCore").path
     guard let handle = dlopen(framework, RTLD_NOW | RTLD_LOCAL) else { fatalError(String(cString: dlerror())) }
-    typealias Prepare = @convention(c) () -> Void
+    step("framework loaded")
+    typealias Prepare = @convention(c) (Int32, UnsafePointer<UnsafePointer<CChar>>) -> Void
     typealias Shared = @convention(c) () -> UnsafeMutableRawPointer
-    unsafeBitCast(dlsym(handle, "BrkCoreApplicationPrepare"), to: Prepare.self)()
+    let arguments = CommandLine.arguments
+    let data = arguments.count > 2 ? arguments[2] : NSTemporaryDirectory() + "brk-core-demo"
+    let chromium = [arguments[0], "--user-data-dir=\(data)", "--profile-directory=Default", "--no-startup-window", "--no-first-run",
+                    "--no-default-browser-check", "--use-mock-keychain", "--enable-logging=stderr", "--v=0"]
+    let copies = chromium.map { UnsafePointer<CChar>(strdup($0)!) }
+    copies.withUnsafeBufferPointer { unsafeBitCast(dlsym(handle, "BrkCoreApplicationPrepare"), to: Prepare.self)(Int32(copies.count), $0.baseAddress!) }
+    step("prepared, NSApp is \(NSStringFromClass(type(of: NSApplication.shared)))")
     let object = Unmanaged<AnyObject>.fromOpaque(unsafeBitCast(dlsym(handle, "BrkCoreApplicationShared"), to: Shared.self)()).takeUnretainedValue()
     let application = object as! any BrkCoreApplication
-    let arguments = CommandLine.arguments
+    step("application object \(application.version)")
     let url = URL(string: arguments.count > 1 ? arguments[1] : "about:version")!
-    let data = arguments.count > 2 ? arguments[2] : NSTemporaryDirectory() + "brk-core-demo"
     let demo = Demo(application: application, url: url)
     NSApplication.shared.delegate = demo
     NSApplication.shared.setActivationPolicy(.regular)
-    let code = application.run(withArguments: [arguments[0], "--user-data-dir=\(data)", "--profile-directory=Default", "--no-startup-window",
-                                               "--no-first-run", "--no-default-browser-check", "--use-mock-keychain"])
+    let code = application.run()
     print("[demo] chromium main returned \(code)")
     exit(code)
 }

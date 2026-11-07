@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:13:54 +0800
+Subject: [PATCH 4/6] brk: the framework is BrkCore.framework, with Brk's code
+ and two C entry points
+
+---
+ chrome/BUILD.gn                   | 3 ++-
+ chrome/app/chrome_exe_main_mac.cc | 7 +++----
+ chrome/app/framework.exports      | 2 ++
+ chrome/common/chrome_constants.cc | 4 ++--
+ 4 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
+index ce7ebbe4f6b680db1aa0d3afdd49cfe2fdbed550..7a4b07c5fd69e1e39eaf1b07e2c63913d9349c46 100644
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -481,7 +481,7 @@ if (is_win) {
+   }
+ } else if (is_mac) {
+   chrome_helper_name = chrome_product_full_name + " Helper"
+-  chrome_framework_name = chrome_product_full_name + " Framework"
++  chrome_framework_name = "BrkCore"
+   chrome_framework_version = chrome_version_full
+ 
+   verify_dynamic_libraries = !is_component_build && !is_asan && !is_ubsan_any
+@@ -1624,6 +1624,7 @@ if (is_win) {
+ 
+ group("dependencies") {
+   public_deps = [
++    "//brk:browser",
+     "//build:branding_buildflags",
+     "//build:chromeos_buildflags",
+     "//chrome/browser",
+diff --git a/chrome/app/chrome_exe_main_mac.cc b/chrome/app/chrome_exe_main_mac.cc
+index 1b476471618a77816529f2282e12be4c1f66c4bf..4a57c7aba9861264c7e7f9f0f524efdb471b1194 100644
+--- a/chrome/app/chrome_exe_main_mac.cc
++++ b/chrome/app/chrome_exe_main_mac.cc
+@@ -183,13 +183,12 @@ __attribute__((visibility("default"))) int main(int argc, char* argv[]) {
+   // go up to find the main dylib.
+   static constexpr char entry_symbol[] = "ChromeMain";
+   static constexpr char rel_path[] =
+-      "../../../../" PRODUCT_FULLNAME_STRING " Framework";
++      "../../../../BrkCore";
+ #else                             // defined(HELPER_EXECUTABLE)
+   static constexpr char entry_symbol[] = "ChromeMain";
+   static constexpr char rel_path[] =
+-      "../Frameworks/" PRODUCT_FULLNAME_STRING
+-      " Framework.framework/Versions/" CHROME_VERSION_STRING
+-      "/" PRODUCT_FULLNAME_STRING " Framework";
++      "../Frameworks/BrkCore.framework/Versions/" CHROME_VERSION_STRING
++      "/BrkCore";
+ #endif                            // defined(RENDERER_HELPER_EXECUTABLE)
+ 
+   // Slice off the last part of the main executable path, and append the
+diff --git a/chrome/app/framework.exports b/chrome/app/framework.exports
+index 37c881f5d29511347ce508ce7bfb1f54cb37a120..24660b54e2cd1ce836c92716d3222ca75b3cb503 100644
+--- a/chrome/app/framework.exports
++++ b/chrome/app/framework.exports
+@@ -18,4 +18,6 @@
+ 
+ _ChromeAppModeStart_v8
+ _ChromeMain
++_BrkCoreApplicationPrepare
++_BrkCoreApplicationShared
+ _ChromeWebAppShortcutCopierMain
+diff --git a/chrome/common/chrome_constants.cc b/chrome/common/chrome_constants.cc
+index 1a6b899b4bc3a35a53ca99d9b8b6d8cf25e7ea6a..3268f0ac84e5ac48dffb4e6d8e6449b590890dc4 100644
+--- a/chrome/common/chrome_constants.cc
++++ b/chrome/common/chrome_constants.cc
+@@ -81,9 +81,9 @@ const base::FilePath::CharType kHelperProcessExecutablePath[] = FPL("chrome");
+ 
+ #if BUILDFLAG(IS_MAC)
+ const base::FilePath::CharType kFrameworkName[] =
+-    FPL(PRODUCT_FULLNAME_STRING " Framework.framework");
++    FPL("BrkCore.framework");
+ const base::FilePath::CharType kFrameworkExecutableName[] =
+-    FPL(PRODUCT_FULLNAME_STRING " Framework");
++    FPL("BrkCore");
+ const char kMacHelperSuffixAlerts[] = " (Alerts)";
+ #endif  // BUILDFLAG(IS_MAC)
+ 

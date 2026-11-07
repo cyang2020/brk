@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:13:49 +0800
+Subject: [PATCH 2/6] brk: hooks for Brk's window object, navigation decisions
+ and status text
+
+Each hook is empty unless BrkCore was started by BrkCoreApplicationPrepare.
+---
+ chrome/browser/BUILD.gn                                    | 1 +
+ .../chrome_content_browser_client_navigation_throttles.cc  | 4 ++++
+ chrome/browser/ui/BUILD.gn                                 | 1 +
+ chrome/browser/ui/browser_web_contents_delegate/BUILD.gn   | 1 +
+ .../browser_web_contents_delegate.cc                       | 4 ++++
+ chrome/browser/ui/views/frame/browser_window_factory.cc    | 7 +++++++
+ 6 files changed, 18 insertions(+)
+
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index f261c72029a989e0fc0cdf0f7042b1bc12b84e07..f3bfe7c2ce3fb3bd7d469f81f2475ac2e1d964e9 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -888,6 +888,7 @@ source_set("core") {
+   }
+ 
+   deps = [
++    "//brk:embedding",
+     ":active_use_util",
+     ":after_startup_task_utils",
+     ":bad_message",
+diff --git a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+index 76ed0833e7b1f82f9f4bbdfedbcaf00436b5e3b1..a8e8115fd4e5d2091bbbf56406c51c6279dd44e7 100644
+--- a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
++++ b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/chrome_content_browser_client_navigation_throttles.h"
+ 
+ #include "base/command_line.h"
+@@ -285,6 +286,9 @@ void MaybeCreateAndAddVisitedLinkNavigationThrottle(
+ void CreateAndAddChromeThrottlesForNavigation(
+     content::NavigationThrottleRegistry& registry) {
+   content::NavigationHandle& handle = registry.GetNavigationHandle();
++  if (auto* add = brkcore::GetHooks().add_navigation_throttles) {
++    add(registry);
++  }
+   if (handle.IsInMainFrame()) {
+     // MetricsNavigationThrottle requires that it runs before
+     // NavigationThrottles that may delay or cancel navigations, so only
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+index 0ab25c63c9f39dc0e96f154eedd3b03ad14fa638..ba963ca6c702e291d693b2c381dda6123c4dbf2a 100644
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -652,6 +652,7 @@ static_library("ui") {
+   ]
+ 
+   deps = [
++    "//brk:embedding",
+     ":browser_element_identifiers",
+     ":browser_otr_state",
+     ":browser_ui_prefs",
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/BUILD.gn b/chrome/browser/ui/browser_web_contents_delegate/BUILD.gn
+index d69f5af470c00262e4c76cacc53ab4de483b2187..60dc4fd866af1f174b5843b796f41d3d53f46d95 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/BUILD.gn
++++ b/chrome/browser/ui/browser_web_contents_delegate/BUILD.gn
+@@ -13,6 +13,7 @@ if (!is_android) {
+     ]
+     public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+     deps = [
++      "//brk:embedding",
+       "//base",
+       "//chrome/browser:file_select_helper",
+       "//chrome/browser:repost_form_warning_controller",
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+index 9e27bdcb53a5030b4226560272138debce274d56..f6d85b38c87a472ead03333ede0a6afd39ad154e 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.h"
+ 
+ #include "base/check_deref.h"
+@@ -793,6 +794,9 @@ void BrowserWebContentsDelegate::SetContentsBounds(content::WebContents* source,
+ 
+ void BrowserWebContentsDelegate::UpdateTargetURL(content::WebContents* source,
+                                                  const GURL& url) {
++  if (auto* update = brkcore::GetHooks().update_target_url; update && update(source, url)) {
++    return;
++  }
+   std::vector<StatusBubble*> status_bubbles =
+       browser_ui_controller_->GetStatusBubbles();
+   for (StatusBubble* status_bubble : status_bubbles) {
+diff --git a/chrome/browser/ui/views/frame/browser_window_factory.cc b/chrome/browser/ui/views/frame/browser_window_factory.cc
+index 6adf503895aed6462b2d602eaba750608c53ce77..566f7b795f8c56a204db9047a678aeb73efb657d 100644
+--- a/chrome/browser/ui/views/frame/browser_window_factory.cc
++++ b/chrome/browser/ui/views/frame/browser_window_factory.cc
+@@ -4,6 +4,7 @@
+ 
+ #include <memory>
+ 
++#include "brk/embedding/embedding.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/ui/browser_window_deleter.h"
+ #include "chrome/browser/ui/fullscreen/browser_window_fullscreen_controller.h"
+@@ -30,6 +31,12 @@ std::unique_ptr<BrowserWindow, BrowserWindowDeleter>
+ BrowserWindow::CreateBrowserWindow(BrowserWindowInterface* browser,
+                                    bool user_gesture,
+                                    bool in_tab_dragging) {
++  if (auto* create = brkcore::GetHooks().create_browser_window) {
++    if (BrowserWindow* window = create(browser)) {
++      return std::unique_ptr<BrowserWindow, BrowserWindowDeleter>(window);
++    }
++  }
++
+   if (webui_browser::IsWebUIBrowserEnabled() &&
+       browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
+     return std::unique_ptr<BrowserWindow, BrowserWindowDeleter>(
