@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:13:49 +0800
-Subject: [PATCH 2/8] brk: hooks for Brk's window object, navigation decisions
- and status text
+Subject: [PATCH 02/11] brk: hooks for Brk's window object, navigation
+ decisions and status text
 
 Each hook is empty unless BrkCore was started by BrkCoreApplicationPrepare.
 ---

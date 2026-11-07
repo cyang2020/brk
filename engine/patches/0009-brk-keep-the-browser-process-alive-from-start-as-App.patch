@@ -1,0 +1,139 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:47:04 +0800
+Subject: [PATCH 09/11] brk: keep the browser process alive from start, as
+ AppController does; developer mode for unpacked; pages from the back-forward
+ cache are ready
+
+---
+ brk/browser/brk_application.h             |  3 +++
+ brk/browser/brk_application.mm            | 14 ++++++++++++--
+ brk/browser/brk_profile.mm                |  3 +++
+ brk/browser/brk_web_contents.mm           |  6 ++++++
+ brk/embedding/embedding.h                 |  2 ++
+ chrome/browser/chrome_browser_main_mac.mm |  1 +
+ 6 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/brk/browser/brk_application.h b/brk/browser/brk_application.h
+index 36d37d58533b758b842858a8ba6e6626bc0daeb1..dd98e6769cc0dd61de9fb58cc4e5fb7614bad3b0 100644
+--- a/brk/browser/brk_application.h
++++ b/brk/browser/brk_application.h
+@@ -6,11 +6,14 @@
+ #include "brk/public/BrkCore.h"
+ 
+ @interface BrkApplication : NSObject <BrkCoreApplication>
++- (void)keepRunning;
+ @end
+ 
+ namespace brkcore {
+ // Starts Chromium's own shutdown. -[BrowserCrApplication replyToApplicationShouldTerminate:] calls this once the shell has agreed to quit.
+ void QuitChromium();
++// Takes the keepalive Chrome's AppController would take (brkcore::Hooks::browser_process_starting).
++void BrowserProcessStarting();
+ }  // namespace brkcore
+ 
+ #endif  // BRK_BROWSER_BRK_APPLICATION_H_
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index bfb31e3b70214a01cc55c057ef8f6cc4d7a2b4ee..1fbba715b2a12491e07d1415c02849e07ccd91a7 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -55,10 +55,15 @@ int ChromeMain(int argc, const char** argv);
+   return ChromeMain(static_cast<int>(_arguments.size()), argv.data());
+ }
+ 
+-- (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable))completion {
+-  if (!_keepAlive) {
++- (void)keepRunning {
++  // As Chrome's AppController: the browser process stays up with no window, until -quit.
++  if (!_keepAlive && !_quitting) {
+     _keepAlive = std::make_unique<ScopedKeepAlive>(KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
+   }
++}
++
++- (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable))completion {
++  [self keepRunning];
+   ProfileManager* manager = g_browser_process->profile_manager();
+   const base::FilePath path = manager->user_data_dir().Append(base::SysNSStringToUTF8(directory));
+   __weak BrkApplication* weakSelf = self;
+@@ -105,6 +110,10 @@ void QuitChromium() {
+   [SharedApplication() quit];
+ }
+ 
++void BrowserProcessStarting() {
++  [SharedApplication() keepRunning];
++}
++
+ }  // namespace brkcore
+ 
+ extern "C" {
+@@ -119,6 +128,7 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.update_target_url = &brkcore::UpdateTargetURLHook;
+   hooks.add_navigation_throttles = &brkcore::AddNavigationThrottles;
+   hooks.quit_chromium = &brkcore::QuitChromium;
++  hooks.browser_process_starting = &brkcore::BrowserProcessStarting;
+   chrome_browser_application_mac::RegisterBrowserCrApp();
+ }
+ 
+diff --git a/brk/browser/brk_profile.mm b/brk/browser/brk_profile.mm
+index e84803f671acd4c5979d1d1c2d9e880aa924afbb..c737d45dfa2100a13d99cbc9509711d219fa093b 100644
+--- a/brk/browser/brk_profile.mm
++++ b/brk/browser/brk_profile.mm
+@@ -11,6 +11,7 @@
+ #include "base/strings/utf_string_conversions.h"
+ #import "brk/browser/brk_browser.h"
+ #import "brk/browser/brk_extension_action.h"
++#include "chrome/browser/extensions/extension_util.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "extensions/browser/extension_action_manager.h"
+ #include "extensions/browser/extension_registry.h"
+@@ -85,6 +86,8 @@
+     completion(nil, @"The profile closed");
+     return;
+   }
++  // As "Load unpacked" in chrome://extensions, which needs developer mode: without it Chromium keeps an unpacked extension disabled.
++  extensions::util::SetDeveloperModeForProfile(_profile.get(), true);
+   scoped_refptr<extensions::UnpackedInstaller> installer = extensions::UnpackedInstaller::Create(_profile.get());
+   installer->set_be_noisy_on_failure(false);
+   installer->set_completion_callback(base::BindOnce(
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index ce51f97456b314cb19dbc106bcc3d3299bdb5303..0a1757786419dedebd89c363227fa03ef54bec42 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -84,6 +84,12 @@ class BrkPage : public content::WebContentsObserver,
+         [delegate webContents:owner_ didChangeAddress:url];
+       } else {
+         [delegate webContents:owner_ didStartDocument:url];
++        // A page restored from the back-forward cache, or a prerendered page shown, is loaded already: no load-finished callback follows.
++        if (handle->IsServedFromBackForwardCache() || handle->IsPrerenderedPageActivation()) {
++          [delegate webContents:owner_ didFinishDocument:url];
++          [delegate webContents:owner_
++                 didChangeTitle:base::SysUTF16ToNSString(GetWebContents().GetTitle())];
++        }
+       }
+     } else if (handle->GetNetErrorCode() != net::OK) {
+       [delegate webContents:owner_
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index b262a90edf9ba03d937166e4915c743c65d0ab15..16559896f0612b33e070cf3d7f77d17fcddef290 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -23,6 +23,8 @@ struct Hooks {
+   // True when the status text went to Brk instead of Chrome's status bubble.
+   bool (*update_target_url)(content::WebContents* source, const GURL& url) = nullptr;
+   void (*add_navigation_throttles)(content::NavigationThrottleRegistry& registry) = nullptr;
++  // Chromium's browser process is starting (PreCreateThreads), where Chrome's AppController would be made.
++  void (*browser_process_starting)() = nullptr;
+   // The shell agreed to quit. Runs Chromium's own shutdown; the run loop stops when that is done.
+   void (*quit_chromium)() = nullptr;
+ };
+diff --git a/chrome/browser/chrome_browser_main_mac.mm b/chrome/browser/chrome_browser_main_mac.mm
+index 9aa29c942218795c37f90f2906bcf15ba9c6b3b9..1912d2e7b5e389aef66f4d1e4428201af0d00baf 100644
+--- a/chrome/browser/chrome_browser_main_mac.mm
++++ b/chrome/browser/chrome_browser_main_mac.mm
+@@ -156,6 +156,7 @@ int ChromeBrowserMainPartsMac::PreCreateThreads() {
+   }
+ 
+   if (brkcore::IsEmbedded()) {
++    brkcore::GetHooks().browser_process_starting();
+     return content::RESULT_CODE_NORMAL_EXIT;
+   }
+ 

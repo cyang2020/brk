@@ -314,9 +314,18 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         contexts.stop()
         outputs.stop()
         for page in live.values { retire(page) }
+        // Test instances say what the quit waits for, once a second (as CEFEngine's "fixture cef" lines).
+        let traced = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, began = ProcessInfo.processInfo.systemUptime
+        var said = began
         let drained = await waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
-            !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.resources.entries.isEmpty
+            if traced, ProcessInfo.processInfo.systemUptime - said >= 1 {
+                said = ProcessInfo.processInfo.systemUptime
+                let pending = self.resources.entries.map { "\($0.key.page.item.rawValue.prefix(8)) presented=\($0.value.presented) leases=\($0.value.leases.count) closing=\($0.value.closing) closed=\($0.value.browserClosed)" }
+                FileHandle.standardError.write(Data("fixture core: waiting at +\(Int(said - began)) s: outputs empty=\(self.outputs.isEmpty) preparing=\(self.outputPreparations.count) pages=\(pending)\n".utf8))
+            }
+            return !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.resources.entries.isEmpty
         }
+        if traced { FileHandle.standardError.write(Data("fixture core: pages \(drained ? "closed" : "did not close") at +\(String(format: "%.2f", ProcessInfo.processInfo.systemUptime - began)) s\n".utf8)) }
         guard drained else {
             outputs.reportTimeout()
             return .timedOut(unclosed: resources.entries.keys.map(\.page).sorted())
@@ -478,6 +487,9 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     }
 
     public func browser(_ browser: any BrkCoreBrowser, didResizeExtensionPopup extensionID: String, size: NSSize) {
+        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
+            FileHandle.standardError.write(Data("fixture core: popup \(extensionID.prefix(8)) size \(Int(size.width))x\(Int(size.height)) panel=\(popupPanel != nil)\n".utf8))
+        }
         guard let popupPanel else { return }
         placePopup(popupPanel, for: browser, size: size)
     }

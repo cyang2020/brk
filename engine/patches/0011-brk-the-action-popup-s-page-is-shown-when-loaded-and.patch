@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 23:01:53 +0800
+Subject: [PATCH 11/11] brk: the action popup's page is shown when loaded and
+ resizes with its content, as in Chrome's bubble
+
+---
+ brk/browser/brk_extension_action.mm | 29 ++++++++++++++++++++++++++---
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/brk/browser/brk_extension_action.mm b/brk/browser/brk_extension_action.mm
+index 0349b40be743ac04e5c552b443d72618fb75efbf..852d3ead7596f6f1ef2f4d4ba34d9a49ee1f4cfb 100644
+--- a/brk/browser/brk_extension_action.mm
++++ b/brk/browser/brk_extension_action.mm
+@@ -21,6 +21,7 @@
+ #include "content/public/browser/render_frame_host.h"
+ #include "content/public/browser/render_widget_host_view.h"
+ #include "content/public/browser/web_contents.h"
++#include "content/public/browser/web_contents_observer.h"
+ #include "extensions/common/constants.h"
+ #include "extensions/common/extension.h"
+ #include "extensions/common/manifest_handlers/icons_handler.h"
+@@ -39,7 +40,7 @@ constexpr gfx::Size kMaxSize(800, 600);
+ class BrkExtensionActionDelegate;
+ 
+ // One open popup. Owns the host, so Chromium's ExtensionViewHost and the popup's WebContents live exactly as long as the popup.
+-class BrkExtensionPopup : public extensions::ExtensionView {
++class BrkExtensionPopup : public extensions::ExtensionView, public content::WebContentsObserver {
+  public:
+   BrkExtensionPopup(std::unique_ptr<extensions::ExtensionViewHost> host,
+                     BrkExtensionActionDelegate* delegate,
+@@ -58,8 +59,13 @@ class BrkExtensionPopup : public extensions::ExtensionView {
+   bool HandleKeyboardEvent(content::WebContents* source, const input::NativeWebKeyboardEvent& event) override;
+   void OnLoaded() override;
+ 
++  // content::WebContentsObserver: the popup's first frame is swapped for one in the extension's process when it navigates. As views::WebView, the
++  // swapped-in frame gets auto-resize too, or the page never reports its size.
++  void RenderFrameHostChanged(content::RenderFrameHost* old_host, content::RenderFrameHost* new_host) override;
++
+  private:
+   void HostAskedToClose(extensions::ExtensionHost* host);
++  void EnableAutoResize(content::RenderFrameHost* frame);
+ 
+   std::unique_ptr<extensions::ExtensionViewHost> host_;
+   const raw_ptr<BrkExtensionActionDelegate> delegate_;
+@@ -119,7 +125,8 @@ BrkExtensionPopup::BrkExtensionPopup(std::unique_ptr<extensions::ExtensionViewHo
+                                      BrkBrowser* browser,
+                                      NSString* extension_id,
+                                      ShowPopupCallback callback)
+-    : host_(std::move(host)),
++    : content::WebContentsObserver(host->host_contents()),
++      host_(std::move(host)),
+       delegate_(delegate),
+       browser_(browser),
+       extension_id_(extension_id),
+@@ -153,7 +160,19 @@ void BrkExtensionPopup::ResizeDueToAutoResize(content::WebContents*, const gfx::
+ }
+ 
+ void BrkExtensionPopup::RenderFrameCreated(content::RenderFrameHost* frame) {
+-  if (frame->IsInPrimaryMainFrame() && frame->GetView()) {
++  if (frame == host_->host_contents()->GetPrimaryMainFrame()) {
++    EnableAutoResize(frame);
++  }
++}
++
++void BrkExtensionPopup::RenderFrameHostChanged(content::RenderFrameHost* old_host, content::RenderFrameHost* new_host) {
++  if (new_host == host_->host_contents()->GetPrimaryMainFrame() && new_host->IsRenderFrameLive()) {
++    EnableAutoResize(new_host);
++  }
++}
++
++void BrkExtensionPopup::EnableAutoResize(content::RenderFrameHost* frame) {
++  if (frame->GetView()) {
+     frame->GetView()->EnableAutoResize(kMinSize, kMaxSize);
+   }
+ }
+@@ -171,6 +190,10 @@ void BrkExtensionPopup::OnLoaded() {
+     return;
+   }
+   shown_ = true;
++  // As Chrome's popup when its bubble opens (the Views host shows it): a page left hidden does no layout, so it would never report its size.
++  content::WebContents* contents = host_->host_contents();
++  contents->WasShown();
++  contents->GetNativeView().GetNativeNSView().hidden = NO;
+   BrkBrowser* browser = browser_;
+   [browser.delegate browser:browser
+       didOpenExtensionPopup:extension_id_

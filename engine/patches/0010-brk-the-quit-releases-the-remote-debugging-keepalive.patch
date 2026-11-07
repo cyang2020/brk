@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:51:28 +0800
+Subject: [PATCH 10/11] brk: the quit releases the remote-debugging keepalive;
+ a closing Browser is no longer activated by its window
+
+---
+ brk/browser/brk_application.mm    |  4 ++++
+ brk/browser/brk_browser_window.mm | 13 ++++++++++---
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 1fbba715b2a12491e07d1415c02849e07ccd91a7..ee2e197014649ae4f8d9510e9bdd77eedcd06eac 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -16,6 +16,7 @@
+ #include "brk/embedding/embedding.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/chrome_browser_application_mac.h"
++#include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
+ #include "chrome/browser/lifetime/application_lifetime.h"
+ #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+ #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
+@@ -92,6 +93,9 @@ int ChromeMain(int argc, const char** argv);
+   _quitting = YES;
+   _profileKeepAlives.clear();
+   _keepAlive.reset();
++  // With a remote debugging port and no startup window, Chromium waits for a DevTools client to close it. The shell is closing it; release that
++  // too, as Chrome does before its DevTools-requested exit (ChromeDevToolsManagerDelegate::CloseBrowserSoon).
++  ChromeDevToolsManagerDelegate::AllowBrowserToClose();
+   chrome::ExitIgnoreUnloadHandlers();
+ }
+ 
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+index 506c0b545eec79c3e2f6c49b9cfbac3fd4079742..1a658b762cedd21fecbf470f5c5ccf7b50c42bad 100644
+--- a/brk/browser/brk_browser_window.mm
++++ b/brk/browser/brk_browser_window.mm
+@@ -94,18 +94,22 @@ void BrkBrowserWindow::SetNativeWindow(NSWindow* window) {
+   if (!window) {
+     return;
+   }
+-  BrowserWindowInterface* browser = browser_;
++  base::WeakPtr<BrkBrowserWindow> weak = weak_factory_.GetWeakPtr();
+   key_observer_ = [center addObserverForName:NSWindowDidBecomeKeyNotification
+                                       object:window
+                                        queue:nil
+                                   usingBlock:^(NSNotification*) {
+-                                    BrowserActiveStateManager::From(browser)->DidBecomeActive();
++                                    if (weak && !weak->closing_) {
++                                      BrowserActiveStateManager::From(weak->browser_)->DidBecomeActive();
++                                    }
+                                   }];
+   resign_observer_ = [center addObserverForName:NSWindowDidResignKeyNotification
+                                          object:window
+                                           queue:nil
+                                      usingBlock:^(NSNotification*) {
+-                                       BrowserActiveStateManager::From(browser)->DidBecomeInactive();
++                                       if (weak && !weak->closing_) {
++                                         BrowserActiveStateManager::From(weak->browser_)->DidBecomeInactive();
++                                       }
+                                      }];
+   if (window.isKeyWindow) {
+     BrowserActiveStateManager::From(browser_)->DidBecomeActive();
+@@ -140,6 +144,9 @@ void BrkBrowserWindow::DestroyBrowser() {
+     closing_ = false;
+     return;  // Chrome calls Close() again when the strip is empty.
+   }
++  // From here the Browser leaves Chrome's lists: no more activation from the window (closing_ stays set).
++  closing_ = true;
++  SetNativeWindow(nil);
+   BrkBrowser* owner = owner_;
+   [owner browserWillGo];
+   BrowserManagerService::SynchronouslyDestroyBrowser(browser_);

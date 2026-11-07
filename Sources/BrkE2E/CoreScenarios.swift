@@ -50,8 +50,14 @@ enum CoreScenarios {
         try app.dispatch(.site(.invokeExtension(action.id)))
         try app.waitUntil("the popup's panel", timeout: 15) { try popupPanel(app) != nil }
         try app.screenshot("popup-open")
-        let panel = try popupPanel(app)
-        try expect(panel?.isKey == true, "the popup's panel is not key: \(String(describing: panel))")
+        guard let panel = try popupPanel(app) else { throw Check(description: "the popup's panel went away") }
+        try expect(panel.isKey, "the popup's panel is not key: \(panel)")
+        // The panel is a window of its own; the window screenshot above shows only the browser window.
+        app.sleep(0.5)
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        capture.arguments = ["-x", "-l", String(panel.number), app.shotsDirectory.appendingPathComponent("Core-popup-panel.png").path]
+        try capture.run(); capture.waitUntilExit()
         // The input has autofocus. A real key press, then Tab to the button and Return.
         try app.type("hello")
         try app.press("tab")
