@@ -48,6 +48,11 @@ final class LocalSourcesTests: XCTestCase {
         XCTAssertEqual(found.first { $0.name == "budget.txt" }?.path.hasSuffix("/Documents/budget.txt"), true)
     }
 
+    /// The real folder, which macOS does not guard.
+    func testTheRealApplicationsFolderIsRead() {
+        XCTAssertTrue(LocalSearch.apps(named: "safari", in: [URL(fileURLWithPath: "/Applications", isDirectory: true)]).contains { $0.path == "/Applications/Safari.app" })
+    }
+
     func testAppsByNameFromTheirFolders() throws {
         for path in ["Applications/Budget Tool.app/Contents/Info.plist", "Applications/Suite/Budget Helper.app/Contents/Info.plist", "Applications/Other.app/Contents/Info.plist",
                      "Applications/a/b/Too Deep Budget.app/Contents/Info.plist", "Applications/.Budget Hidden.app/Contents/Info.plist"] { try touch(path) }
