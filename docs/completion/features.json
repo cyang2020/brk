@@ -13942,6 +13942,383 @@
         "One conversation per window; no saved history; no model change inside a conversation."
       ],
       "reference_tools": []
+    },
+    {
+      "id": "B002",
+      "section": "Command bar quick actions",
+      "feature": "Quick answers",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "Percent, roots, units, CSS units, dates and times, time zones, currency, inline; Return copies.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Answers appear for what they can answer, ordinary searches and addresses stay as they are; plain arithmetic unchanged; currency only from a dated cached or fetched rate, none in a private window unless already known.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Answers,QuickBar-Currency,QuickBar-NoRates",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [],
+      "reference_tools": []
+    },
+    {
+      "id": "B003",
+      "section": "Command bar quick actions",
+      "feature": "Prefix words",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "A whole word then Tab, or Space unless it often begins a search, enters through site search's pill.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Same pill and keys as site search; Backspace and Esc give the word back; pasted text never enters; a same-named engine wins; Arc's rows unchanged when nothing matches.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Prefix,QuickBar-Beside",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "Only in the Cmd+T bar, not Cmd+L, an empty pane, site search or AI mode: the Cmd+T agent's choice."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B004",
+      "section": "Command bar quick actions",
+      "feature": "Apps",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "Open an app by name.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Apps from /Applications, /System/Applications and ~/Applications with their icons, at most two rows inline and last; Return launches.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Apps",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "/System/Applications was added at the merge; the scenario launches a fixture app."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B005",
+      "section": "Command bar quick actions",
+      "feature": "Tab to ask and agent prefixes",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "Tab sends the text to the local agent; claude, gpt, codex, gemini, cursor name one.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "The named agent answers in the Max panel with follow-ups, or the word stays plain when it is missing; never another agent in its place.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-AskTab,QuickBar-AIPrefix",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "Native scenarios use one fixture program for every agent, so which agent answers is pinned by unit tests only; no real agent has been driven through a prefix."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B006",
+      "section": "Command bar quick actions",
+      "feature": "Emoji",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "emoji <name> lists matches.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Names from the system's own character names; Return copies.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Emoji",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [],
+      "reference_tools": []
+    },
+    {
+      "id": "B007",
+      "section": "Command bar quick actions",
+      "feature": "Split prefix",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "split <text> opens it in a new pane, on a named side.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "An address, search or open tab's title opens in the new pane; no text does what Add Split View does; the existing split commands are listed.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Split",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [],
+      "reference_tools": []
+    },
+    {
+      "id": "B008",
+      "section": "Command bar quick actions",
+      "feature": "Window prefix",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "window lists places for Brk's own window.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "Halves, maximize, centre, next display, full screen, minimize, stay on top; only Brk's window; not in the general type-travel list.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Window",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "This machine has one display: Next Display's position is unit-tested only. The bar shows five of the ten rows until the text narrows them."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B009",
+      "section": "Command bar quick actions",
+      "feature": "Translate prefix",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "translate <text> answers in the row.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "A pending row, then the answer, Return copies; a text change cancels; translate page runs the page translation.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Translate",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "Against the fixture only: real agents' quality and time not run. Waits a second after typing stops, since each question spends the user's quota."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B010",
+      "section": "Command bar quick actions",
+      "feature": "Dictionary prefix",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "define <word> shows the offline dictionary.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "First lines in the row, Return opens Dictionary.app, no network.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Define",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "No Chinese dictionary is enabled on this machine, so a Chinese word finds nothing here."
+      ],
+      "reference_tools": []
+    },
+    {
+      "id": "B011",
+      "section": "Command bar quick actions",
+      "feature": "Colour",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "color <name>, or #ff5500, rgb(), hsl() with no prefix.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A swatch and hex, rgb and hsl rows, each copying its value; bare #abc still searches on Return.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Color",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [],
+      "reference_tools": []
+    },
+    {
+      "id": "B012",
+      "section": "Command bar quick actions",
+      "feature": "File search",
+      "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
+      "description": "file <name> finds files by name from Spotlight.",
+      "historical_status": "planned",
+      "status": "blocked",
+      "acceptance": "File names only, not contents; hidden files and ~/Library left out; Return opens, Cmd+Return reveals, Option+Return copies the path; no macOS permission question while typing a web search.",
+      "owner": "cmdt-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
+          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Files,QuickBar-Spotlight",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+        }
+      ],
+      "remaining": [
+        "The first real search asked for the Desktop folder (verify/visual-pairs/run-20261103/cmdt/shots/permission-prompt-desktop.png). Changed to the home scope with nothing touching a file, not yet checked on the real home folder; that run can show the question again, so it waits for the user's yes. Until then ordinary typing does not ask the index on the real path; only the file prefix does."
+      ],
+      "reference_tools": []
     }
   ]
 }
