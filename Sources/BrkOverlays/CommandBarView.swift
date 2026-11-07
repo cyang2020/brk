@@ -436,7 +436,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
+        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, prefixWord: namedBy, resolve: resolve, completing: completion)
         offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
         prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0

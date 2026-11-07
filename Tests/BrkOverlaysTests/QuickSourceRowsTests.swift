@@ -344,6 +344,26 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("", word: "color", bar()), [])
     }
 
+    func testArcsRowNamedByTheWordAndTextStaysReachableAndLeads() {
+        var snapshot = bar()
+        snapshot.actions = [.addSplitView]
+        snapshot.askProvider = "Claude"
+        snapshot.askAgentFound = true
+        let rows = Suggest.rank(query: "view", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) })
+        XCTAssertEqual(rows.first?.command, .split(.addPane), "Add Split View's trigger is Split View")
+        XCTAssertEqual(rows[1].command, .commandBar(.splitOpen(.right, "view")), "the prefix's own row follows")
+        // Nothing named: only the prefix's rows. And no text: no phrase yet.
+        let other = Suggest.rank(query: "notes", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) })
+        XCTAssertEqual(other.first?.command, .commandBar(.splitOpen(.right, "notes")))
+        XCTAssertEqual(Suggest.rank(query: "", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) }).first?.title, "Add Split View")
+        XCTAssertEqual(Suggest.rank(query: "why", bar: snapshot, appName: "Brk", prefix: prefix("ask", snapshot), prefixWord: "ask", resolve: { resolveTypedInput($0) }).first?.command, .assist(.ask("why")))
+        // Translate page's own row runs at once and stays first.
+        snapshot.translationOn = true
+        snapshot.actions = ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil }
+        let page = Suggest.rank(query: "page", bar: snapshot, appName: "Brk", prefix: prefix("translate", snapshot), prefixWord: "translate", resolve: { resolveTypedInput($0) })
+        guard case .assist(.translate)? = page.first?.command else { return XCTFail("\(page.map(\.title))") }
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)
