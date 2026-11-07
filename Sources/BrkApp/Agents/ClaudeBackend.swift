@@ -176,12 +176,19 @@ import Foundation
     }
     private var stepTitles: [String: String] = [:]
 
-    /// The name the user knows: the chosen model's, else the default entry's first words ("Opus 5.5 · Best for…").
+    /// The name the user knows. What the agent says it runs comes first: the user's own settings can pick a model the
+    /// list's default entry does not name. "claude-fable-5-1" reads as the entry called "Fable 5.1".
     private func modelName(_ reported: String?) -> String? {
+        if let reported {
+            let named = models.lazy.compactMap { $0["displayName"] as? String }.first {
+                reported.hasSuffix($0.lowercased().replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: ".", with: "-"))
+            }
+            return named ?? reported
+        }
         if let chosen = spec.model, let entry = models.first(where: { $0["value"] as? String == chosen }) { return entry["displayName"] as? String ?? chosen }
         if let entry = models.first(where: { $0["value"] as? String == "default" }), let description = entry["description"] as? String,
            let name = description.components(separatedBy: " · ").first, !name.isEmpty { return name }
-        return spec.model ?? reported
+        return spec.model
     }
 
     private func exited(_ status: Int32, _ stderr: String) {

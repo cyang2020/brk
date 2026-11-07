@@ -71,7 +71,9 @@ def claude():
         put({'type': 'result', 'subtype': 'error_during_execution' if error else 'success', 'is_error': error, 'result': t, 'session_id': session})
     def turn(prompt):
         log(prompt)
-        put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'fixture-opus'})
+        # The model the agent really runs, as a full id: what is chosen, else the fixture's own default.
+        chosen = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'fixture-opus'
+        put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'claude-' + chosen})
         if prompt == 'fixture:stream':
             text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')
         elif prompt == 'fixture:hang': hang_ignoring_term()

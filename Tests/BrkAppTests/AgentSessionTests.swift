@@ -68,6 +68,7 @@ final class AgentSessionTests: XCTestCase {
             XCTAssertNil(recorder.finished[first], "\(kind) ended early")
             try await wait("\(kind): the end") { recorder.finished[first] != nil }
             XCTAssertEqual(recorder.finished[first], .text("first\nsecond"), "\(kind)")
+            if kind == .claude { XCTAssertEqual(recorder.started?.model, "claude-fixture-opus", "what the agent says it runs, when the list does not name it") }
             session.send("next", turn: second)
             try await wait("\(kind): the follow-up") { recorder.finished[second] != nil }
             XCTAssertEqual(recorder.finished[second], .text("Fixture answer to: next"), "\(kind)")

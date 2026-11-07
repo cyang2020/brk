@@ -206,7 +206,8 @@ enum AIAgentScenarios {
         try expect(zip(argv, argv.dropFirst()).contains { $0 == "--model" && $1 == "fixture-haiku" } && zip(argv, argv.dropFirst()).contains { $0 == "--effort" && $1 == "high" }, "the choice did not reach the agent: \(argv)")
         let shownModel = try app.view().ai?.conversation?.model
         try expect(shownModel == "Fixture Haiku", "the panel names \(String(describing: shownModel))")
-        // The pane with the card open, for the eye.
+        // The pane with the card open, scrolled to it, for the eye.
+        app.sleep(0.5)
         var settingsWindow: AppWindowFact?
         try app.waitUntil("the settings window") { settingsWindow = try app.native().appWindows.first { $0.className == "NSWindow" && $0.isVisible }; return settingsWindow != nil }
         let capture = Process()

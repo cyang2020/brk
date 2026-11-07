@@ -36,7 +36,7 @@ struct MaxPane: View {
                 enableCard.padding(.top, CardMetrics.introToCard.value)
                 SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
-                if max.agentCardOpen { agentCard.padding(.top, M.footerTop.value) }
+                if max.agentCardOpen { agentCard.padding(.top, M.footerTop.value).background(RevealWhenShown()) }
             }
             .frame(width: Metrics.settings.contentWidth.value, alignment: .leading)
             .padding(.horizontal, Metrics.settings.horizontalPadding.value)
@@ -173,6 +173,19 @@ struct MaxPane: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
     }
+}
+
+/// Scrolls the pane to this view when it appears: the Local AI agent card opens below the fold.
+private struct RevealWhenShown: NSViewRepresentable {
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak view] in
+            guard let view else { return }
+            view.scrollToVisible(view.bounds)
+        }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: NSViewRepresentableContext<Self>) {}
 }
 
 /// A Max feature as the pane lists it: Arc's six in Arc's order.

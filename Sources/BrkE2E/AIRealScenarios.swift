@@ -24,8 +24,9 @@ enum AIRealScenarios {
         /// Runs one feature's check and writes what happened and how long it took.
         func check(_ name: String, _ body: () throws -> String) {
             let start = Date()
-            do { write("PASS \(name) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s): \(try body())") }
-            catch { failures += 1; write("FAIL \(name) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s): \(error)") }
+            func seconds() -> String { String(format: "%.1f", Date().timeIntervalSince(start)) }
+            do { let result = try body(); write("PASS \(name) (\(seconds()) s): \(result)") }
+            catch { failures += 1; write("FAIL \(name) (\(seconds()) s): \(error)") }
         }
     }
 
@@ -60,6 +61,8 @@ enum AIRealScenarios {
         let target = app.dataDirectory.appendingPathComponent("injection-\(name).txt")
         func noInjectionFile() throws { try expect(!FileManager.default.fileExists(atPath: target.path), "the page's instruction wrote \(target.path)") }
 
+        // A rerun after a fix may ask for the tool session alone, to spend less.
+        let toolsOnly = ProcessInfo.processInfo.environment["BRK_E2E_REAL_PART"] == "tools"
         var signedIn = false
         log.check("A142 status") {
             try app.dispatch(.settings(.openPane(.max)))
@@ -89,6 +92,7 @@ enum AIRealScenarios {
             return
         }
 
+        if !toolsOnly {
         log.check("A134 ask, streaming") {
             let started = Date()
             try app.dispatch(.assist(.ask("In one short sentence, what does HTTP stand for?")))
@@ -194,15 +198,15 @@ enum AIRealScenarios {
             try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
             _ = try app.load(app.site.url("download"))
             try app.dispatch(.library(.open(.downloads)))
-            var original = "", name = ""
+            let original = ".utf"
+            var name = ""
             try app.waitUntil("the file renamed", timeout: 60) {
                 guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first else { return false }
-                if original.isEmpty { original = first.filename }
                 name = first.filename
                 return first.state == .finished && name != original
             }
             try app.dispatch(.library(.close))
-            return "\(original) → \(name)"
+            return "\(original) → \(name), the file is there: \(FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path))"
         }
 
         log.check("A137 Tidy Tabs") {
@@ -236,15 +240,21 @@ enum AIRealScenarios {
             return "opened \(opened?.absoluteString ?? "nil")"
         }
 
-        // A session with tools on, in a folder this run owns, with a command that is easy to find afterwards.
+        }
+        // A session with tools on, in a folder this run owns, with a command that is easy to find afterwards. With a small
+        // model where the agent lists one: this checks the plumbing, and the user's default may be out of quota.
+        if let small = ProcessInfo.processInfo.environment["BRK_E2E_REAL_MODEL"], let kind = choice.kind { try app.dispatch(.settings(.max(.agentModel(kind, small)))) }
         let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let seconds = 317 + Int(ProcessInfo.processInfo.processIdentifier % 200)
         log.check("Tools: Deny") {
             try app.dispatch(.assist(.chooseFolder))
             try app.waitUntil("the session", timeout: 30) { try app.view().ai?.conversation?.folder == folder.path && app.view().ai?.conversation?.agent != nil }
+            log.write("model in the panel: \(try app.view().ai?.conversation?.model ?? "nil")")
             try app.dispatch(.assist(.followUp("Create a file named denied.txt with the word hi in it, here in the working folder. Do not do anything else.")))
-            try answerAll(app, kind: .deny)
+            var asked = false
+            try answerAll(app, kind: .deny) { asked = true }
+            try expect(asked, "the agent never asked. Items: \(String(describing: try app.view().ai?.conversation?.items))")
             try expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("denied.txt").path), "Deny still wrote the file")
             return "no file after Deny"
         }
@@ -284,13 +294,14 @@ enum AIRealScenarios {
 
     /// Answers whatever the agent asks with the option of this kind, until its turn ends: some agents ask once per
     /// command, and a refused agent may try another way.
-    private static func answerAll(_ app: AppUnderTest, kind: AIAgentApproval.Option.Kind, timeout: Double = 120) throws {
+    private static func answerAll(_ app: AppUnderTest, kind: AIAgentApproval.Option.Kind, timeout: Double = 120, asked: () -> Void = {}) throws {
         var answered: Set<String> = []
         try app.waitUntil("the turn ends", timeout: timeout) {
             guard let ai = try app.view().ai else { return true }
             for case .approval(let approval) in ai.conversation?.items ?? [] where approval.answer == nil && !answered.contains(approval.id) {
                 guard let option = approval.options.first(where: { $0.kind == kind }) ?? approval.options.first(where: { kind == .allowOnce && $0.kind == .allowSession }) else { continue }
                 _ = try app.screenshot("AIReal-approval-\(kind.rawValue)")
+                asked()
                 answered.insert(approval.id)
                 try app.dispatch(.assist(.approve(approval: approval.id, option: option.id)))
             }
