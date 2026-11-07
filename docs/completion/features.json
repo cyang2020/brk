@@ -9603,11 +9603,19 @@
           "artifact": "verify/completion/batch2-parent/integration-final-2/build.log",
           "scope": "Full signed build on the integration branch at 3b07ec4 (ledger commit 1c6bc97 differs only in audit and evidence files): 851 tests, 1 known skip, 0 failures; signature verified. Native: 187 scenarios, 183 PASS, 3 FAIL (W2-10 external search, DataExtensionProfiles intermittent focus after restart, Ext-media WebAudio readback), 1 SKIPPED (extension action popup).",
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp/brk-batch-build.lock --timeout 55 -- scripts/build.sh"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "engine/run-native-core.py parent-core-e5ae9bd7 --only N1,N2,N3,N4,BB1,BB2,BB3,BB4,Core-popup,Core-activeTab",
+          "artifact": "verify/completion/review-r4/merge-gates/brkcore/REPORT-core.md",
+          "scope": "Only on BRK_ENGINE=core, Brk's own Chromium build (engine/, docs/chromium/ARC-ENGINE.md): the action popup opens from the site controls, typed text reaches the page through chrome.tabs, activeTab goes to the opening page only. The default engine is still CEF, where this stays blocked."
         }
       ],
       "remaining": [
         "BLOCKED: actual popup invocation, typing/clicks/focus and owner navigation/close/profile/quit lifetimes. The forbidden browser-target route was removed before execution and never retried.",
-        "R3-8（2026-11-04，合并 c792cfc9）：扩展弹出面板经查证做不到：CEF 154 没有扩展接口，弹出面板只能从 Chrome 自己的工具栏打开（之前三次实验连那条工具栏都弹不出来），把弹出页放进 Brk 自己的浏览器里大多数扩展会操作错的标签页。按钮改成 Arc 的灰态（显示扩展图标、不能按），第二页写明原因；依据在 verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md。"
+        "R3-8（2026-11-04，合并 c792cfc9）：扩展弹出面板经查证做不到：CEF 154 没有扩展接口，弹出面板只能从 Chrome 自己的工具栏打开（之前三次实验连那条工具栏都弹不出来），把弹出页放进 Brk 自己的浏览器里大多数扩展会操作错的标签页。按钮改成 Arc 的灰态（显示扩展图标、不能按），第二页写明原因；依据在 verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md。",
+        "2026-11-07: works on BrkCore (BRK_ENGINE=core, main e5ae9bd7), not on the default CEF engine. The popup is a plain titled window, not Arc's bubble by the button. BrkCore is not the default: 19 of 38 sampled scenarios fail on it, none for a known impossibility."
       ],
       "implementation": [
         "Sources/BrkBase/Extensions.swift",
