@@ -54,6 +54,19 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("file budget")))), 1, "still an ordinary search there")
     }
 
+    func testAPrivateWindowListsNoFilesAndFetchesNothing() throws {
+        let d = Driver()
+        d.user(.window(.newIncognito))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        d.user(.commandBar(.open(.newTab)), in: window)
+        XCTAssertEqual(d.user(.commandBar(.queryChanged("budget")), in: window).effects, [])
+        XCTAssertEqual(d.user(.commandBar(.queryChanged("file budget")), in: window).effects, [])
+        XCTAssertEqual(d.user(.commandBar(.queryChanged("100 usd in cny")), in: window).effects, [])
+        d.system(.currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1, "USD": 1.1])))
+        guard case .commandBar(let bar)? = d.view(of: window).overlay else { return XCTFail("the bar") }
+        XCTAssertNotNil(bar.rates, "rates already known still answer")
+    }
+
     func testAIModeAndSiteSearchAskNothing() {
         let d = Driver()
         d.user(.settings(.max(.feature(.commandBar, true))))

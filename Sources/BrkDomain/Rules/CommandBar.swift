@@ -64,7 +64,7 @@ extension Work {
             if case .ai = target { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
-            askQuickSources(trimmed, target: target, in: window)
+            defer { askQuickSources(trimmed, target: target, in: window) }
             // A text the bar answers itself is not a web search: a calculation, a conversion, a file or emoji name. A bar
             // filling an empty pane has none of those but arithmetic.
             var fillsPane = false
@@ -84,15 +84,18 @@ extension Work {
 
 extension Work {
     /// The sources beside the search engine, none of them for a bar that fills an empty split pane; files and apps only
-    /// in a new-tab bar. An ordinary keystroke changes no state here, so typing does not re-render the window.
+    /// in a new-tab bar. A private window, which lists no history or bookmarks, lists no files and starts no fetch either;
+    /// rates already known still answer there. An ordinary keystroke changes no state here, so typing does not re-render
+    /// the window.
     private mutating func askQuickSources(_ text: String, target: CommandBarTarget, in window: WindowID) {
-        if target == .newTab, let request = LocalSources.request(for: text, engine: state.searchEngine(in: window)),
+        let isPrivate = state.doc.windows[window]?.kind == .incognito
+        if !isPrivate, target == .newTab, let request = LocalSources.request(for: text, engine: state.searchEngine(in: window)),
            state.session.windows[window]?.localResults?.query != request.query {
             effects.append(.searchLocal(window, request))
         }
         if case .fillPane = target { return }
         if QuickAnswers.usesClock(text) { state.session.windows[window]?.barClock = ctx.now }
-        if QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
+        if !isPrivate, QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
     }
 
     /// Kept for the view, which shows it only while its text is still `results.query` (`Suggest.rank`); BrkApp cancels a
