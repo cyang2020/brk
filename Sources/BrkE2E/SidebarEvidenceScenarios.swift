@@ -482,7 +482,7 @@ enum SidebarEvidenceScenarios {
         _ = try app.send(.activate(window: first))
         app.window = first
         try app.waitUntil("the first window key") { try app.native(first).isKey }
-        // Clear sits on the Pinned/Today divider (drawn only while Pinned has something) and shows on hover.
+        // Clear sits on the Pinned/Today divider (drawn while Today has tabs) and shows on hover.
         _ = try newFolder(app, "Keeps the divider")
         guard let frames = try app.native().computed.sidebar, let divider = frames.rows.first(where: { $0.kind == .divider })?.rect else {
             throw Check(description: "no Pinned/Today divider")
