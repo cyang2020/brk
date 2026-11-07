@@ -138,11 +138,13 @@ final class SpotlightFinder: LocalFileFinder {
             }
         }
         let run = SpotlightRun(predicate: Self.predicate(for: name), scopes: scopes, timeout: timeout)
+        let began = ContinuousClock.now
         let found = await withTaskCancellationHandler {
             await run.results()
         } onCancel: {
             Task { @MainActor in run.stop() }
         }
+        log.info("spotlight: \(found.count) hits read in \(String(describing: began.duration(to: .now)), privacy: .public)")
         return direct + found.filter { !LocalSources.isExcluded($0.path, home: home.path) }
     }
 
@@ -156,14 +158,15 @@ final class SpotlightFinder: LocalFileFinder {
             }
             return NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\(escaped)*")
         }
-        return NSCompoundPredicate(andPredicateWithSubpredicates: parts)
+        // NSMetadataQuery throws on an AND of one.
+        return parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
     }
 }
 
 /// One Spotlight question from start to answer. Ends when the index has gathered, at the timeout with what it has so far,
 /// or when stopped.
 @MainActor
-private final class SpotlightRun {
+final class SpotlightRun {
     private let query = NSMetadataQuery()
     private let timeout: Duration
     private var observer: (any NSObjectProtocol)?

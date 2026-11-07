@@ -133,6 +133,26 @@ final class LocalSourcesTests: XCTestCase {
         XCTAssertTrue(format.contains(#"*re\\*port\\?*"#), format)
     }
 
+    /// The real index, in a folder every Mac has indexed and nobody's files live in. One word and several: NSMetadataQuery
+    /// throws on a predicate it does not like, which no fixture folder walks through.
+    func testTheRealIndexTakesTheQuestion() async throws {
+        let applications = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        for name in ["safari", "safari app", "saf*ri"] {
+            let run = SpotlightRun(predicate: SpotlightFinder.predicate(for: name), scopes: [applications], timeout: .seconds(10))
+            let hits = await run.results()
+            if name == "saf*ri" { XCTAssertEqual(hits.filter { $0.name == "Safari.app" }, [], "a star means a star"); continue }
+            try XCTSkipIf(hits.isEmpty, "Spotlight has not indexed /Applications on this machine")
+            XCTAssertTrue(hits.contains { $0.path == "/Applications/Safari.app" }, name + ": \(hits.map(\.path))")
+        }
+    }
+
+    func testAStoppedRunEndsEmptyHanded() async {
+        let run = SpotlightRun(predicate: SpotlightFinder.predicate(for: "safari"), scopes: [URL(fileURLWithPath: "/Applications", isDirectory: true)], timeout: .seconds(10))
+        run.stop()
+        let hits = await run.results()
+        XCTAssertEqual(hits, [])
+    }
+
     // MARK: Exchange rates
 
     private final class Calls: @unchecked Sendable {
