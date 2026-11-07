@@ -129,11 +129,13 @@ enum AIRealUIScenarios {
         try type(text)
         app.sleep(0.8)
     }
+    /// A page opened from the command bar (an open tab with that address is switched to, as the bar offers).
     private static func open(_ app: AppUnderTest, _ path: String) throws {
-        let before = try app.view().space.today.rows.count
         try bar(app, app.site.url(path).absoluteString)
         try key([], .returnKey)
-        try app.waitUntil("\(path) open", timeout: 15) { try app.view().space.today.rows.count > before }
+        try app.waitUntil("\(path) shown", timeout: 15) {
+            try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.status == .current && t.url?.absoluteString.hasSuffix(path) == true } else { false } }
+        }
         app.sleep(1)
     }
     /// The NSOpenPanel a feature opened: Go to Folder with ⇧⌘G, the path typed, Return, Return on the default button.
@@ -163,6 +165,12 @@ enum AIRealUIScenarios {
     }
 
     // MARK: The route
+
+    /// BRK_E2E_REAL_UI_PART=askpage,download reruns only those steps after the Max pane (a rerun spends less).
+    private static func wanted(_ part: String) -> Bool {
+        guard let parts = ProcessInfo.processInfo.environment["BRK_E2E_REAL_UI_PART"], !parts.isEmpty else { return true }
+        return parts.split(separator: ",").contains { $0 == part }
+    }
 
     private static func route(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
         guard WindowServerKeys.allowed else { throw Check(description: "posting events is not allowed for this runner") }
@@ -217,8 +225,8 @@ enum AIRealUIScenarios {
         }
 
         // Tidy: no pinned tabs, six Today tabs (nothing offered), then seven.
-        log.check("Tidy Tabs without pinned tabs, from the divider") {
-            for path in ["ai.html", "ai-source.html", "page2.html", "red.html", "news-site.html"] where try app.view().space.today.rows.count < 6 { try open(app, path) }
+        if wanted("tidy") { log.check("Tidy Tabs without pinned tabs, from the divider") {
+            for path in ["ai-source.html", "page2.html", "red.html", "news-site.html", "keys.html"] where try app.view().space.today.rows.count < 6 { try open(app, path) }
             try expect(try app.view().space.pinned.rows.isEmpty, "this run should have no pinned tabs")
             try expect(try !app.view().space.today.canTidy, "Tidy offered with six Today tabs")
             try open(app, "find.html")
@@ -236,9 +244,9 @@ enum AIRealUIScenarios {
             try key(.command, .z)
             try app.waitUntil("⌘Z put the tabs back") { try !app.view().space.today.rows.contains { if case .folder = $0 { true } else { false } } }
             return "grouped, \"\(toastText)\", ⌘Z undid it"
-        }
+        } }
 
-        log.check("Ask in the command bar: a question and Tab, a follow-up, Stop, Close") {
+        if wanted("ask") { log.check("Ask in the command bar: a question and Tab, a follow-up, Stop, Close") {
             try bar(app, "In one short sentence, what does HTTP stand for")
             try key([], .tab)
             var reply = try answer(app)
@@ -259,9 +267,9 @@ enum AIRealUIScenarios {
             shot(app, "stopped")
             try closePanel(app)
             return "answered, followed up and stopped: \(short(reply.text))"
-        }
+        } }
 
-        log.check("The agent's own prefix and Tab") {
+        if wanted("prefix") { log.check("The agent's own prefix and Tab") {
             let word = kind == .codex ? "gpt" : kind.rawValue
             try bar(app, word)
             try key([], .tab)
@@ -272,9 +280,9 @@ enum AIRealUIScenarios {
             shot(app, "prefix")
             try closePanel(app)
             return "\(word) → \(reply.conversation?.agentName ?? "?") \(reply.conversation?.model ?? ""): \(short(reply.text))"
-        }
+        } }
 
-        log.check("Ask on Page from the command bar on a French page") {
+        if wanted("askpage") { log.check("Ask on Page from the command bar on a French page") {
             try open(app, "ai.html")
             try bar(app, "ask on page")
             try key([], .returnKey)
@@ -287,9 +295,9 @@ enum AIRealUIScenarios {
             shot(app, "ask-page")
             try closePanel(app)
             return short(reply.text)
-        }
+        } }
 
-        log.check("Translate Pages from the pill's Translation Available (P50-g)") {
+        if wanted("translate") { log.check("Translate Pages from the pill's Translation Available (P50-g)") {
             try app.waitUntil("Translation Available", timeout: 15) { try app.view().urlPill.translation == .available }
             let line = try visible(app.native(), .aiControl("pill-translation")).frame
             try click(app, .aiControl("pill-translation"))
@@ -305,9 +313,9 @@ enum AIRealUIScenarios {
             try app.waitUntil("Translated", timeout: 150) { try app.view().urlPill.translation == .translated(from: "French") }
             shot(app, "translated")
             return "the page is in English, the pill says Translated"
-        }
+        } }
 
-        log.check("5-Second Previews: Shift held over a link") {
+        if wanted("preview") { log.check("5-Second Previews: Shift held over a link") {
             let card = try visible(app.native(), .card(0)).frame
             try PhysicalPointer.move(app, to: CGPoint(x: card.minX + 60, y: card.minY + 50), window: app.window!)
             try NativeSystemInput.setShift(true)
@@ -317,9 +325,9 @@ enum AIRealUIScenarios {
             shot(app, "preview")
             try expect(preview.failure == nil, "the card says \(preview.failure ?? "")")
             return "\(preview.title): \(preview.details.map(\.label))"
-        }
+        } }
 
-        log.check("Instant Links: Shift+Return in the bar") {
+        if wanted("instant") { log.check("Instant Links: Shift+Return in the bar") {
             try PhysicalPointer.move(app, to: CGPoint(x: 900, y: 700), window: app.window!)
             try bar(app, "wikipedia arc browser")
             try key(.shift, .returnKey)
@@ -330,9 +338,9 @@ enum AIRealUIScenarios {
             shot(app, "instant")
             try expect(try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url?.host?.contains("wikipedia") == true } else { false } }, "the row failed: \(toast(app) ?? "")")
             return "opened"
-        }
+        } }
 
-        log.check("Tidy Tab Titles: ⌘D on a tab with a long title") {
+        if wanted("titles") { log.check("Tidy Tab Titles: ⌘D on a tab with a long title") {
             try open(app, "ai-long-title.html")
             let tab = try XCTUnwrapValue(app.view().space.today.rows.compactMap { if case .tab(let t) = $0, t.status == .current { t } else { nil } }.first)
             try click(app, .card(0))
@@ -344,9 +352,9 @@ enum AIRealUIScenarios {
             let row = try app.view().space.pinned.rows.compactMap { if case .tab(let t) = $0, t.id == tab.id { t } else { nil } }.first
             try expect(row?.title != tab.title, "not renamed: \(toast(app) ?? "")")
             return "\(tab.title) → \(row?.title ?? "")"
-        }
+        } }
 
-        log.check("Tidy Downloads: a real download, into a folder chosen in Profiles") {
+        if wanted("download") { log.check("Tidy Downloads: a real download, into a folder chosen in Profiles") {
             let folder = app.dataDirectory.appendingPathComponent("downloads", isDirectory: true)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try WindowServerKeys.ensureFrontmost(app, app.window!)
@@ -356,8 +364,9 @@ enum AIRealUIScenarios {
             try choosePanelFolder(app, folder)
             try key(.command, .w)
             try open(app, "ai-download.html")
+            shot(app, "download-page")
             let card = try visible(app.native(), .card(0)).frame
-            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 120, width: 1, height: 1)), window: app.window!)
+            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 121, width: 1, height: 1)), window: app.window!)
             try app.waitUntil("the download renamed", timeout: 120) {
                 let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
                 return names.contains { !$0.hasPrefix("scan_00231") && $0.hasSuffix(".txt") } || toast(app)?.hasPrefix("Tidy Downloads") == true
@@ -368,9 +377,9 @@ enum AIRealUIScenarios {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
             try expect(notice.hasPrefix("Download renamed to:"), "the notice is \(notice); files \(names)")
             return "\(names) \"\(notice)\""
-        }
+        } }
 
-        log.check("Work in a Folder…: Deny, then Allow, with the agent's default model") {
+        if wanted("folder") { log.check("Work in a Folder…: Deny, then Allow, with the agent's default model") {
             let work = app.dataDirectory.appendingPathComponent("work-\(name)", isDirectory: true)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
             let file = work.appendingPathComponent("hello.txt")
@@ -414,9 +423,9 @@ enum AIRealUIScenarios {
             try expect(FileManager.default.fileExists(atPath: file.path), "Allow did not write the file: \(short(reply.text))")
             try closePanel(app)
             return (notes + ["Deny wrote nothing, Allow wrote hello.txt; model \(reply.conversation?.model ?? "?")"]).joined(separator: "; ")
-        }
+        } }
 
-        log.check("After a restart: Max still on, the choices kept, Tidy still offered") {
+        if wanted("restart") { log.check("After a restart: Max still on, the choices kept, Tidy still offered") {
             try app.flush()
             _ = try app.quit()
             try app.launch()
@@ -425,7 +434,7 @@ enum AIRealUIScenarios {
             try expect(max.isOn && max.provider == choice && max.tidyOn && AIFeature.allCases.allSatisfy(max.enabled), "after restart: \(max)")
             try expect(try app.view().space.today.canTidy, "no Tidy after restart")
             return "provider \(max.provider.rawValue), options \(String(describing: max.agentOptions))"
-        }
+        } }
 
         log.write("failures: \(log.failures)")
         try expect(log.failures == 0, "see real-ui-\(name).txt")
