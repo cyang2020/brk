@@ -110,7 +110,7 @@ extension Work {
             guard text.count >= LocalSources.prefixMinLength, state.doc.windows[window]?.kind != .incognito else { return }
             let results = state.session.windows[window]?.localResults
             if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
-        case .emoji, .calculate: break
+        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize: break
         }
     }
 

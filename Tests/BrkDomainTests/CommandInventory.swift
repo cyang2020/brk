@@ -18,7 +18,7 @@ enum CommandInventory {
 
     /// `.window(.close)` is last: on a driver with a second standard window it removes the dispatching window.
     static let commands: [Command] = [
-        .assist(.open(.question)), .assist(.ask("why")), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
+        .assist(.open(.question)), .assist(.ask("why")), .assist(.askAgent("why", agent: .claude)), .assist(.askPage("why")), .assist(.browse(question: "why", sources: [example])),
         .assist(.instant("query")), .assist(.translate("English")), .assist(.organizeToday), .assist(.undoOrganize),
         .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss),
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
@@ -203,6 +203,7 @@ enum CommandInventory {
             switch intent {
             case .open: "open"
             case .ask: "ask"
+            case .askAgent: "askAgent"
             case .askPage: "askPage"
             case .browse: "browse"
             case .instant: "instant"

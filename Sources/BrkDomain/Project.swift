@@ -418,6 +418,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             rates: state.session.currencyRates,
             now: session.barClock ?? Instant(milliseconds: 0),
             askAgentFound: state.askAgentFound,
+            agentsFound: state.session.detectedAI.map(\.rawValue),
+            askPageOn: doc.kind != .incognito && state.doc.settings.max.enabled(.askPage),
             isPrivate: doc.kind == .incognito
         ))
     case .library(let openID, let page)?:

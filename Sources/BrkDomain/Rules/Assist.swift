@@ -69,6 +69,12 @@ extension Work {
         case .ask(let question):
             guard aiEnabled(.commandBar, window), let q = aiQuestion(question) else { return }
             _ = startAI(.ask(q), purpose: .answer, title: q, window: window)
+        case .askAgent(let question, let agent):
+            guard aiEnabled(.commandBar, window), let q = aiQuestion(question) else { return }
+            guard state.doc.settings.max.provider != .off, let kind = AIProviderKind(rawValue: agent.rawValue), state.session.detectedAI.contains(kind) else {
+                aiMessage("\(agent.rawValue.capitalized) is not available on this Mac. Nothing was sent.", in: window); return
+            }
+            _ = startAI(.ask(q), purpose: .answer, title: q, window: window, agent: agent)
         case .askPage(let question):
             guard aiEnabled(.askPage, window), let q = aiQuestion(question) else { return }
             readActiveAI(.askPage(q), title: q, in: window)
@@ -139,10 +145,10 @@ extension Work {
     /// A new request replaces the window's earlier one of the same slot (one answer, one preview, one translation,
     /// one tidy); Instant Links searches run side by side, one Today row each. Only the panel's purposes write the
     /// answer panel.
-    private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true) -> AIRequestID {
+    private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true, agent: AIProviderChoice? = nil) -> AIRequestID {
         if purpose.slot != .instant { cancelAI(in: window, slot: purpose.slot) }
         let id = AIRequestID(ctx.newID())
-        state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose)
+        state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose, agent: agent)
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         if !purpose.inPlace {
             state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [])
@@ -155,7 +161,7 @@ extension Work {
     private mutating func sendAI(_ id: AIRequestID, task: AITask) {
         state.session.pendingAI[id] = task
         state.session.ai.requests[id]?.task = task
-        effects.append(.ai(id, task, choice: state.doc.settings.max.provider))
+        effects.append(.ai(id, task, choice: state.session.ai.requests[id]?.agent ?? state.doc.settings.max.provider))
     }
     private mutating func readActiveAI(_ purpose: AIPurpose, title: String, in window: WindowID) {
         guard let page = state.findPage(in: window), case .ready(let document) = state.session.live[page]?.document,

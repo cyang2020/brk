@@ -567,6 +567,10 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var now = Instant(milliseconds: 0)
     /// Max's tool is chosen and on this Mac, so Tab can send the typed text to it (`Suggest.tabQuestion`).
     public var askAgentFound: Bool = false
+    /// The agents on this Mac by their `AIProviderChoice` names; the `claude` and `gpt` prefixes go to these only.
+    public var agentsFound: [String] = []
+    /// Max's Ask on Page is on, for the `page` and `summarize` prefixes.
+    public var askPageOn: Bool = false
     /// A private window lists nothing of the user's: no history, no bookmarks, no files.
     public var isPrivate: Bool = false
 }

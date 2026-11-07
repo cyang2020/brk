@@ -19,6 +19,9 @@ public enum AIMode: String, Hashable, Sendable, Codable { case question, page, i
 public enum AIIntent: Hashable, Sendable, Codable {
     case open(AIMode)
     case ask(String)
+    /// `ask` with this agent, whatever Max's setting says (the `claude` and `gpt` prefixes). If it is not on this Mac the
+    /// answer says so; another agent never answers in its place.
+    case askAgent(String, agent: AIProviderChoice)
     case askPage(String)
     case browse(question: String, sources: [URL])
     case instant(String)
@@ -131,6 +134,8 @@ struct AIRequest: Equatable, Sendable {
     var contents: [PageID: AIPageContent] = [:]
     var extracting: Set<PageID> = []
     var purpose: AIPurpose
+    /// The agent named for this request; nil is Max's setting.
+    var agent: AIProviderChoice? = nil
     /// Translation: the page being translated and the translated nodes sent to it.
     var page: PageID? = nil
     var translated: [AITextNode] = []

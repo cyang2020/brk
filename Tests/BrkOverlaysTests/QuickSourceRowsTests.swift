@@ -187,6 +187,29 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(rows[0].command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
     }
 
+    func testAIPrefixRows() {
+        var snapshot = bar()
+        snapshot.askProvider = "Claude"
+        snapshot.askAgentFound = true
+        snapshot.agentsFound = ["claude", "codex"]
+        snapshot.askPageOn = true
+        func only(_ text: String, _ word: String) -> Suggestion? {
+            let rows = ranked(text, word: word, snapshot)
+            XCTAssertLessThanOrEqual(rows.count, 1)
+            return rows.first
+        }
+        XCTAssertEqual(only("why", "claude")?.command, .assist(.askAgent("why", agent: .claude)))
+        XCTAssertEqual(only("why", "gpt")?.command, .assist(.askAgent("why", agent: .codex)))
+        XCTAssertEqual(only("why", "codex")?.subtitle, "Ask Codex")
+        XCTAssertEqual(only("why", "ask")?.command, .assist(.ask("why")))
+        XCTAssertEqual(only("why", "问")?.subtitle, "Ask Claude")
+        XCTAssertEqual(only("why", "page")?.command, .assist(.askPage("why")))
+        XCTAssertNil(only("", "claude"), "nothing to send yet")
+        XCTAssertNil(only("", "page"))
+        XCTAssertEqual(only("", "summarize")?.command, .assist(.askPage("Summarize this page")), "Return with no text summarises")
+        XCTAssertEqual(only("the costs", "总结")?.command, .assist(.askPage("Summarize this page: the costs")))
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)

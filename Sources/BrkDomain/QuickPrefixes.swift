@@ -4,6 +4,9 @@ import Foundation
 /// What a prefix word does with the text typed after it.
 public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case files, apps, emoji, calculate
+    /// A question for the default agent (Max's setting), for one agent by its `AIProviderChoice` name, about the current
+    /// page, or a summary of the current page. An agent's name that no choice has yet leaves its line inactive.
+    case ask, askAgent(String), askPage, summarize
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -26,6 +29,13 @@ public enum QuickPrefixes {
     /// The one table: name, the words that enter it, what it does, its placeholder. A site-search engine of the same name
     /// or keyword wins over a word here (`CommandBarView`).
     public static let all: [QuickPrefix] = [
+        QuickPrefix("Claude", ["claude"], .askAgent("claude"), "Ask Claude…"),
+        QuickPrefix("Codex", ["codex", "gpt"], .askAgent("codex"), "Ask Codex…"),
+        QuickPrefix("Gemini", ["gemini"], .askAgent("gemini"), "Ask Gemini…"),
+        QuickPrefix("Cursor", ["cursor"], .askAgent("cursor"), "Ask Cursor…"),
+        QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…"),
+        QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…"),
+        QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -65,6 +75,10 @@ extension QuickPrefix {
         switch action {
         case .files, .apps: !bar.isPrivate
         case .emoji, .calculate: true
+        case .ask: bar.askProvider != nil && bar.askAgentFound
+        // Never another agent in its place: without this one the word stays plain text.
+        case .askAgent(let name): bar.askProvider != nil && AIProviderChoice(rawValue: name) != nil && bar.agentsFound.contains(name)
+        case .askPage, .summarize: bar.askPageOn && bar.askAgentFound
         }
     }
 }

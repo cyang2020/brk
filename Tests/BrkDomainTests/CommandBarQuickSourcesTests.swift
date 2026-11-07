@@ -200,6 +200,87 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertFalse(d.state.askAgentFound)
     }
 
+    // MARK: Asking one agent
+
+    private func choices(_ t: Transition) -> [AIProviderChoice] {
+        t.effects.compactMap { if case .ai(_, _, let choice) = $0 { choice } else { nil } }
+    }
+
+    func testANamedAgentIsTheOneAskedWhateverTheSettingSays() {
+        let d = Driver()
+        d.user(.settings(.max(.feature(.commandBar, true))))
+        d.system(.aiProvidersDetected([.claude, .codex]))
+        d.user(.settings(.max(.provider(.claude))))
+        d.user(.commandBar(.open(.newTab)))
+        let t = d.user(.assist(.askAgent("why", agent: .codex)))
+        XCTAssertEqual(choices(t), [.codex], "the named agent, not the setting's")
+        XCTAssertNil(d.bar, "the bar closed")
+        XCTAssertEqual(d.view.ai?.title, "why")
+        XCTAssertEqual(choices(d.user(.assist(.ask("why again")))), [.claude], "the default still follows the setting")
+    }
+
+    func testAMissingAgentIsNeverReplacedByAnother() {
+        let d = Driver()
+        d.user(.settings(.max(.feature(.commandBar, true))))
+        d.system(.aiProvidersDetected([.claude]))
+        let t = d.user(.assist(.askAgent("why", agent: .codex)))
+        XCTAssertEqual(choices(t), [], "Codex is not here and Claude does not stand in")
+        XCTAssertTrue(d.view.ai?.text.contains("not available") == true)
+        d.user(.assist(.dismiss))
+        d.user(.settings(.max(.provider(.off))))
+        d.system(.aiProvidersDetected([.claude, .codex]))
+        XCTAssertEqual(choices(d.user(.assist(.askAgent("why", agent: .claude)))), [], "Max's tool is off")
+        d.user(.settings(.max(.provider(.auto))))
+        d.user(.settings(.max(.feature(.commandBar, false))))
+        XCTAssertEqual(choices(d.user(.assist(.askAgent("why", agent: .claude)))), [], "Ask is off")
+    }
+
+    func testTheAgentPrefixesFollowWhatIsOnThisMac() {
+        let d = Driver()
+        d.user(.settings(.max(.feature(.commandBar, true))))
+        d.user(.settings(.max(.feature(.askPage, true))))
+        d.system(.aiProvidersDetected([.claude]))
+        d.user(.commandBar(.open(.newTab)))
+        func prefix(_ word: String) -> QuickPrefixAction? { QuickPrefixes.entry(named: word, in: d.bar!)?.action }
+        XCTAssertEqual(prefix("claude"), .askAgent("claude"))
+        XCTAssertEqual(prefix("CLAUDE"), .askAgent("claude"))
+        XCTAssertNil(prefix("gpt"), "Codex is not on this Mac: plain text")
+        XCTAssertNil(prefix("codex"))
+        XCTAssertEqual(prefix("ask"), .ask)
+        XCTAssertEqual(prefix("ai"), .ask)
+        XCTAssertEqual(prefix("问"), .ask)
+        XCTAssertEqual(prefix("page"), .askPage)
+        XCTAssertEqual(prefix("问页面"), .askPage)
+        XCTAssertEqual(prefix("summarize"), .summarize)
+        XCTAssertEqual(prefix("总结"), .summarize)
+        // Lines ready for the agents that branch adds: inactive until AIProviderChoice has them.
+        XCTAssertNil(prefix("gemini"))
+        XCTAssertNil(prefix("cursor"))
+        XCTAssertTrue(QuickPrefixes.all.contains { $0.words.contains("gemini") })
+        XCTAssertTrue(QuickPrefixes.all.contains { $0.words.contains("cursor") })
+
+        d.system(.aiProvidersDetected([.claude, .codex]))
+        XCTAssertEqual(prefix("gpt"), .askAgent("codex"))
+        XCTAssertEqual(prefix("codex"), .askAgent("codex"))
+
+        d.user(.settings(.max(.provider(.off))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(prefix("claude"), "Max's AI is off")
+        XCTAssertNil(prefix("ask"))
+        d.user(.settings(.max(.provider(.auto))))
+        d.user(.settings(.max(.feature(.commandBar, false))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(prefix("claude"), "Ask in Command Bar is off")
+        d.user(.settings(.max(.feature(.askPage, false))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(prefix("page"))
+        XCTAssertNil(prefix("summarize"))
+        d.system(.aiProvidersDetected([]))
+        d.user(.settings(.max(.feature(.commandBar, true))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(prefix("ask"), "no agent found")
+    }
+
     // MARK: The pure rules
 
     func testWhatIsLeftOut() {

@@ -239,7 +239,24 @@ public enum Suggest {
         case .calculate:
             guard !text.isEmpty, let result = BrowserCalculator.forced(text) ?? QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: .current, locale: .current, rates: bar.rates))?.answer else { return [] }
             return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result", command: .commandBar(.copyAnswer(result)))]
+        case .ask:
+            guard !text.isEmpty else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.ask(bar.askProvider ?? prefix.title), .assist(.ask(text)))]
+        case .askAgent(let name):
+            guard !text.isEmpty, let agent = AIProviderChoice(rawValue: name) else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.ask(prefix.title), .assist(.askAgent(text, agent: agent)))]
+        case .askPage:
+            guard !text.isEmpty else { return [] }
+            return [aiRow(text, subtitle: OverlayCopy.askThisPage, .assist(.askPage(text)))]
+        case .summarize:
+            // Return with no text summarises; a text says what to look for. The route is Ask on Page's.
+            let question = text.isEmpty ? OverlayCopy.summarizeThisPage : "\(OverlayCopy.summarizeThisPage): \(text)"
+            return [aiRow(question, subtitle: OverlayCopy.askThisPage, .assist(.askPage(question)))]
         }
+    }
+
+    private static func aiRow(_ title: String, subtitle: String, _ command: Command) -> Suggestion {
+        Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
 
     /// Apps, then files, in the last places: they replace what would be cut last, and the typed row and anything above
@@ -545,6 +562,8 @@ extension OverlayCopy {
     static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
     static let openApp = "Open App"
     static let copyEmoji = "Copy Emoji"
+    static let askThisPage = "Ask about this page"
+    static let summarizeThisPage = "Summarize this page"
     /// GUESS: "Site Search placeholder where the wildcard is the name of the site."
     static func siteSearchPlaceholder(_ engine: String) -> String { "\(searchVerb) \(engine)…" }
     /// Observed: "Focus on <space>" (`TypeTravelCandidate.focusSpace`).
