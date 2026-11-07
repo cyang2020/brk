@@ -13508,7 +13508,7 @@
         "Sources/BrkDomain/SettingsModel.swift",
         "Sources/BrkDomain/Rules/Settings.swift"
       ],
-      "current_behavior": "The note's words open a card with the agent (claude, codex, gemini, cursor, opencode), its state, model and effort as the agent reports them. Max page otherwise as P38.",
+      "current_behavior": "A card under Enable Max, always visible and not in Arc: the agent (claude, codex, gemini, cursor, opencode) with its state in the list, its model and effort as the agent reports them. Arc's rows sit lower because of it (P38-b, P38-max-on). Otherwise as P38.",
       "assessment": {
         "parent_update": {
           "accepted": "2026-11-01",
@@ -13981,10 +13981,10 @@
       "section": "Command bar quick actions",
       "feature": "Prefix words",
       "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
-      "description": "A whole word then Tab, or Space unless it often begins a search, enters through site search's pill.",
+      "description": "A whole word then Tab enters, in that prefix's own colour; Space never enters, so a search can start with any of the words.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "Same pill and keys as site search; Backspace and Esc give the word back; pasted text never enters; a same-named engine wins; Arc's rows unchanged when nothing matches.",
+      "acceptance": "Same keys as site search, with a pill filled in the prefix's colour and a dot of it beside the offer; Tab only, in every language; a real Space and pasted text stay plain; Backspace and Esc give the word back; a same-named engine wins; Arc's rows unchanged when nothing matches.",
       "owner": "cmdt-20261107",
       "required_checks": [
         "unit",
@@ -13995,15 +13995,15 @@
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
-          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/swift-test-summary.txt",
+          "scope": "Parent's run at 7f85bf5f: 1443 tests, 1 skipped, 0 failures."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Prefix,QuickBar-Beside",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
-          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-c3-7f85bf5f --only QuickBar-Prefix,QuickBar-Beside",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 7f85bf5f, 30 of 30 scenarios."
         }
       ],
       "remaining": [
@@ -14119,10 +14119,10 @@
       "section": "Command bar quick actions",
       "feature": "Split prefix",
       "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
-      "description": "split <text> opens it in a new pane, on a named side.",
+      "description": "split lists open tabs, then visited pages, then a web search, for a pane on the named side.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "An address, search or open tab's title opens in the new pane; no text does what Add Split View does; the existing split commands are listed.",
+      "acceptance": "No text: recent tabs, then Add Split View. A text: open tabs, visited pages, then the search; an address leads unless a tab has it. An open tab joins itself, with its live page; a Favorite or pinned tab stays put and its address opens beside the page.",
       "owner": "cmdt-20261107",
       "required_checks": [
         "unit",
@@ -14133,15 +14133,15 @@
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt/swift-test-summary.txt",
-          "scope": "Parent's run at 13792af2: 1439 tests, 1 skipped, 0 failures."
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/swift-test-summary.txt",
+          "scope": "Parent's run at 7f85bf5f: 1443 tests, 1 skipped, 0 failures."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-merge-13792af2 --only QuickBar-Split",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt/parent-native/REPORT.md",
-          "scope": "Real key input against the fixture; parent's run at 13792af2, 59 of 59 scenarios."
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-c3-7f85bf5f --only QuickBar-Split",
+          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/parent-native/REPORT.md",
+          "scope": "Real key input against the fixture; parent's run at 7f85bf5f, 30 of 30 scenarios."
         }
       ],
       "remaining": [],
