@@ -187,17 +187,17 @@ final class CommandBarQuickSourcesTests: XCTestCase {
     func testTheAgentFoundFlag() {
         let d = Driver()
         d.system(.aiProvidersDetected([]))
-        XCTAssertFalse(d.state.askAgentFound, "Automatic with nothing on this Mac")
+        XCTAssertFalse(d.state.activeAgent != nil, "Automatic with nothing on this Mac")
         d.system(.aiProvidersDetected([.codex]))
-        XCTAssertTrue(d.state.askAgentFound)
+        XCTAssertTrue(d.state.activeAgent != nil)
         d.user(.commandBar(.open(.newTab)))
         XCTAssertEqual(d.bar?.askAgentFound, true)
         d.user(.settings(.max(.provider(.claude))))
-        XCTAssertFalse(d.state.askAgentFound, "Claude chosen, only Codex found")
+        XCTAssertFalse(d.state.activeAgent != nil, "Claude chosen, only Codex found")
         d.system(.aiProvidersDetected([.claude]))
-        XCTAssertTrue(d.state.askAgentFound)
+        XCTAssertTrue(d.state.activeAgent != nil)
         d.user(.settings(.max(.provider(.off))))
-        XCTAssertFalse(d.state.askAgentFound)
+        XCTAssertFalse(d.state.activeAgent != nil)
     }
 
     // MARK: Asking one agent
@@ -253,11 +253,11 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(prefix("问页面"), .askPage)
         XCTAssertEqual(prefix("summarize"), .summarize)
         XCTAssertEqual(prefix("总结"), .summarize)
-        // Lines ready for the agents that branch adds: inactive until AIProviderChoice has them.
-        XCTAssertNil(prefix("gemini"))
+        XCTAssertNil(prefix("gemini"), "Gemini is not on this Mac: plain text")
         XCTAssertNil(prefix("cursor"))
-        XCTAssertTrue(QuickPrefixes.all.contains { $0.words.contains("gemini") })
-        XCTAssertTrue(QuickPrefixes.all.contains { $0.words.contains("cursor") })
+        d.system(.aiProvidersDetected([.claude, .gemini, .cursor]))
+        XCTAssertEqual(prefix("gemini"), .askAgent("gemini"))
+        XCTAssertEqual(prefix("cursor"), .askAgent("cursor"))
 
         d.system(.aiProvidersDetected([.claude, .codex]))
         XCTAssertEqual(prefix("gpt"), .askAgent("codex"))

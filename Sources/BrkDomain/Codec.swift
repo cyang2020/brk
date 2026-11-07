@@ -800,17 +800,29 @@ extension StateCodec {
 /// The local CLI wire format shares the codec boundary; it is unrelated to persisted browser state.
 public enum AIReplyCodec {
     public static func groups(_ text: String) -> [AIGroupPlan]? {
-        guard let data = text.data(using: .utf8) else { return nil }
+        guard let data = json(text) else { return nil }
         return try? JSONDecoder().decode([AIGroupPlan].self, from: data)
     }
     public static func nodes(_ text: String) -> [AITextNode]? {
-        guard let data = text.data(using: .utf8) else { return nil }
+        guard let data = json(text) else { return nil }
         return try? JSONDecoder().decode([AITextNode].self, from: data)
     }
     /// The 5-Second Preview card's answer (`AIPreviewReply`), nil when it is not that JSON.
     public static func preview(_ text: String) -> AIPreviewReply? {
-        guard let data = text.data(using: .utf8) else { return nil }
+        guard let data = json(text) else { return nil }
         return try? JSONDecoder().decode(AIPreviewReply.self, from: data)
+    }
+    /// The JSON in an agent's reply: real agents sometimes wrap it in a code block or a sentence, though asked not to.
+    private static func json(_ text: String) -> Data? {
+        var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.hasPrefix("```") || body.contains("\n```") {
+            let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+            if let open = lines.firstIndex(where: { $0.hasPrefix("```") }),
+               let close = lines[(open + 1)...].firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "```" }) {
+                body = lines[(open + 1)..<close].joined(separator: "\n")
+            }
+        }
+        return body.data(using: .utf8)
     }
     public static func nodesJSON(_ nodes: [AITextNode]) throws -> String {
         String(decoding: try JSONEncoder().encode(nodes), as: UTF8.self)

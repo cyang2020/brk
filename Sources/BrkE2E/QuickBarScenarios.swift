@@ -893,13 +893,8 @@ enum QuickBarScenarios {
             try app.dispatch(.assist(.dismiss))
         }
 
-        // Lines for the agents another branch adds: inactive, plain text.
-        try open(app)
-        try typeWord(app, "gemini", enters: false)
-        try dismiss(app)
-        try open(app)
-        try typeWord(app, "cursor", enters: false)
-        try dismiss(app)
+        // Gemini and Cursor, where they are on this Mac. Every agent is the same fixture here.
+        for (word, question) in [("gemini", "why is rust red?"), ("cursor", "why is ink dark?")] where bar.agentsFound.contains(word) { try asks(word, question) }
 
         // Max's Ask off: the word stays plain text.
         try app.dispatch(.settings(.max(.feature(.commandBar, false))))
@@ -910,7 +905,7 @@ enum QuickBarScenarios {
         try open(app)
         try typeWord(app, "summarize", enters: false)
         try dismiss(app)
-        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor stayed plain; Max off left the words plain")
+        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor asked where installed; Max off left the words plain")
     }
 
     // MARK: Split

@@ -12381,6 +12381,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/final-4f152cd5 P43",
           "artifact": "verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P43: P43-a 4.7% 已修（一致）. References in verify/visual-pairs/run-20261103/P43/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -12500,6 +12514,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
           "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -12619,6 +12647,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P45-a 0.56%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -12733,6 +12775,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P46-a 0.29%, P46-b 0.43%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -12854,6 +12910,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P47-a 0.29%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -12967,6 +13037,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P48-a 0.27%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -13100,6 +13184,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
           "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -13228,6 +13326,20 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "verify/completion/review-r4/merge-gates/r5-2/swift-test-main.log",
           "scope": "R5-2 合并后 main 的完整单元测试 1163 个、0 失败、1 个原本就跳过。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -13368,6 +13480,20 @@
           "command": "verify/visual-pairs/run-20261103/tools/station.sh main /tmp/station-parent/r5-1-all all",
           "artifact": "verify/visual-pairs/run-20261103/final/main-2f752467-sheet.tsv",
           "scope": "R5-1 合并后（main 2f752467）整站台：P38-max-list 3.85%, P38-max-on 2.98%；剩余差异见 r5-1/REPORT.md 每对图一节（参照数据、用户已定保留的产品名和图标、Arc 参照里的横幅）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
+          "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
         }
       ],
       "remaining": [
@@ -13382,7 +13508,7 @@
         "Sources/BrkDomain/SettingsModel.swift",
         "Sources/BrkDomain/Rules/Settings.swift"
       ],
-      "current_behavior": "Native Max settings persist delivered feature switches and local Claude/Codex provider choice, expose translation exclusion reset and require no API key.",
+      "current_behavior": "The note's words open a card with the agent (claude, codex, gemini, cursor, opencode), its state, model and effort as the agent reports them. Max page otherwise as P38.",
       "assessment": {
         "parent_update": {
           "accepted": "2026-11-01",
@@ -13762,6 +13888,60 @@
         "docs/arc-anatomy/offline-reference-lab/CAPTURE.md",
         "artifacts/arc-reference-capture.zip"
       ]
+    }
+  ],
+  "own_features_note": "Brk's own features beyond Arc, asked for by the user. Not part of the Arc inventory above: they do not count for or against parity. Same row shape; scripts/check-completion.py does not read them.",
+  "own_features": [
+    {
+      "id": "B001",
+      "section": "AI features",
+      "feature": "Agent conversation in the Max panel",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-07, learning from T3 Code; docs/design/ai-agents.md).",
+      "description": "Follow-ups, live text, Stop, the agent's steps and tool approvals in the panel; Work in a Folder starts a session with tools on.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Every prompt carrying page or link text runs read-only in an empty folder; a read-only session the agent cannot put in read-only mode sends nothing; tools only after the user picks a folder that is not home or above it, with approvals on and no skip-permissions flag; Stop ends what the turn started.",
+      "owner": "max-agents-20261107",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/swift-test-summary.txt",
+          "scope": "Parent's rerun at bb766d3b: 1321 tests, 1 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIAgentChat-*,AIAgentTools-*,AIAgentForcedStop,AIAgentSettings,AIAgentQuit,...",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/REPORT-fixture.md",
+          "scope": "32 scenarios against the fixture program speaking each agent's protocol."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_PART=tools ... --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-claude-tools.txt",
+          "scope": "Real claude and codex: Deny writes nothing, Allow writes, Stop ends the running command, a follow-up works after it. Triggered by commands, not by real clicks on the panel; real keys and clicks ran only on the fixture."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_PART=tools ... --only AIReal-<agent>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex-tools.txt",
+          "scope": "Real claude and codex: Deny writes nothing, Allow writes, Stop ends the running command, a follow-up works after it. Triggered by commands, not by real clicks on the panel; real keys and clicks ran only on the fixture."
+        }
+      ],
+      "remaining": [
+        "gemini and cursor-agent: real answers, approvals and read-only mode not run, they were signed out; opencode not installed. Fixture only.",
+        "A claude session with tools keeps the user's ~/.claude/settings.json allow rules, so commands they allow do not ask; the user was asked on 2026-11-07, the default is to keep them.",
+        "One conversation per window; no saved history; no model change inside a conversation."
+      ],
+      "reference_tools": []
     }
   ]
 }

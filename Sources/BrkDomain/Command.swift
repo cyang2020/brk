@@ -495,6 +495,11 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     /// "Turn On Max": the automatic provider when none is chosen, and every feature the user never switched on.
     /// Off: the provider is `.off`.
     case enable(Bool)
+    /// The Max pane's Local AI agent card: the model and effort for an agent; nil is the agent's own default.
+    case agentModel(AIProviderKind, String?)
+    case agentEffort(AIProviderKind, String?)
+    /// The Local AI agent card opens or closes; opening asks each installed agent about itself.
+    case showAgents(Bool)
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {
@@ -636,6 +641,14 @@ public enum SystemEvent: Sendable, Equatable {
     case aiHoverReady(WindowID, URL, CGRect?)
     case aiTranslated(AIRequestID, Bool)
     case aiDownloadRenamed(DownloadID, originalPath: String, newPath: String?, error: String?)
+    /// A session reported something other than text (its text comes as `aiPartial` and `aiResult`).
+    case aiConversation(AIRequestID, AIConversationEvent)
+    /// The app has PATH now: with Max on, it asks the installed agents about themselves (`Effect.aiRefreshAgents`).
+    case aiAgentsWanted
+    /// What the installed agents said about themselves (`Effect.aiRefreshAgents`).
+    case aiAgents([AIAgentStatus])
+    /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
+    case aiFolderChosen(WindowID, String?)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

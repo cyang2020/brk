@@ -215,6 +215,15 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         let pending = pendingExternalURLs; pendingExternalURLs = []
         for input in pending { store.dispatch(input) }
         store.dispatch(.system(.aiProvidersDetected(AIProviderSeam.detect())))
+        // A GUI app's PATH is short: the user's login shell has the real one, and it may take a moment to say. With Max
+        // on, the installed agents are then asked whether they are signed in, so Automatic can pass over one that is not.
+        if AIProviderSeam.mode == .real {
+            Task { @MainActor in
+                await AgentEnvironment.loadShellPath()
+                store.dispatch(.system(.aiProvidersDetected(AIProviderSeam.detect())))
+                store.dispatch(.system(.aiAgentsWanted))
+            }
+        }
 
         sweep = Timer.scheduledTimer(withTimeInterval: Metrics.persistence.sweepInterval.value, repeats: true) { _ in
             MainActor.assumeIsolated { store.dispatch(.system(.clockTick)) }

@@ -509,7 +509,7 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.click("browse"), [.settings(.max(.feature(.browse, true)))])
         XCTAssertEqual(f.click("translation"), [.settings(.max(.feature(.translation, true)))])
         XCTAssertEqual(f.view("aiStatus", NSTextField.self)?.stringValue, "Found on PATH: codex. Using codex.")
-        XCTAssertEqual(f.view("aiProvider", NSPopUpButton.self)?.itemTitles, ["Off", "Automatic", "claude", "codex"])
+        XCTAssertEqual(f.view("aiProvider", NSPopUpButton.self)?.itemTitles, ["Off", "Automatic", "claude", "codex", "gemini", "cursor-agent", "opencode"])
         XCTAssertEqual(f.view("aiProvider", NSPopUpButton.self)?.titleOfSelectedItem, "Automatic")
         f.render(snapshot(pane: .advanced, max: MaxSnapshot(settings: max, detected: [], active: nil)))
         XCTAssertEqual(f.view("aiStatus", NSTextField.self)?.stringValue, "No local AI command-line tool found on PATH.")
