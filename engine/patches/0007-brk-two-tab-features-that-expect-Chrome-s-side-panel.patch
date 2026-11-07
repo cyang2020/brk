@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:36:36 +0800
+Subject: [PATCH 7/8] brk: two tab features that expect Chrome's side panel or
+ toast anchor accept Brk's window, as they accept WebUIBrowser's
+
+---
+ chrome/browser/ui/read_anything/BUILD.gn                       | 1 +
+ .../ui/read_anything/read_anything_side_panel_controller.cc    | 3 ++-
+ chrome/browser/ui/toasts/BUILD.gn                              | 1 +
+ chrome/browser/ui/toasts/toast_controller.cc                   | 3 ++-
+ 4 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/chrome/browser/ui/read_anything/BUILD.gn b/chrome/browser/ui/read_anything/BUILD.gn
+index 2a0de5df77f7ce400328eebfd59832d57066afab..f11f2c997147f2efcab649aade96a6477c74a6ba 100644
+--- a/chrome/browser/ui/read_anything/BUILD.gn
++++ b/chrome/browser/ui/read_anything/BUILD.gn
+@@ -89,6 +89,7 @@ source_set("impl") {
+     "read_anything_soft_navigation_observer.cc",
+   ]
+   deps = [
++    "//brk:embedding",
+     ":read_anything",
+     "//chrome/app:command_ids",
+     "//chrome/app:generated_resources",
+diff --git a/chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc b/chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc
+index cc74f999f4e11ac665a320dce6dcb917afa82c63..7b44dd288b169dfaf7de29f020cd950730b3c6d7 100644
+--- a/chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc
++++ b/chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc
+@@ -9,6 +9,7 @@
+ #include <memory>
+ #include <optional>
+ 
++#include "brk/embedding/embedding.h"
+ #include "base/check_is_test.h"
+ #include "base/functional/bind.h"
+ #include "base/metrics/histogram_functions.h"
+@@ -293,7 +294,7 @@ void ReadAnythingSidePanelController::TabWillDetach(
+   if (!side_panel_ui) {
+     // TODO(webium): create a SidePanelCoordinator for WebUIBrowser.
+     // This is a temporary solution to avoid a crash.
+-    if (!webui_browser::IsWebUIBrowserEnabled()) {
++    if (!webui_browser::IsWebUIBrowserEnabled() && !brkcore::IsEmbedded()) {
+       CHECK_IS_TEST();
+     }
+     return;  // IN-TEST
+diff --git a/chrome/browser/ui/toasts/BUILD.gn b/chrome/browser/ui/toasts/BUILD.gn
+index e45c27af4a30192e247d5d4149bdc22cefc2da1f..6970f93791f0d1e273f9b09caa802ce2cec3ffa7 100644
+--- a/chrome/browser/ui/toasts/BUILD.gn
++++ b/chrome/browser/ui/toasts/BUILD.gn
+@@ -44,6 +44,7 @@ source_set("impl") {
+   ]
+   public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+   deps = [
++    "//brk:embedding",
+     ":toasts",
+     "//chrome/app:generated_resources",
+     "//chrome/app:generated_resources_grit",
+diff --git a/chrome/browser/ui/toasts/toast_controller.cc b/chrome/browser/ui/toasts/toast_controller.cc
+index 4ea7cb8bf3b3779f002d28632c1929cfee27ee22..68dbfbd056016a7c0dfdd36499d5fe3e5029a062 100644
+--- a/chrome/browser/ui/toasts/toast_controller.cc
++++ b/chrome/browser/ui/toasts/toast_controller.cc
+@@ -10,6 +10,7 @@
+ #include <utility>
+ #include <vector>
+ 
++#include "brk/embedding/embedding.h"
+ #include "base/check.h"
+ #include "base/check_is_test.h"
+ #include "base/check_op.h"
+@@ -318,7 +319,7 @@ void ToastController::CreateToast(ToastParams params,
+   if (!anchor_view) {
+     // Don't actually create the toast in unit tests
+     // TODO(webium): show toast in webui browser.
+-    if (!webui_browser::IsWebUIBrowserEnabled()) {
++    if (!webui_browser::IsWebUIBrowserEnabled() && !brkcore::IsEmbedded()) {
+       CHECK_IS_TEST();
+     }
+     return;

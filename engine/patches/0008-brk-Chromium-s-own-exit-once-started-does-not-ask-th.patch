@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 22:41:59 +0800
+Subject: [PATCH 8/8] brk: Chromium's own exit, once started, does not ask the
+ shell to terminate again
+
+---
+ chrome/browser/chrome_browser_application_mac.mm | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/chrome/browser/chrome_browser_application_mac.mm b/chrome/browser/chrome_browser_application_mac.mm
+index 3df611a86268d05d824dfe7d021a357eabaa1f77..e6976a1a265dbbef593b35a6ef47c66467f5e38b 100644
+--- a/chrome/browser/chrome_browser_application_mac.mm
++++ b/chrome/browser/chrome_browser_application_mac.mm
+@@ -18,6 +18,8 @@
+ #import "chrome/browser/app_controller_mac.h"
+ #import "chrome/browser/mac/exception_processor.h"
+ #include "brk/embedding/embedding.h"
++#include "chrome/browser/lifetime/application_lifetime_desktop.h"
++#include "chrome/browser/lifetime/browser_shutdown.h"
+ #include "chrome/browser/ui/cocoa/l10n_util.h"
+ #include "chrome/common/chrome_switches.h"
+ #include "components/crash/core/common/crash_key.h"
+@@ -317,8 +319,14 @@ std::string DescriptionForNSEvent(NSEvent* event) {
+ // NSApplication event loop, so final post- MessageLoop::Run() work is done
+ // before exiting.
+ - (void)terminate:(id)sender {
+-  // Embedded: the shell's delegate answers, and -replyToApplicationShouldTerminate: below takes it from there.
+   if (brkcore::IsEmbedded()) {
++    // Chromium's own exit, which the shell started, ends here too (BrowserProcessPlatformPart::AttemptExit): finish it as AppController would,
++    // without asking the shell a second time.
++    if (browser_shutdown::HasShutdownStarted()) {
++      chrome::CloseAllBrowsersAndQuit();
++      return;
++    }
++    // Anything else asks the shell's delegate; -replyToApplicationShouldTerminate: below takes it from there.
+     [super terminate:sender];
+     return;
+   }

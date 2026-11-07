@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:29:35 +0800
-Subject: [PATCH 6/6] brk: Prepare takes Chromium's command line; a shown page
+Subject: [PATCH 6/8] brk: Prepare takes Chromium's command line; a shown page
  shows its view
 
 ---

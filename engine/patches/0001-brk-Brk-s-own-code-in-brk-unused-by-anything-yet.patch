@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:13:46 +0800
-Subject: [PATCH 1/6] brk: Brk's own code in brk/, unused by anything yet
+Subject: [PATCH 1/8] brk: Brk's own code in brk/, unused by anything yet
 
 BrkCore's Objective-C interface, Brk's BrowserWindow without Views, the page, profile and
 extension popup objects, and the hooks header Chromium's files call.

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:13:52 +0800
-Subject: [PATCH 3/6] brk: when embedded, the shell owns NSApp's delegate, the
+Subject: [PATCH 3/8] brk: when embedded, the shell owns NSApp's delegate, the
  menu bar and the quit
 
 ---
