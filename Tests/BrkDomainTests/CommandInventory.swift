@@ -23,6 +23,7 @@ enum CommandInventory {
         .assist(.renameDownload(download)), .assist(.cancel), .assist(.dismiss),
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
+        .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -142,6 +143,7 @@ enum CommandInventory {
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
         .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example, nil), .aiTranslated(AIRequestID("ghost"), false),
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
+        .aiConversation(AIRequestID("ghost"), .notice("x")), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -216,6 +218,10 @@ enum CommandInventory {
             case .languageSettings: "languageSettings"
             case .previewHover: "previewHover"
             case .sharePreview: "sharePreview"
+            case .followUp: "followUp"
+            case .stop: "stop"
+            case .chooseFolder: "chooseFolder"
+            case .approve: "approve"
             }
         case .easel(let c):
             switch c {
@@ -565,6 +571,10 @@ enum CommandInventory {
         case .aiHoverReady: "aiHoverReady"
         case .aiTranslated: "aiTranslated"
         case .aiDownloadRenamed: "aiDownloadRenamed"
+        case .aiConversation: "aiConversation"
+        case .aiAgents: "aiAgents"
+        case .aiAgentsWanted: "aiAgentsWanted"
+        case .aiFolderChosen: "aiFolderChosen"
         }
     }
 

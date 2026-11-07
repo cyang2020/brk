@@ -142,8 +142,8 @@ final class SettingsSpecTests: XCTestCase {
             d.user(.settings(.max(.provider(choice))))
             return d.snapshot.settings.max.active
         }
-        XCTAssertEqual(AIProviderChoice.allCases, [.off, .auto, .claude, .codex])
-        XCTAssertEqual(resolved, [nil, .codex, nil, .codex], "auto takes what is on PATH; an explicit tool that is missing answers nothing")
+        XCTAssertEqual(AIProviderChoice.allCases, [.off, .auto, .claude, .codex, .gemini, .cursor, .opencode])
+        XCTAssertEqual(resolved, [nil, .codex, nil, .codex, nil, nil, nil], "auto takes what is on PATH; an explicit tool that is missing answers nothing")
         XCTAssertEqual(d.snapshot.settings.max.detected, [.codex])
     }
 

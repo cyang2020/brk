@@ -1,9 +1,250 @@
 #!/usr/bin/env python3
-"""Deterministic Claude/Codex CLI fixture. It never opens the network."""
-import json, os, re, signal, sys, time
+"""Deterministic agent fixture. It never opens the network and spends nothing.
+
+Started with `-p <prompt>` it is a plain command: the prompt on the command line, the answer on stdout. Started the way
+Brk starts a real agent it speaks that agent's session protocol, enough to drive Brk's whole provider layer:
+`--input-format stream-json` Claude's streaming JSON, `app-server` Codex's JSON-RPC, `--acp` or `acp` ACP.
+BRK_AI_FIXTURE_LOG gets one JSON line per prompt: pid, prompt, and the arguments the agent was started with.
+"""
+import json, os, re, select, signal, subprocess, sys, time
+
+def log(prompt):
+    if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+        with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'prompt': prompt, 'argv': sys.argv[1:], 'cwd': os.getcwd()})+'\n')
+
+def lines():
+    while True:
+        line = sys.stdin.readline()
+        if not line: return
+        yield json.loads(line)
+
+def put(obj):
+    sys.stdout.write(json.dumps(obj) + '\n'); sys.stdout.flush()
+
+def answer_text(prompt):
+    """What the plain branch below would print, for the protocols' turns."""
+    if prompt.startswith('BRK_PAGE_QUESTION'):
+        data = json.loads(prompt.splitlines()[-1])
+        return 'Fixture page answer: ' + data['text'][:400] + ' [1]'
+    if prompt.startswith('BRK_PREVIEW'):
+        data = json.loads(prompt.splitlines()[-1])
+        return json.dumps({'blocked': False, 'quickSummary': 'Fixture preview: ' + data['title'][:60],
+                           'details': [{'label': 'Text:', 'icon': 'text.alignleft', 'info': data['text'][:60]}]})
+    if prompt.startswith('BRK_BROWSE'):
+        pages = [json.loads(line) for line in prompt.splitlines() if line.startswith('{')]
+        return 'Fixture comparison: ' + ' '.join(p['text'][:100] + ' [' + str(i+1) + ']' for i, p in enumerate(pages))
+    if prompt.startswith('BRK_TRANSLATE'):
+        nodes = json.loads(prompt.splitlines()[-1])
+        for node in nodes: node['text'] = node['text'].replace('Bonjour', 'Hello').replace('Monde', 'World')
+        return json.dumps(nodes)
+    if prompt.startswith('Group these browser tabs'):
+        return json.dumps([{'folder': 'Reading', 'tabs': re.findall(r'^- ([^:]+): ', prompt, re.M)}])
+    if prompt.startswith('Give a short, tidy title'): return 'Fixture Tab'
+    if prompt.startswith('BRK_DOWNLOAD_NAME'): return 'Reading.' + prompt.splitlines()[-1].split('.')[-1]
+    if prompt.startswith('BRK_INSTANT_LINK'):
+        urls = [w for w in prompt.splitlines()[-1].replace(',', ' ').split() if w.startswith('http')]
+        return '\n'.join(urls) if urls else 'javascript:alert(1)'
+    return 'Fixture answer to: ' + prompt
+
+def background_child():
+    """A command an agent ran, in a process group of its own: only a stop that walks the tree finds it."""
+    # Its parent never waits for it; without this a stopped child stays as a zombie that still answers kill(pid, 0).
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    child = subprocess.Popen(['/bin/sleep', '300'], start_new_session=True)
+    if path := os.environ.get('BRK_AI_FIXTURE_CHILD'):
+        with open(path, 'w') as f: f.write(str(child.pid))
+    return child
+
+def hang_ignoring_term():
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    while True: time.sleep(1)
+
+def claude():
+    tools = '--permission-prompt-tool' in sys.argv
+    session = 'fixture-session-' + str(os.getpid())
+    next_request = {'n': 0}
+    pending = {}
+    interrupted = {'on': False}
+    def text(t):
+        put({'type': 'stream_event', 'parent_tool_use_id': None, 'event': {'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': t}}})
+    def result(t=None, error=False):
+        put({'type': 'result', 'subtype': 'error_during_execution' if error else 'success', 'is_error': error, 'result': t, 'session_id': session})
+    def turn(prompt):
+        log(prompt)
+        put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'fixture-opus'})
+        if prompt == 'fixture:stream':
+            text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')
+        elif prompt == 'fixture:hang': hang_ignoring_term()
+        elif prompt == 'fixture:slowstop':
+            text('working'); background_child()
+        elif prompt == 'fixture:fail':
+            sys.stderr.write('fixture account unavailable\n'); sys.stderr.flush(); os._exit(23)
+        elif prompt == 'fixture:empty': result('')
+        elif prompt == 'fixture:signedout': result('Not logged in · Please run /login', True)
+        elif prompt == 'fixture:tool':
+            # What an agent does with tools on: a step, and an approval when it needs one.
+            text('Writing the file.')
+            use = 'toolu_' + str(next_request['n']); next_request['n'] += 1
+            input_ = {'file_path': os.path.join(os.getcwd(), 'written.txt'), 'content': 'from the agent\n'}
+            put({'type': 'assistant', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_use', 'id': use, 'name': 'Write', 'input': input_}]}})
+            if tools:
+                rid = 'approval-' + use
+                pending[rid] = (use, input_)
+                put({'type': 'control_request', 'request_id': rid, 'request': {'subtype': 'can_use_tool', 'tool_name': 'Write', 'input': input_, 'tool_use_id': use, 'permission_suggestions': [{'type': 'setMode', 'mode': 'acceptEdits', 'destination': 'session'}]}})
+            else:
+                put({'type': 'user', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': use, 'is_error': True, 'content': 'no tools'}]}})
+                text(' No tools here.'); result()
+        else:
+            for word in answer_text(prompt).split(' '): text(word + ' ')
+            result()
+    for message in lines():
+        kind = message.get('type')
+        if kind == 'control_request':
+            subtype = message['request'].get('subtype')
+            if subtype == 'initialize':
+                put({'type': 'control_response', 'response': {'subtype': 'success', 'request_id': message['request_id'], 'response': {
+                    'claude_code_version': '9.9.9-fixture',
+                    'models': [{'value': 'default', 'displayName': 'Default', 'description': 'Fixture Opus · For tests', 'supportsEffort': True, 'supportedEffortLevels': ['low', 'high']},
+                               {'value': 'fixture-haiku', 'displayName': 'Fixture Haiku', 'description': 'Small', 'supportsEffort': True, 'supportedEffortLevels': ['low', 'high']}]}}})
+            elif subtype == 'interrupt':
+                put({'type': 'control_response', 'response': {'subtype': 'success', 'request_id': message['request_id']}})
+                for rid in list(pending): del pending[rid]
+                result('stopped', True)
+        elif kind == 'control_response':
+            body = message['response'].get('response', {})
+            use, input_ = pending.pop(message['response']['request_id'])
+            if body.get('behavior') == 'allow':
+                with open(input_['file_path'], 'w') as f: f.write(input_['content'])
+                put({'type': 'user', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': use, 'content': 'written'}]}})
+                text(' Done.'); result()
+            else:
+                put({'type': 'user', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': use, 'is_error': True, 'content': 'denied'}]}})
+                text(' You said no.'); result()
+        elif kind == 'user':
+            turn(message['message']['content'][0]['text'])
+
+def codex():
+    read_only = 'sandbox_mode="read-only"' in sys.argv
+    thread, turn_id = 'fixture-thread', None
+    pending = {}
+    server_id = {'n': 100}
+    def note(method, **params): put({'method': method, 'params': params})
+    def delta(t): note('item/agentMessage/delta', threadId=thread, turnId=turn_id, itemId='m', delta=t)
+    def done(status='completed', error=None):
+        note('turn/completed', threadId=thread, turn={'id': turn_id, 'status': status, 'error': error})
+    def turn(prompt):
+        log(prompt)
+        if prompt == 'fixture:stream':
+            delta('first\n'); time.sleep(2); delta('second\n'); done()
+        elif prompt == 'fixture:hang': hang_ignoring_term()
+        elif prompt == 'fixture:slowstop':
+            delta('working'); background_child()
+        elif prompt == 'fixture:fail': sys.stderr.write('fixture account unavailable\n'); sys.stderr.flush(); os._exit(23)
+        elif prompt == 'fixture:tool':
+            delta('Writing the file.')
+            path = os.path.join(os.getcwd(), 'written.txt')
+            item = {'type': 'commandExecution', 'id': 'exec-1', 'command': "/bin/zsh -lc 'printf x > written.txt'", 'status': 'inProgress'}
+            note('item/started', threadId=thread, turnId=turn_id, item=item)
+            if read_only:
+                note('item/completed', threadId=thread, turnId=turn_id, item={**item, 'status': 'declined'}); delta(' No tools here.'); done(); return
+            server_id['n'] += 1
+            pending[server_id['n']] = (item, path)
+            put({'id': server_id['n'], 'method': 'item/commandExecution/requestApproval', 'params': {'threadId': thread, 'turnId': turn_id, 'itemId': 'exec-1', 'command': item['command'], 'availableDecisions': ['accept', 'acceptForSession', 'decline']}})
+        else:
+            for word in answer_text(prompt).split(' '): delta(word + ' ')
+            done()
+    for message in lines():
+        method, params = message.get('method'), message.get('params') or {}
+        rid = message.get('id')
+        if method == 'initialize': put({'id': rid, 'result': {'userAgent': 'brk/9.9.9-fixture (test)', 'codexHome': '/nonexistent'}})
+        elif method == 'initialized': pass
+        elif method == 'account/read': put({'id': rid, 'result': {'account': {'type': 'chatgpt'}, 'requiresOpenaiAuth': True}})
+        elif method == 'model/list':
+            put({'id': rid, 'result': {'data': [{'id': 'fixture-sol', 'displayName': 'Fixture Sol', 'isDefault': True, 'hidden': False, 'supportedReasoningEfforts': [{'reasoningEffort': 'low'}, {'reasoningEffort': 'high'}]},
+                                                {'id': 'fixture-hidden', 'displayName': 'Hidden', 'hidden': True, 'supportedReasoningEfforts': []}], 'nextCursor': None}})
+        elif method in ('thread/start', 'thread/resume'):
+            os.chdir(params.get('cwd') or os.getcwd())
+            if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+                with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'thread': params, 'argv': sys.argv[1:]})+'\n')
+            put({'id': rid, 'result': {'thread': {'id': thread}, 'model': params.get('model') or 'fixture-sol', 'reasoningEffort': None}})
+        elif method == 'turn/start':
+            turn_id = 'turn-' + str(rid)
+            put({'id': rid, 'result': {'turn': {'id': turn_id, 'status': 'inProgress'}}})
+            turn(params['input'][0]['text'])
+        elif method == 'turn/interrupt':
+            put({'id': rid, 'result': {}})
+            pending.clear()
+            done('interrupted')
+        elif rid in pending:
+            item, path = pending.pop(rid)
+            if (message.get('result') or {}).get('decision') in ('accept', 'acceptForSession'):
+                with open(path, 'w') as f: f.write('from the agent\n')
+                note('item/completed', threadId=thread, turnId=turn_id, item={**item, 'status': 'completed'}); delta(' Done.')
+            else:
+                note('item/completed', threadId=thread, turnId=turn_id, item={**item, 'status': 'declined'}); delta(' You said no.')
+            done()
+
+def acp():
+    session = 'fixture-acp-session'
+    pending = {}
+    prompt_id = {'id': None}
+    cancelled = {'on': False}
+    def note(update): put({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': session, 'update': update}})
+    def text(t): note({'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': t}})
+    def stop(reason='end_turn'): put({'jsonrpc': '2.0', 'id': prompt_id['id'], 'result': {'stopReason': reason}})
+    def turn(prompt):
+        log(prompt)
+        if prompt == 'fixture:stream':
+            text('first\n'); time.sleep(2); text('second\n'); stop()
+        elif prompt == 'fixture:hang': hang_ignoring_term()
+        elif prompt == 'fixture:slowstop':
+            text('working'); background_child()
+        elif prompt == 'fixture:tool':
+            text('Writing the file.')
+            note({'sessionUpdate': 'tool_call', 'toolCallId': 'call-1', 'title': 'Write written.txt', 'kind': 'edit', 'status': 'pending'})
+            pending[500] = True
+            put({'jsonrpc': '2.0', 'id': 500, 'method': 'session/request_permission', 'params': {'sessionId': session, 'toolCall': {'toolCallId': 'call-1', 'title': 'Write written.txt'},
+                 'options': [{'optionId': 'yes', 'name': 'Allow', 'kind': 'allow_once'}, {'optionId': 'always', 'name': 'Always Allow', 'kind': 'allow_always'}, {'optionId': 'no', 'name': 'Reject', 'kind': 'reject_once'}]}})
+        else:
+            for word in answer_text(prompt).split(' '): text(word + ' ')
+            stop()
+    for message in lines():
+        method, params = message.get('method'), message.get('params') or {}
+        rid = message.get('id')
+        if method == 'initialize': put({'jsonrpc': '2.0', 'id': rid, 'result': {'protocolVersion': 1, 'agentCapabilities': {'loadSession': True}, 'agentInfo': {'name': 'fixture', 'version': '9.9.9-fixture'}}})
+        elif method == 'authenticate': put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
+        elif method == 'session/new' or method == 'session/load':
+            os.chdir(params.get('cwd') or os.getcwd())
+            put({'jsonrpc': '2.0', 'id': rid, 'result': {'sessionId': session, 'models': {'currentModelId': 'fixture-flash', 'availableModels': [{'modelId': 'fixture-flash', 'name': 'Fixture Flash'}, {'modelId': 'fixture-pro', 'name': 'Fixture Pro'}]},
+                 'modes': {'currentModeId': 'default', 'availableModes': [{'id': 'default', 'name': 'Default'}, {'id': 'plan', 'name': 'Plan'}, {'id': 'ask', 'name': 'Ask'}]}}})
+        elif method in ('session/set_mode', 'session/set_model', 'session/set_config_option'):
+            if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+                with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'method': method, 'params': params})+'\n')
+            put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
+        elif method == 'session/prompt':
+            prompt_id['id'] = rid
+            turn(params['prompt'][0]['text'])
+        elif method == 'session/cancel':
+            stop('cancelled')
+        elif rid == 500:
+            outcome = message['result']['outcome']
+            if outcome.get('optionId') == 'yes':
+                with open('written.txt', 'w') as f: f.write('from the agent\n')
+                note({'sessionUpdate': 'tool_call_update', 'toolCallId': 'call-1', 'status': 'completed'}); text(' Done.')
+            else:
+                note({'sessionUpdate': 'tool_call_update', 'toolCallId': 'call-1', 'status': 'failed'}); text(' You said no.')
+            stop()
+
+if '--input-format' in sys.argv: claude(); sys.exit(0)
+if len(sys.argv) > 1 and sys.argv[1] == 'app-server': codex(); sys.exit(0)
+if '--acp' in sys.argv or (len(sys.argv) > 1 and sys.argv[1] == 'acp'): acp(); sys.exit(0)
+if len(sys.argv) > 1 and sys.argv[1] == 'auth':
+    print(json.dumps({'loggedIn': True})); sys.exit(0)
+if len(sys.argv) > 1 and sys.argv[1] == 'status':
+    print('Logged in as fixture'); sys.exit(0)
+
 prompt = sys.argv[2] if sys.argv[1] == '-p' else sys.argv[-1]
-if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
-    with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'prompt': prompt})+'\n')
+log(prompt)
 pid_path = None
 if prompt.startswith('PID '):
     path, prompt = prompt[4:].split('\n', 1)
@@ -23,8 +264,7 @@ elif prompt == 'detached':
         while True: time.sleep(1)
     os._exit(0)
 elif prompt in ('hang', 'fixture:hang'):
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    while True: time.sleep(1)
+    hang_ignoring_term()
 elif prompt == 'large':
     for _ in range(128):
         os.write(1, b'x' * 4096)
@@ -68,5 +308,7 @@ elif prompt.startswith('Group these browser tabs'):
     print(json.dumps([{'folder': 'Reading', 'tabs': ids}]))
 elif prompt.startswith('Give a short, tidy title'):
     print('Fixture Tab')
+elif prompt == 'fixture:tool':
+    print('No tools here.')
 else:
     print('Fixture answer')
