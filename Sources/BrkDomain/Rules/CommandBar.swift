@@ -66,6 +66,8 @@ extension Work {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
             defer { askQuickSources(trimmed, target: target, in: window) }
+            // Out of the prefix: its translation stops. (Entering a pill sends this too, with no text.)
+            barTranslationText("", in: window)
             // A text the bar answers itself is not a web search: a calculation, a conversion. A bar filling an empty pane
             // has none of those but arithmetic.
             var fillsPane = false

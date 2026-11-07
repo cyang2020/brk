@@ -427,6 +427,15 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).count, 0)
     }
 
+    func testLeavingThePrefixCancels() throws {
+        let d = translationBar()
+        d.user(.commandBar(.prefixQuery(.translate, "hello")))
+        let (id, _) = try XCTUnwrap(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).first)
+        let left = d.user(.commandBar(.queryChanged("translate")))
+        XCTAssertTrue(left.effects.contains(.aiCancel(id)))
+        XCTAssertNil(d.bar?.translation)
+    }
+
     func testClosingTheBarByAnyCommandCancels() throws {
         let d = translationBar()
         d.user(.commandBar(.prefixQuery(.translate, "hello")))
