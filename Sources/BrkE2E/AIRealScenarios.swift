@@ -198,7 +198,7 @@ enum AIRealScenarios {
             try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
             _ = try app.load(app.site.url("download"))
             try app.dispatch(.library(.open(.downloads)))
-            let original = ".utf"
+            let original = "fixture.txt"
             var name = ""
             try app.waitUntil("the file renamed", timeout: 60) {
                 guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first else { return false }
@@ -250,11 +250,13 @@ enum AIRealScenarios {
         log.check("Tools: Deny") {
             try app.dispatch(.assist(.chooseFolder))
             try app.waitUntil("the session", timeout: 30) { try app.view().ai?.conversation?.folder == folder.path && app.view().ai?.conversation?.agent != nil }
-            log.write("model in the panel: \(try app.view().ai?.conversation?.model ?? "nil")")
+            let shown = try app.view().ai?.conversation?.model
+            log.write("model in the panel: \(shown ?? "nil")")
             try app.dispatch(.assist(.followUp("Create a file named denied.txt with the word hi in it, here in the working folder. Do not do anything else.")))
             var asked = false
             try answerAll(app, kind: .deny) { asked = true }
-            try expect(asked, "the agent never asked. Items: \(String(describing: try app.view().ai?.conversation?.items))")
+            let items = try app.view().ai?.conversation?.items
+            try expect(asked, "the agent never asked. Items: \(String(describing: items))")
             try expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("denied.txt").path), "Deny still wrote the file")
             return "no file after Deny"
         }
