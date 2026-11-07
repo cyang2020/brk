@@ -1,0 +1,34 @@
+# Pinned GN arguments for BrkCore. configure.sh copies this file to out/Brk/args.gn. See engine/README.md for why.
+
+# Release code, one framework file (same shape as ArcCore), not official: no LTO and no PGO, which would need far more
+# memory and time than an 8-core machine with 16 GB has for a build that runs beside other work.
+is_debug = false
+is_component_build = false
+is_official_build = false
+chrome_pgo_phase = 0
+use_thin_lto = false
+target_cpu = "arm64"
+
+# No debug info in Chromium's own code: much less disk and link memory. brk/ turns on its own (minimal_symbols).
+symbol_level = 0
+blink_symbol_level = 0
+v8_symbol_level = 0
+enable_dsyms = false
+dcheck_always_on = false
+
+# One link at a time: a framework link takes several GB.
+concurrent_links = 1
+
+# No NaCl, no remote compile.
+enable_nacl = false
+use_remoteexec = false
+
+# Same codec set as the CEF 154.0.34 binary Brk ships today, measured with engine/tools/codec-probe.py: VP8, VP9, AV1, MP3,
+# Opus, FLAC decode; H.264, AAC, HEVC and AC-3 do not. Turning them on is the user's decision (licensing).
+proprietary_codecs = false
+ffmpeg_branding = "Chromium"
+# Widevine is unavailable in the CEF binary too. Turning it on is the user's decision.
+enable_widevine = false
+
+# No Google API keys of any kind.
+use_official_google_api_keys = false
