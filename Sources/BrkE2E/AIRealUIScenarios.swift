@@ -178,7 +178,7 @@ enum AIRealUIScenarios {
         log.check("Max pane: Turn On Max and choose \(kind.displayName)") {
             try WindowServerKeys.ensureFrontmost(app, app.window!)
             try key(.command, .comma)
-            try click(title: "Max", roles: ["AXButton", "AXRadioButton", "AXToolbarButton"], "the Max tab")
+            try click(title: "Max", "the Max tab")
             app.sleep(1)
             try expect(try !settings(app).max.settings.isOn, "Max is on before Turn On Max")
             try click(identifier: ViewID.settingsField("enableMax").identifier, "Turn On Max")
@@ -288,8 +288,17 @@ enum AIRealUIScenarios {
 
         log.check("Translate Pages from the pill's Translation Available (P50-g)") {
             try app.waitUntil("Translation Available", timeout: 15) { try app.view().urlPill.translation == .available }
+            let line = try visible(app.native(), .aiControl("pill-translation")).frame
             try click(app, .aiControl("pill-translation"))
-            try click(identifier: ViewID.aiControl("translation-translate").identifier, "the popover's Translate")
+            app.sleep(0.8)
+            if let popover = try app.native().appWindows.first(where: { $0.className.contains("Popover") && $0.isVisible }) { captureWindow(app, popover.number, "translate-offer") }
+            if let button = NativeSystemInput.frame(pid: pid, identifier: ViewID.aiControl("translation-translate").identifier) {
+                try click(CGPoint(x: button.midX, y: button.midY))
+            } else {
+                // The popover's body (237 x 101) is centred under the line; its right button sits 174.5, 74.5 into it.
+                let anchor = try screen(app, line)
+                try click(CGPoint(x: anchor.x - 118.5 + 174.5, y: anchor.y + 18 + 74.5))
+            }
             try app.waitUntil("Translated", timeout: 150) { try app.view().urlPill.translation == .translated(from: "French") }
             shot(app, "translated")
             return "the page is in English, the pill says Translated"
@@ -321,7 +330,7 @@ enum AIRealUIScenarios {
         }
 
         log.check("Tidy Tab Titles: ⌘D on a tab with a long title") {
-            try open(app, "news-site.html")
+            try open(app, "ai-long-title.html")
             let tab = try XCTUnwrapValue(app.view().space.today.rows.compactMap { if case .tab(let t) = $0, t.status == .current { t } else { nil } }.first)
             try click(app, .card(0))
             try key(.command, .d)
@@ -339,13 +348,13 @@ enum AIRealUIScenarios {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try WindowServerKeys.ensureFrontmost(app, app.window!)
             try key(.command, .comma)
-            try click(title: "Profiles", roles: ["AXButton", "AXRadioButton", "AXToolbarButton"], "the Profiles tab")
+            try click(title: "Profiles", "the Profiles tab")
             try choose(popUp: ViewID.settingsField("downloadLocation-default").identifier, typing: "Other", "Download location")
             try choosePanelFolder(app, folder)
             try key(.command, .w)
             try open(app, "ai-download.html")
             let card = try visible(app.native(), .card(0)).frame
-            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 92, width: 1, height: 1)), window: app.window!)
+            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 120, width: 1, height: 1)), window: app.window!)
             try app.waitUntil("the download renamed", timeout: 120) {
                 let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
                 return names.contains { !$0.hasPrefix("scan_00231") && $0.hasSuffix(".txt") } || toast(app)?.hasPrefix("Tidy Downloads") == true
@@ -419,6 +428,12 @@ enum AIRealUIScenarios {
         try expect(log.failures == 0, "see real-ui-\(name).txt")
     }
 
+    private static func captureWindow(_ app: AppUnderTest, _ number: Int, _ name: String) {
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        capture.arguments = ["-x", "-l", String(number), app.shotsDirectory.appendingPathComponent("AIRealUI-\(name).png").path]
+        try? capture.run(); capture.waitUntilExit()
+    }
     /// The settings window by its number, for the eye.
     private static func captureSettings(_ app: AppUnderTest, _ name: String) throws {
         guard let window = try app.native().appWindows.first(where: { $0.className == "NSWindow" && $0.isVisible }) else { return }
