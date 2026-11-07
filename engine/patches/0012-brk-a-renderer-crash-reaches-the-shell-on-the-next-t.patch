@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 7 Nov 2026 23:39:28 +0800
+Subject: [PATCH 12/12] brk: a renderer crash reaches the shell on the next
+ task, as in CEF
+
+---
+ brk/browser/brk_web_contents.mm | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 0a1757786419dedebd89c363227fa03ef54bec42..9e477898cb4edfe6f283f4c46a3a1459f558a6be 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -9,6 +9,7 @@
+ #include "base/json/json_writer.h"
+ #include "base/memory/raw_ptr.h"
+ #include "base/strings/sys_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/values.h"
+ #import "brk/browser/brk_browser.h"
+@@ -131,7 +132,15 @@ class BrkPage : public content::WebContentsObserver,
+                 didChangeFavicon:candidates.empty() ? nil : NSURLFromGURL(candidates[0]->icon_url)];
+   }
+   void PrimaryMainFrameRenderProcessGone(base::TerminationStatus status) override {
+-    [owner_.delegate webContentsRendererGone:owner_];
++    // On the next task, as CEF does: the shell may reload at once, and Chromium is still tearing the old process down in here (a reload from inside
++    // this call trips extensions::RendererStartupHelper's checks).
++    __weak BrkWebContents* owner = owner_;
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE, base::BindOnce(^{
++      BrkWebContents* page = owner;
++      if (page.contents) {
++        [page.delegate webContentsRendererGone:page];
++      }
++    }));
+   }
+   void OnWebContentsFocused(content::RenderWidgetHost* host) override {
+     [owner_.delegate webContentsDidGainFocus:owner_];

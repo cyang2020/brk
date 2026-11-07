@@ -236,3 +236,33 @@ that they run in a test when there is no side panel; a page made hidden keeps it
 `-[NSApp terminate:]`, which must not reach the shell twice; `--no-startup-window` with a debugging port keeps Chromium alive until a DevTools client closes
 it; the browser process needs AppController's keepalive; unpacked extensions stay disabled without developer mode; pages restored from the back-forward
 cache get no load-finished callback; the popup's first frame is replaced when it navigates, and auto-resize has to be turned on again for the new one.
+
+## Part 5: What is missing before BrkCore could be the default
+
+Measured with a sample of 38 other scenarios on `BRK_ENGINE=core` (`verify/chromium/sample-core-1/REPORT.md`, then R7b fixed and rerun in
+`verify/chromium/r7b-core-1/`): 19 pass, 19 fail. Every failure below is a `WebEngine` call `CoreEngine` does not implement yet, or a Chrome path that still
+opens Chrome's own UI. Nothing in this list was tried and found impossible.
+
+| Area | Scenario that shows it | What has to be built |
+| --- | --- | --- |
+| Links that ask for a new window (Shift+click, `window.open` with features) | W2-6 | a hook where Chrome opens a URL in a new window or popup (`OpenURLFromTab`, `AddNewContents`), sending it to the shell as CEF's `OnOpenURLFromTab` does |
+| Downloads | W2-11 | `DownloadManagerDelegate` events to `Transfers` (the CEF engine's flow, already engine-neutral) |
+| Website data and per-site policy | SitePolicy-clear, -blocking, -appearance, Boost-CSS | `clearSiteData`, `clearProfileData`, the request filter, website CSS, dark mode, Boost scripts: the CEF engine does these through DevTools and request handlers; on BrkCore they are direct Chromium calls |
+| Permission prompts | SitePermission-prompt, SitePolicy-permission | a `PermissionPrompt` factory for Brk's window (Arc's `permission_prompt_impl.cc`) |
+| Connection security in the site controls | SiteSecurity-secure, -invalid | `SecurityStateTabHelper` state to `PageEvent.securityChanged` |
+| Extension management beyond install and the action | Ext-catalog, Ext-shortcuts, Ext-controls | incognito access, commands, uninstall, pins: `ExtensionPrefs`, `CommandService`, `ExtensionRegistrar` |
+| Media, audio, picture in picture, capture | Audio1, MediaControls, CaptureProbe | `MediaSessionImpl`, audible state, `captureViewport` |
+| AI page reading and translation | AIPage, AITranslate | page text and language through the frame, as the CEF engine does over DevTools |
+| Profiles other than Default, profile deletion | W2-2 | named profiles load, but deletion and the directory scheme follow CEF's; to align |
+| Chrome dialogs that need a Views host | none in the sample | JavaScript alerts and other tab-modal dialogs need a `WebContentsModalDialogHost`; Brk's window answers none. Arc replaced 46 such entry points |
+| DevTools, find in page, context menus, fullscreen, print, task manager, tracing | not in the sample | each is a `WebEngine` call with no BrkCore body yet |
+
+Beyond the scenarios:
+- **Release build.** This is a non-official build without LTO or PGO and without symbols for Chromium's code. A shipped engine needs the official
+  configuration, a crash reporter and a dSYM; that build needs much more memory and time than this machine.
+- **Signing.** `dist-core/Brk.app` is signed ad hoc. Helpers need the hardened runtime and entitlements as in `scripts/build.sh` before notarization.
+- **Malloc zone.** Chromium's allocator replaces the process's default zone when the framework loads. Brk loads it with `dlopen` before other threads
+  exist, which is the case Chromium's code accepts; Chrome itself registers the zone first thing in `main`. A shipped Brk should do the same in its own `main`.
+- **Network calls home.** The test runs show Chromium's GCM client registering with Google even with `--disable-background-networking` and no API keys
+  (`registration_request.cc` errors in the logs). The shipped engine should turn that off at build time.
+- **Updating Chromium.** Each new milestone means rebasing 12 patches; 20 of Chromium's own files are touched, most by one or two lines.
