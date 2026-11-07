@@ -75,7 +75,8 @@ final class LocalSearch {
         let files = FileManager.default
         var hits: [LocalHit] = []
         func walk(_ folder: URL, depth: Int) {
-            for entry in (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? [] {
+            // Names with a dot are hidden; the system's hidden flag is not read here, because macOS sets it on Safari in /Applications.
+            for entry in (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [])) ?? [] where !entry.lastPathComponent.hasPrefix(".") {
                 if entry.pathExtension == "app" {
                     hits.append(LocalHit(path: entry.path, name: entry.deletingPathExtension().lastPathComponent))
                 } else if depth > 0, (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
