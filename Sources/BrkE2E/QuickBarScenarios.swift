@@ -314,9 +314,10 @@ enum QuickBarScenarios {
             }
             try expect(!has(bare[0], "Copy Result"), "the answer must not be first: \(bare)")
             _ = try app.screenshot("bare-word")
+            let searchesBefore = app.site.requestCount("/browser-basic-search.html")
             try press(app, [], .returnKey)
             try app.waitUntil("Return searched") { currentTab(try app.view())?.title == "query:tomorrow" }
-            try expect(app.site.requestCount("/browser-basic-search.html") == 1, "the search did not reach the fixture engine once")
+            try expect(app.site.requestCount("/browser-basic-search.html") == searchesBefore + 1, "the search did not reach the fixture engine once")
 
             // Ordinary searches and addresses have no answer row.
             for text in ["10 things", "best 10 ft in m", "example.com", "time.com"] {
@@ -850,6 +851,12 @@ enum QuickBarScenarios {
         try asks("codex", "why is grass green?")
         try asks("ask", "why is snow white?")
         try asks("ai", "why is coal black?")
+        // Arc's own row that the word and the text name together stays reachable, first.
+        try open(app)
+        try typeWord(app, "ask")
+        try type(app, "on page")
+        try waitForRows(app, "Ask on Page leads") { $0.first.map { has($0, "Ask on Page") } ?? false }
+        try dismiss(app)
         // The fixture stands in for every agent here, so which one a word picks is pinned in the reducer's tests.
         app.note("The AI fixture stands in for every agent under the control socket: which agent each word picks is pinned by CommandBarQuickSourcesTests (Effect.ai's choice), not here.")
 
