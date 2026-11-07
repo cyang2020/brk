@@ -391,6 +391,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         typed = namedBy
         completion = nil
         input.stringValue = namedBy
+        // The caret after the word: setting the text selects it, and the next key would replace it.
+        input.currentEditor()?.selectedRange = NSRange(location: (namedBy as NSString).length, length: 0)
         applySiteSearchLook()
         dispatch(.commandBar(.queryChanged(namedBy)))
         rerank(keepHighlight: false)
@@ -538,7 +540,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let labelSize = siteLabel.intrinsicContentSize
             let pill = CGSize(width: ceil(labelSize.width) + 2 * o.hintPadding.value, height: max(o.hintHeight.value, ceil(labelSize.height) + 4))
             sitePill.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - pill.height / 2).rounded(), width: pill.width, height: pill.height)
-            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width), height: labelSize.height)
+            // The room goes to the right of the text, which keeps its place: the measured width alone can cut the last letter ("Emoji").
+            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width) + o.hintTextSlack.value, height: labelSize.height)
             fieldX = sitePill.frame.maxX + m.stackSpacing.value
         }
         // P21-a, Q01-a: the centered bar's text sits half a point above the row's middle.
