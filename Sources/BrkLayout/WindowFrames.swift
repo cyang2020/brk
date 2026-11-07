@@ -164,7 +164,7 @@ public enum ViewID: Hashable, Sendable, Codable {
     case pageDragStrip(Int)
     case findBar, findQuery, findReplacement, findStatus, findNext, findPrevious, findClose, findReplace, findReplaceAll, findCapture
     case splitTool(ActionID), splitSegment(ItemID), splitDropPreview
-    case commandBar, commandBarInput, commandBarResult(Int)
+    case commandBar, commandBarInput, commandBarResult(Int), commandBarPill
     case archive, archiveGroup(ArchiveBucket), archiveEntry(ArchiveID), archiveRestore(ArchiveID), archiveClear, archiveThreshold
     case spaceDialog
     case themeBackground
@@ -237,6 +237,7 @@ public enum ViewID: Hashable, Sendable, Codable {
         case .commandBar: "command-bar"
         case .commandBarInput: "command-bar-input"
         case .commandBarResult(let i): "command-bar-result-\(i)"
+        case .commandBarPill: "command-bar-pill"
         case .archive: "archive"
         case .archiveGroup(let bucket): "archive-group-\(bucket.rawValue)"
         case .archiveEntry(let id): "archive-entry-\(id)"
@@ -307,7 +308,7 @@ extension WindowFrames {
         case .historyPage: return cards.first { if case .history = $0.content { true } else { false } }?.rect
         case .easelBoard: return cards.first { if case .easel = $0.content { true } else { false } }?.rect
         case .peek: return peek
-        case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .archiveGroup, .archiveEntry,
+        case .siteInfo, .paneSiteInfo, .loadingBar, .section, .rowClose, .todayClear, .renameField, .commandBarInput, .commandBarResult, .commandBarPill, .archiveGroup, .archiveEntry,
              .archiveRestore, .archiveClear, .archiveThreshold, .spaceDialog, .themeBackground, .libraryClose, .downloadEntry,
              .historyEntry, .peekClose, .peekOpenIn, .peekSplit, .littleHint, .profileBadge, .profileDialog, .settingsWindow, .settingsPane,
              .settingsField, .splitTool, .splitSegment, .splitDropPreview, .tabTool, .easelControl, .easelElement, .easelCard, .pageDragStrip,

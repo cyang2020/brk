@@ -6,8 +6,8 @@ import XCTest
 /// The reducer's side of the command bar's quick sources: what asks for files, apps and rates, what is dropped as stale,
 /// what is never acted on, and that nothing reaches history or the search engine beyond what the bar already sent.
 final class CommandBarQuickSourcesTests: XCTestCase {
-    private func request(_ query: String, name: String? = nil, apps: Bool = true) -> LocalSearchRequest {
-        LocalSearchRequest(query: query, name: name ?? query, includesApps: apps)
+    private func request(_ query: String, scope: LocalScope = .filesAndApps) -> LocalSearchRequest {
+        LocalSearchRequest(query: query, name: query, scope: scope)
     }
 
     private func local(_ t: Transition) -> [LocalSearchRequest] {
@@ -32,9 +32,11 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(local(d.user(.commandBar(.queryChanged("localhost:5173")))), [], "an address")
         XCTAssertEqual(local(d.user(.commandBar(.queryChanged("1+1")))), [], "arithmetic")
         XCTAssertEqual(local(d.user(.commandBar(.queryChanged("10ft in m")))), [], "a question the bar answers")
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("emoji smile")))), [], "emoji are not files")
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("file report.pdf")))), [request("file report.pdf", name: "report.pdf", apps: false)], "the mode takes any name")
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("file a")))), [request("file a")], "the mode wants two characters: an ordinary text")
+        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("file report")))), [request("file report")], "as plain text it is an ordinary text")
+        XCTAssertEqual(local(d.user(.commandBar(.prefixQuery(.files, "report.pdf")))), [request("report.pdf", scope: .files)], "the prefix takes any name")
+        XCTAssertEqual(local(d.user(.commandBar(.prefixQuery(.apps, "safari")))), [request("safari", scope: .apps)])
+        XCTAssertEqual(local(d.user(.commandBar(.prefixQuery(.files, "a")))), [], "the prefix wants two characters")
+        XCTAssertEqual(local(d.user(.commandBar(.prefixQuery(.emoji, "smile")))), [], "emoji are not files")
         XCTAssertEqual(local(d.user(.commandBar(.queryChanged("")))), [])
     }
 
@@ -51,7 +53,7 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(local(t), [], "the empty pane's bar")
         XCTAssertFalse(needsRates(d.user(.commandBar(.queryChanged("100 usd in cny")))), "the empty pane's bar")
         XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("10ft in m")))), 1, "still an ordinary search there")
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("file budget")))), 1, "still an ordinary search there")
+        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.files, "budget"))).effects, [], "no prefix in that bar")
     }
 
     func testAPrivateWindowListsNoFilesAndFetchesNothing() throws {
@@ -60,7 +62,7 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
         d.user(.commandBar(.open(.newTab)), in: window)
         XCTAssertEqual(d.user(.commandBar(.queryChanged("budget")), in: window).effects, [])
-        XCTAssertEqual(d.user(.commandBar(.queryChanged("file budget")), in: window).effects, [])
+        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.files, "budget")), in: window).effects, [])
         XCTAssertEqual(d.user(.commandBar(.queryChanged("100 usd in cny")), in: window).effects, [])
         d.system(.currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1, "USD": 1.1])))
         guard case .commandBar(let bar)? = d.view(of: window).overlay else { return XCTFail("the bar") }
@@ -133,8 +135,9 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         let d = Driver()
         let visits = d.state.doc.history.count
         d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("file secret plan")))), 0, "a file name is not a web search")
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("emoji smile")))), 0)
+        XCTAssertEqual(fetches(d.user(.commandBar(.prefixQuery(.files, "secret plan")))), 0, "a file name is not a web search")
+        XCTAssertEqual(fetches(d.user(.commandBar(.prefixQuery(.apps, "secret plan")))), 0)
+        XCTAssertEqual(fetches(d.user(.commandBar(.prefixQuery(.emoji, "smile")))), 0)
         XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("10ft in m")))), 0)
         XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("time in tokyo")))), 0)
         XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("100 usd in cny")))), 0)
@@ -198,16 +201,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
     }
 
     // MARK: The pure rules
-
-    func testModes() {
-        XCTAssertEqual(LocalSources.mode("file report"), .files("report"))
-        XCTAssertEqual(LocalSources.mode("FILE my report "), .files("my report"))
-        XCTAssertEqual(LocalSources.mode("emoji smile"), .emoji("smile"))
-        XCTAssertEqual(LocalSources.mode("Emoji thumbs up"), .emoji("thumbs up"))
-        for text in ["file", "file ", "file a", "files report", "profile report", "emoji", "emoji ", "emojis smile"] {
-            XCTAssertNil(LocalSources.mode(text), text)
-        }
-    }
 
     func testWhatIsLeftOut() {
         let home = "/Users/u"

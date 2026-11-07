@@ -29,9 +29,14 @@ import BrkUIKit
 /// (`.commandBar(.submitSearch)`). Backspace in the empty input or Esc leaves the mode and gives back the engine's
 /// name as typed.
 ///
-/// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, "file <name>", "emoji <name>", apps and files in the last
-/// rows, Tab to ask the local AI. A file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do
-/// nothing new on any other row.
+/// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, apps and files in the last rows, Tab to ask the local AI. A
+/// file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do nothing new on any other row.
+///
+/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by a typed
+/// Space or Tab enters, the word's name sits in the pill, Backspace in the empty input or Esc leaves and gives the word
+/// back. An engine of the same name wins. Pasted text never enters, and after a word was given back Space stays a space,
+/// so the word can be typed as a search. Part of a word (three letters) offers the prefix beside the input with the Tab
+/// key while no site search is on offer.
 ///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
@@ -46,14 +51,34 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     let input = NSTextField()
     /// Typed text -> URL: the domain's one URL policy with the bar's engine unless a test sets it.
     var resolve: ((String) -> URL?)?
-    /// Site-search mode: the engine the query goes to, and the text that named it (given back on leaving).
-    private(set) var siteSearch: SearchEngineCandidate?
+    /// What the pill before the input says the text is for. The two kinds share entering, the pill and leaving.
+    enum Pill: Equatable {
+        case site(SearchEngineCandidate)
+        case prefix(QuickPrefix)
+
+        var title: String {
+            switch self {
+            case .site(let engine): engine.name
+            case .prefix(let prefix): prefix.title
+            }
+        }
+    }
+    private var pill: Pill?
+    /// Site-search mode: the engine the query goes to.
+    var siteSearch: SearchEngineCandidate? { if case .site(let engine)? = pill { engine } else { nil } }
+    /// A prefix word's mode.
+    var prefix: QuickPrefix? { if case .prefix(let prefix)? = pill { prefix } else { nil } }
+    /// The text that named the pill (given back on leaving).
     private var namedBy = ""
+    /// A prefix word that was given back: while the input still starts with it, Space after it stays a space.
+    private var declinedWord: String?
     /// What the user typed; the input shows it followed by the rest of `completion`, selected.
     private(set) var typed = ""
     private(set) var completion: String?
     /// The engine Tab would search, shown beside the input.
     private(set) var offer: SearchEngineCandidate?
+    /// The prefix Tab would enter, shown there when no engine is on offer.
+    private(set) var prefixOffer: QuickPrefix?
     private let sitePill = NSView()
     private let siteLabel = NSTextField(labelWithString: "")
     private let leadingIcon = NSImageView()
@@ -125,6 +150,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         backdrop.layer?.masksToBounds = true
         backdropTint.wantsLayer = true
         backdrop.addSubview(backdropTint)
+        sitePill.identify(.commandBarPill)
         for view in [backdrop, leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
@@ -169,7 +195,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         self.bar = bar
         if reopened {
             openID = bar.openID
-            siteSearch = nil
+            pill = nil
+            declinedWord = nil
             typed = bar.initialQuery
             completion = nil
             input.stringValue = bar.initialQuery
@@ -222,11 +249,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// The window routes Escape to Exit before the text field's delegate sees it. Site search owns the first
     /// Escape while its input has focus. The key-equivalent path also covers input in an inactive window.
     private func takeSiteSearchEscape(_ event: NSEvent) -> Bool {
-        guard !isHiddenOrHasHiddenAncestor, siteSearch != nil, event.type == .keyDown, event.keyCode == Key.escape.code,
+        guard !isHiddenOrHasHiddenAncestor, pill != nil, event.type == .keyDown, event.keyCode == Key.escape.code,
               event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
               let window, event.window == nil || event.window === window,
               let editor = input.currentEditor() as? NSTextView, window.firstResponder === editor, !editor.hasMarkedText() else { return false }
-        leaveSiteSearch()
+        leavePill()
         return true
     }
 
@@ -250,7 +277,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
                     dispatch(.assist(.instant((namedBy.isEmpty ? siteSearch.name : namedBy) + " " + typed.trimmingCharacters(in: .whitespaces))))
                     return true
                 }
-                if siteSearch == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
+                if pill == nil, let query = Suggest.instantQuery(typed, bar: bar, resolve: resolve) {
                     dispatch(.assist(.instant(query)))
                     return true
                 }
@@ -258,18 +285,22 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             choose(highlighted)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            if siteSearch != nil { leaveSiteSearch() } else { dispatch(.commandBar(.dismiss)) }
+            if pill != nil { leavePill() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
             // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
             // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab); any other text in a new-tab bar goes to
-            // the tool as a question (Brk's own, as Raycast's Quick AI).
-            if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
-            else if siteSearch == nil, let bar, Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
-            else if siteSearch == nil, let bar, let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
+            // the tool as a question (Brk's own, as Raycast's Quick AI). A prefix's whole word comes before the tool's name,
+            // a part-typed one after it.
+            guard pill == nil, let bar else { return true }
+            if let offer { enter(.site(offer), namedBy: typed) }
+            else if let whole = QuickPrefixes.entry(named: typed, in: bar) { enter(.prefix(whole), namedBy: typed) }
+            else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            else if let prefixOffer { enter(.prefix(prefixOffer), namedBy: typed) }
+            else if let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
             return true
-        case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
-            leaveSiteSearch()
+        case #selector(NSResponder.deleteBackward(_:)) where pill != nil && input.stringValue.isEmpty:
+            leavePill()
             return true
         case #selector(NSResponder.moveUp(_:)):
             step(-1)
@@ -288,20 +319,29 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public func controlTextDidChange(_ notification: Notification) {
         let text = input.stringValue
-        if bar?.aiMode == nil, siteSearch == nil, text.hasSuffix(" "), let bar, let engine = Suggest.siteSearchEngine(named: String(text.dropLast()), bar),
-           !text.dropLast().contains(where: \.isWhitespace) {
-            return enterSiteSearch(engine, namedBy: String(text.dropLast()))
+        if let declined = declinedWord, !Suggest.fold(text).hasPrefix(declined) { declinedWord = nil }
+        if bar?.aiMode == nil, pill == nil, text.hasSuffix(" "), let bar, !text.dropLast().contains(where: \.isWhitespace) {
+            let word = String(text.dropLast())
+            if let engine = Suggest.siteSearchEngine(named: word, bar) { return enter(.site(engine), namedBy: word) }
+            // Exactly what was there and one typed space: pasted text never enters, nor does a space an input method is composing.
+            let composing = (input.currentEditor() as? NSTextView)?.hasMarkedText() == true
+            if text == typed + " ", !composing, declinedWord != Suggest.fold(word), let prefix = QuickPrefixes.entry(named: word, in: bar) {
+                return enter(.prefix(prefix), namedBy: word)
+            }
         }
         // Typing (the caret at the end) may complete; a deletion, of the completion itself or of what was typed,
         // never does: the text is then the start of what was there.
         let typingOn = !typed.hasPrefix(text) && caretAtEnd()
         typed = text
         completion = nil
-        if siteSearch == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
+        if pill == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
             complete(to: domain)
         }
-        if let siteSearch { dispatch(.commandBar(.queryChangedForSite(siteSearch.id, text))) }
-        else { dispatch(.commandBar(.queryChanged(text))) }
+        switch pill {
+        case .site(let engine)?: dispatch(.commandBar(.queryChangedForSite(engine.id, text)))
+        case .prefix(let prefix)?: dispatch(.commandBar(.prefixQuery(prefix.action, text)))
+        case nil: dispatch(.commandBar(.queryChanged(text)))
+        }
         rerank(keepHighlight: false)
     }
 
@@ -334,9 +374,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
-    private func enterSiteSearch(_ engine: SearchEngineCandidate, namedBy name: String) {
+    private func enter(_ mode: Pill, namedBy name: String) {
         namedBy = name.trimmingCharacters(in: .whitespaces)
-        siteSearch = engine
+        pill = mode
         typed = ""
         completion = nil
         input.stringValue = ""
@@ -345,8 +385,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
-    private func leaveSiteSearch() {
-        siteSearch = nil
+    private func leavePill() {
+        if prefix != nil { declinedWord = Suggest.fold(namedBy) }
+        pill = nil
         typed = namedBy
         completion = nil
         input.stringValue = namedBy
@@ -356,9 +397,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     }
 
     private func applySiteSearchLook() {
-        sitePill.isHidden = siteSearch == nil
-        siteLabel.stringValue = siteSearch?.name ?? ""
-        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
+        sitePill.isHidden = pill == nil
+        siteLabel.stringValue = pill?.title ?? ""
+        let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? prefix?.placeholder ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
         input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.centeredInputFontSize.value),
         ])
@@ -393,8 +434,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, resolve: resolve, completing: completion)
-        offer = siteSearch == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
+        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
+        offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
+        prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
         while rows.count < results.count {
             let index = rows.count
@@ -434,7 +476,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         } else {
             leadingIcon.image = glyph
         }
-        leadingIcon.isHidden = siteSearch != nil
+        leadingIcon.isHidden = pill != nil
     }
 
     private func layoutCard() {
@@ -447,10 +489,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let side = o.accessorySize.value
 
         // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
-        offerLabel.isHidden = offer == nil
-        keyCap.isHidden = offer == nil
-        info.isHidden = offer != nil || bar?.aiMode != nil || fillsWindow
-        offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
+        let offered = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? prefixOffer?.title
+        offerLabel.isHidden = offered == nil
+        keyCap.isHidden = offered == nil
+        info.isHidden = offered != nil || bar?.aiMode != nil || fillsWindow
+        offerLabel.stringValue = offered ?? ""
         // A label draws its text 2 in from each side of its frame.
         func width(_ label: NSTextField) -> CGFloat {
             ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
@@ -458,7 +501,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let offerWidth = width(offerLabel) + 4
         // Half points, as Arc's 30.5 pt Tab key.
         let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
-        let accessoryWidth = offer != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
+        let accessoryWidth = offered != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
         let font = input.font ?? .systemFont(ofSize: o.attachedInputFontSize.value)
@@ -475,7 +518,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         leadingIcon.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - iconSide / 2).rounded(), width: iconSide, height: iconSide)
         let right = width - o.accessoryRightInset.value
         var accessoryLeft = right
-        if offer != nil {
+        if offered != nil {
             keyCap.frame = CGRect(x: right - keyWidth, y: (mid - side / 2).rounded(), width: keyWidth, height: side)
             let keyHeight = keyLabel.intrinsicContentSize.height
             // The whole key: a centred label keeps 4 on each side, so a frame about the text's width draws it right of centre.

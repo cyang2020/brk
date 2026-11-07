@@ -163,31 +163,56 @@ final class QuickSourceRowsTests: XCTestCase {
         }
     }
 
-    // MARK: The typed modes
+    // MARK: Prefixes
 
-    func testTheFileModeListsOnlyFilesOnceTheyAreIn() {
-        let text = "file budget"
-        XCTAssertEqual(rank(text, bar()).first?.kind, .openTyped, "not in yet")
+    private func prefix(_ word: String, _ bar: CommandBarSnapshot) -> QuickPrefix { QuickPrefixes.entry(named: word, in: bar)! }
+
+    private func ranked(_ text: String, word: String, _ bar: CommandBarSnapshot) -> [Suggestion] {
+        Suggest.rank(query: text, bar: bar, appName: "Brk", prefix: prefix(word, bar), resolve: { resolveTypedInput($0) })
+    }
+
+    func testTheFilePrefixListsOnlyFilesOnceTheyAreIn() {
+        XCTAssertEqual(ranked("budget", word: "file", bar()), [], "not in yet")
         let files = (1...7).map { hit("budget\($0).txt") }
-        let rows = rank(text, bar(local: LocalResults(query: text, apps: [], files: files)))
+        let rows = ranked("budget", word: "file", bar(local: LocalResults(query: "budget", scope: .files, apps: [], files: files)))
         XCTAssertEqual(rows.count, 5)
         XCTAssertTrue(rows.allSatisfy { $0.kind == .file })
-        XCTAssertEqual(rank(text, bar(local: LocalResults(query: "file budge", apps: [], files: files))).first?.kind, .openTyped, "stale")
-        XCTAssertEqual(rank(text, bar(local: LocalResults(query: text, apps: [], files: []))).first?.kind, .openTyped, "no file: the search is there")
+        XCTAssertEqual(ranked("budget", word: "file", bar(local: LocalResults(query: "budge", scope: .files, apps: [], files: files))), [], "stale")
+        XCTAssertEqual(ranked("budget", word: "文件", bar(local: LocalResults(query: "budget", scope: .filesAndApps, apps: [], files: files))), [], "another question's answer")
+    }
+
+    func testTheAppPrefixListsOnlyApps() {
+        let rows = ranked("bud", word: "app", bar(local: LocalResults(query: "bud", scope: .apps, apps: [app("Budget")], files: [])))
+        XCTAssertEqual(rows.map(\.kind), [.app])
+        XCTAssertEqual(rows[0].command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
+    }
+
+    func testTheCalcPrefixForcesCalculation() {
+        for word in ["calc", "=", "算"] {
+            XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)
+            XCTAssertEqual(ranked("2+2", word: word, bar()).first?.command, .commandBar(.copyAnswer("4")), word)
+        }
+        XCTAssertEqual(ranked("42", word: "calc", bar()).first?.title, "42", "a plain number is an answer here")
+        XCTAssertEqual(ranked("10ft in m", word: "calc", bar()).first?.title, "3.048 m")
+        XCTAssertEqual(ranked("hello", word: "calc", bar()), [])
+        XCTAssertEqual(ranked("", word: "calc", bar()), [])
+    }
+
+    func testAPastedFileWordIsAnOrdinarySearch() {
+        // As plain text, "file budget" is not a mode any more.
+        XCTAssertEqual(rank("file budget", bar()).first?.kind, .openTyped)
+        XCTAssertEqual(rank("emoji smile", bar()).first?.kind, .openTyped)
+        XCTAssertFalse(rank("emoji smile", bar()).contains { $0.kind == .emoji })
     }
 
     func testEmojiMatchesListAndReturnCopies() throws {
-        let rows = rank("emoji smile", bar())
+        let rows = ranked("smile", word: "emoji", bar())
         XCTAssertEqual(rows.count, 5)
         XCTAssertTrue(rows.allSatisfy { $0.kind == .emoji })
         guard case .emoji(let emoji)? = rows[0].icon else { return XCTFail("no emoji picture") }
         XCTAssertEqual(rows[0].command, .commandBar(.copyAnswer(emoji)))
         XCTAssertEqual(rows[0].hint, "Copy Emoji")
-        XCTAssertFalse(rank("emoji zzzqqq", bar()).contains { $0.kind == .emoji }, "no match: as usual")
-        XCTAssertFalse(rank("emoji", bar()).contains { $0.kind == .emoji })
-        var editing = bar()
-        editing.createsTab = false
-        XCTAssertFalse(rank("emoji smile", editing).contains { $0.kind == .emoji })
+        XCTAssertEqual(ranked("zzzqqq", word: "表情", bar()), [])
     }
 
     func testTheSystemsNamesFindAnEmoji() {
@@ -282,12 +307,6 @@ final class QuickSourceRowsTests: XCTestCase {
         press(#selector(NSResponder.insertTab(_:)), address)
         XCTAssertEqual(sink.sent, [], "an address")
 
-        let mode = view(tabBar(), sink)
-        type("file budget", into: mode)
-        sink.sent.removeAll()
-        press(#selector(NSResponder.insertTab(_:)), mode)
-        XCTAssertEqual(sink.sent, [], "a typed mode")
-
         var editing = tabBar()
         editing.createsTab = false
         let edit = view(editing, sink)
@@ -299,12 +318,170 @@ final class QuickSourceRowsTests: XCTestCase {
 
     func testReturnOnAFileRowOpensIt() {
         let sink = Box()
-        let text = "file budget"
-        let local = LocalResults(query: text, apps: [], files: [hit("budget.txt")])
+        let local = LocalResults(query: "budget", scope: .files, apps: [], files: [hit("budget.txt")])
         let bar = view(bar(local: local), sink)
-        type(text, into: bar)
+        typeKeys("file ", into: bar)
+        type("budget", into: bar)
+        XCTAssertEqual(sink.sent.last, .commandBar(.prefixQuery(.files, "budget")))
         sink.sent.removeAll()
         press(#selector(NSResponder.insertNewline(_:)), bar)
         XCTAssertEqual(sink.sent, [.commandBar(.local(.open, path: "/Users/u/Documents/budget.txt"))])
+    }
+
+    // MARK: Entering and leaving a prefix
+
+    /// Character by character, as a keyboard types: each key changes the text by one.
+    private func typeKeys(_ text: String, into view: CommandBarView) {
+        for character in text { type(view.typed + String(character), into: view) }
+    }
+
+    func testAWholeWordThenSpaceEntersAndThePillShowsIt() {
+        let sink = Box(), bar = view(bar(), sink)
+        typeKeys("file ", into: bar)
+        XCTAssertEqual(bar.prefix?.action, .files)
+        XCTAssertEqual(bar.typed, "")
+        XCTAssertEqual(bar.input.stringValue, "")
+        let cased = view(self.bar(), sink)
+        typeKeys("FILE ", into: cased)
+        XCTAssertEqual(cased.prefix?.action, .files, "case aside")
+    }
+
+    func testAWholeWordThenTabEnters() {
+        let sink = Box(), bar = view(bar(), sink)
+        type("emoji", into: bar)
+        press(#selector(NSResponder.insertTab(_:)), bar)
+        XCTAssertEqual(bar.prefix?.action, .emoji)
+    }
+
+    func testPastedTextNeverEnters() {
+        let sink = Box()
+        for text in ["file report notes", "file ", "emoji smile", "calc 2+2"] {
+            let bar = view(bar(), sink)
+            type(text, into: bar)   // the whole text arrives in one change, as a paste does
+            XCTAssertNil(bar.prefix, text)
+            XCTAssertEqual(bar.typed, text)
+        }
+    }
+
+    func testBackspaceAndEscGiveTheWordBackAndSpaceThenStaysASpace() {
+        let sink = Box(), bar = view(bar(), sink)
+        typeKeys("file ", into: bar)
+        press(#selector(NSResponder.deleteBackward(_:)), bar)
+        XCTAssertNil(bar.prefix)
+        XCTAssertEqual(bar.input.stringValue, "file")
+        XCTAssertEqual(bar.typed, "file")
+        // The word can now be typed as a search.
+        typeKeys(" report", into: bar)
+        XCTAssertNil(bar.prefix)
+        XCTAssertEqual(bar.typed, "file report")
+        XCTAssertEqual(sink.sent.last, .commandBar(.queryChanged("file report")))
+        // Typed away, the word works again.
+        type("", into: bar)
+        typeKeys("file ", into: bar)
+        XCTAssertEqual(bar.prefix?.action, .files)
+        press(#selector(NSResponder.cancelOperation(_:)), bar)
+        XCTAssertNil(bar.prefix)
+        XCTAssertEqual(bar.input.stringValue, "file")
+        // Esc again closes the bar, as in site search.
+        sink.sent.removeAll()
+        press(#selector(NSResponder.cancelOperation(_:)), bar)
+        XCTAssertEqual(sink.sent, [.commandBar(.dismiss)])
+    }
+
+    func testBackspaceOnTextInThePillDoesNotLeave() {
+        let sink = Box(), bar = view(bar(), sink)
+        typeKeys("file a", into: bar)
+        press(#selector(NSResponder.deleteBackward(_:)), bar)
+        XCTAssertNotNil(bar.prefix, "only in the empty input")
+    }
+
+    func testAnEngineOfTheSameNameWinsOverAPrefix() {
+        let sink = Box()
+        var snapshot = bar()
+        let named = SearchEngineCandidate(id: SearchEngineID("mine"), name: "File", keyword: "file")
+        snapshot.siteSearch = [named]
+        let spaced = view(snapshot, sink)
+        typeKeys("file ", into: spaced)
+        XCTAssertEqual(spaced.siteSearch?.id, named.id)
+        XCTAssertNil(spaced.prefix)
+        let tabbed = view(snapshot, sink)
+        type("file", into: tabbed)
+        press(#selector(NSResponder.insertTab(_:)), tabbed)
+        XCTAssertEqual(tabbed.siteSearch?.id, named.id)
+    }
+
+    /// The real list: nothing in Brk's table is an engine's name or keyword.
+    func testNoCollisionWithTheBuiltInEngines() {
+        let engines = (SearchEngine.builtIn + SearchEngine.siteSearchSites).flatMap { [$0.name, $0.keyword] }.map(Suggest.fold)
+        for word in QuickPrefixes.all.flatMap(\.words) {
+            XCTAssertFalse(engines.contains(Suggest.fold(word)), word)
+        }
+    }
+
+    func testNotInOtherBarsOrAPrivateWindow() {
+        let sink = Box()
+        var editing = bar()
+        editing.createsTab = false
+        let edit = view(editing, sink)
+        typeKeys("file ", into: edit)
+        XCTAssertNil(edit.prefix, "the bar over the page's address")
+        let pane = view(bar(fillsPane: true), sink)
+        typeKeys("file ", into: pane)
+        XCTAssertNil(pane.prefix, "an empty pane's bar")
+        var ai = bar()
+        ai.aiMode = .question
+        let question = view(ai, sink)
+        typeKeys("file ", into: question)
+        XCTAssertNil(question.prefix, "AI mode")
+        // Site search: the words are plain text in it.
+        var withEngine = bar()
+        withEngine.siteSearch = [bing]
+        let site = view(withEngine, sink)
+        typeKeys("bing ", into: site)
+        XCTAssertEqual(site.siteSearch?.id, bing.id)
+        typeKeys("file ", into: site)
+        XCTAssertNil(site.prefix, "site search")
+        XCTAssertEqual(site.typed, "file ")
+        // A private window lists nothing of the user's.
+        var incognito = bar()
+        incognito.isPrivate = true
+        let secret = view(incognito, sink)
+        typeKeys("file ", into: secret)
+        XCTAssertNil(secret.prefix)
+        XCTAssertEqual(secret.typed, "file ")
+        typeKeys("", into: secret)
+        let calc = view(incognito, sink)
+        typeKeys("calc ", into: calc)
+        XCTAssertEqual(calc.prefix?.action, .calculate, "nothing personal in a calculation")
+    }
+
+    func testPartOfAWordIsOfferedBesideTheInputOnlyWithoutASiteSearchOffer() {
+        let sink = Box()
+        let plain = view(bar(), sink)
+        type("fi", into: plain)
+        XCTAssertNil(plain.prefixOffer, "two letters")
+        type("fil", into: plain)
+        XCTAssertEqual(plain.prefixOffer?.action, .files)
+        press(#selector(NSResponder.insertTab(_:)), plain)
+        XCTAssertEqual(plain.prefix?.action, .files, "Tab enters what is offered")
+
+        var withEngine = bar()
+        withEngine.siteSearch = [SearchEngineCandidate(id: SearchEngineID("mine"), name: "Filings", keyword: "filings")]
+        let offered = view(withEngine, sink)
+        type("fil", into: offered)
+        XCTAssertNotNil(offered.offer)
+        XCTAssertNil(offered.prefixOffer, "the engine's offer goes first")
+
+        let spaced = view(bar(), sink)
+        type("fil ter", into: spaced)
+        XCTAssertNil(spaced.prefixOffer, "one word")
+    }
+
+    func testAToolsPartNameStillOpensQuestionMode() {
+        let sink = Box(), bar = view(tabBar(), sink)
+        type("cla", into: bar)
+        sink.sent.removeAll()
+        press(#selector(NSResponder.insertTab(_:)), bar)
+        XCTAssertEqual(sink.sent, [.assist(.open(.question))])
     }
 }

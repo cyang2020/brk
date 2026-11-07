@@ -28,7 +28,7 @@ enum CommandInventory {
         .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
-        .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")),
+        .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")), .commandBar(.prefixQuery(.files, "x")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
         .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
@@ -279,6 +279,7 @@ enum CommandInventory {
             case .calculate: "calculate"
             case .copyAnswer: "copyAnswer"
             case .local: "local"
+            case .prefixQuery: "prefixQuery"
             case .open: "open"
             case .submit: "submit"
             case .submitSearch: "submitSearch"

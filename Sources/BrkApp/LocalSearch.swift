@@ -60,12 +60,12 @@ final class LocalSearch {
         pending[window] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: debounce)
             guard !Task.isCancelled else { return }
-            let apps = request.includesApps ? await Task.detached(priority: .userInitiated) { Self.apps(named: request.name, in: roots) }.value : []
+            let apps = request.scope != .files ? await Task.detached(priority: .userInitiated) { Self.apps(named: request.name, in: roots) }.value : []
             guard !Task.isCancelled else { return }
-            let files = LocalSources.rank(await finder.find(request.name), needle: request.name)
+            let files = request.scope != .apps ? LocalSources.rank(await finder.find(request.name), needle: request.name) : []
             guard !Task.isCancelled else { return }
             self?.pending[window] = nil
-            send(.system(.localResults(window, LocalResults(query: request.query, apps: apps, files: files))))
+            send(.system(.localResults(window, LocalResults(query: request.query, scope: request.scope, apps: apps, files: files))))
         }
     }
 

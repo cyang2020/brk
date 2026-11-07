@@ -2,7 +2,7 @@ import BrkBase
 import Foundation
 
 /// Brk's own addition beyond Arc, in the manner of Raycast's root search: the command bar finds files by name and apps
-/// on this Mac, and emoji. This file holds the rules that need no system: which texts ask, what is left out and in what
+/// on this Mac. This file holds the rules that need no system: which texts ask, what is left out and in what
 /// order hits come. BrkApp does the looking (`LocalSearch`), BrkOverlays draws the rows (`Suggest`).
 public struct LocalHit: Sendable, Hashable, Codable {
     public var path: String
@@ -14,67 +14,53 @@ public struct LocalHit: Sendable, Hashable, Codable {
     }
 }
 
+/// Which source a question is for: inline rows take both, the `file` and `app` prefixes one.
+public enum LocalScope: Hashable, Sendable, Codable {
+    case filesAndApps, files, apps
+}
+
 public struct LocalResults: Sendable, Hashable, Codable {
     /// The typed text these answer; shown only while the bar's text is still exactly this.
     public var query: String
+    public var scope: LocalScope
     public var apps: [LocalHit]
     public var files: [LocalHit]
 
-    public init(query: String, apps: [LocalHit], files: [LocalHit]) {
+    public init(query: String, scope: LocalScope = .filesAndApps, apps: [LocalHit], files: [LocalHit]) {
         self.query = query
+        self.scope = scope
         self.apps = apps
         self.files = files
     }
 }
 
-/// What to look for: `name` in file names (and app names when `includesApps`) for the typed text `query`.
+/// What to look for: `name` in file names and app names, as `scope` says, for the typed text `query`.
 public struct LocalSearchRequest: Sendable, Hashable, Codable {
     public var query: String
     public var name: String
-    public var includesApps: Bool
+    public var scope: LocalScope
 
-    public init(query: String, name: String, includesApps: Bool) {
+    public init(query: String, name: String, scope: LocalScope = .filesAndApps) {
         self.query = query
         self.name = name
-        self.includesApps = includesApps
+        self.scope = scope
     }
 }
 
 public enum LocalSources {
-    /// A typed word that lists one source only: "file budget", "emoji smile".
-    public enum Mode: Equatable, Sendable {
-        case files(String)
-        case emoji(String)
-    }
-
     /// Inline rows wait for this many characters.
     public static let inlineMinLength = 3
-    /// How many hits the bar keeps: all its rows in the file mode.
+    /// After the `file` or `app` prefix the user has said what they want.
+    public static let prefixMinLength = 2
+    /// How many hits the bar keeps: all its rows under the file prefix.
     public static let hitLimit = 5
-
-    public static func mode(_ typed: String) -> Mode? {
-        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        func after(_ word: String) -> String? {
-            guard text.lowercased().hasPrefix(word + " ") else { return nil }
-            let rest = text.dropFirst(word.count + 1).trimmingCharacters(in: .whitespaces)
-            return rest.isEmpty ? nil : rest
-        }
-        if let name = after("file"), name.count >= 2 { return .files(name) }
-        if let name = after("emoji") { return .emoji(name) }
-        return nil
-    }
 
     /// What `typed` asks of the file and app sources, nil for nothing: an address, a calculation, a short text.
     public static func request(for typed: String, engine: SearchEngine) -> LocalSearchRequest? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        switch mode(text) {
-        case .files(let name)?: return LocalSearchRequest(query: text, name: name, includesApps: false)
-        case .emoji?: return nil
-        case nil: break
-        }
         guard text.count >= inlineMinLength, BrowserCalculator.result(text) == nil, !QuickAnswers.leads(text),
               resolveTypedInput(text, engine: engine) == engine.searchURL(text) else { return nil }
-        return LocalSearchRequest(query: text, name: text, includesApps: true)
+        return LocalSearchRequest(query: text, name: text)
     }
 
     /// Hidden files, the home folder's Library (browser profiles live there), and what is inside or is an app bundle

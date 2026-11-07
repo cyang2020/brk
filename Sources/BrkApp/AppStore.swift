@@ -256,7 +256,7 @@ public final class AppStore {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
-            switch command { case .queryChanged, .queryChangedForSite, .dismiss: suggestions.cancel(window); localSearch.cancel(window); default: break }
+            switch command { case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss: suggestions.cancel(window); localSearch.cancel(window); default: break }
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false

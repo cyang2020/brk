@@ -417,7 +417,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             local: target == .newTab ? session.localResults : nil,
             rates: state.session.currencyRates,
             now: session.barClock ?? Instant(milliseconds: 0),
-            askAgentFound: state.askAgentFound
+            askAgentFound: state.askAgentFound,
+            isPrivate: doc.kind == .incognito
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).

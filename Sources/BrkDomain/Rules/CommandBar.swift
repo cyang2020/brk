@@ -65,16 +65,20 @@ extension Work {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
             defer { askQuickSources(trimmed, target: target, in: window) }
-            // A text the bar answers itself is not a web search: a calculation, a conversion, a file or emoji name. A bar
-            // filling an empty pane has none of those but arithmetic.
+            // A text the bar answers itself is not a web search: a calculation, a conversion. A bar filling an empty pane
+            // has none of those but arithmetic.
             var fillsPane = false
             if case .fillPane = target { fillsPane = true }
-            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && QuickAnswers.leads(trimmed)) || (target == .newTab && LocalSources.mode(trimmed) != nil)
+            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && QuickAnswers.leads(trimmed))
             guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, !answeredHere, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
             }
             effects.append(.fetchSuggestions(window, query: trimmed, url: url))
+        case .prefixQuery(let action, let text):
+            guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
+            if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
+            prefixQuery(action, text.trimmingCharacters(in: .whitespacesAndNewlines), in: window)
         case .dismiss:
             // Esc in the bar, or the archive's close: an empty pane the bar was filling stays (Ctrl+Shift+- closes it).
             if state.session.windows[window]?.overlay != nil { state.session.windows[window]!.overlay = nil }
@@ -90,12 +94,24 @@ extension Work {
     private mutating func askQuickSources(_ text: String, target: CommandBarTarget, in window: WindowID) {
         let isPrivate = state.doc.windows[window]?.kind == .incognito
         if !isPrivate, target == .newTab, let request = LocalSources.request(for: text, engine: state.searchEngine(in: window)),
-           state.session.windows[window]?.localResults?.query != request.query {
+           state.session.windows[window]?.localResults.map({ $0.query == request.query && $0.scope == request.scope }) != true {
             effects.append(.searchLocal(window, request))
         }
         if case .fillPane = target { return }
         if QuickAnswers.usesClock(text) { state.session.windows[window]?.barClock = ctx.now }
         if !isPrivate, QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
+    }
+
+    /// What the text after a prefix word asks of that prefix's source.
+    private mutating func prefixQuery(_ action: QuickPrefixAction, _ text: String, in window: WindowID) {
+        switch action {
+        case .files, .apps:
+            let scope: LocalScope = action == .files ? .files : .apps
+            guard text.count >= LocalSources.prefixMinLength, state.doc.windows[window]?.kind != .incognito else { return }
+            let results = state.session.windows[window]?.localResults
+            if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
+        case .emoji, .calculate: break
+        }
     }
 
     /// Kept for the view, which shows it only while its text is still `results.query` (`Suggest.rank`); BrkApp cancels a

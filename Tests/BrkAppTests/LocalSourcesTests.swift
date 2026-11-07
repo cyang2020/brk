@@ -71,9 +71,9 @@ final class LocalSourcesTests: XCTestCase {
     func testANewerRequestCancelsTheOlderOneEvenWhileItIsSearching() async {
         let finder = SlowFinder(), window = WindowID("w")
         let search = LocalSearch(send: { [unowned self] in self.sent.append($0) }, finder: finder, applicationRoots: [], debounce: .milliseconds(1))
-        search.search(window, LocalSearchRequest(query: "first", name: "first", includesApps: false))
+        search.search(window, LocalSearchRequest(query: "first", name: "first", scope: .files))
         await wait { finder.asked == ["first"] }
-        search.search(window, LocalSearchRequest(query: "second", name: "second", includesApps: false))
+        search.search(window, LocalSearchRequest(query: "second", name: "second", scope: .files))
         await wait { !answers().isEmpty }
         try? await Task.sleep(for: .milliseconds(300))
         XCTAssertEqual(answers().map(\.query), ["second"])
@@ -83,7 +83,7 @@ final class LocalSourcesTests: XCTestCase {
     func testTheDebounceAsksOnceForAQuickRunOfKeys() async {
         let finder = SlowFinder(), window = WindowID("w")
         let search = LocalSearch(send: { [unowned self] in self.sent.append($0) }, finder: finder, applicationRoots: [], debounce: .milliseconds(50))
-        for text in ["bud", "budg", "budge", "budget"] { search.search(window, LocalSearchRequest(query: text, name: text, includesApps: false)) }
+        for text in ["bud", "budg", "budge", "budget"] { search.search(window, LocalSearchRequest(query: text, name: text, scope: .files)) }
         await wait { !answers().isEmpty }
         XCTAssertEqual(finder.asked, ["budget"])
     }
@@ -91,7 +91,7 @@ final class LocalSourcesTests: XCTestCase {
     func testCancellingLeavesNoAnswer() async {
         let finder = SlowFinder(), window = WindowID("w")
         let search = LocalSearch(send: { [unowned self] in self.sent.append($0) }, finder: finder, applicationRoots: [], debounce: .milliseconds(1))
-        search.search(window, LocalSearchRequest(query: "first", name: "first", includesApps: false))
+        search.search(window, LocalSearchRequest(query: "first", name: "first", scope: .files))
         await wait { finder.asked == ["first"] }
         search.cancel(window)
         try? await Task.sleep(for: .milliseconds(300))
@@ -105,7 +105,7 @@ final class LocalSourcesTests: XCTestCase {
         try touch("Documents/budget.txt")
         let socket = LaunchOptions(environment: ["BRK_CONTROL_SOCKET": "/tmp/x.sock", "BRK_LOCAL_SEARCH_FIXTURE": root.path])
         let search = LocalSearch.live(send: { [unowned self] in self.sent.append($0) }, options: socket)
-        search.search(WindowID("w"), LocalSearchRequest(query: "budget", name: "budget", includesApps: true))
+        search.search(WindowID("w"), LocalSearchRequest(query: "budget", name: "budget"))
         await wait { !answers().isEmpty }
         XCTAssertEqual(answers().first?.apps.map(\.name), ["Budget"])
         XCTAssertEqual(answers().first?.files.map(\.name), ["budget.txt"])
@@ -118,7 +118,7 @@ final class LocalSourcesTests: XCTestCase {
     func testUnderTheControlSocketWithNoFixtureNothingIsFound() async {
         let search = LocalSearch.live(send: { [unowned self] in self.sent.append($0) }, options: LaunchOptions(environment: ["BRK_CONTROL_SOCKET": "/tmp/x.sock"]))
         // A file name that exists in no fixture: the point is that no answer comes at all.
-        search.search(WindowID("w"), LocalSearchRequest(query: "safari", name: "safari", includesApps: true))
+        search.search(WindowID("w"), LocalSearchRequest(query: "safari", name: "safari"))
         try? await Task.sleep(for: .milliseconds(400))
         XCTAssertEqual(answers(), [])
     }

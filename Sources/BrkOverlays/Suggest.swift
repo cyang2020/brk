@@ -90,10 +90,10 @@ public enum Suggest {
     ///
     /// Brk's own sources beyond Arc, none of which changes a row when it has nothing to say, and none in site search, AI
     /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
-    /// question, else sits right under the typed row so Return still searches; "emoji <name>" and, once its files are
-    /// in, "file <name>" list only those; apps and files take the last two rows at most (never the top hit, never the
-    /// typed row) while `bar.local` answers exactly this text. Only `createsTab` bars look for files, apps and emoji.
-    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil,
+    /// question, else sits right under the typed row so Return still searches; apps and files take the last two rows at
+    /// most (never the top hit, never the typed row) while `bar.local` answers exactly this text, in `createsTab` bars only.
+    /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search.
+    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil,
                             resolve: ((String) -> URL?)? = nil, completing: String? = nil,
                             timeZone: TimeZone = .current, locale: Locale = .current) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
@@ -115,6 +115,7 @@ public enum Suggest {
                                subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
+        if let prefix { return Array(prefixRows(prefix, text, bar: bar).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
@@ -136,7 +137,6 @@ public enum Suggest {
             return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
                                command: .commandBar(.calculate(text)))]
         }
-        if bar.createsTab, let listed = modeRows(text, bar: bar, limit: limit) { return listed }
         let quick = bar.fillsPane ? nil : QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: timeZone, locale: locale, rates: bar.rates)).map(quickRow)
         var typed: Suggestion?
         var isAddress = false
@@ -222,27 +222,30 @@ public enum Suggest {
                           command: .commandBar(.copyAnswer(answer.answer)))
     }
 
-    /// The rows of a typed mode, nil to rank the text as usual: nothing matches, or the files are not in yet.
-    private static func modeRows(_ text: String, bar: CommandBarSnapshot, limit: Int) -> [Suggestion]? {
-        switch LocalSources.mode(text) {
-        case .emoji(let name)?:
-            let rows = EmojiIndex.matches(name, limit: limit).map { entry in
+    /// A prefix's own rows for the text after its word.
+    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot) -> [Suggestion] {
+        switch prefix.action {
+        case .files:
+            guard let local = bar.local, local.query == text, local.scope == .files else { return [] }
+            return local.files.map(fileRow)
+        case .apps:
+            guard let local = bar.local, local.query == text, local.scope == .apps else { return [] }
+            return local.apps.map(appRow)
+        case .emoji:
+            return EmojiIndex.matches(text, limit: Metrics.commandBar.maxVisibleRows.value).map { entry in
                 Suggestion(kind: .emoji, title: entry.name, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.copyEmoji,
                            command: .commandBar(.copyAnswer(entry.emoji)), icon: .emoji(entry.emoji))
             }
-            return rows.isEmpty ? nil : rows
-        case .files?:
-            guard let local = bar.local, local.query == text, !local.files.isEmpty else { return nil }
-            return local.files.prefix(limit).map(fileRow)
-        case nil:
-            return nil
+        case .calculate:
+            guard !text.isEmpty, let result = BrowserCalculator.forced(text) ?? QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: .current, locale: .current, rates: bar.rates))?.answer else { return [] }
+            return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result", command: .commandBar(.copyAnswer(result)))]
         }
     }
 
     /// Apps, then files, in the last places: they replace what would be cut last, and the typed row and anything above
     /// it stay.
     private static func withLocalRows(_ rows: [Suggestion], _ text: String, isAddress: Bool, bar: CommandBarSnapshot, limit: Int) -> [Suggestion] {
-        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, LocalSources.mode(text) == nil else { return rows }
+        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return rows }
         let found = Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
         guard !found.isEmpty else { return rows }
         let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator } ?? 0
@@ -263,12 +266,12 @@ public enum Suggest {
                    command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path))
     }
 
-    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address, not a
-    /// site being completed and not a typed mode. Nil keeps Tab as it was. Site search's offer and the tool's name go first
-    /// (the view).
+    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address and not
+    /// a site being completed. Nil keeps Tab as it was. Site search's offer, a prefix word and the tool's name go first (the
+    /// view).
     public static func tabQuestion(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound, LocalSources.mode(text) == nil else { return nil }
+        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound else { return nil }
         let engine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
             SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
         } ?? .google
