@@ -180,9 +180,12 @@ enum AIRealUIScenarios {
             try key(.command, .comma)
             try click(title: "Max", "the Max tab")
             app.sleep(1)
-            try expect(try !settings(app).max.settings.isOn, "Max is on before Turn On Max")
+            // The pane's own rule (MaxPane.isOn): the tool not off and some feature on. A new user has the tool on
+            // Automatic and nothing switched on, so the button reads Turn On Max.
+            func paneOn(_ m: MaxSettings) -> Bool { m.isOn && (m.tidyOn || m.titlesOn || AIFeature.allCases.contains(where: m.enabled)) }
+            try expect(try !paneOn(settings(app).max.settings), "Max is on before Turn On Max")
             try click(identifier: ViewID.settingsField("enableMax").identifier, "Turn On Max")
-            try app.waitUntil("Max on") { try settings(app).max.settings.isOn }
+            try app.waitUntil("Max on") { try paneOn(settings(app).max.settings) }
             let on = try settings(app).max.settings
             try expect(on.tidyOn && on.titlesOn && AIFeature.allCases.allSatisfy(on.enabled), "Turn On Max left \(on)")
             try choose(popUp: ViewID.settingsField("agentChoice").identifier, typing: kind.displayName, "the agent pop-up")
