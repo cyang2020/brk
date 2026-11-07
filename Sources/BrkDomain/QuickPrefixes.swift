@@ -7,6 +7,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     /// A question for the default agent (Max's setting), for one agent by its `AIProviderChoice` name, about the current
     /// page, or a summary of the current page. An agent's name that no choice has yet leaves its line inactive.
     case ask, askAgent(String), askPage, summarize
+    /// The text is an address, a search or an open tab's title for a new pane; a first word can name the side.
+    case split
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -36,6 +38,7 @@ public enum QuickPrefixes {
         QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…"),
         QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…"),
         QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…"),
+        QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -79,6 +82,18 @@ extension QuickPrefix {
         // Never another agent in its place: without this one the word stays plain text.
         case .askAgent(let name): bar.askProvider != nil && AIProviderChoice(rawValue: name) != nil && bar.agentsFound.contains(name)
         case .askPage, .summarize: bar.askPageOn && bar.askAgentFound
+        // Add Split View is listed only where it can work: not in a Little window or on a Favorite.
+        case .split: bar.actions.contains(.addSplitView)
         }
+    }
+}
+
+/// `split left|right|top|bottom <text>`: the side and the rest.
+public enum QuickSplit {
+    public static func parse(_ text: String) -> (edge: SplitEdge?, rest: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let first = trimmed.prefix { !$0.isWhitespace }
+        guard let edge = SplitEdge(rawValue: first.lowercased()) else { return (nil, trimmed) }
+        return (edge, trimmed.dropFirst(first.count).trimmingCharacters(in: .whitespaces))
     }
 }

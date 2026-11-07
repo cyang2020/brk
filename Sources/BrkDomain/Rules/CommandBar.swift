@@ -75,6 +75,9 @@ extension Work {
                 return
             }
             effects.append(.fetchSuggestions(window, query: trimmed, url: url))
+        case .splitOpen(let edge, let text):
+            run(.split(.addPaneAt(edge)), in: window)
+            if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(text)), in: window) }
         case .prefixQuery(let action, let text):
             guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
             if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
@@ -110,7 +113,7 @@ extension Work {
             guard text.count >= LocalSources.prefixMinLength, state.doc.windows[window]?.kind != .incognito else { return }
             let results = state.session.windows[window]?.localResults
             if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
-        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize: break
+        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split: break
         }
     }
 

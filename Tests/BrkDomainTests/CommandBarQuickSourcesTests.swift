@@ -281,6 +281,74 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNil(prefix("ask"), "no agent found")
     }
 
+    // MARK: Split
+
+    private func panes(_ d: Driver) -> [ItemID] { d.view.content.panes.map(\.tab) }
+
+    func testSplitOpensTheTextInANewPaneOnThatSide() throws {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        let first = try XCTUnwrap(panes(d).first)
+        d.user(.commandBar(.splitOpen(.right, "example.com")))
+        XCTAssertNil(d.bar, "the bar closed")
+        XCTAssertEqual(panes(d).count, 2)
+        XCTAssertEqual(panes(d).first, first, "right of the current page")
+        let added = panes(d)[1]
+        XCTAssertEqual(d.state.session.live[PageID(window: d.window, item: added)]?.requestedURL, url("https://example.com/"))
+
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.splitOpen(.left, "two words")))
+        XCTAssertEqual(panes(d).count, 3)
+        XCTAssertEqual(d.view.content.panes.first { $0.focused }?.tab, panes(d).first { $0 != first && $0 != added })
+        let searched = try XCTUnwrap(d.view.content.panes.first { $0.focused }?.tab)
+        XCTAssertEqual(panes(d).firstIndex(of: searched).map { $0 < panes(d).firstIndex(of: added)! }, true, "before the focused pane")
+        XCTAssertEqual(d.state.session.live[PageID(window: d.window, item: searched)]?.requestedURL?.query, "q=two%20words")
+        XCTAssertEqual(d.view.content.orientation, .horizontal)
+    }
+
+    func testSplitTopUsesTheStackedOrientation() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.splitOpen(.top, "example.com")))
+        XCTAssertEqual(panes(d).count, 2)
+        XCTAssertEqual(d.view.content.orientation, .vertical)
+    }
+
+    func testASplitThatCannotBeAddedLeavesNoOpenBar() {
+        let d = Driver()
+        for _ in 0..<(Metrics.content.maxPanes.value - 1) {
+            d.user(.commandBar(.open(.newTab)))
+            d.user(.commandBar(.splitOpen(.right, "example.com")))
+        }
+        let full = panes(d).count
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.splitOpen(.right, "example.org")))
+        XCTAssertEqual(panes(d).count, full, "a full split")
+        XCTAssertNil(d.bar)
+    }
+
+    func testTheSplitWordStaysPlainWhereNoPaneCanBeAdded() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(QuickPrefixes.entry(named: "split", in: d.bar!)?.action, .split)
+        XCTAssertEqual(QuickPrefixes.entry(named: "分屏", in: d.bar!)?.action, .split)
+        var little = d.bar!
+        little.actions.removeAll { $0 == .addSplitView }
+        XCTAssertNil(QuickPrefixes.entry(named: "split", in: little))
+    }
+
+    func testSplitSides() {
+        XCTAssertEqual(QuickSplit.parse("left example.com").edge, .left)
+        XCTAssertEqual(QuickSplit.parse("left example.com").rest, "example.com")
+        XCTAssertEqual(QuickSplit.parse("TOP  a b").edge, .top)
+        XCTAssertEqual(QuickSplit.parse("TOP  a b").rest, "a b")
+        XCTAssertEqual(QuickSplit.parse("bottom").edge, .bottom)
+        XCTAssertEqual(QuickSplit.parse("bottom").rest, "")
+        XCTAssertNil(QuickSplit.parse("lefty x").edge)
+        XCTAssertEqual(QuickSplit.parse("lefty x").rest, "lefty x")
+        XCTAssertNil(QuickSplit.parse("").edge)
+    }
+
     // MARK: The pure rules
 
     func testWhatIsLeftOut() {

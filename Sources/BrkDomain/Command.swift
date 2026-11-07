@@ -99,6 +99,9 @@ public enum CommandBarCommand: Hashable, Sendable, Codable {
     case submit(String)
     /// Site search (Tab or Space on a known engine's name): `query` searched with `engine`, applied like `submit`.
     case submitSearch(engine: SearchEngineID, query: String)
+    /// The `split` prefix's Return: a new pane on that side (`.split(.addPaneAt)`), and `text` opened in it through the
+    /// route an empty pane's bar uses. A window that cannot add a pane opens nothing.
+    case splitOpen(SplitEdge, String)
     /// The text after a prefix word changed (`QuickPrefixes`): this asks the prefix's own source, never the search engine.
     case prefixQuery(QuickPrefixAction, String)
     /// The typed query changed (the view keeps the text; this asks for search suggestions when the profile allows

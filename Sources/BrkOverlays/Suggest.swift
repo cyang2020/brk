@@ -115,7 +115,7 @@ public enum Suggest {
                                subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
-        if let prefix { return Array(prefixRows(prefix, text, bar: bar).prefix(limit)) }
+        if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
@@ -223,7 +223,7 @@ public enum Suggest {
     }
 
     /// A prefix's own rows for the text after its word.
-    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot) -> [Suggestion] {
+    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
         switch prefix.action {
         case .files:
             guard let local = bar.local, local.query == text, local.scope == .files else { return [] }
@@ -252,7 +252,39 @@ public enum Suggest {
             // Return with no text summarises; a text says what to look for. The route is Ask on Page's.
             let question = text.isEmpty ? OverlayCopy.summarizeThisPage : "\(OverlayCopy.summarizeThisPage): \(text)"
             return [aiRow(question, subtitle: OverlayCopy.askThisPage, .assist(.askPage(question)))]
+        case .split:
+            return splitRows(text, bar: bar, appName: appName)
         }
+    }
+
+    /// The existing split commands this mode also lists, where the menu would enable them (`bar.actions`).
+    private static let splitActions: [ActionID] = [.separateTabFromSplitView, .maximizeSplitPane, .splitHorizontal, .splitVertical, .removeSplitView, .separateAllSplit]
+
+    /// The new pane's row (no text: Add Split View or the named side's), open tabs by title, and the split commands. A
+    /// command the text names outright ("expand") leads, so Return runs it rather than searching for the word.
+    private static func splitRows(_ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
+        let (edge, rest) = QuickSplit.parse(text)
+        let side = edge ?? .right
+        let needle = fold(rest)
+        var scored: [(score: Int, row: Suggestion)] = []
+        for action in splitActions where bar.actions.contains(action) {
+            let score = needle.isEmpty ? 0 : score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName))
+            guard needle.isEmpty || score != nil else { continue }
+            scored.append((score ?? 0, Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil,
+                                                  hint: bar.keys[action]?.glyphs, command: action.spec.command)))
+        }
+        let named = scored.filter { $0.score >= 3 }.map(\.row), others = scored.filter { $0.score < 3 }.map(\.row)
+        guard !rest.isEmpty else {
+            let add = Suggestion(kind: .action, title: edge.map(TypeTravelCopy.addSplit) ?? ActionID.addSplitView.barTitle(appName: appName), subtitle: nil, symbol: "square.split.2x1", favicon: nil,
+                                 hint: "Return", command: edge.map { .split(.addPaneAt($0)) } ?? .split(.addPane))
+            return [add] + others
+        }
+        let where_ = OverlayCopy.newPane(side)
+        let open = Suggestion(kind: .action, title: rest, subtitle: where_, symbol: "square.split.2x1", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, rest)))
+        let tabs = matching(bar.tabs.filter { !$0.isFocused }, needle) { [$0.title] }.prefix(2).map { tab in
+            Suggestion(kind: .action, title: tab.title, subtitle: where_, symbol: "globe", favicon: tab.favicon, hint: "Return", command: .commandBar(.splitOpen(side, tab.url.absoluteString)))
+        }
+        return named + [open] + tabs + others
     }
 
     private static func aiRow(_ title: String, subtitle: String, _ command: Command) -> Suggestion {
@@ -562,6 +594,7 @@ extension OverlayCopy {
     static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
     static let openApp = "Open App"
     static let copyEmoji = "Copy Emoji"
+    static func newPane(_ edge: SplitEdge) -> String { "New pane on the \(edge.rawValue)" }
     static let askThisPage = "Ask about this page"
     static let summarizeThisPage = "Summarize this page"
     /// GUESS: "Site Search placeholder where the wildcard is the name of the site."
