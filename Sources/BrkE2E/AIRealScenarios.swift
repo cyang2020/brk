@@ -274,13 +274,27 @@ enum AIRealScenarios {
             return "file written. Steps: \(steps)"
         }
         log.check("Tools: Stop ends the running command") {
-            try app.dispatch(.assist(.followUp("Run this exact shell command in the foreground and wait for it: sleep \(seconds)")))
-            try approve(app, kind: .allowOnce, timeout: 60)
-            try app.waitUntil("the command runs", timeout: 60) { !processes(matching: "sleep \(seconds)").isEmpty }
-            let running = processes(matching: "sleep \(seconds)")
+            // Not `sleep`: Claude Code's Bash tool refuses a long one by itself. Whether this needs an approval is the
+            // agent's call, so both ways are met.
+            let pattern = "time.sleep.\(seconds)"
+            try app.dispatch(.assist(.followUp("Run this exact shell command in the foreground and wait for it, do not change it: python3 -c \"import time; time.sleep(\(seconds))\"")))
+            var answered: Set<String> = []
+            try app.waitUntil("the command runs", timeout: 90) {
+                guard let ai = try app.view().ai else { return false }
+                for case .approval(let approval) in ai.conversation?.items ?? [] where approval.answer == nil && !answered.contains(approval.id) {
+                    guard let option = approval.options.first(where: { $0.kind == .allowOnce }) else { continue }
+                    answered.insert(approval.id)
+                    try app.dispatch(.assist(.approve(approval: approval.id, option: option.id)))
+                }
+                if !ai.busy { throw Check(description: "the turn ended first: \(String(describing: ai.conversation?.items.suffix(4)))") }
+                return !processes(matching: pattern).isEmpty
+            }
+            let running = processes(matching: pattern)
+            _ = try app.screenshot("AIReal-\(name)-running")
+            let before = Date()
             try app.dispatch(.assist(.stop))
-            try app.waitUntil("the command is gone", timeout: 15) { processes(matching: "sleep \(seconds)").isEmpty }
-            return "ran as \(running), gone after Stop"
+            try app.waitUntil("the command is gone", timeout: 15) { processes(matching: pattern).isEmpty }
+            return "approvals \(answered.count), ran as \(running), gone \(String(format: "%.1f", Date().timeIntervalSince(before))) s after Stop"
         }
         log.check("Tools: a follow-up after Stop") {
             try app.dispatch(.assist(.followUp("Say the word ready and nothing else.")))
