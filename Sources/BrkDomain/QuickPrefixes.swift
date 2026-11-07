@@ -9,6 +9,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case ask, askAgent(String), askPage, summarize
     /// The text is an address, a search or an open tab's title for a new pane; a first word can name the side.
     case split
+    /// Places Brk's own window, plus the existing full screen, minimize and stay on top.
+    case window
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -39,6 +41,7 @@ public enum QuickPrefixes {
         QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…"),
         QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…"),
         QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…"),
+        QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -77,7 +80,7 @@ extension QuickPrefix {
     func isActive(in bar: CommandBarSnapshot) -> Bool {
         switch action {
         case .files, .apps: !bar.isPrivate
-        case .emoji, .calculate: true
+        case .emoji, .calculate, .window: true
         case .ask: bar.askProvider != nil && bar.askAgentFound
         // Never another agent in its place: without this one the word stays plain text.
         case .askAgent(let name): bar.askProvider != nil && AIProviderChoice(rawValue: name) != nil && bar.agentsFound.contains(name)

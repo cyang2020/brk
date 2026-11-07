@@ -105,6 +105,8 @@ public enum ExportOutcome: Hashable, Sendable, Codable {
 }
 
 public enum WindowEffect: Hashable, Sendable {
+    /// On the window's screen's visible frame (the next screen's for `nextDisplay`; with one screen it stays).
+    case place(WindowSnap)
     case requestArchiveClear
     case toggleFullScreen
     case pageFullScreen(Bool)

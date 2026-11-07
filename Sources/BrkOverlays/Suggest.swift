@@ -208,6 +208,8 @@ public enum Suggest {
             else { rows.insert(quick, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count) }
         }
         rows = withLocalRows(rows, text, isAddress: isAddress, bar: bar, limit: limit)
+        // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
+        if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
         return Array(rows.prefix(limit))
     }
 
@@ -254,6 +256,8 @@ public enum Suggest {
             return [aiRow(question, subtitle: OverlayCopy.askThisPage, .assist(.askPage(question)))]
         case .split:
             return splitRows(text, bar: bar, appName: appName)
+        case .window:
+            return windowRows(text, bar: bar, appName: appName)
         }
     }
 
@@ -287,6 +291,32 @@ public enum Suggest {
         return named + [open] + tabs + others
     }
 
+    private static func placementRow(_ placement: WindowSnap) -> Suggestion {
+        let symbol = switch placement {
+        case .leftHalf: "rectangle.lefthalf.filled"
+        case .rightHalf: "rectangle.righthalf.filled"
+        case .topHalf: "rectangle.tophalf.filled"
+        case .bottomHalf: "rectangle.bottomhalf.filled"
+        case .maximize: "macwindow"
+        case .center: "macwindow.on.rectangle"
+        case .nextDisplay: "display.2"
+        }
+        return Suggestion(kind: .action, title: placement.title, subtitle: nil, symbol: symbol, favicon: nil, hint: nil, command: .window(.place(placement)))
+    }
+
+    /// The window's places, then its existing commands; the text narrows them. Not in type travel, so ordinary queries do
+    /// not meet these rows.
+    private static func windowRows(_ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
+        let needle = fold(text)
+        let places = WindowSnap.allCases.filter { needle.isEmpty || score(needle, title: $0.title, triggers: $0.triggers) != nil }.map(placementRow)
+        let existing = [ActionID.fullscreen, .minimize, .toggleStayOnTop].filter { action in
+            bar.actions.contains(action) && (needle.isEmpty || score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName)) != nil)
+        }.map { action in
+            Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil, hint: bar.keys[action]?.glyphs, command: action.spec.command)
+        }
+        return places + existing
+    }
+
     private static func aiRow(_ title: String, subtitle: String, _ command: Command) -> Suggestion {
         Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
@@ -296,6 +326,11 @@ public enum Suggest {
     private static func withLocalRows(_ rows: [Suggestion], _ text: String, isAddress: Bool, bar: CommandBarSnapshot, limit: Int) -> [Suggestion] {
         guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return rows }
         let found = Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
+        return withLastRows(rows, found, limit: limit)
+    }
+
+    /// `found` in the last places: they replace what would be cut last, and the typed row and anything above it stay.
+    private static func withLastRows(_ rows: [Suggestion], _ found: [Suggestion], limit: Int) -> [Suggestion] {
         guard !found.isEmpty else { return rows }
         let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator } ?? 0
         let room = max(0, limit - (lastKept + 1))

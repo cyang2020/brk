@@ -530,6 +530,8 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.
 public enum WindowCommand: Hashable, Sendable, Codable {
+    /// The `window` prefix: this window on its screen's visible frame.
+    case place(WindowSnap)
     /// A public, session-only window with its own empty sidebar.
     case newBlank
     case toggleStayOnTop

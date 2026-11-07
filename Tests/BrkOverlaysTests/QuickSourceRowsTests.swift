@@ -233,6 +233,35 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("", word: "split", snapshot).map(\.command), [.split(.addPane)])
     }
 
+    func testWindowRows() {
+        var snapshot = bar()
+        snapshot.actions = [.fullscreen, .minimize, .toggleStayOnTop]
+        let all = ranked("", word: "window", snapshot)
+        XCTAssertEqual(all.count, 5, "the bar's five rows; a word narrows the rest")
+        XCTAssertEqual(all.map(\.command), [.window(.place(.leftHalf)), .window(.place(.rightHalf)), .window(.place(.topHalf)), .window(.place(.bottomHalf)), .window(.place(.maximize))])
+        XCTAssertEqual(ranked("cent", word: "窗口", snapshot).map(\.command), [.window(.place(.center))])
+        XCTAssertEqual(ranked("centre", word: "window", snapshot).map(\.command), [.window(.place(.center))])
+        XCTAssertEqual(ranked("next", word: "window", snapshot).map(\.command), [.window(.place(.nextDisplay))])
+        XCTAssertEqual(ranked("full", word: "window", snapshot).first?.command, .app(.toggleFullScreen))
+        XCTAssertEqual(ranked("minimize", word: "window", snapshot).first?.command, .app(.minimize))
+        XCTAssertEqual(ranked("always", word: "window", snapshot).first?.command, .window(.toggleStayOnTop))
+    }
+
+    func testWindowRowsStayOutOfOrdinaryQueriesButAnExactPhrase() {
+        for text in ["left", "half", "right", "maximize", "center", "next", "window", "display"] {
+            XCTAssertFalse(rank(text, bar()).contains { if case .window(.place) = $0.command { true } else { false } }, text)
+        }
+        let rows = rank("left half", bar(suggestions: ["left half a", "left half b", "left half c"], suggestedFor: "left half"))
+        XCTAssertEqual(rows.first?.kind, .openTyped, "Return still searches")
+        XCTAssertEqual(rows.last?.command, .window(.place(.leftHalf)), "low down")
+        XCTAssertEqual(rows.count, 5)
+        XCTAssertEqual(rank("next display", bar()).last?.command, .window(.place(.nextDisplay)))
+        var editing = bar()
+        editing.createsTab = false
+        XCTAssertFalse(rank("left half", editing).contains { if case .window(.place) = $0.command { true } else { false } })
+        XCTAssertFalse(rank("left half", bar(fillsPane: true)).contains { if case .window(.place) = $0.command { true } else { false } })
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)

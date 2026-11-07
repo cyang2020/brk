@@ -349,6 +349,36 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNil(QuickSplit.parse("").edge)
     }
 
+    // MARK: Window
+
+    func testPlacingTheWindowIsAnEffectAndClosesTheBar() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(d.user(.window(.place(.leftHalf))).effects, [.window(d.window, .place(.leftHalf))])
+        XCTAssertNil(d.bar)
+    }
+
+    func testPlacements() {
+        let visible = CGRect(x: 100, y: 50, width: 1000, height: 800), current = CGRect(x: 300, y: 200, width: 400, height: 300)
+        XCTAssertEqual(WindowSnap.leftHalf.frame(current: current, visible: visible), CGRect(x: 100, y: 50, width: 500, height: 800))
+        XCTAssertEqual(WindowSnap.rightHalf.frame(current: current, visible: visible), CGRect(x: 600, y: 50, width: 500, height: 800))
+        XCTAssertEqual(WindowSnap.topHalf.frame(current: current, visible: visible), CGRect(x: 100, y: 450, width: 1000, height: 400), "AppKit's y grows upward")
+        XCTAssertEqual(WindowSnap.bottomHalf.frame(current: current, visible: visible), CGRect(x: 100, y: 50, width: 1000, height: 400))
+        XCTAssertEqual(WindowSnap.maximize.frame(current: current, visible: visible), visible)
+        XCTAssertEqual(WindowSnap.center.frame(current: current, visible: visible), CGRect(x: 400, y: 300, width: 400, height: 300))
+        // The same share and place on another screen, and back.
+        let other = CGRect(x: 1100, y: 0, width: 2000, height: 1600)
+        XCTAssertEqual(WindowSnap.moved(current, from: visible, to: other), CGRect(x: 1500, y: 300, width: 800, height: 600))
+        XCTAssertEqual(WindowSnap.moved(WindowSnap.moved(current, from: visible, to: other), from: other, to: visible), current)
+    }
+
+    func testExactPhrases() {
+        XCTAssertEqual(WindowSnap.exact("left half"), .leftHalf)
+        XCTAssertEqual(WindowSnap.exact("Next Display"), .nextDisplay)
+        XCTAssertEqual(WindowSnap.exact("centre window"), .center)
+        for text in ["left", "half", "maximize", "center", "left half of a page", "window"] { XCTAssertNil(WindowSnap.exact(text), text) }
+    }
+
     // MARK: The pure rules
 
     func testWhatIsLeftOut() {

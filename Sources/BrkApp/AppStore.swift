@@ -477,6 +477,7 @@ public final class AppStore {
             case .window(let id, let effect):
                 guard let window = windows[id]?.window else { continue }
                 switch effect {
+                case .place(let placement): place(window, placement)
                 case .toggleFullScreen: windows[id]?.toggleFullScreen()
                 case .pageFullScreen(let on): windows[id]?.setPageFullScreen(on)
                 case .leaveFullScreen: if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
@@ -655,6 +656,18 @@ public final class AppStore {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         }
+    }
+
+    /// Brk's own window only. A window in full screen has its screen to itself and stays.
+    private func place(_ window: NSWindow, _ placement: WindowSnap) {
+        guard !window.styleMask.contains(.fullScreen), let screen = window.screen ?? NSScreen.main else { return }
+        guard placement == .nextDisplay else {
+            window.setFrame(placement.frame(current: window.frame, visible: screen.visibleFrame), display: true)
+            return
+        }
+        let screens = NSScreen.screens
+        guard screens.count > 1, let index = screens.firstIndex(of: screen) else { return }
+        window.setFrame(WindowSnap.moved(window.frame, from: screen.visibleFrame, to: screens[(index + 1) % screens.count].visibleFrame), display: true)
     }
 
     private func runSidebarData(_ effect: SidebarDataEffect) {
