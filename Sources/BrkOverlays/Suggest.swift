@@ -258,6 +258,8 @@ public enum Suggest {
             return splitRows(text, bar: bar, appName: appName)
         case .window:
             return windowRows(text, bar: bar, appName: appName)
+        case .translate:
+            return translateRows(text, bar: bar)
         }
     }
 
@@ -317,7 +319,27 @@ public enum Suggest {
         return places + existing
     }
 
-    private static func aiRow(_ title: String, subtitle: String, _ command: Command) -> Suggestion {
+    /// The page translation's row, or the text's: waiting, its answer (Return copies), or why not.
+    private static func translateRows(_ text: String, bar: CommandBarSnapshot) -> [Suggestion] {
+        switch QuickTranslation.parse(text) {
+        case nil:
+            return []
+        case .page(let target)?:
+            return [aiRow(OverlayCopy.translatePage(target), subtitle: nil, .assist(.translate(target)))]
+        case .text(let source, let target)?:
+            let current = bar.translation?.text == text ? bar.translation : nil
+            if let answer = current?.answer {
+                let shown = answer.split(whereSeparator: \.isNewline).joined(separator: " ")
+                return [Suggestion(kind: .calculator, title: shown, subtitle: target, symbol: "character.bubble", favicon: nil, hint: "Copy Result", command: .commandBar(.copyAnswer(answer)))]
+            }
+            if let failure = current?.failure {
+                return [Suggestion(kind: .action, title: failure, subtitle: nil, symbol: "exclamationmark.triangle", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+            }
+            return [Suggestion(kind: .action, title: OverlayCopy.translating(target), subtitle: source, symbol: "character.bubble", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+        }
+    }
+
+    private static func aiRow(_ title: String, subtitle: String?, _ command: Command) -> Suggestion {
         Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
 
@@ -629,6 +651,8 @@ extension OverlayCopy {
     static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
     static let openApp = "Open App"
     static let copyEmoji = "Copy Emoji"
+    static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }
+    static func translating(_ target: String) -> String { "Translating to \(target)…" }
     static func newPane(_ edge: SplitEdge) -> String { "New pane on the \(edge.rawValue)" }
     static let askThisPage = "Ask about this page"
     static let summarizeThisPage = "Summarize this page"

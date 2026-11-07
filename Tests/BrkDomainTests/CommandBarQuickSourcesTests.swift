@@ -379,6 +379,114 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         for text in ["left", "half", "maximize", "center", "left half of a page", "window"] { XCTAssertNil(WindowSnap.exact(text), text) }
     }
 
+    // MARK: Translate
+
+    private func translationBar() -> Driver {
+        let d = Driver()
+        d.user(.settings(.max(.feature(.translation, true))))
+        d.system(.aiProvidersDetected([.claude]))
+        d.user(.commandBar(.open(.newTab)))
+        return d
+    }
+
+    private func aiEffects(_ t: Transition) -> [(AIRequestID, AITask)] {
+        t.effects.compactMap { if case .ai(let id, let task, _) = $0 { (id, task) } else { nil } }
+    }
+
+    func testATranslationWaitsForAPauseAsksAndAnswersInTheRow() throws {
+        let d = translationBar()
+        let typed = d.user(.commandBar(.prefixQuery(.translate, "你好世界")))
+        XCTAssertEqual(typed.effects, [.barTranslationDue(d.window, "你好世界")], "no agent at a key press")
+        XCTAssertEqual(d.bar?.translation, BarTranslation(text: "你好世界", target: "English"))
+        let due = d.system(.barTranslationDue(d.window, "你好世界"))
+        let (id, task) = try XCTUnwrap(aiEffects(due).first)
+        guard case .ask(let prompt) = task else { return XCTFail("\(task)") }
+        XCTAssertTrue(prompt.contains("你好世界") && prompt.contains("English"), prompt)
+        XCTAssertNotNil(d.bar, "the bar stays open")
+        XCTAssertNil(d.view.ai, "the answer panel stays out of it")
+        d.system(.aiResult(id, .text(" Hello, world \n")))
+        XCTAssertEqual(d.bar?.translation?.answer, "Hello, world")
+        XCTAssertNil(d.view.ai)
+        XCTAssertEqual(d.user(.commandBar(.copyAnswer("Hello, world"))).effects, [.copyToPasteboard("Hello, world")])
+        XCTAssertNil(d.bar)
+    }
+
+    func testChangingTheTextCancelsAtOnce() throws {
+        let d = translationBar()
+        d.user(.commandBar(.prefixQuery(.translate, "hello")))
+        let due = d.system(.barTranslationDue(d.window, "hello"))
+        let (id, _) = try XCTUnwrap(aiEffects(due).first)
+        let changed = d.user(.commandBar(.prefixQuery(.translate, "hello there")))
+        XCTAssertTrue(changed.effects.contains(.aiCancel(id)))
+        XCTAssertEqual(d.bar?.translation?.text, "hello there")
+        XCTAssertNil(d.bar?.translation?.answer)
+        // The old agent's late answer lands nowhere.
+        d.system(.aiResult(id, .text("old")))
+        XCTAssertNil(d.bar?.translation?.answer)
+        // A pause for a text since changed does nothing.
+        XCTAssertEqual(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).count, 0)
+    }
+
+    func testClosingTheBarByAnyCommandCancels() throws {
+        let d = translationBar()
+        d.user(.commandBar(.prefixQuery(.translate, "hello")))
+        let (id, _) = try XCTUnwrap(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).first)
+        let dismissed = d.user(.commandBar(.dismiss))
+        XCTAssertTrue(dismissed.effects.contains(.aiCancel(id)))
+        let other = translationBar()
+        other.user(.commandBar(.prefixQuery(.translate, "hello")))
+        let (second, _) = try XCTUnwrap(aiEffects(other.system(.barTranslationDue(other.window, "hello"))).first)
+        let toggled = other.user(.sidebar(.toggle))
+        XCTAssertNil(other.bar)
+        XCTAssertTrue(toggled.effects.contains(.aiCancel(second)))
+    }
+
+    func testAFailureIsTheRowsAndEmptyAnswersCopyNothing() throws {
+        let d = translationBar()
+        d.user(.commandBar(.prefixQuery(.translate, "hello")))
+        let (id, _) = try XCTUnwrap(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).first)
+        d.system(.aiResult(id, .failed("no network")))
+        XCTAssertEqual(d.bar?.translation?.failure, "no network")
+        XCTAssertNil(d.view.ai)
+        XCTAssertEqual(d.user(.commandBar(.copyAnswer(""))).effects, [])
+        XCTAssertNotNil(d.bar, "the bar stays")
+    }
+
+    func testTranslatePrefixNeedsTranslationAndAnAgent() {
+        let d = translationBar()
+        XCTAssertEqual(QuickPrefixes.entry(named: "tr", in: d.bar!)?.action, .translate)
+        XCTAssertEqual(QuickPrefixes.entry(named: "翻译", in: d.bar!)?.action, .translate)
+        d.system(.aiProvidersDetected([]))
+        XCTAssertNil(QuickPrefixes.entry(named: "translate", in: d.bar!))
+        d.system(.aiProvidersDetected([.claude]))
+        d.user(.settings(.max(.feature(.translation, false))))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(QuickPrefixes.entry(named: "translate", in: d.bar!))
+    }
+
+    func testReadingATranslation() {
+        func read(_ text: String) -> QuickTranslation.Request? { QuickTranslation.parse(text, systemTarget: "English") }
+        let chinese = "Chinese (Simplified)"
+        XCTAssertEqual(read("你好世界"), .text("你好世界", target: "English"), "mostly Chinese")
+        XCTAssertEqual(read("hello world"), .text("hello world", target: chinese), "otherwise")
+        XCTAssertEqual(read("这是 a test 的句子"), .text("这是 a test 的句子", target: chinese), "five Latin letters against five Han: not mostly Chinese")
+        XCTAssertEqual(read("这是一个很长的句子 ok"), .text("这是一个很长的句子 ok", target: "English"))
+        XCTAssertEqual(read("hello to ja"), .text("hello", target: "Japanese"))
+        XCTAssertEqual(read("hello to japanese"), .text("hello", target: "Japanese"))
+        XCTAssertEqual(read("HELLO TO KO"), .text("HELLO", target: "Korean"))
+        XCTAssertEqual(read("你好到日文"), .text("你好", target: "Japanese"))
+        XCTAssertEqual(read("你好 到日文"), .text("你好", target: "Japanese"))
+        XCTAssertEqual(read("going to school"), .text("going to school", target: chinese), "school is no language")
+        XCTAssertEqual(read("to be"), .text("to be", target: chinese), "not Belarusian")
+        XCTAssertEqual(read("我到家了"), .text("我到家了", target: "English"), "家了 is no language")
+        XCTAssertEqual(read("page"), .page(target: "English"))
+        XCTAssertEqual(read("page to ja"), .page(target: "Japanese"))
+        XCTAssertEqual(read("页面"), .page(target: "English"))
+        XCTAssertNil(read(""))
+        XCTAssertNil(read("  "))
+        XCTAssertNil(read("to ja"), "nothing to translate")
+    }
+
     // MARK: The pure rules
 
     func testWhatIsLeftOut() {

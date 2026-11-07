@@ -142,13 +142,15 @@ struct AIRequest: Equatable, Sendable {
 }
 enum AIPurpose: Equatable, Sendable {
     case answer, askPage(String), preview(URL), instant(String), browse(String), translate(String), organize
+    /// The `translate` prefix: the answer goes in the bar's row.
+    case barTranslation
 }
 extension AIPurpose {
     /// Purposes that show in their own place (the preview card, the Today row, the URL pill and its popover, the
     /// Tidy button and a toast), not in the answer panel.
     var inPlace: Bool {
         switch self {
-        case .preview, .instant, .translate, .organize: true
+        case .preview, .instant, .translate, .organize, .barTranslation: true
         case .answer, .askPage, .browse: false
         }
     }

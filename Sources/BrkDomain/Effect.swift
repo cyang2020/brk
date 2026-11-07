@@ -48,6 +48,9 @@ public enum Effect: Hashable, Sendable {
     case fetchSuggestions(WindowID, query: String, url: URL)
     /// Look for a file and app by name (BrkApp debounces like the suggestions); the answer is `SystemEvent.localResults`.
     case searchLocal(WindowID, LocalSearchRequest)
+    /// A text to translate under the `translate` prefix: after a pause in typing the answer is
+    /// `SystemEvent.barTranslationDue`. Any later key cancels it.
+    case barTranslationDue(WindowID, String)
     /// Open a file with its default app, or launch an app.
     case openLocalFile(String)
     /// A currency question was typed: BrkApp reads its cache and fetches at most once a day; the answer is

@@ -337,6 +337,9 @@ struct WindowSession: Sendable, Equatable {
     var suggestions: Suggestions?
     /// The file and app sources' last answer; the view shows it only while its text is still what the answer says.
     var localResults: LocalResults?
+    /// The `translate` prefix's text and its answer, and the request asking for it.
+    var barTranslation: BarTranslation?
+    var barTranslationRequest: AIRequestID?
     /// The time the bar's quick answers read: set on opening and on a date or time question, moved by the clock's tick.
     var barClock: Instant?
     var recentCycle: RecentCycle?

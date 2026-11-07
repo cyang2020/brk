@@ -149,11 +149,11 @@ extension Work {
         if purpose.slot != .instant { cancelAI(in: window, slot: purpose.slot) }
         let id = AIRequestID(ctx.newID())
         state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose, agent: agent)
-        state.session.ai.answerContexts[window] = state.libraryContext(in: window)
+        if purpose != .barTranslation { state.session.ai.answerContexts[window] = state.libraryContext(in: window) }
         if !purpose.inPlace {
             state.session.ai.answers[window] = AIAnswerSnapshot(request: id, title: title, text: run ? "Waiting for the local AI tool…" : "Reading the selected page…", busy: true, sources: [])
         }
-        state.session.windows[window]?.overlay = nil
+        if purpose != .barTranslation { state.session.windows[window]?.overlay = nil }
         effects.append(.aiWatch(id, seconds: 120))
         if run { sendAI(id, task: task) }
         return id
@@ -345,7 +345,7 @@ extension Work {
             }
             completeAI(id, text: answer)
         case .ask, .pageQuestion:
-            completeAI(id, text: String(text.prefix(60_000)))
+            completeAI(id, text: String(text.prefix(60_000)), success: true)
         case .summarize:
             guard let request = state.session.ai.requests[id], state.session.ai.previews[request.window]?.request == id else { completeAI(id, text: ""); return }
             guard let reply = AIValidation.preview(text) else { completeAI(id, text: "No preview available"); return }
@@ -359,7 +359,8 @@ extension Work {
         guard let request = state.session.ai.requests[id], state.session.pendingAI[id] != nil else { return }
         switch request.task {
         case .ask, .pageQuestion, .browse:
-            state.session.ai.answers[request.window]?.text = String(text.prefix(60_000))
+            // The bar's row shows the finished answer; the answer panel is someone else's.
+            if !request.purpose.inPlace { state.session.ai.answers[request.window]?.text = String(text.prefix(60_000)) }
         default: break
         }
     }
@@ -413,9 +414,48 @@ extension Work {
         case .organize:
             state.session.ai.tidying.remove(window)
             if !success, text != Self.cancelled { toast(text, in: window) }
+        case .barTranslation:
+            guard state.session.windows[window]?.barTranslationRequest == id else { return }
+            state.session.windows[window]?.barTranslationRequest = nil
+            if success { state.session.windows[window]?.barTranslation?.answer = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            else if text != Self.cancelled { state.session.windows[window]?.barTranslation?.failure = text }
         case .answer, .askPage, .browse: break
         }
     }
+
+    // MARK: The `translate` prefix
+
+    /// The text changed: whatever was asking stops at once, and the row waits for a pause in typing.
+    mutating func barTranslationText(_ text: String, in window: WindowID) {
+        guard state.session.windows[window]?.barTranslation?.text != text else { return }
+        cancelAI(in: window, slot: .bar)
+        state.session.windows[window]?.barTranslationRequest = nil
+        guard !text.isEmpty, case .text(_, let target)? = QuickTranslation.parse(text) else {
+            state.session.windows[window]?.barTranslation = nil
+            return
+        }
+        state.session.windows[window]?.barTranslation = BarTranslation(text: text, target: target)
+        effects.append(.barTranslationDue(window, text))
+    }
+
+    mutating func barTranslationDue(_ window: WindowID, _ text: String) {
+        guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay, let current = state.session.windows[window]?.barTranslation, current.text == text,
+              current.answer == nil, current.failure == nil, state.session.windows[window]?.barTranslationRequest == nil,
+              state.doc.windows[window]?.kind != .incognito, state.doc.settings.max.enabled(.translation),
+              case .text(let source, let target)? = QuickTranslation.parse(text), source.count <= 2000 else { return }
+        let request = startAI(.ask(QuickTranslation.prompt(source, target: target)), purpose: .barTranslation, title: source, window: window)
+        state.session.windows[window]?.barTranslationRequest = request
+    }
+
+    /// The bar went away, by whatever command: its translation stops too.
+    mutating func cancelBarTranslationsWithNoBar() {
+        let asking = state.session.ai.requests.values.filter { $0.purpose == .barTranslation }.map(\.window)
+        for window in Set(asking) {
+            if case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay { continue }
+            cancelAI(in: window, slot: .bar)
+        }
+    }
+
     private mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
         let ids = state.session.ai.requests.filter { $0.value.window == window && $0.value.purpose.slot == slot }.map(\.key)
         for id in ids { completeAI(id, text: Self.cancelled) }
@@ -482,7 +522,7 @@ extension Work {
             case .preview: state.doc.settings.max.enabled(.linkPreviews)
             case .instant: state.doc.settings.max.enabled(.instantLinks)
             case .browse: state.doc.settings.max.enabled(.browse)
-            case .translate: state.doc.settings.max.enabled(.translation)
+            case .translate, .barTranslation: state.doc.settings.max.enabled(.translation)
             case .organize: state.doc.settings.max.tidyTabs
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
@@ -617,7 +657,7 @@ extension Work {
     }
 }
 extension AIPurpose {
-    enum Slot: Equatable { case panel, preview, instant, translate, organize }
+    enum Slot: Equatable { case panel, preview, instant, translate, organize, bar }
     var slot: Slot {
         switch self {
         case .answer, .askPage, .browse: .panel
@@ -625,6 +665,7 @@ extension AIPurpose {
         case .instant: .instant
         case .translate: .translate
         case .organize: .organize
+        case .barTranslation: .bar
         }
     }
     var isPreview: Bool { slot == .preview }

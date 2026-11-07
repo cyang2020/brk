@@ -51,6 +51,7 @@ public final class AppStore {
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
     private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
+    private lazy var barLookups = BarLookups(send: { [weak self] in self?.dispatch($0) })
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
     private var queue: [Input] = []
@@ -256,7 +257,7 @@ public final class AppStore {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
-            switch command { case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss: suggestions.cancel(window); localSearch.cancel(window); default: break }
+            switch command { case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss: suggestions.cancel(window); localSearch.cancel(window); barLookups.cancel(window); default: break }
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false
@@ -568,6 +569,7 @@ public final class AppStore {
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
             case .searchLocal(let window, let request): localSearch.search(window, request)
+            case .barTranslationDue(let window, let text): barLookups.translationDue(window, text: text)
             case .openLocalFile(let path): NSWorkspace.shared.open(URL(fileURLWithPath: path))
             case .needCurrencyRates: currencyRates.need()
             case .disposeContext: break

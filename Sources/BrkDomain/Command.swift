@@ -615,6 +615,8 @@ public enum SystemEvent: Sendable, Equatable {
     case suggestions(WindowID, query: String, [String])
     /// The file and app sources answered `Effect.searchLocal`; the bar shows it only while its text is still the answer's.
     case localResults(WindowID, LocalResults)
+    /// The pause after typing under the `translate` prefix is over (`Effect.barTranslationDue`) for this text.
+    case barTranslationDue(WindowID, String)
     /// Exchange rates are known (`Effect.needCurrencyRates`), from the cache or the day's fetch.
     case currencyRates(CurrencyRates)
     /// Which local AI command-line tools BrkApp found on PATH at launch (`AIProviderSeam.detect`).

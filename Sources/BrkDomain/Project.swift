@@ -420,6 +420,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             askAgentFound: state.askAgentFound,
             agentsFound: state.session.detectedAI.map(\.rawValue),
             askPageOn: doc.kind != .incognito && state.doc.settings.max.enabled(.askPage),
+            translationOn: doc.kind != .incognito && state.doc.settings.max.enabled(.translation),
+            translation: session.barTranslation,
             isPrivate: doc.kind == .incognito
         ))
     case .library(let openID, let page)?:

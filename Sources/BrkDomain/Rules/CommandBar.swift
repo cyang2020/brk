@@ -13,7 +13,8 @@ extension Work {
             effects.append(.copyToPasteboard(result))
             state.session.windows[window]?.overlay = nil
         case .copyAnswer(let text):
-            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
+            // A row still waiting for its answer has nothing to copy, and the bar stays.
+            guard !text.isEmpty, case .commandBar? = state.session.windows[window]?.overlay else { return }
             effects.append(.copyToPasteboard(text))
             state.session.windows[window]?.overlay = nil
         case .local(let action, let path):
@@ -113,6 +114,7 @@ extension Work {
             guard text.count >= LocalSources.prefixMinLength, state.doc.windows[window]?.kind != .incognito else { return }
             let results = state.session.windows[window]?.localResults
             if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
+        case .translate: barTranslationText(text, in: window)
         case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split, .window: break
         }
     }

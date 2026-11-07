@@ -138,7 +138,7 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
-        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
+        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .barTranslationDue(WindowID("ghost"), "x"), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
@@ -565,6 +565,7 @@ enum CommandInventory {
         case .externalURL: "externalURL"
         case .suggestions: "suggestions"
         case .localResults: "localResults"
+        case .barTranslationDue: "barTranslationDue"
         case .currencyRates: "currencyRates"
         case .aiProvidersDetected: "aiProvidersDetected"
         case .globalShortcut: "globalShortcut"

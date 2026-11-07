@@ -292,6 +292,7 @@ public struct CommandBarMetrics: MetricGroup {
     public let littleArcWidth = Metric(500.0, .arc("Little Arc command bar width", .low))
     /// Typing pause before the default engine's suggest endpoint is asked (`Effect.fetchSuggestions`).
     public let suggestionDebounce = Metric(0.15, .guess("debounce before a search-suggestion fetch; Arc's value was not traced"))
+    public let translationDebounce = Metric(0.6, .guess("pause in typing before the translate prefix asks a local agent, which takes seconds; Brk's own"))
     public let maxSearchSuggestions = Metric(5, .guess("search-engine suggestions shown; Arc shows a handful under the typed row"))
 }
 

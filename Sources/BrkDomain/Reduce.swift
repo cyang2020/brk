@@ -162,7 +162,7 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
         case .easel(let event):
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
@@ -218,6 +218,7 @@ struct Work {
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
         case .localResults(let window, let results): localResults(window, results)
+        case .barTranslationDue(let window, let text): barTranslationDue(window, text)
         case .currencyRates(let rates): state.session.currencyRates = rates
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
         case .globalShortcut(let status): if state.session.globalShortcut != status { state.session.globalShortcut = status }
@@ -283,6 +284,7 @@ struct Work {
     }
 
     mutating func finish(from input: AppState) -> Transition {
+        cancelBarTranslationsWithNoBar()
         normalize(&state)
         reconcileFind(from: input)
         reconcileAI(from: input)

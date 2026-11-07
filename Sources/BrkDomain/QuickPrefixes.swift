@@ -11,6 +11,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case split
     /// Places Brk's own window, plus the existing full screen, minimize and stay on top.
     case window
+    /// Text through the default agent, answer in the row; `page` runs the page translation.
+    case translate
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -42,6 +44,7 @@ public enum QuickPrefixes {
         QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…"),
         QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…"),
         QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…"),
+        QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -87,6 +90,7 @@ extension QuickPrefix {
         case .askPage, .summarize: bar.askPageOn && bar.askAgentFound
         // Add Split View is listed only where it can work: not in a Little window or on a Favorite.
         case .split: bar.actions.contains(.addSplitView)
+        case .translate: bar.translationOn && bar.askAgentFound
         }
     }
 }

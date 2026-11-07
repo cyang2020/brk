@@ -571,6 +571,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var agentsFound: [String] = []
     /// Max's Ask on Page is on, for the `page` and `summarize` prefixes.
     public var askPageOn: Bool = false
+    /// Max's Translation is on, for the `translate` prefix, and where that prefix's text has got to.
+    public var translationOn: Bool = false
+    public var translation: BarTranslation? = nil
     /// A private window lists nothing of the user's: no history, no bookmarks, no files.
     public var isPrivate: Bool = false
 }

@@ -262,6 +262,34 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertFalse(rank("left half", bar(fillsPane: true)).contains { if case .window(.place) = $0.command { true } else { false } })
     }
 
+    func testTranslateRows() {
+        var snapshot = bar()
+        snapshot.translationOn = true
+        snapshot.askAgentFound = true
+        XCTAssertEqual(ranked("", word: "tr", snapshot), [])
+        XCTAssertEqual(ranked("page to ja", word: "tr", snapshot).first?.command, .assist(.translate("Japanese")))
+        // Waiting: says so, and Return has nothing to do.
+        let waiting = ranked("hello", word: "tr", snapshot)
+        XCTAssertEqual(waiting.first?.title, "Translating to Chinese (Simplified)…")
+        XCTAssertEqual(waiting.first?.subtitle, "hello")
+        XCTAssertEqual(waiting.first?.command, .commandBar(.copyAnswer("")))
+        // The answer, one line in the row, whole on the pasteboard.
+        var answered = BarTranslation(text: "hello", target: "Chinese (Simplified)")
+        answered.answer = "你好\n世界"
+        snapshot.translation = answered
+        let done = ranked("hello", word: "翻译", snapshot)
+        XCTAssertEqual(done.first?.title, "你好 世界")
+        XCTAssertEqual(done.first?.command, .commandBar(.copyAnswer("你好\n世界")))
+        XCTAssertEqual(done.first?.hint, "Copy Result")
+        // An answer to another text is not this text's.
+        XCTAssertEqual(ranked("hello there", word: "tr", snapshot).first?.command, .commandBar(.copyAnswer("")))
+        // A failure says why.
+        var failed = BarTranslation(text: "hello", target: "English")
+        failed.failure = "no network"
+        snapshot.translation = failed
+        XCTAssertEqual(ranked("hello", word: "tr", snapshot).first?.title, "no network")
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)
