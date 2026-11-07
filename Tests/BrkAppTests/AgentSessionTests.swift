@@ -302,6 +302,7 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(ClaudeBackend.title(tool: "Bash", input: ["command": "ls\n-la"]), "Run: ls -la")
         XCTAssertEqual(ClaudeBackend.title(tool: "Edit", input: ["file_path": "/a.swift"]), "Edit /a.swift")
         XCTAssertEqual(CodexBackend.plainCommand("/bin/zsh -lc 'cat hello.txt'"), "cat hello.txt")
+        XCTAssertEqual(CodexBackend.plainCommand("/bin/zsh -lc \"printf 'hi' > a.txt\""), "printf 'hi' > a.txt")
         XCTAssertEqual(CodexBackend.step(["type": "fileChange", "id": "x", "changes": [["path": "/a"]]], state: .done)?.title, "Edit /a")
         XCTAssertNil(CodexBackend.step(["type": "agentMessage", "id": "x"], state: .done))
     }

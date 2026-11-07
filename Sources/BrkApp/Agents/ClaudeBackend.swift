@@ -30,7 +30,9 @@ import Foundation
         if let effort = spec.effort { arguments += ["--effort", effort] }
         switch spec.access {
         case .readOnly:
-            arguments += ["--tools", "", "--permission-mode", "dontAsk", "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", ""]
+            arguments += ["--tools", "", "--permission-mode", "dontAsk", "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "",
+                          // Asked to act, a model with no tools can write out a tool call as text; this makes it say it cannot.
+                          "--append-system-prompt", "You are answering inside a web browser and have no tools here: you cannot read or write files, run commands or browse. If asked to, say so briefly."]
         case .tools:
             arguments += ["--permission-prompt-tool", "stdio", "--permission-mode", "default"]
             if let resume = spec.resume { arguments += ["--resume", resume] }

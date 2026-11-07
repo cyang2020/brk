@@ -209,7 +209,7 @@ import Foundation
     static func plainCommand(_ command: String) -> String {
         for prefix in ["/bin/zsh -lc ", "/bin/bash -lc ", "zsh -lc ", "bash -lc "] where command.hasPrefix(prefix) {
             var rest = String(command.dropFirst(prefix.count))
-            if rest.hasPrefix("'"), rest.hasSuffix("'"), rest.count >= 2 { rest = String(rest.dropFirst().dropLast()) }
+            for quote in ["'", "\""] where rest.hasPrefix(quote) && rest.hasSuffix(quote) && rest.count >= 2 { rest = String(rest.dropFirst().dropLast()) }
             return rest
         }
         return command

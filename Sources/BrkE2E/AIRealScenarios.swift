@@ -192,23 +192,6 @@ enum AIRealScenarios {
             try app.waitUntil("a new title", timeout: 60) { try tab(page.item, in: app.view())?.title != before }
             return "\(short(before)) → \(short(try tab(page.item, in: app.view())?.title))"
         }
-        log.check("A138 tidy download name") {
-            let directory = app.dataDirectory.appendingPathComponent("ai-downloads")
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
-            _ = try app.load(app.site.url("download"))
-            try app.dispatch(.library(.open(.downloads)))
-            let original = "fixture.txt"
-            var name = ""
-            try app.waitUntil("the file renamed", timeout: 60) {
-                guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first else { return false }
-                name = first.filename
-                return first.state == .finished && name != original
-            }
-            try app.dispatch(.library(.close))
-            return "\(original) → \(name), the file is there: \(FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path))"
-        }
-
         log.check("A137 Tidy Tabs") {
             let titles = ["Swift concurrency guide", "Best pasta recipes", "AppKit release notes", "Ramen near me", "Swift macros", "Pizza dough", "Xcode tips"]
             for (index, title) in titles.enumerated() {
@@ -241,17 +224,38 @@ enum AIRealScenarios {
         }
 
         }
+        log.check("A138 tidy download name") {
+            let directory = app.dataDirectory.appendingPathComponent("ai-downloads")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
+            // A name worth tidying; the fixture server's "fixture.txt" is already as short as a name gets.
+            let original = "IMG_20240312_invoice_final(2) copy.txt"
+            let page = try load(app, "ai-source.html")
+            try app.evaluate(page, "const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['invoice']));a.download=\(try literal(original));document.body.append(a);a.click()")
+            try app.dispatch(.library(.open(.downloads)))
+            var name = ""
+            try app.waitUntil("the file renamed", timeout: 60) {
+                guard case .library(let library)? = try app.view().overlay, let first = library.downloads.first else { return false }
+                name = first.filename
+                return first.state == .finished && name != original
+            }
+            try app.dispatch(.library(.close))
+            return "\(original) → \(name), the file is there: \(FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path))"
+        }
+
         // A session with tools on, in a folder this run owns, with a command that is easy to find afterwards. With a small
         // model where the agent lists one: this checks the plumbing, and the user's default may be out of quota.
-        if let small = ProcessInfo.processInfo.environment["BRK_E2E_REAL_MODEL"], let kind = choice.kind { try app.dispatch(.settings(.max(.agentModel(kind, small)))) }
+        let chosen = ProcessInfo.processInfo.environment
+        if let small = chosen["BRK_E2E_REAL_MODEL"], let kind = choice.kind { try app.dispatch(.settings(.max(.agentModel(kind, small)))) }
+        if let effort = chosen["BRK_E2E_REAL_EFFORT"], let kind = choice.kind { try app.dispatch(.settings(.max(.agentEffort(kind, effort)))) }
         let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let seconds = 317 + Int(ProcessInfo.processInfo.processIdentifier % 200)
         log.check("Tools: Deny") {
             try app.dispatch(.assist(.chooseFolder))
             try app.waitUntil("the session", timeout: 30) { try app.view().ai?.conversation?.folder == folder.path && app.view().ai?.conversation?.agent != nil }
-            let shown = try app.view().ai?.conversation?.model
-            log.write("model in the panel: \(shown ?? "nil")")
+            let shown = try app.view().ai?.conversation
+            log.write("model in the panel: \(shown?.model ?? "nil"), effort \(shown?.effort ?? "nil")")
             try app.dispatch(.assist(.followUp("Create a file named denied.txt with the word hi in it, here in the working folder. Do not do anything else.")))
             var asked = false
             try answerAll(app, kind: .deny) { asked = true }
