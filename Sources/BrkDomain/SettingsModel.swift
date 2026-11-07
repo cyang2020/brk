@@ -216,6 +216,13 @@ public struct MaxSettings: Hashable, Sendable, Codable {
     public var agentOptions: [AIProviderKind: AIAgentOptions]? = nil
 
     public static let `default` = MaxSettings(provider: .auto, renamePinnedTabs: false, tidyTabs: false)
+
+    /// Turn Off Max sets the tool to off and keeps each switch's choice for Turn On Max; while off, no feature runs and
+    /// none offers itself (no Tidy on the divider, no Ask row), and the pane shows every switch off, as Arc's does (P38-b).
+    public var isOn: Bool { provider != .off }
+    /// Tidy Tabs and Tidy Tab Titles as they act now: their switch, and Max on.
+    public var tidyOn: Bool { isOn && tidyTabs }
+    public var titlesOn: Bool { isOn && renamePinnedTabs }
 }
 
 /// A model and effort picked in the Max pane. Identifiers as the agent reported them.

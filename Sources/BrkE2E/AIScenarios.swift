@@ -2,6 +2,7 @@ import BrkBase
 import BrkControl
 import BrkDomain
 import BrkLayout
+import CoreGraphics
 import Foundation
 
 /// Every AI scenario launches only Tests/Fixtures/ai-provider. Pages and filesystem destinations are owned fixtures.
@@ -18,6 +19,7 @@ enum AIScenarios {
         Scenario("PillShareQuote", "a highlight on the page puts Share Quote on the pill's second line; its click copies the link to the highlight", cefOnly: "CEF selection", shareQuote),
         Scenario("AIBrowse", "selected sources use owning profile cookies, citations and close all readers", cefOnly: "CEF hidden pages", browse),
         Scenario("AITranslate", "page menu Translate to English, the pill's Translated and popover, Use Original's undo toast and ⌘Z, never-translate", cefOnly: "CEF isolated world", translate),
+        Scenario("AITranslateOffer", "a real click on the pill's Translation Available opens Arc's Translate this page popover (P50-g); its Translate translates", cefOnly: "CEF isolated world", translateOffer),
         Scenario("AIMax", "native Max pane persists delivered switches and provider choice without an API key", cefOnly: "native settings", maxPane),
         Scenario("AIQuit", "quit reaps active and already-cancelled fixture CLIs", cefOnly: "native shutdown", quit),
     ]
@@ -137,8 +139,8 @@ enum AIScenarios {
     /// plan: one Reading group), Arc's undo toast undoes it, and the groups survive a restart.
     private static func organize(_ app: AppUnderTest) throws {
         try enable(app); try app.dispatch(.settings(.max(.tidyTabs(true))))
-        // The divider between Pinned and Today (where Tidy and Clear live) shows once Pinned has a row.
-        try app.dispatch(.tab(.togglePin(.item(currentTab(app.view())!.id))))
+        // Nothing pinned: Arc draws the divider, with Clear and Tidy, over any Today that has tabs.
+        try expect(try app.view().space.pinned.rows.isEmpty, "the fixture window starts with a pinned tab")
         _ = try load(app)
         var n = 0
         while todayIDs(try app.view()).count < 7 { n += 1; _ = try load(app, "ai-source.html?tab=\(n)") }
@@ -162,6 +164,26 @@ enum AIScenarios {
         try app.flush(); try app.restart()
         guard case .folder(let restored)? = try app.view().space.today.rows.first else { throw Check(description: "Today group not restored") }
         try expect(restored.children.map(\.id) == before, "group children changed on restart")
+    }
+    /// P50-g: the pill's Translation Available is the way to a translation a person sees first. Real clicks.
+    private static func translateOffer(_ app: AppUnderTest) throws {
+        try enable(app)
+        _ = try load(app)
+        try app.waitUntil("Translation Available on the pill") { try app.view().urlPill.translation == .available }
+        func screen(_ frame: CGRect) throws -> CGPoint {
+            let facts = try app.native()
+            return CGPoint(x: facts.windowFrame.minX + frame.midX, y: CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY + frame.midY)
+        }
+        try PhysicalPointer.click(app, at: try screen(try visible(app.native(), .aiControl("pill-translation")).frame), window: app.window!)
+        guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "no hello") }
+        var button: CGRect?
+        try app.waitUntil("the popover's Translate", timeout: 5) {
+            button = NativeSystemInput.frame(pid: hello.pid, identifier: ViewID.aiControl("translation-translate").identifier); return button != nil
+        }
+        _ = try app.screenshot("AITranslateOffer-popover")
+        try PhysicalPointer.click(app, at: CGPoint(x: button!.midX, y: button!.midY), window: app.window!)
+        try app.waitUntil("Translated", timeout: 30) { try app.view().urlPill.translation == .translated(from: "French") }
+        app.passed("Translation Available → Translate this page to English? → Translate → Translated")
     }
     private static func download(_ app: AppUnderTest) throws {
         try enable(app)

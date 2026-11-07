@@ -210,8 +210,8 @@ enum MaxFeature: String, Hashable, CaseIterable {
 
     func isOn(_ settings: MaxSettings) -> Bool {
         switch self {
-        case .tidyTabs: settings.tidyTabs
-        case .tidyTitles: settings.renamePinnedTabs
+        case .tidyTabs: settings.tidyOn
+        case .tidyTitles: settings.titlesOn
         default: settings.enabled(aiFeature!)
         }
     }

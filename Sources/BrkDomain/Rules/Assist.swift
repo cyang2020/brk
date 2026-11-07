@@ -65,6 +65,8 @@ extension Work {
                 toast(missing, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window)
                 return
             }
+            // The other modes' bars only lead to their feature: off, the person is told where to switch it on first.
+            if let feature = mode.feature, !aiEnabled(feature, window) { return }
             openOverlay({ .commandBar(openID: $0, target: .ai(mode)) }, in: window)
             return
         }
@@ -93,8 +95,9 @@ extension Work {
             translatePage(page, to: language, in: window)
         case .organizeToday:
             // Arc's 🧹 Tidy on the Today divider (P46-b): the result is tab groups in Today and an undo toast.
-            guard state.doc.settings.max.tidyTabs, let space = state.doc.windows[window]?.space else {
-                toast("Enable Tidy Tabs in Settings → Max.", link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window); return
+            guard state.doc.settings.max.tidyOn, let space = state.doc.windows[window]?.space else {
+                let text = state.doc.settings.max.isOn ? "Enable Tidy Tabs in Settings → Max." : Self.maxOff
+                toast(text, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window); return
             }
             let tabs = eligibleAITabs(space, in: window)
             guard tabs.count >= 2, tabs.count <= 50 else { toast("Tidy needs 2–50 ungrouped Today tabs.", in: window); return }
@@ -110,7 +113,8 @@ extension Work {
                 state.session.ai.instantRows[window, default: []].insert(AIInstantRow(id: ItemID(Self.instantRowPrefix + id.rawValue), request: id), at: 0)
             }
         case .browse(let question, let sources):
-            guard aiEnabled(.browse, window), let q = aiQuestion(question), (1...4).contains(sources.count),
+            guard aiEnabled(.browse, window) else { return }
+            guard let q = aiQuestion(question), (1...4).contains(sources.count),
                   Set(sources).count == sources.count, sources.allSatisfy({ AIValidation.destination($0.absoluteString) != nil }) else {
                 aiMessage("Browse for Me needs a question and 1–4 HTTP(S) source URLs. Enter: question | URL, URL", in: window); return
             }
@@ -131,17 +135,23 @@ extension Work {
     /// Why Ask in Command Bar cannot run, or nil: the Max switch is off, or the provider is set to off. (Whether a
     /// CLI is on PATH is only known to the app's seam; an answer without one says so, `AIOutcome.unavailable`.)
     private func askBarMissing() -> String? {
+        if !state.doc.settings.max.isOn { return Self.maxOff }
         if !state.doc.settings.max.enabled(.commandBar) { return "\(AIFeature.commandBar.title) not enabled" }
-        if state.doc.settings.max.provider == .off { return "No local AI tool selected for Max" }
         return nil
     }
-    /// Off, the feature says how to turn it on: in the answer panel for the panel's features, as a notice for the
-    /// ones that work in place (preview card, Today row, the page itself).
+    static let maxOff = "Max is off. Turn it on in Settings → Max."
+    /// Off, the feature says how to turn it on and where its switch is (the Max pane, or Advanced → More Settings… for
+    /// Brk's own three): in the answer panel for the panel's features, as a notice for the ones that work in place
+    /// (preview card, Today row, the page itself).
     private mutating func aiEnabled(_ feature: AIFeature, _ window: WindowID) -> Bool {
         guard state.doc.settings.max.enabled(feature) else {
-            let text = "Enable \(feature.title) in Settings → Max."
+            let max = state.doc.settings.max.isOn
+            // "… → More Settings…" already ends the sentence.
+            let place = feature.place
+            let text = max ? "Enable \(feature.title) in \(place)" + (place.hasSuffix("…") ? "" : ".") : Self.maxOff
+            let pane = max ? feature.pane : .max
             if [.instantLinks, .translation, .linkPreviews].contains(feature) {
-                toast(text, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window)
+                toast(text, link: ToastLink(title: pane == .max ? "Max Preferences ↗" : "Advanced Settings ↗", command: .settings(.openPane(pane))), in: window)
             } else { aiMessage(text, in: window) }
             return false
         }
@@ -432,17 +442,20 @@ extension Work {
 
     mutating func aiResult(_ id: AIRequestID, _ outcome: AIOutcome) {
         guard let task = state.session.pendingAI.removeValue(forKey: id) else { return }
+        let background = state.session.ai.backgroundWindows.removeValue(forKey: id)
         if let context = state.session.ai.backgroundContexts.removeValue(forKey: id), backgroundAIContext(task) != context { return }
         guard case .text(let text) = outcome else {
-            switch outcome {
-            case .unavailable: completeAI(id, text: "No selected local AI tool is available. Choose an installed provider in Settings → Max and sign in to it in Terminal.")
-            case .failed(let reason): completeAI(id, text: reason)
-            default: break
+            let reason: String? = switch outcome {
+            case .unavailable: "No selected local AI tool is available. Choose an installed provider in Settings → Max and sign in to it in Terminal."
+            case .failed(let reason): reason
+            default: nil
             }
+            if let reason { completeAI(id, text: reason); backgroundFailed(task, reason, in: background) }
             return
         }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            completeAI(id, text: "The AI tool returned no answer. Check its sign-in in Terminal, then retry.")
+            let reason = "The AI tool returned no answer. Check its sign-in in Terminal, then retry."
+            completeAI(id, text: reason); backgroundFailed(task, reason, in: background)
             return
         }
         switch task {
@@ -453,7 +466,11 @@ extension Work {
         case .renameDownload(let download, let original):
             guard let value = state.doc.downloads.first(where: { $0.id == download }), value.state == .finished,
                   value.filename == original, let path = value.path,
-                  let name = AIValidation.filename(text, original: original) else { completeAI(id, text: "The tool returned an unsafe filename, or the download changed. No file was renamed."); return }
+                  let name = AIValidation.filename(text, original: original) else {
+                let reason = "The tool returned an unsafe filename, or the download changed. No file was renamed."
+                completeAI(id, text: reason); backgroundFailed(task, reason, in: background); return
+            }
+            if let background { state.session.ai.renamingDownloads[download] = background }
             effects.append(.aiRenameDownload(download, originalPath: path, filename: name))
         case .instant:
             let urls = AIValidation.destinations(text)
@@ -487,6 +504,18 @@ extension Work {
             state.session.ai.previews[request.window]?.details = reply.details ?? []
             completeAI(id, text: "", success: true)
         }
+    }
+    /// Tidy Tab Titles and Tidy Downloads run in the background: a failure says so in the window it came from, or the
+    /// person would never learn why nothing was renamed.
+    private mutating func backgroundFailed(_ task: AITask, _ reason: String, in window: WindowID?) {
+        guard let window, state.doc.windows[window] != nil else { return }
+        let feature = switch task {
+        case .renameTab: "Tidy Tab Titles"
+        case .renameDownload: AIFeature.downloadRename.title
+        default: ""
+        }
+        guard !feature.isEmpty else { return }
+        toast("\(feature): \(reason)", in: window)
     }
     mutating func aiPartial(_ id: AIRequestID, _ text: String) {
         guard let request = state.session.ai.requests[id], state.session.pendingAI[id] != nil else { return }
@@ -551,7 +580,11 @@ extension Work {
             if success || text == Self.cancelled || state.session.ai.instantRows[window]![index].opened.count > 0 {
                 state.session.ai.instantRows[window]!.remove(at: index)
                 if state.session.ai.instantRows[window]!.isEmpty { state.session.ai.instantRows[window] = nil }
-            } else { state.session.ai.instantRows[window]![index].failed = true }
+            } else {
+                state.session.ai.instantRows[window]![index].failed = true
+                // The row keeps Arc's words; why it failed (the agent signed out, no answer in time) goes beside it.
+                if text != AICopy.instantFailed { toast("Instant Links: " + text, in: window) }
+            }
         case .translate:
             if !success, text != Self.cancelled { toast(text, in: window) }
         case .organize:
@@ -634,22 +667,25 @@ extension Work {
         let providerChanged = previous.doc.settings.max.provider != state.doc.settings.max.provider
         // Max's Tidy Tab Titles: a Today tab that became Pinned by any route (Pin Tab, a drag into Pinned, a move from
         // the menu) asks for its tidier title; Arc renames a tab dragged into Pinned within a few seconds (P47-a).
-        if state.doc.settings.max.renamePinnedTabs {
+        if state.doc.settings.max.titlesOn {
             let asked = Set(state.session.pendingAI.values.compactMap { if case .renameTab(let tab, _, _) = $0 { tab } else { nil } })
             for tab in state.doc.tree.allTabs() where !asked.contains(tab) && state.role(of: tab)?.kind == .pinned && previous.role(of: tab)?.kind == .today {
                 guard let window = state.doc.windows.first(where: { state.displayedTab(tab, in: $0.key) != nil })?.key,
                       let t = state.displayedTab(tab, in: window), let url = state.tab(tab)?.pinnedURL ?? t.url, t.customTitle == nil else { continue }
-                requestAI(.renameTab(tab, title: t.displayTitle, url: url))
+                requestAI(.renameTab(tab, title: t.displayTitle, url: url), from: window)
             }
         }
         for (id, task) in state.session.pendingAI where state.session.ai.requests[id] == nil {
             let valid: Bool
             switch task {
-            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.renamePinnedTabs && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.pinnedURL == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
+            case .renameTab(let tab, _, let url): valid = state.doc.settings.max.titlesOn && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.pinnedURL == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
             case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
             default: valid = true
             }
-            if !valid || providerChanged { state.session.pendingAI[id] = nil; state.session.ai.backgroundContexts[id] = nil; effects.append(.aiCancel(id)) }
+            if !valid || providerChanged {
+                state.session.pendingAI[id] = nil; state.session.ai.backgroundContexts[id] = nil; state.session.ai.backgroundWindows[id] = nil
+                effects.append(.aiCancel(id))
+            }
         }
         for (id, request) in state.session.ai.requests {
             let ownerExists = state.doc.windows[request.window] != nil
@@ -667,7 +703,7 @@ extension Work {
             case .instant: state.doc.settings.max.enabled(.instantLinks)
             case .browse: state.doc.settings.max.enabled(.browse)
             case .translate, .barTranslation: state.doc.settings.max.enabled(.translation)
-            case .organize: state.doc.settings.max.tidyTabs
+            case .organize: state.doc.settings.max.tidyOn
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
         }
@@ -707,10 +743,11 @@ extension Work {
     }
 
     @discardableResult
-    mutating func requestAI(_ task: AITask) -> AIRequestID {
+    mutating func requestAI(_ task: AITask, from window: WindowID? = nil) -> AIRequestID {
         let id = AIRequestID(ctx.newID())
         state.session.pendingAI[id] = task
         state.session.ai.backgroundContexts[id] = backgroundAIContext(task)
+        if let window { state.session.ai.backgroundWindows[id] = window }
         effects.append(.ai(id, task, choice: state.doc.settings.max.provider))
         return id
     }
@@ -800,15 +837,21 @@ extension Work {
 
     mutating func aiDownloadRenamed(_ id: DownloadID, original: String, new: String?, error: String?) {
         let asked = state.session.ai.requests.values.first { if case .renameDownload(id, _) = $0.task { true } else { false } }?.window
+            ?? state.session.ai.renamingDownloads.removeValue(forKey: id)
         for (requestID, request) in state.session.ai.requests {
             if case .renameDownload(let downloadID, _) = request.task, downloadID == id {
                 completeAI(requestID, text: new.map { "Renamed download to " + ($0 as NSString).lastPathComponent } ?? error ?? "The file could not be renamed.")
             }
         }
-        guard let index = state.doc.downloads.firstIndex(where: { $0.id == id && $0.path == original && $0.state == .finished }), let new else { return }
+        guard let index = state.doc.downloads.firstIndex(where: { $0.id == id && $0.path == original && $0.state == .finished }), let new else {
+            // The file could not be moved (a background rename has no panel to say so).
+            if let asked, new == nil, state.doc.windows[asked] != nil { toast("\(AIFeature.downloadRename.title): " + (error ?? "The file could not be renamed."), in: asked) }
+            return
+        }
         state.doc.downloads[index].path = new
         state.doc.downloads[index].filename = (new as NSString).lastPathComponent
-        if let asked { toast(ToastCopy.downloadRenamed, in: asked) }
+        // Arc's Tidy Downloads card: "Download renamed to:" and the new name; the file is where it was.
+        if let asked, state.doc.windows[asked] != nil { toast(ToastCopy.downloadRenamed, in: asked, subtitle: (new as NSString).lastPathComponent) }
     }
 
     mutating func suggestions(_ window: WindowID, query: String, _ results: [String]) {

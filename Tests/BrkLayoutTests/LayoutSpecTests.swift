@@ -354,10 +354,11 @@ final class DropTargetTests: XCTestCase {
         let d = LayoutDriver()
         let a = d.view.space.today.rows[0].id
         let frames = d.frames()
-        // Viewport at y 232 (under the empty favorites box); the first Today row follows spacer (2+1) and New Tab
-        // (40+1): document y 44. Pinned is empty, so there is no divider (Arc's new space, P24 e).
-        XCTAssertEqual(frames.frame(of: .row(a)), CGRect(x: 0, y: 276, width: 228, height: 40))
-        XCTAssertEqual(frames.frame(of: .todayNewTab), CGRect(x: 0, y: 235, width: 228, height: 40))
+        // Viewport at y 232 (under the empty favorites box); the first Today row follows spacer (2+1), the divider
+        // (16+1; Arc draws it over Today's tabs with Pinned empty too, verify/completion/max-ui-20261107) and New Tab
+        // (40+1): document y 61.
+        XCTAssertEqual(frames.frame(of: .row(a)), CGRect(x: 0, y: 293, width: 228, height: 40))
+        XCTAssertEqual(frames.frame(of: .todayNewTab), CGRect(x: 0, y: 252, width: 228, height: 40))
         XCTAssertEqual(frames.frame(of: .urlPill), CGRect(x: 8, y: 46, width: 212, height: 36))
         XCTAssertEqual(frames.frame(of: .dockLibrary), CGRect(x: 8, y: 735, width: 32, height: 32))
         XCTAssertNil(frames.frame(of: .renameField), "view-owned")

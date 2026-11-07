@@ -249,6 +249,38 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(events, [.aiResult(id, .failed(AgentCopy.missing(.gemini)))])
     }
 
+    /// The agent said its model has no quota left and to switch model; the person picked another in the Max pane through
+    /// the panel's Agent…: the next message goes to that model, in the same conversation (2026-11-07, a real launch:
+    /// it went to the old model again and failed the same way).
+    func testAModelPickedDuringAConversationTakesTheNextMessage() async throws {
+        let folder = try directory(), log = folder.appendingPathComponent("calls.jsonl")
+        let variables = ["BRK_CONTROL_SOCKET": folder.appendingPathComponent("unused.sock").path, "BRK_AI_FIXTURE_EXECUTABLE": fixture.path,
+                         "BRK_AI_FIXTURE_PROTOCOL": "1", "BRK_AI_FIXTURE_LOG": log.path]
+        for (name, value) in variables { setenv(name, value, 1) }
+        defer { for name in variables.keys { unsetenv(name) } }
+        var events: [SystemEvent] = []
+        let services = AIServices(engine: StubEngine(), send: { events.append($0) })
+        func max(_ model: String?) throws -> MaxSnapshot {
+            var snapshot = try JSONDecoder().decode(MaxSnapshot.self, from: Data(#"{"settings":{"provider":"claude","renamePinnedTabs":false,"tidyTabs":false},"detected":["claude"],"active":"claude","agents":[],"askProvider":"Claude"}"#.utf8))
+            if let model { snapshot.settings.agentOptions = [.claude: AIAgentOptions(model: model)] }
+            return snapshot
+        }
+        let work = try directory(), id = AIRequestID("conversation")
+        services.openConversation(id, folder: work.path, choice: .claude, max: try max(nil))
+        let first = AIRequestID("first"), second = AIRequestID("second")
+        services.turn(conversation: id, turn: first, task: .ask("hello"), max: try max(nil))
+        try await wait("the first answer") { events.contains { if case .aiResult(first, _) = $0 { true } else { false } } }
+        services.turn(conversation: id, turn: second, task: .ask("again"), max: try max("fixture-haiku"))
+        try await wait("the second answer") { events.contains { if case .aiResult(second, _) = $0 { true } else { false } } }
+        XCTAssertTrue(events.contains(.aiConversation(id, .notice(AgentCopy.modelChanged))), "the panel says the model changed")
+        let calls = entries(log).filter { $0["prompt"] != nil }
+        let argv = try XCTUnwrap(calls.last?["argv"] as? [String])
+        XCTAssertEqual(zip(argv, argv.dropFirst()).first { $0.0 == "--model" }?.1, "fixture-haiku", "\(argv)")
+        XCTAssertTrue(argv.contains("--resume"), "a session with tools on goes on where it was: \(argv)")
+        XCTAssertNotEqual(calls.first?["pid"] as? Int32, calls.last?["pid"] as? Int32, "a new process for the new model")
+        services.cancelAll()
+    }
+
     func testTheOneShotProviderRunsReadOnlyAndCleansUp() async throws {
         let provider = AgentOneShot(kind: .codex, executable: fixture, options: AIAgentOptions(model: "fixture-sol"))
         var partial: String?
