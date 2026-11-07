@@ -12,6 +12,18 @@ extension Work {
             guard let result = BrowserCalculator.result(expression) else { return }
             effects.append(.copyToPasteboard(result))
             state.session.windows[window]?.overlay = nil
+        case .copyAnswer(let text):
+            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
+            effects.append(.copyToPasteboard(text))
+            state.session.windows[window]?.overlay = nil
+        case .local(let action, let path):
+            guard let results = state.session.windows[window]?.localResults, (results.apps + results.files).contains(where: { $0.path == path }) else { return }
+            switch action {
+            case .open: effects.append(.openLocalFile(path))
+            case .reveal: effects.append(.revealFile(path))
+            case .copyPath: effects.append(.copyToPasteboard(path))
+            }
+            state.session.windows[window]?.overlay = nil
         case .open(let mode):
             // Cmd+L edits the focused tab (over the URL pill while the sidebar shows it, else centered); with
             // nothing shown it behaves as Cmd+T. The same target already open is a no-op that keeps its openID (the
@@ -24,6 +36,8 @@ extension Work {
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)
             // A new opening starts with an empty query, so the last opening's suggestions answer nothing.
             if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }
+            state.session.windows[window]?.localResults = nil
+            state.session.windows[window]?.barClock = ctx.now
         case .submit(let text):
             // Searches use the current space's profile's engine (Profiles pane, "Default Search Engine").
             guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
@@ -46,11 +60,14 @@ extension Work {
             // `SystemEvent.suggestions`. A blank query, or a profile that does not allow them (any more), clears
             // what is shown. Top domains and the host dedup list are view-local (Suggest.swift); only the network
             // fetch goes through here.
-            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
-            if case .commandBar(_, .ai)? = state.session.windows[window]?.overlay { return }
+            guard case .commandBar(_, let target)? = state.session.windows[window]?.overlay else { return }
+            if case .ai = target { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
-            guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, BrowserCalculator.result(trimmed) == nil, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
+            askQuickSources(trimmed, target: target, in: window)
+            // A text the bar answers itself is not a web search: a calculation, a conversion, a file or emoji name.
+            let answeredHere = BrowserCalculator.result(trimmed) != nil || QuickAnswers.leads(trimmed) || (target == .newTab && LocalSources.mode(trimmed) != nil)
+            guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, !answeredHere, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
             }
@@ -63,6 +80,25 @@ extension Work {
 }
 
 extension Work {
+    /// The sources beside the search engine, none of them for a bar that fills an empty split pane; files and apps only
+    /// in a new-tab bar. An ordinary keystroke changes no state here, so typing does not re-render the window.
+    private mutating func askQuickSources(_ text: String, target: CommandBarTarget, in window: WindowID) {
+        if target == .newTab, let request = LocalSources.request(for: text, engine: state.searchEngine(in: window)),
+           state.session.windows[window]?.localResults?.query != request.query {
+            effects.append(.searchLocal(window, request))
+        }
+        if case .fillPane = target { return }
+        if QuickAnswers.usesClock(text) { state.session.windows[window]?.barClock = ctx.now }
+        if QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
+    }
+
+    /// Kept for the view, which shows it only while its text is still `results.query` (`Suggest.rank`); BrkApp cancels a
+    /// search as soon as the text moves on.
+    mutating func localResults(_ window: WindowID, _ results: LocalResults) {
+        guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
+        state.session.windows[window]?.localResults = results
+    }
+
     /// What a submitted url does per the open bar's target: a live page navigates, a tab without a page (an empty
     /// pane) gets its page created from the url, a new-tab bar opens a tab; then the bar closes.
     private mutating func apply(_ url: URL, in window: WindowID) {

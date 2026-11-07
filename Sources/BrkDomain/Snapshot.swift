@@ -560,6 +560,13 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var askProvider: String? = nil
     /// Max's Instant Links is on: Shift+Return opens the top results of a web search (P48-a).
     public var instantLinks: Bool = false
+    /// Files and apps for the bar's text; the view drops them once its text has moved on. Only in a new-tab bar.
+    public var local: LocalResults? = nil
+    public var rates: CurrencyRates? = nil
+    /// The time quick answers read (`WindowSession.barClock`).
+    public var now = Instant(milliseconds: 0)
+    /// Max's tool is chosen and on this Mac, so Tab can send the typed text to it (`Suggest.tabQuestion`).
+    public var askAgentFound: Bool = false
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {

@@ -104,6 +104,16 @@ public enum CommandBarCommand: Hashable, Sendable, Codable {
     case queryChanged(String)
     /// Esc in the bar.
     case dismiss
+    /// A quick answer's or an emoji row's Return: `text` to the pasteboard, then the bar closes.
+    case copyAnswer(String)
+    /// A file or app row (`LocalResults`): only a path the bar is showing is acted on.
+    case local(LocalAction, path: String)
+}
+
+/// Return on a file row opens it with its default app (an app launches); ⌘Return shows it in the Finder; ⌥Return copies
+/// its path.
+public enum LocalAction: Hashable, Sendable, Codable {
+    case open, reveal, copyPath
 }
 
 public enum ArchiveCommand: Hashable, Sendable, Codable {
@@ -596,6 +606,10 @@ public enum SystemEvent: Sendable, Equatable {
     case externalURL(URL)
     /// The default engine answered `Effect.fetchSuggestions` for this query (stale answers are dropped). F4.
     case suggestions(WindowID, query: String, [String])
+    /// The file and app sources answered `Effect.searchLocal`; the bar shows it only while its text is still the answer's.
+    case localResults(WindowID, LocalResults)
+    /// Exchange rates are known (`Effect.needCurrencyRates`), from the cache or the day's fetch.
+    case currencyRates(CurrencyRates)
     /// Which local AI command-line tools BrkApp found on PATH at launch (`AIProviderSeam.detect`).
     case aiProvidersDetected([AIProviderKind])
     /// What registering the system-wide New Little Arc Window shortcut came to (BrkApp/LittleEntryPoints.swift).

@@ -161,7 +161,11 @@ private func repairSessionTargets(_ state: inout AppState) {
         case .commandBar(_, .ai), .commandBar(_, .newTab), .library, nil:
             break
         }
-        if case .commandBar? = session.overlay {} else if session.suggestions != nil { session.suggestions = nil }
+        if case .commandBar? = session.overlay {} else {
+            if session.suggestions != nil { session.suggestions = nil }
+            if session.localResults != nil { session.localResults = nil }
+            if session.barClock != nil { session.barClock = nil }
+        }
         if let space = session.dialog?.space, state.doc.spaces[space] == nil { session.dialog = nil }
         switch session.profileDialog {
         case .change(let space)? where state.doc.spaces[space] == nil: session.profileDialog = nil

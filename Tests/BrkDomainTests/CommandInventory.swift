@@ -28,6 +28,7 @@ enum CommandInventory {
         .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
+        .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
         .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
@@ -137,6 +138,7 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
+        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
@@ -275,6 +277,8 @@ enum CommandInventory {
             switch c {
             case .queryChangedForSite: "queryChangedForSite"
             case .calculate: "calculate"
+            case .copyAnswer: "copyAnswer"
+            case .local: "local"
             case .open: "open"
             case .submit: "submit"
             case .submitSearch: "submitSearch"
@@ -556,6 +560,8 @@ enum CommandInventory {
             }
         case .externalURL: "externalURL"
         case .suggestions: "suggestions"
+        case .localResults: "localResults"
+        case .currencyRates: "currencyRates"
         case .aiProvidersDetected: "aiProvidersDetected"
         case .globalShortcut: "globalShortcut"
         case .aiResult: "aiResult"

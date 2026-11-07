@@ -162,12 +162,12 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
         case .easel(let event):
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed: begin(window: nil)
+        case .boost, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .currencyRates: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -204,6 +204,7 @@ struct Work {
         case .spaceExportFinished(let window, let token, let outcome): spaceExportFinished(window, token: token, outcome: outcome)
         case .clockTick:
             sweepAutoArchive()
+            for window in state.session.windows.keys where state.session.windows[window]?.barClock != nil { state.session.windows[window]?.barClock = ctx.now }
             for window in state.session.windows.keys {
                 if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now {
                     state.session.windows[window]?.toast = nil
@@ -216,6 +217,8 @@ struct Work {
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
+        case .localResults(let window, let results): localResults(window, results)
+        case .currencyRates(let rates): state.session.currencyRates = rates
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
         case .globalShortcut(let status): if state.session.globalShortcut != status { state.session.globalShortcut = status }
         case .aiResult(let id, let outcome): aiResult(id, outcome)

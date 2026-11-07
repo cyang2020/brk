@@ -654,6 +654,14 @@ extension AppState {
         }
         return kind.displayName
     }
+
+    /// Max's chosen tool, or under Automatic any tool, is on this Mac (`askProviderName` names Claude even when none is).
+    var askAgentFound: Bool {
+        let choice = doc.settings.max.provider
+        if choice == .off { return false }
+        if let kind = AIProviderKind(rawValue: choice.rawValue) { return session.detectedAI.contains(kind) }
+        return !session.detectedAI.isEmpty
+    }
 }
 
 extension AIProviderKind {

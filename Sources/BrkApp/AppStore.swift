@@ -50,6 +50,8 @@ public final class AppStore {
     /// Fallback for in-process input while the display is locked or the app has no key window.
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
+    private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
+    private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
     private var queue: [Input] = []
     private var dispatching = false
@@ -254,7 +256,7 @@ public final class AppStore {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
-            switch command { case .queryChanged, .queryChangedForSite, .dismiss: suggestions.cancel(window); default: break }
+            switch command { case .queryChanged, .queryChangedForSite, .dismiss: suggestions.cancel(window); localSearch.cancel(window); default: break }
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false
@@ -293,6 +295,7 @@ public final class AppStore {
         }
         sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
+        localSearch.reconcile(snapshot)
         reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
@@ -563,6 +566,9 @@ public final class AppStore {
             case .aiRenameDownload(let id, let path, let name): aiServices.rename(id, path: path, filename: name)
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
+            case .searchLocal(let window, let request): localSearch.search(window, request)
+            case .openLocalFile(let path): NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            case .needCurrencyRates: currencyRates.need()
             case .disposeContext: break
             case .loadWebsiteRules(let file, let context):
                 Task { @MainActor [weak self] in

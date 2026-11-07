@@ -46,6 +46,13 @@ public enum Effect: Hashable, Sendable {
     /// Fetch the default engine's OpenSearch suggestions for `query` (BrkApp debounces by
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.
     case fetchSuggestions(WindowID, query: String, url: URL)
+    /// Look for a file and app by name (BrkApp debounces like the suggestions); the answer is `SystemEvent.localResults`.
+    case searchLocal(WindowID, LocalSearchRequest)
+    /// Open a file with its default app, or launch an app.
+    case openLocalFile(String)
+    /// A currency question was typed: BrkApp reads its cache and fetches at most once a day; the answer is
+    /// `SystemEvent.currencyRates`.
+    case needCurrencyRates
     /// Drop a request context's data: incognito when its last window closed, a profile when it was deleted.
     case disposeContext(ContextDisposal)
     case loadWebsiteRules(URL, BrowsingContext)

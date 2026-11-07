@@ -413,7 +413,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             newDocument: doc.kind == .little ? nil : state.profileSettings(in: id).documentApp,
             travel: state.travelCandidates(window: id, space: space, focused: state.resolveTab(.focused, in: id)),
             askProvider: doc.kind != .incognito && state.doc.settings.max.enabled(.commandBar) ? state.askProviderName : nil,
-            instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks)
+            instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks),
+            local: target == .newTab ? session.localResults : nil,
+            rates: state.session.currencyRates,
+            now: session.barClock ?? Instant(milliseconds: 0),
+            askAgentFound: state.askAgentFound
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
