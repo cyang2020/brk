@@ -1,5 +1,6 @@
 import BrkBase
 import BrkDomain
+import BrkEngine
 import Darwin
 import Foundation
 import XCTest
@@ -210,6 +211,25 @@ final class AgentSessionTests: XCTestCase {
         await session.close()
         XCTAssertTrue(AgentCopy.notSignedIn(.gemini).contains("Terminal"))
         XCTAssertTrue(AgentCopy.missing(.cursor).contains("cursor-agent"))
+    }
+
+    /// A request that names an agent gets that agent or the reason it cannot, whatever else is installed.
+    func testAnExplicitChoiceNeverFallsBackToAnotherAgent() async throws {
+        XCTAssertEqual(AIProviderSeam.resolve(.gemini, active: .claude, detected: [.claude]), .gemini)
+        XCTAssertEqual(AIProviderSeam.resolve(.cursor, active: .claude, detected: [.claude]), .cursor)
+        XCTAssertEqual(AIProviderSeam.resolve(.auto, active: .codex, detected: [.claude, .codex]), .codex)
+        XCTAssertNil(AIProviderSeam.resolve(.off, active: .claude, detected: [.claude]))
+        XCTAssertNil(AIProviderSeam.provider(for: .gemini, detected: [.claude], active: .claude))
+        let outcome = await AIProviderSeam.answer(.ask("x"), choice: .gemini, detected: [.claude], active: .claude)
+        XCTAssertEqual(outcome, .failed(AgentCopy.missing(.gemini)))
+        // The same through a conversation, the way the panel asks.
+        var events: [SystemEvent] = []
+        let services = AIServices(engine: StubEngine(), send: { events.append($0) })
+        let max = try JSONDecoder().decode(MaxSnapshot.self, from: Data(#"{"settings":{"provider":"auto","renamePinnedTabs":false,"tidyTabs":false},"detected":["claude"],"active":"claude","agents":[],"agentCardOpen":false}"#.utf8))
+        let id = AIRequestID("explicit")
+        services.openConversation(id, folder: nil, choice: .auto, max: max)
+        services.answer(id, task: .ask("x"), choice: .gemini, max: max)
+        XCTAssertEqual(events, [.aiResult(id, .failed(AgentCopy.missing(.gemini)))])
     }
 
     func testTheOneShotProviderRunsReadOnlyAndCleansUp() async throws {

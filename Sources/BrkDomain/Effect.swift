@@ -30,12 +30,14 @@ public enum Effect: Hashable, Sendable {
     /// Share-by-link replaced by a file: BrkApp shows a save panel (JSON or HTML) and writes `ExportCodec`'s bytes.
     case export(ExportDocument, owner: WindowID)
     case exportSpaceFolder(WindowID, token: String, document: ExportDocument)
-    /// Run a task through the local AI command-line tool (BrkApp/AIProvider.swift); the answer comes back as
-    /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
+    /// Run a task through a local agent (BrkApp/AIProvider.swift); the answer comes back as
+    /// `SystemEvent.aiResult(id, outcome)`. `choice` picks the agent for this request: an agent named explicitly runs or
+    /// says why it cannot, never another one; only `.auto` chooses, from what is installed and signed in.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
     case aiCancel(AIRequestID)
-    /// Keep a session for this conversation: the `.ai` request with the same id is its first turn, and it stays for
-    /// `aiTurn`. `folder` nil: tools off, strictest read-only mode. A folder: tools on, approvals on, chosen by the user.
+    /// Keep a session for this conversation; it stays for `aiTurn`. `folder` nil: tools off, strictest read-only mode, and
+    /// the `.ai` request with the same id is its first turn and names its agent. A folder: tools on, approvals on, chosen
+    /// by the user, and this `choice` names the agent.
     case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice)
     /// The next user message in a conversation; it answers as request `turn` (`aiPartial`, `aiResult`).
     case aiTurn(conversation: AIRequestID, turn: AIRequestID, AITask)

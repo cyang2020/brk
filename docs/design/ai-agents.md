@@ -56,6 +56,10 @@ Brk (`AgentProcess`, `AgentSession`):
 
 A command that double-forked away before Stop and left the process group is the one case this cannot reach on macOS.
 
+## Choosing the agent for one request
+
+`Effect.ai(id, task, choice:)` picks the agent per request. An agent named explicitly either runs or says why it cannot (not installed, not signed in); Brk never answers from a different agent instead. Only `.auto` chooses: the first installed agent not known to be signed out. A conversation's first request names its agent, and its follow-ups stay with that agent.
+
 ## Tool approvals
 
 **Claude**: `--permission-prompt-tool stdio` sends every tool that needs permission to the host as `can_use_tool`, with the tool's input and `permission_suggestions`. T3 answers `allow` with `updatedInput`, or `deny` with a message; "for the session" adds `updatedPermissions` with `destination: "session"` (`ClaudeAdapterV2.ts`: `permissionResultFromDecision`, `toSessionPermissionUpdates`). Brk leaves out a `setMode` suggestion: for `Write`, Claude suggests switching the whole session to accept edits, which is wider than what the user is looking at.

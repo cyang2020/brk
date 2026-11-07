@@ -30,14 +30,13 @@ final class AIServices {
             if self?.tasks[id]?.isEmpty == true { self?.tasks[id] = nil }
         }
     }
+    /// `choice` picks this request's agent. An agent named explicitly runs or says why it cannot; only `.auto` chooses.
     func answer(_ id: AIRequestID, task: AITask, choice: AIProviderChoice, max: MaxSnapshot) {
-        // The first turn of a conversation runs in its session; everything else is one prompt in a session of its own.
-        if conversations[id] != nil {
+        // The first turn of a conversation makes its session, with the agent this request names. Everything else is one
+        // prompt in a session of its own.
+        if opening.remove(id) != nil {
+            if let failure = makeSession(id, folder: nil, choice: choice, max: max) { send(.aiResult(id, failure)); return }
             turn(conversation: id, turn: id, task: task)
-            return
-        }
-        if let waiting = unavailableConversations.removeValue(forKey: id) {
-            send(.aiResult(id, waiting))
             return
         }
         start(id) { [weak self] in
@@ -48,17 +47,25 @@ final class AIServices {
         }
     }
 
-    /// The session for a conversation. Read-only ones work in an empty folder of their own, deleted when they close; a
-    /// session with tools on works in the folder the user chose and starts at once, so the panel can say which model.
+    /// A read-only conversation waits for its first request, which says which agent. A session with tools on starts at
+    /// once, so the panel can say which model before the first message.
     func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot) {
         guard !stopping else { return }
-        let resolved = agent(for: choice, max: max)
-        guard let resolved else {
-            let outcome: AIOutcome = choice.kind.map { AIProviderSeam.mode == .real ? .failed(AgentCopy.missing($0)) : .unavailable } ?? .unavailable
-            if folder == nil { unavailableConversations[id] = outcome }
-            else if case .failed(let message) = outcome { send(.aiConversation(id, .notice(message))) }
-            else { send(.aiConversation(id, .notice("No local AI tool is available. Choose an installed agent in Settings → Max."))) }
+        guard let folder else { opening.insert(id); return }
+        guard let failure = makeSession(id, folder: folder, choice: choice, max: max) else {
+            conversations[id]?.begin()
             return
+        }
+        if case .failed(let message) = failure { send(.aiConversation(id, .notice(message))) }
+        else { send(.aiConversation(id, .notice("No local AI tool is available. Choose an installed agent in Settings → Max."))) }
+    }
+    private var opening: Set<AIRequestID> = []
+
+    /// The session for a conversation, or why there can be none. Read-only ones work in an empty folder of their own,
+    /// deleted when they close; a session with tools on works in the folder the user chose.
+    private func makeSession(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot) -> AIOutcome? {
+        guard let resolved = agent(for: choice, max: max) else {
+            return choice.kind.map { AIProviderSeam.mode == .real ? .failed(AgentCopy.missing($0)) : .unavailable } ?? .unavailable
         }
         let directory: URL
         if let folder { directory = URL(fileURLWithPath: folder, isDirectory: true) }
@@ -68,11 +75,9 @@ final class AIServices {
         }
         let options = max.settings.agentOptions?[resolved.kind]
         let spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: folder == nil ? .readOnly : .tools, directory: directory)
-        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
-        conversations[id] = session
-        if folder != nil { session.begin() }
+        conversations[id] = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
+        return nil
     }
-    private var unavailableConversations: [AIRequestID: AIOutcome] = [:]
 
     /// The executable and how to talk to it for this instance: the fixture stands in for every agent in a test instance.
     private func agent(for choice: AIProviderChoice, max: MaxSnapshot) -> (kind: AIProviderKind, executable: URL, plain: Bool)? {
@@ -102,7 +107,7 @@ final class AIServices {
     }
 
     func closeConversation(_ id: AIRequestID) {
-        unavailableConversations[id] = nil
+        opening.remove(id)
         guard let session = conversations.removeValue(forKey: id) else { return }
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
         closing.append(Task { await session.close() })
@@ -215,6 +220,7 @@ final class AIServices {
         deadlines.removeAll(); hovers.removeAll()
         for task in refreshing.values { task.cancel() }
         for id in Array(conversations.keys) { closeConversation(id) }
+        opening.removeAll()
     }
     func stop() async {
         let running = tasks.values.flatMap { $0.values }

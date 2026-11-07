@@ -71,9 +71,7 @@ extension Work {
         switch intent {
         case .ask(let question):
             guard aiEnabled(.commandBar, window), let q = aiQuestion(question) else { return }
-            let id = startAI(.ask(q), purpose: .answer, title: q, window: window, run: false, seconds: Self.panelSeconds)
-            openConversation(id, in: window)
-            sendAI(id, task: .ask(q))
+            askAgent(q, choice: state.doc.settings.max.provider, in: window)
         case .followUp(let text):
             guard let q = aiQuestion(text) else { return }
             followUp(q, in: window)
@@ -166,6 +164,12 @@ extension Work {
     /// A read-only panel turn's ceiling: the panel has Stop, and an agent writing a long answer is not stuck. A turn in
     /// a folder has none; a command the user allowed may run for as long as it needs.
     private static let panelSeconds = 300
+    /// A question in the panel to `choice`'s agent, read-only; its follow-ups stay with that agent.
+    private mutating func askAgent(_ q: String, choice: AIProviderChoice, in window: WindowID) {
+        let id = startAI(.ask(q), purpose: .answer, title: q, window: window, run: false, seconds: Self.panelSeconds)
+        openConversation(id, in: window)
+        sendAI(id, task: .ask(q), choice: choice)
+    }
     /// The request becomes the first turn of a conversation: its session stays for follow-ups, with tools off.
     private mutating func openConversation(_ id: AIRequestID, in window: WindowID) {
         state.session.ai.answers[window]?.conversation = AIConversationSnapshot(id: id)
@@ -258,10 +262,10 @@ extension Work {
     mutating func aiAgents(_ statuses: [AIAgentStatus]) {
         for status in statuses { state.session.ai.agents[status.kind] = status }
     }
-    private mutating func sendAI(_ id: AIRequestID, task: AITask) {
+    private mutating func sendAI(_ id: AIRequestID, task: AITask, choice: AIProviderChoice? = nil) {
         state.session.pendingAI[id] = task
         state.session.ai.requests[id]?.task = task
-        effects.append(.ai(id, task, choice: state.doc.settings.max.provider))
+        effects.append(.ai(id, task, choice: choice ?? state.doc.settings.max.provider))
     }
     private mutating func readActiveAI(_ purpose: AIPurpose, title: String, in window: WindowID) {
         guard let page = state.findPage(in: window), case .ready(let document) = state.session.live[page]?.document,
