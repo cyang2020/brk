@@ -128,8 +128,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
         shortcuts: shortcuts,
         max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName,
-                         agents: AIProviderKind.allCases.map { state.session.ai.agents[$0] ?? AIAgentStatus(kind: $0, state: state.session.detectedAI.contains($0) ? .checking : .missing) },
-                         agentCardOpen: state.session.ai.agentCardOpen),
+                         agents: AIProviderKind.allCases.map { state.session.ai.agents[$0] ?? AIAgentStatus(kind: $0, state: state.session.detectedAI.contains($0) ? .checking : .missing) }),
         advanced: doc.settings.advanced,
         tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
         littleArcShortcut: state.session.globalShortcut

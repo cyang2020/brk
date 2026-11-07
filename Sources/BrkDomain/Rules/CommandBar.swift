@@ -85,6 +85,17 @@ extension Work {
         case .splitOpen(let edge, let text):
             run(.split(.addPaneAt(edge)), in: window)
             if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(text)), in: window) }
+        case .splitTab(let edge, let tab):
+            guard let open = state.session.windows[window]?.overlay, case .commandBar(_, .newTab) = open else { return }
+            // An open bar holds drops off (`splitDrop`). A Favorite's or pinned tab's drop opens its address and leaves it where it is.
+            state.session.windows[window]?.overlay = nil
+            if let offer = state.splitDrop(in: window)?.offers[tab] {
+                run(.split(.dropTab(offer, edge: edge)), in: window)
+            } else if let url = state.displayedTab(tab, in: window)?.url {
+                run(.commandBar(.splitOpen(edge, url.absoluteString)), in: window)
+            } else {
+                state.session.windows[window]?.overlay = open
+            }
         case .prefixQuery(let action, let text):
             guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
             if state.session.windows[window]?.suggestions != nil { state.session.windows[window]!.suggestions = nil }

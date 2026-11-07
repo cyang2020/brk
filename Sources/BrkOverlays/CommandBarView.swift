@@ -77,11 +77,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private(set) var offer: SearchEngineCandidate?
     /// The prefix Tab would enter, shown there when no engine is on offer.
     private(set) var prefixOffer: QuickPrefix?
-    private let sitePill = NSView()
-    private let siteLabel = NSTextField(labelWithString: "")
+    let sitePill = NSView()
+    let siteLabel = NSTextField(labelWithString: "")
     private let leadingIcon = NSImageView()
     private let info = InfoButton()
     private let offerLabel = NSTextField(labelWithString: "")
+    /// A prefix's colour beside its offer, so the word shows what Tab will enter.
+    let offerDot = NSView()
     private let keyCap = NSView()
     private let keyLabel = NSTextField(labelWithString: OverlayCopy.siteSearchKey)
     private(set) var results: [Suggestion] = []
@@ -130,6 +132,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         leadingIcon.imageScaling = .scaleProportionallyUpOrDown
         offerLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
         offerLabel.lineBreakMode = .byTruncatingTail
+        offerDot.wantsLayer = true
+        offerDot.layer?.cornerRadius = OverlayMetrics.commandBar.offerDotSize.value / 2
+        offerDot.isHidden = true
         keyCap.wantsLayer = true
         keyCap.layer?.cornerCurve = .continuous
         keyCap.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
@@ -149,7 +154,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         backdropTint.wantsLayer = true
         backdrop.addSubview(backdropTint)
         sitePill.identify(.commandBarPill)
-        for view in [backdrop, leadingIcon, sitePill, input, info, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
+        for view in [backdrop, leadingIcon, sitePill, input, info, offerDot, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
@@ -388,9 +393,21 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
+    /// A prefix wears its own colour; a search engine's pill stays Arc's.
+    private func applyPillColors() {
+        if let tint = prefix?.tint {
+            sitePill.layer?.backgroundColor = tint.pillColor.cgColor
+            siteLabel.textColor = .white
+        } else {
+            sitePill.layer?.backgroundColor = colors.accessory.cgColor
+            siteLabel.textColor = colors.accessoryText
+        }
+    }
+
     private func applySiteSearchLook() {
         sitePill.isHidden = pill == nil
         siteLabel.stringValue = pill?.title ?? ""
+        applyPillColors()
         let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? prefix?.placeholder ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
         input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: colors.placeholder, .font: input.font ?? .systemFont(ofSize: OverlayMetrics.commandBar.centeredInputFontSize.value),
@@ -493,7 +510,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let offerWidth = width(offerLabel) + 4
         // Half points, as Arc's 30.5 pt Tab key.
         let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
-        let accessoryWidth = offered != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
+        let offerTint = offer == nil ? prefixOffer?.tint : nil
+        offerDot.isHidden = offerTint == nil
+        let dotWidth = offerTint == nil ? 0 : o.offerDotSize.value + o.offerDotGap.value
+        let accessoryWidth = offered != nil ? dotWidth + offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
         let font = input.font ?? .systemFont(ofSize: o.attachedInputFontSize.value)
@@ -518,6 +538,12 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let offerHeight = offerLabel.intrinsicContentSize.height
             offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
             accessoryLeft = offerLabel.frame.minX
+            if let offerTint {
+                let dot = o.offerDotSize.value
+                offerDot.frame = CGRect(x: offerLabel.frame.minX - o.offerDotGap.value - dot, y: (mid - dot / 2).rounded(), width: dot, height: dot)
+                offerDot.layer?.backgroundColor = offerTint.pillColor.cgColor
+                accessoryLeft = offerDot.frame.minX
+            }
         } else if !info.isHidden {
             info.frame = CGRect(x: right - side, y: (mid - side / 2).rounded(), width: side, height: side)
             accessoryLeft = info.frame.minX
@@ -568,8 +594,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             return shadow
         }()
         hairline.layer?.backgroundColor = colors.hairline.cgColor
-        sitePill.layer?.backgroundColor = colors.accessory.cgColor
-        siteLabel.textColor = colors.accessoryText
+        applyPillColors()
         offerLabel.textColor = colors.secondary
         keyCap.layer?.backgroundColor = colors.accessory.cgColor
         keyLabel.textColor = colors.accessoryText
@@ -888,6 +913,10 @@ extension NSShadow {
 /// A plain container with top-left origin, like every BrkUI container.
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+private extension RGBA {
+    var pillColor: NSColor { NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha) }
 }
 
 /// The pictures of Brk's own rows: the system's icon for an app, once per path, for a kind of file, or an emoji drawn at

@@ -213,24 +213,33 @@ final class QuickSourceRowsTests: XCTestCase {
     func testSplitRows() {
         var snapshot = bar(tabs: [candidate("t1", "Fixture Notes", "https://notes.example.com/"), candidate("t2", "Other", "https://other.example.com/")])
         snapshot.actions = [.addSplitView, .separateTabFromSplitView, .maximizeSplitPane, .splitHorizontal, .splitVertical, .removeSplitView]
-        // No text: what Add Split View does, then the commands.
+        func tab(_ id: String, _ side: SplitEdge = .right) -> Command { .commandBar(.splitTab(side, ItemID(id))) }
+        // No text: the open tabs, then an empty pane, then the commands.
         let empty = ranked("", word: "split", snapshot)
-        XCTAssertEqual(empty.first?.command, .split(.addPane))
-        XCTAssertEqual(Array(empty.dropFirst().map(\.command)), [.split(.separatePane(.focused)), .split(.toggleExpanded), .split(.orientCurrent(.horizontal)), .split(.orientCurrent(.vertical))])
-        XCTAssertEqual(ranked("left", word: "split", snapshot).first?.command, .split(.addPaneAt(.left)))
-        // A text: an address or search for a new pane on the right; a tab's title too.
+        XCTAssertEqual(empty.map(\.command), [tab("t1"), tab("t2"), .split(.addPane), .split(.separatePane(.focused)), .split(.toggleExpanded)])
+        XCTAssertEqual(empty.first?.subtitle, "New pane on the right")
+        // A side alone: the same, on that side.
+        XCTAssertEqual(Array(ranked("left", word: "split", snapshot).map(\.command).prefix(3)), [tab("t1", .left), tab("t2", .left), .split(.addPaneAt(.left))])
+        // A text: an open tab first; a web search only after what is open or was visited.
         let typed = ranked("fixture", word: "split", snapshot)
-        XCTAssertEqual(typed.first?.command, .commandBar(.splitOpen(.right, "fixture")))
-        XCTAssertEqual(typed.first?.subtitle, "New pane on the right")
-        XCTAssertEqual(typed[1].title, "Fixture Notes")
-        XCTAssertEqual(typed[1].command, .commandBar(.splitOpen(.right, "https://notes.example.com/")))
+        XCTAssertEqual(typed.first?.title, "Fixture Notes")
+        XCTAssertEqual(typed.first?.command, tab("t1"))
+        XCTAssertEqual(typed[1].command, .commandBar(.splitOpen(.right, "fixture")))
+        XCTAssertEqual(typed[1].symbol, "magnifyingglass")
+        XCTAssertEqual(ranked("example", word: "split", snapshot).first?.command, tab("t1"), "by its address too")
+        var visited = snapshot
+        visited.history = [HistoryCandidate(url: URL(string: "https://guide.example.com/")!, title: "Fixture Guide", visitedAt: Instant(milliseconds: 1))]
+        XCTAssertEqual(ranked("fixture", word: "split", visited).map(\.command).prefix(3).map { $0 }, [tab("t1"), .commandBar(.splitOpen(.right, "https://guide.example.com/")), .commandBar(.splitOpen(.right, "fixture"))])
+        // An address leads, on any side, unless a tab has it.
         XCTAssertEqual(ranked("bottom example.com", word: "分屏", snapshot).first?.command, .commandBar(.splitOpen(.bottom, "example.com")))
+        XCTAssertEqual(ranked("bottom example.com", word: "分屏", snapshot).first?.symbol, "globe")
+        XCTAssertEqual(ranked("https://notes.example.com/", word: "split", snapshot).first?.command, tab("t1"))
         // A command named outright leads; the other commands follow what matches.
         XCTAssertEqual(ranked("expand", word: "split", snapshot).first?.command, .split(.toggleExpanded))
         XCTAssertEqual(ranked("expand", word: "split", snapshot)[1].command, .commandBar(.splitOpen(.right, "expand")))
         // Commands the menu has off do not show.
         snapshot.actions = [.addSplitView]
-        XCTAssertEqual(ranked("", word: "split", snapshot).map(\.command), [.split(.addPane)])
+        XCTAssertEqual(ranked("", word: "split", snapshot).map(\.command), [tab("t1"), tab("t2"), .split(.addPane)])
     }
 
     func testWindowRows() {
@@ -652,6 +661,51 @@ final class QuickSourceRowsTests: XCTestCase {
         let calc = view(incognito, sink)
         enterWord("calc", into: calc)
         XCTAssertEqual(calc.prefix?.action, .calculate, "nothing personal in a calculation")
+    }
+
+    /// Each prefix is told apart at a glance, and its name stays legible on its colour.
+    func testEveryPrefixHasItsOwnColourWithLegibleWhiteText() {
+        func channel(_ value: Double) -> Double { value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4) }
+        for prefix in QuickPrefixes.all {
+            let luminance = 0.2126 * channel(Double(prefix.tint.red)) + 0.7152 * channel(Double(prefix.tint.green)) + 0.0722 * channel(Double(prefix.tint.blue))
+            XCTAssertGreaterThanOrEqual(1.05 / (luminance + 0.05), 4.5, prefix.title)
+        }
+        XCTAssertEqual(Set(QuickPrefixes.all.map(\.tint)).count, QuickPrefixes.all.count)
+    }
+
+    func testAPrefixsPillWearsItsColourAndAnEnginesStaysAsItWas() {
+        let sink = Box()
+        var snapshot = bar()
+        snapshot.siteSearch = [bing]
+        let plain = view(snapshot, sink)
+        let accessory = plain.sitePill.layer?.backgroundColor
+        enterWord("emoji", into: plain)
+        let tint = try! XCTUnwrap(plain.prefix?.tint)
+        let filled = try! XCTUnwrap(plain.sitePill.layer?.backgroundColor?.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)?.components)
+        XCTAssertEqual(filled[0], CGFloat(tint.red), accuracy: 0.01)
+        XCTAssertEqual(filled[1], CGFloat(tint.green), accuracy: 0.01)
+        XCTAssertEqual(filled[2], CGFloat(tint.blue), accuracy: 0.01)
+        XCTAssertEqual(plain.siteLabel.textColor, .white)
+        press(#selector(NSResponder.cancelOperation(_:)), plain)
+        XCTAssertEqual(plain.sitePill.layer?.backgroundColor, accessory, "leaving gives the pill its colour back")
+        let site = view(snapshot, sink)
+        typeKeys("bing ", into: site)
+        XCTAssertEqual(site.siteSearch?.id, bing.id)
+        XCTAssertEqual(site.sitePill.layer?.backgroundColor, accessory, "a search engine's pill stays Arc's")
+    }
+
+    func testTheColourShowsBesideAPrefixsOfferOnly() {
+        let sink = Box()
+        var snapshot = bar()
+        snapshot.siteSearch = [bing]
+        let offered = view(snapshot, sink)
+        XCTAssertTrue(offered.offerDot.isHidden)
+        type("emoji", into: offered)
+        offered.layoutSubtreeIfNeeded()
+        XCTAssertFalse(offered.offerDot.isHidden, "Emoji is on offer")
+        type("bing", into: offered)
+        offered.layoutSubtreeIfNeeded()
+        XCTAssertTrue(offered.offerDot.isHidden, "an engine's offer has none")
     }
 
     func testPartOfAWordIsOfferedBesideTheInputOnlyWithoutASiteSearchOffer() {

@@ -7,9 +7,8 @@ import SwiftUI
 
 /// The Max pane as Arc 1.170 lays it out (P38-b, P38-c, P38-max-on, P38-max-list): the MAX banner, Arc's paragraph,
 /// the Enable Max card, one card row per feature with its picture and switch, the note about what is sent. Max runs
-/// the user's local coding agent. The pane keeps Arc's six rows and Arc's note under them; the note's words "your local
-/// AI tool", the Learn more note and the Max panel's Agent… open the Local AI agent card under the note (which agent,
-/// model, effort), which Arc does not have. Brk's own
+/// the user's local coding agent, so under the Enable Max card there is one card Arc does not have: which agent, its model
+/// and effort. It moves Arc's rows down, on purpose: choosing the agent is the first thing Max asks of the user here. Brk's own
 /// three AI features (Ask on Page, Browse for Me, Translate Pages) are in Advanced's More Settings…. The pane scrolls.
 struct MaxPane: View {
     let context: PaneContext
@@ -35,14 +34,16 @@ struct MaxPane: View {
                     .padding(.horizontal, M.introInset.value)
                     .padding(.top, M.introTop.value)
                 enableCard.padding(.top, CardMetrics.introToCard.value)
+                agentCard.padding(.top, M.cardGap.value)
                 SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
-                if max.agentCardOpen { agentCard.padding(.top, M.footerTop.value).background(RevealWhenShown()) }
             }
             .frame(width: Metrics.settings.contentWidth.value, alignment: .leading)
             .padding(.horizontal, Metrics.settings.horizontalPadding.value)
             .padding(.bottom, M.footerBottom.value)
         }
+        // The card says what each agent reports about itself: signed in or not, its models and efforts.
+        .onAppear { send(.refreshAgents) }
     }
 
     private var enableCard: some View {
@@ -125,7 +126,7 @@ struct MaxPane: View {
             CardRow {
                 CardLabel(MaxCopy.provider)
             } trailing: {
-                SettingsPopUp(field: "agentChoice", entries: AIProviderChoice.allCases.map { .option(SettingsCopy.provider($0), $0) },
+                SettingsPopUp(field: "agentChoice", entries: AIProviderChoice.allCases.map { .option(agentTitle($0), $0) },
                               selected: max.settings.provider, width: .selected(minimum: M.agentPopup.value)) { send(.provider($0)) }
             }
             if let kind, let status, !status.models.isEmpty {
@@ -146,22 +147,28 @@ struct MaxPane: View {
                     }
                 }
             }
-            CardDivider()
-            VStack(alignment: .leading, spacing: M.titleGap.value) {
-                ForEach(max.agents, id: \.kind) { agent in
-                    SettingsLabel(text: SettingsCopy.agentStatus(agent), field: "agentStatus-\(agent.kind.rawValue)", secondary: true)
-                }
+            if let status {
+                CardDivider()
+                SettingsLabel(text: SettingsCopy.agentStatus(status), field: "agentStatus-\(status.kind.rawValue)", secondary: true)
+                    .padding(CardMetrics.rowPadding.value)
             }
-            .padding(CardMetrics.rowPadding.value)
+        }
+    }
+
+    /// An agent's name, and why it would not answer if it would not.
+    private func agentTitle(_ choice: AIProviderChoice) -> String {
+        let name = choice.kind?.displayName ?? SettingsCopy.provider(choice)
+        guard let kind = choice.kind, let status = max.agents.first(where: { $0.kind == kind }) else { return name }
+        switch status.state {
+        case .notSignedIn: return name + MaxCopy.notSignedIn
+        case .missing: return name + MaxCopy.notInstalled
+        default: return name
         }
     }
 
     private var footer: some View {
         VStack(spacing: M.footerGap.value) {
-            LinkedText(parts: [.text(MaxCopy.footerBefore), .link(MaxCopy.footerTool, id: "agents"), .text(MaxCopy.footerAfter)],
-                       // The same grey as the sentence: at rest the note is as Arc's, whose words are not a link.
-                       font: .system(size: M.footerSize.value), color: SettingsStyle.secondaryText, linkColor: SettingsStyle.secondaryText) { _ in send(.showAgents(!max.agentCardOpen)) }
-                .help(MaxCopy.chooseAgent)
+            LinkedText(parts: [.text(MaxCopy.footer)], font: .system(size: M.footerSize.value), color: SettingsStyle.secondaryText) { _ in }
             LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], font: .system(size: M.footerSize.value), color: SettingsStyle.link, underline: true) { _ in explaining = true }
                 .popover(isPresented: $explaining) {
                     VStack(alignment: .leading, spacing: CardMetrics.controlGap.value) {
@@ -169,10 +176,6 @@ struct MaxPane: View {
                         Text(SettingsCopy.detected(max.detected, active: max.active)).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
                         Text(MaxCopy.whereToChoose).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
-                        LinkedText(parts: [.link(MaxCopy.chooseAgent, id: "agents")]) { _ in
-                            explaining = false
-                            send(.showAgents(true))
-                        }
                     }
                     .frame(width: M.popoverWidth.value).padding()
                 }
@@ -180,19 +183,6 @@ struct MaxPane: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
     }
-}
-
-/// Scrolls the pane to this view when it appears: the Local AI agent card opens below the fold.
-private struct RevealWhenShown: NSViewRepresentable {
-    func makeNSView(context: NSViewRepresentableContext<Self>) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak view] in
-            guard let view else { return }
-            view.scrollToVisible(view.bounds)
-        }
-        return view
-    }
-    func updateNSView(_ view: NSView, context: NSViewRepresentableContext<Self>) {}
 }
 
 /// A Max feature as the pane lists it: Arc's six in Arc's order.
@@ -246,15 +236,14 @@ enum MaxCopy {
     static var autoEnable: String { "Automatically enable future \(Product.name) Max features" }
     static let provider = "Local AI tool"
     /// Arc: "Max features require that we send data to our AI partners."; Brk sends it to the local tool.
-    static let footerBefore = "Max features require that we send data to "
-    static let footerTool = "your local AI tool"
-    static let footerAfter = "."
+    static let footer = "Max features require that we send data to your local AI tool."
+    static let notSignedIn = " (not signed in)"
+    static let notInstalled = " (not installed)"
     static let model = "Model"
     static let effort = "Effort"
     static let agentDefault = "Default"
     static let learnMore = "Learn more about what we send"
     static var whereToChoose: String { "Turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off in Advanced → More Settings…." }
-    static let chooseAgent = "Choose the agent, model and effort"
 
     /// "ChatGPT in the Command Bar" names the local tool (`AppState.askProviderName`: Claude, Codex, Gemini…).
     static func title(_ feature: MaxFeature, provider: String?) -> String {

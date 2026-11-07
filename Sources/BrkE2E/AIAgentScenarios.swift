@@ -16,7 +16,7 @@ enum AIAgentScenarios {
         ]
     } + [
         Scenario("AIAgentForcedStop", "a turn that ignores the agent's own stop is ended by Brk, whole tree; the next message starts a new process", cefOnly: "native panel", forcedStop),
-        Scenario("AIAgentSettings", "the Max pane's Local AI agent card lists what the agent reports; the choice reaches the next session", cefOnly: "native settings", settings),
+        Scenario("AIAgentSettings", "the Max pane's Local AI card, always there under Enable Max, lists what the agent reports; the choice reaches the next session", cefOnly: "native settings", settings),
         Scenario("AIAgentQuit", "quit ends a session with tools on and the command it started", cefOnly: "native shutdown", quit),
     ]
 
@@ -184,7 +184,6 @@ enum AIAgentScenarios {
     private static func settings(_ app: AppUnderTest) throws {
         try prepare(app, .claude)
         try app.dispatch(.settings(.openPane(.max)))
-        try app.dispatch(.settings(.max(.showAgents(true))))
         var max: MaxSnapshot?
         try app.waitUntil("the agents answered", timeout: 25) {
             guard case .settings(let settings) = try app.send(.settings) else { return false }
@@ -206,7 +205,7 @@ enum AIAgentScenarios {
         try expect(zip(argv, argv.dropFirst()).contains { $0 == "--model" && $1 == "fixture-haiku" } && zip(argv, argv.dropFirst()).contains { $0 == "--effort" && $1 == "high" }, "the choice did not reach the agent: \(argv)")
         let shownModel = try app.view().ai?.conversation?.model
         try expect(shownModel == "Fixture Haiku", "the panel names \(String(describing: shownModel))")
-        // The pane with the card open, scrolled to it, for the eye.
+        // The pane, with the card under Enable Max, for the eye.
         app.sleep(0.5)
         var settingsWindow: AppWindowFact?
         try app.waitUntil("the settings window") { settingsWindow = try app.native().appWindows.first { $0.className == "NSWindow" && $0.isVisible }; return settingsWindow != nil }

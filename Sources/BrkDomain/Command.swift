@@ -102,6 +102,9 @@ public enum CommandBarCommand: Hashable, Sendable, Codable {
     /// The `split` prefix's Return: a new pane on that side (`.split(.addPaneAt)`), and `text` opened in it through the
     /// route an empty pane's bar uses. A window that cannot add a pane opens nothing.
     case splitOpen(SplitEdge, String)
+    /// The `split` prefix's Return on an open tab: the tab itself joins what the window shows, on that side, with its live
+    /// page. A Favorite or pinned tab stays put and its address opens beside the page; so does another Space's tab.
+    case splitTab(SplitEdge, ItemID)
     /// The `define` prefix's Return: the word in Dictionary.app.
     case openDictionary(String)
     /// The text after a prefix word changed (`QuickPrefixes`): this asks the prefix's own source, never the search engine.
@@ -498,8 +501,8 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     /// The Max pane's Local AI agent card: the model and effort for an agent; nil is the agent's own default.
     case agentModel(AIProviderKind, String?)
     case agentEffort(AIProviderKind, String?)
-    /// The Local AI agent card opens or closes; opening asks each installed agent about itself.
-    case showAgents(Bool)
+    /// The Max pane appeared: ask each installed agent about itself.
+    case refreshAgents
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {

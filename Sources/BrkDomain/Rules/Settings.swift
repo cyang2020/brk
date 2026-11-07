@@ -143,9 +143,8 @@ extension Work {
                 chosen.effort = effort
                 options[agent] = chosen == AIAgentOptions() ? nil : chosen
                 state.doc.settings.max.agentOptions = options.isEmpty ? nil : options
-            case .showAgents(let open):
-                state.session.ai.agentCardOpen = open
-                if open { effects.append(.aiRefreshAgents) }
+            case .refreshAgents:
+                effects.append(.aiRefreshAgents)
             }
         case .advanced(let setting):
             switch setting {

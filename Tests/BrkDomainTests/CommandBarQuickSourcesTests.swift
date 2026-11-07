@@ -285,6 +285,42 @@ final class CommandBarQuickSourcesTests: XCTestCase {
 
     private func panes(_ d: Driver) -> [ItemID] { d.view.content.panes.map(\.tab) }
 
+    func testSplitTabBringsTheOpenTabItselfBesideThePageOnThatSide() throws {
+        for (edge, expectedFirst) in [(SplitEdge.left, true), (.right, false)] {
+            let d = Driver()
+            let other = d.open("https://other.example/")
+            let current = d.open("https://current.example/")
+            d.user(.commandBar(.open(.newTab)))
+            d.user(.commandBar(.splitTab(edge, other)))
+            XCTAssertNil(d.bar, "the bar closed")
+            XCTAssertEqual(panes(d), expectedFirst ? [other, current] : [current, other], "the tab itself, not a copy")
+        }
+    }
+
+    func testSplitTabOpensAnAddressWhenTheTabCannotJoin() throws {
+        let d = Driver()
+        let only = d.open("https://only.example/")
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.splitTab(.right, ItemID("ghost"))))
+        XCTAssertEqual(panes(d), [only], "no such tab: nothing happens")
+        XCTAssertNotNil(d.bar, "and the bar stays")
+    }
+
+    /// A Favorite stays a Favorite: its address opens beside the page, as Arc's Open in Split View does.
+    func testSplitTabOnAFavoriteOpensItsAddressInANewPane() throws {
+        let d = Driver()
+        let favorite = d.open("https://favorite.example/")
+        d.user(.item(.move(favorite, to: .into(parent: d.state.doc.favorites[.default]!, index: 0))))
+        let current = d.open("https://current.example/")
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.splitTab(.right, favorite)))
+        XCTAssertNil(d.bar)
+        XCTAssertEqual(panes(d).count, 2)
+        XCTAssertEqual(panes(d).first, current)
+        XCTAssertNotEqual(panes(d).last, favorite, "a new pane, the Favorite stays where it is")
+        XCTAssertEqual(d.state.session.live[PageID(window: d.window, item: panes(d)[1])]?.requestedURL, url("https://favorite.example/"))
+    }
+
     func testSplitOpensTheTextInANewPaneOnThatSide() throws {
         let d = Driver()
         d.user(.commandBar(.open(.newTab)))

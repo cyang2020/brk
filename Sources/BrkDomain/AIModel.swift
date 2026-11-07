@@ -271,8 +271,6 @@ struct AISession: Equatable, Sendable {
     var tidying: Set<WindowID> = []
     /// What each agent said about itself last (`SystemEvent.aiAgents`); only for the Max pane and `.auto`.
     var agents: [AIProviderKind: AIAgentStatus] = [:]
-    /// The Max pane's Local AI agent card is open.
-    var agentCardOpen = false
     /// By conversation: how much of the running turn's text rows above its last step already show.
     var turnText: [AIRequestID: Int] = [:]
 }

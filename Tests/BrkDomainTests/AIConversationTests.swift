@@ -230,8 +230,7 @@ final class AIConversationTests: XCTestCase {
 
     func testOpeningTheCardAsksTheAgentsAndMaxOnAtLaunchDoesToo() {
         let d = enabled()
-        XCTAssertTrue(d.user(.settings(.max(.showAgents(true)))).effects.contains(.aiRefreshAgents))
-        XCTAssertTrue(d.snapshot.settings.max.agentCardOpen)
+        XCTAssertTrue(d.user(.settings(.max(.refreshAgents))).effects.contains(.aiRefreshAgents))
         XCTAssertTrue(d.system(.aiAgentsWanted).effects.contains(.aiRefreshAgents))
         XCTAssertFalse(Driver().system(.aiAgentsWanted).effects.contains(.aiRefreshAgents), "Max off: no agent is started at launch")
     }

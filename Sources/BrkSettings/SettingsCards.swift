@@ -160,8 +160,6 @@ struct LinkedText: View {
     var font: Font = SettingsStyle.font
     var color: Color = SettingsStyle.text
     var underline = false
-    /// The phrase's colour, for a phrase that should not stand out where it sits.
-    var linkColor: Color = SettingsStyle.link
     let open: @MainActor (String) -> Void
 
     enum Part {
@@ -185,7 +183,7 @@ struct LinkedText: View {
             case .link(let text, let id):
                 var link = AttributedString(text)
                 link.link = URL(string: "brk-settings://\(id)")
-                link.foregroundColor = linkColor
+                link.foregroundColor = SettingsStyle.link
                 if underline { link.underlineStyle = .single }
                 result += link
             }

@@ -27,35 +27,38 @@ public struct QuickPrefix: Hashable, Sendable, Codable {
     public let words: [String]
     public let action: QuickPrefixAction
     public let placeholder: String
+    /// The pill's fill, with white text on it, in light and dark alike: this prefix at a glance.
+    public let tint: RGBA
 
-    init(_ title: String, _ words: [String], _ action: QuickPrefixAction, _ placeholder: String) {
+    init(_ title: String, _ words: [String], _ action: QuickPrefixAction, _ placeholder: String, _ tint: UInt32) {
         self.title = title
         self.words = words
         self.action = action
         self.placeholder = placeholder
+        self.tint = RGBA(Double((tint >> 16) & 255) / 255, Double((tint >> 8) & 255) / 255, Double(tint & 255) / 255)
     }
 }
 
 public enum QuickPrefixes {
-    /// The one table: name, the words that enter it, what it does, its placeholder. A site-search engine of the same name
+    /// The one table: name, the words that enter it, what it does, its placeholder, its colour. A site-search engine of the same name
     /// or keyword wins over a word here (`CommandBarView`).
     public static let all: [QuickPrefix] = [
-        QuickPrefix("Claude", ["claude"], .askAgent("claude"), "Ask Claude…"),
-        QuickPrefix("Codex", ["codex", "gpt"], .askAgent("codex"), "Ask Codex…"),
-        QuickPrefix("Gemini", ["gemini"], .askAgent("gemini"), "Ask Gemini…"),
-        QuickPrefix("Cursor", ["cursor"], .askAgent("cursor"), "Ask Cursor…"),
-        QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…"),
-        QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…"),
-        QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…"),
-        QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…"),
-        QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…"),
-        QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)"),
-        QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…"),
-        QuickPrefix("Color", ["color", "colour", "颜色"], .color, "A colour: #ff5500, tomato…"),
-        QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
-        QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
-        QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
-        QuickPrefix("Calculate", ["calc", "=", "算"], .calculate, "Calculate…"),
+        QuickPrefix("Claude", ["claude"], .askAgent("claude"), "Ask Claude…", 0xB8573A),
+        QuickPrefix("Codex", ["codex", "gpt"], .askAgent("codex"), "Ask Codex…", 0x0B7F63),
+        QuickPrefix("Gemini", ["gemini"], .askAgent("gemini"), "Ask Gemini…", 0x1A73E8),
+        QuickPrefix("Cursor", ["cursor"], .askAgent("cursor"), "Ask Cursor…", 0x4A4A52),
+        QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…", 0x7C3AED),
+        QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…", 0x0E7490),
+        QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…", 0x0F766E),
+        QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…", 0x2563EB),
+        QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…", 0x4338CA),
+        QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)", 0xDB2777),
+        QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…", 0x92400E),
+        QuickPrefix("Color", ["color", "colour", "颜色"], .color, "A colour: #ff5500, tomato…", 0xC026D3),
+        QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…", 0x0369A1),
+        QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…", 0x475569),
+        QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…", 0xB45309),
+        QuickPrefix("Calculate", ["calc", "=", "算"], .calculate, "Calculate…", 0x15803D),
     ]
 
     /// The prefix whose whole word this is, nil when there is none or it cannot work here now, so the word stays plain text.

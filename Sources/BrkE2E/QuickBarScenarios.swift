@@ -743,6 +743,24 @@ enum QuickBarScenarios {
             try press(app, [], .escape)
             try app.waitUntil("a second Esc closed the bar") { try !isOpen(app) }
 
+            // Each prefix's colour, for the eye: the pill and the offer beside the word.
+            for feature in [AIFeature.commandBar, .askPage, .translation] { try app.dispatch(.settings(.max(.feature(feature, true)))) }
+            try open(app)
+            try type(app, "cla")
+            app.sleep(0.2)
+            _ = try app.screenshot("offer-colour")
+            try dismiss(app)
+            for word in ["claude", "gpt", "gemini", "cursor", "ask", "page", "summarize", "split", "window", "translate", "define", "color", "file", "app", "emoji", "calc"] {
+                try open(app)
+                try type(app, word)
+                app.sleep(0.15)
+                try press(app, [], .tab)
+                if (try? app.waitUntil("\(word)'s pill", timeout: 2) { try pillShown(app) }) != nil { _ = try app.screenshot("pill-" + word) }
+                else { app.note("\(word) did not enter here: its agent or feature is off") }
+                try dismiss(app)
+            }
+            for feature in [AIFeature.commandBar, .askPage, .translation] { try app.dispatch(.settings(.max(.feature(feature, false)))) }
+
             // A search can start with any of the words: typed with a real Space it stays a search.
             for text in ["split pea soup", "claude pricing", "app store", "translate this", "define me", "emoji movie"] {
                 try open(app)
@@ -946,8 +964,7 @@ enum QuickBarScenarios {
         try open(app)
         try typeWord(app, "split")
         _ = try app.screenshot("commands")
-        let listed = try waitForRows(app, "the commands") { $0.count >= 3 }
-        try expect(has(listed[0], "Add Split View"), "Return with no text is Add Split View: \(listed)")
+        try waitForRows(app, "Add Split View listed") { $0.contains { has($0, "Add Split View") } }
         try dismiss(app)
         try app.dispatch(.split(.restore))
         try app.dispatch(.split(.separateAll))
@@ -963,7 +980,7 @@ enum QuickBarScenarios {
         try app.dispatch(.split(.separateAll))
         try app.waitUntil("one pane again") { try panes().count == 1 }
 
-        // An open tab's title: its address in the new pane.
+        // An open tab, by a part of its title: the tab itself joins, its live page with it, before any web search.
         let titled = try app.load(app.site.url("page2.html?titled"))
         try app.waitForPageInput(PageID(window: app.window!, item: titled), at: app.site.url("page2.html?titled"))
         try app.dispatch(.tab(.focus(first)))
@@ -971,24 +988,42 @@ enum QuickBarScenarios {
         let title = try BrkE2E.tab(titled, in: app.view())?.title ?? ""
         try open(app)
         try typeWord(app, "split")
+        // No text: what is open is there already, and Return takes the first.
+        let listedTabs = try waitForRows(app, "the open tabs") { $0.contains { has($0, title) } }
+        _ = try app.screenshot("open-tabs")
+        try expect(!has(listedTabs[0], "Add Split View"), "a tab should come first: \(listedTabs)")
         try type(app, String(title.lowercased().prefix(7)))
-        let byTitle = try waitForRows(app, "the tab's row") { $0.contains { has($0, title) } }
-        for _ in 0..<(byTitle.firstIndex { has($0, title) } ?? 0) { try press(app, [], .downArrow) }
-        app.sleep(0.2)
+        let byTitle = try waitForRows(app, "the tab's row leads") { $0.first.map { has($0, title) } ?? false }
+        _ = try app.screenshot("tab-by-title")
+        try expect(byTitle.contains { has($0, "New pane on the right") }, "\(byTitle)")
         try press(app, [], .returnKey)
-        try app.waitUntil("the tab's address in a new pane") { try panes().count == 2 && !isOpen(app) && address(panes()[1]).contains("page2.html?titled") }
+        try app.waitUntil("the tab itself in the split") { try panes() == [first, titled] && !isOpen(app) }
         try app.dispatch(.split(.separateAll))
         try app.waitUntil("one pane once more") { try panes().count == 1 }
 
-        // Return with no text does what Add Split View does: the empty pane's bar.
+        // On a named side, and Return with no text.
+        try app.dispatch(.tab(.focus(first)))
+        try app.waitUntil("the first tab again") { try currentTab(app.view())?.id == first }
         try open(app)
         try typeWord(app, "split")
-        try waitForRows(app, "Add Split View") { $0.first.map { has($0, "Add Split View") } ?? false }
+        try type(app, "left")
+        try waitForRows(app, "the tabs on the left") { $0.first.map { has($0, "New pane on the left") } ?? false }
+        try press(app, [], .returnKey)
+        try app.waitUntil("a tab left of the page") { try panes().count == 2 && panes().last == first && !isOpen(app) }
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("one pane again, after the left tab") { try panes().count == 1 }
+
+        // An empty pane is still on offer, under the tabs.
+        try open(app)
+        try typeWord(app, "split")
+        let withAdd = try waitForRows(app, "Add Split View") { $0.contains { has($0, "Add Split View") } }
+        for _ in 0..<(withAdd.firstIndex { has($0, "Add Split View") } ?? 0) { try press(app, [], .downArrow) }
+        app.sleep(0.2)
         try press(app, [], .returnKey)
         try app.waitUntil("the empty pane's bar") { if case .commandBar(let bar)? = try app.view().overlay { return bar.fillsPane }; return false }
         try expect(try panes().count == 2, "a pane was added")
         try dismiss(app)
-        app.passed("An address, a side and a tab's title each opened in a new pane; expand ran; Return with no text added a pane")
+        app.passed("An address and a side each opened in a new pane; expand ran; an open tab joined the split itself, by title and from the list, on either side; Add Split View stayed on offer")
     }
 
     private static func XCTFirst<T>(_ value: T?, _ what: String) throws -> T {

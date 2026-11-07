@@ -74,10 +74,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
         folder.onPress = { dispatch(.assist(.chooseFolder)) }
         settings.identify(.aiControl("agent-settings"))
         settings.toolTip = "Choose the agent, model and effort in Settings → Max."
-        settings.onPress = {
-            dispatch(.settings(.openPane(.max)))
-            dispatch(.settings(.max(.showAgents(true))))
-        }
+        settings.onPress = { dispatch(.settings(.openPane(.max))) }
         folderStatus.font = .systemFont(ofSize: Metrics.ai.stepFont.value)
         folderStatus.textColor = .secondaryLabelColor
         folderStatus.lineBreakMode = .byTruncatingMiddle

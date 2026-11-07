@@ -117,7 +117,7 @@ public enum Suggest {
                                subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
-        if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName).prefix(limit)) }
+        if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName, resolve: resolve).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
@@ -130,9 +130,7 @@ public enum Suggest {
             return Array(([row] + arcRows).prefix(limit))
         }
 
-        let selectedEngine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
-            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
-        } ?? .google
+        let selectedEngine = selectedEngine(bar)
         let resolve = resolve ?? { resolveTypedInput($0, engine: selectedEngine) }
         let needle = fold(text)
         if let result = BrowserCalculator.result(text) {
@@ -230,7 +228,13 @@ public enum Suggest {
     }
 
     /// A prefix's own rows for the text after its word.
-    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
+    private static func selectedEngine(_ bar: CommandBarSnapshot) -> SearchEngine {
+        SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+    }
+
+    private static func prefixRows(_ prefix: QuickPrefix, _ text: String, bar: CommandBarSnapshot, appName: String, resolve: ((String) -> URL?)?) -> [Suggestion] {
         switch prefix.action {
         case .files:
             guard let local = bar.local, local.query == text, local.scope == .files else { return [] }
@@ -260,7 +264,7 @@ public enum Suggest {
             let question = text.isEmpty ? OverlayCopy.summarizeThisPage : "\(OverlayCopy.summarizeThisPage): \(text)"
             return [aiRow(question, subtitle: OverlayCopy.askThisPage, .assist(.askPage(question)))]
         case .split:
-            return splitRows(text, bar: bar, appName: appName)
+            return splitRows(text, bar: bar, appName: appName, resolve: resolve)
         case .window:
             return windowRows(text, bar: bar, appName: appName)
         case .translate:
@@ -281,7 +285,9 @@ public enum Suggest {
 
     /// The new pane's row (no text: Add Split View or the named side's), open tabs by title, and the split commands. A
     /// command the text names outright ("expand") leads, so Return runs it rather than searching for the word.
-    private static func splitRows(_ text: String, bar: CommandBarSnapshot, appName: String) -> [Suggestion] {
+    /// What the `split` prefix can bring beside the page: first what is already open, then what was visited, and only then a
+    /// web search for the text. An address leads, unless a tab already has it. No text: the recent tabs and an empty pane.
+    private static func splitRows(_ text: String, bar: CommandBarSnapshot, appName: String, resolve: ((String) -> URL?)?) -> [Suggestion] {
         let (edge, rest) = QuickSplit.parse(text)
         let side = edge ?? .right
         let needle = fold(rest)
@@ -293,17 +299,30 @@ public enum Suggest {
                                                   hint: bar.keys[action]?.glyphs, command: action.spec.command)))
         }
         let named = scored.filter { $0.score >= 3 }.map(\.row), others = scored.filter { $0.score < 3 }.map(\.row)
+        let where_ = OverlayCopy.newPane(side)
+        let tabs = bar.tabs.filter { !$0.isFocused }
+        func tabRow(_ tab: SwitchCandidate) -> Suggestion {
+            Suggestion(kind: .action, title: tab.title, subtitle: where_, symbol: "globe", favicon: tab.favicon, hint: "Return", command: .commandBar(.splitTab(side, tab.tab)))
+        }
         guard !rest.isEmpty else {
             let add = Suggestion(kind: .action, title: edge.map(TypeTravelCopy.addSplit) ?? ActionID.addSplitView.barTitle(appName: appName), subtitle: nil, symbol: "square.split.2x1", favicon: nil,
                                  hint: "Return", command: edge.map { .split(.addPaneAt($0)) } ?? .split(.addPane))
-            return [add] + others
+            return tabs.prefix(emptyTabCap).map(tabRow) + [add] + others
         }
-        let where_ = OverlayCopy.newPane(side)
-        let open = Suggestion(kind: .action, title: rest, subtitle: where_, symbol: "square.split.2x1", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, rest)))
-        let tabs = matching(bar.tabs.filter { !$0.isFocused }, needle) { [$0.title] }.prefix(2).map { tab in
-            Suggestion(kind: .action, title: tab.title, subtitle: where_, symbol: "globe", favicon: tab.favicon, hint: "Return", command: .commandBar(.splitOpen(side, tab.url.absoluteString)))
+        let engine = selectedEngine(bar)
+        let url = (resolve ?? { resolveTypedInput($0, engine: engine) })(rest)
+        let isAddress = url.map { $0 != engine.searchURL(rest) && !isSearch($0, for: rest) } ?? false
+        let open = Suggestion(kind: .action, title: rest, subtitle: where_, symbol: isAddress ? "globe" : "magnifyingglass", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, rest)))
+        let matches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }
+        let taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
+        let visited = matching(recentHistory(bar.history, excluding: taken), needle) { [$0.title, $0.url.absoluteString] }.prefix(2).map { entry in
+            Suggestion(kind: .action, title: entry.title.isEmpty ? displayURL(entry.url) : entry.title, subtitle: where_, symbol: "clock", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, entry.url.absoluteString)))
         }
-        return named + [open] + tabs + others
+        if isAddress {
+            let exact = matches.filter { $0.url == url }, partial = matches.filter { $0.url != url }
+            return named + exact.map(tabRow) + [open] + partial.prefix(tabCap).map(tabRow) + visited + others
+        }
+        return named + matches.prefix(tabCap).map(tabRow) + visited + [open] + others
     }
 
     private static func placementRow(_ placement: WindowSnap) -> Suggestion {

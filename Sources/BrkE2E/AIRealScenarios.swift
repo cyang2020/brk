@@ -66,7 +66,6 @@ enum AIRealScenarios {
         var signedIn = false
         log.check("A142 status") {
             try app.dispatch(.settings(.openPane(.max)))
-            try app.dispatch(.settings(.max(.showAgents(true))))
             var status: AIAgentStatus?
             try app.waitUntil("the agent's status", timeout: 30) {
                 guard case .settings(let settings) = try app.send(.settings) else { return false }
