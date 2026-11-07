@@ -1046,7 +1046,7 @@ enum QuickBarScenarios {
         try open(app)
         try typeWord(app, "window")
         try type(app, "always")
-        try waitForRows(app, "Always on Top") { $0.first.map { has($0, "Always on Top") } ?? false }
+        try waitForRows(app, "Stay on Top") { $0.first.map { has($0, "Stay on Top") } ?? false }
         app.sleep(0.15)
         try press(app, [], .returnKey)
         try app.waitUntil("Stay on Top") { try app.view().stayOnTop }
