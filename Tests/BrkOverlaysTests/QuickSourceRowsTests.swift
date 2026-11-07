@@ -304,6 +304,46 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.command, .commandBar(.copyAnswer("")), "Return does nothing")
     }
 
+    func testColorRowsWithNoPrefix() {
+        let full = rank("#ff5500", bar())
+        XCTAssertEqual(Array(full.map(\.title).prefix(3)), ["#FF5500", "rgb(255, 85, 0)", "hsl(20, 100%, 50%)"], "in full it leads")
+        XCTAssertEqual(full[0].command, .commandBar(.copyAnswer("#FF5500")))
+        XCTAssertEqual(full[1].command, .commandBar(.copyAnswer("rgb(255, 85, 0)")))
+        XCTAssertEqual(full[2].command, .commandBar(.copyAnswer("hsl(20, 100%, 50%)")))
+        XCTAssertEqual(full[0].icon, .swatch(QuickColor(red: 255, green: 85, blue: 0).rgba))
+        XCTAssertEqual(full[3].kind, .openTyped, "the search is still there")
+        XCTAssertEqual(rank("rgb(255,85,0)", bar())[0].title, "#FF5500")
+        XCTAssertEqual(rank("hsl(20,100%,50%)", bar())[0].title, "#FF5500")
+    }
+
+    func testBareThreeDigitHashKeepsReturnSearching() {
+        let rows = rank("#abc", bar())
+        XCTAssertEqual(rows[0].kind, .openTyped)
+        XCTAssertEqual(rows[0].command, .commandBar(.submit("#abc")))
+        XCTAssertEqual(Array(rows[1...3].map(\.kind)), [.color, .color, .color])
+        XCTAssertEqual(rows[1].title, "#AABBCC")
+    }
+
+    func testAHashtagAndWordsAreNoColor() {
+        for text in ["#hashtag", "#ab", "tomato", "red", "rgb"] {
+            XCTAssertFalse(rank(text, bar()).contains { $0.kind == .color }, text)
+        }
+        XCTAssertEqual(rank("#hashtag", bar()).first?.kind, .openTyped)
+    }
+
+    func testColorRowsNotInAnEmptyPane() {
+        XCTAssertFalse(rank("#ff5500", bar(fillsPane: true)).contains { $0.kind == .color })
+    }
+
+    func testTheColorPrefixReadsNames() {
+        let rows = ranked("tomato", word: "color", bar())
+        XCTAssertEqual(rows.map(\.title), ["#FF6347", "rgb(255, 99, 71)", "hsl(9, 100%, 64%)"])
+        XCTAssertEqual(rows[2].command, .commandBar(.copyAnswer("hsl(9, 100%, 64%)")))
+        XCTAssertEqual(ranked("#f50", word: "颜色", bar()).first?.title, "#FF5500")
+        XCTAssertEqual(ranked("nothing", word: "colour", bar()), [])
+        XCTAssertEqual(ranked("", word: "color", bar()), [])
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)

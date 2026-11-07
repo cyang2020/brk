@@ -911,6 +911,16 @@ enum LocalIcons {
             let image = NSWorkspace.shared.icon(forFile: path)
             files[path] = image
             return image
+        case .swatch(let color):
+            let side = OverlayMetrics.commandBar.iconSize.value
+            return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+                let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: OverlayMetrics.commandBar.hintRadius.value, yRadius: OverlayMetrics.commandBar.hintRadius.value)
+                NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha).setFill()
+                path.fill()
+                NSColor.black.withAlphaComponent(0.2).setStroke()
+                path.stroke()
+                return true
+            }
         case .emoji(let emoji):
             let side = OverlayMetrics.commandBar.iconSize.value
             return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in

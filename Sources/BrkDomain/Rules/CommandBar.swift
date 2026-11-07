@@ -70,7 +70,7 @@ extension Work {
             // has none of those but arithmetic.
             var fillsPane = false
             if case .fillPane = target { fillsPane = true }
-            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && QuickAnswers.leads(trimmed))
+            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && (QuickAnswers.leads(trimmed) || QuickColors.leads(trimmed)))
             guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, !answeredHere, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return
@@ -121,7 +121,7 @@ extension Work {
         case .translate: barTranslationText(text, in: window)
         case .define:
             if !text.isEmpty, state.session.windows[window]?.barDefinition?.word != text { effects.append(.lookUpWord(window, text)) }
-        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split, .window: break
+        case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split, .window, .color: break
         }
     }
 

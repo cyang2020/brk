@@ -15,6 +15,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case translate
     /// macOS's offline dictionary: first lines in the row, Return opens the word in Dictionary.app.
     case define
+    /// A colour's hex, rgb and hsl rows; the only place CSS names are read.
+    case color
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -48,6 +50,7 @@ public enum QuickPrefixes {
         QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…"),
         QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)"),
         QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…"),
+        QuickPrefix("Color", ["color", "colour", "颜色"], .color, "A colour: #ff5500, tomato…"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -86,7 +89,7 @@ extension QuickPrefix {
     func isActive(in bar: CommandBarSnapshot) -> Bool {
         switch action {
         case .files, .apps: !bar.isPrivate
-        case .emoji, .calculate, .window, .define: true
+        case .emoji, .calculate, .window, .define, .color: true
         case .ask: bar.askProvider != nil && bar.askAgentFound
         // Never another agent in its place: without this one the word stays plain text.
         case .askAgent(let name): bar.askProvider != nil && AIProviderChoice(rawValue: name) != nil && bar.agentsFound.contains(name)

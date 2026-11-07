@@ -58,7 +58,7 @@ public enum LocalSources {
     /// What `typed` asks of the file and app sources, nil for nothing: an address, a calculation, a short text.
     public static func request(for typed: String, engine: SearchEngine) -> LocalSearchRequest? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= inlineMinLength, BrowserCalculator.result(text) == nil, !QuickAnswers.leads(text),
+        guard text.count >= inlineMinLength, BrowserCalculator.result(text) == nil, !QuickAnswers.leads(text), QuickColors.parse(text) == nil,
               resolveTypedInput(text, engine: engine) == engine.searchURL(text) else { return nil }
         return LocalSearchRequest(query: text, name: text)
     }

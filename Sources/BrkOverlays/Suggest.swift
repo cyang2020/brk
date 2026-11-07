@@ -18,8 +18,8 @@ public struct Suggestion: Equatable, Sendable {
         case topDomain
         /// Max's Ask row (Arc's "Ask ChatGPT →", P49): the query, the local tool's name and the arrow square.
         case ask
-        /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji.
-        case file, app, emoji
+        /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji, one form of a colour.
+        case file, app, emoji, color
     }
     public let kind: Kind
     public let title: String
@@ -46,6 +46,7 @@ public struct Suggestion: Equatable, Sendable {
     public enum Icon: Equatable, Sendable {
         case file(String)
         case emoji(String)
+        case swatch(RGBA)
     }
 }
 
@@ -207,6 +208,9 @@ public enum Suggest {
             if QuickAnswers.leads(text) { rows.insert(quick, at: 0) }
             else { rows.insert(quick, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count) }
         }
+        if !bar.fillsPane, let color = QuickColors.parse(text) {
+            rows.insert(contentsOf: colorRows(color), at: QuickColors.leads(text) ? 0 : rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
+        }
         rows = withLocalRows(rows, text, isAddress: isAddress, bar: bar, limit: limit)
         // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
         if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
@@ -260,6 +264,8 @@ public enum Suggest {
             return windowRows(text, bar: bar, appName: appName)
         case .translate:
             return translateRows(text, bar: bar)
+        case .color:
+            return QuickColors.parse(text, names: true).map(colorRows) ?? []
         case .define:
             guard let found = bar.definition, found.word == text else { return [] }
             guard let definition = found.text else {
@@ -345,6 +351,13 @@ public enum Suggest {
         }
     }
 
+    /// The colour's three forms, each row with its swatch; Return copies that row's form.
+    private static func colorRows(_ color: QuickColor) -> [Suggestion] {
+        [color.hex, color.rgb, color.hsl].map { value in
+            Suggestion(kind: .color, title: value, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.copyColor, command: .commandBar(.copyAnswer(value)), icon: .swatch(color.rgba))
+        }
+    }
+
     private static func aiRow(_ title: String, subtitle: String?, _ command: Command) -> Suggestion {
         Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
@@ -360,7 +373,7 @@ public enum Suggest {
     /// `found` in the last places: they replace what would be cut last, and the typed row and anything above it stay.
     private static func withLastRows(_ rows: [Suggestion], _ found: [Suggestion], limit: Int) -> [Suggestion] {
         guard !found.isEmpty else { return rows }
-        let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator } ?? 0
+        let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator || $0.kind == .color } ?? 0
         let room = max(0, limit - (lastKept + 1))
         let shown = Array(found.prefix(room))
         return Array(rows.prefix(max(lastKept + 1, min(rows.count, limit - shown.count)))) + shown
@@ -657,6 +670,7 @@ extension OverlayCopy {
     static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
     static let openApp = "Open App"
     static let copyEmoji = "Copy Emoji"
+    static let copyColor = "Copy Color"
     static let openDictionary = "Open Dictionary"
     static func noDefinition(_ word: String) -> String { "No definition for \(word)" }
     static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }

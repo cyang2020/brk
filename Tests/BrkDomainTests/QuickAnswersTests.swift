@@ -141,6 +141,43 @@ final class QuickAnswersTests: XCTestCase {
         XCTAssertNil(answer(String(repeating: "1", count: 100) + " ft in m"))
     }
 
+    func testColorsAreReadInEveryForm() {
+        let orange = QuickColor(red: 255, green: 85, blue: 0)
+        for text in ["#ff5500", "#FF5500", "#f50", "rgb(255,85,0)", "rgb(255, 85, 0)", "RGB(255 85 0)", "hsl(20,100%,50%)", "hsl(20, 100%, 50%)"] {
+            XCTAssertEqual(QuickColors.parse(text), orange, text)
+        }
+        XCTAssertEqual(orange.hex, "#FF5500")
+        XCTAssertEqual(orange.rgb, "rgb(255, 85, 0)")
+        XCTAssertEqual(orange.hsl, "hsl(20, 100%, 50%)")
+        XCTAssertEqual(QuickColor(red: 128, green: 128, blue: 128).hsl, "hsl(0, 0%, 50%)")
+        XCTAssertEqual(QuickColors.parse("hsl(240,100%,50%)"), QuickColor(red: 0, green: 0, blue: 255))
+        XCTAssertEqual(QuickColors.parse("hsl(120,100%,25%)"), QuickColor(red: 0, green: 128, blue: 0))
+        XCTAssertEqual(QuickColors.parse("hsl(360,100%,50%)"), QuickColor(red: 255, green: 0, blue: 0))
+    }
+
+    func testCSSNamesOnlyAfterTheColorPrefix() {
+        XCTAssertNil(QuickColors.parse("tomato"), "an ordinary word")
+        XCTAssertNil(QuickColors.parse("red"))
+        XCTAssertEqual(QuickColors.parse("tomato", names: true), QuickColor(red: 255, green: 99, blue: 71))
+        XCTAssertEqual(QuickColors.parse("Rebecca Purple", names: true), QuickColor(red: 102, green: 51, blue: 153))
+        XCTAssertEqual(QuickColors.parse("ff5500", names: true), QuickColor(red: 255, green: 85, blue: 0), "under the prefix the # may go")
+        XCTAssertEqual(QuickColors.named.count, 148)
+    }
+
+    func testTextsThatAreNoColor() {
+        for text in ["#", "#ab", "#abcd", "#abcde", "#abcdefg", "#ggg", "#hashtag", "rgb(1,2)", "rgb(1,2,3,4)", "rgb(256,0,0)", "rgb(a,b,c)", "rgb 1 2 3", "hsl(20,100,50)", "hsl(400,100%,50%)", "hsl(20,200%,50%)", "ff5500", "abc", "example.com/#abc"] {
+            XCTAssertNil(QuickColors.parse(text), text)
+        }
+    }
+
+    func testOnlyAFullColorLeads() {
+        XCTAssertTrue(QuickColors.leads("#ff5500"))
+        XCTAssertTrue(QuickColors.leads("rgb(255,85,0)"))
+        XCTAssertTrue(QuickColors.leads("hsl(20,100%,50%)"))
+        XCTAssertFalse(QuickColors.leads("#abc"), "can as well be a tag")
+        XCTAssertFalse(QuickColors.leads("#hashtag"))
+    }
+
     func testTheEuroBanksFile() {
         let file = """
         <?xml version="1.0" encoding="UTF-8"?>

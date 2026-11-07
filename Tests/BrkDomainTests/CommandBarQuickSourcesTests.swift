@@ -487,6 +487,23 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNil(read("to ja"), "nothing to translate")
     }
 
+    // MARK: Colour
+
+    func testBareHashTextStillAsksAsBefore() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#abc")))), 1, "may be a tag: an ordinary search")
+        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("#abc")))), [], "no file named after a colour")
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#hashtag")))), 1)
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#ff5500")))), 0, "a colour in full is answered here")
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("rgb(255,85,0)")))), 0)
+    }
+
+    func testAHashStaysASearchForTheURLPolicy() {
+        XCTAssertEqual(resolveTypedInput("#abc"), SearchEngine.google.searchURL("#abc"))
+        XCTAssertEqual(resolveTypedInput("#ff5500"), SearchEngine.google.searchURL("#ff5500"))
+    }
+
     // MARK: Dictionary
 
     func testTheDictionaryIsAskedAndItsAnswerKept() {
