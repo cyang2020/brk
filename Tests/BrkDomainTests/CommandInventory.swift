@@ -28,7 +28,7 @@ enum CommandInventory {
         .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
-        .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")), .commandBar(.prefixQuery(.files, "x")), .commandBar(.splitOpen(.right, "example.com")), .window(.place(.leftHalf)),
+        .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")), .commandBar(.prefixQuery(.files, "x")), .commandBar(.splitOpen(.right, "example.com")), .window(.place(.leftHalf)), .commandBar(.openDictionary("word")),
         .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
         .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
@@ -138,7 +138,7 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
-        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .barTranslationDue(WindowID("ghost"), "x"), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
+        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .barTranslationDue(WindowID("ghost"), "x"), .definition(WindowID("ghost"), BarDefinition(word: "x", text: nil)), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
@@ -282,6 +282,7 @@ enum CommandInventory {
             case .local: "local"
             case .prefixQuery: "prefixQuery"
             case .splitOpen: "splitOpen"
+            case .openDictionary: "openDictionary"
             case .open: "open"
             case .submit: "submit"
             case .submitSearch: "submitSearch"
@@ -566,6 +567,7 @@ enum CommandInventory {
         case .suggestions: "suggestions"
         case .localResults: "localResults"
         case .barTranslationDue: "barTranslationDue"
+        case .definition: "definition"
         case .currencyRates: "currencyRates"
         case .aiProvidersDetected: "aiProvidersDetected"
         case .globalShortcut: "globalShortcut"

@@ -260,6 +260,12 @@ public enum Suggest {
             return windowRows(text, bar: bar, appName: appName)
         case .translate:
             return translateRows(text, bar: bar)
+        case .define:
+            guard let found = bar.definition, found.word == text else { return [] }
+            guard let definition = found.text else {
+                return [Suggestion(kind: .action, title: OverlayCopy.noDefinition(text), subtitle: nil, symbol: "character.book.closed", favicon: nil, hint: nil, command: .commandBar(.copyAnswer("")))]
+            }
+            return [Suggestion(kind: .action, title: definition, subtitle: nil, symbol: "character.book.closed", favicon: nil, hint: OverlayCopy.openDictionary, command: .commandBar(.openDictionary(text)))]
         }
     }
 
@@ -651,6 +657,8 @@ extension OverlayCopy {
     static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
     static let openApp = "Open App"
     static let copyEmoji = "Copy Emoji"
+    static let openDictionary = "Open Dictionary"
+    static func noDefinition(_ word: String) -> String { "No definition for \(word)" }
     static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }
     static func translating(_ target: String) -> String { "Translating to \(target)…" }
     static func newPane(_ edge: SplitEdge) -> String { "New pane on the \(edge.rawValue)" }

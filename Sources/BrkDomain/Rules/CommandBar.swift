@@ -76,6 +76,10 @@ extension Work {
                 return
             }
             effects.append(.fetchSuggestions(window, query: trimmed, url: url))
+        case .openDictionary(let word):
+            guard case .commandBar? = state.session.windows[window]?.overlay, !word.isEmpty else { return }
+            effects.append(.openDictionary(word))
+            state.session.windows[window]?.overlay = nil
         case .splitOpen(let edge, let text):
             run(.split(.addPaneAt(edge)), in: window)
             if case .commandBar(_, .fillPane)? = state.session.windows[window]?.overlay { run(.commandBar(.submit(text)), in: window) }
@@ -115,6 +119,8 @@ extension Work {
             let results = state.session.windows[window]?.localResults
             if results?.query != text || results?.scope != scope { effects.append(.searchLocal(window, LocalSearchRequest(query: text, name: text, scope: scope))) }
         case .translate: barTranslationText(text, in: window)
+        case .define:
+            if !text.isEmpty, state.session.windows[window]?.barDefinition?.word != text { effects.append(.lookUpWord(window, text)) }
         case .emoji, .calculate, .ask, .askAgent, .askPage, .summarize, .split, .window: break
         }
     }

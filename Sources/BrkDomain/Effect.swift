@@ -51,6 +51,10 @@ public enum Effect: Hashable, Sendable {
     /// A text to translate under the `translate` prefix: after a pause in typing the answer is
     /// `SystemEvent.barTranslationDue`. Any later key cancels it.
     case barTranslationDue(WindowID, String)
+    /// Ask macOS's offline dictionary about a word (BrkApp debounces); the answer is `SystemEvent.definition`.
+    case lookUpWord(WindowID, String)
+    /// The word in Dictionary.app, through its `dict:` address.
+    case openDictionary(String)
     /// Open a file with its default app, or launch an app.
     case openLocalFile(String)
     /// A currency question was typed: BrkApp reads its cache and fetches at most once a day; the answer is

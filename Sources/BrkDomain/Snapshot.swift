@@ -574,6 +574,8 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// Max's Translation is on, for the `translate` prefix, and where that prefix's text has got to.
     public var translationOn: Bool = false
     public var translation: BarTranslation? = nil
+    /// The `define` prefix's answer; the view drops it once its text has moved on.
+    public var definition: BarDefinition? = nil
     /// A private window lists nothing of the user's: no history, no bookmarks, no files.
     public var isPrivate: Bool = false
 }

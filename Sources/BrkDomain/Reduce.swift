@@ -162,7 +162,7 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
         case .easel(let event):
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
@@ -219,6 +219,8 @@ struct Work {
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
         case .localResults(let window, let results): localResults(window, results)
         case .barTranslationDue(let window, let text): barTranslationDue(window, text)
+        case .definition(let window, let definition):
+            if case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay { state.session.windows[window]?.barDefinition = definition }
         case .currencyRates(let rates): state.session.currencyRates = rates
         case .aiProvidersDetected(let kinds): aiProvidersDetected(kinds)
         case .globalShortcut(let status): if state.session.globalShortcut != status { state.session.globalShortcut = status }

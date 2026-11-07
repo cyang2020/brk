@@ -290,6 +290,20 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("hello", word: "tr", snapshot).first?.title, "no network")
     }
 
+    func testDefineRows() {
+        var snapshot = bar()
+        XCTAssertEqual(ranked("apple", word: "define", snapshot), [], "not in yet")
+        snapshot.definition = BarDefinition(word: "apple", text: "the round fruit of a tree")
+        let rows = ranked("apple", word: "查", snapshot)
+        XCTAssertEqual(rows.first?.title, "the round fruit of a tree")
+        XCTAssertEqual(rows.first?.hint, "Open Dictionary")
+        XCTAssertEqual(rows.first?.command, .commandBar(.openDictionary("apple")))
+        XCTAssertEqual(ranked("apples", word: "def", snapshot), [], "stale")
+        snapshot.definition = BarDefinition(word: "zzz", text: nil)
+        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.title, "No definition for zzz")
+        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.command, .commandBar(.copyAnswer("")), "Return does nothing")
+    }
+
     func testTheCalcPrefixForcesCalculation() {
         for word in ["calc", "=", "算"] {
             XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)

@@ -13,6 +13,8 @@ public enum QuickPrefixAction: Hashable, Sendable, Codable {
     case window
     /// Text through the default agent, answer in the row; `page` runs the page translation.
     case translate
+    /// macOS's offline dictionary: first lines in the row, Return opens the word in Dictionary.app.
+    case define
 }
 
 /// A word that, typed whole and followed by Space or Tab, makes the command bar's input mean one thing: the same pill,
@@ -45,6 +47,7 @@ public enum QuickPrefixes {
         QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…"),
         QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…"),
         QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)"),
+        QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…"),
         QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…"),
         QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…"),
         QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…"),
@@ -83,7 +86,7 @@ extension QuickPrefix {
     func isActive(in bar: CommandBarSnapshot) -> Bool {
         switch action {
         case .files, .apps: !bar.isPrivate
-        case .emoji, .calculate, .window: true
+        case .emoji, .calculate, .window, .define: true
         case .ask: bar.askProvider != nil && bar.askAgentFound
         // Never another agent in its place: without this one the word stays plain text.
         case .askAgent(let name): bar.askProvider != nil && AIProviderChoice(rawValue: name) != nil && bar.agentsFound.contains(name)
@@ -102,5 +105,16 @@ public enum QuickSplit {
         let first = trimmed.prefix { !$0.isWhitespace }
         guard let edge = SplitEdge(rawValue: first.lowercased()) else { return (nil, trimmed) }
         return (edge, trimmed.dropFirst(first.count).trimmingCharacters(in: .whitespaces))
+    }
+}
+
+/// What macOS's dictionary says about a word; nil text when it has nothing.
+public struct BarDefinition: Sendable, Hashable, Codable {
+    public var word: String
+    public var text: String?
+
+    public init(word: String, text: String?) {
+        self.word = word
+        self.text = text
     }
 }

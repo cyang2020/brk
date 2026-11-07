@@ -422,6 +422,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             askPageOn: doc.kind != .incognito && state.doc.settings.max.enabled(.askPage),
             translationOn: doc.kind != .incognito && state.doc.settings.max.enabled(.translation),
             translation: session.barTranslation,
+            definition: session.barDefinition,
             isPrivate: doc.kind == .incognito
         ))
     case .library(let openID, let page)?:

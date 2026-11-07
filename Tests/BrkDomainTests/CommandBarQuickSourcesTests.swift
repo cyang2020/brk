@@ -487,6 +487,24 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNil(read("to ja"), "nothing to translate")
     }
 
+    // MARK: Dictionary
+
+    func testTheDictionaryIsAskedAndItsAnswerKept() {
+        let d = Driver()
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, "apple"))).effects, [.lookUpWord(d.window, "apple")])
+        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, ""))).effects, [])
+        d.system(.definition(d.window, BarDefinition(word: "apple", text: "the round fruit")))
+        XCTAssertEqual(d.bar?.definition?.text, "the round fruit")
+        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, "apple"))).effects, [], "this word has its answer")
+        XCTAssertEqual(d.user(.commandBar(.openDictionary("apple"))).effects, [.openDictionary("apple")])
+        XCTAssertNil(d.bar)
+        XCTAssertEqual(d.user(.commandBar(.openDictionary("apple"))).effects, [], "no bar")
+        d.system(.definition(d.window, BarDefinition(word: "late", text: "x")))
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNil(d.bar?.definition, "a late answer does not reach the next opening")
+    }
+
     // MARK: The pure rules
 
     func testWhatIsLeftOut() {

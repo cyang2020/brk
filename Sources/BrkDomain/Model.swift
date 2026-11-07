@@ -340,6 +340,8 @@ struct WindowSession: Sendable, Equatable {
     /// The `translate` prefix's text and its answer, and the request asking for it.
     var barTranslation: BarTranslation?
     var barTranslationRequest: AIRequestID?
+    /// The `define` prefix's last answer.
+    var barDefinition: BarDefinition?
     /// The time the bar's quick answers read: set on opening and on a date or time question, moved by the clock's tick.
     var barClock: Instant?
     var recentCycle: RecentCycle?

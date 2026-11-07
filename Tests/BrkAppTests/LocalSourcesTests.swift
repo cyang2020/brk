@@ -153,6 +153,25 @@ final class LocalSourcesTests: XCTestCase {
         XCTAssertEqual(hits, [])
     }
 
+    // MARK: The dictionary
+
+    func testTheOfflineDictionaryAnswersAWordAndNothingForNonsense() throws {
+        XCTAssertNil(BarLookups.definition(of: "zzzqqqxyz"))
+        let found = try XCTUnwrap(BarLookups.definition(of: "apple"), "the system dictionary has no English on this Mac?")
+        XCTAssertTrue(found.lowercased().contains("apple"), found)
+        XCTAssertLessThanOrEqual(found.count, 400)
+        XCTAssertFalse(found.contains("\n"))
+    }
+
+    func testALookupWaitsAndANewerOneCancels() async {
+        let lookups = BarLookups(send: { [unowned self] in self.sent.append($0) })
+        let window = WindowID("w")
+        for word in ["app", "appl", "apple"] { lookups.define(window, word: word) }
+        let answers = { self.sent.compactMap { input -> BarDefinition? in if case .system(.definition(_, let found)) = input { found } else { nil } } }
+        await wait { !answers().isEmpty }
+        XCTAssertEqual(answers().map(\.word), ["apple"])
+    }
+
     // MARK: Exchange rates
 
     private final class Calls: @unchecked Sendable {

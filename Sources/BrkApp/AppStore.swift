@@ -570,6 +570,9 @@ public final class AppStore {
                 suggestions.fetch(window, query: query, url: url)
             case .searchLocal(let window, let request): localSearch.search(window, request)
             case .barTranslationDue(let window, let text): barLookups.translationDue(window, text: text)
+            case .lookUpWord(let window, let word): barLookups.define(window, word: word)
+            case .openDictionary(let word):
+                if let url = URL(string: "dict://" + (word.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")) { NSWorkspace.shared.open(url) }
             case .openLocalFile(let path): NSWorkspace.shared.open(URL(fileURLWithPath: path))
             case .needCurrencyRates: currencyRates.need()
             case .disposeContext: break
