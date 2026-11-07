@@ -20,7 +20,7 @@ enum QuickBarScenarios {
         Scenario("QuickBar-AskTab", "Tab sends the text to the local AI; site search first; no text, Max off and an address stay as they were", cefOnly: "native command bar", askTab),
         Scenario("QuickBar-Emoji", "emoji <name> lists matches, Return copies", cefOnly: "native command bar", emoji),
         Scenario("QuickBar-Beside", "none of it in the bar over the address, an empty pane, site search or AI mode", cefOnly: "native command bar", beside),
-        Scenario("QuickBar-Prefix", "a whole word and Space or Tab enters through site search's pill; Backspace and Esc give it back; pasted text never enters; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
+        Scenario("QuickBar-Prefix", "a whole word and Tab enters through site search's pill; a real Space never does, so the words can begin a search; Backspace and Esc give it back; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
         Scenario("QuickBar-AIPrefix", "claude, gpt, ask and ai ask; page and summarize read the page; Max off and a missing agent leave the word plain", cefOnly: "native command bar", aiPrefix),
         Scenario("QuickBar-Split", "split opens an address in a new pane on the named side, Return with no text adds a pane, a tab's title, and the split commands", cefOnly: "native command bar", split),
         Scenario("QuickBar-Window", "window places Brk's own window on the visible frame, with full screen, minimize and stay on top; an exact phrase shows low down", cefOnly: "native command bar", windowPlaces),
@@ -167,22 +167,18 @@ enum QuickBarScenarios {
 
     private static func inputText(_ app: AppUnderTest) throws -> String { try app.native().editorText ?? "" }
 
-    /// `word` and a real Space (Tab for a word Space leaves alone): the pill must show, or (`enters` false) the word must stay plain text.
+    /// `word` and a real Tab: the pill must show, or (`enters` false) the word must stay plain text.
     private static func typeWord(_ app: AppUnderTest, _ word: String, enters: Bool = true) throws {
-        if enters, !QuickPrefixes.entersOnSpace(word) {
-            try type(app, word)
-            app.sleep(0.2)
-            try press(app, [], .tab)
-            return try app.waitUntil("\(word) and Tab entered") { try pillShown(app) && inputText(app).isEmpty }
-        }
-        try type(app, word + " ")
+        try type(app, word)
+        app.sleep(0.2)
+        try press(app, [], .tab)
         if enters {
-            try app.waitUntil("\(word) and Space entered") { try pillShown(app) && inputText(app).isEmpty }
+            try app.waitUntil("\(word) and Tab entered") { try pillShown(app) && inputText(app).isEmpty }
         } else {
             app.sleep(0.2)
             try expect(try !pillShown(app), "\(word) entered a mode")
             let shown = try inputText(app)
-            try expect(shown == word + " ", "\(word): the input reads \(shown)")
+            try expect(shown.hasPrefix(word), "\(word): the input reads \(shown)")
         }
     }
 
@@ -725,11 +721,11 @@ enum QuickBarScenarios {
         try preflight(app)
         try useFixtureEngine(app)
         try keepingPasteboard(app) {
-            // Space after the whole word: the pill, an empty input. Case aside.
+            // Tab after the whole word: the pill, an empty input. Case aside.
             try open(app)
             try typeWord(app, "emoji")
             _ = try app.screenshot("pill")
-            // Backspace in the empty input gives the word back; Space after it is now a space, so it can be searched.
+            // Backspace in the empty input gives the word back, and the word can be searched.
             try backspace(app)
             try app.waitUntil("Backspace left the mode") { try !pillShown(app) && inputText(app) == "emoji" }
             try type(app, " on a mug")
@@ -747,24 +743,19 @@ enum QuickBarScenarios {
             try press(app, [], .escape)
             try app.waitUntil("a second Esc closed the bar") { try !isOpen(app) }
 
-            // Tab after the whole word.
+            // A search can start with any of the words: typed with a real Space it stays a search.
+            for text in ["split pea soup", "claude pricing", "app store", "translate this", "define me", "emoji movie"] {
+                try open(app)
+                try type(app, text)
+                app.sleep(0.2)
+                let typed = try inputText(app)
+                try expect(try !pillShown(app) && typed == text, "Space entered a mode in \(text): \(typed)")
+                try dismiss(app)
+            }
             try open(app)
-            try type(app, "emoji")
-            app.sleep(0.2)
-            try press(app, [], .tab)
-            try app.waitUntil("Tab entered") { try pillShown(app) && inputText(app).isEmpty }
-            try dismiss(app)
-
-            // A word that often begins a search: Space stays a space, so "app store" is a search; Tab enters.
-            try open(app)
-            try type(app, "app store")
-            app.sleep(0.2)
-            let everyday = try inputText(app)
-            try expect(try !pillShown(app) && everyday == "app store", "Space entered after an everyday word: \(everyday)")
-            try dismiss(app)
-            try open(app)
-            try typeWord(app, "app")
-            try dismiss(app)
+            try type(app, "split pea soup")
+            try press(app, [], .returnKey)
+            try app.waitUntil("that typed search ran") { currentTab(try app.view())?.title == "query:split pea soup" }
 
             // Pasted text never enters.
             let tabsBefore = todayIDs(try app.view()).count
@@ -810,13 +801,13 @@ enum QuickBarScenarios {
             try press(app, [], .returnKey)
             try app.waitUntil("the engine searched") { currentTab(try app.view())?.title == "query:engine-abc" }
 
-            // A word in another script arrives as committed text, then a real Space: the input method's route.
+            // A word in another script arrives as committed text, then a real Tab: the input method's route.
             try open(app)
             PhysicalKeys.type("文件", pid: app.hello!.pid)
             app.sleep(0.3)
             if try inputText(app) == "文件" {
-                try press(app, [], .space)
-                try app.waitUntil("文件 and Space entered") { try pillShown(app) && inputText(app).isEmpty }
+                try press(app, [], .tab)
+                try app.waitUntil("文件 and Tab entered") { try pillShown(app) && inputText(app).isEmpty }
             } else {
                 app.note("Key events carrying 文件 did not reach the field here; the Chinese words are covered by unit tests.")
             }
@@ -835,7 +826,7 @@ enum QuickBarScenarios {
             try waitForRows(app, "=") { $0.first.map { has($0, "42") } ?? false }
             try press(app, [], .returnKey)
             try app.waitUntil("= copied") { try !isOpen(app) && pasteboard(app) == "42" }
-            app.passed("Space and Tab enter, case aside; Backspace and Esc give the word back; pasted text never enters and split pea soup searched; the offer; the engine won; calc and =")
+            app.passed("Tab enters, case aside; a real Space never does, so typed and pasted text starting with a word searches; Backspace and Esc give the word back; split pea soup searched; the offer; the engine won; calc and =")
         }
     }
 
@@ -868,10 +859,9 @@ enum QuickBarScenarios {
         try asks("codex", "why is grass green?")
         try asks("ask", "why is snow white?")
         try asks("ai", "why is coal black?")
-        // Arc's own row that the word and the text name together stays reachable, first.
+        // Arc's own row: typing it is an ordinary query, however it begins.
         try open(app)
-        try typeWord(app, "ask")
-        try type(app, "on page")
+        try type(app, "ask on page")
         try waitForRows(app, "Ask on Page leads") { $0.first.map { has($0, "Ask on Page") } ?? false }
         try dismiss(app)
         // The fixture stands in for every agent here, so which one a word picks is pinned in the reducer's tests.

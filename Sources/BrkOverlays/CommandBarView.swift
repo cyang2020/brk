@@ -33,11 +33,10 @@ import UniformTypeIdentifiers
 /// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, apps and files in the last rows, Tab to ask the local AI. A
 /// file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do nothing new on any other row.
 ///
-/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by Tab, or
-/// by a typed Space unless it often begins an ordinary search, enters, the word's name sits in the pill, Backspace in the
-/// empty input or Esc leaves and gives the word back. An engine of the same name wins. Pasted text never enters, and after a word was given back Space stays a space,
-/// so the word can be typed as a search. Part of a word (three letters) offers the prefix beside the input with the Tab
-/// key while no site search is on offer.
+/// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by Tab
+/// enters, the word's name sits in the pill, Backspace in the empty input or Esc leaves and gives the word back. An engine
+/// of the same name wins. Space never enters, so a search can start with one of these words. The word, or three letters of
+/// it, offers the prefix beside the input with the Tab key while no site search is on offer.
 ///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
@@ -71,8 +70,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     var prefix: QuickPrefix? { if case .prefix(let prefix)? = pill { prefix } else { nil } }
     /// The text that named the pill (given back on leaving).
     private var namedBy = ""
-    /// A prefix word that was given back: while the input still starts with it, Space after it stays a space.
-    private var declinedWord: String?
     /// What the user typed; the input shows it followed by the rest of `completion`, selected.
     private(set) var typed = ""
     private(set) var completion: String?
@@ -197,7 +194,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         if reopened {
             openID = bar.openID
             pill = nil
-            declinedWord = nil
             typed = bar.initialQuery
             completion = nil
             input.stringValue = bar.initialQuery
@@ -320,15 +316,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     public func controlTextDidChange(_ notification: Notification) {
         let text = input.stringValue
-        if let declined = declinedWord, !Suggest.fold(text).hasPrefix(declined) { declinedWord = nil }
         if bar?.aiMode == nil, pill == nil, text.hasSuffix(" "), let bar, !text.dropLast().contains(where: \.isWhitespace) {
             let word = String(text.dropLast())
             if let engine = Suggest.siteSearchEngine(named: word, bar) { return enter(.site(engine), namedBy: word) }
-            // Exactly what was there and one typed space: pasted text never enters, nor does a space an input method is composing.
-            let composing = (input.currentEditor() as? NSTextView)?.hasMarkedText() == true
-            if text == typed + " ", !composing, declinedWord != Suggest.fold(word), QuickPrefixes.entersOnSpace(word), let prefix = QuickPrefixes.entry(named: word, in: bar) {
-                return enter(.prefix(prefix), namedBy: word)
-            }
         }
         // Typing (the caret at the end) may complete; a deletion, of the completion itself or of what was typed,
         // never does: the text is then the start of what was there.
@@ -387,7 +377,6 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     }
 
     private func leavePill() {
-        if prefix != nil { declinedWord = Suggest.fold(namedBy) }
         pill = nil
         typed = namedBy
         completion = nil
@@ -437,7 +426,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
-        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, prefixWord: namedBy, resolve: resolve, completing: completion)
+        results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
         offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
         prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0

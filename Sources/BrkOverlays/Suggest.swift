@@ -94,10 +94,8 @@ public enum Suggest {
     /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
     /// question, else sits right under the typed row so Return still searches; apps and files take the last two rows at
     /// most (never the top hit, never the typed row) while `bar.local` answers exactly this text, in `createsTab` bars only.
-    /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search, but for Arc's own row that the word and
-    /// the text together name ("ask on page", "split view"): `prefixWord` is the word as typed, and that row leads, so no
-    /// prefix hides one of Arc's rows.
-    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil, prefixWord: String = "",
+    /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search: the user asked for it with Tab.
+    public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil,
                             resolve: ((String) -> URL?)? = nil, completing: String? = nil,
                             timeZone: TimeZone = .current, locale: Locale = .current) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
@@ -119,13 +117,7 @@ public enum Suggest {
                                subtitle: mode == .browse ? "Read selected sources · local AI" : "Ask the local AI tool", symbol: "sparkles", favicon: nil, hint: "Return", command: .assist(intent))]
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
-        if let prefix {
-            let phrase = fold(prefixWord + " " + text)
-            let arcs = text.isEmpty || prefixWord.isEmpty ? [] : typeTravel(phrase, bar: bar, appName: appName).filter { $0.score >= 3 }.prefix(1).map(\.suggestion)
-            let own = prefixRows(prefix, text, bar: bar, appName: appName)
-            // "translate page" runs the page translation at once; Arc's Translate Page… asks for a language first, so it follows.
-            return Array((prefix.action == .translate ? own + arcs : arcs + own).prefix(limit))
-        }
+        if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
         var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {

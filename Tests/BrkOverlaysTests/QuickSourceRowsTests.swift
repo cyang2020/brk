@@ -344,24 +344,12 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("", word: "color", bar()), [])
     }
 
-    func testArcsRowNamedByTheWordAndTextStaysReachableAndLeads() {
+    func testAPrefixHasTheListToItself() {
         var snapshot = bar()
         snapshot.actions = [.addSplitView]
-        snapshot.askProvider = "Claude"
-        snapshot.askAgentFound = true
-        let rows = Suggest.rank(query: "view", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) })
-        XCTAssertEqual(rows.first?.command, .split(.addPane), "Add Split View's trigger is Split View")
-        XCTAssertEqual(rows[1].command, .commandBar(.splitOpen(.right, "view")), "the prefix's own row follows")
-        // Nothing named: only the prefix's rows. And no text: no phrase yet.
-        let other = Suggest.rank(query: "notes", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) })
-        XCTAssertEqual(other.first?.command, .commandBar(.splitOpen(.right, "notes")))
-        XCTAssertEqual(Suggest.rank(query: "", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), prefixWord: "split", resolve: { resolveTypedInput($0) }).first?.title, "Add Split View")
-        XCTAssertEqual(Suggest.rank(query: "why", bar: snapshot, appName: "Brk", prefix: prefix("ask", snapshot), prefixWord: "ask", resolve: { resolveTypedInput($0) }).first?.command, .assist(.ask("why")))
-        // Translate page's own row runs at once and stays first.
-        snapshot.translationOn = true
-        snapshot.actions = ActionID.allCases.filter { $0.spec.commandBar != nil && $0.spec.later == nil }
-        let page = Suggest.rank(query: "page", bar: snapshot, appName: "Brk", prefix: prefix("translate", snapshot), prefixWord: "translate", resolve: { resolveTypedInput($0) })
-        guard case .assist(.translate)? = page.first?.command else { return XCTFail("\(page.map(\.title))") }
+        let rows = Suggest.rank(query: "view", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), resolve: { resolveTypedInput($0) })
+        XCTAssertEqual(rows.first?.command, .commandBar(.splitOpen(.right, "view")))
+        XCTAssertEqual(Suggest.rank(query: "", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), resolve: { resolveTypedInput($0) }).first?.title, "Add Split View")
     }
 
     func testTheCalcPrefixForcesCalculation() {
@@ -513,37 +501,41 @@ final class QuickSourceRowsTests: XCTestCase {
         for character in text { type(view.typed + String(character), into: view) }
     }
 
-    func testAWholeWordThenSpaceEntersAndThePillShowsIt() {
+    private func enterWord(_ word: String, into view: CommandBarView) {
+        type(word, into: view)
+        press(#selector(NSResponder.insertTab(_:)), view)
+    }
+
+    func testAWholeWordThenTabEntersAndThePillShowsIt() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("emoji ", into: bar)
+        enterWord("emoji", into: bar)
         XCTAssertEqual(bar.prefix?.action, .emoji)
         XCTAssertEqual(bar.typed, "")
         XCTAssertEqual(bar.input.stringValue, "")
         let cased = view(self.bar(), sink)
-        typeKeys("EMOJI ", into: cased)
+        enterWord("EMOJI", into: cased)
         XCTAssertEqual(cased.prefix?.action, .emoji, "case aside")
     }
 
-    /// "app store" stays a search: Space leaves these words alone, Tab enters.
-    func testAnEverydayWordStaysPlainOnSpaceAndEntersOnTab() {
+    /// A search can start with any of the words: Space is always a space, and only Tab enters.
+    func testSpaceNeverEntersAndTabEntersEveryWord() {
         let sink = Box()
-        for (word, action) in [("file", QuickPrefixAction.files), ("app", .apps), ("window", .window), ("color", .color)] {
-            let plain = view(bar(), sink)
-            typeKeys(word + " store", into: plain)
+        var snapshot = bar()
+        snapshot.actions = [.addSplitView]
+        snapshot.askProvider = "Claude"
+        snapshot.askAgentFound = true
+        snapshot.agentsFound = ["claude", "codex", "gemini", "cursor"]
+        snapshot.askPageOn = true
+        snapshot.translationOn = true
+        for word in QuickPrefixes.all.flatMap(\.words) {
+            let plain = view(snapshot, sink)
+            typeKeys(word + " pea soup", into: plain)
             XCTAssertNil(plain.prefix, word)
-            XCTAssertEqual(plain.typed, word + " store")
-            let tabbed = view(bar(), sink)
-            type(word, into: tabbed)
-            press(#selector(NSResponder.insertTab(_:)), tabbed)
-            XCTAssertEqual(tabbed.prefix?.action, action, word)
+            XCTAssertEqual(plain.typed, word + " pea soup")
+            let tabbed = view(snapshot, sink)
+            enterWord(word, into: tabbed)
+            XCTAssertNotNil(tabbed.prefix, word)
         }
-    }
-
-    func testAWholeWordThenTabEnters() {
-        let sink = Box(), bar = view(bar(), sink)
-        type("emoji", into: bar)
-        press(#selector(NSResponder.insertTab(_:)), bar)
-        XCTAssertEqual(bar.prefix?.action, .emoji)
     }
 
     func testPastedTextNeverEnters() {
@@ -556,9 +548,9 @@ final class QuickSourceRowsTests: XCTestCase {
         }
     }
 
-    func testBackspaceAndEscGiveTheWordBackAndSpaceThenStaysASpace() {
+    func testBackspaceAndEscGiveTheWordBack() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("emoji ", into: bar)
+        enterWord("emoji", into: bar)
         press(#selector(NSResponder.deleteBackward(_:)), bar)
         XCTAssertNil(bar.prefix)
         XCTAssertEqual(bar.input.stringValue, "emoji")
@@ -568,9 +560,9 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertNil(bar.prefix)
         XCTAssertEqual(bar.typed, "emoji report")
         XCTAssertEqual(sink.sent.last, .commandBar(.queryChanged("emoji report")))
-        // Typed away, the word works again.
+        // Tab on the word again.
         type("", into: bar)
-        typeKeys("emoji ", into: bar)
+        enterWord("emoji", into: bar)
         XCTAssertEqual(bar.prefix?.action, .emoji)
         press(#selector(NSResponder.cancelOperation(_:)), bar)
         XCTAssertNil(bar.prefix)
@@ -590,14 +582,15 @@ final class QuickSourceRowsTests: XCTestCase {
             bar.show(snapshot, in: box, scheme: .light)
             type(word, into: bar)
             XCTAssertEqual(bar.prefixOffer?.action, action, word)
-            type(word + " ", into: bar)
+            press(#selector(NSResponder.insertTab(_:)), bar)
             XCTAssertEqual(bar.prefix?.action, action, word)
         }
     }
 
     func testBackspaceOnTextInThePillDoesNotLeave() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("emoji a", into: bar)
+        enterWord("emoji", into: bar)
+        typeKeys("a", into: bar)
         press(#selector(NSResponder.deleteBackward(_:)), bar)
         XCTAssertNotNil(bar.prefix, "only in the empty input")
     }
@@ -630,15 +623,15 @@ final class QuickSourceRowsTests: XCTestCase {
         var editing = bar()
         editing.createsTab = false
         let edit = view(editing, sink)
-        typeKeys("file ", into: edit)
+        enterWord("emoji", into: edit)
         XCTAssertNil(edit.prefix, "the bar over the page's address")
         let pane = view(bar(fillsPane: true), sink)
-        typeKeys("file ", into: pane)
+        enterWord("emoji", into: pane)
         XCTAssertNil(pane.prefix, "an empty pane's bar")
         var ai = bar()
         ai.aiMode = .question
         let question = view(ai, sink)
-        typeKeys("file ", into: question)
+        enterWord("emoji", into: question)
         XCTAssertNil(question.prefix, "AI mode")
         // Site search: the words are plain text in it.
         var withEngine = bar()
@@ -646,19 +639,18 @@ final class QuickSourceRowsTests: XCTestCase {
         let site = view(withEngine, sink)
         typeKeys("bing ", into: site)
         XCTAssertEqual(site.siteSearch?.id, bing.id)
-        typeKeys("file ", into: site)
+        enterWord("emoji", into: site)
         XCTAssertNil(site.prefix, "site search")
-        XCTAssertEqual(site.typed, "file ")
+        XCTAssertEqual(site.typed, "emoji")
         // A private window lists nothing of the user's.
         var incognito = bar()
         incognito.isPrivate = true
         let secret = view(incognito, sink)
-        typeKeys("file ", into: secret)
+        enterWord("file", into: secret)
         XCTAssertNil(secret.prefix)
-        XCTAssertEqual(secret.typed, "file ")
-        typeKeys("", into: secret)
+        XCTAssertEqual(secret.typed, "file")
         let calc = view(incognito, sink)
-        typeKeys("calc ", into: calc)
+        enterWord("calc", into: calc)
         XCTAssertEqual(calc.prefix?.action, .calculate, "nothing personal in a calculation")
     }
 

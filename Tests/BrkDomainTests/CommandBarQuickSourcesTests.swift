@@ -557,12 +557,4 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(LocalSources.rank([hit("Café Menu.pdf")], needle: "cafe").count, 1, "accents aside")
         XCTAssertEqual(LocalSources.rank(hits, needle: "zzz"), [])
     }
-
-    /// "app store" and "ai art" stay searches: Space leaves these words alone and Tab enters. The named agents and `split`, which the user asked to type straight through, enter on Space, as do the Chinese words.
-    func testWordsThatBeginEverydaySearchesEnterOnlyOnTab() {
-        for word in ["ask", "AI", "page", "window", "color", "colour", "file", "app"] { XCTAssertFalse(QuickPrefixes.entersOnSpace(word), word) }
-        for word in ["claude", "gpt", "codex", "gemini", "cursor", "split", "translate", "tr", "define", "def", "emoji", "calc", "summarize", "文件", "应用", "问", "窗口", "颜色"] {
-            XCTAssertTrue(QuickPrefixes.entersOnSpace(word), word)
-        }
-    }
 }
