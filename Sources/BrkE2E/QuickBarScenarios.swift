@@ -20,6 +20,13 @@ enum QuickBarScenarios {
         Scenario("QuickBar-AskTab", "Tab sends the text to the local AI; site search first; no text, Max off and an address stay as they were", cefOnly: "native command bar", askTab),
         Scenario("QuickBar-Emoji", "emoji <name> lists matches, Return copies", cefOnly: "native command bar", emoji),
         Scenario("QuickBar-Beside", "none of it in the bar over the address, an empty pane, site search or AI mode", cefOnly: "native command bar", beside),
+        Scenario("QuickBar-Prefix", "a whole word and Space or Tab enters through site search's pill; Backspace and Esc give it back; pasted text never enters; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
+        Scenario("QuickBar-AIPrefix", "claude, gpt, ask and ai ask; page and summarize read the page; Max off and a missing agent leave the word plain", cefOnly: "native command bar", aiPrefix),
+        Scenario("QuickBar-Split", "split opens an address in a new pane on the named side, Return with no text adds a pane, a tab's title, and the split commands", cefOnly: "native command bar", split),
+        Scenario("QuickBar-Window", "window places Brk's own window on the visible frame, with full screen, minimize and stay on top; an exact phrase shows low down", cefOnly: "native command bar", windowPlaces),
+        Scenario("QuickBar-Translate", "translate shows a pending row, then the answer, Return copies; a change asks again; translate page runs the page translation", cefOnly: "native command bar", translate),
+        Scenario("QuickBar-Define", "define shows the offline dictionary's first lines; Return opens Dictionary.app", cefOnly: "native command bar", define),
+        Scenario("QuickBar-Color", "colours with no prefix and after color, each form copied; bare #abc still searches", cefOnly: "native command bar", color),
     ]
 
     // MARK: Fixtures
@@ -108,8 +115,11 @@ enum QuickBarScenarios {
                                                    "%": (23, true), "?": (44, true), ":": (41, true), "(": (25, true), ")": (29, true), "+": (24, true), "*": (28, true)]
         for key in Key.allCases {
             let name = key.description
-            if name.count == 1, let character = name.first, character.isASCII, character.isLetter || character.isNumber { map[character] = (CGKeyCode(key.code), false) }
+            guard name.count == 1, let character = name.first, character.isASCII, character.isLetter || character.isNumber else { continue }
+            map[character] = (CGKeyCode(key.code), false)
+            if character.isLetter { map[Character(name.uppercased())] = (CGKeyCode(key.code), true) }
         }
+        map["#"] = (20, true)
         return map
     }()
 
@@ -137,7 +147,48 @@ enum QuickBarScenarios {
         try WindowServerKeys.press(app, KeyChord(modifiers, key), window: app.window!)
     }
 
+    /// The Backspace key (no `Key` of its own: nothing in the shortcut table uses it).
+    private static func backspace(_ app: AppUnderTest) throws {
+        try WindowServerKeys.ensureFrontmost(app, app.window!)
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: down) else { continue }
+            event.post(tap: .cghidEventTap)
+            usleep(20_000)
+        }
+    }
+
     private static func isOpen(_ app: AppUnderTest) throws -> Bool { isCommandBar(try app.view().overlay) }
+
+    /// The pill before the input is showing: a prefix or a site search is on.
+    private static func pillShown(_ app: AppUnderTest) throws -> Bool {
+        try app.native().actual[ViewID.commandBarPill.identifier].map { !$0.hidden } ?? false
+    }
+
+    private static func inputText(_ app: AppUnderTest) throws -> String { try app.native().editorText ?? "" }
+
+    /// `word` and a real Space: the pill must show, or (`enters` false) the word must stay plain text.
+    private static func typeWord(_ app: AppUnderTest, _ word: String, enters: Bool = true) throws {
+        try type(app, word + " ")
+        if enters {
+            try app.waitUntil("\(word) and Space entered") { try pillShown(app) && inputText(app).isEmpty }
+        } else {
+            app.sleep(0.2)
+            try expect(try !pillShown(app), "\(word) entered a mode")
+            let shown = try inputText(app)
+            try expect(shown == word + " ", "\(word): the input reads \(shown)")
+        }
+    }
+
+    /// A search engine on the fixture site as the default, so a search goes nowhere off this machine.
+    private static func useFixtureEngine(_ app: AppUnderTest) throws {
+        let profile = ProfileID.default
+        try app.dispatch(.settings(.profile(profile, .addSiteSearch(name: "Fixture Search", keyword: "fixture", template: app.site.baseURL.absoluteString + "browser-basic-search.html?q={q}"))))
+        try open(app)
+        guard case .commandBar(let snapshot)? = try app.view().overlay, let engine = snapshot.siteSearch.first(where: { $0.name == "Fixture Search" }) else { throw Check(description: "no fixture engine") }
+        try dismiss(app)
+        try app.dispatch(.settings(.profile(profile, .searchEngine(engine.id))))
+    }
 
     /// Cmd+T for real, then the focused input.
     private static func open(_ app: AppUnderTest) throws {
@@ -253,12 +304,7 @@ enum QuickBarScenarios {
 
             // A bare word: the typed row first (Return searches), the answer below it. "tomorrow" completes to no site.
             // The search goes to a fixture engine, so nothing leaves the machine.
-            let profile = ProfileID.default
-            try app.dispatch(.settings(.profile(profile, .addSiteSearch(name: "Fixture Search", keyword: "fixture", template: app.site.baseURL.absoluteString + "browser-basic-search.html?q={q}"))))
-            try open(app)
-            guard case .commandBar(let snapshot)? = try app.view().overlay, let engine = snapshot.siteSearch.first(where: { $0.name == "Fixture Search" }) else { throw Check(description: "no fixture engine") }
-            try dismiss(app)
-            try app.dispatch(.settings(.profile(profile, .searchEngine(engine.id))))
+            try useFixtureEngine(app)
             try open(app)
             try type(app, "tomorrow")
             let tomorrow = clock(calendar.date(byAdding: .day, value: 1, to: today)!, "EEEE d MMMM y", TimeZone.current.identifier)
@@ -378,16 +424,17 @@ enum QuickBarScenarios {
             try app.waitUntil("Command+Return closed the bar") { try !isOpen(app) }
             var revealed = false
             for _ in 0..<40 where !revealed {
-                revealed = NativeSystemInput.closeFinderWindow(titled: folder)
+                revealed = NativeSystemInput.closeWindow(owner: "Finder", titled: folder)
                 if !revealed { app.sleep(0.25) }
             }
             try expect(revealed, "no Finder window for \(folder)")
             try WindowServerKeys.ensureFrontmost(app, app.window!)
 
-            // The file mode lists only files, more than the inline two.
+            // The file prefix lists only files, more than the inline two.
             try open(app)
-            try type(app, "file quickbar")
-            let listed = try waitForRows(app, "the file mode") { $0.count >= 5 && $0.allSatisfy { has($0, fileCaption) } }
+            try typeWord(app, "file")
+            try type(app, "quickbar")
+            let listed = try waitForRows(app, "the file prefix") { $0.count >= 5 && $0.allSatisfy { has($0, fileCaption) } }
             try assertNothingExcluded(listed)
             _ = try app.screenshot("file-mode")
 
@@ -403,7 +450,8 @@ enum QuickBarScenarios {
 
             // Return opens with the default app: the fixture app owns this type and writes its marker.
             try open(app)
-            try type(app, "file quickbar-report")
+            try typeWord(app, "file")
+            try type(app, "quickbar-report")
             let report = try waitForRows(app, "the one report") { $0.count == 1 && has($0[0], "quickbar-report.brkquickdoc") }
             try expect(has(report[0], fileCaption), "\(report)")
             try press(app, [], .returnKey)
@@ -449,7 +497,8 @@ enum QuickBarScenarios {
         guard indexed else { throw Skipped(description: "Spotlight did not index the fixture folder within 4 minutes") }
         try keepingPasteboard(app) {
             try open(app)
-            try type(app, "file zqxquickbar")
+            try typeWord(app, "file")
+            try type(app, "zqxquickbar")
             let found = try waitForRows(app, "Spotlight's answer", timeout: 8) { $0.contains { has($0, "zqxquickbar-spot.txt") } }
             try expect(found.allSatisfy { has($0, fileCaption) }, "only files: \(found)")
             try expect(found.contains { has($0, "zqxquickbar-top.txt") }, "the file lying directly in the folder: \(found)")
@@ -481,6 +530,17 @@ enum QuickBarScenarios {
         let index = shown.firstIndex { has($0, "Quickbarlauncher") }!
         try expect(index > 0, "the app came first: \(shown)")
         _ = try app.screenshot("app-row")
+        try dismiss(app)
+        // The app prefix lists only apps, first.
+        try open(app)
+        try typeWord(app, "app")
+        try type(app, "quickbarla")
+        let listed = try waitForRows(app, "the app prefix") { $0.first.map { has($0, "Quickbarlauncher") } ?? false }
+        try expect(listed.count == 1, "only the app: \(listed)")
+        try dismiss(app)
+        try open(app)
+        try type(app, "quickbarla")
+        try waitForRows(app, "the app's row again") { $0.contains { has($0, "Quickbarlauncher") } }
         for _ in 0..<index { try press(app, [], .downArrow) }
         app.sleep(0.2)
         try press(app, [], .returnKey)
@@ -555,23 +615,27 @@ enum QuickBarScenarios {
         try preflight(app)
         try keepingPasteboard(app) {
             try open(app)
-            try type(app, "emoji smile")
+            try typeWord(app, "emoji")
+            try type(app, "smile")
             let listed = try waitForRows(app, "emoji rows") { $0.count == 5 && $0.allSatisfy { has($0, "Copy Emoji") } }
             try expect(listed.contains { $0.contains { $0.contains("smil") } }, "no smiling name: \(listed)")
             _ = try app.screenshot("emoji")
             try dismiss(app)
             try open(app)
-            try type(app, "emoji rocket")
+            try typeWord(app, "emoji")
+            try type(app, "rocket")
             try waitForRows(app, "the rocket") { $0.first.map { $0.contains("rocket") } ?? false }
             try press(app, [], .returnKey)
             try app.waitUntil("the rocket copied") { try !isOpen(app) && pasteboard(app) == "🚀" }
-            // No match: the ordinary rows.
+            // No match: no rows.
             try open(app)
-            try type(app, "emoji zzzqqq")
-            let none = try waitForRows(app, "the typed row") { $0.first.map { $0.contains("emoji zzzqqq") } ?? false }
-            try expect(!none.contains { has($0, "Copy Emoji") }, "\(none)")
+            try typeWord(app, "emoji")
+            try type(app, "zzzqqq")
+            app.sleep(0.3)
+            let none = try rows(app)
+            try expect(none.isEmpty, "\(none)")
             try dismiss(app)
-            app.passed("emoji smile lists five, Return copied 🚀, no match leaves the ordinary rows")
+            app.passed("emoji then smile lists five, Return copied 🚀, no match has no rows")
         }
     }
 
@@ -598,6 +662,8 @@ enum QuickBarScenarios {
         try app.waitUntil("its input focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier) }
         try type(app, "quickbar")
         try assertNoLocalRows("the bar over the address")
+        try press(app, [.command], .a)
+        try typeWord(app, "file", enters: false)
         try dismiss(app)
 
         // Site search.
@@ -607,6 +673,11 @@ enum QuickBarScenarios {
         try press(app, [], .tab)
         try type(app, "quickbar")
         try assertNoLocalRows("site search")
+        try press(app, [.command], .a)
+        try type(app, "file ")
+        app.sleep(0.2)
+        let inSite = try inputText(app)
+        try expect(inSite == "file ", "a prefix inside site search: \(inSite)")
         try dismiss(app)
 
         // AI mode.
@@ -616,6 +687,11 @@ enum QuickBarScenarios {
         try app.waitUntil("its input focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier) }
         try type(app, "quickbar")
         try assertNoLocalRows("AI mode")
+        try press(app, [.command], .a)
+        try type(app, "file ")
+        app.sleep(0.2)
+        let inAI = try inputText(app)
+        try expect(inAI == "file ", "a prefix entered in AI mode: \(inAI)")
         try dismiss(app)
 
         // An empty split pane.
@@ -629,7 +705,533 @@ enum QuickBarScenarios {
         app.sleep(0.4)
         let pane = try rows(app)
         try expect(!pane.contains { has($0, "Copy Result") }, "an answer in the empty pane: \(pane)")
+        // No prefix enters there either.
+        try press(app, [.command], .a)
+        try typeWord(app, "file", enters: false)
         try dismiss(app)
         app.passed("No file, app or answer rows over the address, in site search, in AI mode or in an empty pane")
+    }
+
+    // MARK: Prefix keys
+
+    @Sendable static func prefixKeys(_ app: AppUnderTest) throws {
+        try preflight(app)
+        try useFixtureEngine(app)
+        try keepingPasteboard(app) {
+            // Space after the whole word: the pill, an empty input. Case aside.
+            try open(app)
+            try typeWord(app, "emoji")
+            _ = try app.screenshot("pill")
+            // Backspace in the empty input gives the word back; Space after it is now a space, so it can be searched.
+            try backspace(app)
+            try app.waitUntil("Backspace left the mode") { try !pillShown(app) && inputText(app) == "emoji" }
+            try type(app, " on a mug")
+            app.sleep(0.2)
+            let plain = try inputText(app)
+            try expect(try !pillShown(app) && plain == "emoji on a mug", "the word did not stay plain: \(plain)")
+            try press(app, [], .returnKey)
+            try app.waitUntil("that search ran") { currentTab(try app.view())?.title == "query:emoji on a mug" }
+
+            try open(app)
+            try typeWord(app, "EMOJI")
+            // Esc gives the word back too, and leaves the bar open; a second Esc closes it.
+            try press(app, [], .escape)
+            try app.waitUntil("Esc left the mode") { try !pillShown(app) && inputText(app) == "EMOJI" && isOpen(app) }
+            try press(app, [], .escape)
+            try app.waitUntil("a second Esc closed the bar") { try !isOpen(app) }
+
+            // Tab after the whole word.
+            try open(app)
+            try type(app, "emoji")
+            app.sleep(0.2)
+            try press(app, [], .tab)
+            try app.waitUntil("Tab entered") { try pillShown(app) && inputText(app).isEmpty }
+            try dismiss(app)
+
+            // Pasted text never enters.
+            let tabsBefore = todayIDs(try app.view()).count
+            for text in ["split pea soup", "split "] {
+                _ = try app.send(.pasteboard(text))
+                try open(app)
+                try press(app, [.command], .v)
+                try app.waitUntil("the paste arrived") { try inputText(app) == text }
+                app.sleep(0.2)
+                try expect(try !pillShown(app), "pasted \(text) entered a mode")
+                try dismiss(app)
+            }
+            _ = try app.send(.pasteboard("split pea soup"))
+            try open(app)
+            try press(app, [.command], .v)
+            try app.waitUntil("the paste arrived") { try inputText(app) == "split pea soup" }
+            _ = try app.screenshot("pasted")
+            try press(app, [], .returnKey)
+            try app.waitUntil("the pasted text searched") { currentTab(try app.view())?.title == "query:split pea soup" }
+            try expect(todayIDs(try app.view()).count == tabsBefore + 1, "one new tab for the search")
+
+            // Part of a word is offered beside the input; Tab enters what is offered; an engine's offer goes first.
+            try open(app)
+            try type(app, "fil")
+            let card = try visible(app.native(), .commandBar).frame
+            try app.waitUntil("Files offered beside the input") { try SidebarReviewScenarios.texts(app, in: card).contains("Files") }
+            _ = try app.screenshot("offer")
+            try press(app, [], .tab)
+            try app.waitUntil("Tab entered Files") { try pillShown(app) && inputText(app).isEmpty }
+            try dismiss(app)
+            try open(app)
+            try type(app, "wiki")
+            try app.waitUntil("the engine's offer") { try SidebarReviewScenarios.texts(app, in: card).contains("Search Wikipedia") }
+            try dismiss(app)
+
+            // An engine of the same name wins over a prefix: its search, not the prefix's.
+            try app.dispatch(.settings(.profile(ProfileID.default, .addSiteSearch(name: "Split Engine", keyword: "split", template: app.site.baseURL.absoluteString + "browser-basic-search.html?q=engine-{q}"))))
+            try open(app)
+            try typeWord(app, "split")
+            try app.waitUntil("the engine's name in the pill") { try SidebarReviewScenarios.texts(app, in: card).contains("Split Engine") }
+            try type(app, "abc")
+            try waitForRows(app, "the engine's row") { $0.first.map { $0.contains("abc") } ?? false }
+            try press(app, [], .returnKey)
+            try app.waitUntil("the engine searched") { currentTab(try app.view())?.title == "query:engine-abc" }
+
+            // The calc prefix: forced calculation, with the = word and a plain number.
+            try open(app)
+            try typeWord(app, "calc")
+            try type(app, "2+2")
+            try waitForRows(app, "calc") { $0.first.map { has($0, "4") } ?? false }
+            try press(app, [], .returnKey)
+            try app.waitUntil("calc copied") { try !isOpen(app) && pasteboard(app) == "4" }
+            try open(app)
+            try typeWord(app, "=")
+            try type(app, "42")
+            try waitForRows(app, "=") { $0.first.map { has($0, "42") } ?? false }
+            try press(app, [], .returnKey)
+            try app.waitUntil("= copied") { try !isOpen(app) && pasteboard(app) == "42" }
+            app.passed("Space and Tab enter, case aside; Backspace and Esc give the word back; pasted text never enters and split pea soup searched; the offer; the engine won; calc and =")
+        }
+    }
+
+    // MARK: AI prefixes
+
+    @Sendable static func aiPrefix(_ app: AppUnderTest) throws {
+        try preflight(app)
+        for feature in [AIFeature.commandBar, .askPage] { try app.dispatch(.settings(.max(.feature(feature, true)))) }
+        try open(app)
+        guard case .commandBar(let bar)? = try app.view().overlay, bar.agentsFound.contains("claude"), bar.agentsFound.contains("codex") else {
+            try dismiss(app)
+            throw Skipped(description: "needs both claude and codex on this Mac's PATH")
+        }
+        try dismiss(app)
+        func asks(_ word: String, _ question: String) throws {
+            let before = aiCalls(app).count
+            try open(app)
+            try typeWord(app, word)
+            try type(app, question)
+            try waitForRows(app, "\(word)'s row") { $0.first.map { $0.contains(question) } ?? false }
+            if word == "gpt" { _ = try app.screenshot("gpt-row") }
+            try press(app, [], .returnKey)
+            try app.waitUntil("\(word) answered", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains("Fixture answer") == true && aiCalls(app).count == before + 1 }
+            try expect(aiCalls(app).last?["prompt"] as? String == question, "\(word) asked \(String(describing: aiCalls(app).last?["prompt"]))")
+            try expect(try !isOpen(app), "the bar stayed open")
+            try app.dispatch(.assist(.dismiss))
+        }
+        try asks("claude", "why is the sky blue?")
+        try asks("gpt", "why is the sea blue?")
+        try asks("codex", "why is grass green?")
+        try asks("ask", "why is snow white?")
+        try asks("ai", "why is coal black?")
+        // The fixture stands in for every agent here, so which one a word picks is pinned in the reducer's tests.
+        app.note("The AI fixture stands in for every agent under the control socket: which agent each word picks is pinned by CommandBarQuickSourcesTests (Effect.ai's choice), not here.")
+
+        // The page and a summary, by the Ask on Page route: its prompt carries the page's text.
+        let url = app.site.url("ai.html"), item = try app.load(url), page = PageID(window: app.window!, item: item)
+        try app.waitForPageInput(page, at: url)
+        for (word, question, fragment) in [("page", "what does it say", "what does it say"), ("summarize", "", "Summarize this page")] {
+            let before = aiCalls(app).count
+            try open(app)
+            try typeWord(app, word)
+            if !question.isEmpty { try type(app, question) }
+            try waitForRows(app, "\(word)'s row") { $0.count == 1 }
+            try press(app, [], .returnKey)
+            try app.waitUntil("\(word) answered", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains("Fixture page answer") == true && aiCalls(app).count == before + 1 }
+            let prompt = aiCalls(app).last?["prompt"] as? String ?? ""
+            try expect(prompt.hasPrefix("BRK_PAGE_QUESTION") && prompt.contains(fragment), "\(word) asked \(prompt.prefix(200))")
+            try app.dispatch(.assist(.dismiss))
+        }
+
+        // Lines for the agents another branch adds: inactive, plain text.
+        try open(app)
+        try typeWord(app, "gemini", enters: false)
+        try dismiss(app)
+        try open(app)
+        try typeWord(app, "cursor", enters: false)
+        try dismiss(app)
+
+        // Max's Ask off: the word stays plain text.
+        try app.dispatch(.settings(.max(.feature(.commandBar, false))))
+        try open(app)
+        try typeWord(app, "claude", enters: false)
+        try dismiss(app)
+        try app.dispatch(.settings(.max(.feature(.askPage, false))))
+        try open(app)
+        try typeWord(app, "page", enters: false)
+        try dismiss(app)
+        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor stayed plain; Max off left the words plain")
+    }
+
+    // MARK: Split
+
+    @Sendable static func split(_ app: AppUnderTest) throws {
+        try preflight(app)
+        let first = try app.load(app.site.url("index.html"))
+        try app.waitForPageInput(PageID(window: app.window!, item: first), at: app.site.url("index.html"))
+        func panes() throws -> [ItemID] { try app.view().content.panes.map(\.tab) }
+        func address(_ pane: ItemID) throws -> String { try BrkE2E.tab(pane, in: app.view())?.url?.absoluteString ?? "" }
+        let host = app.site.baseURL.host ?? "127.0.0.1", port = app.site.baseURL.port ?? 0
+        let page2 = "\(host):\(port)/page2.html"
+
+        // The rest is an address: a new pane to the right.
+        try open(app)
+        try typeWord(app, "split")
+        _ = try app.screenshot("empty")
+        try type(app, page2)
+        let opening = try waitForRows(app, "the new pane's row") { $0.first.map { has($0, "New pane on the right") } ?? false }
+        try expect(has(opening[0], page2), "\(opening)")
+        _ = try app.screenshot("address")
+        try press(app, [], .returnKey)
+        try app.waitUntil("the second pane") { try panes().count == 2 && !isOpen(app) }
+        var now = try panes()
+        try expect(now[0] == first, "the new pane should be right of the page: \(now)")
+        try app.waitUntil("the second pane's page") { try address(panes()[1]).contains("page2.html") }
+        try expect(try app.view().content.orientation == .horizontal, "side by side")
+
+        // A side by name: left, before the focused pane.
+        try open(app)
+        try typeWord(app, "split")
+        try type(app, "left " + page2 + "?left")
+        try waitForRows(app, "the left row") { $0.first.map { has($0, "New pane on the left") } ?? false }
+        try press(app, [], .returnKey)
+        try app.waitUntil("a third pane") { try panes().count == 3 && !isOpen(app) }
+        now = try panes()
+        let leftPane = try XCTFirst(now.first { try address($0).contains("?left") }, "the left pane")
+        try expect(now.firstIndex(of: leftPane) == 1, "left of the pane that was focused: \(now)")
+
+        // The commands: expand runs, the row named outright leads.
+        try open(app)
+        try typeWord(app, "split")
+        try type(app, "expand")
+        let commands = try waitForRows(app, "Expand leads") { $0.first.map { has($0, "Expand") } ?? false }
+        try expect(has(commands[1], "New pane on the right"), "\(commands)")
+        try press(app, [], .returnKey)
+        try app.waitUntil("expanded") { try app.view().content.expanded }
+        try open(app)
+        try typeWord(app, "split")
+        _ = try app.screenshot("commands")
+        let listed = try waitForRows(app, "the commands") { $0.count >= 3 }
+        try expect(has(listed[0], "Add Split View"), "Return with no text is Add Split View: \(listed)")
+        try dismiss(app)
+        try app.dispatch(.split(.restore))
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("back to one pane") { try panes().count == 1 }
+
+        // Top: the stacked orientation.
+        try open(app)
+        try typeWord(app, "split")
+        try type(app, "top " + page2 + "?top")
+        try waitForRows(app, "the top row") { $0.first.map { has($0, "New pane on the top") } ?? false }
+        try press(app, [], .returnKey)
+        try app.waitUntil("two panes, stacked") { try panes().count == 2 && app.view().content.orientation == .vertical && !isOpen(app) }
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("one pane again") { try panes().count == 1 }
+
+        // An open tab's title: its address in the new pane.
+        let titled = try app.load(app.site.url("page2.html?titled"))
+        try app.waitForPageInput(PageID(window: app.window!, item: titled), at: app.site.url("page2.html?titled"))
+        try app.dispatch(.tab(.focus(first)))
+        try app.waitUntil("back on the first tab") { try currentTab(app.view())?.id == first }
+        let title = try BrkE2E.tab(titled, in: app.view())?.title ?? ""
+        try open(app)
+        try typeWord(app, "split")
+        try type(app, String(title.lowercased().prefix(7)))
+        let byTitle = try waitForRows(app, "the tab's row") { $0.contains { has($0, title) } }
+        for _ in 0..<(byTitle.firstIndex { has($0, title) } ?? 0) { try press(app, [], .downArrow) }
+        app.sleep(0.2)
+        try press(app, [], .returnKey)
+        try app.waitUntil("the tab's address in a new pane") { try panes().count == 2 && !isOpen(app) && address(panes()[1]).contains("page2.html?titled") }
+        try app.dispatch(.split(.separateAll))
+        try app.waitUntil("one pane once more") { try panes().count == 1 }
+
+        // Return with no text does what Add Split View does: the empty pane's bar.
+        try open(app)
+        try typeWord(app, "split")
+        try waitForRows(app, "Add Split View") { $0.first.map { has($0, "Add Split View") } ?? false }
+        try press(app, [], .returnKey)
+        try app.waitUntil("the empty pane's bar") { if case .commandBar(let bar)? = try app.view().overlay { return bar.fillsPane }; return false }
+        try expect(try panes().count == 2, "a pane was added")
+        try dismiss(app)
+        app.passed("An address, a side and a tab's title each opened in a new pane; expand ran; Return with no text added a pane")
+    }
+
+    private static func XCTFirst<T>(_ value: T?, _ what: String) throws -> T {
+        guard let value else { throw Check(description: "no \(what)") }
+        return value
+    }
+
+    // MARK: Window
+
+    @Sendable static func windowPlaces(_ app: AppUnderTest) throws {
+        try preflight(app)
+        func place(_ text: String) throws {
+            try open(app)
+            try typeWord(app, "window")
+            try type(app, text)
+            try waitForRows(app, "\(text)'s row") { !$0.isEmpty }
+            app.sleep(0.15)
+            try press(app, [], .returnKey)
+            try app.waitUntil("the bar closed") { try !isOpen(app) }
+        }
+        func frame() throws -> CGRect { try app.native().windowFrame }
+        func near(_ a: CGRect, _ b: CGRect) -> Bool { abs(a.minX - b.minX) <= 1 && abs(a.minY - b.minY) <= 1 && abs(a.width - b.width) <= 1 && abs(a.height - b.height) <= 1 }
+        func expectFrame(_ expected: CGRect, _ what: String) throws {
+            var last = CGRect.zero
+            do { try app.waitUntil(what, timeout: 3) { last = try frame(); return near(last, expected) } }
+            catch { throw Check(description: "\(what): the frame is \(last), expected \(expected)") }
+        }
+        let original = try frame()
+        try open(app)
+        try typeWord(app, "window")
+        let listed = try waitForRows(app, "the places") { $0.count == 5 }
+        try expect(has(listed[0], "Left Half") && has(listed[4], "Maximize"), "\(listed)")
+        _ = try app.screenshot("list")
+        try dismiss(app)
+
+        // The screen's visible frame, read off Maximize: inside the display and short of its menu bar.
+        try place("maximize")
+        try app.waitUntil("maximized") { try frame() != original }
+        app.sleep(0.2)
+        let visible = try frame()
+        let display = CGDisplayBounds(CGMainDisplayID())
+        try expect(visible.width <= display.width + 1 && visible.height < display.height, "\(visible) in \(display)")
+        try place("left")
+        try expectFrame(CGRect(x: visible.minX, y: visible.minY, width: visible.width / 2, height: visible.height), "left half")
+        try place("right")
+        try expectFrame(CGRect(x: visible.midX, y: visible.minY, width: visible.width / 2, height: visible.height), "right half")
+        try place("top")
+        try expectFrame(CGRect(x: visible.minX, y: visible.midY, width: visible.width, height: visible.height / 2), "top half")
+        try place("bottom")
+        try expectFrame(CGRect(x: visible.minX, y: visible.minY, width: visible.width, height: visible.height / 2), "bottom half")
+        try app.setWindowFrame(CGRect(x: visible.minX + 10, y: visible.minY + 10, width: 1000, height: 700))
+        try place("centre")
+        try expectFrame(CGRect(x: visible.midX - 500, y: visible.midY - 350, width: 1000, height: 700), "centre")
+        // One display here means Next Display stays; with more it moves. Either way the row runs.
+        var displays: UInt32 = 0
+        _ = CGGetActiveDisplayList(0, nil, &displays)
+        let before = try frame()
+        try place("next")
+        if displays == 1 { app.sleep(0.3); try expect(try near(frame(), before), "Next Display with one display moved the window") }
+        else { try app.waitUntil("the next display") { try !near(frame(), before) } }
+        app.note("Next Display ran on \(displays) display(s).")
+
+        // The existing commands.
+        try place("always")
+        try app.waitUntil("Stay on Top") { try app.view().stayOnTop }
+        try app.dispatch(.window(.toggleStayOnTop))
+        try place("full")
+        try app.waitUntil("full screen", timeout: 10) { let n = try app.native(); return n.fullscreen && n.fullscreenTransitioning != true }
+        try app.dispatch(.app(.toggleFullScreen))
+        try app.waitUntil("full screen left", timeout: 10) { let n = try app.native(); return !n.fullscreen && n.fullscreenTransitioning != true }
+        try place("minimize")
+        try app.waitUntil("minimized") { try app.native().miniaturized }
+        _ = try app.send(.activate(window: app.window!))
+        try app.waitUntil("back from the Dock") { try !app.native().miniaturized }
+
+        // Ordinary text meets none of this, but an exact phrase has its row low down, the search first.
+        try open(app)
+        try type(app, "left")
+        app.sleep(0.4)
+        let plain = try rows(app)
+        try expect(!plain.contains { has($0, "Left Half") }, "left alone: \(plain)")
+        try dismiss(app)
+        try open(app)
+        try type(app, "left half")
+        let exact = try waitForRows(app, "the phrase's row") { $0.last.map { has($0, "Left Half") } ?? false }
+        try expect(exact.count > 1 && exact[0].contains("left half"), "the search should lead: \(exact)")
+        _ = try app.screenshot("exact-phrase")
+        try dismiss(app)
+        try app.setWindowFrame(original)
+        app.passed("Halves, maximize and centre landed on the visible frame; stay on top, full screen and minimize ran; ordinary text met none of it, left half showed low down")
+    }
+
+    // MARK: Translate
+
+    @Sendable static func translate(_ app: AppUnderTest) throws {
+        try preflight(app)
+        try app.dispatch(.settings(.max(.feature(.translation, true))))
+        try open(app)
+        guard case .commandBar(let bar)? = try app.view().overlay, bar.askAgentFound else {
+            try dismiss(app)
+            throw Skipped(description: "no local agent on this Mac's PATH")
+        }
+        try keepingPasteboard(app) {
+            let before = aiCalls(app).count
+            try typeWord(app, "translate")
+            try type(app, "hello world")
+            // The pending row at once, then the answer.
+            let pending = try waitForRows(app, "the pending row", timeout: 2) { $0.first.map { has($0, "Translating to Chinese") } ?? false }
+            try expect(has(pending[0], "hello world"), "\(pending)")
+            _ = try app.screenshot("pending")
+            try waitForRows(app, "the answer", timeout: 15) { $0.first.map { has($0, "Fixture answer") && has($0, "Copy Result") } ?? false }
+            _ = try app.screenshot("answer")
+            let prompt = aiCalls(app).last?["prompt"] as? String ?? ""
+            try expect(aiCalls(app).count == before + 1 && prompt.contains("hello world") && prompt.contains("Chinese"), "asked \(prompt.prefix(200))")
+            try expect(try isOpen(app), "the bar stays open for the answer")
+            try expect(try app.view().ai == nil, "the answer panel stayed out of it")
+            try press(app, [], .returnKey)
+            try app.waitUntil("Return copied the answer") { try !isOpen(app) && pasteboard(app).contains("Fixture answer") }
+
+            // A trailing "to ja"; a quick run of keys asks once, for the final text.
+            let count = aiCalls(app).count
+            try open(app)
+            try typeWord(app, "tr")
+            try type(app, "good morning to ja")
+            try waitForRows(app, "Japanese", timeout: 15) { $0.first.map { has($0, "Fixture answer") } ?? false }
+            let asked = aiCalls(app)
+            try expect(asked.count == count + 1, "\(asked.count - count) asks for one run of keys")
+            let japanese = asked.last?["prompt"] as? String ?? ""
+            try expect(japanese.contains("good morning") && !japanese.contains("to ja") && japanese.contains("Japanese"), japanese)
+            // A change: the old answer leaves the row at once.
+            try type(app, "x")
+            try app.waitUntil("the answer gone with the change") { try !rows(app).contains { has($0, "Fixture answer") } }
+            try dismiss(app)
+
+            // translate page runs the page translation on the fixture's French page.
+            let url = app.site.url("ai.html"), item = try app.load(url), page = PageID(window: app.window!, item: item)
+            try app.waitForPageInput(page, at: url)
+            try open(app)
+            try typeWord(app, "translate")
+            try type(app, "page to english")
+            try waitForRows(app, "the page row") { $0.first.map { has($0, "Translate this page to English") } ?? false }
+            _ = try app.screenshot("page-row")
+            try press(app, [], .returnKey)
+            try app.waitUntil("the page translated", timeout: 15) {
+                if case .translated? = try app.view().urlPill.translation { return true }
+                return false
+            }
+            // Translation off: the word stays plain.
+            try app.dispatch(.settings(.max(.feature(.translation, false))))
+            try open(app)
+            try typeWord(app, "translate", enters: false)
+            try dismiss(app)
+            app.passed("Pending, then the answer in the row and Return copied it; to ja asked once for the final text; translate page translated the page; off, the word stays plain")
+        }
+    }
+
+    // MARK: Dictionary
+
+    /// Whether a program of this name is running now, so a scenario only quits what it started.
+    private static func running(_ name: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        process.arguments = ["-x", name]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return false }
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    }
+
+    @Sendable static func define(_ app: AppUnderTest) throws {
+        try preflight(app)
+        try open(app)
+        try typeWord(app, "define")
+        try type(app, "apple")
+        let found = try waitForRows(app, "the definition", timeout: 8) { $0.first.map { has($0, "Open Dictionary") } ?? false }
+        try expect(has(found[0], "apple") && has(found[0], "noun"), "\(found)")
+        _ = try app.screenshot("definition")
+        try dismiss(app)
+        try open(app)
+        try typeWord(app, "def")
+        try type(app, "zzzqqqxyz")
+        try waitForRows(app, "nothing found", timeout: 8) { $0.first.map { has($0, "No definition for zzzqqqxyz") } ?? false }
+        try press(app, [], .returnKey)
+        app.sleep(0.3)
+        try expect(try isOpen(app), "Return on nothing found closed the bar")
+        try dismiss(app)
+
+        // Return opens the word in Dictionary.app; the window is closed again, and the app quit if it was not running.
+        let wasRunning = running("Dictionary")
+        defer { if !wasRunning, running("Dictionary") { try? tool("/usr/bin/pkill", ["-x", "Dictionary"]) } }
+        try open(app)
+        try typeWord(app, "define")
+        try type(app, "apple")
+        try waitForRows(app, "the definition", timeout: 8) { $0.first.map { has($0, "Open Dictionary") } ?? false }
+        try press(app, [], .returnKey)
+        try app.waitUntil("the bar closed") { try !isOpen(app) }
+        var opened = false
+        for _ in 0..<60 where !opened {
+            opened = NativeSystemInput.closeWindow(owner: "Dictionary")
+            if !opened { app.sleep(0.25) }
+        }
+        try expect(opened, "no Dictionary window")
+        try WindowServerKeys.ensureFrontmost(app, app.window!)
+        app.passed("The offline dictionary's first lines in the row; nothing found says so; Return opened Dictionary.app")
+    }
+
+    // MARK: Colour
+
+    @Sendable static func color(_ app: AppUnderTest) throws {
+        try preflight(app)
+        try useFixtureEngine(app)
+        try keepingPasteboard(app) {
+            try open(app)
+            try type(app, "#ff5500")
+            let rowsShown = try waitForRows(app, "three forms") { $0.count >= 3 && has($0[0], "#FF5500") }
+            try expect(has(rowsShown[1], "rgb(255, 85, 0)") && has(rowsShown[2], "hsl(20, 100%, 50%)"), "\(rowsShown)")
+            _ = try app.screenshot("swatch")
+            try press(app, [], .returnKey)
+            try app.waitUntil("hex copied") { try !isOpen(app) && pasteboard(app) == "#FF5500" }
+            // Each row copies its own form.
+            try open(app)
+            try type(app, "rgb(255,85,0)")
+            try waitForRows(app, "rgb") { $0.first.map { has($0, "#FF5500") } ?? false }
+            try press(app, [], .downArrow)
+            app.sleep(0.2)
+            try press(app, [], .returnKey)
+            try app.waitUntil("the rgb form copied") { try !isOpen(app) && pasteboard(app) == "rgb(255, 85, 0)" }
+            try open(app)
+            try type(app, "hsl(20,100%,50%)")
+            try waitForRows(app, "hsl") { $0.first.map { has($0, "#FF5500") } ?? false }
+            try press(app, [], .downArrow)
+            try press(app, [], .downArrow)
+            app.sleep(0.2)
+            try press(app, [], .returnKey)
+            try app.waitUntil("the hsl form copied") { try !isOpen(app) && pasteboard(app) == "hsl(20, 100%, 50%)" }
+            // The prefix reads CSS names; alone, a name is an ordinary word.
+            try open(app)
+            try typeWord(app, "color")
+            try type(app, "tomato")
+            try waitForRows(app, "tomato") { $0.first.map { has($0, "#FF6347") } ?? false }
+            _ = try app.screenshot("named")
+            try dismiss(app)
+            try open(app)
+            try type(app, "tomato")
+            app.sleep(0.4)
+            let word = try rows(app)
+            try expect(!word.contains { has($0, "Copy Color") }, "tomato alone: \(word)")
+            try dismiss(app)
+            // Bare #abc: the search first, so Return searches, the colour below it; a hashtag has no colour row.
+            try open(app)
+            try type(app, "#abc")
+            let bare = try waitForRows(app, "the colour under the search") { $0.count >= 4 && has($0[1], "#AABBCC") }
+            try expect(bare[0].contains("#abc"), "\(bare)")
+            _ = try app.screenshot("bare-hash")
+            try press(app, [], .returnKey)
+            try app.waitUntil("#abc searched") { currentTab(try app.view())?.title == "query:#abc" }
+            try open(app)
+            try type(app, "#hashtag")
+            app.sleep(0.4)
+            let hashtag = try rows(app)
+            try expect(!hashtag.contains { has($0, "Copy Color") } && hashtag.first?.contains("#hashtag") == true, "\(hashtag)")
+            try dismiss(app)
+            app.passed("#ff5500, rgb() and hsl() each with a swatch and three forms, each form copied; tomato only after color; #abc still searched")
+        }
     }
 }
