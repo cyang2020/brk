@@ -197,7 +197,18 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     // MARK: Keys inside the input
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        takeSiteSearchEscape(event) || super.performKeyEquivalent(with: event)
+        takeSiteSearchEscape(event) || takeCommandReturn(event) || super.performKeyEquivalent(with: event)
+    }
+
+    /// ⌘Return on a row that has its own use for it (a file row). AppKit offers Command chords as key equivalents, so
+    /// the text field's delegate never sees this one.
+    private func takeCommandReturn(_ event: NSEvent) -> Bool {
+        guard !isHiddenOrHasHiddenAncestor, event.type == .keyDown, event.keyCode == Key.returnKey.code, !event.isARepeat,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command, results.indices.contains(highlighted),
+              let command = results[highlighted].commandReturn, let window, event.window == nil || event.window === window,
+              let editor = input.currentEditor() as? NSTextView, window.firstResponder === editor, !editor.hasMarkedText() else { return false }
+        dispatch(command)
+        return true
     }
 
     /// For the window's own Escape handling, which runs before the page and before this view's event monitor (the
@@ -222,6 +233,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             // A held Return auto-repeats; only the first press chooses (`isARepeat` exists on key events only).
             let event = NSApp?.currentEvent
             if event?.type == .keyDown && event?.isARepeat == true { return true }
+            // A file row's ⌥Return copies its path; on any other row it stays Return.
+            if event?.modifierFlags.contains(.option) == true, results.indices.contains(highlighted), let command = results[highlighted].optionReturn {
+                dispatch(command)
+                return true
+            }
             // Max's Instant Links: Shift+Return on a web search opens its top results instead (P48-a).
             if event?.modifierFlags.contains(.shift) == true, let bar {
                 // A site search is a web search too: its engine's name and the query go to Instant Links whole (Arc's P48
@@ -242,9 +258,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
             // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
-            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab).
+            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab); any other text in a new-tab bar goes to
+            // the tool as a question (Brk's own, as Raycast's Quick AI).
             if siteSearch == nil, let offer { enterSiteSearch(offer, namedBy: typed) }
             else if siteSearch == nil, let bar, Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            else if siteSearch == nil, let bar, let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where siteSearch != nil && input.stringValue.isEmpty:
             leaveSiteSearch()
@@ -689,7 +707,11 @@ final class ResultRowView: NSView {
         icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)
         favicon = suggestion.favicon
         hasFavicon = false
-        if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
+        // A file's, an app's or an emoji's own picture draws in its colors, on the highlight's tile like a favicon.
+        if let picture = suggestion.icon.map(LocalIcons.image) {
+            icon.image = picture
+            hasFavicon = true
+        } else if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
             guard let self, self.favicon == url else { return }
             self.icon.image = image
             self.hasFavicon = true
@@ -824,6 +846,32 @@ extension NSShadow {
 /// A plain container with top-left origin, like every BrkUI container.
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// The pictures of Brk's own rows: the system's icon for a file or app, once per path, or an emoji drawn at the row's
+/// icon size.
+@MainActor
+enum LocalIcons {
+    private static var files: [String: NSImage] = [:]
+
+    static func image(_ icon: Suggestion.Icon) -> NSImage {
+        switch icon {
+        case .file(let path):
+            if let image = files[path] { return image }
+            if files.count > 200 { files.removeAll() }
+            let image = NSWorkspace.shared.icon(forFile: path)
+            files[path] = image
+            return image
+        case .emoji(let emoji):
+            let side = OverlayMetrics.commandBar.iconSize.value
+            return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+                let text = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: side * 0.82)])
+                let size = text.size()
+                text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
+                return true
+            }
+        }
+    }
 }
 
 /// Favicons for result rows, archive entries and the tab switcher, fetched once per URL.

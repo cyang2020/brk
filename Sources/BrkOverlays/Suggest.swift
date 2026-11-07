@@ -18,6 +18,8 @@ public struct Suggestion: Equatable, Sendable {
         case topDomain
         /// Max's Ask row (Arc's "Ask ChatGPT →", P49): the query, the local tool's name and the arrow square.
         case ask
+        /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji.
+        case file, app, emoji
     }
     public let kind: Kind
     public let title: String
@@ -35,6 +37,16 @@ public struct Suggestion: Equatable, Sendable {
     public var tile = false
     /// The symbol's own color instead of the row's text color (the YouTube mark).
     public var accent: RGBA? = nil
+    /// Instead of a symbol: the system's icon for this path, or this emoji.
+    public var icon: Icon? = nil
+    /// What ⌘Return and ⌥Return do on this row; nil keeps those keys' usual behaviour.
+    public var commandReturn: Command? = nil
+    public var optionReturn: Command? = nil
+
+    public enum Icon: Equatable, Sendable {
+        case file(String)
+        case emoji(String)
+    }
 }
 
 public enum Suggest {
@@ -75,8 +87,15 @@ public enum Suggest {
     /// In site-search mode (`siteSearch` set) the rows are the query on that engine and the suggestions, each a
     /// `.commandBar(.submitSearch)` on it.
     /// Matching is case- and diacritic-insensitive. `resolve` is the domain's URL policy (default: the bar's engine).
+    ///
+    /// Brk's own sources beyond Arc, none of which changes a row when it has nothing to say, and none in site search, AI
+    /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
+    /// question, else sits right under the typed row so Return still searches; "emoji <name>" and, once its files are
+    /// in, "file <name>" list only those; apps and files take the last two rows at most (never the top hit, never the
+    /// typed row) while `bar.local` answers exactly this text. Only `createsTab` bars look for files, apps and emoji.
     public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil,
-                            resolve: ((String) -> URL?)? = nil, completing: String? = nil) -> [Suggestion] {
+                            resolve: ((String) -> URL?)? = nil, completing: String? = nil,
+                            timeZone: TimeZone = .current, locale: Locale = .current) -> [Suggestion] {
         let limit = Metrics.commandBar.maxVisibleRows.value
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if let mode = bar.aiMode {
@@ -117,6 +136,8 @@ public enum Suggest {
             return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
                                command: .commandBar(.calculate(text)))]
         }
+        if bar.createsTab, let listed = modeRows(text, bar: bar, limit: limit) { return listed }
+        let quick = bar.fillsPane ? nil : QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: timeZone, locale: locale, rates: bar.rates)).map(quickRow)
         var typed: Suggestion?
         var isAddress = false
         let resolvedURL = resolve(text)
@@ -182,7 +203,76 @@ public enum Suggest {
         if let provider = bar.askProvider, !isAddress, completed == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
             rows.insert(askRow(text, provider: provider), at: min(2, rows.count))
         }
+        if let quick {
+            if QuickAnswers.leads(text) { rows.insert(quick, at: 0) }
+            else { rows.insert(quick, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count) }
+        }
+        rows = withLocalRows(rows, text, isAddress: isAddress, bar: bar, limit: limit)
         return Array(rows.prefix(limit))
+    }
+
+    // MARK: Brk's own sources
+
+    /// The most file and app rows among the others.
+    private static let inlineLocalCap = 2
+
+    private static func quickRow(_ answer: QuickAnswer) -> Suggestion {
+        let symbol = switch answer.kind { case .math: "equal"; case .date: "clock"; case .currency: "dollarsign.circle" }
+        return Suggestion(kind: .calculator, title: answer.answer, subtitle: answer.detail, symbol: symbol, favicon: nil, hint: "Copy Result",
+                          command: .commandBar(.copyAnswer(answer.answer)))
+    }
+
+    /// The rows of a typed mode, nil to rank the text as usual: nothing matches, or the files are not in yet.
+    private static func modeRows(_ text: String, bar: CommandBarSnapshot, limit: Int) -> [Suggestion]? {
+        switch LocalSources.mode(text) {
+        case .emoji(let name)?:
+            let rows = EmojiIndex.matches(name, limit: limit).map { entry in
+                Suggestion(kind: .emoji, title: entry.name, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.copyEmoji,
+                           command: .commandBar(.copyAnswer(entry.emoji)), icon: .emoji(entry.emoji))
+            }
+            return rows.isEmpty ? nil : rows
+        case .files?:
+            guard let local = bar.local, local.query == text, !local.files.isEmpty else { return nil }
+            return local.files.prefix(limit).map(fileRow)
+        case nil:
+            return nil
+        }
+    }
+
+    /// Apps, then files, in the last places: they replace what would be cut last, and the typed row and anything above
+    /// it stay.
+    private static func withLocalRows(_ rows: [Suggestion], _ text: String, isAddress: Bool, bar: CommandBarSnapshot, limit: Int) -> [Suggestion] {
+        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, LocalSources.mode(text) == nil else { return rows }
+        let found = Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
+        guard !found.isEmpty else { return rows }
+        let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator } ?? 0
+        let room = max(0, limit - (lastKept + 1))
+        let shown = Array(found.prefix(room))
+        return Array(rows.prefix(max(lastKept + 1, min(rows.count, limit - shown.count)))) + shown
+    }
+
+    private static func fileRow(_ hit: LocalHit) -> Suggestion {
+        let folder = ((hit.path as NSString).deletingLastPathComponent as NSString).abbreviatingWithTildeInPath
+        return Suggestion(kind: .file, title: hit.name, subtitle: folder, symbol: nil, favicon: nil, hint: OverlayCopy.fileRowKeys,
+                          command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path),
+                          commandReturn: .commandBar(.local(.reveal, path: hit.path)), optionReturn: .commandBar(.local(.copyPath, path: hit.path)))
+    }
+
+    private static func appRow(_ hit: LocalHit) -> Suggestion {
+        Suggestion(kind: .app, title: hit.name, subtitle: nil, symbol: nil, favicon: nil, hint: OverlayCopy.openApp,
+                   command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path))
+    }
+
+    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address and
+    /// not a site being completed. Nil keeps Tab as it was. Site search's offer and the tool's name go first (the view).
+    public static func tabQuestion(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound else { return nil }
+        let engine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
+            SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
+        } ?? .google
+        guard let url = (resolve ?? { resolveTypedInput($0, engine: engine) })(text), url == engine.searchURL(text) || isSearch(url, for: text) else { return nil }
+        return text
     }
 
     /// The Ask row: the query after Max's flower, "Ask <tool>" and the arrow square on the right.
@@ -447,6 +537,10 @@ extension OverlayCopy {
     /// The key shown beside "Search Wikipedia" (P02-c, Q01-b); Space after an engine's whole name also enters site
     /// search, as the comments "Hint for using the Space key…" and "…the Tab key…" say.
     static let siteSearchKey = "Tab"
+    /// Brk's own rows' captions (beyond Arc).
+    static let fileRowKeys = "⌘↩ Reveal  ⌥↩ Copy Path"
+    static let openApp = "Open App"
+    static let copyEmoji = "Copy Emoji"
     /// GUESS: "Site Search placeholder where the wildcard is the name of the site."
     static func siteSearchPlaceholder(_ engine: String) -> String { "\(searchVerb) \(engine)…" }
     /// Observed: "Focus on <space>" (`TypeTravelCandidate.focusSpace`).
